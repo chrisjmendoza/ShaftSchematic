@@ -86,7 +86,7 @@ object ShaftPdfComposer {
             MARGIN_PT,
             MARGIN_PT,
             pageRect.right - MARGIN_PT,
-            titleRect.top - VERTICAL_PADDING_PT * 0f // keep clear separation
+            titleRect.top - VERTICAL_PADDING_PT // ← remove * 0f
         )
 
         // Border around the work area (optional)
@@ -107,7 +107,6 @@ object ShaftPdfComposer {
     }
 
     /* ---------------- Core drawing ---------------- */
-
     private fun drawShaftSheet(c: Canvas, spec: ShaftSpecMm, area: RectF) {
         // Precompute width/height once
         val widthPt = area.width()
@@ -142,9 +141,18 @@ object ShaftPdfComposer {
             withScale(scale, scale) {
                 val centerY = 150f
 
-                // Stroke width that remains readable when scaled down
+                // Reusable scaled paints (created once per render)
                 val scaledStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     style = Paint.Style.STROKE; strokeWidth = 2f / max(1f, scale)
+                }
+                val strokeKeywayScaled = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE; strokeWidth = 1.5f / max(1f, scale)
+                }
+                val stroke2Scaled = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE; strokeWidth = 1.7f / max(1f, scale)
+                }
+                val hatch = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE; strokeWidth = 1.5f / max(1f, scale)
                 }
 
                 // Span rectangles
@@ -196,9 +204,8 @@ object ShaftPdfComposer {
                 // Centerline
                 drawLine(0f, centerY, mmToPt(spec.overallLengthMm), centerY, dashedCenter)
 
-                // Threads callouts
-                drawThreadCallout(this, spec.forwardThreads, atMm = 0.0, centerY = centerY, outward = -1f, scale = scale)
-                drawThreadCallout(this, spec.aftThreads, atMm = spec.overallLengthMm, centerY = centerY, outward = +1f, scale = scale)
+                drawThreadCallout(this, spec.forwardThreads, 0.0, centerY, -1f, hatch)
+                drawThreadCallout(this, spec.aftThreads, spec.overallLengthMm, centerY, +1f, hatch)
 
                 // Keyways (simple top-notch + callout)
                 spec.keyways.forEach { k ->
@@ -206,8 +213,7 @@ object ShaftPdfComposer {
                     val x0 = mmToPt(k.positionFromForwardMm)
                     val x1 = mmToPt(k.positionFromForwardMm + k.lengthMm)
                     val notchTop = centerY - (mmToPt(baseDia) / 2f)
-                    val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.5f / max(1f, scale) }
-                    drawLine(x0, notchTop, x1, notchTop, p)
+                    drawLine(x0, notchTop, x1, notchTop, strokeKeywayScaled) // single draw with reused paint
                     drawDim(
                         this, x0, notchTop - 20f, x1, notchTop - 20f, offset = -28f,
                         text = "Keyway W ${fmt(k.widthMm)} × D ${fmt(k.depthMm)} × L ${fmt(k.lengthMm)}", above = true
@@ -215,9 +221,6 @@ object ShaftPdfComposer {
                 }
 
                 // Liners
-                val stroke2Scaled = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    style = Paint.Style.STROKE; strokeWidth = 1.7f / max(1f, scale)
-                }
                 linerNotes.forEach { ln ->
                     val x0 = mmToPt(ln.positionFromForwardMm)
                     val x1 = mmToPt(ln.positionFromForwardMm + ln.lengthMm)
@@ -239,7 +242,6 @@ object ShaftPdfComposer {
             }
         }
     }
-
 
     /* ---------------- Title block ---------------- */
 
@@ -350,20 +352,36 @@ object ShaftPdfComposer {
         atMm: Double,
         centerY: Float,
         outward: Float,
-        scale: Float
+        hatch: Paint
     ) {
         if (t.lengthMm <= 0.0 || t.diameterMm <= 0.0) return
-        val hatch = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE; strokeWidth = 1.5f / max(1f, scale)
-        }
+
+        val dir = if (outward < 0f) -1f else 1f
         val x = mmToPt(atMm)
+
+        // Small “thread marker” line on the shaft axis
         c.drawLine(x, centerY - 22f, x, centerY + 22f, hatch)
-        val text = "Threads Ø ${fmt(t.diameterMm)}  P ${fmt(t.pitchMm)}  L ${fmt(t.lengthMm)}"
-        drawLeaderText(c, x + 48f * outward, centerY - 30f, text)
+
+        // Leader text positioned left/right based on dir
+        val textX = x + 48f * dir
+        val textY = centerY - 30f
+        val label = "Threads Ø ${fmt(t.diameterMm)}  P ${fmt(t.pitchMm)}  L ${fmt(t.lengthMm)}"
+
+        drawLeaderText(c, textX, textY, label, dir)
     }
 
-    private fun drawLeaderText(c: Canvas, x: Float, y: Float, text: String) {
-        c.drawLine(x - 16f, y - 8f, x - 2f, y - 2f, stroke1)
+    private fun drawLeaderText(
+        c: Canvas,
+        x: Float,
+        y: Float,
+        text: String,
+        outwardDir: Float // -1 = left, +1 = right
+    ) {
+        // Short tick line pointing toward the text side
+        val dx = -14f * outwardDir
+        val dy = -6f * outwardDir
+        c.drawLine(x + dx, y + dy, x - 2f * outwardDir, y - 2f, stroke1)
+
         c.drawText(text, x, y, dimText)
     }
 
