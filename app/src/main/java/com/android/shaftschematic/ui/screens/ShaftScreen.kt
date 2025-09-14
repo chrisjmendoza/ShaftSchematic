@@ -3,6 +3,8 @@ package com.android.shaftschematic.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -16,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -145,7 +148,7 @@ fun ShaftScreen(viewModel: ShaftViewModel) {
                         val chipHint = remember(spec, unit) { viewModel.coverageChipHint() }
                         if (chipHint != null) {
                             AssistChip(
-                                onClick = { /* could navigate/scroll; no-op for now */ },
+                                onClick = { /* optional action */ },
                                 label = { Text(chipHint) },
                                 colors = AssistChipDefaults.assistChipColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -287,6 +290,7 @@ fun ShaftScreen(viewModel: ShaftViewModel) {
                     mmValue = spec.forwardTaper.largeEndMm,
                     format = { viewModel.formatInCurrentUnit(it, 3) },
                     saveKey = "fwdTaper-large",
+                    commitOnFocusLoss = true,
                     onUserChange = { viewModel.setForwardTaper(large = it) }
                 )
             }
@@ -297,6 +301,7 @@ fun ShaftScreen(viewModel: ShaftViewModel) {
                     mmValue = spec.forwardTaper.smallEndMm,
                     format = { viewModel.formatInCurrentUnit(it, 3) },
                     saveKey = "fwdTaper-small",
+                    commitOnFocusLoss = true,
                     onUserChange = { viewModel.setForwardTaper(small = it) }
                 )
             }
@@ -307,12 +312,11 @@ fun ShaftScreen(viewModel: ShaftViewModel) {
                     mmValue = spec.forwardTaper.lengthMm,
                     format = { viewModel.formatInCurrentUnit(it, 3) },
                     saveKey = "fwdTaper-length",
+                    commitOnFocusLoss = true,
                     onUserChange = { viewModel.setForwardTaper(length = it) }
                 )
             }
             item {
-                var fwdRatio by remember { mutableStateOf(spec.forwardTaper.ratio.toString()) }
-                LaunchedEffect(spec.forwardTaper.ratio) { fwdRatio = spec.forwardTaper.ratio.toString() }
                 OutlinedTextField(
                     value = fwdRatio,
                     onValueChange = { s -> fwdRatio = s; viewModel.setForwardTaper(ratio = s) },
@@ -330,6 +334,7 @@ fun ShaftScreen(viewModel: ShaftViewModel) {
                     mmValue = spec.aftTaper.largeEndMm,
                     format = { viewModel.formatInCurrentUnit(it, 3) },
                     saveKey = "aftTaper-large",
+                    commitOnFocusLoss = true,
                     onUserChange = { viewModel.setAftTaper(large = it) }
                 )
             }
@@ -340,6 +345,7 @@ fun ShaftScreen(viewModel: ShaftViewModel) {
                     mmValue = spec.aftTaper.smallEndMm,
                     format = { viewModel.formatInCurrentUnit(it, 3) },
                     saveKey = "aftTaper-small",
+                    commitOnFocusLoss = true,
                     onUserChange = { viewModel.setAftTaper(small = it) }
                 )
             }
@@ -350,12 +356,11 @@ fun ShaftScreen(viewModel: ShaftViewModel) {
                     mmValue = spec.aftTaper.lengthMm,
                     format = { viewModel.formatInCurrentUnit(it, 3) },
                     saveKey = "aftTaper-length",
+                    commitOnFocusLoss = true,
                     onUserChange = { viewModel.setAftTaper(length = it) }
                 )
             }
             item {
-                var aftRatio by remember { mutableStateOf(spec.aftTaper.ratio.toString()) }
-                LaunchedEffect(spec.aftTaper.ratio) { aftRatio = spec.aftTaper.ratio.toString() }
                 OutlinedTextField(
                     value = aftRatio,
                     onValueChange = { s -> aftRatio = s; viewModel.setAftTaper(ratio = s) },
@@ -523,7 +528,7 @@ private fun SectionHeaderWithAdd(title: String, onAdd: () -> Unit) {
     }
 }
 
-/** Cursor-safe numeric text field with stable save keys per row. */
+/** Cursor-safe numeric text field with optional commit-on-blur. */
 @Composable
 private fun NumberField(
     label: String,
@@ -532,28 +537,44 @@ private fun NumberField(
     format: (Double) -> String,
     modifier: Modifier = Modifier,
     onUserChange: (String) -> Unit,
-    saveKey: String? = null
+    saveKey: String? = null,
+    commitOnFocusLoss: Boolean = false
 ) {
     val rememberKey = saveKey ?: "$label|${unit.name}"
     var tf by rememberSaveable(rememberKey, stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(format(mmValue)))
     }
-    LaunchedEffect(unit, mmValue) {
-        val t = format(mmValue)
-        tf = tf.copy(text = t, selection = TextRange(t.length))
+    var hasFocus by remember { mutableStateOf(false) }
+
+    LaunchedEffect(unit, mmValue, hasFocus) {
+        if (!hasFocus) {
+            val t = format(mmValue)
+            tf = tf.copy(text = t, selection = TextRange(t.length))
+        }
     }
+
     OutlinedTextField(
         value = tf,
         onValueChange = { v ->
             tf = v
-            onUserChange(v.text)
+            if (!commitOnFocusLoss) onUserChange(v.text)
         },
         label = { Text(label) },
         singleLine = true,
+        keyboardOptions = KeyboardOptions(
+            imeAction = if (commitOnFocusLoss) ImeAction.Done else ImeAction.Next
+        ),
+        keyboardActions = KeyboardActions(
+            onDone = {
+                if (commitOnFocusLoss) onUserChange(tf.text)
+            }
+        ),
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { f ->
-                if (!f.isFocused) {
+                hasFocus = f.isFocused
+                if (!f.isFocused && commitOnFocusLoss) {
+                    onUserChange(tf.text)
                     val t = format(mmValue)
                     tf = tf.copy(text = t, selection = TextRange(t.length))
                 }

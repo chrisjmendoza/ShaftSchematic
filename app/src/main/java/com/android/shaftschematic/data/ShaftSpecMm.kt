@@ -30,8 +30,22 @@ data class TaperRatio(
     val den: Double = 0.0
 ) {
     val value: Double get() = if (den == 0.0) 0.0 else num / den
-    override fun toString(): String = if (den == 0.0) "" else "$num:$den"
+
+    override fun toString(): String {
+        if (den == 0.0) return ""
+        fun pretty(d: Double): String {
+            val rounded = kotlin.math.round(d)
+            return if (kotlin.math.abs(d - rounded) < 1e-6) {
+                rounded.toInt().toString()           // e.g., 1 → "1"
+            } else {
+                "%.${3}f".format(java.util.Locale.US, d)
+                    .trimEnd('0').trimEnd('.')        // e.g., 12.500 → "12.5"
+            }
+        }
+        return "${pretty(num)}:${pretty(den)}"
+    }
 }
+
 
 /** Keyway spec */
 data class KeywaySpec(
