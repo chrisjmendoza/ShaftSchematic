@@ -190,6 +190,13 @@ class ShaftLayout(private val dm: DisplayMetrics) {
             ReferenceEnd.FWD -> totalMm - (startMm + lengthMm)
         }
 
+    // Builds the dimension label text, e.g. "120.0 mm / 4.724 in   (30.0 mm / 1.181 in from ref)"
+    private fun labelFor(lengthMm: Float, fromRefMm: Float): String {
+        val len = lengthStr(lengthMm)
+        val from = lengthStr(fromRefMm)
+        return "$len   ($from from ref)"
+    }
+
     private fun lengthStr(mm: Float): String {
         val inches = mm / 25.4f
         return "${roundTo(mm, 1)} mm / ${roundTo(inches, 3)} in"
@@ -212,4 +219,6 @@ class ShaftLayout(private val dm: DisplayMetrics) {
         while (y <= b) { out += Prim.Line(l, y, r, y); y += step }
         return out
     }
+
+
 }

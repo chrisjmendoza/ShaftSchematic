@@ -5,20 +5,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
-import com.android.shaftschematic.ui.screens.ShaftScreen
-import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.screen.ShaftScreen
+import com.android.shaftschematic.ui.screen.ShaftViewModel  // <-- fixed package
 
 // If you’ve set up your own theme file:
 // import com.android.shaftschematic.ui.theme.ShaftschematicTheme
 
 class MainActivity : ComponentActivity() {
-    // Create the ViewModel scoped to this Activity
+
+    // Activity-scoped ViewModel (requires activity-ktx)
     private val vm by viewModels<ShaftViewModel>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            // If you generated a custom theme, wrap with that instead of plain MaterialTheme
+            // Replace with ShaftschematicTheme if you have one
             MaterialTheme {
                 ShaftScreen(viewModel = vm)
             }
