@@ -1,4 +1,4 @@
-package com.android.shaftschematic.ui.drawing
+package com.android.shaftschematic.ui.drawing.view
 
 import android.content.Context
 import android.graphics.Canvas
@@ -9,10 +9,6 @@ import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 
-/**
- * Classic Android View that renders the shaft drawing.
- * Set [spec] and [opts], then call invalidate().
- */
 class ShaftDrawingView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -20,34 +16,36 @@ class ShaftDrawingView @JvmOverloads constructor(
 ) : View(context, attrs, defStyle) {
 
     var spec: ShaftSpecMm? = null
-        set(value) {
-            field = value
-            invalidate()
-        }
+        set(value) { field = value; invalidate() }
 
-    var opts: RenderOptions? = null
-        set(value) {
-            field = value
-            invalidate()
-        }
+    var opts: RenderOptions = RenderOptions()
+        set(value) { field = value; invalidate() }
 
-    // No delegates; just plain instances
-    private val renderer: ShaftRenderer = ShaftRenderer()
+    private val renderer = ShaftRenderer()
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val s = spec ?: return
-        val o = opts ?: return
-        if (width <= 0 || height <= 0) return
 
-        // Compute layout each draw based on current size
+        val w = width.toFloat()
+        val h = height.toFloat()
+        if (w <= 2f || h <= 2f) return
+
+        val pad = opts.paddingPx.toFloat()
+        val left = pad
+        val top = pad
+        val right = (w - pad).coerceAtLeast(left + 1f)
+        val bottom = (h - pad).coerceAtLeast(top + 1f)
+
+        // IMPORTANT: positional args — matches ShaftLayout.compute signature
         val layout = ShaftLayout.compute(
-            spec = s,
-            targetWidthPx = width,
-            maxHeightPx = height,
-            paddingPx = o.paddingPx
+            s,
+            left,
+            top,
+            right,
+            bottom
         )
 
-        renderer.render(canvas, layout, o)
+        renderer.render(canvas, layout, opts)
     }
 }

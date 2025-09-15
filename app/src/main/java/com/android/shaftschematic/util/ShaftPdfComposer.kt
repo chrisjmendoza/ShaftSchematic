@@ -1,45 +1,27 @@
 package com.android.shaftschematic.util
 
 import android.content.Context
-import android.graphics.*
-import android.graphics.pdf.PdfDocument
+import android.graphics.Color
+import android.graphics.Paint
 import android.net.Uri
 import com.android.shaftschematic.data.EndInfo
 import com.android.shaftschematic.data.MetaBlock
 import com.android.shaftschematic.data.ShaftSpecMm
+import com.android.shaftschematic.data.TaperSpec
+import com.android.shaftschematic.data.ThreadSpec
+import com.android.shaftschematic.ui.drawing.render.ReferenceEnd
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
-import com.android.shaftschematic.ui.drawing.render.ShaftLayout   // ✅ use the new object with compute()
+import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
-import java.io.OutputStream
-import kotlin.math.roundToInt
+import com.android.shaftschematic.ui.viewmodel.Units
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 object ShaftPdfComposer {
 
-    fun write(
-        context: Context,
-        target: Uri,
-        spec: ShaftSpecMm,
-        pageWidthIn: Float = 11f,
-        pageHeightIn: Float = 8.5f,
-        drawingWidthIn: Float = 10f,
-        drawingMaxHeightIn: Float = 2f,
-        optsBase: RenderOptions,
-        leftEnd: EndInfo = EndInfo(),
-        middle: MetaBlock = MetaBlock(),
-        rightEnd: EndInfo = EndInfo()
-    ) {
-        context.contentResolver.openOutputStream(target)?.use { os ->
-            writeInternal(
-                context, os, spec,
-                pageWidthIn, pageHeightIn,
-                drawingWidthIn, drawingMaxHeightIn,
-                optsBase, leftEnd, middle, rightEnd
-            )
-        }
-    }
-
-    @JvmName("writeLegacy")
-    fun write(
+    /** Create one-page PDF and write to [target]. */
+    suspend fun write(
         context: Context,
         target: Uri,
         spec: ShaftSpecMm,
@@ -47,166 +29,233 @@ object ShaftPdfComposer {
         pageHeightIn: Float,
         drawingWidthIn: Float,
         drawingMaxHeightIn: Float,
-        optsBase: RenderOptions
-    ) = write(context, target, spec, pageWidthIn, pageHeightIn, drawingWidthIn, drawingMaxHeightIn, optsBase, EndInfo(), MetaBlock(), EndInfo())
-
-    private fun writeInternal(
-        context: Context,
-        output: OutputStream,
-        spec: ShaftSpecMm,
-        pageWidthIn: Float,
-        pageHeightIn: Float,
-        drawingWidthIn: Float,
-        drawingMaxHeightIn: Float,
         optsBase: RenderOptions,
-        leftEnd: EndInfo,
-        middle: MetaBlock,
-        rightEnd: EndInfo
+        units: Units,
+        middle: MetaBlock
     ) {
+        val pdf = android.graphics.pdf.PdfDocument()
         val ptsPerIn = 72f
-        val pageWidthPts = (pageWidthIn * ptsPerIn).roundToInt()
-        val pageHeightPts = (pageHeightIn * ptsPerIn).roundToInt()
+        val pageWpx = (pageWidthIn * ptsPerIn).toInt()
+        val pageHpx = (pageHeightIn * ptsPerIn).toInt()
 
-        val pdf = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(pageWidthPts, pageHeightPts, 1).create()
+        val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(pageWpx, pageHpx, 1).create()
         val page = pdf.startPage(pageInfo)
         val canvas = page.canvas
 
-        val dm = context.resources.displayMetrics
-        val renderer = ShaftRenderer()
+        // Outer content rect
+        val pad = optsBase.paddingPx.toFloat()
+        val contentLeft = pad
+        val contentRight = pageWpx - pad
+        val contentTop = pad
+        val contentBottom = pageHpx - pad
 
-        // Virtual canvas for layout (px) based on requested physical inches and device DPI
-        val widthPx = (drawingWidthIn * dm.xdpi).roundToInt()
-        val heightPx = (drawingMaxHeightIn * dm.ydpi).roundToInt()
+        // Drawing rect (leave space at bottom for title block)
+        val drawingWpx = drawingWidthIn * ptsPerIn
+        val drawingHpx = drawingMaxHeightIn * ptsPerIn
+        val drawLeft = contentLeft
+        val drawTop = contentTop
+        val drawRight = min(contentRight, drawLeft + drawingWpx)
+        val drawBottom = min(contentBottom - 180f, drawTop + drawingHpx)
 
-        // Layout compute (new API)
+        // ---- Layout shaft (POSITIONAL args to avoid named-parameter mismatch) ----
         val layout = ShaftLayout.compute(
-            spec = spec,
-            targetWidthPx = widthPx,
-            maxHeightPx = heightPx,
-            paddingPx = optsBase.paddingPx
+            spec,
+            drawLeft,
+            drawTop,
+            drawRight,
+            drawBottom
         )
 
-        // Use the same opts but lock in physical intent for the PDF export
-        val opts = optsBase.copy(
-            targetWidthInches = drawingWidthIn,
-            maxHeightInches = drawingMaxHeightIn
-        )
+        // ---- Render geometry (no grid on PDF) ----
+        val renderer = ShaftRenderer()
+        renderer.render(canvas, layout, optsBase.copy(showGrid = false, targetWidthInches = drawingWidthIn))
 
-        // Scale PX → PDF points so width exactly equals drawingWidthIn on paper
-        val drawLeftPts = (pageWidthPts - drawingWidthIn * ptsPerIn) / 2f
-        val topMarginPts = 36f // 0.5"
-        val scale = (drawingWidthIn * ptsPerIn) / widthPx.toFloat()
+        // (Optional) dimensions/labels would be drawn here
 
-        canvas.save()
-        canvas.translate(drawLeftPts, topMarginPts)
-        canvas.scale(scale, scale)
-        renderer.render(canvas, layout, opts)
-        canvas.restore()
+        // ---- Derive end panels from spec ----
+        val leftEnd = deriveEndInfo(spec, ReferenceEnd.AFT, units)
+        val rightEnd = deriveEndInfo(spec, ReferenceEnd.FWD, units)
 
-        // Title block position
-        val drawingHeightPts = scale * heightPx.toFloat()
-        val titleTopPts = topMarginPts + drawingHeightPts + 24f
-
+        // ---- Draw title block (3 panels) ----
         drawTitleBlock3Panels(
             canvas = canvas,
-            pageWidthPts = pageWidthPts.toFloat(),
-            topY = titleTopPts,
-            leftEnd = leftEnd,
+            pageLeft = contentLeft,
+            pageRight = contentRight,
+            pageBottom = contentBottom,
             middle = middle,
-            rightEnd = rightEnd
+            left = leftEnd,
+            right = rightEnd,
+            textSizePx = optsBase.textSizePx * 0.9f
         )
 
         pdf.finishPage(page)
-        pdf.writeTo(output)
+        context.contentResolver.openOutputStream(target)?.use { out -> pdf.writeTo(out) }
         pdf.close()
     }
 
-    // --- Title block (unchanged) ---
-    private fun drawTitleBlock3Panels(
-        canvas: Canvas,
-        pageWidthPts: Float,
-        topY: Float,
-        leftEnd: EndInfo,
+    // ----------------- End-panel derivation -----------------
+
+    private const val TOUCH_EPS_MM = 1.0f
+
+    private fun deriveEndInfo(spec: ShaftSpecMm, end: ReferenceEnd, units: Units): EndInfo {
+        val taper = pickEndTaper(spec, end)
+        val thread = pickEndThread(spec, end)
+
+        val (letStr, setStr, rateStr) = if (taper != null) {
+            val d0 = taper.startDiaMm
+            val d1 = taper.endDiaMm
+            val len = max(1e-3f, taper.lengthMm)
+            val bigger = max(d0, d1)
+            val smaller = min(d0, d1)
+            val let = formatLength(bigger, units) // show Ø using length formatter with unit
+            val set = formatLength(smaller, units)
+            val rate = formatTaperRate(d0, d1, len, units)
+            Triple(let, set, rate)
+        } else Triple("", "", "")
+
+        val threadsStr = thread?.let {
+            val dia = formatLength(it.majorDiaMm, units)
+            val pitch = formatLength(it.pitchMm, units)
+            val len = formatLength(it.lengthMm, units)
+            "$dia × $pitch × $len"
+        } ?: ""
+
+        return EndInfo(
+            let = letStr,
+            set = setStr,
+            taperRate = rateStr,
+            keyway = "",           // not modeled yet
+            threads = threadsStr
+        )
+    }
+
+    /** Prefer explicit aft/forward taper; else a taper that touches the respective end. */
+    private fun pickEndTaper(spec: ShaftSpecMm, end: ReferenceEnd): TaperSpec? =
+        when (end) {
+            ReferenceEnd.AFT -> {
+                spec.aftTaper ?: spec.tapers
+                    .filter { it.startFromAftMm <= TOUCH_EPS_MM }
+                    .minByOrNull { it.startFromAftMm }
+            }
+            ReferenceEnd.FWD -> {
+                val overall = spec.overallLengthMm
+                spec.forwardTaper ?: spec.tapers
+                    .filter { (it.startFromAftMm + it.lengthMm) >= overall - TOUCH_EPS_MM }
+                    .maxByOrNull { it.startFromAftMm }
+            }
+        }
+
+    /** Prefer a thread with endLabel=AFT/FWD; else the thread nearest that end. */
+    private fun pickEndThread(spec: ShaftSpecMm, end: ReferenceEnd): ThreadSpec? {
+        spec.threads.firstOrNull { it.endLabel.equals(end.name, ignoreCase = true) }?.let { return it }
+        if (spec.threads.isEmpty()) return null
+        return when (end) {
+            ReferenceEnd.AFT -> spec.threads.minByOrNull { it.startFromAftMm }
+            ReferenceEnd.FWD -> {
+                val overall = spec.overallLengthMm
+                spec.threads.minByOrNull { abs((it.startFromAftMm + it.lengthMm) - overall) }
+            }
+        }
+    }
+
+    // ----------------- Formatting -----------------
+
+    private fun formatLength(mm: Float, units: Units): String =
+        if (units == Units.MM) {
+            if (mm >= 100f) "${mm.toInt()} mm" else String.format("%.1f mm", mm)
+        } else {
+            val inches = mm / 25.4f
+            String.format("%.3f in", inches).trimZeros()
+        }
+
+    private fun formatTaperRate(d0mm: Float, d1mm: Float, lenMm: Float, units: Units): String {
+        val deltaMm = abs(d1mm - d0mm)
+        return if (units == Units.MM) {
+            val r = deltaMm / lenMm
+            String.format("%.4f mm/mm", r).trimZeros()
+        } else {
+            val r = (deltaMm / 25.4f) / (lenMm / 25.4f)
+            String.format("%.4f in/in", r).trimZeros()
+        }
+    }
+
+    private fun String.trimZeros(): String =
+        this.replace(Regex("(\\.\\d*?)0+(\\s*[a-zA-Z/]+)$"), "$1$2")
+            .replace(Regex("\\.(\\s*[a-zA-Z/]+)$"), "$1")
+
+    // ----------------- Title block (3 panels) -----------------
+
+    fun drawTitleBlock3Panels(
+        canvas: android.graphics.Canvas,
+        pageLeft: Float,
+        pageRight: Float,
+        pageBottom: Float,
         middle: MetaBlock,
-        rightEnd: EndInfo
+        left: EndInfo,
+        right: EndInfo,
+        textSizePx: Float
     ) {
-        val ptsPerIn = 72f
-        val wLeft = 3.5f * ptsPerIn
-        val wMiddle = 4.0f * ptsPerIn
-        val wRight = 3.5f * ptsPerIn
-        val total = wLeft + wMiddle + wRight
-        val startX = (pageWidthPts - total) / 2f
+        val pad = 12f
+        val boxH = 140f
+        val gap = 10f
+        val colW = (pageRight - pageLeft - gap * 2) / 3f
+        val leftX = pageLeft
+        val midX = leftX + colW + gap
+        val rightX = midX + colW + gap
+        val top = pageBottom - boxH
 
-        val leftX = startX
-        val midX = leftX + wLeft
-        val rightX = midX + wMiddle
-
-        val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
-            textSize = 12f
-            textAlign = Paint.Align.LEFT
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
-            textSize = 10f
-            textAlign = Paint.Align.LEFT
-        }
-        val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
-            textSize = 10f
-            textAlign = Paint.Align.LEFT
-        }
-        val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
-            strokeWidth = 1.2f
+        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
+            color = Color.BLACK
+            strokeWidth = 2f
+        }
+        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.BLACK
+            textSize = textSizePx
         }
 
-        val rowHeight = 18f
-        val boxHeight = rowHeight * 7
-        val leftRect = RectF(leftX, topY, leftX + wLeft, topY + boxHeight)
-        val midRect = RectF(midX, topY, midX + wMiddle, topY + boxHeight)
-        val rightRect = RectF(rightX, topY, rightX + wRight, topY + boxHeight)
-        canvas.drawRect(leftRect, boxPaint)
-        canvas.drawRect(midRect, boxPaint)
-        canvas.drawRect(rightRect, boxPaint)
+        // column boxes
+        canvas.drawRect(leftX, top, leftX + colW, pageBottom, stroke)
+        canvas.drawRect(midX, top, midX + colW, pageBottom, stroke)
+        canvas.drawRect(rightX, top, rightX + colW, pageBottom, stroke)
 
-        val hPad = 8f
-        val headY = topY + 14f
-        canvas.drawText("Aft / Left End", leftX + hPad, headY, headerPaint)
-        canvas.drawText("Job / Meta", midX + hPad, headY, headerPaint)
-        canvas.drawText("Fwd / Right End", rightX + hPad, headY, headerPaint)
-
-        fun row(panelLeft: Float, label: String, value: String?, colWidth: Float, rowIndex: Int) {
-            val baseY = topY + 14f + 6f + rowHeight * (rowIndex + 1)
-            val labelX = panelLeft + hPad
-            val valueX = panelLeft + colWidth * 0.45f
-            canvas.drawText("$label:", labelX, baseY, labelPaint)
-            val v = value?.takeIf { it.isNotBlank() } ?: "________"
-            canvas.drawText(v, valueX, baseY, valuePaint)
+        fun drawLabelValueBox(x: Float, title: String, lines: List<Pair<String, String>>) {
+            var y = top + pad + text.textSize
+            canvas.drawText(title, x + pad, y, text)
+            y += text.textSize * 0.7f
+            val rowGap = text.textSize * 1.15f
+            for ((lbl, v) in lines) {
+                y += rowGap
+                canvas.drawText("$lbl:", x + pad, y, text)
+                if (v.isNotBlank()) {
+                    canvas.drawText(v, x + pad + text.measureText("$lbl: ") + 6f, y, text)
+                }
+            }
         }
 
-        // Left end
-        row(leftX, "L.E.T.", leftEnd.let, wLeft, 0)
-        row(leftX, "S.E.T.", leftEnd.set, wLeft, 1)
-        row(leftX, "Taper Rate", leftEnd.taperRate, wLeft, 2)
-        row(leftX, "K.W.", leftEnd.keyway, wLeft, 3)
-        row(leftX, "Threads", leftEnd.threads, wLeft, 4)
+        drawLabelValueBox(leftX, "AFT / LEFT END", listOf(
+            "L.E.T." to (left.let ?: ""),
+            "S.E.T." to (left.set ?: ""),
+            "Taper" to (left.taperRate ?: ""),
+            "K.W." to (left.keyway ?: ""),
+            "Threads" to (left.threads ?: "")
+        ))
 
-        // Middle
-        row(midX, "Customer", middle.customer, wMiddle, 0)
-        row(midX, "Vessel", middle.vessel, wMiddle, 1)
-        row(midX, "Job Number", middle.jobNumber, wMiddle, 2)
-        row(midX, "Port/Starboard", middle.side, wMiddle, 3)
-        row(midX, "Date", middle.date, wMiddle, 4)
+        drawLabelValueBox(midX, "JOB / META", listOf(
+            "Customer" to middle.customer,
+            "Vessel" to middle.vessel,
+            "Job #" to middle.jobNumber,
+            "Port/Stbd" to middle.side,
+            "Date" to middle.date
+        ))
 
-        // Right end
-        row(rightX, "L.E.T.", rightEnd.let, wRight, 0)
-        row(rightX, "S.E.T.", rightEnd.set, wRight, 1)
-        row(rightX, "Taper Rate", rightEnd.taperRate, wRight, 2)
-        row(rightX, "K.W.", rightEnd.keyway, wRight, 3)
-        row(rightX, "Threads", rightEnd.threads, wRight, 4)
+        drawLabelValueBox(rightX, "FWD / RIGHT END", listOf(
+            "L.E.T." to (right.let ?: ""),
+            "S.E.T." to (right.set ?: ""),
+            "Taper" to (right.taperRate ?: ""),
+            "K.W." to (right.keyway ?: ""),
+            "Threads" to (right.threads ?: "")
+        ))
     }
 }

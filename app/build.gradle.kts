@@ -54,7 +54,10 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.activity.ktx)                   // for viewModels()
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.runtime.compose)      // for collectAsStateWithLifecycle
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
+
+    // for collectAsStateWithLifecycle
 
     // --- Compose BOM controls versions for all Compose artifacts below
     implementation(platform(libs.androidx.compose.bom))
