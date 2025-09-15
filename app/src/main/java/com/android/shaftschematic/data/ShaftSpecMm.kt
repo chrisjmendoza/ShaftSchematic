@@ -48,11 +48,15 @@ data class TaperSpec(
 )
 
 /** External thread area (simplified as a box with hatch). */
+// data/ThreadSpec.kt (or wherever it lives)
 data class ThreadSpec(
     val startFromAftMm: Float,
     val lengthMm: Float,
-    val majorDiaMm: Float
+    val majorDiaMm: Float,
+    val pitchMm: Float = 0f,      // NEW
+    val endLabel: String = ""     // NEW  ("AFT" or "FWD" for display/PDF)
 )
+
 
 /** A sleeve/liner sitting on the shaft OD. */
 data class LinerSpec(

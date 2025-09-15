@@ -1,4 +1,4 @@
-package com.android.shaftschematic.ui.drawing
+package com.android.shaftschematic.ui.drawing.view
 
 import android.content.Context
 import android.graphics.Canvas
@@ -31,16 +31,16 @@ class ShaftDrawingView @JvmOverloads constructor(
             invalidate()
         }
 
-    // No delegates; just plain instances
-    private val renderer: ShaftRenderer = ShaftRenderer()
+    private val renderer = ShaftRenderer()
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val s = spec ?: return
         val o = opts ?: return
+
+        // Guard against zero size
         if (width <= 0 || height <= 0) return
 
-        // Compute layout each draw based on current size
         val layout = ShaftLayout.compute(
             spec = s,
             targetWidthPx = width,
