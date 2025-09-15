@@ -1,21 +1,24 @@
 package com.android.shaftschematic.ui.drawing.compose
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
 import androidx.compose.foundation.Canvas
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.rememberTextMeasurer
 import com.android.shaftschematic.data.ShaftSpecMm
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 
+@OptIn(ExperimentalTextApi::class)
 @Composable
 fun ShaftDrawing(
     spec: ShaftSpecMm,
     opts: RenderOptions,
     modifier: Modifier = Modifier
 ) {
+    val textMeasurer = rememberTextMeasurer()
+
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
@@ -26,24 +29,8 @@ fun ShaftDrawing(
         val right = (w - pad).coerceAtLeast(left + 1f)
         val bottom = (h - pad).coerceAtLeast(top + 1f)
 
-        // Safely recompute layout when inputs change
-        val layout = remember(spec, w, h, opts.paddingPx) {
-            ShaftLayout.compute(
-                spec,
-                left,
-                top,
-                right,
-                bottom
-            )
-        }
+        val layout = ShaftLayout.compute(spec, left, top, right, bottom)
 
-        drawIntoCanvas { c ->
-            val renderer = ShaftRenderer()
-            renderer.render(
-                canvas = c.nativeCanvas,
-                layout = layout,
-                opts = opts
-            )
-        }
+        ShaftRenderer().run { render(layout, opts, textMeasurer) }
     }
 }

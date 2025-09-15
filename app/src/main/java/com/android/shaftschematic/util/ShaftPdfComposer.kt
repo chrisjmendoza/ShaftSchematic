@@ -1,6 +1,7 @@
 package com.android.shaftschematic.util
 
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.net.Uri
@@ -12,7 +13,6 @@ import com.android.shaftschematic.data.ThreadSpec
 import com.android.shaftschematic.ui.drawing.render.ReferenceEnd
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
-import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.viewmodel.Units
 import kotlin.math.abs
 import kotlin.math.max
@@ -38,18 +38,20 @@ object ShaftPdfComposer {
         val pageWpx = (pageWidthIn * ptsPerIn).toInt()
         val pageHpx = (pageHeightIn * ptsPerIn).toInt()
 
-        val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(pageWpx, pageHpx, 1).create()
+        val pageInfo = android.graphics.pdf.PdfDocument.PageInfo
+            .Builder(pageWpx, pageHpx, 1)
+            .create()
         val page = pdf.startPage(pageInfo)
         val canvas = page.canvas
 
-        // Outer content rect
+        // ----- Outer content rect
         val pad = optsBase.paddingPx.toFloat()
         val contentLeft = pad
         val contentRight = pageWpx - pad
         val contentTop = pad
         val contentBottom = pageHpx - pad
 
-        // Drawing rect (leave space at bottom for title block)
+        // ----- Drawing rect (reserve space at bottom for title block)
         val drawingWpx = drawingWidthIn * ptsPerIn
         val drawingHpx = drawingMaxHeightIn * ptsPerIn
         val drawLeft = contentLeft
@@ -57,7 +59,7 @@ object ShaftPdfComposer {
         val drawRight = min(contentRight, drawLeft + drawingWpx)
         val drawBottom = min(contentBottom - 180f, drawTop + drawingHpx)
 
-        // ---- Layout shaft (POSITIONAL args to avoid named-parameter mismatch) ----
+        // ----- Layout (positional signature)
         val layout = ShaftLayout.compute(
             spec,
             drawLeft,
@@ -66,17 +68,26 @@ object ShaftPdfComposer {
             drawBottom
         )
 
-        // ---- Render geometry (no grid on PDF) ----
-        val renderer = ShaftRenderer()
-        renderer.render(canvas, layout, optsBase.copy(showGrid = false, targetWidthInches = drawingWidthIn))
+        // ----- Render geometry on Android Canvas (grid OFF for clean print)
+        drawShaftForPdf(
+            canvas = canvas,
+            layout = layout,
+            opts = optsBase.copy(showGrid = false, targetWidthInches = drawingWidthIn)
+        )
 
-        // (Optional) dimensions/labels would be drawn here
+        // ----- Overall length label centered under drawing
+        drawOverallLengthLabelPdf(
+            canvas = canvas,
+            layout = layout,
+            units = units,
+            baseTextSizePx = optsBase.textSizePx
+        )
 
-        // ---- Derive end panels from spec ----
+        // ----- Derive end panels from spec + units
         val leftEnd = deriveEndInfo(spec, ReferenceEnd.AFT, units)
         val rightEnd = deriveEndInfo(spec, ReferenceEnd.FWD, units)
 
-        // ---- Draw title block (3 panels) ----
+        // ----- Draw bottom title block (three panels)
         drawTitleBlock3Panels(
             canvas = canvas,
             pageLeft = contentLeft,
@@ -93,6 +104,142 @@ object ShaftPdfComposer {
         pdf.close()
     }
 
+    // --------------------------------------------------------------------
+    // Android-canvas shaft drawing for PDF only (UI uses Compose renderer)
+    // --------------------------------------------------------------------
+
+    private fun drawShaftForPdf(
+        canvas: Canvas,
+        layout: ShaftLayout.Result,
+        opts: RenderOptions
+    ) {
+        val spec = layout.spec
+
+        val main = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = Color.BLACK
+            strokeWidth = opts.lineWidthPx
+            strokeCap = Paint.Cap.BUTT
+            strokeJoin = Paint.Join.MITER
+        }
+        val dim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = Color.BLACK
+            strokeWidth = opts.dimLineWidthPx
+            strokeCap = Paint.Cap.BUTT
+            strokeJoin = Paint.Join.MITER
+        }
+
+        // Centerline
+        canvas.drawLine(
+            layout.contentLeftPx, layout.centerlineYPx,
+            layout.contentRightPx, layout.centerlineYPx,
+            main
+        )
+
+        fun xAt(mmFromAft: Float) = layout.contentLeftPx + mmFromAft * layout.pxPerMm
+        fun radPx(diaMm: Float) = (diaMm * 0.5f) * layout.pxPerMm
+
+        // Bodies
+        spec.bodies.forEach { b ->
+            val x0 = xAt(b.startFromAftMm)
+            val x1 = xAt(b.startFromAftMm + b.lengthMm)
+            val r = radPx(b.diaMm)
+            val top = layout.centerlineYPx - r
+            val bot = layout.centerlineYPx + r
+
+            canvas.drawLine(x0, top, x1, top, main)
+            canvas.drawLine(x0, bot, x1, bot, main)
+
+            // end ticks
+            canvas.drawLine(x0, top - 6f, x0, top + 6f, dim)
+            canvas.drawLine(x1, top - 6f, x1, top + 6f, dim)
+        }
+
+        // Tapers
+        spec.tapers.forEach { t ->
+            val x0 = xAt(t.startFromAftMm)
+            val x1 = xAt(t.startFromAftMm + t.lengthMm)
+            val r0 = radPx(t.startDiaMm)
+            val r1 = radPx(t.endDiaMm)
+
+            canvas.drawLine(x0, layout.centerlineYPx - r0, x1, layout.centerlineYPx - r1, main)
+            canvas.drawLine(x0, layout.centerlineYPx + r0, x1, layout.centerlineYPx + r1, main)
+
+            // end ticks around max radius
+            val tTop = layout.centerlineYPx - max(r0, r1)
+            val tBot = layout.centerlineYPx - min(r0, r1)
+            canvas.drawLine(x0, tTop - 6f, x0, tBot + 6f, dim)
+            canvas.drawLine(x1, tTop - 6f, x1, tBot + 6f, dim)
+        }
+
+        // Threads (band + light hatch)
+        spec.threads.forEach { th ->
+            val x0 = xAt(th.startFromAftMm)
+            val x1 = xAt(th.startFromAftMm + th.lengthMm)
+            val r = radPx(th.majorDiaMm)
+            val top = layout.centerlineYPx - r
+            val bot = layout.centerlineYPx + r
+
+            canvas.drawLine(x0, top, x1, top, main)
+            canvas.drawLine(x0, bot, x1, bot, main)
+
+            // subtle hatch
+            var hx = x0
+            val step = 8f
+            while (hx < x1) {
+                canvas.drawLine(hx, top, hx + 6f, top + 12f, dim)
+                hx += step
+            }
+
+            canvas.drawLine(x0, top - 6f, x0, top + 6f, dim)
+            canvas.drawLine(x1, top - 6f, x1, top + 6f, dim)
+        }
+
+        // Liners
+        spec.liners.forEach { ln ->
+            val x0 = xAt(ln.startFromAftMm)
+            val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
+            val r = radPx(ln.odMm)
+            val top = layout.centerlineYPx - r
+            val bot = layout.centerlineYPx + r
+
+            canvas.drawLine(x0, top, x1, top, dim)
+            canvas.drawLine(x0, bot, x1, bot, dim)
+            canvas.drawLine(x0, top - 5f, x0, top + 5f, dim)
+            canvas.drawLine(x1, top - 5f, x1, top + 5f, dim)
+        }
+    }
+
+    // ----- Overall length label (PDF) -----
+    private fun drawOverallLengthLabelPdf(
+        canvas: Canvas,
+        layout: ShaftLayout.Result,
+        units: Units,
+        baseTextSizePx: Float
+    ) {
+        val overallMm = layout.spec.overallLengthMm
+        val label = if (units == Units.IN) {
+            val inches = overallMm / 25.4f
+            "Overall: %.3f in".format(inches)
+        } else {
+            if (overallMm >= 100f) "Overall: ${overallMm.toInt()} mm"
+            else "Overall: %.1f mm".format(overallMm)
+        }
+
+        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.BLACK
+            textAlign = Paint.Align.CENTER
+            textSize = baseTextSizePx * 0.75f
+        }
+
+        val cx = (layout.contentLeftPx + layout.contentRightPx) / 2f
+        // Place just above the bottom of the drawing area, with a small gap
+        val baselineY = layout.contentBottomPx - 8f
+        canvas.drawText(label, cx, baselineY, text)
+    }
+
     // ----------------- End-panel derivation -----------------
 
     private const val TOUCH_EPS_MM = 1.0f
@@ -107,7 +254,7 @@ object ShaftPdfComposer {
             val len = max(1e-3f, taper.lengthMm)
             val bigger = max(d0, d1)
             val smaller = min(d0, d1)
-            val let = formatLength(bigger, units) // show Ø using length formatter with unit
+            val let = formatLength(bigger, units) // display Ø with same formatter as length
             val set = formatLength(smaller, units)
             val rate = formatTaperRate(d0, d1, len, units)
             Triple(let, set, rate)
@@ -129,7 +276,6 @@ object ShaftPdfComposer {
         )
     }
 
-    /** Prefer explicit aft/forward taper; else a taper that touches the respective end. */
     private fun pickEndTaper(spec: ShaftSpecMm, end: ReferenceEnd): TaperSpec? =
         when (end) {
             ReferenceEnd.AFT -> {
@@ -145,7 +291,6 @@ object ShaftPdfComposer {
             }
         }
 
-    /** Prefer a thread with endLabel=AFT/FWD; else the thread nearest that end. */
     private fun pickEndThread(spec: ShaftSpecMm, end: ReferenceEnd): ThreadSpec? {
         spec.threads.firstOrNull { it.endLabel.equals(end.name, ignoreCase = true) }?.let { return it }
         if (spec.threads.isEmpty()) return null
@@ -183,10 +328,10 @@ object ShaftPdfComposer {
         this.replace(Regex("(\\.\\d*?)0+(\\s*[a-zA-Z/]+)$"), "$1$2")
             .replace(Regex("\\.(\\s*[a-zA-Z/]+)$"), "$1")
 
-    // ----------------- Title block (3 panels) -----------------
+    // ----------------- Title block -----------------
 
     fun drawTitleBlock3Panels(
-        canvas: android.graphics.Canvas,
+        canvas: Canvas,
         pageLeft: Float,
         pageRight: Float,
         pageBottom: Float,
@@ -205,14 +350,10 @@ object ShaftPdfComposer {
         val top = pageBottom - boxH
 
         val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            color = Color.BLACK
-            strokeWidth = 2f
+            style = Paint.Style.STROKE; color = Color.BLACK; strokeWidth = 2f
         }
         val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = Color.BLACK
-            textSize = textSizePx
+            style = Paint.Style.FILL; color = Color.BLACK; textSize = textSizePx
         }
 
         // column boxes
@@ -234,7 +375,7 @@ object ShaftPdfComposer {
             }
         }
 
-        drawLabelValueBox(leftX, "AFT / LEFT END", listOf(
+        drawLabelValueBox(leftX, "AFT END", listOf(
             "L.E.T." to (left.let ?: ""),
             "S.E.T." to (left.set ?: ""),
             "Taper" to (left.taperRate ?: ""),
@@ -242,7 +383,7 @@ object ShaftPdfComposer {
             "Threads" to (left.threads ?: "")
         ))
 
-        drawLabelValueBox(midX, "JOB / META", listOf(
+        drawLabelValueBox(midX, "JOB INFORMATION", listOf(
             "Customer" to middle.customer,
             "Vessel" to middle.vessel,
             "Job #" to middle.jobNumber,
@@ -250,7 +391,7 @@ object ShaftPdfComposer {
             "Date" to middle.date
         ))
 
-        drawLabelValueBox(rightX, "FWD / RIGHT END", listOf(
+        drawLabelValueBox(rightX, "FWD END", listOf(
             "L.E.T." to (right.let ?: ""),
             "S.E.T." to (right.set ?: ""),
             "Taper" to (right.taperRate ?: ""),
