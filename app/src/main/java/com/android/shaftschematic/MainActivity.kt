@@ -12,7 +12,7 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModelFactory
 class MainActivity : ComponentActivity() {
 
     private val vm: ShaftViewModel by viewModels {
-        ShaftViewModelFactory(applicationContext)
+        ShaftViewModelFactory()   // now a no-arg factory
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

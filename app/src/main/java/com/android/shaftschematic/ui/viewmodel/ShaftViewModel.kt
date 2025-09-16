@@ -1,325 +1,294 @@
 package com.android.shaftschematic.ui.viewmodel
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.android.shaftschematic.data.*
-import com.android.shaftschematic.ui.drawing.render.ReferenceEnd
-import com.android.shaftschematic.util.UnitsStore
+import com.android.shaftschematic.data.BodySegmentSpec
+import com.android.shaftschematic.data.LinerSpec
+import com.android.shaftschematic.data.ShaftSpecMm
+import com.android.shaftschematic.data.TaperSpec
+import com.android.shaftschematic.data.ThreadSpec
+import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.HintStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.update
+import kotlin.math.max
+import kotlin.math.round
 
-enum class Units { MM, IN }
+/**
+ * ViewModel for the new ShaftSpecMm schema (AFT-based coordinates).
+ * - All model values are stored in millimeters (Float).
+ * - Positions are "startFromAftMm".
+ * - Add-helpers prefill start position to the current farthest end.
+ */
+class ShaftViewModel : ViewModel() {
 
-class ShaftViewModel(private val appContext: Context) : ViewModel() {
+    /* ---------------- State ---------------- */
 
-    /* ===================== State ===================== */
+    private val _unit = MutableStateFlow(UnitSystem.INCHES)  // or MILLIMETERS as you prefer
+    val unit: StateFlow<UnitSystem> = _unit
+
+    private val _hintStyle = MutableStateFlow(HintStyle.CHIP) // CHIP / TEXT / OFF
+    val hintStyle: StateFlow<HintStyle> = _hintStyle
 
     private val _spec = MutableStateFlow(
         ShaftSpecMm(
-            overallLengthMm = 0f,
-            bodies = emptyList(),
-            tapers = emptyList(),
-            threads = emptyList(),
-            liners = emptyList(),
-            aftTaper = null,
-            forwardTaper = null
+            overallLengthMm = 40f * UnitSystem.INCHES.toMillimeters(1.0).toFloat(), // ~1016 mm default
+            // lists start empty; you’ll add bodies/liners/tapers/threads as you go
         )
     )
-    val spec: StateFlow<ShaftSpecMm> = _spec.asStateFlow()
+    val spec: StateFlow<ShaftSpecMm> = _spec
 
-    private val _units = MutableStateFlow(Units.MM)
-    val units: StateFlow<Units> = _units.asStateFlow()
+    fun setUnit(newUnit: UnitSystem) { _unit.value = newUnit }
+    fun setHintStyle(style: HintStyle) { _hintStyle.value = style }
 
-    private val _referenceEnd = MutableStateFlow(ReferenceEnd.AFT)
-    val referenceEnd: StateFlow<ReferenceEnd> = _referenceEnd.asStateFlow()
+    /* ---------------- Parse / Format helpers ---------------- */
 
-    private val _showGrid = MutableStateFlow(false)
-    val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
+    private fun parseInCurrentUnit(raw: String): Float? {
+        val n = raw.trim().toDoubleOrNull() ?: return null
+        return _unit.value.toMillimeters(n).toFloat()
+    }
 
-    // Meta (Job/Notes)
-    private val _customer = MutableStateFlow("")
-    val customer: StateFlow<String> = _customer.asStateFlow()
-    private val _vessel = MutableStateFlow("")
-    val vessel: StateFlow<String> = _vessel.asStateFlow()
-    private val _jobNumber = MutableStateFlow("")
-    val jobNumber: StateFlow<String> = _jobNumber.asStateFlow()
-    private val _side = MutableStateFlow("")
-    val side: StateFlow<String> = _side.asStateFlow()
-    private val _date = MutableStateFlow("")
-    val date: StateFlow<String> = _date.asStateFlow()
-    private val _notes = MutableStateFlow("")
-    val notes: StateFlow<String> = _notes.asStateFlow()
+    /** Formats a millimeter value in the current unit, trimming trailing zeros. */
+    fun formatInCurrentUnit(mm: Float, decimals: Int = 3): String {
+        val v = _unit.value.fromMillimeters(mm.toDouble())
+        return "%.${decimals}f".format(v).trimEnd('0').trimEnd('.')
+    }
 
-    // End panels (Aft/Fwd) – ready for PDF
-    private val _aftLet = MutableStateFlow("")
-    private val _aftSet = MutableStateFlow("")
-    private val _aftTaperRate = MutableStateFlow("")
-    private val _aftKeyway = MutableStateFlow("")
-    private val _aftThreads = MutableStateFlow("")
-    val aftLet = _aftLet.asStateFlow()
-    val aftSet = _aftSet.asStateFlow()
-    val aftTaperRate = _aftTaperRate.asStateFlow()
-    val aftKeyway = _aftKeyway.asStateFlow()
-    val aftThreads = _aftThreads.asStateFlow()
+    private fun nonNeg(x: Float?): Float =
+        (x ?: 0f).let { if (it.isNaN()) 0f else max(0f, it) }
 
-    private val _fwdLet = MutableStateFlow("")
-    private val _fwdSet = MutableStateFlow("")
-    private val _fwdTaperRate = MutableStateFlow("")
-    private val _fwdKeyway = MutableStateFlow("")
-    private val _fwdThreads = MutableStateFlow("")
-    val fwdLet = _fwdLet.asStateFlow()
-    val fwdSet = _fwdSet.asStateFlow()
-    val fwdTaperRate = _fwdTaperRate.asStateFlow()
-    val fwdKeyway = _fwdKeyway.asStateFlow()
-    val fwdThreads = _fwdThreads.asStateFlow()
+    /* ---------------- Coverage / Prefill logic ---------------- */
 
-    /* ===================== Persist / init ===================== */
+    /** Farthest filled axial position (mm from AFT) across all components, clamped to overall length. */
+    private fun ShaftSpecMm.currentFillEndMm(): Float {
+        fun List<Float>.maxOrZero() = if (isEmpty()) 0f else this.max()
 
-    init {
-        // Load last-used units at startup
-        viewModelScope.launch {
-            UnitsStore.flow(appContext).collect { saved ->
-                _units.value = saved
-            }
+        val bodyEnds   = bodies.map { it.startFromAftMm + it.lengthMm }
+        val linerEnds  = liners.map { it.startFromAftMm + it.lengthMm }
+        val taperEnds  = tapers.map { it.startFromAftMm + it.lengthMm }
+        val threadEnds = threads.map { it.startFromAftMm + it.lengthMm }
+
+        val ends = buildList {
+            addAll(bodyEnds); addAll(linerEnds); addAll(taperEnds); addAll(threadEnds)
+            forwardTaper?.let { add(it.startFromAftMm + it.lengthMm) }
+            aftTaper?.let     { add(it.startFromAftMm + it.lengthMm) }
+            forwardThread?.let{ add(it.startFromAftMm + it.lengthMm) }
+            aftThread?.let    { add(it.startFromAftMm + it.lengthMm) }
+        }
+
+        return (if (ends.isEmpty()) 0f else ends.max()).coerceIn(0f, overallLengthMm)
+    }
+
+    /** Best-effort OD at the current end; prefers last body OD, then liner OD, then taper end OD. */
+    private fun ShaftSpecMm.inferCurrentOdMm(): Float {
+        bodies.maxByOrNull  { it.startFromAftMm + it.lengthMm }?.let { return it.diaMm }
+        liners.maxByOrNull  { it.startFromAftMm + it.lengthMm }?.let { return it.odMm }
+        tapers.maxByOrNull  { it.startFromAftMm + it.lengthMm }?.let { return it.endDiaMm }
+        // Threads don’t define base OD. If you introduce a base OD later, return it here.
+        return 0f
+    }
+
+    /** Label for a preview chip showing where the next component will auto-start (in current unit). */
+    fun nextAddPositionLabel(): String {
+        val mm = _spec.value.currentFillEndMm()
+        return "${formatInCurrentUnit(mm, 3)} ${_unit.value.displayName} from AFT"
+    }
+
+    /** Short “chip” coverage nudge if coverage != overall length. */
+    fun coverageChipHint(): String? {
+        val s = _spec.value
+        val filled = s.currentFillEndMm()
+        return when {
+            filled < s.overallLengthMm -> "Covered ${formatInCurrentUnit(filled, 3)} / ${formatInCurrentUnit(s.overallLengthMm, 3)}"
+            filled > s.overallLengthMm -> "Over by ${formatInCurrentUnit(filled - s.overallLengthMm, 3)}"
+            else -> null
         }
     }
 
-    /* ===================== Unit helpers ===================== */
-
-    private fun uiToMm(v: Float): Float =
-        if (_units.value == Units.MM) v else v * 25.4f
-
-    fun toUiUnits(mm: Float): Float =
-        if (_units.value == Units.MM) mm else mm / 25.4f
-
-    /* ===================== Global toggles ===================== */
-
-    fun setUnits(u: Units) {
-        _units.value = u
-        // persist selection
-        viewModelScope.launch { UnitsStore.save(appContext, u) }
-    }
-    fun setReferenceEnd(r: ReferenceEnd) { _referenceEnd.value = r }
-    fun setShowGrid(show: Boolean) { _showGrid.value = show }
-
-    /* ===================== Meta setters ===================== */
-
-    fun setCustomer(s: String) { _customer.value = s }
-    fun setVessel(s: String) { _vessel.value = s }
-    fun setJobNumber(s: String) { _jobNumber.value = s }
-    fun setSide(s: String) { _side.value = s }
-    fun setDate(s: String) { _date.value = s }
-    fun setNotes(s: String) { _notes.value = s }
-
-    // End panels setters
-    fun setAftLet(s: String) { _aftLet.value = s }
-    fun setAftSet(s: String) { _aftSet.value = s }
-    fun setAftTaperRate(s: String) { _aftTaperRate.value = s }
-    fun setAftKeyway(s: String) { _aftKeyway.value = s }
-    fun setAftThreads(s: String) { _aftThreads.value = s }
-
-    fun setFwdLet(s: String) { _fwdLet.value = s }
-    fun setFwdSet(s: String) { _fwdSet.value = s }
-    fun setFwdTaperRate(s: String) { _fwdTaperRate.value = s }
-    fun setFwdKeyway(s: String) { _fwdKeyway.value = s }
-    fun setFwdThreads(s: String) { _fwdThreads.value = s }
-
-    /* ===================== Shaft core ===================== */
-
-    /** Expects UI-units; stored internally in mm. */
-    fun setOverallLength(vUi: Float) {
+    /** Longer text hint for coverage. */
+    fun coverageHint(): String? {
         val s = _spec.value
-        _spec.value = s.copy(overallLengthMm = uiToMm(vUi).coerceAtLeast(0f))
+        val filled = s.currentFillEndMm()
+        return when {
+            filled < s.overallLengthMm ->
+                "Components cover ${formatInCurrentUnit(filled, 3)} of ${formatInCurrentUnit(s.overallLengthMm, 3)}. Add more or extend lengths."
+            filled > s.overallLengthMm ->
+                "Components exceed overall by ${formatInCurrentUnit(filled - s.overallLengthMm, 3)}. Shorten or reposition to fit."
+            else -> null
+        }
     }
 
-    /* ===================== Bodies ===================== */
+    /* ---------------- Basics ---------------- */
 
-    fun addBody() {
-        val s = _spec.value
-        _spec.value = s.copy(
-            bodies = s.bodies + BodySegmentSpec(
-                startFromAftMm = 0f,
-                lengthMm = 0f,
-                diaMm = 0f,
-                compressed = false,
-                compressionFactor = 0.5f
+    fun setOverallLength(text: String) {
+        val newVal = parseInCurrentUnit(text) ?: return
+        _spec.update { cur ->
+            val v = nonNeg(newVal)
+            // Optionally clamp components that extend beyond the new overall length
+            cur.copy(overallLengthMm = v)
+        }
+    }
+
+    /* ---------------- Add helpers (auto-prefill startFromAftMm) ---------------- */
+
+    fun addBodySegment(defaultLength: String? = null, defaultDia: String? = null) {
+        _spec.update { cur ->
+            val start = cur.currentFillEndMm()
+            val len   = defaultLength?.let { parseInCurrentUnit(it) } ?: 0f
+            val dia   = defaultDia?.let { parseInCurrentUnit(it) } ?: cur.inferCurrentOdMm()
+            cur.copy(
+                bodies = cur.bodies + BodySegmentSpec(
+                    startFromAftMm = start,
+                    lengthMm = nonNeg(len),
+                    diaMm = nonNeg(dia)
+                )
             )
-        )
+        }
     }
 
-    fun removeBody(index: Int) {
-        val s = _spec.value
-        if (index !in s.bodies.indices) return
-        _spec.value = s.copy(bodies = s.bodies.toMutableList().apply { removeAt(index) })
-    }
-
-    fun updateBody(
-        index: Int,
-        startUi: Float? = null,
-        lenUi: Float? = null,
-        diaUi: Float? = null,
-        compressed: Boolean? = null,
-        factor: Float? = null
-    ) {
-        val s = _spec.value
-        if (index !in s.bodies.indices) return
-        val cur = s.bodies[index]
-
-        val newStart = startUi?.let(::uiToMm) ?: cur.startFromAftMm
-        val newLen   = lenUi?.let(::uiToMm)   ?: cur.lengthMm
-        val (cs, cl) = clampStartLen(newStart, newLen, _spec.value.overallLengthMm)
-
-        val next = cur.copy(
-            startFromAftMm = cs,
-            lengthMm = cl,
-            diaMm = diaUi?.let(::uiToMm) ?: cur.diaMm,
-            compressed = compressed ?: cur.compressed,
-            compressionFactor = factor ?: cur.compressionFactor
-        )
-        _spec.value = s.copy(bodies = s.bodies.toMutableList().also { it[index] = next })
-    }
-
-    /* ===================== Tapers ===================== */
-
-    fun addTaper() {
-        val s = _spec.value
-        _spec.value = s.copy(
-            tapers = s.tapers + TaperSpec(
-                startFromAftMm = 0f,
-                lengthMm = 0f,
-                startDiaMm = 0f,
-                endDiaMm = 0f
+    fun addLiner(defaultLength: String? = null, defaultOd: String? = null) {
+        _spec.update { cur ->
+            val start = cur.currentFillEndMm()
+            val len   = defaultLength?.let { parseInCurrentUnit(it) } ?: 0f
+            val od    = defaultOd?.let { parseInCurrentUnit(it) } ?: cur.inferCurrentOdMm()
+            cur.copy(
+                liners = cur.liners + LinerSpec(
+                    startFromAftMm = start,
+                    lengthMm = nonNeg(len),
+                    odMm = nonNeg(od)
+                )
             )
-        )
+        }
     }
 
-    fun removeTaper(index: Int) {
-        val s = _spec.value
-        if (index !in s.tapers.indices) return
-        _spec.value = s.copy(tapers = s.tapers.toMutableList().apply { removeAt(index) })
-    }
-
-    fun updateTaper(
-        index: Int,
-        startUi: Float? = null,
-        lenUi: Float? = null,
-        startDiaUi: Float? = null,
-        endDiaUi: Float? = null
-    ) {
-        val s = _spec.value
-        if (index !in s.tapers.indices) return
-        val cur = s.tapers[index]
-
-        val ns = startUi?.let(::uiToMm) ?: cur.startFromAftMm
-        val nl = lenUi?.let(::uiToMm) ?: cur.lengthMm
-        val (cs, cl) = clampStartLen(ns, nl, _spec.value.overallLengthMm)
-
-        val next = cur.copy(
-            startFromAftMm = cs,
-            lengthMm = cl,
-            startDiaMm = startDiaUi?.let(::uiToMm) ?: cur.startDiaMm,
-            endDiaMm = endDiaUi?.let(::uiToMm) ?: cur.endDiaMm
-        )
-        _spec.value = s.copy(tapers = s.tapers.toMutableList().also { it[index] = next })
-    }
-
-    /* ===================== Threads ===================== */
-
-    fun addThread() {
-        val s = _spec.value
-        _spec.value = s.copy(
-            threads = s.threads + ThreadSpec(
-                startFromAftMm = 0f,
-                lengthMm = 0f,
-                majorDiaMm = 0f,
-                pitchMm = 0f,
-                endLabel = ""
+    fun addTaper(defaultLength: String? = null, defaultStartDia: String? = null, defaultEndDia: String? = null) {
+        _spec.update { cur ->
+            val start = cur.currentFillEndMm()
+            val base  = cur.inferCurrentOdMm()
+            val len   = defaultLength?.let { parseInCurrentUnit(it) } ?: 0f
+            val sDia  = defaultStartDia?.let { parseInCurrentUnit(it) } ?: base
+            val eDia  = defaultEndDia?.let { parseInCurrentUnit(it) } ?: base
+            cur.copy(
+                tapers = cur.tapers + TaperSpec(
+                    startFromAftMm = start,
+                    lengthMm = nonNeg(len),
+                    startDiaMm = nonNeg(sDia),
+                    endDiaMm = nonNeg(eDia)
+                )
             )
-        )
+        }
     }
 
-    fun removeThread(index: Int) {
-        val s = _spec.value
-        if (index !in s.threads.indices) return
-        _spec.value = s.copy(threads = s.threads.toMutableList().apply { removeAt(index) })
-    }
-
-    fun updateThread(
-        index: Int,
-        startUi: Float? = null,
-        lenUi: Float? = null,
-        majorDiaUi: Float? = null,
-        pitchUi: Float? = null,
-        endLabel: String? = null
-    ) {
-        val s = _spec.value
-        if (index !in s.threads.indices) return
-        val cur = s.threads[index]
-
-        val ns = startUi?.let(::uiToMm) ?: cur.startFromAftMm
-        val nl = lenUi?.let(::uiToMm) ?: cur.lengthMm
-        val (cs, cl) = clampStartLen(ns, nl, _spec.value.overallLengthMm)
-
-        val next = cur.copy(
-            startFromAftMm = cs,
-            lengthMm = cl,
-            majorDiaMm = majorDiaUi?.let(::uiToMm) ?: cur.majorDiaMm,
-            pitchMm = pitchUi?.let(::uiToMm) ?: cur.pitchMm,
-            endLabel = endLabel ?: cur.endLabel
-        )
-        _spec.value = s.copy(threads = s.threads.toMutableList().also { it[index] = next })
-    }
-
-    /* ===================== Liners ===================== */
-
-    fun addLiner() {
-        val s = _spec.value
-        _spec.value = s.copy(
-            liners = s.liners + LinerSpec(
-                startFromAftMm = 0f,
-                lengthMm = 0f,
-                odMm = 0f
+    fun addThread(defaultLength: String? = null, defaultMajorDia: String? = null, defaultPitch: String? = null, endLabel: String = "") {
+        _spec.update { cur ->
+            val start = cur.currentFillEndMm()
+            val base  = cur.inferCurrentOdMm()
+            val len   = defaultLength?.let { parseInCurrentUnit(it) } ?: 0f
+            val dia   = defaultMajorDia?.let { parseInCurrentUnit(it) } ?: base
+            val pitch = defaultPitch?.let { parseInCurrentUnit(it) } ?: 0f
+            cur.copy(
+                threads = cur.threads + ThreadSpec(
+                    startFromAftMm = start,
+                    lengthMm = nonNeg(len),
+                    majorDiaMm = nonNeg(dia),
+                    pitchMm = nonNeg(pitch),
+                    endLabel = endLabel
+                )
             )
+        }
+    }
+
+    /* ---------------- Remove helpers ---------------- */
+
+    fun removeBody(index: Int)   { _spec.update { cur -> cur.copy(bodies  = cur.bodies .toMutableList().also { if (index in it.indices) it.removeAt(index) }) } }
+    fun removeLiner(index: Int)  { _spec.update { cur -> cur.copy(liners  = cur.liners .toMutableList().also { if (index in it.indices) it.removeAt(index) }) } }
+    fun removeTaper(index: Int)  { _spec.update { cur -> cur.copy(tapers  = cur.tapers .toMutableList().also { if (index in it.indices) it.removeAt(index) }) } }
+    fun removeThread(index: Int) { _spec.update { cur -> cur.copy(threads = cur.threads.toMutableList().also { if (index in it.indices) it.removeAt(index) }) } }
+
+    /* ---------------- Setters for list items ---------------- */
+
+    fun setBody(index: Int, start: String? = null, length: String? = null, dia: String? = null) {
+        _spec.update { cur ->
+            if (index !in cur.bodies.indices) return@update cur
+            val list = cur.bodies.toMutableList()
+            val src = list[index]
+            val s = start ?.let { parseInCurrentUnit(it) } ?: src.startFromAftMm
+            val l = length?.let { parseInCurrentUnit(it) } ?: src.lengthMm
+            val d = dia   ?.let { parseInCurrentUnit(it) } ?: src.diaMm
+            list[index] = src.copy(
+                startFromAftMm = nonNeg(s).coerceAtMost(cur.overallLengthMm),
+                lengthMm = nonNeg(l),
+                diaMm = nonNeg(d)
+            )
+            cur.copy(bodies = list)
+        }
+    }
+
+    fun setLiner(index: Int, start: String? = null, length: String? = null, od: String? = null) {
+        _spec.update { cur ->
+            if (index !in cur.liners.indices) return@update cur
+            val list = cur.liners.toMutableList()
+            val src = list[index]
+            val s = start ?.let { parseInCurrentUnit(it) } ?: src.startFromAftMm
+            val l = length?.let { parseInCurrentUnit(it) } ?: src.lengthMm
+            val o = od    ?.let { parseInCurrentUnit(it) } ?: src.odMm
+            list[index] = src.copy(
+                startFromAftMm = nonNeg(s).coerceAtMost(cur.overallLengthMm),
+                lengthMm = nonNeg(l),
+                odMm = nonNeg(o)
+            )
+            cur.copy(liners = list)
+        }
+    }
+
+    fun setTaper(index: Int, start: String? = null, length: String? = null, startDia: String? = null, endDia: String? = null) {
+        _spec.update { cur ->
+            if (index !in cur.tapers.indices) return@update cur
+            val list = cur.tapers.toMutableList()
+            val src = list[index]
+            val s  = start    ?.let { parseInCurrentUnit(it) } ?: src.startFromAftMm
+            val l  = length   ?.let { parseInCurrentUnit(it) } ?: src.lengthMm
+            val sd = startDia ?.let { parseInCurrentUnit(it) } ?: src.startDiaMm
+            val ed = endDia   ?.let { parseInCurrentUnit(it) } ?: src.endDiaMm
+            list[index] = src.copy(
+                startFromAftMm = nonNeg(s).coerceAtMost(cur.overallLengthMm),
+                lengthMm = nonNeg(l),
+                startDiaMm = nonNeg(sd),
+                endDiaMm = nonNeg(ed)
+            )
+            cur.copy(tapers = list)
+        }
+    }
+
+    fun setThread(index: Int, start: String? = null, length: String? = null, majorDia: String? = null, pitch: String? = null, endLabel: String? = null) {
+        _spec.update { cur ->
+            if (index !in cur.threads.indices) return@update cur
+            val list = cur.threads.toMutableList()
+            val src = list[index]
+            val s  = start    ?.let { parseInCurrentUnit(it) } ?: src.startFromAftMm
+            val l  = length   ?.let { parseInCurrentUnit(it) } ?: src.lengthMm
+            val d  = majorDia ?.let { parseInCurrentUnit(it) } ?: src.majorDiaMm
+            val p  = pitch    ?.let { parseInCurrentUnit(it) } ?: src.pitchMm
+            val el = endLabel ?: src.endLabel
+            list[index] = src.copy(
+                startFromAftMm = nonNeg(s).coerceAtMost(cur.overallLengthMm),
+                lengthMm = nonNeg(l),
+                majorDiaMm = nonNeg(d),
+                pitchMm = nonNeg(p),
+                endLabel = el
+            )
+            cur.copy(threads = list)
+        }
+    }
+
+    fun clearAll() {
+        val hundredInMm = UnitSystem.INCHES.toMillimeters(100.0).toFloat()
+        _spec.value = com.android.shaftschematic.data.ShaftSpecMm(
+            overallLengthMm = hundredInMm,
+            threads = emptyList(),
+            tapers  = emptyList(),
+            liners  = emptyList(),
+            bodies  = emptyList()
         )
-    }
-
-    fun removeLiner(index: Int) {
-        val s = _spec.value
-        if (index !in s.liners.indices) return
-        _spec.value = s.copy(liners = s.liners.toMutableList().apply { removeAt(index) })
-    }
-
-    fun updateLiner(
-        index: Int,
-        startUi: Float? = null,
-        lenUi: Float? = null,
-        odUi: Float? = null
-    ) {
-        val s = _spec.value
-        if (index !in s.liners.indices) return
-        val cur = s.liners[index]
-
-        val ns = startUi?.let(::uiToMm) ?: cur.startFromAftMm
-        val nl = lenUi?.let(::uiToMm) ?: cur.lengthMm
-        val (cs, cl) = clampStartLen(ns, nl, _spec.value.overallLengthMm)
-
-        val next = cur.copy(
-            startFromAftMm = cs,
-            lengthMm = cl,
-            odMm = odUi?.let(::uiToMm) ?: cur.odMm
-        )
-        _spec.value = s.copy(liners = s.liners.toMutableList().also { it[index] = next })
-    }
-
-    /* ===================== Helpers ===================== */
-
-    private fun clampStartLen(startMm: Float, lenMm: Float, overallMm: Float): Pair<Float, Float> {
-        val s = startMm.coerceIn(0f, overallMm)
-        val maxLen = (overallMm - s).coerceAtLeast(0f)
-        val l = lenMm.coerceIn(0f, maxLen)
-        return s to l
     }
 }

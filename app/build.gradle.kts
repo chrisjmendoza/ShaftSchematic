@@ -56,6 +56,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation("androidx.datastore:datastore-preferences:1.1.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1") // or newer
 
     // for collectAsStateWithLifecycle
 
@@ -75,6 +76,7 @@ dependencies {
 
     // --- Material (View System) ONLY if you actually use Material Views
     implementation("com.google.android.material:material:1.13.0")
+    implementation(libs.androidx.compose.foundation)
 
     // --- Debug / Tooling
     debugImplementation(libs.androidx.compose.ui.tooling)
