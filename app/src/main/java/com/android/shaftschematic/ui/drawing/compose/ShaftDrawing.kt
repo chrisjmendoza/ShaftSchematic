@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import com.android.shaftschematic.data.ShaftSpecMm
+import com.android.shaftschematic.model.ShaftSpec
 import kotlin.math.max
 import kotlin.math.max as kmax
 
@@ -42,7 +42,7 @@ private fun mergeIntervals(list: List<Interval>): List<Interval> {
 
 @Composable
 fun ShaftDrawing(
-    spec: ShaftSpecMm,
+    spec: ShaftSpec,
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier) {

@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.BoatShaftDrawer" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- App-specific overrides -->
+    <!-- App theme that inherits Material3 DayNight NoActionBar -->
+    <style name="Theme.ShaftSchematic" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- optional: status/nav bar tweaks -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
     </style>
 </resources>

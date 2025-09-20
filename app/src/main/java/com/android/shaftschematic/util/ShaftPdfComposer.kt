@@ -67,7 +67,13 @@ object ShaftPdfComposer {
     private val dimText = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 11.5f }
 
     /* ───────────────────────── Public API ───────────────────────── */
-    fun export(context: Context, spec: ShaftSpecMm, fileName: String = "shaft_drawing.pdf"): File {
+    // NEW: Overload that writes to a provided OutputStream (SAF friendly)
+    fun exportToStream(
+        context: Context,
+        spec: ShaftSpecMm,
+        showGrid: Boolean = false,
+        out: java.io.OutputStream
+    ) {
         val pdf = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(PAGE_W_PT, PAGE_H_PT, 1).create()
         val page = pdf.startPage(pageInfo)
@@ -90,6 +96,46 @@ object ShaftPdfComposer {
 
         // Optional work area border
         c.drawRect(workRect, stroke1)
+
+        // NEW: grid behind geometry (if enabled)
+        if (showGrid) {
+            drawGrid(c, workRect, minorEveryMm = 10.0, majorEveryMm = 50.0)
+        }
+
+        drawShaftSheet(c, spec, workRect)
+        drawTitleBlock(c, spec, titleRect)
+
+        pdf.finishPage(page)
+        pdf.writeTo(out)
+        pdf.close()
+    }
+
+    fun export(context: Context, spec: ShaftSpecMm, fileName: String = "shaft_drawing.pdf", showGrid: Boolean = false): File {
+        val pdf = PdfDocument()
+        val pageInfo = PdfDocument.PageInfo.Builder(PAGE_W_PT, PAGE_H_PT, 1).create()
+        val page = pdf.startPage(pageInfo)
+        val c = page.canvas
+
+        val pageRect = RectF(0f, 0f, PAGE_W_PT.toFloat(), PAGE_H_PT.toFloat())
+        val titleRect = RectF(
+            MARGIN_PT,
+            pageRect.bottom - MARGIN_PT - TITLE_BLOCK_H_PT,
+            pageRect.right - MARGIN_PT,
+            pageRect.bottom - MARGIN_PT
+        )
+        val workRect = RectF(
+            MARGIN_PT,
+            MARGIN_PT,
+            pageRect.right - MARGIN_PT,
+            titleRect.top - VERTICAL_PADDING_PT * 0f
+        )
+
+        c.drawRect(workRect, stroke1)
+
+        // NEW: grid
+        if (showGrid) {
+            drawGrid(c, workRect, minorEveryMm = 10.0, majorEveryMm = 50.0)
+        }
 
         drawShaftSheet(c, spec, workRect)
         drawTitleBlock(c, spec, titleRect)
@@ -435,4 +481,44 @@ object ShaftPdfComposer {
     private fun mmToPt(mm: Double): Float = (mm * PT_PER_MM).toFloat()
     private fun fmt(v: Double, decimals: Int = 2): String = "%.${decimals}f".format(Locale.US, v)
     private fun sign(v: Float): Float = if (v < 0) -1f else 1f
+
+    // NEW: subtle grid in mm (converted to points)
+    private fun drawGrid(c: Canvas, area: RectF, minorEveryMm: Double = 10.0, majorEveryMm: Double = 50.0) {
+        val minorPt = mmToPt(minorEveryMm)
+        val majorPt = mmToPt(majorEveryMm)
+
+        val minor = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 0.6f
+            color = Color.argb(40, 0, 0, 0) // very light
+        }
+        val major = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 0.9f
+            color = Color.argb(70, 0, 0, 0) // a bit darker
+        }
+
+        // Vertical lines (snap first line to left edge)
+        run {
+            var x = area.left
+            var i = 0
+            while (x <= area.right + 0.5f) {
+                val p = if ((i % (majorPt / minorPt).toInt()) == 0) major else minor
+                c.drawLine(x, area.top, x, area.bottom, p)
+                x += minorPt
+                i++
+            }
+        }
+        // Horizontal lines (snap first line to top edge)
+        run {
+            var y = area.top
+            var i = 0
+            while (y <= area.bottom + 0.5f) {
+                val p = if ((i % (majorPt / minorPt).toInt()) == 0) major else minor
+                c.drawLine(area.left, y, area.right, y, p)
+                y += minorPt
+                i++
+            }
+        }
+    }
 }

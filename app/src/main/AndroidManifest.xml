@@ -6,7 +6,7 @@
         android:allowBackup="true"
         android:label="Shaft Schematic"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+        android:theme="@style/Theme.ShaftSchematic">
         <activity android:name=".MainActivity"
             android:windowSoftInputMode="adjustResize"
             android:exported="true">

@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -29,19 +30,24 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
 
     buildFeatures {
         compose = true
     }
-    // Important: keep this OUTSIDE buildFeatures
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
+    // No composeOptions with Kotlin 2.x
+
+}
+
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xlambdas=class")
     }
 }
 
@@ -55,10 +61,9 @@ dependencies {
     implementation(libs.androidx.activity.ktx)                   // for viewModels()
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation("androidx.datastore:datastore-preferences:1.1.7")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1") // or newer
-
-    // for collectAsStateWithLifecycle
+    implementation(libs.kotlinx.serialization.json)
 
     // --- Compose BOM controls versions for all Compose artifacts below
     implementation(platform(libs.androidx.compose.bom))
@@ -75,8 +80,8 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
 
     // --- Material (View System) ONLY if you actually use Material Views
-    implementation("com.google.android.material:material:1.13.0")
     implementation(libs.androidx.compose.foundation)
+    implementation("com.google.android.material:material:1.13.0")
 
     // --- Debug / Tooling
     debugImplementation(libs.androidx.compose.ui.tooling)
@@ -86,6 +91,5 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }
