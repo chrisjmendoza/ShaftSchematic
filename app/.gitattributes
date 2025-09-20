@@ -1,0 +1,43 @@
+# === Line endings ===
+# Always normalize to LF in repo, convert to native on checkout if needed
+* text=auto eol=lf
+
+# === Source code diffs (treat Kotlin like Java) ===
+*.kt   diff=java
+*.kts  diff=java
+*.java diff=java
+*.gradle      diff=java
+*.gradle.kts  diff=java
+
+# === Config files (force UTF-8) ===
+*.toml       text working-tree-encoding=UTF-8
+*.xml        text working-tree-encoding=UTF-8
+*.yml        text working-tree-encoding=UTF-8
+*.yaml       text working-tree-encoding=UTF-8
+*.json       text working-tree-encoding=UTF-8
+*.md         text working-tree-encoding=UTF-8
+*.txt        text working-tree-encoding=UTF-8
+*.properties text working-tree-encoding=UTF-8
+*.pro        text working-tree-encoding=UTF-8
+
+# === Scripts ===
+*.sh    text eol=lf working-tree-encoding=UTF-8
+*.bat   text eol=crlf working-tree-encoding=UTF-8
+*.cmd   text eol=crlf working-tree-encoding=UTF-8
+
+# === Binary files (no diffs, no CRLF conversion) ===
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.pdf   binary
+*.jar   binary
+*.keystore binary
+*.jks   binary
+*.aab   binary
+*.apk   binary
+*.aar   binary
+
+# === App-generated PDFs ===
+# Mark any exported PDFs (like ShaftSchematic drawings) as binary
+export/*.pdf binary

@@ -1,20 +1,21 @@
-# Gradle
+# === Gradle ===
 .gradle/
 build/
 **/build/
 
 # Local configuration files
 local.properties
+
+# IDE / Android Studio
 *.iml
 .idea/
-.idea/**
 
-# Log/OS files
+# Log / OS files
 *.log
 .DS_Store
 Thumbs.db
 
-# Android Studio
+# Android Studio native build
 .cxx/
 captures/
 .externalNativeBuild/
@@ -23,12 +24,33 @@ captures/
 *.jks
 *.keystore
 
-# Generated files
+# Generated APK/AAR/AAB
+*.apk
+*.aar
+*.aab
+
+# Generated build variants
 app/release/
 app/debug/
 app/generated/
 
-# Other
-*.apk
-*.aar
-*.aab
+# Optional extras
+*.class
+*.hprof
+*.ec
+build/tmp/kapt3/
+
+# === Allowlist important build config ===
+!gradlew
+!gradlew.bat
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+!settings.gradle
+!settings.gradle.kts
+!build.gradle
+!build.gradle.kts
+!gradle.properties
+!libs.versions.toml
+!.idea/codeStyles/
+!.idea/codeStyles/Project.xml
+!.idea/codeStyles/codeStyleConfig.xml

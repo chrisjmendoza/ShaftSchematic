@@ -1,0 +1,23 @@
+# Top-most EditorConfig file
+root = true
+
+# === Global defaults ===
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# === Kotlin / Java / Gradle ===
+[*.{kt,kts,java,gradle,gradle.kts}]
+indent_style = space
+indent_size = 4
+
+# === Config files (YAML, JSON, TOML, XML) ===
+[*.{yml,yaml,json,toml,xml}]
+indent_style = space
+indent_size = 2
+
+# === Markdown ===
+[*.md]
+trim_trailing_whitespace = false

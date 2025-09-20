@@ -12,11 +12,16 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModelFactory
 
 class MainActivity : ComponentActivity() {
 
+    // Activity-scoped VM using your factory
+    private val vm: ShaftViewModel by viewModels { ShaftViewModelFactory() }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
-                Surface { ShaftScreen() }
+                Surface {
+                    ShaftScreen(viewModel = vm)   // <-- pass the VM
+                }
             }
         }
     }
