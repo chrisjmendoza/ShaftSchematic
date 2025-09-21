@@ -1,7 +1,6 @@
-// file: com/android/shaftschematic/ui/shaft/ShaftScreen.kt
-package com.android.shaftschematic.ui.shaft
+// file: com/android/shaftschematic/ui/screen/ShaftScreen.kt
+package com.android.shaftschematic.ui.screen
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,23 +17,22 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.util.UnitSystem
 
 /**
  * ShaftScreen
  *
  * Stable, non-experimental UI:
- *  - Custom top bar (title, unit toggle, grid toggle, PDF export)
- *  - Preview at top: grid underlay + injected renderer on top
- *  - Collapsible Project Info (Customer, Vessel, Job)
+ *  - Top bar (title, unit toggle, grid toggle, PDF export)
+ *  - Preview at top (ShaftDrawing is unit- & grid-aware)
  *  - Overall Length input with dynamic unit label (mm/in)
- *  - Collapsible Notes
+ *  - Project Info (moved below Overall Length)
+ *  - Notes (collapsible)
  *  - IME-safe FAB
  *  - Snackbar hosted **inside Scaffold** (provided by Route)
  */
@@ -56,7 +54,6 @@ fun ShaftScreen(
     onSetOverallLengthRaw: (String) -> Unit,
     onAddComponent: () -> Unit,
     onExportPdf: () -> Unit,
-    renderShaft: @Composable (ShaftSpec, UnitSystem) -> Unit = { s, u -> DefaultShaftRenderer(s, u) },
     snackbarHostState: SnackbarHostState
 ) {
     Scaffold(
@@ -82,16 +79,15 @@ fun ShaftScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp)
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // 0) Preview card at the top
+                // 0) Preview (unit-aware + grid-aware)
                 PreviewCard(
                     showGrid = showGrid,
-                    gridStepDp = 16.dp,
                     spec = spec,
                     unit = unit,
-                    renderShaft = renderShaft,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 220.dp)
@@ -99,7 +95,23 @@ fun ShaftScreen(
 
                 HorizontalDivider()
 
-                // 1) Project Info (collapsible)
+                // 1) Overall Length (label reflects current unit)
+                var lengthText by remember(unit, spec.overallLengthMm) {
+                    mutableStateOf(formatForDisplay(spec.overallLengthMm, unit))
+                }
+                OutlinedTextField(
+                    value = lengthText,
+                    onValueChange = { txt ->
+                        lengthText = txt
+                        onSetOverallLengthRaw(txt)
+                    },
+                    label = { Text("Shaft Overall Length (${unitAbbrev(unit)})") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // 2) Project Info (moved here, below Overall Length)
                 ExpandableSection(title = "Project Info", initiallyExpanded = true) {
                     OutlinedTextField(
                         value = customer,
@@ -125,22 +137,6 @@ fun ShaftScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-
-                // 2) Overall Length (label reflects current unit)
-                var lengthText by remember(unit, spec.overallLengthMm) {
-                    mutableStateOf(formatForDisplay(spec.overallLengthMm, unit))
-                }
-                OutlinedTextField(
-                    value = lengthText,
-                    onValueChange = { txt ->
-                        lengthText = txt
-                        onSetOverallLengthRaw(txt)
-                    },
-                    label = { Text("Shaft Overall Length (${unitAbbrev(unit)})") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth()
-                )
 
                 // 3) Notes (collapsible)
                 ExpandableSection(title = "Notes", initiallyExpanded = false) {
@@ -214,7 +210,75 @@ private fun AppBarStable(
 }
 
 /* ─────────────────────────────
- *  Unit segmented control
+ *  Collapsible section
+ * ───────────────────────────── */
+@Composable
+private fun ExpandableSection(
+    title: String,
+    initiallyExpanded: Boolean,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(text = title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (expanded) "Collapse" else "Expand"
+                    )
+                }
+            }
+            if (expanded) {
+                Spacer(Modifier.height(8.dp))
+                content()
+            }
+        }
+    }
+}
+
+/* ─────────────────────────────
+ *  Preview card (delegates to ShaftDrawing)
+ * ───────────────────────────── */
+@Composable
+private fun PreviewCard(
+    showGrid: Boolean,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(8.dp)
+        ) {
+            ShaftDrawing(
+                spec = spec,
+                unit = unit,
+                showGrid = showGrid,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+
+/* ─────────────────────────────
+ *  Helpers
  * ───────────────────────────── */
 @Composable
 private fun UnitSegment(unit: UnitSystem, onUnitSelected: (UnitSystem) -> Unit) {
@@ -259,99 +323,6 @@ private fun UnitChip(
     }
 }
 
-/* ─────────────────────────────
- *  Collapsible section
- * ───────────────────────────── */
-@Composable
-private fun ExpandableSection(
-    title: String,
-    initiallyExpanded: Boolean,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-            ) {
-                Text(text = title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                IconButton(onClick = { expanded = !expanded }) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = if (expanded) "Collapse" else "Expand"
-                    )
-                }
-            }
-            if (expanded) {
-                Spacer(Modifier.height(8.dp))
-                content()
-            }
-        }
-    }
-}
-
-/* ─────────────────────────────
- *  Preview area
- * ───────────────────────────── */
-@Composable
-private fun PreviewCard(
-    showGrid: Boolean,
-    gridStepDp: Dp,
-    spec: ShaftSpec,
-    unit: UnitSystem,
-    renderShaft: @Composable (ShaftSpec, UnitSystem) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(8.dp)
-        ) {
-            if (showGrid) {
-                GridCanvas(
-                    step = gridStepDp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-                )
-            }
-            renderShaft(spec, unit)
-        }
-    }
-}
-
-@Composable
-private fun GridCanvas(step: Dp, color: Color, modifier: Modifier = Modifier.fillMaxSize()) {
-    Canvas(modifier = modifier) {
-        val stepPx = step.toPx().coerceAtLeast(1f)
-        val w = size.width
-        val h = size.height
-        var x = 0f
-        while (x <= w) {
-            drawLine(color, Offset(x, 0f), Offset(x, h), 1f); x += stepPx
-        }
-        var y = 0f
-        while (y <= h) {
-            drawLine(color, Offset(0f, y), Offset(w, y), 1f); y += stepPx
-        }
-    }
-}
-
-/* ─────────────────────────────
- *  Helpers
- * ───────────────────────────── */
 private fun unitAbbrev(unit: UnitSystem) = when (unit) {
     UnitSystem.MILLIMETERS -> "mm"
     UnitSystem.INCHES -> "in"
@@ -361,16 +332,4 @@ private fun formatForDisplay(mm: Float, unit: UnitSystem, maxDecimals: Int = 3):
     val v = if (unit == UnitSystem.MILLIMETERS) mm.toDouble() else (mm / com.android.shaftschematic.model.MM_PER_IN)
     val s = "%.${maxDecimals}f".format(v).trimEnd('0').trimEnd('.')
     return if (s.isEmpty()) "0" else s
-}
-
-/** Safe fallback if a renderer isn't injected yet. */
-@Composable
-private fun DefaultShaftRenderer(spec: ShaftSpec, unit: UnitSystem) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = "Preview: Overall Length = ${formatForDisplay(spec.overallLengthMm, unit)} ${unitAbbrev(unit)}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
 }

@@ -11,30 +11,34 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.sp
-import com.android.shaftschematic.data.ShaftSpecMm
+import com.android.shaftschematic.model.ShaftSpec
 import kotlin.math.max
 import kotlin.math.min
 
 /**
  * Compose-first renderer for the shaft drawing. Uses DrawScope APIs only.
- * Expects a precomputed ShaftLayout (for pixel mapping) and RenderOptions (styling).
+ *
+ * INPUTS
+ * - A [ShaftLayout.Result] computed with the canonical [ShaftSpec] (mm-only geometry).
+ * - [RenderOptions] for grid, strokes, and label behavior. Geometry is never re-scaled here;
+ *   we draw using the mm→px mapping provided by the layout.
  */
-class ShaftRenderer {
+object ShaftRenderer {
 
     @OptIn(ExperimentalTextApi::class)
-    fun DrawScope.render(
+    fun DrawScope.draw(
         layout: ShaftLayout.Result,
         opts: RenderOptions,
         textMeasurer: TextMeasurer
     ) {
-        val spec: ShaftSpecMm = layout.spec
+        val spec: ShaftSpec = layout.spec
 
         // Use simple width floats for Compose drawLine
         val shaftWidth = opts.lineWidthPx
         val dimWidth   = opts.dimLineWidthPx
 
         // Optional grid underlay
-        if (opts.showGrid) drawGrid(layout, opts)
+        if (opts.showGrid) drawGrid(layout, opts, textMeasurer)
 
         val cy = layout.centerlineYPx
 
@@ -43,7 +47,7 @@ class ShaftRenderer {
             color = Color.Black,
             start = Offset(layout.contentLeftPx, cy),
             end   = Offset(layout.contentRightPx, cy),
-            strokeWidth = shaftWidth
+            strokeWidth = dimWidth
         )
 
         // Helpers: unit conversions
@@ -76,12 +80,14 @@ class ShaftRenderer {
             drawLine(Color.Black, Offset(x0, cy - r0), Offset(x1, cy - r1), shaftWidth)
             drawLine(Color.Black, Offset(x0, cy + r0), Offset(x1, cy + r1), shaftWidth)
 
-            // End ticks (span the larger radius)
-            drawLine(Color.Black, Offset(x0, cy - max(r0, r1) - 6f), Offset(x0, cy - min(r0, r1) + 6f), dimWidth)
-            drawLine(Color.Black, Offset(x1, cy - max(r0, r1) - 6f), Offset(x1, cy - min(r0, r1) + 6f), dimWidth)
+            // Ticks
+            val top0 = cy - r0
+            drawLine(Color.Black, Offset(x0, top0 - 6f), Offset(x0, top0 + 6f), dimWidth)
+            val top1 = cy - r1
+            drawLine(Color.Black, Offset(x1, top1 - 6f), Offset(x1, top1 + 6f), dimWidth)
         }
 
-        // Threads (band + light hatch)
+        // Threads (render a simple hatch inside the OD bounds)
         spec.threads.forEach { th ->
             val x0 = xAt(th.startFromAftMm)
             val x1 = xAt(th.startFromAftMm + th.lengthMm)
@@ -89,14 +95,15 @@ class ShaftRenderer {
             val top = cy - r
             val bottom = cy + r
 
-            drawLine(Color.Black, Offset(x0, top), Offset(x1, top), shaftWidth)
-            drawLine(Color.Black, Offset(x0, bottom), Offset(x1, bottom), shaftWidth)
+            // OD lines
+            drawLine(Color.Black, Offset(x0, top), Offset(x1, top), dimWidth)
+            drawLine(Color.Black, Offset(x0, bottom), Offset(x1, bottom), dimWidth)
 
-            // Diagonal hatch to suggest thread zone (subtle)
-            var hx = x0
-            val hatchStep = 8f
-            while (hx < x1) {
-                drawLine(Color(0x99000000), Offset(hx, top), Offset(hx + 6f, top + 12f), dimWidth)
+            // 45° hatch based on pitch (fallback to 8 px if pitch==0)
+            val hatchStep = max(8f, th.pitchMm * layout.pxPerMm)
+            var hx = x0 + 4f
+            while (hx <= x1) {
+                drawLine(Color.Black, Offset(hx - 4f, bottom), Offset(hx + 4f, top), dimWidth)
                 hx += hatchStep
             }
 
@@ -121,7 +128,7 @@ class ShaftRenderer {
         drawOverallLengthLabel(layout, opts, textMeasurer)
     }
 
-    private fun DrawScope.drawGrid(layout: ShaftLayout.Result, opts: RenderOptions) {
+    private fun DrawScope.drawGrid(layout: ShaftLayout.Result, opts: RenderOptions, textMeasurer: TextMeasurer) {
         val width  = layout.contentRightPx - layout.contentLeftPx
         val height = layout.contentBottomPx - layout.contentTopPx
 
@@ -131,9 +138,7 @@ class ShaftRenderer {
         val minors = max(1, opts.gridMinorsPerMajor)
         val minorGapPx = majorGapPx / minors
 
-        // Keep minors from getting too dense
-        val minGap = 2f
-        val useMinor = minorGapPx >= minGap
+        val useMinor = minorGapPx >= opts.gridMinPixelGap
 
         // Vertical lines
         var x = layout.contentLeftPx
@@ -173,6 +178,25 @@ class ShaftRenderer {
                 topLeft = Offset(layout.contentRightPx - barW - pad, layout.contentTopPx + pad),
                 size = Size(barW, barH),
                 alpha = 0.6f
+            )
+
+            val legendSize = if (opts.legendTextSizePx > 0f) opts.legendTextSizePx else 0.6f * opts.textSizePx
+            val style = TextStyle(
+                color = Color(opts.legendTextColor),
+                fontSize = (legendSize / density).sp,
+                platformStyle = PlatformTextStyle(includeFontPadding = false)
+            )
+            val oneMajorMm = majorGapPx / layout.pxPerMm
+            val legend = if (opts.gridUseInches) {
+                val inches = oneMajorMm / 25.4f
+                "%.2f in".format(inches)
+            } else {
+                if (oneMajorMm >= 100f) "${oneMajorMm.toInt()} mm" else "%.1f mm".format(oneMajorMm)
+            }
+            val textLayout = textMeasurer.measure(AnnotatedString(legend), style)
+            drawText(
+                textLayout,
+                topLeft = Offset(layout.contentRightPx - textLayout.size.width - pad, layout.contentTopPx + pad + barH + 6f)
             )
         }
     }
