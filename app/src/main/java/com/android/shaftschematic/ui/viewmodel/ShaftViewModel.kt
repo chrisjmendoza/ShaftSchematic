@@ -63,18 +63,18 @@ class ShaftViewModel : ViewModel() {
     val spec: StateFlow<ShaftSpec> = _spec.asStateFlow()
 
     // UI metadata and preview toggles (not part of ShaftSpec by design)
-    private val _customer   = MutableStateFlow("")
-    private val _vessel     = MutableStateFlow("")
-    private val _jobNumber  = MutableStateFlow("")
-    private val _notes      = MutableStateFlow("")
-    private val _showGrid   = MutableStateFlow(false)
+    private val _customer = MutableStateFlow("")
+    private val _vessel = MutableStateFlow("")
+    private val _jobNumber = MutableStateFlow("")
+    private val _notes = MutableStateFlow("")
+    private val _showGrid = MutableStateFlow(false)
 
     /** Read-only views for the UI layer */
-    val customer:  StateFlow<String> = _customer.asStateFlow()
-    val vessel:    StateFlow<String> = _vessel.asStateFlow()
+    val customer: StateFlow<String> = _customer.asStateFlow()
+    val vessel: StateFlow<String> = _vessel.asStateFlow()
     val jobNumber: StateFlow<String> = _jobNumber.asStateFlow()
-    val notes:     StateFlow<String> = _notes.asStateFlow()
-    val showGrid:  StateFlow<Boolean> = _showGrid.asStateFlow()
+    val notes: StateFlow<String> = _notes.asStateFlow()
+    val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
 
     // -------------------------------------------------------------------------
     // #2. Formatting helpers (display-only)
@@ -87,7 +87,8 @@ class ShaftViewModel : ViewModel() {
      * - Capped to [maxDecimals] to avoid noisy long decimals (default 3)
      */
     fun formatInCurrentUnit(mm: Float, maxDecimals: Int = 3): String {
-        val value = if (unit.value == UnitSystem.MILLIMETERS) mm.toDouble() else mm.toDouble() / MM_PER_IN
+        val value =
+            if (unit.value == UnitSystem.MILLIMETERS) mm.toDouble() else mm.toDouble() / MM_PER_IN
         return trimZeros(value, maxDecimals)
     }
 
@@ -110,10 +111,10 @@ class ShaftViewModel : ViewModel() {
 
     private fun coverageEndMmOf(s: ShaftSpec): Float {
         var end = 0f
-        s.bodies.forEach  { end = max(end, segmentEnd(it.startFromAftMm, it.lengthMm)) }
-        s.tapers.forEach  { end = max(end, segmentEnd(it.startFromAftMm, it.lengthMm)) }
+        s.bodies.forEach { end = max(end, segmentEnd(it.startFromAftMm, it.lengthMm)) }
+        s.tapers.forEach { end = max(end, segmentEnd(it.startFromAftMm, it.lengthMm)) }
         s.threads.forEach { end = max(end, segmentEnd(it.startFromAftMm, it.lengthMm)) }
-        s.liners.forEach  { end = max(end, segmentEnd(it.startFromAftMm, it.lengthMm)) }
+        s.liners.forEach { end = max(end, segmentEnd(it.startFromAftMm, it.lengthMm)) }
         return end
     }
 
@@ -175,8 +176,8 @@ class ShaftViewModel : ViewModel() {
             val b = list.getOrNull(index) ?: return@update prev
             val updated = b.copy(
                 startFromAftMm = start?.let { parseToMm(it, u).toFloat() } ?: b.startFromAftMm,
-                lengthMm      = length?.let { parseToMm(it, u).toFloat() } ?: b.lengthMm,
-                diaMm         = dia?.let    { parseToMm(it, u).toFloat() } ?: b.diaMm
+                lengthMm = length?.let { parseToMm(it, u).toFloat() } ?: b.lengthMm,
+                diaMm = dia?.let { parseToMm(it, u).toFloat() } ?: b.diaMm
             )
             list[index] = updated
             prev.copy(bodies = list)
@@ -184,16 +185,22 @@ class ShaftViewModel : ViewModel() {
     }
 
     /** Update a Taper by index. */
-    fun setTaper(index: Int, start: String? = null, length: String? = null, startDia: String? = null, endDia: String? = null) {
+    fun setTaper(
+        index: Int,
+        start: String? = null,
+        length: String? = null,
+        startDia: String? = null,
+        endDia: String? = null
+    ) {
         val u = unit.value
         _spec.update { prev ->
             val list = prev.tapers.toMutableList()
             val t = list.getOrNull(index) ?: return@update prev
             val updated = t.copy(
-                startFromAftMm = start?.let    { parseToMm(it, u).toFloat() } ?: t.startFromAftMm,
-                lengthMm       = length?.let   { parseToMm(it, u).toFloat() } ?: t.lengthMm,
-                startDiaMm     = startDia?.let { parseToMm(it, u).toFloat() } ?: t.startDiaMm,
-                endDiaMm       = endDia?.let   { parseToMm(it, u).toFloat() } ?: t.endDiaMm
+                startFromAftMm = start?.let { parseToMm(it, u).toFloat() } ?: t.startFromAftMm,
+                lengthMm = length?.let { parseToMm(it, u).toFloat() } ?: t.lengthMm,
+                startDiaMm = startDia?.let { parseToMm(it, u).toFloat() } ?: t.startDiaMm,
+                endDiaMm = endDia?.let { parseToMm(it, u).toFloat() } ?: t.endDiaMm
             )
             list[index] = updated
             prev.copy(tapers = list)
@@ -201,16 +208,22 @@ class ShaftViewModel : ViewModel() {
     }
 
     /** Update a Thread by index. */
-    fun setThread(index: Int, start: String? = null, majorDia: String? = null, pitch: String? = null, length: String? = null) {
+    fun setThread(
+        index: Int,
+        start: String? = null,
+        majorDia: String? = null,
+        pitch: String? = null,
+        length: String? = null
+    ) {
         val u = unit.value
         _spec.update { prev ->
             val list = prev.threads.toMutableList()
             val th = list.getOrNull(index) ?: return@update prev
             val updated = th.copy(
-                startFromAftMm = start?.let    { parseToMm(it, u).toFloat() } ?: th.startFromAftMm,
-                majorDiaMm     = majorDia?.let { parseToMm(it, u).toFloat() } ?: th.majorDiaMm,
-                pitchMm        = pitch?.let    { parseToMm(it, u).toFloat() } ?: th.pitchMm,
-                lengthMm       = length?.let   { parseToMm(it, u).toFloat() } ?: th.lengthMm
+                startFromAftMm = start?.let { parseToMm(it, u).toFloat() } ?: th.startFromAftMm,
+                majorDiaMm = majorDia?.let { parseToMm(it, u).toFloat() } ?: th.majorDiaMm,
+                pitchMm = pitch?.let { parseToMm(it, u).toFloat() } ?: th.pitchMm,
+                lengthMm = length?.let { parseToMm(it, u).toFloat() } ?: th.lengthMm
             )
             list[index] = updated
             prev.copy(threads = list)
@@ -225,8 +238,8 @@ class ShaftViewModel : ViewModel() {
             val ln = list.getOrNull(index) ?: return@update prev
             val updated = ln.copy(
                 startFromAftMm = start?.let { parseToMm(it, u).toFloat() } ?: ln.startFromAftMm,
-                lengthMm       = length?.let { parseToMm(it, u).toFloat() } ?: ln.lengthMm,
-                odMm           = od?.let    { parseToMm(it, u).toFloat() } ?: ln.odMm
+                lengthMm = length?.let { parseToMm(it, u).toFloat() } ?: ln.lengthMm,
+                odMm = od?.let { parseToMm(it, u).toFloat() } ?: ln.odMm
             )
             list[index] = updated
             prev.copy(liners = list)
@@ -237,38 +250,82 @@ class ShaftViewModel : ViewModel() {
     // #5b. UI-only setters (metadata & preview flags)
     // -------------------------------------------------------------------------
 
-    fun setCustomer(text: String)  { _customer.value = text }
-    fun setVessel(text: String)    { _vessel.value = text }
-    fun setJobNumber(text: String) { _jobNumber.value = text }
-    fun setNotes(text: String)     { _notes.value = text }
-    fun setShowGrid(enabled: Boolean) { _showGrid.value = enabled }
+    fun setCustomer(text: String) {
+        _customer.value = text
+    }
+
+    fun setVessel(text: String) {
+        _vessel.value = text
+    }
+
+    fun setJobNumber(text: String) {
+        _jobNumber.value = text
+    }
+
+    fun setNotes(text: String) {
+        _notes.value = text
+    }
+
+    fun setShowGrid(enabled: Boolean) {
+        _showGrid.value = enabled
+    }
 
     // -------------------------------------------------------------------------
     // #6. Removers (by id)
     // -------------------------------------------------------------------------
 
-    fun removeBodyById(id: String)   { _spec.update { it.copy(bodies  = it.bodies.filterNot  { b -> b.id == id }) } }
-    fun removeTaperById(id: String)  { _spec.update { it.copy(tapers  = it.tapers.filterNot  { t -> t.id == id }) } }
-    fun removeThreadById(id: String) { _spec.update { it.copy(threads = it.threads.filterNot { th -> th.id == id }) } }
-    fun removeLinerById(id: String)  { _spec.update { it.copy(liners  = it.liners.filterNot  { ln -> ln.id == id }) } }
+    fun removeBodyById(id: String) {
+        _spec.update { it.copy(bodies = it.bodies.filterNot { b -> b.id == id }) }
+    }
+
+    fun removeTaperById(id: String) {
+        _spec.update { it.copy(tapers = it.tapers.filterNot { t -> t.id == id }) }
+    }
+
+    fun removeThreadById(id: String) {
+        _spec.update { it.copy(threads = it.threads.filterNot { th -> th.id == id }) }
+    }
+
+    fun removeLinerById(id: String) {
+        _spec.update { it.copy(liners = it.liners.filterNot { ln -> ln.id == id }) }
+    }
 
     // -------------------------------------------------------------------------
     // #7. Adders (auto-place at current coverage end)
     // -------------------------------------------------------------------------
 
-    /** Adds a Body at the end of current coverage. Carries diameter if available. */
+    /** Append a Body at the current tail using last known diameter (or 25 mm) and 100 mm length. */
     fun addBodySegment() {
-        val s = spec.value
-        val start = coverageEndMmOf(s)
-        val carryDia = s.bodies.lastOrNull()?.diaMm
-            ?: s.liners.lastOrNull()?.odMm
-            ?: 25.4f // default: 1 inch in mm
-        val newItem = Body(
-            startFromAftMm = start,
-            lengthMm = 50f,
-            diaMm = carryDia
+        val cur = _spec.value
+
+        // Compute tail (max end across all components)
+        val lastEnd = listOfNotNull(
+            cur.bodies.maxOfOrNull { it.startFromAftMm + it.lengthMm },
+            cur.tapers.maxOfOrNull { it.startFromAftMm + it.lengthMm },
+            cur.liners.maxOfOrNull { it.startFromAftMm + it.lengthMm },
+            cur.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm },
+        ).maxOrNull() ?: 0f
+
+        // Heuristic for diameter: prefer last body, then taper end, else 25 mm default
+        val baseDia = cur.bodies.lastOrNull()?.diaMm
+            ?: cur.tapers.lastOrNull()?.endDiaMm
+            ?: 25f
+
+        val newLen = 100f // mm
+        val newBody = Body(
+            startFromAftMm = lastEnd,
+            lengthMm = newLen,
+            diaMm = baseDia
         )
-        viewModelScope.launch { _spec.emit(s.copy(bodies = s.bodies + newItem)) }
+
+        val newOverall = max(cur.overallLengthMm, lastEnd + newLen)
+
+        _spec.update {
+            it.copy(
+                overallLengthMm = newOverall,
+                bodies = it.bodies + newBody
+            )
+        }
     }
 
     /** Adds a Taper at the end of current coverage. Seeds diameters from last Body. */

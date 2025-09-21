@@ -10,13 +10,33 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * This version uses the **canonical** model layer types (no more data.ShaftSpecMm).
- * All geometry in the spec is assumed to be **millimeters (mm)**; the returned
- * [pxPerMm] converts mm → px for the current content rectangle.
+ * Computes a device-space layout for rendering a shaft drawing.
+ *
+ * Converts canonical millimeter geometry from [com.android.shaftschematic.model.ShaftSpec]
+ * into pixel coordinates for a given drawing rectangle and returns a [Result] that
+ * encapsulates:
+ *
+ * - **Content bounds**: [contentLeftPx], [contentTopPx], [contentRightPx], [contentBottomPx]
+ *   where the shaft will be drawn.
+ * - **Scale**: [pxPerMm], a uniform mm→px factor used for both X (length) and Y (diameter).
+ * - **Centerline**: [centerlineYPx], the vertical center of the shaft.
+ * - **Spec reference**: the original [spec] used to compute the layout.
+ *
+ * The layout is deterministic given the inputs; it does not query resources or hold mutable state.
  */
 object ShaftLayout {
 
-
+    /**
+     * Output of a layout computation for a shaft drawing.
+     *
+     * @property spec The canonical input spec (all geometry in millimeters).
+     * @property pxPerMm Uniform scale from millimeters to pixels.
+     * @property contentLeftPx Left edge (px) of the drawing content region.
+     * @property contentTopPx Top edge (px) of the drawing content region.
+     * @property contentRightPx Right edge (px) of the drawing content region.
+     * @property contentBottomPx Bottom edge (px) of the drawing content region.
+     * @property centerlineYPx The vertical Y position (px) of the shaft centerline.
+     */
     data class Result(
         val spec: ShaftSpec,
         val contentLeftPx: Float,
@@ -29,10 +49,19 @@ object ShaftLayout {
 
 
     /**
-     * Compute a layout that fits the full shaft length into [leftPx,rightPx] and
-     * (approximately) fits the max diameter into [topPx,bottomPx] with a little headroom.
+     * Compute the mm→px mapping and content rectangle for rendering a [spec] within
+     * the provided device-space bounds.
      *
-     * Signature intentionally simple so call sites can pass positionally.
+     * The algorithm fits the geometry into `[leftPx, topPx, rightPx, bottomPx]` while
+     * preserving a uniform mm→px scale ([Result.pxPerMm]). The result also encodes a
+     * vertical centerline for convenience in the renderer.
+     *
+     * @param spec Canonical shaft geometry in **millimeters**.
+     * @param leftPx Left bound of the available drawing area (pixels).
+     * @param topPx Top bound of the available drawing area (pixels).
+     * @param rightPx Right bound of the available drawing area (pixels).
+     * @param bottomPx Bottom bound of the available drawing area (pixels).
+     * @return A [Result] with pixel bounds, centerline, and mm→px scale for rendering.
      */
     fun compute(
         spec: ShaftSpec,

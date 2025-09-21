@@ -16,15 +16,38 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Compose-first renderer for the shaft drawing. Uses DrawScope APIs only.
+ * Compose-first shaft drawing renderer.
  *
- * INPUTS
- * - A [ShaftLayout.Result] computed with the canonical [ShaftSpec] (mm-only geometry).
- * - [RenderOptions] for grid, strokes, and label behavior. Geometry is never re-scaled here;
- *   we draw using the mm→px mapping provided by the layout.
+ * ## Responsibilities
+ * - Draws the engineering grid (optional), shaft geometry (bodies, tapers, threads, liners),
+ *   centerline/ticks, and text labels.
+ * - Consumes a precomputed [ShaftLayout.Result] that supplies the mm→px mapping and content bounds.
+ * - Treats [com.android.shaftschematic.model.ShaftSpec] geometry as **canonical millimeters**.
+ *   Unit-dependent behavior (e.g., grid legend in inches vs mm) is controlled via [RenderOptions].
+ *
+ * ## Usage
+ * ```kotlin
+ * val layout = ShaftLayout.compute(spec, 0f, 0f, size.width, size.height)
+ * val opts = RenderOptions(showGrid = true, gridUseInches = unit == UnitSystem.INCHES)
+ * with(this) {                      // this = DrawScope inside Canvas { ... }
+ *   ShaftRenderer.draw(layout, opts, textMeasurer)
+ * }
+ * ```
+ *
+ * The renderer is pure w.r.t. its inputs (layout/options/spec) and does not hold state.
+ * Call from a Compose `Canvas` block on the UI thread.
  */
 object ShaftRenderer {
 
+    /**
+     * Render the shaft into the current [DrawScope].
+     *
+     * @receiver The active [DrawScope] provided by a Compose `Canvas { … }` block.
+     * @param layout A precomputed layout describing the content rect, centerline, and mm→px scale.
+     * @param opts Rendering options, including grid visibility and legend/line styling.
+     * @param textMeasurer A Compose text measurer supplied by the caller to ensure text
+     *                     measurement/layout is consistent with the preview host.
+     */
     @OptIn(ExperimentalTextApi::class)
     fun DrawScope.draw(
         layout: ShaftLayout.Result,
@@ -137,6 +160,17 @@ object ShaftRenderer {
     ) {
         with(scope) { draw(layout, opts, textMeasurer) }
     }
+
+    /**
+     * Draw the background engineering grid inside the content rect defined by [layout].
+     *
+     * Grid cadence and legend units are driven by [RenderOptions], not by the underlying geometry,
+     * which remains in millimeters.
+     *
+     * @receiver The active [DrawScope].
+     * @param layout Content bounds and mm→px scale.
+     * @param opts Grid styling (visibility, major/minor strokes, legend).
+     */
     private fun DrawScope.drawGrid(layout: ShaftLayout.Result, opts: RenderOptions, textMeasurer: TextMeasurer) {
         val width  = layout.contentRightPx - layout.contentLeftPx
         val height = layout.contentBottomPx - layout.contentTopPx
@@ -210,6 +244,16 @@ object ShaftRenderer {
         }
     }
 
+    /**
+     * Draw a single overall-length label aligned near the bottom of the content rect.
+     *
+     * Display units follow [RenderOptions.gridUseInches]; geometry remains canonical (mm).
+     *
+     * @receiver The active [DrawScope].
+     * @param layout Content bounds and mm→px scale.
+     * @param opts Text styling hints (via [RenderOptions]).
+     * @param textMeasurer Caller-supplied measurer for consistent typography.
+     */
     @OptIn(ExperimentalTextApi::class)
     private fun DrawScope.drawOverallLengthLabel(
         layout: ShaftLayout.Result,
