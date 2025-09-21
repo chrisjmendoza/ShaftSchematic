@@ -247,7 +247,7 @@ private fun ExpandableSection(
 }
 
 /* ─────────────────────────────
- *  Preview card (delegates to ShaftDrawing)
+ *  Preview card (delegates to unit/grid-aware ShaftDrawing)
  * ───────────────────────────── */
 @Composable
 private fun PreviewCard(

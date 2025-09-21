@@ -6,39 +6,24 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.pdf.ShaftPdfComposer
-import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
-import com.android.shaftschematic.ui.screen.ShaftScreen // <-- IMPORTANT: match your ShaftScreen package
+import com.android.shaftschematic.ui.screen.ShaftScreen
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
-import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * ShaftRoute
- *
- * Wires VM ↔ UI and owns the SAF “Save As…” export flow.
- *
- * Notes:
- *  - We pass `unit` and `showGrid` to the screen (your screen requires them).
- *  - The preview renderer signature is (ShaftSpec, UnitSystem) -> Unit, but the current
- *    ShaftDrawing composable only takes (spec: ShaftSpec, modifier: Modifier = Modifier).
- *    We therefore ignore the UnitSystem in the lambda and just call ShaftDrawing(spec = s).
- *  - No lifecycle-*compose imports are needed; we use collectAsState().
+ * Wires ViewModel ↔ UI and owns the SAF “Save As…” export flow.
+ * No lifecycle-*compose imports; uses collectAsState().
  */
 @Composable
 fun ShaftRoute(vm: ShaftViewModel) {
@@ -46,7 +31,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // --- collect state ---
+    // --- state ---
     val spec      by vm.spec.collectAsState()
     val unit      by vm.unit.collectAsState()
     val showGrid  by vm.showGrid.collectAsState()
@@ -55,7 +40,6 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val jobNumber by vm.jobNumber.collectAsState()
     val notes     by vm.notes.collectAsState()
 
-    // --- helpers ---
     fun exportTitleStem(): String {
         val parts = listOf(jobNumber, vessel, customer).map { it.trim() }.filter { it.isNotEmpty() }
         return if (parts.isNotEmpty()) parts.joinToString(" - ")
@@ -64,7 +48,6 @@ fun ShaftRoute(vm: ShaftViewModel) {
 
     fun showSnack(msg: String) = scope.launch { snackbarHostState.showSnackbar(msg) }
 
-    // --- SAF launcher ---
     val createPdfLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
@@ -76,17 +59,16 @@ fun ShaftRoute(vm: ShaftViewModel) {
             context.contentResolver.openOutputStream(uri)?.use { out ->
                 ShaftPdfComposer.exportToStream(
                     context = context,
-                    spec = spec,                // geometry (mm)
-                    unit = unit,                // labels (mm/in)
-                    showGrid = showGrid,        // grid underlay
+                    spec = spec,
+                    unit = unit,
+                    showGrid = showGrid,
                     out = out,
-                    title = exportTitleStem()   // printed in the title block
+                    title = exportTitleStem()
                 )
             } ?: run {
                 showSnack("Unable to open destination")
                 return@rememberLauncherForActivityResult
             }
-
             val displayName = runCatching {
                 queryDisplayName(context.contentResolver.query(uri, null, null, null, null))
             }.getOrNull() ?: uri.lastPathSegment ?: "PDF"
@@ -96,7 +78,6 @@ fun ShaftRoute(vm: ShaftViewModel) {
         }
     }
 
-    // --- UI ---
     Box {
         ShaftScreen(
             spec = spec,
@@ -116,7 +97,13 @@ fun ShaftRoute(vm: ShaftViewModel) {
             onSetOverallLengthRaw = vm::setOverallLength,
             onAddComponent = vm::addBodySegment,
 
-            onExportPdf = { /* your SAF launcher */ },
+            onExportPdf = {
+                val suggested = exportTitleStem()
+                    .replace(Regex("\\s+"), " ")
+                    .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                    .plus(".pdf")
+                createPdfLauncher.launch(suggested)
+            },
 
             snackbarHostState = snackbarHostState
         )

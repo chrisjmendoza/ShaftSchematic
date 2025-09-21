@@ -128,6 +128,15 @@ object ShaftRenderer {
         drawOverallLengthLabel(layout, opts, textMeasurer)
     }
 
+    @OptIn(ExperimentalTextApi::class)
+    fun drawOn(
+        scope: DrawScope,
+        layout: ShaftLayout.Result,
+        opts: RenderOptions,
+        textMeasurer: TextMeasurer
+    ) {
+        with(scope) { draw(layout, opts, textMeasurer) }
+    }
     private fun DrawScope.drawGrid(layout: ShaftLayout.Result, opts: RenderOptions, textMeasurer: TextMeasurer) {
         val width  = layout.contentRightPx - layout.contentLeftPx
         val height = layout.contentBottomPx - layout.contentTopPx
