@@ -58,13 +58,12 @@ dependencies {
 
     // --- Activity / Lifecycle
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.ktx)                   // for viewModels()
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1") // or newer
     implementation(libs.kotlinx.serialization.json)
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
 
 // latest stable as of now
 

@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.android.shaftschematic.pdf.ShaftPdfComposer
+import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.screen.ShaftScreen
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import kotlinx.coroutines.launch
@@ -22,8 +23,12 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Wires ViewModel ↔ UI and owns the SAF “Save As…” export flow.
- * No lifecycle-*compose imports; uses collectAsState().
+ * ShaftRoute
+ *
+ * Wires ViewModel ↔ UI, hosts Snackbar state, and implements SAF “Save As…” export.
+ * - File name + title block order: Job – Vessel – Customer (fallback: timestamp_shaftdrawing.pdf)
+ * - FAB opens add flow in ShaftScreen; typed callbacks here append components via VM.
+ * - No lifecycle-*compose dependency; uses collectAsState().
  */
 @Composable
 fun ShaftRoute(vm: ShaftViewModel) {
@@ -31,7 +36,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // --- state ---
+    // --- VM state ---
     val spec      by vm.spec.collectAsState()
     val unit      by vm.unit.collectAsState()
     val showGrid  by vm.showGrid.collectAsState()
@@ -40,6 +45,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val jobNumber by vm.jobNumber.collectAsState()
     val notes     by vm.notes.collectAsState()
 
+    /** Build human title/filename stem in Job → Vessel → Customer order. */
     fun exportTitleStem(): String {
         val parts = listOf(jobNumber, vessel, customer).map { it.trim() }.filter { it.isNotEmpty() }
         return if (parts.isNotEmpty()) parts.joinToString(" - ")
@@ -48,6 +54,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
 
     fun showSnack(msg: String) = scope.launch { snackbarHostState.showSnackbar(msg) }
 
+    // SAF launcher (CreateDocument → we write to returned Uri)
     val createPdfLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
@@ -59,9 +66,9 @@ fun ShaftRoute(vm: ShaftViewModel) {
             context.contentResolver.openOutputStream(uri)?.use { out ->
                 ShaftPdfComposer.exportToStream(
                     context = context,
-                    spec = spec,
-                    unit = unit,
-                    showGrid = showGrid,
+                    spec = spec,         // geometry (mm)
+                    unit = unit,         // labels (mm/in)
+                    showGrid = showGrid, // grid underlay
                     out = out,
                     title = exportTitleStem()
                 )
@@ -69,8 +76,10 @@ fun ShaftRoute(vm: ShaftViewModel) {
                 showSnack("Unable to open destination")
                 return@rememberLauncherForActivityResult
             }
+
+            // Best-effort: show the saved display name
             val displayName = runCatching {
-                queryDisplayName(context.contentResolver.query(uri, null, null, null, null))
+                context.contentResolver.query(uri, null, null, null, null).use(::queryDisplayName)
             }.getOrNull() ?: uri.lastPathSegment ?: "PDF"
             showSnack("Exported: $displayName")
         } catch (t: Throwable) {
@@ -80,6 +89,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
 
     Box {
         ShaftScreen(
+            // --- state ---
             spec = spec,
             unit = unit,
             customer = customer,
@@ -88,6 +98,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
             notes = notes,
             showGrid = showGrid,
 
+            // --- setters ---
             onSetUnit = vm::setUnit,
             onToggleGrid = vm::setShowGrid,
             onSetCustomer = vm::setCustomer,
@@ -95,8 +106,31 @@ fun ShaftRoute(vm: ShaftViewModel) {
             onSetJobNumber = vm::setJobNumber,
             onSetNotes = vm::setNotes,
             onSetOverallLengthRaw = vm::setOverallLength,
-            onAddComponent = vm::addBodySegment,
 
+            // --- typed add callbacks (FAB flow in screen triggers these) ---
+            onAddBody = { startMm, lengthMm, diaMm ->
+                vm.addBodyAt(startMm = startMm, lengthMm = lengthMm, diaMm = diaMm)
+                showSnack("Body @ ${startMm.toInt()} mm: ${lengthMm.toInt()} × Ø ${diaMm.toInt()}")
+            },
+            onAddTaper = { startMm, lengthMm, startDiaMm, endDiaMm ->
+                vm.addTaperAt(startMm = startMm, lengthMm = lengthMm, startDiaMm = startDiaMm, endDiaMm = endDiaMm)
+                showSnack("Taper @ ${startMm.toInt()} mm: ${lengthMm.toInt()} (${startDiaMm.toInt()}→${endDiaMm.toInt()} mm)")
+            },
+            onAddThread = { startMm, lengthMm, majorDiaMm, pitchMm ->
+                vm.addThreadAt(startMm = startMm, lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
+                showSnack("Thread @ ${startMm.toInt()} mm: ${lengthMm.toInt()} mm, Ø ${majorDiaMm.toInt()} mm, pitch ${"%.2f".format(pitchMm)} mm")
+            },
+            onAddLiner = { startMm, lengthMm, odMm ->
+                vm.addLinerAt(startMm = startMm, lengthMm = lengthMm, odMm = odMm)
+                showSnack("Liner @ ${startMm.toInt()} mm: ${lengthMm.toInt()} × Ø ${odMm.toInt()}")
+            },
+
+            onUpdateBody   = { i, s, l, d -> vm.updateBody(i, s, l, d) },
+            onUpdateTaper  = { i, s, l, sd, ed -> vm.updateTaper(i, s, l, sd, ed) },
+            onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
+            onUpdateLiner  = { i, s, l, od -> vm.updateLiner(i, s, l, od) },
+
+            // --- PDF export ---
             onExportPdf = {
                 val suggested = exportTitleStem()
                     .replace(Regex("\\s+"), " ")
@@ -105,6 +139,12 @@ fun ShaftRoute(vm: ShaftViewModel) {
                 createPdfLauncher.launch(suggested)
             },
 
+            // --- preview renderer injection (unit + grid-aware) ---
+            renderShaft = { s, u ->
+                ShaftDrawing(spec = s, unit = u, showGrid = showGrid)
+            },
+
+            // Snackbar host lives in the Scaffold
             snackbarHostState = snackbarHostState
         )
     }
