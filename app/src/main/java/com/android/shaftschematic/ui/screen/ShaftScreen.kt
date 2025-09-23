@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.ui.screen.ComponentType
 import com.android.shaftschematic.util.UnitSystem
-import kotlin.math.max
+import kotlinx.coroutines.launch
 
 /**
  * ShaftScreen
@@ -39,7 +39,7 @@ import kotlin.math.max
  * - Overall Length (commit on blur/Done; no live mutation while typing)
  * - Project Info (collapsible): Job Number, Customer, Vessel, Notes
  * - Components:
- *   • FAB → chooser → add dialog per type (Body/Taper/Thread/Liner)
+ *   • FAB → chooser → inline insert with sensible defaults (no ephemeral dialog)
  *   • Unified editable list (newest-on-top) with commit-on-blur fields
  *
  * Data contract:
@@ -86,9 +86,12 @@ fun ShaftScreen(
     renderShaft: @Composable (ShaftSpec, UnitSystem) -> Unit,
     snackbarHostState: SnackbarHostState
 ) {
-    // Local UI state for add flow
+    // Local UI state for add chooser
     var chooserOpen by remember { mutableStateOf(false) }
-    var addType by remember { mutableStateOf<ComponentType?>(null) }
+
+    // Scroll to top after inserting a new component (so the new card is visible)
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -110,7 +113,7 @@ fun ShaftScreen(
                     .fillMaxSize()
                     .padding(16.dp)
                     .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(scroll),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // 0) Preview
@@ -187,64 +190,46 @@ fun ShaftScreen(
                 )
             }
 
-            // FAB + chooser + dialogs
+            // FAB + chooser (inline insert)
             FloatingActionButton(
                 onClick = { chooserOpen = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
             ) { Icon(Icons.Filled.Add, contentDescription = "Add component") }
 
-            // show chooser
             if (chooserOpen) {
                 InlineAddChooserDialog(
                     onDismiss = { chooserOpen = false },
-                    onSelect = { t -> chooserOpen = false; addType = t }
+                    onSelect = { kind: ComponentType ->
+                        chooserOpen = false
+                        val d = computeAddDefaults(spec)
+                        when (kind) {
+                            ComponentType.BODY -> {
+                                // 100 mm long with current dia
+                                onAddBody(d.startMm, 100f, d.lastDiaMm)
+                            }
+                            ComponentType.LINER -> {
+                                onAddLiner(d.startMm, 100f, d.lastDiaMm)
+                            }
+                            ComponentType.THREAD -> {
+                                // default 10 TPI -> pitch mm
+                                val pitchMm = 25.4f / 10f
+                                onAddThread(d.startMm, 32f, d.lastDiaMm, pitchMm)
+                            }
+                            ComponentType.TAPER -> {
+                                // default 1:12 over 100 mm; derive LET from SET + length/12
+                                val set = d.lastDiaMm
+                                val let = set + (100f / 12f)
+                                onAddTaper(d.startMm, 100f, set, let)
+                            }
+                        }
+                        scope.launch { scroll.animateScrollTo(0) } // new card visible
+                    }
                 )
             }
-
-            // handle selection
-            when (addType) {
-                ComponentType.BODY -> {
-                    AddBodyDialog(unit = unit, spec = spec) { s: Float, l: Float, d: Float ->
-                        addType = null
-                        onAddBody(s, l, d)
-                    }
-                }
-
-                ComponentType.LINER -> {
-                    AddLinerDialog(unit = unit, spec = spec) { s: Float, l: Float, od: Float ->
-                        addType = null
-                        onAddLiner(s, l, od)
-                    }
-                }
-
-                ComponentType.THREAD -> {
-                    AddThreadDialog(unit = unit, spec = spec) { s: Float, l: Float, dia: Float, tpi: Float ->
-                        addType = null
-                        // Convert TPI → pitch (mm) for the model/API
-                        val pitchMm = 25.4f / tpi
-                        onAddThread(s, l, dia, pitchMm)
-                    }
-                }
-
-                ComponentType.TAPER -> {
-                    AddTaperDialog(unit = unit, spec = spec) { s: Float, l: Float, setMm: Float, letMm: Float, rateText: String ->
-                        addType = null
-                        // Derive missing diameter from taper rate (accepts "1:12", "3/4", "1", decimals)
-                        val (finalSet, finalLet) = resolveTaperDiametersFromRate(
-                            setDiaInput = setMm,
-                            letDiaInput = letMm,
-                            lengthMm = l,
-                            unit = unit,
-                            rateText = rateText
-                        )
-                        onAddTaper(s, l, finalSet, finalLet)
-                    }
-                }
-
-                null -> Unit
-            }
-        }
-    }
+        } // Box
+    } // Scaffold
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -382,8 +367,29 @@ private fun GridCanvas(step: Dp, color: Color, modifier: Modifier = Modifier.fil
     Canvas(modifier) {
         val stepPx = step.toPx().coerceAtLeast(1f)
         val w = size.width; val h = size.height
-        var x = 0f; while (x <= w) { drawLine(color, Offset(x, 0f), Offset(x, h), 1f); x += stepPx }
-        var y = 0f; while (y <= h) { drawLine(color, Offset(0f, y), Offset(w, y), 1f); y += stepPx }
+        val majorStroke = 1.8f
+        val minorStroke = 1.2f
+        val majorColor = color.copy(alpha = 0.60f)
+        val minorColor = color.copy(alpha = 0.35f)
+
+        // vertical lines
+        var x = 0f; var i = 0
+        while (x <= w + 0.5f) {
+            val isMajor = i % 5 == 0
+            val stroke = if (isMajor) majorStroke else minorStroke
+            val c = if (isMajor) majorColor else minorColor
+            drawLine(c, Offset(x, 0f), Offset(x, h), stroke)
+            x += stepPx; i++
+        }
+        // horizontal lines
+        var y = 0f; i = 0
+        while (y <= h + 0.5f) {
+            val isMajor = i % 5 == 0
+            val stroke = if (isMajor) majorStroke else minorStroke
+            val c = if (isMajor) majorColor else minorColor
+            drawLine(c, Offset(0f, y), Offset(w, y), stroke)
+            y += stepPx; i++
+        }
     }
 }
 
@@ -404,14 +410,12 @@ private fun ComponentsUnifiedList(
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit
 ) {
-    val rows = remember(spec) {
-        buildList {
-            spec.liners.forEachIndexed { i, ln -> add(RowRef(RowKind.LINER, i, ln.startFromAftMm)) }
-            spec.bodies.forEachIndexed { i, b -> add(RowRef(RowKind.BODY, i, b.startFromAftMm)) }
-            spec.threads.forEachIndexed { i, th -> add(RowRef(RowKind.THREAD, i, th.startFromAftMm)) }
-            spec.tapers.forEachIndexed { i, t -> add(RowRef(RowKind.TAPER, i, t.startFromAftMm)) }
-        }.sortedByDescending { it.start }
-    }
+    val rows = buildList {
+        spec.liners.forEachIndexed { i, ln -> add(RowRef(RowKind.LINER,  i, ln.startFromAftMm)) }
+        spec.bodies.forEachIndexed { i, b  -> add(RowRef(RowKind.BODY,   i, b.startFromAftMm)) }
+        spec.threads.forEachIndexed { i, th -> add(RowRef(RowKind.THREAD, i, th.startFromAftMm)) }
+        spec.tapers.forEachIndexed  { i, t  -> add(RowRef(RowKind.TAPER,  i, t.startFromAftMm)) }
+    }.sortedByDescending { it.start }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         rows.forEach { row ->
@@ -497,14 +501,24 @@ private fun ComponentsUnifiedList(
 }
 
 /* Small card wrapper rows use */
-@Composable private fun ComponentCard(
+@Composable
+private fun ComponentCard(
     title: String,
-    content: @Composable RowScope.() -> Unit
+    content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Text(title, style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
+            content()
         }
     }
 }
@@ -519,9 +533,12 @@ private fun ComponentsUnifiedList(
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
-        modifier = Modifier.onFocusChanged { f -> if (!f.isFocused) onCommit(text) }
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { f -> if (!f.isFocused) onCommit(text) }
     )
 }
+
 @Composable private fun CommitText(label: String, initial: String, onCommit: (String) -> Unit) {
     var text by remember(initial) { mutableStateOf(initial) }
     OutlinedTextField(
@@ -531,17 +548,19 @@ private fun ComponentsUnifiedList(
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
         keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
-        modifier = Modifier.onFocusChanged { f -> if (!f.isFocused) onCommit(text) }
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { f -> if (!f.isFocused) onCommit(text) }
     )
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- * Add flow (chooser + dialogs) — inlined to keep project simple
+ * Add flow (chooser) — inline insert to keep new card visible & editable
  * ──────────────────────────────────────────────────────────────────────────── */
 @Composable
 private fun InlineAddChooserDialog(
     onDismiss: () -> Unit,
-    onSelect: (ComponentType) -> Unit,   // <- was AddComponentKind
+    onSelect: (ComponentType) -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -564,6 +583,7 @@ private fun InlineAddChooserDialog(
  * ──────────────────────────────────────────────────────────────────────────── */
 
 private fun abbr(unit: UnitSystem) = if (unit == UnitSystem.MILLIMETERS) "mm" else "in"
+
 private fun formatDisplay(mm: Float, unit: UnitSystem, d: Int = 3): String {
     val v = if (unit == UnitSystem.MILLIMETERS) mm else mm / 25.4f
     return "%.${d}f".format(v).trimEnd('0').trimEnd('.').ifEmpty { "0" }
@@ -580,7 +600,7 @@ private fun toMmOrNull(text: String, unit: UnitSystem): Float? {
 
 private fun Float.fmtTrim(d: Int) = "%.${d}f".format(this).trimEnd('0').trimEnd('.')
 
-/** Accepts "12", "3/4", "1.5" and returns Float, or null. */
+/** Accepts "12", "3/4", "1.5" and returns Float, or null. Also supports ratios like "1:12". */
 private fun parseFractionOrDecimal(input: String): Float? {
     val t = input.trim()
     if (t.isEmpty()) return null
@@ -602,6 +622,26 @@ private fun parseFractionOrDecimal(input: String): Float? {
     return t.toFloatOrNull()
 }
 
+// Compute sensible defaults for a brand-new component (all in mm)
+private data class AddDefaults(val startMm: Float, val lastDiaMm: Float)
+
+private fun computeAddDefaults(spec: ShaftSpec): AddDefaults {
+    // place new piece right after the last end among all components
+    val lastEnd = listOfNotNull(
+        spec.bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
+        spec.tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
+        spec.liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
+        spec.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm },
+    ).maxOrNull() ?: 0f
+
+    // reuse most recent diameter we know; fallback 25 mm
+    val lastDia = spec.bodies.lastOrNull()?.diaMm
+        ?: spec.tapers.lastOrNull()?.endDiaMm
+        ?: 25f
+
+    return AddDefaults(startMm = lastEnd, lastDiaMm = lastDia)
+}
+
 /** Threads: convert TPI → pitch mm and back. */
 private fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) 25.4f / tpi else 0f
 private fun pitchMmToTpi(pitchMm: Float): Float = if (pitchMm > 0f) 25.4f / pitchMm else 0f
@@ -615,7 +655,6 @@ private fun rateFromDia(setDiaMm: Float, letDiaMm: Float, lengthMm: Float, unit:
     if (lengthMm <= 0f) return ""
     val deltaMm = letDiaMm - setDiaMm
     val ratio = if (unit == UnitSystem.MILLIMETERS) deltaMm / lengthMm else (deltaMm / 25.4f) / (lengthMm / 25.4f)
-    // Approx to common 1:12
     val approx12 = 1f / 12f
     return if (kotlin.math.abs(ratio - approx12) < 0.005f) "1:12" else ratio.fmtTrim(3)
 }
@@ -643,7 +682,7 @@ private fun resolveTaperDiametersFromRate(
     val r = when {
         rateText.trim().isEmpty() -> null
         rateText.trim() == "1" -> 1f / 12f
-        else -> parseFractionOrDecimal(rateText) // "1:12" or "3/4" or "0.0833"
+        else -> parseFractionOrDecimal(rateText)
     } ?: return (setDiaInput.takeIf { it > 0f } ?: 0f) to (letDiaInput.takeIf { it > 0f } ?: 0f)
 
     val lengthDisp = if (unit == UnitSystem.MILLIMETERS) lengthMm else lengthMm / 25.4f
@@ -653,6 +692,6 @@ private fun resolveTaperDiametersFromRate(
     return when {
         hasSet -> setDiaInput to (setDiaInput + deltaMm)
         hasLet -> (letDiaInput - deltaMm) to letDiaInput
-        else   -> 0f to 0f // nothing to do
+        else   -> 0f to 0f
     }
 }
