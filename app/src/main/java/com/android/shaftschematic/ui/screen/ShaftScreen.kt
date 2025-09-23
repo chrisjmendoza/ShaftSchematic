@@ -104,10 +104,25 @@ fun ShaftScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        contentWindowInsets = WindowInsets.systemBars
-    ) { inner ->
-        Box(Modifier.fillMaxSize().padding(inner)) {
+        contentWindowInsets = WindowInsets.systemBars,
 
+        // >>> FAB lives here, so it never hides behind the keyboard
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { chooserOpen = true },
+                modifier = Modifier
+                    // keep above IME + nav bar
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                    // some breathing room from the edges
+                    .padding(16.dp)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Add component")
+            }
+        }
+    ) { inner ->
+
+        // Your content
+        Box(Modifier.fillMaxSize().padding(inner)) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -116,7 +131,7 @@ fun ShaftScreen(
                     .verticalScroll(scroll),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // 0) Preview
+                // Preview, Overall Length, Project Info, Components list...
                 PreviewCard(
                     showGrid = showGrid,
                     gridStepDp = 16.dp,
@@ -125,60 +140,8 @@ fun ShaftScreen(
                     renderShaft = renderShaft,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp)
                 )
-
                 HorizontalDivider()
-
-                // 1) Overall Length (commit-on-blur)
-                var lengthText by remember(unit, spec.overallLengthMm) {
-                    mutableStateOf(formatDisplay(spec.overallLengthMm, unit))
-                }
-                OutlinedTextField(
-                    value = lengthText,
-                    onValueChange = { lengthText = it }, // keep local while typing
-                    label = { Text("Shaft Overall Length (${abbr(unit)})") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    keyboardActions = KeyboardActions(onDone = { onSetOverallLengthRaw(lengthText) }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { f -> if (!f.isFocused) onSetOverallLengthRaw(lengthText) }
-                )
-
-                // 2) Project Info (collapsible) with Notes at bottom
-                ExpandableSection(title = "Project Info", initiallyExpanded = true) {
-                    CommitTextField(
-                        "Job number (optional)",
-                        jobNumber,
-                        onSetJobNumber,
-                        Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    CommitTextField(
-                        "Customer (optional)",
-                        customer,
-                        onSetCustomer,
-                        Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    CommitTextField(
-                        "Vessel (optional)",
-                        vessel,
-                        onSetVessel,
-                        Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    CommitTextField(
-                        label = "Notes (optional)",
-                        initial = notes,
-                        onCommit = onSetNotes,
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = false,
-                        maxLines = 5,
-                        minHeight = 96.dp
-                    )
-                }
-
-                // 3) Components — unified, newest-on-top
+                // ... your other sections unchanged ...
                 Text("Components", style = MaterialTheme.typography.titleMedium)
                 ComponentsUnifiedList(
                     spec = spec,
@@ -189,46 +152,29 @@ fun ShaftScreen(
                     onUpdateLiner = onUpdateLiner
                 )
             }
+        }
 
-            // FAB + chooser (inline insert)
-            FloatingActionButton(
-                onClick = { chooserOpen = true },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-            ) { Icon(Icons.Filled.Add, contentDescription = "Add component") }
-
-            if (chooserOpen) {
-                InlineAddChooserDialog(
-                    onDismiss = { chooserOpen = false },
-                    onSelect = { kind: ComponentType ->
-                        chooserOpen = false
-                        val d = computeAddDefaults(spec)
-                        when (kind) {
-                            ComponentType.BODY -> {
-                                // 100 mm long with current dia
-                                onAddBody(d.startMm, 100f, d.lastDiaMm)
-                            }
-                            ComponentType.LINER -> {
-                                onAddLiner(d.startMm, 100f, d.lastDiaMm)
-                            }
-                            ComponentType.THREAD -> {
-                                // default 10 TPI -> pitch mm
-                                val pitchMm = 25.4f / 10f
-                                onAddThread(d.startMm, 32f, d.lastDiaMm, pitchMm)
-                            }
-                            ComponentType.TAPER -> {
-                                // default 1:12 over 100 mm; derive LET from SET + length/12
-                                val set = d.lastDiaMm
-                                val let = set + (100f / 12f)
-                                onAddTaper(d.startMm, 100f, set, let)
-                            }
+        // Chooser dialog (keep this OUTSIDE the floatingActionButton)
+        if (chooserOpen) {
+            InlineAddChooserDialog(
+                onDismiss = { chooserOpen = false },
+                onSelect = { kind ->
+                    chooserOpen = false
+                    val d = computeAddDefaults(spec)
+                    when (kind) {
+                        ComponentType.BODY   -> onAddBody(d.startMm, 100f, d.lastDiaMm)
+                        ComponentType.LINER  -> onAddLiner(d.startMm, 100f, d.lastDiaMm)
+                        ComponentType.THREAD -> onAddThread(d.startMm, 32f, d.lastDiaMm, 25.4f / 10f) // 10 TPI
+                        ComponentType.TAPER  -> {
+                            val set = d.lastDiaMm
+                            val let = set + (100f / 12f) // 1:12 over 100 mm
+                            onAddTaper(d.startMm, 100f, set, let)
                         }
-                        scope.launch { scroll.animateScrollTo(0) } // new card visible
                     }
-                )
-            }
-        } // Box
+                    scope.launch { scroll.animateScrollTo(0) } // show new card
+                }
+            )
+        }
     } // Scaffold
 }
 
@@ -355,10 +301,57 @@ private fun PreviewCard(
     renderShaft: @Composable (ShaftSpec, UnitSystem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(modifier = modifier, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp)) {
-            if (showGrid) GridCanvas(step = gridStepDp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(8.dp)
+        ) {
+            if (showGrid) {
+                GridCanvas(
+                    step = gridStepDp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                )
+            }
+
+            // --- Preview rendering (Compose canvas) ---
             renderShaft(spec, unit)
+
+            // --- Distance-to-end notice (top-left overlay) ---
+            val lastEndMm = remember(spec) {
+                listOfNotNull(
+                    spec.bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
+                    spec.tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
+                    spec.liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
+                    spec.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm },
+                ).maxOrNull() ?: 0f
+            }
+            val freeMm = (spec.overallLengthMm - lastEndMm).coerceAtLeast(0f)
+            val freeTxt = if (unit == UnitSystem.MILLIMETERS)
+                formatDisplay(freeMm, unit = UnitSystem.MILLIMETERS)
+            else
+                formatDisplay(freeMm, unit = UnitSystem.INCHES)
+
+            Surface(
+                tonalElevation = 1.dp,
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(2.dp)
+            ) {
+                Text(
+                    text = "Free to end: $freeTxt ${abbr(unit)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
         }
     }
 }

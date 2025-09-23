@@ -6,11 +6,13 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.android.shaftschematic.pdf.ShaftPdfComposer
@@ -141,7 +143,13 @@ fun ShaftRoute(vm: ShaftViewModel) {
 
             // --- preview renderer injection (unit + grid-aware) ---
             renderShaft = { s, u ->
-                ShaftDrawing(spec = s, unit = u, showGrid = showGrid)
+                // Fill the preview area; let the UI’s GridCanvas handle the grid
+                ShaftDrawing(
+                    spec = s,
+                    unit = u,
+                    showGrid = false,                // prevent double-grid
+                    modifier = Modifier.fillMaxSize()
+                )
             },
 
             // Snackbar host lives in the Scaffold
