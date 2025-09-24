@@ -148,7 +148,6 @@ fun ShaftRoute(vm: ShaftViewModel) {
                     spec = s,
                     unit = u,
                     showGrid = false,                // prevent double-grid
-                    modifier = Modifier.fillMaxSize()
                 )
             },
 

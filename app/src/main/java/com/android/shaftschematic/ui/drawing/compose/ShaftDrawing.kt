@@ -2,6 +2,7 @@
 package com.android.shaftschematic.ui.drawing.compose
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -49,7 +50,7 @@ fun ShaftDrawing(
     spec: ShaftSpec,
     unit: UnitSystem,
     showGrid: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier.fillMaxSize() // ensures the Canvas fills its parent
 ) {
     val textMeasurer = rememberTextMeasurer()
 
@@ -61,18 +62,29 @@ fun ShaftDrawing(
         )
     }
 
+    // Compute a safe overall for preview if the user hasn't set one yet
+    val lastEndMm = remember(spec) {
+        listOfNotNull(
+            spec.bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
+            spec.tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
+            spec.liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
+            spec.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm },
+        ).maxOrNull() ?: 0f
+    }
+    val safeSpec = if (spec.overallLengthMm <= 0f && lastEndMm > 0f) {
+        // preview-only fallback so scaling is sane; PDF can still require an explicit overall
+        spec.copy(overallLengthMm = lastEndMm)
+    } else spec
+
     Canvas(modifier = modifier) {
         // Lay out drawing coordinates (mm → px mapping, content rect, centerline, etc.).
         val layout = ShaftLayout.compute(
-            spec = spec,
+            spec = safeSpec,
             leftPx = 0f,
             topPx = 0f,
             rightPx = size.width,
             bottomPx = size.height
         )
-
-        // Background
-        drawRect(Color.White)
 
         if (showGrid) {
             drawIntegerSteppedGrid(

@@ -106,14 +106,12 @@ fun ShaftScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets.systemBars,
 
-        // >>> FAB lives here, so it never hides behind the keyboard
+        // IME-safe FAB in scaffold slot
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { chooserOpen = true },
                 modifier = Modifier
-                    // keep above IME + nav bar
                     .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
-                    // some breathing room from the edges
                     .padding(16.dp)
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Add component")
@@ -121,8 +119,8 @@ fun ShaftScreen(
         }
     ) { inner ->
 
-        // Your content
         Box(Modifier.fillMaxSize().padding(inner)) {
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -131,17 +129,72 @@ fun ShaftScreen(
                     .verticalScroll(scroll),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Preview, Overall Length, Project Info, Components list...
+                // --- Preview ------------------------------------------------------
                 PreviewCard(
                     showGrid = showGrid,
                     gridStepDp = 16.dp,
                     spec = spec,
                     unit = unit,
                     renderShaft = renderShaft,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)   // was heightIn(min = 220.dp)
                 )
+
+
                 HorizontalDivider()
-                // ... your other sections unchanged ...
+
+                // --- Overall Shaft Length (NOT collapsible) ----------------------
+                var lengthText by remember(unit, spec.overallLengthMm) {
+                    mutableStateOf(formatDisplay(spec.overallLengthMm, unit))
+                }
+                OutlinedTextField(
+                    value = lengthText,
+                    onValueChange = { lengthText = it }, // keep local while typing
+                    label = { Text("Shaft Overall Length (${abbr(unit)})") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    keyboardActions = KeyboardActions(onDone = { onSetOverallLengthRaw(lengthText) }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { f -> if (!f.isFocused) onSetOverallLengthRaw(lengthText) }
+                )
+
+                // --- Project Info (collapsible; includes Notes) ------------------
+                ExpandableSection(title = "Project Info", initiallyExpanded = true) {
+                    CommitTextField(
+                        "Job number (optional)",
+                        jobNumber,
+                        onSetJobNumber,
+                        Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    CommitTextField(
+                        "Customer (optional)",
+                        customer,
+                        onSetCustomer,
+                        Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    CommitTextField(
+                        "Vessel (optional)",
+                        vessel,
+                        onSetVessel,
+                        Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    CommitTextField(
+                        label = "Notes (optional)",
+                        initial = notes,
+                        onCommit = onSetNotes,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
+                        maxLines = 5,
+                        minHeight = 96.dp
+                    )
+                }
+
+                // --- Components (newest-on-top) ---------------------------------
                 Text("Components", style = MaterialTheme.typography.titleMedium)
                 ComponentsUnifiedList(
                     spec = spec,
@@ -154,7 +207,7 @@ fun ShaftScreen(
             }
         }
 
-        // Chooser dialog (keep this OUTSIDE the floatingActionButton)
+        // Chooser dialog (outside the FAB slot)
         if (chooserOpen) {
             InlineAddChooserDialog(
                 onDismiss = { chooserOpen = false },
@@ -360,27 +413,26 @@ private fun GridCanvas(step: Dp, color: Color, modifier: Modifier = Modifier.fil
     Canvas(modifier) {
         val stepPx = step.toPx().coerceAtLeast(1f)
         val w = size.width; val h = size.height
-        val majorStroke = 1.8f
-        val minorStroke = 1.2f
-        val majorColor = color.copy(alpha = 0.60f)
-        val minorColor = color.copy(alpha = 0.35f)
 
-        // vertical lines
+        val majorStroke = 2.0f
+        val minorStroke = 1.2f
+        val majorColor  = color.copy(alpha = 0.70f)
+        val minorColor  = color.copy(alpha = 0.35f)
+
+        // verticals
         var x = 0f; var i = 0
         while (x <= w + 0.5f) {
-            val isMajor = i % 5 == 0
-            val stroke = if (isMajor) majorStroke else minorStroke
-            val c = if (isMajor) majorColor else minorColor
-            drawLine(c, Offset(x, 0f), Offset(x, h), stroke)
+            val isMajor = (i % 5 == 0)
+            drawLine(if (isMajor) majorColor else minorColor, Offset(x, 0f), Offset(x, h),
+                if (isMajor) majorStroke else minorStroke)
             x += stepPx; i++
         }
-        // horizontal lines
+        // horizontals (same idea)
         var y = 0f; i = 0
         while (y <= h + 0.5f) {
-            val isMajor = i % 5 == 0
-            val stroke = if (isMajor) majorStroke else minorStroke
-            val c = if (isMajor) majorColor else minorColor
-            drawLine(c, Offset(0f, y), Offset(w, y), stroke)
+            val isMajor = (i % 5 == 0)
+            drawLine(if (isMajor) majorColor else minorColor, Offset(0f, y), Offset(w, y),
+                if (isMajor) majorStroke else minorStroke)
             y += stepPx; i++
         }
     }
