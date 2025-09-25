@@ -26,6 +26,7 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.abs
 
 /**
  * ShaftDrawing
@@ -35,14 +36,14 @@ import kotlin.math.roundToInt
  *
  * Heuristic:
  *  - Choose a major spacing (in the *display* unit) as a *nice* integer near overall/10.
- *  - "Nice" integers are picked from {1, 2, 5} × 10^k, giving values like 1,2,5,10,20,25,50,100...
+ *  - "Nice" integers are picked from {1, 2, 5} × 10^k, giving values like 1,2,5,10,20,50,100...
  *  - Minors are exactly half of majors (can be 0.5 fractions in display units).
  *  - We allow leftover space at the end (no forced stretching).
  *
  * Notes:
- *  - All model geometry is in millimeters; [unit] only alters grid spacing/legend (and any labels).
+ *  - All model geometry is in millimeters; [unit] only alters grid spacing/legend and labels.
  *  - We disable the renderer's grid via RenderOptions (to avoid double drawing).
- *  - Tapers remain **trapezoids** (renderer uses straight top/bottom edges from SET→LET).
+ *  - **Centerline is not drawn**; we emphasize majors at **X=0** and **Y center** instead.
  */
 @OptIn(ExperimentalTextApi::class)
 @Composable
@@ -50,39 +51,27 @@ fun ShaftDrawing(
     spec: ShaftSpec,
     unit: UnitSystem,
     showGrid: Boolean,
-    modifier: Modifier = Modifier.fillMaxSize() // ensures the Canvas fills its parent
+    modifier: Modifier = Modifier.fillMaxSize()
 ) {
     val textMeasurer = rememberTextMeasurer()
 
     // Disable internal renderer grid; we draw our own here.
     val opts = remember(unit, showGrid) {
         RenderOptions(
-            showGrid = false,
-            gridUseInches = (unit == UnitSystem.INCHES),
+            showGrid = false,               // our grid below
+            textSizePx = 22f,
+            gridUseInches = (unit == UnitSystem.INCHES)
         )
     }
 
-    // Compute a safe overall for preview if the user hasn't set one yet
-    val lastEndMm = remember(spec) {
-        listOfNotNull(
-            spec.bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
-            spec.tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
-            spec.liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
-            spec.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm },
-        ).maxOrNull() ?: 0f
-    }
-    val safeSpec = if (spec.overallLengthMm <= 0f && lastEndMm > 0f) {
-        // preview-only fallback so scaling is sane; PDF can still require an explicit overall
-        spec.copy(overallLengthMm = lastEndMm)
-    } else spec
-
     Canvas(modifier = modifier) {
-        // Lay out drawing coordinates (mm → px mapping, content rect, centerline, etc.).
+        // Add horizontal padding so geometry doesn't touch edges.
+        val pad = 16f
         val layout = ShaftLayout.compute(
-            spec = safeSpec,
-            leftPx = 0f,
+            spec = spec,
+            leftPx = pad,
             topPx = 0f,
-            rightPx = size.width,
+            rightPx = size.width - pad,
             bottomPx = size.height
         )
 
@@ -94,16 +83,15 @@ fun ShaftDrawing(
             )
         }
 
-        // Draw the actual shaft (bodies, liners, threads, tapers-as-trapezoids, dims).
+        // Shaft geometry (bodies, liners, threads, tapers). Centerline is not drawn.
         with(ShaftRenderer) {
-            // Member extension: receiver is the Canvas' DrawScope
             draw(layout, opts, textMeasurer)
         }
     }
 }
 
 /* ─────────────────────────────
- * Integer-stepped unit-aware grid
+ * Integer-stepped unit-aware grid + labels
  * ───────────────────────────── */
 
 @OptIn(ExperimentalTextApi::class)
@@ -112,95 +100,201 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawIntegerSteppedG
     unit: UnitSystem,
     textMeasurer: TextMeasurer
 ) {
-    // Target number of "major steps" across the length (≈ feel).
-    // Use 10 to match the example: overall=200 → major 20; overall=208 → major 20 with 8 leftover.
-    val TARGET_DIVISIONS = 10f
-
-    val left   = layout.contentLeftPx
-    val right  = layout.contentRightPx
-    val top    = layout.contentTopPx
+    val left = layout.contentLeftPx
+    val right = layout.contentRightPx
+    val top = layout.contentTopPx
     val bottom = layout.contentBottomPx
-    val cy     = layout.centerlineYPx
+    val width = right - left
+    val height = bottom - top
+    val midY = (top + bottom) * 0.5f
+
+    // Overall in display units, choose a major spacing (nice integer) and minor = major/2
+    val overallMm = layout.spec.overallLengthMm.coerceAtLeast(1f)
+    val mmPerUnit = if (unit == UnitSystem.INCHES) 25.4f else 1f
+    val overallDisp = overallMm / mmPerUnit
+    val majDisp = chooseNiceIntegerNear(overallDisp / 10f).coerceAtLeast(1f)
+    val minDisp = majDisp / 2f
+
     val pxPerMm = layout.pxPerMm
+    val majPx = majDisp * mmPerUnit * pxPerMm
+    val minPx = minDisp * mmPerUnit * pxPerMm
+    val showMinors = minPx >= 6f
 
-    val overallMm = max(1f, layout.spec.overallLengthMm)
+    // X=0 origin in pixels (datum = 0 mm is at 'left' by construction)
+    val xAtZero = left
 
-    // Convert overall into **display units**
-    val toDisp = if (unit == UnitSystem.MILLIMETERS) 1f else (1f / 25.4f)
-    val toMm   = if (unit == UnitSystem.MILLIMETERS) 1f else 25.4f
+    // --- Draw vertical lines (symmetric from origin) ---
+    fun drawVerticalRays(stepPx: Float) {
+        // Origin line (drawn once, then march both ways)
+        // Minor or major style chosen by caller
+        var x: Float
 
-    val overallDisp = overallMm * toDisp
-    val rawStepDisp = (overallDisp / TARGET_DIVISIONS).coerceAtLeast(1f)
+        // Right side
+        x = xAtZero + stepPx
+        var idx = 1
+        while (x <= right + 0.5f) {
+            val isMajor = stepPx == majPx
+            val stroke = if (isMajor) 2f else 1f
+            val color = if (isMajor) Color(0x66000000) else Color(0x33000000)
+            drawLine(color, Offset(x, top), Offset(x, bottom), strokeWidth = stroke)
+            x += stepPx; idx++
+        }
 
-    // Snap to a *nice* integer (from {1,2,5} × 10^k), but always an INTEGER.
-    val majorDisp = snapNiceInteger(rawStepDisp)
-
-    // Convert back to mm for drawing
-    val majorMm  = majorDisp * toMm
-    val minorMm  = majorMm * 0.5f
-    val majorPx  = majorMm * pxPerMm
-    val minorPx  = minorMm * pxPerMm
-
-    // Avoid over-dense minors
-    val minVisible = 6f
-    val showMinors = minorPx >= minVisible
-
-    // Pens/colors
-    val majorStroke = 1.25f
-    val minorStroke = 1.0f
-    val majorColor  = Color(0x33000000)   // 20% black
-    val minorColor  = Color(0x1A000000)   // 10% black
-
-    // ---- Vertical lines (X along length in mm) ----
-    val lastMinorIdx = floor(overallMm / minorMm).toInt()  // no extra line beyond overall
-    for (i in 0..lastMinorIdx) {
-        val mm = i * minorMm
-        val x = left + mm * pxPerMm
-        val isMajor = (i % 2 == 0) // every 2 minors = 1 major (since minor = major/2)
-        if (isMajor) {
-            drawLine(majorColor, Offset(x, top), Offset(x, bottom), majorStroke)
-        } else if (showMinors) {
-            drawLine(minorColor, Offset(x, top), Offset(x, bottom), minorStroke)
+        // Left side
+        x = xAtZero - stepPx
+        idx = 1
+        while (x >= left - 0.5f) {
+            val isMajor = stepPx == majPx
+            val stroke = if (isMajor) 2f else 1f
+            val color = if (isMajor) Color(0x66000000) else Color(0x33000000)
+            drawLine(color, Offset(x, top), Offset(x, bottom), strokeWidth = stroke)
+            x -= stepPx; idx++
         }
     }
 
-    // ---- Horizontal lines (Y about centerline) ----
-    // Step in "minor" pixels up/down from the centerline.
-    var off = 0f
-    var j = 0
-    while (cy + off <= bottom + 0.5f) {
-        val isMajor = (j % 2 == 0)
-        val col = if (isMajor) majorColor else minorColor
-        val sw  = if (isMajor) majorStroke else minorStroke
+    // Draw minors then majors so majors sit on top
+    if (showMinors) drawVerticalRays(minPx)
+    drawVerticalRays(majPx)
 
-        if (isMajor || showMinors) {
-            // below centerline
-            val y1 = cy + off
-            if (y1 in top - 0.5f..bottom + 0.5f) drawLine(col, Offset(left, y1), Offset(right, y1), sw)
-            // mirror above centerline (skip double-drawing centerline at off==0)
-            if (off > 0f) {
-                val y2 = cy - off
-                if (y2 in top - 0.5f..bottom + 0.5f) drawLine(col, Offset(left, y2), Offset(right, y2), sw)
+    // Emphasize the origin major at X=0 (slightly thicker)
+    drawLine(
+        color = Color(0x66000000),
+        start = Offset(xAtZero, top),
+        end = Offset(xAtZero, bottom),
+        strokeWidth = 2.8f
+    )
+
+    // --- Draw horizontal lines (minors/majors), with center emphasized ---
+    val majorRows = 10  // use same density vertically for a pleasing grid
+    val majorGapY = height / majorRows
+    val minorGapY = majorGapY / 2f
+    val showMinorY = minorGapY >= 6f
+
+    var y = top
+    var i = 0
+    while (y <= bottom + 0.5f) {
+        val isMajor = i % 2 == 0
+        val stroke = if (isMajor) 2f else 1f
+        val color = if (isMajor) Color(0x66000000) else Color(0x33000000)
+        if (isMajor || showMinorY) {
+            drawLine(color, Offset(left, y), Offset(right, y), strokeWidth = stroke)
+        }
+        y += minorGapY; i++
+    }
+
+    // Emphasize the horizontal center major (Y=0)
+    drawLine(
+        color = Color(0x66000000),
+        start = Offset(left, midY),
+        end = Offset(right, midY),
+        strokeWidth = 2.8f
+    )
+
+    // --- Axis labels ---
+    val normalStyle = TextStyle(
+        color = Color.Black,
+        fontSize = 12.sp,
+        platformStyle = PlatformTextStyle(includeFontPadding = false)
+    )
+    val specialStyle = TextStyle(
+        color = Color.Black,
+        fontSize = 14.sp,
+        platformStyle = PlatformTextStyle(includeFontPadding = false)
+    )
+
+    fun drawBoxedLabel(text: String, x: Float, yTop: Float) {
+        val tl = textMeasurer.measure(AnnotatedString(text), specialStyle)
+        // Simple translucent background
+        val pad = 4f
+        drawRect(
+            color = Color.Black.copy(alpha = 0.14f),
+            topLeft = Offset(x - tl.size.width / 2f - pad, yTop - tl.size.height - pad),
+            size = androidx.compose.ui.geometry.Size(tl.size.width + 2 * pad, tl.size.height + 2 * pad)
+        )
+        drawText(tl, topLeft = Offset(x - tl.size.width / 2f, yTop - tl.size.height))
+    }
+
+    // X-axis labels (bottom), “0” at origin with box
+    val baseY = bottom - 4f
+    val unitSuffix = if (unit == UnitSystem.INCHES) " in" else " mm"
+    drawBoxedLabel("0$unitSuffix", xAtZero, baseY)
+
+    // March labels to the right and left at each major
+    val minDX = 24f
+    fun labelXRay(startX: Float, step: Float, dir: Int) {
+        var x = startX + step * dir
+        var last = startX
+        while (x in (left - 2f)..(right + 2f)) {
+            if (abs(x - last) >= minDX) {
+                val mmAtX = (x - left) / pxPerMm // since origin is at 'left'
+                val display = mmAtX / mmPerUnit
+                val txt = if (unit == UnitSystem.INCHES) {
+                    if (abs(display) >= 10f) String.format("%.1f in", display) else String.format("%.2f in", display)
+                } else {
+                    if (abs(display) >= 100f) String.format("%.0f mm", display) else String.format("%.1f mm", display)
+                }
+                val tl = textMeasurer.measure(AnnotatedString(txt), normalStyle)
+                drawText(tl, topLeft = Offset(x - tl.size.width / 2f, baseY - tl.size.height))
+                last = x
             }
+            x += step * dir
         }
-        off += minorPx
-        j++
+    }
+    labelXRay(xAtZero, majPx, +1)
+    labelXRay(xAtZero, majPx, -1)
+
+    // Y-axis labels: 0 at center (boxed), positive values mirrored up and down
+    run {
+        val tl = textMeasurer.measure(AnnotatedString("0"), specialStyle)
+        val padLeft = left + 4f
+        // boxed background
+        val pad = 4f
+        drawRect(
+            color = Color.Black.copy(alpha = 0.14f),
+            topLeft = Offset(padLeft - pad, midY - tl.size.height / 2f - pad),
+            size = androidx.compose.ui.geometry.Size(tl.size.width + 2 * pad, tl.size.height + 2 * pad)
+        )
+        drawText(tl, topLeft = Offset(padLeft, midY - tl.size.height / 2f))
     }
 
-    // ---- Legend: show the major length in display units ----
-    val pad  = 8f
+    val minDY = 16f
+    val rows = 10
+    val stepY = height / rows
+    fun labelYRay(startY: Float, step: Float, dir: Int) {
+        var yPos = startY + step * dir
+        var last = startY
+        while (yPos in (top - 2f)..(bottom + 2f)) {
+            if (abs(yPos - last) >= minDY) {
+                val mmFromCenter = abs((yPos - midY) / pxPerMm)
+                val display = mmFromCenter / mmPerUnit
+                val txt = if (unit == UnitSystem.INCHES) {
+                    if (display >= 10f) String.format("%.1f in", display) else String.format("%.2f in", display)
+                } else {
+                    if (display >= 100f) String.format("%.0f mm", display) else String.format("%.1f mm", display)
+                }
+                val tl = textMeasurer.measure(AnnotatedString(txt), normalStyle)
+                drawText(tl, topLeft = Offset(left + 4f, yPos - tl.size.height / 2f))
+                last = yPos
+            }
+            yPos += step * dir
+        }
+    }
+    labelYRay(midY, stepY, -1) // up
+    labelYRay(midY, stepY, +1) // down
+
+    // Simple legend bar (kept): one major in current unit
     val barH = 6f
-    val barW = majorPx.coerceAtMost(right - left - 2 * pad)
+    val barW = majPx.coerceAtMost(right - left - 16f)
     if (barW > 8f) {
         drawRect(
             color = Color.Black.copy(alpha = 0.6f),
-            topLeft = Offset(right - barW - pad, top + pad),
+            topLeft = Offset(right - barW - 8f, top + 8f),
             size = androidx.compose.ui.geometry.Size(barW, barH)
         )
         val legend = if (unit == UnitSystem.INCHES) {
-            String.format("%.0f in", majorDisp) // integer by construction
+            String.format("%.0f in", majDisp)
         } else {
-            String.format("%.0f mm", majorDisp) // integer by construction
+            String.format("%.0f mm", majDisp)
         }
         val style = TextStyle(
             color = Color.Black,
@@ -210,7 +304,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawIntegerSteppedG
         val layoutText = textMeasurer.measure(AnnotatedString(legend), style)
         drawText(
             layoutText,
-            topLeft = Offset(right - layoutText.size.width - pad, top + pad + barH + 6f)
+            topLeft = Offset(right - layoutText.size.width - 8f, top + 8f + barH + 6f)
         )
     }
 }
@@ -219,25 +313,17 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawIntegerSteppedG
  * Snap a positive float to a *nice* **integer** near it using the {1,2,5}×10^k ladder.
  * Examples:
  *  - 19.7 → 20
- *  - 21.3 → 20 (closer to 20 than 25; ties round to the higher)
- *  - 3.6  → 4
- *  - 0.9  → 1
+ *  - 61.2 → 60
+ *  - 280 → 300
  */
-private fun snapNiceInteger(x: Float): Float {
-    if (x <= 1f) return 1f
-    val log10 = kotlin.math.log10(x)
-    val k = floor(log10).toInt()
-    val mag = 10f.pow(k)           // magnitude (…1, 10, 100,…)
-    val n = x / mag                // normalized to [1,10)
-
-    // Candidate bases in [1,10) multiplied by mag → {1, 2, 5}×mag
+private fun chooseNiceIntegerNear(x: Float): Float {
+    if (x <= 0f) return 1f
+    val k = kotlin.math.floor(kotlin.math.log10(x.toDouble())).toInt()
+    val mag = 10f.pow(k)
     val c1 = 1f * mag
     val c2 = 2f * mag
     val c5 = 5f * mag
     val candidates = listOf(c1, c2, c5, 10f * mag)
-
-    // Pick nearest; if exactly halfway, prefer the larger (cleaner/roomier)
     val best = candidates.minBy { kotlin.math.abs(it - x) }
-    // Ensure it's an integer in display units: round to nearest integer.
     return best.roundToInt().toFloat().coerceAtLeast(1f)
 }
