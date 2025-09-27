@@ -1,548 +1,407 @@
+// File: com/android/shaftschematic/pdf/ShaftPdfComposer.kt
+// COMPLETE REWRITE v5 — minimal, compiling version (no AxisMapping)
+// - Pure android.graphics.Canvas (no Compose bridge)
+// - Fit‑to‑width single scale (ptPerMm)
+// - Centerline OFF in PDF
+// - Liners: top/bottom = outline width; ends = dim width (ticks)
+// - Dimension band above drawing: top Overall line + per‑component length lines
+//   with centered labels that include units (e.g., "100.0 mm", "12.5 in.") and a handwriting gap
+// - Footer: AFT / Work Order / FWD (no boxes)
+// - Uses your model names: Body.diaMm, ThreadSpec.majorDiaMm, Liner.odMm
+// - Distance‑from‑reference lines + body‑only compression can be added later
+
 package com.android.shaftschematic.pdf
 
 import android.content.Context
-import android.graphics.*
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
-import android.os.Environment
-import androidx.core.graphics.withScale
-import androidx.core.graphics.withTranslation
-import com.android.shaftschematic.model.*
+import com.android.shaftschematic.model.Body
+import com.android.shaftschematic.model.Liner
+import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Taper
+import com.android.shaftschematic.model.ThreadSpec
 import com.android.shaftschematic.util.UnitSystem
-import java.io.File
-import java.io.FileOutputStream
 import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.round
-import kotlin.math.sign
-import kotlin.math.sin
+
+private const val MM_PER_IN = 25.4f
+private const val OUTLINE_PT = 2.5f
+private const val DIM_PT = 1.6f
+private const val TEXT_PT = 12f
+
+private const val PAGE_MARGIN_PT = 36f      // 0.5 in
+private const val FOOTER_H_PT = 84f         // ~1.17 in
+private const val DIM_BAND_H_PT = 90f       // space above drawing for dimension lines
+private const val LANE_GAP_PT = 12f
+private const val ARROW_PT = 6f
+private const val LABEL_PAD_PT = 6f
+private const val EPS_END_MM = 0.25f
+
 
 /**
- * ShaftPdfComposer (ShaftSpec in millimeters)
- *
- * PURPOSE
- *  - Render a complete shaft drawing to PDF using Android PdfDocument.
- *  - All geometry is taken from ShaftSpec (stored in mm). We convert to points (pt) for PDF.
- *  - Title block (bottom/landscape), optional grid underlay, scale-to-fit drawing band.
- *
- * KEY CHOICES
- *  - mm → pt via a single constant; no ad-hoc conversions.
- *  - Scale-to-fit horizontally; stroke widths/arrow lengths compensated for scale
- *    so dimension lines, leaders, and arrowheads look consistent.
- *  - Labels follow UI unit selection (mm | in) WITHOUT changing geometry math.
- *
- * NON-GOALS (for now)
- *  - Pagination across multiple pages (we fit to width).
- *  - Embedded metadata (PdfDocument has no metadata API).
+ * Backwards‑compatibility shim so existing imports `ShaftPdfComposer` keep working.
+ * Delegates to the v5 top‑level function `composeShaftPdf(...)`.
  */
-
-// ───────────────────────────── Units & page ─────────────────────────────
-private const val POINTS_PER_INCH = 72f
-private const val MM_PER_INCH = 25.4f
-private val PT_PER_MM = POINTS_PER_INCH / MM_PER_INCH
-
-// US Letter landscape
-private const val PAGE_W_PT = 792   // 11 in * 72
-private const val PAGE_H_PT = 612   // 8.5 in * 72
-
-// ───────────────────────────── Layout ─────────────────────────────
-private const val MARGIN_PT = 36f                // 0.5 in
-private const val TITLE_BLOCK_H_PT = 90f         // bottom title block height
-private const val LEFT_LEADER_GUTTER_PT = 80f    // space on left of drawing for leaders
-private const val VERTICAL_PADDING_PT = 24f      // inner padding
-
-// Dimension layout (above & below)
-private const val DIM_ROW_SPACING_PT = 26f
-private const val DIM_STACK_CLEAR_PT = 40f
-private const val DIM_TEXT_OFFSET_PT = -18f
-
-// Arrow geometry (in pt at page scale; we compensate for drawing scale)
-private const val ARROW_DEG = 160.0
-private val ARROW_RAD = ARROW_DEG * PI / 180.0
-
-// ───────────────────────────── Paints (base) ─────────────────────────────
-private val titleText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    textSize = 16f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); color = Color.BLACK
-}
-private val smallText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    textSize = 12f; color = Color.BLACK
-}
-private val dimText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    textSize = 11.5f; color = Color.BLACK
-}
-private val frameStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    style = Paint.Style.STROKE; strokeWidth = 1.2f; color = Color.BLACK
-}
-
-// Scale-compensated stroke (keeps visual thickness stable regardless of drawing scale)
-private fun scaledStroke(basePt: Float, scale: Float, color: Int = Color.BLACK) =
-    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = basePt / max(1f, scale)
-        this.color = color
-    }
-
-// ───────────────────────────── Public API ─────────────────────────────
+/**
+ * Backwards‑compatibility shim so existing imports `ShaftPdfComposer` keep working.
+ * Provides the legacy `exportToStream(...)` API and delegates to the v5
+ * top‑level composer (`composeShaftPdf`). Grid is ignored per PDF rules.
+ */
 object ShaftPdfComposer {
-
-    /**
-     * Export to an OutputStream (SAF-friendly).
-     *
-     * @param spec    canonical geometry in mm
-     * @param unit    label unit for text (mm|in); geometry remains in mm
-     * @param showGrid draw subtle grid underlay
-     */
+    /** Legacy entry point still used by ShaftRoute. */
+    @JvmStatic
     fun exportToStream(
         context: Context,
         spec: ShaftSpec,
-        unit: UnitSystem = UnitSystem.MILLIMETERS,
-        showGrid: Boolean = false,
+        unit: UnitSystem,
+        showGrid: Boolean, // ignored; PDF grid is off by contract
         out: OutputStream,
-        title: String? = null   // ⬅️ NEW
+        title: String? = null,
     ) {
-        val pdf = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(PAGE_W_PT, PAGE_H_PT, 1).create()
-        val page = pdf.startPage(pageInfo)
-        val c = page.canvas
+// Determine app version (robust to older SDKs)
+        val pm = context.packageManager
+        val pkg = context.packageName
+        val appVersion = try {
+            val pi = pm.getPackageInfo(pkg, 0)
+            (pi?.versionName ?: "").ifBlank { "" }
+        } catch (t: Throwable) { "" }
 
-        val pageRect = RectF(0f, 0f, PAGE_W_PT.toFloat(), PAGE_H_PT.toFloat())
-        val titleRect = RectF(
-            MARGIN_PT,
-            pageRect.bottom - MARGIN_PT - TITLE_BLOCK_H_PT,
-            pageRect.right - MARGIN_PT,
-            pageRect.bottom - MARGIN_PT
+
+        val filename = (title ?: "shaft_drawing").ifBlank { "shaft_drawing" }
+
+
+        val doc = PdfDocument()
+        val pageInfo = PdfDocument.PageInfo.Builder(612, 792, 1) // Letter 8.5x11in @72dpi
+            .create()
+        val page = doc.startPage(pageInfo)
+
+
+// Compose content on the page
+        composeShaftPdf(
+            page = page,
+            spec = spec,
+            unit = unit,
+            project = ProjectInfo(), // no project info available here
+            appVersion = appVersion,
+            filename = filename,
         )
-        val workRect = RectF(
-            MARGIN_PT,
-            MARGIN_PT,
-            pageRect.right - MARGIN_PT,
-            titleRect.top - VERTICAL_PADDING_PT * 0f
-        )
 
-        // Optional: frame around working area (kept for now)
-        c.drawRect(workRect, frameStroke)
 
-        if (showGrid) {
-            drawGrid(c, workRect, minorEveryMm = 10.0, majorEveryMm = 50.0)
-        }
-
-        drawShaftSheet(c, spec, workRect, unit)
-        drawTitleBlock(c, spec, titleRect, unit, title)
-
-        pdf.finishPage(page)
-        pdf.writeTo(out)
-        pdf.close()
+        doc.finishPage(page)
+        doc.writeTo(out)
+        doc.close()
     }
 
-    /**
-     * Export to an app-private file (Documents/… or files dir).
-     */
-    fun export(
-        context: Context,
+
+    // Optional convenience alias kept from earlier messages
+    @JvmStatic
+    fun compose(
+        page: PdfDocument.Page,
         spec: ShaftSpec,
-        unit: UnitSystem = UnitSystem.MILLIMETERS,
-        fileName: String = defaultFileName("shaft_drawing"),
-        showGrid: Boolean = false
-    ): File {
-        val pdf = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(PAGE_W_PT, PAGE_H_PT, 1).create()
-        val page = pdf.startPage(pageInfo)
-        val c = page.canvas
+        unit: UnitSystem,
+        project: ProjectInfo,
+        appVersion: String,
+        filename: String,
+    ) {
+        composeShaftPdf(page, spec, unit, project, appVersion, filename)
+    }
 
-        val pageRect = RectF(0f, 0f, PAGE_W_PT.toFloat(), PAGE_H_PT.toFloat())
-        val titleRect = RectF(
-            MARGIN_PT,
-            pageRect.bottom - MARGIN_PT - TITLE_BLOCK_H_PT,
-            pageRect.right - MARGIN_PT,
-            pageRect.bottom - MARGIN_PT
-        )
-        val workRect = RectF(
-            MARGIN_PT,
-            MARGIN_PT,
-            pageRect.right - MARGIN_PT,
-            titleRect.top - VERTICAL_PADDING_PT * 0f
-        )
 
-        c.drawRect(workRect, frameStroke)
-
-        if (showGrid) {
-            drawGrid(c, workRect, minorEveryMm = 10.0, majorEveryMm = 50.0)
-        }
-
-        drawShaftSheet(c, spec, workRect, unit)
-        drawTitleBlock(c, spec, titleRect, unit)
-
-        pdf.finishPage(page)
-
-        val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
-        val out = File(dir, fileName)
-        FileOutputStream(out).use { pdf.writeTo(it) }
-        pdf.close()
-        return out
+    // Alternate overload in case older call sites passed filename before project
+    @JvmStatic
+    fun compose(
+        page: PdfDocument.Page,
+        spec: ShaftSpec,
+        unit: UnitSystem,
+        filename: String,
+        project: ProjectInfo,
+        appVersion: String,
+    ) {
+        composeShaftPdf(page, spec, unit, project, appVersion, filename)
     }
 }
 
-// ───────────────────────────── Core drawing ─────────────────────────────
-
-/** Normalized forms (forward-origin coordinates; doubles for math) */
-private data class BodyN(val xStartMm: Double, val lengthMm: Double, val diaMm: Double)
-private data class TaperN(val xStartMm: Double, val lengthMm: Double, val startDiaMm: Double, val endDiaMm: Double)
-private data class ThreadN(val xStartMm: Double, val lengthMm: Double, val majorDiaMm: Double, val pitchMm: Double)
-private data class LinerN(val xStartMm: Double, val lengthMm: Double, val odMm: Double)
-
-private data class Normalized(
-    val overallLenMm: Double,
-    val bodies: List<BodyN>,
-    val tapers: List<TaperN>,
-    val threads: List<ThreadN>,
-    val liners: List<LinerN>,
-    val maxDiaMm: Double
+// Mid column carrier
+data class ProjectInfo(
+    val customer: String = "",
+    val vessel: String = "",
+    val jobNumber: String = "",
 )
 
-/** Convert AFT-based start to FORWARD-based xStart (left→right). */
-private fun aftToForwardStart(overallLenMm: Double, startFromAftMm: Double, lengthMm: Double): Double {
-    // AFT origin: 0 at aft, increasing toward forward
-    // FORWARD origin target: 0 at forward, increasing toward aft
-    // x_fwd = overall - (startFromAft + length)
-    return (overallLenMm - (startFromAftMm + lengthMm)).coerceAtLeast(0.0)
-}
+fun composeShaftPdf(
+    page: PdfDocument.Page,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    project: ProjectInfo,
+    appVersion: String,
+    filename: String,
+) {
+    val c = page.canvas
+    val pageW = page.info.pageWidth.toFloat()
+    val pageH = page.info.pageHeight.toFloat()
 
-/** Gather lists and normalize to forward-origin working lists. */
-private fun normalize(spec: ShaftSpec): Normalized {
-    val overall = spec.overallLengthMm.toDouble()
-
-    val bodies = buildList {
-        spec.bodies.forEach { b ->
-            val len = b.lengthMm.toDouble()
-            if (len > 0.0) {
-                val x = aftToForwardStart(overall, b.startFromAftMm.toDouble(), len)
-                add(BodyN(x, len, b.diaMm.toDouble()))
-            }
-        }
-    }.sortedBy { it.xStartMm }
-
-    val tapers = buildList {
-        spec.tapers.forEach { t ->
-            val len = t.lengthMm.toDouble()
-            if (len > 0.0) {
-                val x = aftToForwardStart(overall, t.startFromAftMm.toDouble(), len)
-                add(TaperN(x, len, t.startDiaMm.toDouble(), t.endDiaMm.toDouble()))
-            }
-        }
-    }.sortedBy { it.xStartMm }
-
-    val threads = buildList {
-        spec.threads.forEach { th ->
-            val len = th.lengthMm.toDouble()
-            if (len > 0.0 && th.majorDiaMm > 0f) {
-                val x = aftToForwardStart(overall, th.startFromAftMm.toDouble(), len)
-                add(ThreadN(x, len, th.majorDiaMm.toDouble(), th.pitchMm.toDouble()))
-            }
-        }
-    }.sortedBy { it.xStartMm }
-
-    val liners = buildList {
-        spec.liners.forEach { ln ->
-            val len = ln.lengthMm.toDouble()
-            if (len > 0.0 && ln.odMm > 0f) {
-                val x = aftToForwardStart(overall, ln.startFromAftMm.toDouble(), len)
-                add(LinerN(x, len, ln.odMm.toDouble()))
-            }
-        }
-    }.sortedBy { it.xStartMm }
-
-    val maxDia = listOfNotNull(
-        bodies.maxOfOrNull { it.diaMm },
-        tapers.maxOfOrNull { max(it.startDiaMm, it.endDiaMm) },
-        liners.maxOfOrNull { it.odMm },
-        threads.maxOfOrNull { it.majorDiaMm }
-    ).maxOrNull() ?: 0.0
-
-    return Normalized(
-        overallLenMm = overall,
-        bodies = bodies,
-        tapers = tapers,
-        threads = threads,
-        liners = liners,
-        maxDiaMm = maxDia
+    // Layout
+    val geomRect = RectF(
+        PAGE_MARGIN_PT,
+        PAGE_MARGIN_PT + DIM_BAND_H_PT,
+        pageW - PAGE_MARGIN_PT,
+        pageH - PAGE_MARGIN_PT - FOOTER_H_PT
     )
+    val dimRect = RectF(PAGE_MARGIN_PT, PAGE_MARGIN_PT, pageW - PAGE_MARGIN_PT, PAGE_MARGIN_PT + DIM_BAND_H_PT)
+    val footerRect = RectF(PAGE_MARGIN_PT, pageH - PAGE_MARGIN_PT - FOOTER_H_PT, pageW - PAGE_MARGIN_PT, pageH - PAGE_MARGIN_PT)
+
+    // Paints
+    val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = OUTLINE_PT; color = 0xFF000000.toInt() }
+    val dim = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = DIM_PT; color = 0xFF000000.toInt() }
+    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; textSize = TEXT_PT; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL); color = 0xFF000000.toInt() }
+
+    // Scale (fit to width)
+    val overall = max(1f, spec.overallLengthMm)
+    val ptPerMm = geomRect.width() / overall
+    val left = geomRect.left
+    val cy = (geomRect.top + geomRect.bottom) * 0.5f
+
+    fun xAt(mm: Float) = left + mm * ptPerMm
+    fun rPx(diaMm: Float) = (diaMm * 0.5f) * ptPerMm
+
+    // 1) Components (no centerline in PDF)
+    drawBodies(c, spec.bodies, cy, ::xAt, ::rPx, outline)
+    drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline)
+    drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
+    drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
+
+    // 2) Dimension band
+    drawDimensionBand(c, dimRect, spec, unit, ::xAt, text, dim)
+
+    // 3) Footer
+    drawFooter(c, footerRect, spec, unit, project, filename, appVersion, text)
 }
 
-private fun drawShaftSheet(c: Canvas, spec: ShaftSpec, area: RectF, unit: UnitSystem) {
-    val n = normalize(spec)
+/* ------------------------------ Components ------------------------------ */
+private fun drawBodies(c: Canvas, bodies: List<Body>, cy: Float, xAt: (Float) -> Float, rPx: (Float) -> Float, outline: Paint) {
+    bodies.forEach { b ->
+        if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
+        val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
+        val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
+        c.drawLine(x0, top, x1, top, outline)
+        c.drawLine(x0, bot, x1, bot, outline)
+        c.drawLine(x0, top, x0, bot, outline)
+        c.drawLine(x1, top, x1, bot, outline)
+    }
+}
 
-    // Fit-to-width scale and band layout
-    val widthPt = area.width()
-    val heightPt = area.height()
-    val drawWidthPt = widthPt - LEFT_LEADER_GUTTER_PT
-    val neededWPt = (n.overallLenMm * PT_PER_MM).toFloat()
-    val neededHPt = (n.maxDiaMm * PT_PER_MM).toFloat() * 2f + 80f
-    val scale = min(1f, min(drawWidthPt / neededWPt, (heightPt - 2 * VERTICAL_PADDING_PT) / neededHPt))
+private fun drawTapers(c: Canvas, tapers: List<Taper>, cy: Float, xAt: (Float) -> Float, rPx: (Float) -> Float, outline: Paint) {
+    tapers.forEach { t ->
+        if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
+        val x0 = xAt(t.startFromAftMm); val x1 = xAt(t.startFromAftMm + t.lengthMm)
+        val r0 = rPx(t.startDiaMm); val r1 = rPx(t.endDiaMm)
+        val top0 = cy - r0; val bot0 = cy + r0
+        val top1 = cy - r1; val bot1 = cy + r1
+        c.drawLine(x0, top0, x1, top1, outline)
+        c.drawLine(x0, bot0, x1, bot1, outline)
+        c.drawLine(x0, top0, x0, bot0, outline)
+        c.drawLine(x1, top1, x1, bot1, outline)
+    }
+}
 
-    c.withTranslation(area.left + LEFT_LEADER_GUTTER_PT, area.top + VERTICAL_PADDING_PT + 60f) {
-        withScale(scale, scale) {
-            val centerY = 150f
-
-            // Scale-compensated strokes
-            val strokeBold = scaledStroke(2f, scale)
-            val strokeThin = scaledStroke(1.5f, scale)
-            val pDim = scaledStroke(1.2f, scale)
-            val pLeader = scaledStroke(1.0f, scale)
-            val arrowLen = 14f / max(1f, scale)
-
-            /* Bodies */
-            n.bodies.forEach { b ->
-                val x0 = mmToPt(b.xStartMm)
-                val x1 = mmToPt(b.xStartMm + b.lengthMm)
-                val half = mmToPt(b.diaMm) / 2f
-                c.drawRect(x0, centerY - half, x1, centerY + half, strokeBold)
+private fun drawThreads(c: Canvas, threads: List<ThreadSpec>, cy: Float, xAt: (Float) -> Float, rPx: (Float) -> Float, outline: Paint, dim: Paint, ptPerMm: Float) {
+    threads.forEach { th ->
+        if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
+        val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
+        val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
+        c.drawLine(x0, top, x1, top, outline)
+        c.drawLine(x0, bot, x1, bot, outline)
+        c.drawLine(x0, top, x0, bot, outline)
+        c.drawLine(x1, top, x1, bot, outline)
+        // Hatch at 45° using pitch
+        val step = th.pitchMm * ptPerMm
+        if (step > 0f) {
+            var x = x0
+            val path = Path()
+            while (x < x1 + step) {
+                path.rewind(); path.moveTo(x, bot); path.lineTo(x + (bot - top), top)
+                c.drawPath(path, dim); x += step
             }
-
-            /* Tapers */
-            n.tapers.forEach { t ->
-                val x0 = mmToPt(t.xStartMm)
-                val x1 = mmToPt(t.xStartMm + t.lengthMm)
-                val half0 = mmToPt(t.startDiaMm) / 2f
-                val half1 = mmToPt(t.endDiaMm) / 2f
-                val p = Path().apply {
-                    moveTo(x0, centerY - half0); lineTo(x1, centerY - half1)
-                    lineTo(x1, centerY + half1); lineTo(x0, centerY + half0); close()
-                }
-                c.drawPath(p, strokeBold)
-            }
-
-            /* Threads (tick + leader text) */
-            n.threads.forEach { th ->
-                val x = mmToPt(th.xStartMm)
-                c.drawLine(x, centerY - 22f, x, centerY + 22f, strokeThin)
-                val text = buildString {
-                    append("Threads Ø ").append(lenLabel(th.majorDiaMm, unit))
-                    if (th.pitchMm > 0.0) append("  P ").append(lenLabel(th.pitchMm, unit))
-                    append("  L ").append(lenLabel(th.lengthMm, unit))
-                }
-                drawLeaderText(c, x - 48f, centerY - 30f, text, pLeader)
-            }
-
-            /* Liners */
-            n.liners.forEach { ln ->
-                val x0 = mmToPt(ln.xStartMm)
-                val x1 = mmToPt(ln.xStartMm + ln.lengthMm)
-                val half = mmToPt(ln.odMm) / 2f
-                c.drawRect(x0, centerY - half, x1, centerY + half, strokeThin)
-                drawDim(
-                    c,
-                    x0, centerY + half + 24f,
-                    x1, centerY + half + 24f,
-                    offset = +22f,
-                    text = "Liner Ø ${lenLabel(ln.odMm, unit)} × ${lenLabel(ln.lengthMm, unit)}",
-                    above = false,
-                    paint = pDim,
-                    arrowLen = arrowLen
-                )
-            }
-
-            /* Stacked dimension rows ABOVE shaft */
-            val stackItems = collectDimItems(n, unit)
-            if (stackItems.isNotEmpty()) {
-                drawDimStackAbove(c, centerY, n.maxDiaMm, stackItems, pDim, arrowLen)
-            }
-
-            /* Overall length BELOW */
-            val x0 = 0f
-            val x1 = mmToPt(n.overallLenMm)
-            drawDim(
-                c,
-                x0, centerY + mmToPt(n.maxDiaMm) / 2f + 70f,
-                x1, centerY + mmToPt(n.maxDiaMm) / 2f + 70f,
-                offset = +26f,
-                text = "Overall ${lenLabel(n.overallLenMm, unit)}",
-                above = false,
-                paint = pDim,
-                arrowLen = arrowLen
-            )
         }
     }
 }
 
-// ───────────────────────────── Title block ─────────────────────────────
-private fun drawTitleBlock(c: Canvas, spec: ShaftSpec, area: RectF, unit: UnitSystem, title: String? = null) {
-    c.drawRect(area, frameStroke)
-    val colW = area.width() / 3f
-    c.drawLine(area.left + colW, area.top, area.left + colW, area.bottom, frameStroke)
-    c.drawLine(area.left + 2 * colW, area.top, area.left + 2 * colW, area.bottom, frameStroke)
-
-    val y0 = area.top + 20f
-    val unitTxt = if (unit == UnitSystem.MILLIMETERS) "mm" else "in"
-    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
-
-    val leftTitle = title?.takeIf { it.isNotBlank() } ?: "Shaft Schematic"
-    c.drawText(leftTitle, area.left + 12f, y0, titleText)
-    c.drawText("Overall: ${lenLabel(spec.overallLengthMm.toDouble(), unit)}", area.left + 12f, y0 + 18f, smallText)
-    c.drawText("App: ShaftSchematic", area.left + 12f, y0 + 34f, smallText)
-
-    c.drawText("Date: ${sdf.format(Date())}", area.left + colW + 12f, y0, smallText)
-    c.drawText("Units: $unitTxt (fit to width)", area.left + colW + 12f, y0 + 18f, smallText)
-
-    c.drawText("File: ${defaultFileName("shaft_drawing")}", area.left + 2 * colW + 12f, y0, smallText)
-    c.drawText("Rev: A", area.left + 2 * colW + 12f, y0 + 18f, smallText)
-}
-
-// ───────────────────────────── Dimension & leaders ─────────────────────────────
-private data class DimItem(val startMm: Double, val endMm: Double, val label: String)
-
-private fun collectDimItems(n: Normalized, unit: UnitSystem): List<DimItem> {
-    val items = mutableListOf<DimItem>()
-    n.bodies.forEach { if (it.lengthMm > 0.0) items += DimItem(it.xStartMm, it.xStartMm + it.lengthMm, lenLabel(it.lengthMm, unit)) }
-    n.liners.forEach { if (it.lengthMm > 0.0) items += DimItem(it.xStartMm, it.xStartMm + it.lengthMm, lenLabel(it.lengthMm, unit)) }
-    n.tapers.forEach { if (it.lengthMm > 0.0) items += DimItem(it.xStartMm, it.xStartMm + it.lengthMm, lenLabel(it.lengthMm, unit)) }
-    n.threads.forEach { if (it.lengthMm > 0.0) items += DimItem(it.xStartMm, it.xStartMm + it.lengthMm, lenLabel(it.lengthMm, unit)) }
-    return items
-}
-
-private fun drawDimStackAbove(
-    c: Canvas,
-    centerY: Float,
-    maxDiaMm: Double,
-    items: List<DimItem>,
-    paint: Paint,
-    arrowLen: Float
-) {
-    var row = 0
-    items.forEach { itx ->
-        val x0 = mmToPt(itx.startMm)
-        val x1 = mmToPt(itx.endMm)
-        val y = dimRowYAbove(centerY, maxDiaMm, row++)
-        drawDim(c, x0, y, x1, y, offset = DIM_TEXT_OFFSET_PT, text = itx.label, above = true, paint = paint, arrowLen = arrowLen)
+private fun drawLiners(c: Canvas, liners: List<Liner>, cy: Float, xAt: (Float) -> Float, rPx: (Float) -> Float, outline: Paint, dim: Paint) {
+    liners.forEach { ln ->
+        if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
+        val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
+        val r = rPx(ln.odMm); val top = cy - r; val bot = cy + r
+        c.drawLine(x0, top, x1, top, outline)
+        c.drawLine(x0, bot, x1, bot, outline)
+        c.drawLine(x0, top, x0, bot, dim)
+        c.drawLine(x1, top, x1, bot, dim)
     }
 }
 
-private fun dimRowYAbove(centerY: Float, maxDiaMm: Double, row: Int): Float {
-    val odHalf = mmToPt(maxDiaMm) / 2f
-    val base = centerY - odHalf - DIM_STACK_CLEAR_PT
-    return base - row * DIM_ROW_SPACING_PT
-}
+/* --------------------------- Dimension band --------------------------- */
+private data class Interval(val startMm: Float, val endMm: Float)
 
-private fun drawDim(
-    c: Canvas,
-    x0: Float, y0: Float,
-    x1: Float, y1: Float,
-    offset: Float = 20f,
-    text: String,
-    above: Boolean = false,
-    paint: Paint,
-    arrowLen: Float = 14f
-) {
-    val isHorizontal = abs(y1 - y0) < 1e-3
-    val p = paint
-    if (isHorizontal) {
-        val y = y0 + offset
-        val a = min(x0, x1); val b = max(x0, x1)
-        c.drawLine(x0, y0, x0, y, p)
-        c.drawLine(x1, y1, x1, y, p)
-        c.drawLine(a, y, b, y, p)
-        drawArrow(c, a, y, a + arrowLen * sign(b - a), y, p)
-        drawArrow(c, b, y, b - arrowLen * sign(b - a), y, p)
-        val tw = dimText.measureText(text)
-        c.drawText(text, (a + b) / 2f - tw / 2f, y + if (above) -6f else -4f, dimText)
-    } else {
-        val x = x0 + offset
-        val a = min(y0, y1); val b = max(y0, y1)
-        c.drawLine(x0, y0, x, y0, p)
-        c.drawLine(x1, y1, x, y1, p)
-        c.drawLine(x, a, x, b, p)
-        drawArrow(c, x, a, x, a + arrowLen * sign(b - a), p)
-        drawArrow(c, x, b, x, b - arrowLen * sign(b - a), p)
-        c.drawText(text, x + 6f, (a + b) / 2f - 2f, dimText)
+private fun drawDimensionBand(c: Canvas, band: RectF, spec: ShaftSpec, unit: UnitSystem, xAt: (Float) -> Float, text: Paint, dim: Paint) {
+    // Top: Overall
+    val overallY = band.top + text.textSize + 6f
+    val xa = xAt(0f); val xf = xAt(spec.overallLengthMm)
+    drawDimWithGap(c, xa, xf, overallY, fmtLen(unit, spec.overallLengthMm), text, dim)
+
+    // Per‑component lengths
+    val ivs = ArrayList<Interval>()
+    spec.bodies.forEach { if (it.lengthMm > 0f && it.diaMm > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+    spec.tapers.forEach { if (it.lengthMm > 0f && (it.startDiaMm > 0f || it.endDiaMm > 0f)) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+    spec.threads.forEach { if (it.lengthMm > 0f && it.majorDiaMm > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+    spec.liners.forEach { if (it.lengthMm > 0f && it.odMm > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+
+    // Greedy lane stack under overall line
+    data class Lane(var endX: Float, val y: Float)
+    val lanes = mutableListOf<Lane>()
+    val firstLaneY = overallY + text.textSize * 1.6f
+    val sorted = ivs.sortedWith(compareBy({ it.startMm }, { it.endMm }))
+
+    sorted.forEach { iv ->
+        val x0 = xAt(iv.startMm); val x1 = xAt(iv.endMm)
+        var lane = -1
+        for (i in lanes.indices) if (x0 >= lanes[i].endX) { lane = i; break }
+        if (lane == -1) { lanes += Lane(x1, firstLaneY + lanes.size * (TEXT_PT + LANE_GAP_PT)); lane = lanes.lastIndex } else { lanes[lane].endX = x1 }
+        val y = lanes[lane].y
+        drawDimWithGap(c, x0, x1, y, fmtLen(unit, iv.endMm - iv.startMm), text, dim)
     }
 }
 
-private fun drawLeaderText(c: Canvas, x: Float, y: Float, text: String, paint: Paint) {
-    c.drawLine(x - 16f, y - 8f, x - 2f, y - 2f, paint)
-    c.drawText(text, x, y, dimText)
+private fun drawDimWithGap(c: Canvas, x0: Float, x1: Float, y: Float, label: String, text: Paint, dim: Paint) {
+    val mid = (x0 + x1) * 0.5f
+    val w = text.measureText(label)
+    val gap = w + LABEL_PAD_PT * 2
+    val leftEnd = mid - gap / 2f
+    val rightStart = mid + gap / 2f
+
+    // Baseline split
+    c.drawLine(x0, y, leftEnd, y, dim)
+    c.drawLine(rightStart, y, x1, y, dim)
+
+    // Arrowheads
+    c.drawLine(x0, y, x0 + ARROW_PT, y - ARROW_PT, dim)
+    c.drawLine(x0, y, x0 + ARROW_PT, y + ARROW_PT, dim)
+    c.drawLine(x1, y, x1 - ARROW_PT, y - ARROW_PT, dim)
+    c.drawLine(x1, y, x1 - ARROW_PT, y + ARROW_PT, dim)
+
+    // Label
+    val tx = mid - w / 2f
+    val ty = y - 6f
+    c.drawText(label, tx, ty, text)
 }
 
-// Arrowheads built from the segment direction
-private fun drawArrow(c: Canvas, x0: Float, y0: Float, x1: Float, y1: Float, p: Paint) {
-    c.drawLine(x0, y0, x1, y1, p)
-    val ang = atan2((y1 - y0).toDouble(), (x1 - x0).toDouble())
-    val a1 = ang + ARROW_RAD
-    val a2 = ang - ARROW_RAD
-    val xA = (x1 + 6.0 * cos(a1)).toFloat()
-    val yA = (y1 + 6.0 * sin(a1)).toFloat()
-    val xB = (x1 + 6.0 * cos(a2)).toFloat()
-    val yB = (y1 + 6.0 * sin(a2)).toFloat()
-    c.drawLine(x1, y1, xA, yA, p)
-    c.drawLine(x1, y1, xB, yB, p)
-}
+/* -------------------------------- Footer -------------------------------- */
+private fun drawFooter(c: Canvas, rect: RectF, spec: ShaftSpec, unit: UnitSystem, project: ProjectInfo, filename: String, appVersion: String, text: Paint) {
+    val gutter = 16f
+    val innerW = rect.width() - gutter * 2
+    val colW = innerW / 3f
 
-// ───────────────────────────── Grid & utils ─────────────────────────────
-private fun drawGrid(c: Canvas, area: RectF, minorEveryMm: Double = 10.0, majorEveryMm: Double = 50.0) {
-    val minorPt = mmToPt(minorEveryMm)
-    val majorPt = mmToPt(majorEveryMm)
+    val leftX = rect.left
+    val midX = leftX + colW + gutter
+    val rightX = midX + colW + gutter
 
-    val minor = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 0.6f
-        color = Color.argb(40, 0, 0, 0)
-    }
-    val major = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 0.9f
-        color = Color.argb(70, 0, 0, 0)
-    }
+    val top = rect.top + 18f
+    val lh = text.textSize * 1.35f
 
-    // Vertical lines
+    // Left (AFT)
     run {
-        var x = area.left
-        var i = 0
-        val mod = max(1, (majorPt / minorPt).toInt())
-        while (x <= area.right + 0.5f) {
-            val p = if ((i % mod) == 0) major else minor
-            val xr = x.roundHalf()
-            c.drawLine(xr, area.top, xr, area.bottom, p)
-            x += minorPt
-            i++
+        var y = top
+        val aftTaper = findAftTaper(spec)
+        val aftThread = findAftThread(spec)
+        if (aftTaper != null) {
+            val (let, set) = letSet(aftTaper)
+            c.drawText("AFT Taper", leftX, y, text); y += lh
+            c.drawText("L.E.T.: ${fmtDia(unit, let)}", leftX, y, text); y += lh
+            c.drawText("S.E.T.: ${fmtDia(unit, set)}", leftX, y, text); y += lh
+            c.drawText("Length: ${fmtLen(unit, aftTaper.lengthMm)}", leftX, y, text); y += lh
+            c.drawText("Rate: ${rate1toN(aftTaper)}", leftX, y, text); y += lh
+        }
+        if (aftThread != null) {
+            val tpi = tpiFromPitch(aftThread.pitchMm)
+            val dia = fmtDia(unit, aftThread.majorDiaMm)
+            val len = fmtLen(unit, aftThread.lengthMm)
+            c.drawText("Thread: ${dia} × ${fmtTpi(tpi)} × ${len}", leftX, y, text)
         }
     }
-    // Horizontal lines
+
+    // Middle (Work order)
     run {
-        var y = area.top
-        var i = 0
-        val mod = max(1, (majorPt / minorPt).toInt())
-        while (y <= area.bottom + 0.5f) {
-            val p = if ((i % mod) == 0) major else minor
-            val yr = y.roundHalf()
-            c.drawLine(area.left, yr, area.right, yr, p)
-            y += minorPt
-            i++
+        var y = top
+        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        c.drawText("Customer: ${project.customer}", midX, y, text); y += lh
+        c.drawText("Vessel: ${project.vessel}", midX, y, text); y += lh
+        c.drawText("Job #: ${project.jobNumber}", midX, y, text); y += lh
+        c.drawText("Date: $date", midX, y, text); y += lh
+    }
+
+    // Right (FWD)
+    run {
+        var y = top
+        val fwdTaper = findFwdTaper(spec)
+        val fwdThread = findFwdThread(spec)
+        if (fwdTaper != null) {
+            val (let, set) = letSet(fwdTaper)
+            c.drawText("FWD Taper", rightX, y, text); y += lh
+            c.drawText("L.E.T.: ${fmtDia(unit, let)}", rightX, y, text); y += lh
+            c.drawText("S.E.T.: ${fmtDia(unit, set)}", rightX, y, text); y += lh
+            c.drawText("Length: ${fmtLen(unit, fwdTaper.lengthMm)}", rightX, y, text); y += lh
+            c.drawText("Rate: ${rate1toN(fwdTaper)}", rightX, y, text); y += lh
+        }
+        if (fwdThread != null) {
+            val tpi = tpiFromPitch(fwdThread.pitchMm)
+            val dia = fmtDia(unit, fwdThread.majorDiaMm)
+            val len = fmtLen(unit, fwdThread.lengthMm)
+            c.drawText("Thread: ${dia} × ${fmtTpi(tpi)} × ${len}", rightX, y, text)
         }
     }
+
+    // Metadata (tiny) at bottom-right
+    val meta = "$filename  •  ShaftSchematic $appVersion"
+    val metaW = text.measureText(meta)
+    c.drawText(meta, rect.right - metaW, rect.bottom - 6f, text)
 }
 
-private fun Float.roundHalf(): Float = (round(this * 2f) / 2f)
+/* ------------------------------ Helpers ------------------------------ */
+private fun findAftTaper(spec: ShaftSpec): Taper? = spec.tapers.minByOrNull { it.startFromAftMm }?.takeIf { it.startFromAftMm < EPS_END_MM }
+private fun findFwdTaper(spec: ShaftSpec): Taper? = spec.tapers.maxByOrNull { it.startFromAftMm + it.lengthMm }?.takeIf { abs((it.startFromAftMm + it.lengthMm) - spec.overallLengthMm) < EPS_END_MM }
+private fun findAftThread(spec: ShaftSpec): ThreadSpec? = spec.threads.minByOrNull { it.startFromAftMm }?.takeIf { it.startFromAftMm < EPS_END_MM }
+private fun findFwdThread(spec: ShaftSpec): ThreadSpec? = spec.threads.maxByOrNull { it.startFromAftMm + it.lengthMm }?.takeIf { abs((it.startFromAftMm + it.lengthMm) - spec.overallLengthMm) < EPS_END_MM }
 
-/** mm → pt (PDF points, 1/72 in). */
-private fun mmToPt(mm: Double): Float = (mm * PT_PER_MM).toFloat()
+private fun letSet(t: Taper): Pair<Float, Float> { val let = max(t.startDiaMm, t.endDiaMm); val set = min(t.startDiaMm, t.endDiaMm); return let to set }
+private fun rate1toN(t: Taper): String { val d = abs(t.startDiaMm - t.endDiaMm); if (d <= 1e-4f || t.lengthMm <= 0f) return "—"; val n = t.lengthMm / d; return "1:" + String.format(Locale.US, "%.0f", n) }
 
-/** Unit-aware label (mm or in), integer when whole, trimmed decimals otherwise. */
-private fun lenLabel(mm: Double, unit: UnitSystem, decimals: Int = 3): String {
-    val (value, suffix) = if (unit == UnitSystem.MILLIMETERS) {
-        mm to " mm"
-    } else {
-        (mm / MM_PER_IN) to " in"
+private fun fmtLen(unit: UnitSystem, mm: Float): String = when (unit) {
+    // Support both possible enum spellings; default to mm
+    else -> String.format(Locale.US, "%.1f mm", mm)
+}.let {
+    when (unit.name.uppercase(Locale.US)) {
+        "MILLIMETERS", "MM" -> String.format(Locale.US, "%.1f mm", mm)
+        "INCHES", "IN" -> {
+            val inches = mm / MM_PER_IN
+            val s = String.format(Locale.US, "%.3f", inches).trimEnd('0').trimEnd('.')
+            "$s in."
+        }
+        else -> String.format(Locale.US, "%.1f mm", mm)
     }
-    val s = "%.${decimals}f".format(Locale.US, value).trimEnd('0').trimEnd('.')
-    return if (s.isEmpty()) "0$suffix" else s + suffix
 }
 
-private fun defaultFileName(prefix: String): String {
-    val ts = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
-    return "${prefix}_$ts.pdf"
+private fun fmtDia(unit: UnitSystem, mm: Float): String = when (unit.name.uppercase(Locale.US)) {
+    "MILLIMETERS", "MM" -> String.format(Locale.US, "%.1f", mm)
+    "INCHES", "IN" -> String.format(Locale.US, "%.3f", mm / MM_PER_IN).trimEnd('0').trimEnd('.')
+    else -> String.format(Locale.US, "%.1f", mm)
 }
+
+private fun tpiFromPitch(pitchMm: Float): Float = if (pitchMm > 0f) MM_PER_IN / pitchMm else 0f
+private fun fmtTpi(tpi: Float): String { val i = tpi.toInt(); return if (abs(tpi - i) < 0.01f) i.toString() else String.format(Locale.US, "%.2f", tpi) }

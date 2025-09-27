@@ -1,127 +1,83 @@
 package com.android.shaftschematic.ui.drawing.render
 
-import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.ShaftSpec  // ← if you use data.ShaftSpecMm, swap this import
 import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Layout mapper for the on-screen preview.
+ * Converts a mm-only [ShaftSpec] into a normalized drawing layout.
  *
- * Maps model millimeters → screen pixels inside a fixed content rectangle.
- * This version fits the shaft geometry on **both axes**:
- *  - X fit: uses the total span [minXMm, maxXMm] across all components (allows negative).
- *  - Y fit: uses the maximum **diameter** found across all components.
- * The chosen scale is the minimum of the two so everything remains encapsulated.
+ * - Always normalizes the content rect (swaps sides if inverted).
+ * - Guarantees positive content width/height (at least 1px).
+ * - Maps X left→right (aft at left).
+ * - Places centerline at the vertical middle of the content rect.
  */
-class ShaftLayout private constructor(
-    val spec: ShaftSpec,
-    val pxPerMm: Float,
-    val contentLeftPx: Float,
-    val contentTopPx: Float,
-    val contentRightPx: Float,
-    val contentBottomPx: Float,
-    /** Left bound of the drawn span in mm (can be negative). */
-    val minXMm: Float,
-    /** Right bound of the drawn span in mm. */
-    val maxXMm: Float,
-    /** Vertical centerline Y in pixels (shaft center). */
-    val centerlineYPx: Float
-) {
+object ShaftLayout {
 
-    /** Immutable view handed to renderers. */
-    class Result internal constructor(private val l: ShaftLayout) {
-        val spec get() = l.spec
-        val pxPerMm get() = l.pxPerMm
-        val contentLeftPx get() = l.contentLeftPx
-        val contentTopPx get() = l.contentTopPx
-        val contentRightPx get() = l.contentRightPx
-        val contentBottomPx get() = l.contentBottomPx
-        val minXMm get() = l.minXMm
-        val maxXMm get() = l.maxXMm
-        val centerlineYPx get() = l.centerlineYPx
-    }
+    data class Result(
+        val spec: ShaftSpec,
+        // content rect in pixels
+        val contentLeftPx: Float,
+        val contentTopPx: Float,
+        val contentRightPx: Float,
+        val contentBottomPx: Float,
+        // mapping / span
+        val pxPerMm: Float,
+        val minXMm: Float,
+        val maxXMm: Float,
+        // guides
+        val centerlineYPx: Float
+    )
 
-    companion object {
+    /**
+     * Build a robust layout from the given spec and pixel rect.
+     * The rect may be inverted; we normalize it to [l,t,r,b].
+     */
+    fun compute(
+        spec: ShaftSpec,
+        leftPx: Float,
+        topPx: Float,
+        rightPx: Float,
+        bottomPx: Float
+    ): Result {
+        // Normalize input rect first
+        val lRaw = minOf(leftPx, rightPx)
+        val rRaw = maxOf(leftPx, rightPx)
+        val tRaw = minOf(topPx, bottomPx)
+        val bRaw = maxOf(topPx, bottomPx)
 
-        /**
-         * Compute a layout for the given [spec] inside the pixel rectangle.
-         *
-         * X span:
-         *   minX = min(0, min(component.start))
-         *   maxX = max(component.start + component.length)
-         *
-         * Y fit:
-         *   maxDiaMm = max of { body.dia, thread.majorDia, liner.od, taper.max(startDia, endDia) }
-         *
-         * Scale:
-         *   pxPerMm = min( widthPx / (maxX - minX), heightPx / maxDiaMm )
-         */
-        fun compute(
-            spec: ShaftSpec,
-            leftPx: Float,
-            topPx: Float,
-            rightPx: Float,
-            bottomPx: Float
-        ): Result {
-            // ----- Collect X extents -----
-            var minStart = Float.POSITIVE_INFINITY
-            var maxEnd = Float.NEGATIVE_INFINITY
+        // Clamp width/height to be non-zero (avoid collapsing to top edge)
+        val minW = 1f
+        val minH = 1f
+        val w = (rRaw - lRaw).coerceAtLeast(minW)
+        val h = (bRaw - tRaw).coerceAtLeast(minH)
 
-            fun consider(start: Float, length: Float) {
-                minStart = min(minStart, start)
-                maxEnd = max(maxEnd, start + length)
-            }
+        val l = lRaw
+        val t = tRaw
+        val r = l + w                // recomputed from clamped width
+        val b = t + h                // recomputed from clamped height
 
-            spec.bodies.forEach { consider(it.startFromAftMm, it.lengthMm) }
-            spec.tapers.forEach { consider(it.startFromAftMm, it.lengthMm) }
-            spec.threads.forEach { consider(it.startFromAftMm, it.lengthMm) }
-            spec.liners.forEach { consider(it.startFromAftMm, it.lengthMm) }
+        // Visible mm span (aft→forward); avoid 0 span
+        val minXMm = 0f
+        val maxXMm = max(1f, spec.overallLengthMm)
+        val spanMm = maxXMm - minXMm
 
-            if (minStart == Float.POSITIVE_INFINITY) {
-                // No components: fall back to [0, overall] (or [0,1] if overall is 0)
-                minStart = 0f
-                maxEnd = if (spec.overallLengthMm > 0f) spec.overallLengthMm else 1f
-            }
+        // Horizontal scale (mm→px)
+        val pxPerMm = w / spanMm
 
-            val minX = min(0f, minStart)
-            val maxX = maxEnd
-            val spanMm = max(1f, maxX - minX)
+        // Centerline is vertical middle of the content rect
+        val centerlineY = t + h * 0.5f
 
-            // ----- Collect maximum diameter for vertical fit -----
-            var maxDiaMm = 0f
-            spec.bodies.forEach { maxDiaMm = max(maxDiaMm, it.diaMm) }
-            spec.threads.forEach { maxDiaMm = max(maxDiaMm, it.majorDiaMm) }
-            spec.liners.forEach { maxDiaMm = max(maxDiaMm, it.odMm) }
-            spec.tapers.forEach { t ->
-                maxDiaMm = max(maxDiaMm, max(t.startDiaMm, t.endDiaMm))
-            }
-            if (maxDiaMm <= 0f) {
-                // If we somehow have no diameters yet, keep something tiny so we don't divide by zero.
-                maxDiaMm = 1f
-            }
-
-            // ----- Compute scale (fit both axes) -----
-            val widthPx = max(1f, rightPx - leftPx)
-            val heightPx = max(1f, bottomPx - topPx)
-            val pxPerMmX = widthPx / spanMm
-            val pxPerMmY = heightPx / maxDiaMm
-            val pxPerMm = min(pxPerMmX, pxPerMmY)
-
-            val centerlineYPx = topPx + heightPx * 0.5f
-
-            return Result(
-                ShaftLayout(
-                    spec = spec,
-                    pxPerMm = pxPerMm,
-                    contentLeftPx = leftPx,
-                    contentTopPx = topPx,
-                    contentRightPx = rightPx,
-                    contentBottomPx = bottomPx,
-                    minXMm = minX,
-                    maxXMm = maxX,
-                    centerlineYPx = centerlineYPx
-                )
-            )
-        }
+        return Result(
+            spec = spec,
+            contentLeftPx = l,
+            contentTopPx = t,
+            contentRightPx = r,
+            contentBottomPx = b,
+            pxPerMm = pxPerMm,
+            minXMm = minXMm,
+            maxXMm = maxXMm,
+            centerlineYPx = centerlineY
+        )
     }
 }

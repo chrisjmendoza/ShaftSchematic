@@ -8,7 +8,7 @@ package com.android.shaftschematic.ui.drawing.render
  *
  * ### Units & Coordinates
  * - Renderer draws inside a Compose `DrawScope` using **device pixels** (not dp).
- * - Text sizes are also specified in **pixels** and converted to sp internally.
+ * - Text sizes are specified in **pixels** and converted to sp internally.
  * - `gridUseInches` toggles *labels/legend semantics* (in vs mm). **Geometry stays mm.**
  *
  * ### Tuning Tips
@@ -17,107 +17,79 @@ package com.android.shaftschematic.ui.drawing.render
  * - If you want a bigger preview font, scale `textSizePx` (and optionally `legendTextSizePx`).
  */
 data class RenderOptions(
-    // Sizing for the drawing area
+    // ──────────────────────────────
+    // Content sizing / padding
+    // ──────────────────────────────
+    /** If set, the renderer may use this as a sizing hint (not required in Compose). */
     val targetWidthInches: Float? = null,
+    /** Max drawing height hint (used by non-Compose backends). */
     val maxHeightInches: Float = 2f,
+    /** Inner padding between content rect and card/canvas border (px). */
     val paddingPx: Int = 16,
 
-    // Dimensioning / reference
+    // Reference direction for any annotations that care about AFT/FWD.
     val referenceEnd: ReferenceEnd = ReferenceEnd.AFT,
 
     // ──────────────────────────────
-    // Geometry & dimension styling
+    // Geometry & text styling
     // ──────────────────────────────
-
-    /**
-     * Stroke width (px) for primary shaft outlines (e.g., body/taper edges).
-     */
-    val lineWidthPx: Float = 4f,       // main outlines
-
-    /**
-     * Stroke width (px) for auxiliary lines (centerline segments, end ticks, hatching).
-     */
-    val dimLineWidthPx: Float = 2f,    // dimension / thin lines
-
-    /**
-     * Base text size in **pixels** for labels rendered on the drawing (overall length, etc.).
-     */
+    /** Stroke width (px) for primary outlines (bodies, tapers, etc.). */
+    val lineWidthPx: Float = 4f,
+    /** Stroke width (px) for auxiliary lines (ticks, hatching, thin lines). */
+    val dimLineWidthPx: Float = 2f,
+    /** Base text size in **pixels** for labels drawn on the canvas. */
     val textSizePx: Float = 34f,
+
+    // ──────────────────────────────
+    // Visibility toggles
+    // ──────────────────────────────
+    /**
+     * Draw the centerline/axis across the shaft. Turn this **OFF** in the in-app preview;
+     * leave it **ON** for export or technical prints if desired.
+     */
+    val showCenterline: Boolean = true,
 
     // ──────────────────────────────
     // Grid visibility & semantics
     // ──────────────────────────────
-
-    /**
-     * Whether to draw the engineering grid under the shaft geometry.
-     */
+    /** Whether to draw the engineering grid under the geometry. */
     val showGrid: Boolean = false,
-
-    /**
-     * If `true`, grid legend/labels are expressed in **inches**; otherwise **millimeters**.
-     * Geometry remains canonical in mm either way.
-     */
-    val gridUseInches: Boolean = false, // set from UI based on selected Units
-
-    /**
-     * Target count of **major** grid divisions across the content width.
-     * The layout computes the actual spacing and will clamp to a reasonable range.
-     */
-    val gridDesiredMajors: Int = 20,    // target majors across the width
-
-    /**
-     * Number of **minor** subdivisions within each major step.
-     * Example: 5 minors ⇒ 10 mm minors when majors are 50 mm.
-     */
-    val gridMinorsPerMajor: Int = 4,    // number of minor lines between majors
-
-    /**
-     * Stroke width (px) for **minor** grid lines.
-     */
+    /** If true, grid labels/legend are shown in inches; otherwise millimeters. */
+    val gridUseInches: Boolean = false,
+    /** Target number of **major** divisions across the width (renderer will choose a nice spacing). */
+    val gridDesiredMajors: Int = 20,
+    /** Number of **minor** subdivisions per major. */
+    val gridMinorsPerMajor: Int = 4,
+    /** Stroke width (px) for **minor** grid lines. */
     val gridMinorStrokePx: Float = 1f,
 
     // ──────────────────────────────
     // Grid styling
     // ──────────────────────────────
-
-    /**
-     * Stroke width (px) for **major** grid lines.
-     */
+    /** Stroke width (px) for **major** grid lines. */
     val gridMajorStrokePx: Float = 1.5f,
-
-    /**
-     * ARGB color for **minor** grid lines (e.g., 0x1A000000 = black @ ~10% alpha).
-     */
-    val gridMinorColor: Int = 0x66888888.toInt(), // subtle gray
-
-    /**
-     * ARGB color for **major** grid lines (e.g., 0x33000000 = black @ ~20% alpha).
-     */
+    /** ARGB color for **minor** grid lines. */
+    val gridMinorColor: Int = 0x66888888.toInt(),
+    /** ARGB color for **major** grid lines. */
     val gridMajorColor: Int = 0x99888888.toInt(),
-
     /**
-     * Minimum pixel gap allowed between **minor** lines. If minors would be denser than this
-     * threshold, the renderer will **omit** them to reduce visual clutter.
+     * Minimum pixel gap allowed between **minor** lines. If minors would be denser than this,
+     * the renderer omits them to reduce visual clutter.
      */
-    val gridMinPixelGap: Float = 10f,             // never draw lines closer than this
-
-    /**
-     * Show a small numeric legend indicating the physical length of one major step
-     * (e.g., “1.00 in” or “50 mm”), positioned near the top-right of the content area.
-     */
+    val gridMinPixelGap: Float = 10f,
+    /** Show a small legend (e.g., “1.00 in” or “50 mm”) near the top-right of the content. */
     val showGridLegend: Boolean = true,
-
-    /**
-     * ARGB color of the legend text.
-     */
+    /** ARGB color for legend text. */
     val legendTextColor: Int = 0xFF000000.toInt(),
-
     /**
-     * Legend text size in **pixels**. If ≤ 0, the renderer derives it from [textSizePx].
+     * Legend text size in **pixels**. If ≤ 0, the renderer derives it from [textSizePx]
+     * (typically ~0.6 × `textSizePx`).
      */
-    val legendTextSizePx: Float = 0f,  // 0 => auto (0.6 * textSizePx)
+    val legendTextSizePx: Float = 0f,
+    /** Legend scale bar height (px). */
     val legendBarHeightPx: Float = 6f,
-    val legendPaddingPx: Int = 8
+    /** Legend inner padding (px). */
+    val legendPaddingPx: Int = 8,
 )
 
 enum class ReferenceEnd { AFT, FWD }
