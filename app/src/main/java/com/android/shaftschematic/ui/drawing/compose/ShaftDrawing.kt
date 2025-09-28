@@ -17,9 +17,12 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
 import com.android.shaftschematic.model.ShaftSpec
+import androidx.compose.ui.text.rememberTextMeasurer
+import com.android.shaftschematic.ui.drawing.render.GridRenderer.drawAdaptiveShaftGrid
+import com.android.shaftschematic.ui.drawing.render.ShaftRenderer.RenderOptions as SRRenderOptions
+import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
-import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
 import kotlin.math.log10
@@ -28,13 +31,23 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
- * On-screen shaft preview with a unit-aware grid aligned to the renderer.
+ * File: ShaftDrawing.kt
+ * Layer: UI → Compose
+ * Purpose: Compose wrapper that measures text, computes layout, draws optional grid,
+ * and delegates actual shaft geometry to renderers.
  *
- * - Grid is symmetric around X=0 and Y center.
- * - Vertical origin uses layout.minXMm so X=0 aligns even if span goes negative.
- * - Horizontal center major uses layout.centerlineYPx (same as renderer).
- * - Centerline is currently drawn by the renderer (preview-only hide is a future toggle).
- * - The Overall label is drawn by the renderer.
+ * Responsibilities
+ * • Own a Canvas and call: ShaftLayout.compute → (optional) Grid → ShaftRenderer.draw.
+ * • Mediates unit settings (mm/in) only for labels; geometry remains mm throughout.
+ * • Provide accessibility semantics (content descriptions for measurements when applicable).
+ *
+ * Data Flow
+ * spec(Model, mm) → layout(pxPerMm, origin, rect) → grid/renderer (Canvas) →
+ * overlays (badges, dimension labels via TextMeasurer).
+ *
+ * Notes
+ * • This composable should not mutate model state; it is pure rendering.
+ * • Keep allocations outside drawScope when possible (remember TextMeasurer).
  */
 @OptIn(ExperimentalTextApi::class)
 @Composable
@@ -56,6 +69,16 @@ fun ShaftDrawing(
         )
     }
 
+    // Options for the renderer only (stroke widths/colors). Values can be tuned later.
+    val ropts = remember(unit) {
+        SRRenderOptions(
+            outlineColor = Color.Black,
+            fillColor = Color.Transparent,
+            shaftStrokePx = 2f,
+            dimStrokePx = 1f
+        )
+    }
+
     // --- Preview-only safety: if overall is 0, scale to last occupied end so something is visible.
     val safeSpec = remember(spec) {
         val lastEnd = listOfNotNull(
@@ -69,26 +92,31 @@ fun ShaftDrawing(
 
     Canvas(modifier = modifier) {
         val padX = opts.paddingPx.toFloat()
-        val padY = 8f // small vertical space so geometry never touches top/bottom
+        val padY = 8f
 
         val layout = ShaftLayout.compute(
-            spec = safeSpec,                 // ← preview-only fallback spec (overall > 0)
+            spec = safeSpec,
             leftPx = padX,
             topPx = padY,
             rightPx = size.width - padX,
-            bottomPx = size.height - padY    // ← must be > topPx
+            bottomPx = size.height - padY
         )
 
         if (showGrid) {
-            drawIntegerGridWithLabels(
+            drawAdaptiveShaftGrid(
                 layout = layout,
                 unit = unit,
-                textMeasurer = textMeasurer
+                targetMajorPx = 90f // tweak between ~70–120 based on taste
             )
         }
 
         with(ShaftRenderer) {
-            draw(layout, opts, textMeasurer)
+            draw(
+                spec = safeSpec,       // <-- added
+                layout = layout,
+                opts = ropts,
+                textMeasurer = textMeasurer
+            )
         }
     }
 }

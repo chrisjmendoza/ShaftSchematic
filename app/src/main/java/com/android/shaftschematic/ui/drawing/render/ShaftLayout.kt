@@ -5,12 +5,29 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Converts a mm-only [ShaftSpec] into a normalized drawing layout.
+ * File: ShaftLayout.kt
+ * Layer: UI → Drawing/Layout
+ * Purpose: Compute a stable mapping from **shaft space (mm)** to **canvas space (px)**
+ * and expose only the values required by renderers.
  *
- * - Always normalizes the content rect (swaps sides if inverted).
- * - Guarantees positive content width/height (at least 1px).
- * - Maps X left→right (aft at left).
- * - Places centerline at the vertical middle of the content rect.
+ * Responsibilities
+ * • Accept view bounds + desired margins and compute scale = pxPerMm.
+ * • Define the axial origin (x=0) and place the shaft within the content rect.
+ * • Provide helpers/values used by renderers:
+ * - pxPerMm (Float)
+ * - minXMm (Float): leftmost visible x in mm (so xPx(mm) = contentLeftPx + (mm - minXMm) * pxPerMm)
+ * - centerlineYPx (Float): vertical center of the shaft
+ * - contentLeft/Top/Right/Bottom px (Float)
+ * • Be side‑effect free; do no drawing.
+ *
+ * Data Contracts / Invariants
+ * • All inputs from model are millimeters.
+ * • The content rect never exceeds the canvas; margins are clamped to >= 0.
+ * • xPx(mm) and rPx(diaMm) must be monotonic and stable across density.
+ *
+ * Notes
+ * • Grid anchoring relies on minXMm and centerlineYPx—do not rename without updating renderers.
+ * • Keep float math consistent; avoid mixing Int/Float to prevent rounding drift.
  */
 object ShaftLayout {
 

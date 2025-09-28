@@ -25,16 +25,30 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.freeToEndMm
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.model.freeToEndMm
 import kotlinx.coroutines.launch
 
 /**
- * ShaftScreen (self-contained version)
+ * File: ShaftScreen.kt
+ * Layer: UI → Screens
+ * Purpose: Present the Shaft editor surface: preview, unit toggle, grid toggle,
+ * overall length, project info, and component editors.
  *
- * Insets policy:
- * • The scrolling content gets .imePadding() so fields are never hidden.
- * • Only the FAB gets ime + nav padding to float above the keyboard.
- * • We DO NOT add full-screen ime padding – no “white slab”.
+ * Responsibilities
+ * • Bind ViewModel state (spec/unit/grid/customer/etc.) to UI controls.
+ * • Enforce unit boundaries at the **UI edge** (mm↔in conversion) before writing to VM.
+ * • Render the preview via ShaftDrawing; compute derived labels (e.g., Free to end).
+ *
+ * Invariants
+ * • Model stays in millimeters at all times; only display strings convert units.
+ * • Text fields commit on blur/IME Done; while editing, they hold local text state.
+ *
+ * Notes
+ * • Keep business logic out of the screen; push derived calculations into model helpers
+ * (see: ShaftSpecExtensions.freeToEndMm()).
+ * • Avoid heavyweight recomposition by scoping state and using remember where appropriate.
  */
 @Composable
 fun ShaftScreen(
@@ -374,10 +388,15 @@ private fun PreviewCard(
                     spec.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm },
                 ).maxOrNull() ?: 0f
             }
-            val freeMm = (spec.overallLengthMm - lastEndMm).coerceAtLeast(0f)
+            val freeMm = spec.freeToEndMm()
             val freeTxt = formatDisplay(
                 if (unit == UnitSystem.MILLIMETERS) freeMm else freeMm / 25.4f,
                 unit
+            )
+// ...
+            Text(
+                text = "Free to end: $freeTxt ${abbr(unit)}",
+// style + color unchanged
             )
             Surface(
                 tonalElevation = 1.dp,
