@@ -6,13 +6,11 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.android.shaftschematic.pdf.ShaftPdfComposer
@@ -39,9 +37,9 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
 
     // --- VM state ---
-    val spec      by vm.spec.collectAsState()
-    val unit      by vm.unit.collectAsState()
-    val showGrid  by vm.showGrid.collectAsState()
+    val spec     = vm.spec.collectAsState().value
+    val unit     = vm.unit.collectAsState().value
+    val showGrid = vm.showGrid.collectAsState().value
     val customer  by vm.customer.collectAsState()
     val vessel    by vm.vessel.collectAsState()
     val jobNumber by vm.jobNumber.collectAsState()

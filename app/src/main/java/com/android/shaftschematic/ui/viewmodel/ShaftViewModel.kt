@@ -1,210 +1,273 @@
-// file: com/android/shaftschematic/ui/viewmodel/ShaftViewModel.kt
 package com.android.shaftschematic.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import java.io.File
+import java.util.UUID
 import kotlin.math.max
 
 /**
- * ShaftViewModel
+ * File: ShaftViewModel.kt
+ * Layer: ViewModel
+ * Purpose: Hold the current ShaftSpec (in mm), expose it as reactive StateFlow for UI,
+ *          and provide mutation methods that enforce the mm-only contract.
  *
- * Single source of truth for:
- * - Shaft geometry spec (canonical millimeters)
- * - Unit system (mm/in)
- * - UI toggles (grid)
- * - Project metadata (job number, customer, vessel, notes)
+ * Responsibilities
+ *  • Single source of truth: all shaft geometry is stored in mm.
+ *  • Expose StateFlow<ShaftSpec> for Compose to observe.
+ *  • Provide mutation methods for overall length and component updates.
+ *  • Persist/restore ShaftSpec snapshots (tiny save/load stubs for dev/test).
  *
- * Design notes:
- * - All geometry is stored in **millimeters** inside [ShaftSpec].
- * - UI may display/edit using inches/TPI; the UI layer converts to mm before calling VM APIs.
- * - Setters are **commit-on-blur** friendly: passing an empty string for length is ignored
- *   (to avoid "0" writes while the user is still typing).
- * - All updates are **immutable** (copy + StateFlow.update) so Compose recomposes.
+ * Invariants
+ *  • All stored geometry is millimeters only.
+ *  • UI does unit conversions at the edges (toMmOrNull, formatDisplay).
+ *  • Renderer/Layout read only mm values.
+ *
+ * TODO
+ *  • Expand save/load into a proper repository (names, lists, overwrite guards).
+ *  • Add undo/redo history.
+ *  • Design fuller app navigation (shaft generator is one tool of many).
+ *  • Add shaft template maker (generic shafts for quick edit).
+ *  • Add Settings page (grid size, shaft coloring, PDF export options).
  */
 class ShaftViewModel : ViewModel() {
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // State
-    // ─────────────────────────────────────────────────────────────────────────────
-
+    // Backing state flow, immutable to observers
     private val _spec = MutableStateFlow(ShaftSpec())
-    /** Canonical mm-only shaft geometry/state. */
-    val spec: StateFlow<ShaftSpec> = _spec.asStateFlow()
+    val spec: StateFlow<ShaftSpec> = _spec
 
+    // UI prefs and project metadata (ShaftRoute consumes these)
     private val _unit = MutableStateFlow(UnitSystem.MILLIMETERS)
-    /** Current unit system for labels/input. */
-    val unit: StateFlow<UnitSystem> = _unit.asStateFlow()
+    val unit: StateFlow<UnitSystem> = _unit
 
-    private val _showGrid = MutableStateFlow(true)
-    /** UI: preview grid toggle. */
-    val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
-
-    // Project metadata
-    private val _jobNumber = MutableStateFlow("")
-    val jobNumber: StateFlow<String> = _jobNumber.asStateFlow()
+    private val _showGrid = MutableStateFlow(false)
+    val showGrid: StateFlow<Boolean> = _showGrid
 
     private val _customer = MutableStateFlow("")
-    val customer: StateFlow<String> = _customer.asStateFlow()
+    val customer: StateFlow<String> = _customer
 
     private val _vessel = MutableStateFlow("")
-    val vessel: StateFlow<String> = _vessel.asStateFlow()
+    val vessel: StateFlow<String> = _vessel
+
+    private val _jobNumber = MutableStateFlow("")
+    val jobNumber: StateFlow<String> = _jobNumber
 
     private val _notes = MutableStateFlow("")
-    val notes: StateFlow<String> = _notes.asStateFlow()
+    val notes: StateFlow<String> = _notes
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // Simple setters (commit-on-blur friendly)
-    // ─────────────────────────────────────────────────────────────────────────────
 
-    fun setUnit(u: UnitSystem) = _unit.update { u }
-    fun setShowGrid(show: Boolean) = _showGrid.update { show }
-
-    fun setJobNumber(v: String) = _jobNumber.update { v }
-    fun setCustomer(v: String) = _customer.update { v }
-    fun setVessel(v: String) = _vessel.update { v }
-    fun setNotes(v: String) = _notes.update { v }
+    // ---- Overall Length ----
 
     /**
-     * Commit overall length from a user string (in current unit).
-     * - Empty or invalid input: ignored (no change) to honor commit-on-blur UX.
+     * Set shaft overall length in mm. Clamped to ≥ 0.
      */
-    fun setOverallLength(raw: String) {
-        val u = _unit.value
-        val mm = parseUserNumber(raw, u) ?: return // ignore blank/invalid
+    fun onSetOverallLengthMm(valueMm: Float) {
         _spec.update { cur ->
-            val clamped = max(0f, mm)
-            val next = cur.copy(overallLengthMm = clamped)
-            next
+            cur.copy(overallLengthMm = max(0f, valueMm))
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // Append component at an explicit start (mm)
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ---- Bodies ----
 
-    /** Add a cylindrical body segment at [startMm] of length [lengthMm] with diameter [diaMm] (all mm). */
-    fun addBodyAt(startMm: Float, lengthMm: Float, diaMm: Float) {
-        val cur = _spec.value
-        val next = cur.copy(
-            bodies = cur.bodies + Body(startFromAftMm = startMm, lengthMm = lengthMm, diaMm = diaMm)
+    fun addBody(body: Body) = _spec.update { it.copy(bodies = listOf(body) + it.bodies) }
+
+    fun updateBody(id: String, updater: (Body) -> Body) = _spec.update { s ->
+        s.copy(bodies = s.bodies.map { if (it.id == id) updater(it) else it })
+    }
+
+    // ---- Tapers ----
+
+    fun addTaper(taper: Taper) = _spec.update { it.copy(tapers = listOf(taper) + it.tapers) }
+
+    fun updateTaper(id: String, updater: (Taper) -> Taper) = _spec.update { s ->
+        s.copy(tapers = s.tapers.map { if (it.id == id) updater(it) else it })
+    }
+
+    // ---- Threads ----
+
+    fun addThread(thread: ThreadSpec) = _spec.update { it.copy(threads = listOf(thread) + it.threads) }
+
+    fun updateThread(id: String, updater: (ThreadSpec) -> ThreadSpec) = _spec.update { s ->
+        s.copy(threads = s.threads.map { if (it.id == id) updater(it) else it })
+    }
+
+    // ---- Liners ----
+
+    fun addLiner(liner: Liner) = _spec.update { it.copy(liners = listOf(liner) + it.liners) }
+
+    fun updateLiner(id: String, updater: (Liner) -> Liner) = _spec.update { s ->
+        s.copy(liners = s.liners.map { if (it.id == id) updater(it) else it })
+    }
+
+    // ---- Utilities ----
+
+    /**
+     * Ensure overall length is at least as long as the last occupied end + [minFreeMm].
+     * Useful after adding components.
+     */
+    fun ensureOverall(minFreeMm: Float = 0f) = _spec.update { s ->
+        val end = s.coverageEndMm()
+        val minOverall = end + max(0f, minFreeMm)
+        if (s.overallLengthMm < minOverall) s.copy(overallLengthMm = minOverall) else s
+    }
+
+    // ShaftRoute -> setters
+    fun setUnit(u: UnitSystem) { _unit.value = u }
+    fun setShowGrid(b: Boolean) { _showGrid.value = b }
+
+    fun setCustomer(s: String) { _customer.value = s }
+    fun setVessel(s: String)   { _vessel.value = s }
+    fun setJobNumber(s: String){ _jobNumber.value = s }
+    fun setNotes(s: String)    { _notes.value = s }
+
+    fun setOverallLength(raw: String) {
+        val v = raw.replace(",", "").trim().toFloatOrNull() ?: 0f
+        val mm = if (_unit.value == UnitSystem.INCHES) v * 25.4f else v
+        onSetOverallLengthMm(mm)
+    }
+
+    // Adds (prepend so newest appears first; match your prior UX)
+    fun addBodyAt(startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
+        s.copy(
+            bodies = listOf(
+                Body(
+                    id = newId(),
+                    startFromAftMm = startMm,
+                    lengthMm = max(0f, lengthMm),
+                    diaMm = max(0f, diaMm)
+                )
+            ) + s.bodies
         )
-        _spec.update { ensureOverall(next) }
-    }
+    }.also { ensureOverall() }
 
-    /** Add a linear taper (start Ø → end Ø) at [startMm] of length [lengthMm] (all mm). */
-    fun addTaperAt(startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) {
-        val cur = _spec.value
-        val next = cur.copy(
-            tapers = cur.tapers + Taper(
-                startFromAftMm = startMm,
-                lengthMm = lengthMm,
-                startDiaMm = startDiaMm,
-                endDiaMm = endDiaMm
-            )
+    fun addTaperAt(startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) = _spec.update { s ->
+        s.copy(
+            tapers = listOf(
+                Taper(
+                    id = newId(),
+                    startFromAftMm = startMm,
+                    lengthMm = max(0f, lengthMm),
+                    startDiaMm = max(0f, startDiaMm),
+                    endDiaMm = max(0f, endDiaMm)
+                )
+            ) + s.tapers
         )
-        _spec.update { ensureOverall(next) }
-    }
+    }.also { ensureOverall() }
 
-    /** Add a thread segment with [majorDiaMm] and [pitchMm] (pitch is mm; UI converts from TPI when needed). */
-    fun addThreadAt(startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) {
-        val cur = _spec.value
-        val next = cur.copy(
-            threads = cur.threads + ThreadSpec(
-                startFromAftMm = startMm,
-                lengthMm = lengthMm,
-                majorDiaMm = majorDiaMm,
-                pitchMm = pitchMm
-            )
+    fun addThreadAt(startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
+        s.copy(
+            threads = listOf(
+                ThreadSpec(
+                    id = newId(),
+                    startFromAftMm = startMm,
+                    lengthMm = max(0f, lengthMm),
+                    majorDiaMm = max(0f, majorDiaMm),
+                    pitchMm = max(0f, pitchMm)
+                )
+            ) + s.threads
         )
-        _spec.update { ensureOverall(next) }
-    }
+    }.also { ensureOverall() }
 
-    /** Add a liner/sleeve with outer diameter [odMm] at [startMm] (all mm). */
-    fun addLinerAt(startMm: Float, lengthMm: Float, odMm: Float) {
-        val cur = _spec.value
-        val next = cur.copy(
-            liners = cur.liners + Liner(
-                startFromAftMm = startMm,
-                lengthMm = lengthMm,
-                odMm = odMm
-            )
+    fun addLinerAt(startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
+        s.copy(
+            liners = listOf(
+                Liner(
+                    id = newId(),
+                    startFromAftMm = startMm,
+                    lengthMm = max(0f, lengthMm),
+                    odMm = max(0f, odMm)
+                )
+            ) + s.liners
         )
-        _spec.update { ensureOverall(next) }
-    }
+    }.also { ensureOverall() }
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // Update existing components by index (commit-on-blur from UI lists)
-    // ─────────────────────────────────────────────────────────────────────────────
-
-    fun updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) {
-        val cur = _spec.value
-        if (index !in cur.bodies.indices) return
-        val bodies = cur.bodies.toMutableList()
-        bodies[index] = bodies[index].copy(startFromAftMm = startMm, lengthMm = lengthMm, diaMm = diaMm)
-        _spec.update { ensureOverall(cur.copy(bodies = bodies)) }
-    }
-
-    fun updateTaper(index: Int, startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) {
-        val cur = _spec.value
-        if (index !in cur.tapers.indices) return
-        val tapers = cur.tapers.toMutableList()
-        tapers[index] = tapers[index].copy(
-            startFromAftMm = startMm,
-            lengthMm = lengthMm,
-            startDiaMm = startDiaMm,
-            endDiaMm = endDiaMm
+    fun updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
+        if (index !in s.bodies.indices) s else s.copy(
+            bodies = s.bodies.toMutableList().also { list ->
+                val b = list[index]
+                list[index] = b.copy(
+                    startFromAftMm = startMm,
+                    lengthMm = max(0f, lengthMm),
+                    diaMm = max(0f, diaMm)
+                )
+            }
         )
-        _spec.update { ensureOverall(cur.copy(tapers = tapers)) }
-    }
+    }.also { ensureOverall() }
 
-    fun updateThread(index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) {
-        val cur = _spec.value
-        if (index !in cur.threads.indices) return
-        val threads = cur.threads.toMutableList()
-        threads[index] = threads[index].copy(
-            startFromAftMm = startMm,
-            lengthMm = lengthMm,
-            majorDiaMm = majorDiaMm,
-            pitchMm = pitchMm
+    fun updateTaper(index: Int, startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) = _spec.update { s ->
+        if (index !in s.tapers.indices) s else s.copy(
+            tapers = s.tapers.toMutableList().also { list ->
+                val t = list[index]
+                list[index] = t.copy(
+                    startFromAftMm = startMm,
+                    lengthMm = max(0f, lengthMm),
+                    startDiaMm = max(0f, startDiaMm),
+                    endDiaMm = max(0f, endDiaMm)
+                )
+            }
         )
-        _spec.update { ensureOverall(cur.copy(threads = threads)) }
+    }.also { ensureOverall() }
+
+    fun updateThread(index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
+        if (index !in s.threads.indices) s else s.copy(
+            threads = s.threads.toMutableList().also { list ->
+                val th = list[index]
+                list[index] = th.copy(
+                    startFromAftMm = startMm,
+                    lengthMm = max(0f, lengthMm),
+                    majorDiaMm = max(0f, majorDiaMm),
+                    pitchMm = max(0f, pitchMm)
+                )
+            }
+        )
+    }.also { ensureOverall() }
+
+    fun updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
+        if (index !in s.liners.indices) s else s.copy(
+            liners = s.liners.toMutableList().also { list ->
+                val ln = list[index]
+                list[index] = ln.copy(
+                    startFromAftMm = startMm,
+                    lengthMm = max(0f, lengthMm),
+                    odMm = max(0f, odMm)
+                )
+            }
+        )
+    }.also { ensureOverall() }
+
+    private fun newId(): String = UUID.randomUUID().toString()
+
+
+    // ---- Tiny Save/Load Stubs ----
+
+    private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
+
+    /**
+     * Save the current spec to a JSON file in [dir].
+     */
+    fun saveToFile(dir: File, name: String) {
+        val f = File(dir, "$name.json")
+        f.writeText(json.encodeToString(_spec.value))
     }
 
-    fun updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm: Float) {
-        val cur = _spec.value
-        if (index !in cur.liners.indices) return
-        val liners = cur.liners.toMutableList()
-        liners[index] = liners[index].copy(startFromAftMm = startMm, lengthMm = lengthMm, odMm = odMm)
-        _spec.update { ensureOverall(cur.copy(liners = liners)) }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────────────────────────────────────
-
-    /** Recompute overall = max(current overall, farthest coverage end). */
-    private fun ensureOverall(s: ShaftSpec): ShaftSpec {
-        val far = s.coverageEndMm()
-        val nextOverall = max(s.overallLengthMm, far)
-        return if (nextOverall != s.overallLengthMm) s.copy(overallLengthMm = nextOverall) else s
-    }
-
-    /** Parse a user-entered number in the current [unit]; returns mm or null for blank/invalid. */
-    private fun parseUserNumber(raw: String, unit: UnitSystem): Float? {
-        val t = raw.trim()
-        if (t.isEmpty()) return null
-        val v = t.toFloatOrNull() ?: return null
-        return when (unit) {
-            UnitSystem.MILLIMETERS -> v
-            UnitSystem.INCHES -> v * 25.4f
+    /**
+     * Load a spec from JSON file in [dir], replace current state.
+     */
+    fun loadFromFile(dir: File, name: String) {
+        val f = File(dir, "$name.json")
+        if (f.exists()) {
+            runCatching {
+                json.decodeFromString<ShaftSpec>(f.readText())
+            }.onSuccess { loaded ->
+                _spec.value = loaded
+            }
         }
     }
 }
-
-
