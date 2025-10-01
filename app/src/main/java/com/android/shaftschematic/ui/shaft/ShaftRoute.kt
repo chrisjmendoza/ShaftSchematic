@@ -107,6 +107,9 @@ fun ShaftRoute(vm: ShaftViewModel) {
             onSetNotes = vm::setNotes,
             onSetOverallLengthRaw = vm::setOverallLength,
 
+            // mm-safe setter
+            onSetOverallLengthMm = vm::onSetOverallLengthMm,
+
             // --- typed add callbacks (FAB flow in screen triggers these) ---
             onAddBody = { startMm, lengthMm, diaMm ->
                 vm.addBodyAt(startMm = startMm, lengthMm = lengthMm, diaMm = diaMm)

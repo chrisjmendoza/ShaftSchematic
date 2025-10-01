@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.util.UnitSystem
@@ -202,6 +203,7 @@ class ShaftViewModel : ViewModel() {
     }.also { ensureOverall() }
 
     fun updateTaper(index: Int, startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) = _spec.update { s ->
+        Log.d("ShaftVM","updateTaper[$index] start=${startMm} len=${lengthMm} set=${startDiaMm} let=${endDiaMm}")
         if (index !in s.tapers.indices) s else s.copy(
             tapers = s.tapers.toMutableList().also { list ->
                 val t = list[index]
@@ -213,6 +215,7 @@ class ShaftViewModel : ViewModel() {
                 )
             }
         )
+
     }.also { ensureOverall() }
 
     fun updateThread(index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->

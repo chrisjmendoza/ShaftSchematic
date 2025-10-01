@@ -43,14 +43,17 @@ fun ShaftSpec.validate(): Boolean {
 }
 
 /** End-of-coverage position (max of start+length across all segments). */
+// === SINGLE SOURCE OF TRUTH ===
+// Farther occupied end across ALL components (mm).
 fun ShaftSpec.coverageEndMm(): Float {
-    var end = 0f
-    bodies.forEach  { end = maxOf(end, it.endFromAftMm) }
-    tapers.forEach  { end = maxOf(end, it.endFromAftMm) }
-    threads.forEach { end = maxOf(end, it.endFromAftMm) }
-    liners.forEach  { end = maxOf(end, it.endFromAftMm) }
-    return end
+    val bodyEnd   = bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
+    val taperEnd  = tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
+    val linerEnd  = liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
+    val threadEnd = threads.maxOfOrNull { it.startFromAftMm + it.lengthMm } ?: 0f
+    return maxOf(bodyEnd, taperEnd, linerEnd, threadEnd)
 }
+fun ShaftSpec.freeToEndMm(): Float =
+    (overallLengthMm - coverageEndMm()).coerceAtLeast(0f)
 
 /** Maximum outer diameter found across all components (mm). */
 fun ShaftSpec.maxOuterDiaMm(): Float {

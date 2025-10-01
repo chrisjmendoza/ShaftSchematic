@@ -57,33 +57,26 @@ dependencies {
     implementation(libs.androidx.core.ktx)
 
     // --- Activity / Lifecycle
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.activity.ktx)                   // for viewModels()
+    implementation(libs.androidx.activity.compose)           // 1.9.2
+    implementation(libs.androidx.lifecycle.runtime.compose)  // 2.8.4
+    implementation(libs.androidx.activity.ktx)               // for viewModels()
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1") // or newer
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation(libs.kotlinx.serialization.json)
 
-// latest stable as of now
-
-    // --- Compose BOM controls versions for all Compose artifacts below
+    // Compose BOM controls versions of Compose artifacts below
     implementation(platform(libs.androidx.compose.bom))
 
     // Compose UI
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
-
-    // Material 3 (Compose)
     implementation(libs.androidx.compose.material3)
-
-    // Optional: Material Icons (Compose)
     implementation(libs.androidx.compose.material.icons.extended)
-
-    // --- Material (View System) ONLY if you actually use Material Views
     implementation(libs.androidx.compose.foundation)
+
+    // Material (View system) — only if you actually use Views; otherwise you can remove
     implementation("com.google.android.material:material:1.13.0")
 
     // --- Debug / Tooling

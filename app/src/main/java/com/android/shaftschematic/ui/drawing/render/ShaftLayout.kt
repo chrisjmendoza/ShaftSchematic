@@ -1,39 +1,23 @@
 package com.android.shaftschematic.ui.drawing.render
 
-import com.android.shaftschematic.model.ShaftSpec  // ← if you use data.ShaftSpecMm, swap this import
+import com.android.shaftschematic.model.ShaftSpec
 import kotlin.math.max
 import kotlin.math.min
 
 /**
  * File: ShaftLayout.kt
  * Layer: UI → Drawing/Layout
- * Purpose: Compute a stable mapping from **shaft space (mm)** to **canvas space (px)**
- * and expose only the values required by renderers.
+ * Purpose: Compute a stable mapping from **shaft space (mm)** to **canvas space (px)**.
  *
- * Responsibilities
- * • Accept view bounds + desired margins and compute scale = pxPerMm.
- * • Define the axial origin (x=0) and place the shaft within the content rect.
- * • Provide helpers/values used by renderers:
- * - pxPerMm (Float)
- * - minXMm (Float): leftmost visible x in mm (so xPx(mm) = contentLeftPx + (mm - minXMm) * pxPerMm)
- * - centerlineYPx (Float): vertical center of the shaft
- * - contentLeft/Top/Right/Bottom px (Float)
- * • Be side‑effect free; do no drawing.
- *
- * Data Contracts / Invariants
- * • All inputs from model are millimeters.
- * • The content rect never exceeds the canvas; margins are clamped to >= 0.
- * • xPx(mm) and rPx(diaMm) must be monotonic and stable across density.
- *
- * Notes
- * • Grid anchoring relies on minXMm and centerlineYPx—do not rename without updating renderers.
- * • Keep float math consistent; avoid mixing Int/Float to prevent rounding drift.
+ * Invariants
+ * • All inputs from model are **millimeters**.
+ * • Geometry never inspects UI units; conversion happens in the UI layer only.
  */
 object ShaftLayout {
 
     data class Result(
         val spec: ShaftSpec,
-        // content rect in pixels
+        // content rect in pixels (inside margins)
         val contentLeftPx: Float,
         val contentTopPx: Float,
         val contentRightPx: Float,
@@ -44,53 +28,91 @@ object ShaftLayout {
         val maxXMm: Float,
         // guides
         val centerlineYPx: Float
-    )
+    ) {
+        /** Maps axial position in millimeters to canvas X in pixels. */
+        fun xPx(mm: Float): Float = contentLeftPx + (mm - minXMm) * pxPerMm
+        /** Maps diameter (mm) to radius (px) using current scale. */
+        fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * pxPerMm
+
+        /** Debug snapshot string for overlays/logcat. */
+        fun dbg(): String = buildString {
+            append("pxPerMm=").append("%.3f".format(pxPerMm))
+            append(" content=(")
+            append("%.0f".format(contentLeftPx)).append(',')
+            append("%.0f".format(contentTopPx)).append(")–(")
+            append("%.0f".format(contentRightPx)).append(',')
+            append("%.0f".format(contentBottomPx)).append(')')
+            append(" spanMm=[").append("%.1f".format(minXMm))
+            append("→").append("%.1f".format(maxXMm)).append("]")
+        }
+    }
 
     /**
-     * Build a robust layout from the given spec and pixel rect.
-     * The rect may be inverted; we normalize it to [l,t,r,b].
+     * Compute layout for the given canvas rect (px). Adds inner margins (px).
+     *
+     * @param leftPx Canvas left
+     * @param topPx  Canvas top
+     * @param rightPx Canvas right
+     * @param bottomPx Canvas bottom
+     * @param marginPx Inner margin on all sides (default 12 px)
      */
     fun compute(
         spec: ShaftSpec,
         leftPx: Float,
         topPx: Float,
         rightPx: Float,
-        bottomPx: Float
+        bottomPx: Float,
+        marginPx: Float = 12f
     ): Result {
-        // Normalize input rect first
-        val lRaw = minOf(leftPx, rightPx)
-        val rRaw = maxOf(leftPx, rightPx)
-        val tRaw = minOf(topPx, bottomPx)
-        val bRaw = maxOf(topPx, bottomPx)
+        // Normalize rect
+        val L = min(leftPx, rightPx)
+        val R = max(leftPx, rightPx)
+        val T = min(topPx, bottomPx)
+        val B = max(topPx, bottomPx)
+        val W = max(1f, R - L)
+        val H = max(1f, B - T)
 
-        // Clamp width/height to be non-zero (avoid collapsing to top edge)
-        val minW = 1f
-        val minH = 1f
-        val w = (rRaw - lRaw).coerceAtLeast(minW)
-        val h = (bRaw - tRaw).coerceAtLeast(minH)
+        // Content rect inside margins (clamped so it doesn't invert)
+        val m = max(0f, marginPx)
+        val cL = L + m
+        val cT = T + m
+        val cR = R - m
+        val cB = B - m
+        val cW = max(1f, cR - cL)
+        val cH = max(1f, cB - cT)
 
-        val l = lRaw
-        val t = tRaw
-        val r = l + w                // recomputed from clamped width
-        val b = t + h                // recomputed from clamped height
-
-        // Visible mm span (aft→forward); avoid 0 span
+        // Axial span (mm) — left=0, right=overall
         val minXMm = 0f
         val maxXMm = max(1f, spec.overallLengthMm)
-        val spanMm = maxXMm - minXMm
+        val axialSpanMm = maxXMm - minXMm
 
-        // Horizontal scale (mm→px)
-        val pxPerMm = w / spanMm
+        // Radial span (mm) — use max diameter across all components (and at least a small minimum)
+        val maxDiaMm = listOf(
+            spec.bodies.maxOfOrNull  { it.diaMm } ?: 0f,
+            spec.tapers.maxOfOrNull  { max(it.startDiaMm, it.endDiaMm) } ?: 0f,
+            spec.liners.maxOfOrNull  { it.odMm } ?: 0f,
+            spec.threads.maxOfOrNull { it.majorDiaMm } ?: 0f
+        ).maxOrNull() ?: 0f
 
-        // Centerline is vertical middle of the content rect
-        val centerlineY = t + h * 0.5f
+        // Minimum radial span so a very thin shaft still gets some vertical presence
+        val minDiaForFitMm = 10f
+        val fitDiaMm = max(maxDiaMm, minDiaForFitMm)
+        val radialSpanMm = fitDiaMm // we render around centerline, so top/bottom split evenly
+
+        // Scale: choose the tighter of width/height constraints
+        val pxPerMmX = cW / axialSpanMm
+        val pxPerMmY = cH / radialSpanMm
+        val pxPerMm = min(pxPerMmX, pxPerMmY).coerceAtLeast(0.0001f) // avoid zero
+
+        // Vertical centerline
+        val centerlineY = cT + cH * 0.5f
 
         return Result(
             spec = spec,
-            contentLeftPx = l,
-            contentTopPx = t,
-            contentRightPx = r,
-            contentBottomPx = b,
+            contentLeftPx = cL,
+            contentTopPx = cT,
+            contentRightPx = cR,
+            contentBottomPx = cB,
             pxPerMm = pxPerMm,
             minXMm = minXMm,
             maxXMm = maxXMm,

@@ -28,7 +28,3 @@ fun ShaftSpec.lastOccupiedEndMm(): Float {
     liners.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
     return maxEnd
 }
-
-/** Remaining mm to overall end; clamped to [0, ∞). */
-fun ShaftSpec.freeToEndMm(): Float =
-    (overallLengthMm - lastOccupiedEndMm()).coerceAtLeast(0f)
