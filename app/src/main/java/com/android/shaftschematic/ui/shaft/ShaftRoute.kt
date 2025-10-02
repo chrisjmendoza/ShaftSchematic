@@ -113,19 +113,19 @@ fun ShaftRoute(vm: ShaftViewModel) {
             // --- typed add callbacks (FAB flow in screen triggers these) ---
             onAddBody = { startMm, lengthMm, diaMm ->
                 vm.addBodyAt(startMm = startMm, lengthMm = lengthMm, diaMm = diaMm)
-                showSnack("Body @ ${startMm.toInt()} mm: ${lengthMm.toInt()} × Ø ${diaMm.toInt()}")
+                //showSnack("Body @ ${startMm.toInt()} mm: ${lengthMm.toInt()} × Ø ${diaMm.toInt()}")
             },
             onAddTaper = { startMm, lengthMm, startDiaMm, endDiaMm ->
                 vm.addTaperAt(startMm = startMm, lengthMm = lengthMm, startDiaMm = startDiaMm, endDiaMm = endDiaMm)
-                showSnack("Taper @ ${startMm.toInt()} mm: ${lengthMm.toInt()} (${startDiaMm.toInt()}→${endDiaMm.toInt()} mm)")
+                //showSnack("Taper @ ${startMm.toInt()} mm: ${lengthMm.toInt()} (${startDiaMm.toInt()}→${endDiaMm.toInt()} mm)")
             },
             onAddThread = { startMm, lengthMm, majorDiaMm, pitchMm ->
                 vm.addThreadAt(startMm = startMm, lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
-                showSnack("Thread @ ${startMm.toInt()} mm: ${lengthMm.toInt()} mm, Ø ${majorDiaMm.toInt()} mm, pitch ${"%.2f".format(pitchMm)} mm")
+                //showSnack("Thread @ ${startMm.toInt()} mm: ${lengthMm.toInt()} mm, Ø ${majorDiaMm.toInt()} mm, pitch ${"%.2f".format(pitchMm)} mm")
             },
             onAddLiner = { startMm, lengthMm, odMm ->
                 vm.addLinerAt(startMm = startMm, lengthMm = lengthMm, odMm = odMm)
-                showSnack("Liner @ ${startMm.toInt()} mm: ${lengthMm.toInt()} × Ø ${odMm.toInt()}")
+                //showSnack("Liner @ ${startMm.toInt()} mm: ${lengthMm.toInt()} × Ø ${odMm.toInt()}")
             },
 
             onUpdateBody   = { i, s, l, d -> vm.updateBody(i, s, l, d) },

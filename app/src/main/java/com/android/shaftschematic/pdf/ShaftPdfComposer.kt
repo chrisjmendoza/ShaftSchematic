@@ -1,8 +1,5 @@
 // File: com/android/shaftschematic/pdf/ShaftPdfComposer.kt
-// v7.1 — polish + streamlining (2025‑09‑27)
-// • Keeps the v7 behavior you approved (dimension lanes, extension lines, title stamp, 1" info gap, taper/thread footer).
-// • Minor cleanup: remove unused imports; clearer KDoc; constants grouped.
-// • This is the **single canonical** top‑level composer function.
+@file:Suppress("MemberVisibilityCanBePrivate", "unused")
 
 package com.android.shaftschematic.pdf
 
@@ -20,53 +17,33 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-// ------------------------------- Constants -------------------------------
-private const val MM_PER_IN = 25.4f
-
-// Strokes / text
-private const val OUTLINE_PT = 2.5f
-private const val DIM_PT = 1.6f
-private const val TEXT_PT = 12f
-
-// Layout
-private const val PAGE_MARGIN_PT = 36f       // 0.5 in
-private const val BAND_CLEAR_PT = 12f        // breathing room above shaft before first dim line
-private const val BASE_DIM_OFFSET_PT = 24f   // ~1/3 in for component lines
-private const val OVERALL_EXTRA_PT = 16f     // overall sits higher than components
-private const val LANE_GAP_PT = 24f          // spacing between lanes
-private const val ARROW_PT = 6f
-private const val LABEL_PAD_PT = 6f
-private const val EXT_OFFSET_PT = 9f         // ~1/8 in gap from shaft to start of extension line
-private const val EXT_OVERRUN_PT = 4f        // how much extension lines rise past the dimension line
-private const val INFO_GAP_PT = 72f          // exactly 1 inch
-private const val EPS_END_MM = 0.25f
-
-// ------------------------------- Models ----------------------------------
-/** Mid‑column work‑order info for footer. */
-data class ProjectInfo(
-    val customer: String = "",
-    val vessel: String = "",
-    val jobNumber: String = "",
-)
-
-/**
- * File: ShaftPdfComposer.kt
- * Layer: Export → PDF
- * Purpose: Convert the same mm‑based shaft geometry and metadata into a paginated PDF.
+/*
+ * ShaftPdfComposer
  *
- * Responsibilities
- * • Mirror on‑screen layout where sensible; keep a dedicated PDF layout for print fidelity.
- * • Use mm as the canonical unit; convert to PDF points only at the final draw step.
- * • Encapsulate text styles, line styles, and margins; provide a stable title block API.
+ * Purpose
+ * Convert the canonical mm-based [ShaftSpec] + metadata into a single-page PDF drawing that
+ * mirrors our on-screen Preview style. This keeps the renderer logic consistent while using
+ * Android's PdfDocument Canvas directly (no Compose dependency when exporting).
  *
- * Contracts
- * • Inputs: ShaftSpec (mm), RenderOptions (strokes/fonts), page size (e.g., Letter/A4 in mm).
- * • Outputs: ByteArray/File; never hold references to Android UI objects.
+ * Contracts & Invariants
+ * - **Model is millimeters**. We never store inches here; convert only for text labels.
+ * - Layout policy fits geometry to the available width inside margins; vertical position
+ *   is centered with a slight upward bias to reserve space for footer info.
+ * - Drawing order: bodies → tapers → threads (with hatch) → liners.
+ * - Dimension system: overall above component lanes; 1" gap between geometry and footer.
+ * - Thread look matches Preview: diagonal hatch with stride = max(8 px, pitchMm * ptPerMm).
  *
- * Notes
- * • Be deterministic for testing; avoid timestamps in output unless provided.
- * • Thread hatch/texture should be PDF‑safe (no overly dense pattern that explodes file size).
+ * Inputs
+ * - [page]: opened PdfDocument.Page to draw into.
+ * - [spec]: the shaft spec in **mm**.
+ * - [unit]: label unit (mm or inches) for dimension & footer text.
+ * - [project], [appVersion], [filename]: footer metadata and stamp text.
  */
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Public API
+// ──────────────────────────────────────────────────────────────────────────────
+
 fun composeShaftPdf(
     page: PdfDocument.Page,
     spec: ShaftSpec,
@@ -79,15 +56,15 @@ fun composeShaftPdf(
     val pageW = page.info.pageWidth.toFloat()
     val pageH = page.info.pageHeight.toFloat()
 
-    // Geometry area
+    // --- Geometry area (inside margins)
     val geomRect = RectF(
         PAGE_MARGIN_PT,
-        PAGE_MARGIN_PT + TEXT_PT, // small top margin
+        PAGE_MARGIN_PT + TOP_TEXT_PAD_PT,
         pageW - PAGE_MARGIN_PT,
-        pageH - PAGE_MARGIN_PT - 160f // reserve for info + page stamp
+        pageH - PAGE_MARGIN_PT - FOOTER_BLOCK_PT
     )
 
-    // Paints
+    // --- Paint kit
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = OUTLINE_PT; color = 0xFF000000.toInt()
     }
@@ -95,46 +72,75 @@ fun composeShaftPdf(
         style = Paint.Style.STROKE; strokeWidth = DIM_PT; color = 0xFF000000.toInt()
     }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL; textSize = TEXT_PT; typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        style = Paint.Style.FILL; textSize = TEXT_PT
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         color = 0xFF000000.toInt()
     }
 
-    // Scale (fit to width)
-    val overall = max(1f, spec.overallLengthMm)
-    val ptPerMm = geomRect.width() / overall
+    // --- Scale & placement (fit-to-width)
+    val overallMm = max(1f, spec.overallLengthMm)
+    val ptPerMm = geomRect.width() / overallMm
     val left = geomRect.left
 
-    // Vertical placement
-    val maxDia = spec.maxOuterDiaMm().coerceAtLeast(1f)
-    val halfHeight = (maxDia * 0.5f) * ptPerMm
-    val cy = (geomRect.top + geomRect.bottom) * 0.5f - 40f // bias up to give room for info below
-    val yTop = cy - halfHeight
+    val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
+    val halfHeightPx = (maxDiaMm * 0.5f) * ptPerMm
+    val cy = (geomRect.top + geomRect.bottom) * 0.5f - CY_UP_BIAS_PT
+    val yTopOfShaft = cy - halfHeightPx
 
     fun xAt(mm: Float) = left + mm * ptPerMm
     fun rPx(diaMm: Float) = (diaMm * 0.5f) * ptPerMm
 
-    // 1) Components (centerline intentionally off)
+    // 1) Geometry stack
     drawBodies(c, spec.bodies, cy, ::xAt, ::rPx, outline)
     drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline)
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
 
-    // 2) Dimension system just above the shaft
-    drawDimensionsLikeSketch(c, spec, unit, ::xAt, yTop, text, dim)
+    // 2) Dimension lanes (overall above component lanes)
+    drawDimensionsLikePreview(c, spec, unit, ::xAt, yTopOfShaft, text, dim)
 
-    // 3) Info columns placed **1 inch** below geometry
-    val infoTop = cy + halfHeight + INFO_GAP_PT
-    val infoBottom = min(infoTop + 96f, pageH - PAGE_MARGIN_PT) // a bit taller than before
+    // 3) Footer — exactly 1" below geometry
+    val infoTop = cy + halfHeightPx + INFO_GAP_PT
+    val infoBottom = min(infoTop + FOOTER_BLOCK_PT, pageH - PAGE_MARGIN_PT)
     val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
     drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text)
 
-    // 4) Page-bottom stamp (bottom-right of the PAGE, not the info block)
+    // 4) Page stamp (bottom-right, page coordinates)
     val meta = "$filename  •  ShaftSchematic $appVersion"
     val metaW = text.measureText(meta)
     c.drawText(meta, pageW - PAGE_MARGIN_PT - metaW, pageH - PAGE_MARGIN_PT - 4f, text)
 }
 
-// ------------------------------ Components ------------------------------
+// ──────────────────────────────────────────────────────────────────────────────
+// Constants
+// ──────────────────────────────────────────────────────────────────────────────
+
+private const val MM_PER_IN = 25.4f
+
+// Strokes / text
+private const val OUTLINE_PT = 2.5f
+private const val DIM_PT = 1.6f
+private const val TEXT_PT = 12f
+
+// Layout
+private const val PAGE_MARGIN_PT = 36f       // 0.5 in
+private const val TOP_TEXT_PAD_PT = 12f
+private const val CY_UP_BIAS_PT = 40f        // bias geometry upward to make room for footer
+private const val BAND_CLEAR_PT = 12f        // breathing room above shaft before first dim line
+private const val BASE_DIM_OFFSET_PT = 24f   // distance from shaft top to first component dim
+private const val OVERALL_EXTRA_PT = 16f     // overall lane sits above components
+private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
+private const val ARROW_PT = 6f
+private const val LABEL_PAD_PT = 6f
+private const val EXT_OFFSET_PT = 9f         // gap from shaft to start of extension line
+private const val EXT_OVERRUN_PT = 4f        // how much extension lines rise past dim line
+private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
+private const val FOOTER_BLOCK_PT = 96f
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Geometry — components
+// ──────────────────────────────────────────────────────────────────────────────
+
 private fun drawBodies(
     c: Canvas,
     bodies: List<Body>,
@@ -189,23 +195,24 @@ private fun drawThreads(
         if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
         val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
         val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
-        // Outline
+
+        // Envelope
         c.drawLine(x0, top, x1, top, outline)
         c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, outline)
         c.drawLine(x1, top, x1, bot, outline)
-        // Hatch from pitch — clipped to rect; stripes via drawLine (robust on PDF)
-        val step = th.pitchMm * ptPerMm
-        if (step > 0f) {
-            val save = c.save()
-            c.clipRect(RectF(x0, top, x1, bot))
-            var x = x0
-            while (x <= x1 + step) {
-                c.drawLine(x, bot, x + (bot - top), top, dim)
-                x += step
-            }
-            c.restoreToCount(save)
+
+        // Hatch — match Preview: stride = max(8 px, pitchMm * ptPerMm), clipped to band
+        val step = max(8f, th.pitchMm * ptPerMm)
+        val rect = RectF(min(x0, x1), min(top, bot), max(x0, x1), max(top, bot))
+        val save = c.save()
+        c.clipRect(rect)
+        var hx = rect.left + 4f
+        while (hx <= rect.right + 4f) {
+            c.drawLine(hx - 4f, rect.bottom, hx + 4f, rect.top, dim)
+            hx += step
         }
+        c.restoreToCount(save)
     }
 }
 
@@ -224,39 +231,40 @@ private fun drawLiners(
         val r = rPx(ln.odMm); val top = cy - r; val bot = cy + r
         c.drawLine(x0, top, x1, top, outline)
         c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, dim)
+        c.drawLine(x0, top, x0, bot, dim) // thin end ticks
         c.drawLine(x1, top, x1, bot, dim)
     }
 }
 
-// --------------------------- Dimensions like sketches ---------------------------
+// ──────────────────────────────────────────────────────────────────────────────
+// Dimensions (Preview-style: overall above components; lanes avoid collisions)
+// ──────────────────────────────────────────────────────────────────────────────
+
 private data class Interval(val startMm: Float, val endMm: Float)
 
-private fun drawDimensionsLikeSketch(
+private fun drawDimensionsLikePreview(
     c: Canvas,
     spec: ShaftSpec,
     unit: UnitSystem,
     xAt: (Float) -> Float,
-    yTop: Float,
+    yTopOfShaft: Float,
     text: Paint,
     dim: Paint,
 ) {
-    // Overall above components; both above the shaft top.
-    val overallY = yTop - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT - OVERALL_EXTRA_PT
-    val firstLaneY = yTop - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
+    val overallY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT - OVERALL_EXTRA_PT
+    val firstLaneY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
 
     // Overall
     val xa = xAt(0f); val xf = xAt(spec.overallLengthMm)
-    drawDimWithExtensions(c, xa, xf, overallY, yTop, fmtLen(unit, spec.overallLengthMm), text, dim)
+    drawDimWithExtensions(c, xa, xf, overallY, yTopOfShaft, fmtLen(unit, spec.overallLengthMm), text, dim)
 
-    // Component intervals
+    // Component intervals (greedy lane packing)
     val ivs = ArrayList<Interval>()
-    spec.bodies.forEach   { if (it.lengthMm > 0f && it.diaMm > 0f)           ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+    spec.bodies.forEach   { if (it.lengthMm > 0f && it.diaMm > 0f)                 ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
     spec.tapers.forEach   { if (it.lengthMm > 0f && (it.startDiaMm > 0f || it.endDiaMm > 0f)) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
-    spec.threads.forEach  { if (it.lengthMm > 0f && it.majorDiaMm > 0f)      ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
-    spec.liners.forEach   { if (it.lengthMm > 0f && it.odMm > 0f)            ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+    spec.threads.forEach  { if (it.lengthMm > 0f && it.majorDiaMm > 0f)            ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+    spec.liners.forEach   { if (it.lengthMm > 0f && it.odMm > 0f)                  ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
 
-    // Greedy lanes with extra spacing
     data class Lane(var endX: Float, val y: Float)
     val lanes = mutableListOf<Lane>()
     val sorted = ivs.sortedWith(compareBy({ it.startMm }, { it.endMm }))
@@ -267,7 +275,7 @@ private fun drawDimensionsLikeSketch(
         for (i in lanes.indices) if (x0 >= lanes[i].endX) { idx = i; break }
         if (idx == -1) { lanes += Lane(x1, firstLaneY - lanes.size * (TEXT_PT + LANE_GAP_PT)); idx = lanes.lastIndex } else { lanes[idx].endX = x1 }
         val y = lanes[idx].y
-        drawDimWithExtensions(c, x0, x1, y, yTop, fmtLen(unit, iv.endMm - iv.startMm), text, dim)
+        drawDimWithExtensions(c, x0, x1, y, yTopOfShaft, fmtLen(unit, iv.endMm - iv.startMm), text, dim)
     }
 }
 
@@ -281,13 +289,11 @@ private fun drawDimWithExtensions(
     text: Paint,
     dim: Paint,
 ) {
-    // Extension lines rise from just above the shaft to slightly beyond the dimension line
     val extStartY = yTopOfShaft - EXT_OFFSET_PT
     val extEndY = yDim + EXT_OVERRUN_PT
     c.drawLine(x0, extStartY, x0, extEndY, dim)
     c.drawLine(x1, extStartY, x1, extEndY, dim)
 
-    // Baseline with handwriting gap
     val mid = (x0 + x1) * 0.5f
     val w = text.measureText(label)
     val gap = w + LABEL_PAD_PT * 2
@@ -296,11 +302,9 @@ private fun drawDimWithExtensions(
     c.drawLine(x0, yDim, leftEnd, yDim, dim)
     c.drawLine(rightStart, yDim, x1, yDim, dim)
 
-    // Inward arrowheads
     drawArrowInward(c, x0, yDim, dim)
     drawArrowInward(c, x1, yDim, dim, left = false)
 
-    // Center label vertically on the baseline using ascent/descent
     val ty = yDim - (text.descent() + text.ascent()) / 2f
     c.drawText(label, mid - w / 2f, ty, text)
 }
@@ -311,7 +315,16 @@ private fun drawArrowInward(c: Canvas, x: Float, y: Float, p: Paint, left: Boole
     c.drawLine(x, y, x + s * ARROW_PT, y + ARROW_PT, p)
 }
 
-// -------------------------------- Footer ---------------------------------
+// ──────────────────────────────────────────────────────────────────────────────
+// Footer (3 columns; center column is work-order info)
+// ──────────────────────────────────────────────────────────────────────────────
+
+data class ProjectInfo(
+    val customer: String = "",
+    val vessel: String = "",
+    val jobNumber: String = "",
+)
+
 private fun drawFooter(
     c: Canvas,
     rect: RectF,
@@ -384,13 +397,15 @@ private fun drawFooter(
     }
 }
 
-// -------------------------------- Helpers --------------------------------
+// ──────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────────────────────────────────
+
 private fun pickAftFwdTapers(spec: ShaftSpec): Pair<Taper?, Taper?> {
     if (spec.tapers.isEmpty()) return null to null
     var aft: Taper? = spec.tapers.minByOrNull { it.startFromAftMm }
     var fwd: Taper? = spec.tapers.maxByOrNull { it.startFromAftMm + it.lengthMm }
     if (aft == fwd) {
-        // Single taper: place it on the nearer end
         val t = aft!!
         val distAft = t.startFromAftMm
         val distFwd = spec.overallLengthMm - (t.startFromAftMm + t.lengthMm)
@@ -439,7 +454,6 @@ private fun fmtTpi(tpi: Float): String {
     return if (abs(tpi - i) < 0.01f) i.toString() else String.format(Locale.US, "%.2f", tpi)
 }
 
-// Aggregate helper
 private fun ShaftSpec.maxOuterDiaMm(): Float {
     var maxDia = 0f
     bodies.forEach  { maxDia = maxOf(maxDia, it.diaMm) }

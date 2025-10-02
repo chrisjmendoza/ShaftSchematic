@@ -17,7 +17,6 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
 import com.android.shaftschematic.model.ShaftSpec
-import androidx.compose.ui.text.rememberTextMeasurer
 import com.android.shaftschematic.ui.drawing.render.GridRenderer.drawAdaptiveShaftGrid
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer.RenderOptions as SRRenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
@@ -72,10 +71,13 @@ fun ShaftDrawing(
     // Options for the renderer only (stroke widths/colors). Values can be tuned later.
     val ropts = remember(unit) {
         SRRenderOptions(
-            outlineColor = Color.Black,
-            fillColor = Color.Transparent,
-            shaftStrokePx = 2f,
-            dimStrokePx = 1f
+            outline = Color.Black,
+            outlineWidthPx = 2f,
+            bodyFill = Color.Transparent,
+            linerFill = Color.Transparent,
+            taperFill = Color.Black.copy(alpha = 0.10f),
+            threadFill = Color.Transparent,
+            threadHatch = Color.Black
         )
     }
 

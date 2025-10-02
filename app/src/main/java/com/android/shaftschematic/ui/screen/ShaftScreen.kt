@@ -1,7 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
 import android.content.Context
-import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -180,10 +179,12 @@ fun ShaftScreen(
         }
     ) { innerPadding ->
 
-        Box(Modifier
-            .fillMaxSize()
-            .padding(innerPadding)
-            .windowInsetsPadding(WindowInsets.ime)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .windowInsetsPadding(WindowInsets.ime)
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -343,9 +344,11 @@ private fun UnitSegment(unit: UnitSystem, onUnitSelected: (UnitSystem) -> Unit) 
         shape = RoundedCornerShape(999.dp),
         tonalElevation = 1.dp
     ) {
-        Row(Modifier
-            .height(36.dp)
-            .padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier
+                .height(36.dp)
+                .padding(4.dp), verticalAlignment = Alignment.CenterVertically
+        ) {
             UnitChip("mm", UnitSystem.MILLIMETERS, unit, onUnitSelected)
             Spacer(Modifier.width(4.dp))
             UnitChip("in", UnitSystem.INCHES, unit, onUnitSelected)
@@ -390,9 +393,11 @@ private fun ExpandableSection(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(Modifier
-            .fillMaxWidth()
-            .padding(12.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -448,17 +453,17 @@ private fun PreviewCard(
             // Shaft preview
             renderShaft(spec, unit)
 
-            // Debug HUD (already correct)
-            DebugHud(
-                spec = spec,
-                unit = unit,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-            )
+            // Debug HUD
+//            DebugHud(
+//                spec = spec,
+//                unit = unit,
+//                modifier = Modifier
+//                    .align(Alignment.TopEnd)
+//                    .padding(6.dp)
+//            )
 
             // ✅ Free-to-end badge now inside the Box
-            val freeMm  = spec.freeToEndMm()
+            val freeMm = spec.freeToEndMm()
             val freeTxt = formatMmForDisplay(freeMm, unit)
             Surface(
                 tonalElevation = 1.dp,
@@ -475,20 +480,6 @@ private fun PreviewCard(
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
-
-//            // ✅ taperLen debug overlay also inside the Box
-//            val lastTaperLenMm = spec.tapers.lastOrNull()?.lengthMm ?: 0f
-//            Surface(
-//                modifier = Modifier
-//                    .align(Alignment.TopEnd)
-//                    .padding(top = 32.dp, end = 6.dp) // nudge below the DebugHud
-//            ) {
-//                Text(
-//                    "taperLen=${"%.1f".format(lastTaperLenMm)} mm",
-//                    style = MaterialTheme.typography.labelSmall,
-//                    modifier = Modifier.padding(6.dp)
-//                )
-//            }
         }
     }
 }
@@ -680,18 +671,7 @@ private fun ComponentsUnifiedList(
                                 edMm
                             )
                         }
-                        // In ShaftScreen.kt, inside the TAPER editor:
-                        CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
-                            val lenMm = toMmOrNull(s, unit) ?: 0f
-                            Log.d("ShaftEdit", "updateTaper lenMm=$lenMm (unit=$unit, raw='$s')")
-                            onUpdateTaper(
-                                row.index,
-                                t.startFromAftMm,
-                                lenMm,
-                                t.startDiaMm,
-                                t.endDiaMm
-                            )
-                        }
+
                     }
                 }
             }
