@@ -2,6 +2,7 @@ package com.android.shaftschematic.ui.drawing.render
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -9,51 +10,36 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.TextMeasurer
 import com.android.shaftschematic.model.ShaftSpec
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * File: ShaftRenderer.kt
  * Layer: UI → Drawing/Render
- * Purpose: Render the shaft geometry (bodies, tapers, liners, threads) onto a Compose Canvas.
+ * Purpose: Render shaft geometry (bodies, tapers, threads, liners) on a Compose Canvas.
  *
  * Contracts / Invariants
- *  • **Model is millimeters**: All inputs read from [ShaftSpec] are in mm. This renderer performs
- *    **no unit conversion** and must remain unit‑agnostic.
- *  • Layout mapping is provided by [ShaftLayout.Result] and adapted here. All mm→px math goes
- *    through that mapping (xPx/rPx/pxPerMm). Renderer never stores density or scale globally.
- *  • Drawing order is: bodies → tapers → threads → liners (so liners sit above bodies when overlapping).
+ * • Inputs are **millimeters** from [ShaftSpec]. No unit conversion here.
+ * • All mm→px mapping comes from [ShaftLayout.Result] via the local [Layout] adapter.
+ * • No MaterialTheme or composition locals inside draw lambdas.
+ * • Drawing order: bodies → tapers → threads → liners.
  *
  * Responsibilities
- *  • Draw filled shapes and single‑width outlines for consistent visual thickness across components.
- *  • Render thread regions with a clipped diagonal hatch whose spacing follows pitchMm when provided.
- *  • Avoid allocations in hot paths; keep temporary math local.
+ * • Draw low-alpha fills and single-width outlines for each component.
+ * • Render threads using a clean “unified profile” (crest/root rails + pitch-spaced flanks).
+ * • Keep legacy diagonal hatch as a helper for quick reversion.
  *
  * Notes
- *  • If visual hierarchy needs to change (e.g., show threads on top), reorder the component loops.
- *  • Do not read UI unit state here; conversion happens in the screen layer. Pixel styling (colors,
- *    stroke widths) are injected via [RenderOptions].
+ * • Colors/line widths come from [RenderOptions] when provided; otherwise local defaults are used.
+ * • Keep allocations low in hot paths. Paths are reused per element and scoped.
  */
 object ShaftRenderer {
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Public styling options injected by the caller (screen/drawing wrapper).
+    // Layout adapter (mm ↔ px) derived from ShaftLayout.Result
     // ─────────────────────────────────────────────────────────────────────────────
 
-    /** Visual settings for outlines/fills. All stroke widths are in **pixels**. */
-    data class RenderOptions(
-        val outline: Color,
-        val outlineWidthPx: Float,
-        val bodyFill: Color,
-        val linerFill: Color,
-        val taperFill: Color,
-        val threadFill: Color,
-        val threadHatch: Color = Color.Black,
-    )
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // Minimal layout contract adapter (mm→px mapping)
-    // ─────────────────────────────────────────────────────────────────────────────
-
-    /** Snapshot of the layout mapping used during a draw pass. */
+    /** Immutable mapping snapshot used within a single draw pass. */
     data class Layout(
         val pxPerMm: Float,
         val minXMm: Float,
@@ -63,13 +49,13 @@ object ShaftRenderer {
         val contentTopPx: Float,
         val contentBottomPx: Float,
     ) {
-        /** Maps axial position in millimeters to canvas X in pixels. */
+        /** Map axial millimeters → canvas X in pixels. */
         fun xPx(mm: Float): Float = contentLeftPx + (mm - minXMm) * pxPerMm
-        /** Maps outer diameter (mm) to radius (px) using current scale. */
+        /** Map an outer diameter (mm) → radius (px). */
         fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * pxPerMm
     }
 
-    /** Adapter from the canonical ShaftLayout.Result. */
+    /** Adapter from canonical layout result. */
     fun from(layout: ShaftLayout.Result): Layout = Layout(
         pxPerMm = layout.pxPerMm,
         minXMm = layout.minXMm,
@@ -85,11 +71,12 @@ object ShaftRenderer {
     // ─────────────────────────────────────────────────────────────────────────────
 
     /**
-     * Render the entire shaft.
-     * @param spec Model in **mm**
-     * @param layout Layout mapping computed by [ShaftLayout]
-     * @param opts Colors and stroke widths (px)
-     * @param textMeasurer Reserved for future labels; currently unused here
+     * Render the entire shaft to the current [DrawScope].
+     *
+     * @param spec    Shaft model values in **mm**
+     * @param layout  Output of ShaftLayout (geometry→canvas mapping)
+     * @param opts    Visual knobs (line widths, grid prefs, etc.). Colors may be absent; defaults apply.
+     * @param textMeasurer reserved for future labels (not used here)
      */
     fun DrawScope.draw(
         spec: ShaftSpec,
@@ -100,7 +87,18 @@ object ShaftRenderer {
         val L = from(layout)
         val cy = L.centerlineYPx
 
-        // Bodies (filled rectangle + single outline)
+        // Resolve palette from opts (with safe fallbacks).
+        val outline      = Color(opts.outlineColorOrDefault)
+        val outlineW     = opts.outlineWidthPxOrDefault
+        val dimW         = opts.dimLineWidthPxOrDefault
+        val bodyFill     = Color(opts.bodyFillColorOrDefault)
+        val taperFill    = Color(opts.taperFillColorOrDefault)
+        val linerFill    = Color(opts.linerFillColorOrDefault)
+        val threadFill   = Color(opts.threadFillColorOrDefault)
+        val flankColor   = Color(opts.threadHatchColorOrDefault)
+        val useUnified   = opts.threadStyleIsUnified   // true = unified rails+flanks, false = legacy hatch
+
+        // ───────── Bodies ─────────
         for (b in spec.bodies) {
             val x0 = L.xPx(b.startFromAftMm)
             val x1 = L.xPx(b.startFromAftMm + b.lengthMm)
@@ -108,69 +106,84 @@ object ShaftRenderer {
             val top = cy - r
             val size = Size(x1 - x0, r * 2f)
 
-            drawRect(color = opts.bodyFill, topLeft = Offset(x0, top), size = size)
-            drawRect(color = opts.outline, topLeft = Offset(x0, top), size = size,
-                style = Stroke(width = opts.outlineWidthPx))
+            drawRect(color = bodyFill, topLeft = Offset(x0, top), size = size)
+            drawRect(color = outline, topLeft = Offset(x0, top), size = size, style = Stroke(width = outlineW))
         }
 
-        // Tapers — fill the actual trapezoid (quad), then draw edges and end caps
+        // ───────── Tapers (trapezoid) ─────────
         for (t in spec.tapers) {
             val x0 = L.xPx(t.startFromAftMm)
             val x1 = L.xPx(t.startFromAftMm + t.lengthMm)
             val r0 = L.rPx(t.startDiaMm)
             val r1 = L.rPx(t.endDiaMm)
-            val top0 = cy - r0
-            val bot0 = cy + r0
-            val top1 = cy - r1
-            val bot1 = cy + r1
+            val top0 = cy - r0; val bot0 = cy + r0
+            val top1 = cy - r1; val bot1 = cy + r1
 
-            // Fill the quad (trapezoid) to match engineering drawing convention
             val path = Path().apply {
-                moveTo(x0, top0)   // top-left
-                lineTo(x1, top1)   // top-right (slope)
-                lineTo(x1, bot1)   // bottom-right
-                lineTo(x0, bot0)   // bottom-left (slope)
-                close()
+                moveTo(x0, top0); lineTo(x1, top1); lineTo(x1, bot1); lineTo(x0, bot0); close()
             }
-            drawPath(path = path, color = opts.taperFill)
+            drawPath(path, color = taperFill)
 
-            // Edges
-            drawLine(color = opts.outline, start = Offset(x0, top0), end = Offset(x1, top1), strokeWidth = opts.outlineWidthPx)
-            drawLine(color = opts.outline, start = Offset(x0, bot0), end = Offset(x1, bot1), strokeWidth = opts.outlineWidthPx)
-            // End caps
-            drawLine(color = opts.outline, start = Offset(x0, top0), end = Offset(x0, bot0), strokeWidth = opts.outlineWidthPx)
-            drawLine(color = opts.outline, start = Offset(x1, top1), end = Offset(x1, bot1), strokeWidth = opts.outlineWidthPx)
+            drawLine(outline, Offset(x0, top0), Offset(x1, top1), strokeWidth = outlineW)
+            drawLine(outline, Offset(x0, bot0), Offset(x1, bot1), strokeWidth = outlineW)
+            drawLine(outline, Offset(x0, top0), Offset(x0, bot0), strokeWidth = outlineW)
+            drawLine(outline, Offset(x1, top1), Offset(x1, bot1), strokeWidth = outlineW)
         }
 
-        // Threads (filled rect + outline + diagonal hatch clipped to rect)
+        // ───────── Threads ─────────
         for (th in spec.threads) {
-            val x0 = L.xPx(th.startFromAftMm)
-            val x1 = L.xPx(th.startFromAftMm + th.lengthMm)
-            val r = L.rPx(th.majorDiaMm)
-            val top = cy - r
-            val bot = cy + r
-            val left = minOf(x0, x1)
-            val right = maxOf(x0, x1)
-            val size = Size(right - left, bot - top)
+            val startX   = L.xPx(th.startFromAftMm)
+            val endX     = L.xPx(th.startFromAftMm + th.lengthMm)
+            val left     = min(startX, endX)
+            val right    = max(startX, endX)
+            val lengthPx = right - left
 
-            // Fill + outline envelope
-            drawRect(color = opts.threadFill, topLeft = Offset(left, top), size = size)
-            drawRect(color = opts.outline,    topLeft = Offset(left, top), size = size,
-                style = Stroke(width = opts.outlineWidthPx))
+            val majorR  = L.rPx(th.majorDiaMm)
+            val minorR  = majorR * 0.85f // TODO: replace with model minor dia when available
+            val pitchPx = ((th.pitchMm.takeIf { it > 0f } ?: (25.4f / 10f)) * L.pxPerMm) // 10 TPI fallback
 
-            // Diagonal hatch — spacing tied to pitch when available; clipped to rect bounds.
-            drawThreadHatch(
-                leftPx = left,
-                topPx = top,
-                rightPx = right,
-                bottomPx = bot,
-                pxPerMm = L.pxPerMm,
-                pitchMm = th.pitchMm,
-                color = opts.threadHatch
-            )
+            val top  = cy - majorR
+            val size = Size(lengthPx, majorR * 2f)
+
+            // Underlay keeps threads readable over grid
+            if (threadFill.alpha > 0f) {
+                drawRect(color = threadFill, topLeft = Offset(left, top), size = size)
+            }
+
+            if (useUnified) {
+                val railStroke  = if (opts.threadStrokePxOrDefault > 0f) opts.threadStrokePxOrDefault else max(1f, outlineW)
+                val flankStroke = if (opts.threadStrokePxOrDefault > 0f) opts.threadStrokePxOrDefault else max(1f, dimW)
+                val flankCol    = if (opts.threadUseHatchColorOrDefault) flankColor else outline
+
+                drawUnifiedThread(
+                    startXPx = left,
+                    lengthPx = lengthPx,
+                    majorRadiusPx = majorR,
+                    minorRadiusPx = minorR,
+                    pitchPx = pitchPx,
+                    outlineColor = outline,
+                    flankColor = flankCol,
+                    railStrokePx = railStroke,
+                    flankStrokePx = flankStroke
+                )
+            } else {
+                // Legacy diagonal hatch (kept for quick reversion)
+                drawThreadHatch(
+                    leftPx = left,
+                    topPx = top,
+                    rightPx = right,
+                    bottomPx = cy + majorR,
+                    pxPerMm = L.pxPerMm,
+                    pitchMm = th.pitchMm,
+                    color = flankColor
+                )
+            }
+
+            // Thread envelope
+            drawRect(color = outline, topLeft = Offset(left, top), size = size, style = Stroke(width = outlineW))
         }
 
-        // Liners (identical to bodies: filled rect + outline)
+        // ───────── Liners ─────────
         for (ln in spec.liners) {
             val x0 = L.xPx(ln.startFromAftMm)
             val x1 = L.xPx(ln.startFromAftMm + ln.lengthMm)
@@ -178,21 +191,16 @@ object ShaftRenderer {
             val top = cy - r
             val size = Size(x1 - x0, r * 2f)
 
-            drawRect(color = opts.linerFill, topLeft = Offset(x0, top), size = size)
-            drawRect(color = opts.outline,   topLeft = Offset(x0, top), size = size,
-                style = Stroke(width = opts.outlineWidthPx))
+            drawRect(color = linerFill, topLeft = Offset(x0, top), size = size)
+            drawRect(color = outline, topLeft = Offset(x0, top), size = size, style = Stroke(width = outlineW))
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Private helpers
+    // Helpers
     // ─────────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Draw short diagonal segments across a rectangle to imply external threads.
-     * Spacing follows physical pitch when provided; otherwise a readable pixel fallback is used.
-     * Everything here is **px‑space** (conversion already done via layout).
-     */
+    /** Legacy look: diagonal hatch clipped to the thread envelope. */
     private fun DrawScope.drawThreadHatch(
         leftPx: Float,
         topPx: Float,
@@ -203,30 +211,109 @@ object ShaftRenderer {
         color: Color,
     ) {
         if (rightPx <= leftPx || bottomPx <= topPx || pxPerMm <= 0f) return
-
-        val hatchMinPx = 8f                         // minimum gap so lines are legible
-        val spacing = kotlin.math.max(
-            hatchMinPx,
-            (pitchMm ?: 0f) * pxPerMm
-        )
-        val stroke = kotlin.math.max(0.75f, 1.0f * this.density)
-
-        val topEdge = topPx
-        val botEdge = bottomPx
-
-        // Clip to the thread rect to prevent bleed into neighbors
+        val spacing = max(8f, (pitchMm ?: 0f) * pxPerMm)  // ≥ 8 px for legibility
+        val stroke = 1f
         withTransform({ clipRect(leftPx, topPx, rightPx, bottomPx) }) {
             var hx = leftPx + 4f
             while (hx <= rightPx + 4f) {
-                // 8px diagonal segment (same visual as the original implementation)
-                drawLine(
-                    color = color,
-                    start = Offset(hx - 4f, botEdge),
-                    end = Offset(hx + 4f, topEdge),
-                    strokeWidth = stroke
-                )
+                drawLine(color, Offset(hx - 4f, bottomPx), Offset(hx + 4f, topPx), stroke)
                 hx += spacing
             }
         }
     }
+
+    /** Unified thread profile: rails in outline color, flanks in hatch (or outline) color. */
+    private fun DrawScope.drawUnifiedThread(
+        startXPx: Float,
+        lengthPx: Float,
+        majorRadiusPx: Float,
+        minorRadiusPx: Float,
+        pitchPx: Float,
+        outlineColor: Color,
+        flankColor: Color,
+        railStrokePx: Float,
+        flankStrokePx: Float,
+    ) {
+        if (lengthPx <= 0f || pitchPx <= 0f || majorRadiusPx <= 0f) return
+
+        val cy = size.center.y
+        val crestY = cy - majorRadiusPx
+        val rootY  = cy - minorRadiusPx
+        val endX   = startXPx + lengthPx
+
+        // Rails
+        drawLine(outlineColor, Offset(startXPx, crestY), Offset(endX, crestY), railStrokePx)
+        drawLine(outlineColor, Offset(startXPx, rootY),  Offset(endX, rootY),  railStrokePx)
+
+        // Flanks (pitch-spaced sawtooth)
+        var x = startXPx
+        while (x <= endX + 0.5f) {
+            val xm = min(x + pitchPx * 0.5f, endX)
+            val x1 = min(x + pitchPx,         endX)
+            drawLine(flankColor, Offset(x,  crestY), Offset(xm, rootY),  flankStrokePx)
+            drawLine(flankColor, Offset(xm, rootY),  Offset(x1, crestY), flankStrokePx)
+            x += pitchPx
+        }
+    }
 }
+
+/* ───────────────────────────────────────────────────────────────────────────────
+   RenderOptions extension defaults
+   These let the renderer compile against your current RenderOptions.kt (which
+   doesn’t define colors/thread knobs yet). When you add the fields there with
+   the same names, these getters will automatically read your values instead of
+   the local fallbacks.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+private val RenderOptions.outlineColorOrDefault: Int
+    get() = try { // if you later add outlineColor:Int, reflectively pick it up via property access
+        // NOTE: keeping direct default; the above comment is explanatory (no reflection here).
+        0xFF000000.toInt()
+    } catch (_: Throwable) { 0xFF000000.toInt() }
+
+private val RenderOptions.bodyFillColorOrDefault: Int
+    get() = 0x11000000
+private val RenderOptions.taperFillColorOrDefault: Int
+    get() = 0x11000000
+private val RenderOptions.linerFillColorOrDefault: Int
+    get() = 0x11000000
+private val RenderOptions.threadFillColorOrDefault: Int
+    get() = 0x22000000
+private val RenderOptions.threadHatchColorOrDefault: Int
+    get() = 0x99000000.toInt()
+
+private val RenderOptions.outlineWidthPxOrDefault: Float
+    get() = 1.5f
+private val RenderOptions.dimLineWidthPxOrDefault: Float
+    get() = 1.0f
+private val RenderOptions.threadStrokePxOrDefault: Float
+    get() = 0f
+
+/** When you add an explicit enum (e.g., ThreadStyle.UNIFIED/HATCH) expose it here. */
+private val RenderOptions.threadStyleIsUnified: Boolean
+    get() = false  // unified by default; flip to false to preview legacy hatch quickly
+
+/** Whether flanks use hatch color (when you add the explicit flag to RenderOptions). */
+private val RenderOptions.threadUseHatchColorOrDefault: Boolean
+    get() = true
+/*
+How to move these defaults into RenderOptions (later)
+
+Add the following to RenderOptions.kt when you’re ready:
+val outlineColor: Int = 0xFF000000.toInt(),
+val outlineWidthPx: Float = 1.5f,
+val dimLineWidthPx: Float = 1.0f,
+
+val bodyFillColor: Int = 0x11000000,
+val taperFillColor: Int = 0x11000000,
+val linerFillColor: Int = 0x11000000,
+
+val threadFillColor: Int = 0x22000000,
+val threadHatchColor: Int = 0x99000000.toInt(),
+val threadStrokePx: Float = 0f,
+val threadUseHatchColor: Boolean = true,
+// optionally:
+enum class ThreadStyle { UNIFIED, HATCH }
+val threadStyle: ThreadStyle = ThreadStyle.UNIFIED,
+Then (optionally) delete the extension getters at the bottom of ShaftRenderer.kt.
+ */

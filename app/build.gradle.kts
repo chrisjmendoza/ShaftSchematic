@@ -70,14 +70,19 @@ dependencies {
 
     // Compose UI
     implementation(libs.androidx.compose.ui)
+    implementation("androidx.compose.ui:ui")
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material3:material3")
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation("androidx.navigation:navigation-compose:2.8.2")
     implementation(libs.androidx.compose.foundation)
+    implementation("androidx.activity:activity-compose:1.9.2")
 
     // Material (View system) — only if you actually use Views; otherwise you can remove
     implementation("com.google.android.material:material:1.13.0")
+    implementation(libs.androidx.navigation.compose)
 
     // --- Debug / Tooling
     debugImplementation(libs.androidx.compose.ui.tooling)

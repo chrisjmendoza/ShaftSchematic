@@ -59,8 +59,12 @@ class ShaftViewModel : ViewModel() {
 // ─────────────────────────────────────────────────────────────────────────────
 
     /** Sets the UI unit (preview/labels only). Model remains canonical mm. */
-    fun setUnit(value: UnitSystem) {
-        _unit.value = value
+    fun setUnit(newUnit: UnitSystem) {
+        if (newUnit != _unit.value) _unit.value = newUnit
+    }
+
+    fun toggleUnit() {
+        _unit.value = if (_unit.value == UnitSystem.MILLIMETERS) UnitSystem.INCHES else UnitSystem.MILLIMETERS
     }
 
     /** Toggles grid visibility in Preview. */
@@ -194,6 +198,40 @@ class ShaftViewModel : ViewModel() {
     }
 
     private fun newId(): String = UUID.randomUUID().toString()
+
+    // Removes — preserve insertion order, guard index, keep model in mm
+    fun removeBody(index: Int) {
+        _spec.update { s ->
+            if (index !in s.bodies.indices) s
+            else s.copy(bodies = s.bodies.toMutableList().apply { removeAt(index) })
+        }
+        ensureOverall()
+    }
+
+    fun removeTaper(index: Int) {
+        _spec.update { s ->
+            if (index !in s.tapers.indices) s
+            else s.copy(tapers = s.tapers.toMutableList().apply { removeAt(index) })
+        }
+        ensureOverall()
+    }
+
+    fun removeThread(index: Int) {
+        _spec.update { s ->
+            if (index !in s.threads.indices) s
+            else s.copy(threads = s.threads.toMutableList().apply { removeAt(index) })
+        }
+        ensureOverall()
+    }
+
+    fun removeLiner(index: Int) {
+        _spec.update { s ->
+            if (index !in s.liners.indices) s
+            else s.copy(liners = s.liners.toMutableList().apply { removeAt(index) })
+        }
+        ensureOverall()
+    }
+
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Persistence — versioned JSON document (UI wires it to SAF)
