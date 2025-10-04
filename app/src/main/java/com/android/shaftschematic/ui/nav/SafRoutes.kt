@@ -16,16 +16,17 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * SAF one-shot “routes” used by the nav graph.
- *
- * Contract:
- * - Exactly one public Composable for open and one for save — no overloads.
- * - UI layer only reads/writes bytes; JSON shape/versioning lives in the ViewModel.
- * - Caller navigates to this route; the Composable immediately launches the SAF
- *   contract, then calls [onFinished] (typically popBackStack) when done.
+# SAF Routes – JSON open/save
+ **Purpose**: One-shot composables that launch system pickers to open/save JSON.
+ **Contract**:
+- Only two public composables: `OpenInternalRoute`, `SaveInternalRoute`.
+- UI reads/writes bytes; VM owns JSON schema/versioning (importJson/exportJson).
+- Launch immediately on composition; call `onFinished()` when done or canceled.
+- No toasts/snackbars here; let parent route/screen handle UX.
  */
+
 @Composable
-fun OpenDocumentRoute(
+fun OpenInternalRoute(
     nav: NavController,
     vm: ShaftViewModel,
     onFinished: () -> Unit
@@ -38,10 +39,9 @@ fun OpenDocumentRoute(
     ) { uri ->
         runCatching {
             if (uri != null) {
-                // Optional: persist read permission so future reads work without relaunch
-                val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(uri, flags)
-
+                context.contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
                 context.contentResolver.openInputStream(uri)?.use { inp ->
                     vm.importJson(inp.bufferedReader().readText())
                 }
@@ -51,11 +51,11 @@ fun OpenDocumentRoute(
     }
 
     LaunchedEffect(Unit) { opener.launch(arrayOf("application/json")) }
-    if (done.value) onFinished() else Text("") // minimal body to satisfy composition
+    if (done.value) onFinished() else Text("") // headless route body
 }
 
 @Composable
-fun SaveDocumentRoute(
+fun SaveInternalRoute(
     nav: NavController,
     vm: ShaftViewModel,
     onFinished: () -> Unit
@@ -76,11 +76,13 @@ fun SaveDocumentRoute(
         done.value = true
     }
 
-    LaunchedEffect(Unit) { saver.launch(defaultFileName()) }
+    LaunchedEffect(Unit) { saver.launch(defaultJsonFileName()) }
     if (done.value) onFinished() else Text("")
 }
 
-private fun defaultFileName(): String {
+/* ── helpers ─────────────────────────────────────────────────────────────── */
+
+private fun defaultJsonFileName(): String {
     val sdf = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US)
     return "Shaft_${sdf.format(Date())}.json"
 }

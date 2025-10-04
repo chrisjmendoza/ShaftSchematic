@@ -1,4 +1,3 @@
-// app/src/main/java/com/android/shaftschematic/ui/nav/InternalDocRoutes.kt
 package com.android.shaftschematic.ui.nav
 
 import androidx.compose.foundation.clickable
@@ -12,36 +11,47 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 /**
- * OpenInternalRoute
- *
- * Purpose
- * Lists internal JSON drawings. Tap to load.
+# InternalDocRoutes – open/save JSON *inside app storage*
+ **Purpose**: UI for listing and saving JSON drawings stored **internally** (app sandbox).
+ **Contract**
+- No SAF here. Uses [InternalStorage] (app-private files dir).
+- Emits navigation completion via [onFinished].
+- ViewModel owns JSON shape/version (importJson/exportJson).
+- Names are unique to avoid conflicts with SAF routes.
  */
+
+/* ───────────────────── OPEN (from app storage) ───────────────────── */
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OpenInternalRoute(
+fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
     nav: NavController,
     vm: ShaftViewModel,
     onFinished: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
-    val files by remember { mutableStateOf(InternalStorage.list(ctx)) }
+    val scope = rememberCoroutineScope()
+    var files by remember { mutableStateOf(listOf<String>()) }
+
+    // Load list once on enter (keeps behavior the same as your original)
+    LaunchedEffect(Unit) { files = InternalStorage.list(ctx) }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Open drawing") }) }) { pad ->
-        LazyColumn(Modifier.padding(pad).padding(16.dp)) {
+        LazyColumn(
+            modifier = Modifier
+                .padding(pad)
+                .padding(16.dp)
+        ) {
             if (files.isEmpty()) {
                 item { Text("No saved drawings yet.", style = MaterialTheme.typography.bodyMedium) }
             } else {
@@ -51,7 +61,9 @@ fun OpenInternalRoute(
                             .fillMaxWidth()
                             .clickable {
                                 scope.launch {
-                                    val text = withContext(Dispatchers.IO) { InternalStorage.load(ctx, name) }
+                                    val text = withContext(Dispatchers.IO) {
+                                        InternalStorage.load(ctx, name)
+                                    }
                                     vm.importJson(text)
                                     onFinished()
                                 }
@@ -69,21 +81,18 @@ fun OpenInternalRoute(
     }
 }
 
-/**
- * SaveInternalRoute
- *
- * Purpose
- * “Save As” UI for internal JSON drawings.
- */
+/* ───────────────────── SAVE (to app storage) ───────────────────── */
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SaveInternalRoute(
+fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
     nav: NavController,
     vm: ShaftViewModel,
     onFinished: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     var name by remember {
         val default = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
         mutableStateOf(TextFieldValue("Shaft_$default.json"))
@@ -91,7 +100,12 @@ fun SaveInternalRoute(
     var error by remember { mutableStateOf<String?>(null) }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Save drawing") }) }) { pad ->
-        Column(Modifier.padding(pad).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(pad)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             OutlinedTextField(
                 value = name,
                 onValueChange = {
@@ -100,16 +114,19 @@ fun SaveInternalRoute(
                 },
                 label = { Text("File name (.json)") },
                 isError = error != null,
-                supportingText = { if (error != null) Text(error!!) }
+                supportingText = { if (error != null) Text(error!!) },
+                modifier = Modifier.fillMaxWidth()
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = {
                     val n = name.text.trim()
                     when {
                         n.isEmpty() -> error = "Enter a file name."
-                        !n.endsWith(".json") -> error = "Name must end with .json"
+                        !n.endsWith(".json", ignoreCase = true) -> error = "Name must end with .json"
                         else -> scope.launch {
-                            withContext(Dispatchers.IO) { InternalStorage.save(ctx, n, vm.exportJson()) }
+                            withContext(Dispatchers.IO) {
+                                InternalStorage.save(ctx, n, vm.exportJson())
+                            }
                             onFinished()
                         }
                     }

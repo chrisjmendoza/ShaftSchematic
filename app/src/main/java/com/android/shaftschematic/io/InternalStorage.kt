@@ -8,9 +8,22 @@ import java.io.File
  * InternalStorage
  *
  * Purpose
- * Private JSON document storage for ShaftSchematic.
+ * Provides private JSON document storage for ShaftSchematic inside the app sandbox.
+ *
  * Location: <filesDir>/shafts/
+ *
+ * Contract
+ * - Handles only .json text documents.
+ * - Creates its directory lazily on first access.
+ * - Does not perform threading; callers must dispatch to Dispatchers.IO.
+ * - No external permissions required.
+ * - Not responsible for JSON schema; ViewModel handles serialization.
+ *
+ * Non-Goals
+ * - No SAF, sharing, or export features (those live in SafRoutes.kt).
+ * - No exception UI; errors propagate to caller.
  */
+
 object InternalStorage {
     private fun dir(ctx: Context): File = File(ctx.filesDir, "shafts").apply { mkdirs() }
 
