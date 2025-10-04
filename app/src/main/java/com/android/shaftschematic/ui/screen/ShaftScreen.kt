@@ -14,9 +14,32 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -26,29 +49,25 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.model.freeToEndMm
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
+import kotlin.math.round
 
 /**
- * ShaftScreen – UI Screen Layer
- * -----------------------------------
- * Presents the shaft editor surface and binds ViewModel state to user controls.
+ * ShaftScreen — Editor surface
  *
- * Contract: docs/ShaftScreen.md (v0.3, 2025-10-04)
+ * Responsibilities
+ * • Header row (Unit selector + Grid toggle; unit selector disables when locked)
+ * • Preview drawing area (renderShaft(spec, unit))
+ * • Overall length field (unit-aware; commits mm)
+ * • Project fields (commit-on-blur / IME Done)
+ * • Editable component cards including Remove buttons
+ * • Add-component FAB floating above the keyboard/nav bar
  *
- * Responsibilities:
- *  • Header row with unit selector and grid toggle.
- *  • Fixed preview area rendering via renderShaft(spec, unit).
- *  • Scrollable form area with overall length, project info, and unified component list.
- *  • ComponentCard handles its own top-right remove icon.
- *  • FloatingActionButton opens the Add-Chooser dialog.
- *
- * Invariants:
- *  • Model and ViewModel data are canonical millimeters (mm).
- *  • All unit conversions occur only at the UI edge.
- *  • Text fields commit on blur or IME Done (no live writes).
- *  • Renderer and layout layers are mm-only (no unit logic here).
+ * Invariants
+ * • Canonical data & rendering units are millimeters (mm).
+ * • All unit conversions happen only at the UI edge (format/parse).
+ * • No file I/O here. Save/Load/PDF live in routes/host.
  */
 
 @Composable
@@ -56,6 +75,7 @@ fun ShaftScreen(
     // State
     spec: ShaftSpec,
     unit: UnitSystem,
+    unitLocked: Boolean,
     customer: String,
     vessel: String,
     jobNumber: String,
@@ -69,22 +89,22 @@ fun ShaftScreen(
     onSetVessel: (String) -> Unit,
     onSetJobNumber: (String) -> Unit,
     onSetNotes: (String) -> Unit,
-    onSetOverallLengthRaw: (String) -> Unit,
+    onSetOverallLengthRaw: (String) -> Unit,   // legacy-friendly
     onSetOverallLengthMm: (Float) -> Unit,
 
-    // Add
+    // Adds (all mm)
     onAddBody: (Float, Float, Float) -> Unit,
     onAddTaper: (Float, Float, Float, Float) -> Unit,
     onAddThread: (Float, Float, Float, Float) -> Unit,
     onAddLiner: (Float, Float, Float) -> Unit,
 
-    // Update
+    // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
 
-    // Remove
+    // Removes
     onRemoveBody: (Int) -> Unit,
     onRemoveTaper: (Int) -> Unit,
     onRemoveThread: (Int) -> Unit,
@@ -94,13 +114,15 @@ fun ShaftScreen(
     renderShaft: @Composable (ShaftSpec, UnitSystem) -> Unit,
     snackbarHostState: SnackbarHostState
 ) {
-    var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    var chooserOpen by rememberSaveable { mutableStateOf(false) }
+    val scroll = rememberScrollState()
 
     Scaffold(
         topBar = {
             HeaderRow(
                 unit = unit,
+                unitLocked = unitLocked,
                 gridChecked = showGrid,
                 onUnitSelected = onSetUnit,
                 onToggleGrid = onToggleGrid
@@ -125,9 +147,9 @@ fun ShaftScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner)
-                .padding(16.dp) // no .imePadding here
+                .padding(16.dp),
         ) {
-            // — Fixed preview only —
+            // Preview (fixed height)
             PreviewCard(
                 showGrid = showGrid,
                 gridStepDp = 16.dp,
@@ -136,126 +158,128 @@ fun ShaftScreen(
                 renderShaft = renderShaft,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 120.dp, max = 200.dp)
-                    .aspectRatio(3f)  // wide, low profile
+                    .heightIn(min = 140.dp, max = 200.dp)
             )
 
             Spacer(Modifier.height(12.dp))
             HorizontalDivider()
             Spacer(Modifier.height(12.dp))
 
-            // — Everything below is scrollable and IME-aware —
-            Box(
+            // Scrollable editor content; apply IME padding here (not on whole screen)
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .verticalScroll(scroll)
+                    .imePadding(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .imePadding(), // <— apply IME padding ONLY to the scroll area
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Overall Length (moved into scrollable area)
-                    var lengthText by remember(unit, spec.overallLengthMm) {
-                        mutableStateOf(formatDisplay(spec.overallLengthMm, unit))
-                    }
-                    OutlinedTextField(
-                        value = lengthText,
-                        onValueChange = { lengthText = it },
-                        label = { Text("Overall Length (${abbr(unit)})") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        keyboardActions = KeyboardActions(onDone = { onSetOverallLengthRaw(lengthText) }),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { f -> if (!f.isFocused) onSetOverallLengthRaw(lengthText) }
-                    )
-
-                    // Project Info (moved into scrollable area)
-                    ExpandableSection("Project Information", initiallyExpanded = false) {
-                        CommitTextField("Job Number", jobNumber, onSetJobNumber, Modifier.fillMaxWidth())
-                        CommitTextField("Customer", customer, onSetCustomer, Modifier.fillMaxWidth())
-                        CommitTextField("Vessel", vessel, onSetVessel, Modifier.fillMaxWidth())
-                        CommitTextField(
-                            "Notes",
-                            notes,
-                            onSetNotes,
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = false,
-                            minHeight = 88.dp
-                        )
-                    }
-
-                    Text("Components", style = MaterialTheme.typography.titleMedium)
-
-                    ComponentsUnifiedList(
-                        spec = spec,
-                        unit = unit,
-                        onUpdateBody = onUpdateBody,
-                        onUpdateTaper = onUpdateTaper,
-                        onUpdateThread = onUpdateThread,
-                        onUpdateLiner = onUpdateLiner,
-                        onRemoveBody = onRemoveBody,
-                        onRemoveTaper = onRemoveTaper,
-                        onRemoveThread = onRemoveThread,
-                        onRemoveLiner = onRemoveLiner
-                    )
-
-                    Spacer(Modifier.height(8.dp))
+                // Overall Length (unit-aware display; commit mm)
+                var lengthText by remember(unit, spec.overallLengthMm) {
+                    mutableStateOf(formatDisplay(spec.overallLengthMm, unit))
                 }
+                OutlinedTextField(
+                    value = lengthText,
+                    onValueChange = { lengthText = it },
+                    label = { Text("Overall Length (${abbr(unit)})") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    keyboardActions = KeyboardActions(onDone = { onSetOverallLengthRaw(lengthText) }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { f -> if (!f.isFocused) onSetOverallLengthRaw(lengthText) }
+                )
+
+                // Project Info
+                ExpandableSection("Project Information (optional)", initiallyExpanded = false) {
+                    CommitTextField("Job Number", jobNumber, onSetJobNumber, Modifier.fillMaxWidth())
+                    CommitTextField("Customer", customer, onSetCustomer, Modifier.fillMaxWidth())
+                    CommitTextField("Vessel",   vessel,   onSetVessel,   Modifier.fillMaxWidth())
+                    CommitTextField(
+                        label = "Notes",
+                        initial = notes,
+                        onCommit = onSetNotes,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
+                        minHeight = 88.dp
+                    )
+                }
+
+                Text("Components", style = MaterialTheme.typography.titleMedium)
+
+                // Editable component cards (commit-on-blur; remove buttons)
+                ComponentsUnifiedList(
+                    spec = spec,
+                    unit = unit,
+                    onUpdateBody = onUpdateBody,
+                    onUpdateTaper = onUpdateTaper,
+                    onUpdateThread = onUpdateThread,
+                    onUpdateLiner = onUpdateLiner,
+                    onRemoveBody = onRemoveBody,
+                    onRemoveTaper = onRemoveTaper,
+                    onRemoveThread = onRemoveThread,
+                    onRemoveLiner = onRemoveLiner
+                )
+
+                Spacer(Modifier.height(8.dp))
             }
         }
     }
 
-        if (chooserOpen) {
-            val d = computeAddDefaults(spec)
-            InlineAddChooserDialog(
-                onDismiss = { chooserOpen = false },
-                onAddBody = {
-                    chooserOpen = false
-                    onAddBody(d.startMm, 100f, d.lastDiaMm)
-                    scope.launch { /* you can scroll to top of list if desired */ }
-                },
-                onAddLiner = {
-                    chooserOpen = false
-                    onAddLiner(d.startMm, 100f, d.lastDiaMm)
-                },
-                onAddThread = {
-                    chooserOpen = false
-                    onAddThread(d.startMm, 150f, d.lastDiaMm, 25.4f / 4f) // default 10 TPI
-                },
-                onAddTaper = {
-                    chooserOpen = false
-                    val set = d.lastDiaMm
-                    val let = set + (100f / 12f) // ~1:12 over 100 mm
-                    onAddTaper(d.startMm, 100f, set, let)
-                }
-            )
-        }
+    if (chooserOpen) {
+        val d = computeAddDefaults(spec)
+        val defaultLenMm = if (unit == UnitSystem.INCHES) 16f * 25.4f else 100f
+        val defaultThreadLenMm = 32f
+        val defaultPitchMm = 25.4f / 4f // 4 TPI
+
+        InlineAddChooserDialog(
+            onDismiss = { chooserOpen = false },
+            onAddBody = {
+                chooserOpen = false
+                onAddBody(d.startMm, defaultLenMm, d.lastDiaMm)
+                scope.launch { scroll.animateScrollTo(0) }
+            },
+            onAddLiner = {
+                chooserOpen = false
+                onAddLiner(d.startMm, defaultLenMm, d.lastDiaMm)
+                scope.launch { scroll.animateScrollTo(0) }
+            },
+            onAddThread = {
+                chooserOpen = false
+                onAddThread(d.startMm, defaultThreadLenMm, d.lastDiaMm, defaultPitchMm)
+                scope.launch { scroll.animateScrollTo(0) }
+            },
+            onAddTaper = {
+                chooserOpen = false
+                val len = defaultLenMm
+                val setDiaMm = d.lastDiaMm
+                val letDiaMm = setDiaMm + (len / 12f)
+                onAddTaper(d.startMm, len, setDiaMm, letDiaMm)
+                scope.launch { scroll.animateScrollTo(0) }
+            }
+        )
     }
+}
 
-
-/* ───────────────────────── Header ───────────────────────── */
+/* ───────────────── Header (Unit + Grid) ───────────────── */
 
 @Composable
 private fun HeaderRow(
     unit: UnitSystem,
+    unitLocked: Boolean,
     gridChecked: Boolean,
     onUnitSelected: (UnitSystem) -> Unit,
     onToggleGrid: (Boolean) -> Unit
 ) {
-    // Keep this area visually slim: no tonal surface band, minimal height & padding.
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp) // trimmed
-            .heightIn(min = 44.dp),                       // slimmer strip
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .heightIn(min = 44.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.End
     ) {
-        UnitSegment(unit = unit, onUnitSelected = onUnitSelected)
+        UnitSegment(unit = unit, enabled = !unitLocked, onUnitSelected = onUnitSelected)
         Spacer(Modifier.width(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Grid")
@@ -266,19 +290,20 @@ private fun HeaderRow(
 }
 
 @Composable
-private fun UnitSegment(unit: UnitSystem, onUnitSelected: (UnitSystem) -> Unit) {
+private fun UnitSegment(
+    unit: UnitSystem,
+    enabled: Boolean,
+    onUnitSelected: (UnitSystem) -> Unit
+) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(999.dp),
         tonalElevation = 1.dp
     ) {
-        Row(
-            Modifier.height(36.dp).padding(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            UnitChip("mm", UnitSystem.MILLIMETERS, unit, onUnitSelected)
+        Row(Modifier.height(36.dp).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            UnitChip("mm", UnitSystem.MILLIMETERS, unit, enabled, onUnitSelected)
             Spacer(Modifier.width(4.dp))
-            UnitChip("in", UnitSystem.INCHES, unit, onUnitSelected)
+            UnitChip("in", UnitSystem.INCHES, unit, enabled, onUnitSelected)
         }
     }
 }
@@ -288,6 +313,7 @@ private fun UnitChip(
     label: String,
     chipUnit: UnitSystem,
     current: UnitSystem,
+    enabled: Boolean,
     onUnitSelected: (UnitSystem) -> Unit
 ) {
     val selected = chipUnit == current
@@ -302,12 +328,12 @@ private fun UnitChip(
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier
                 .padding(horizontal = 12.dp, vertical = 6.dp)
-                .clickable { onUnitSelected(chipUnit) }
+                .let { if (enabled) it.clickable { onUnitSelected(chipUnit) } else it }
         )
     }
 }
 
-/* ─────────────── Preview + Free-to-End badge ─────────────── */
+/* ───────────────── Preview ───────────────── */
 
 @Composable
 private fun PreviewCard(
@@ -325,12 +351,9 @@ private fun PreviewCard(
     ) {
         Box(Modifier.fillMaxSize().background(Color.Transparent)) {
             if (showGrid) {
-                // Read composition locals (MaterialTheme) OUTSIDE the Canvas
                 val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-                val step = gridStepDp
-
                 Canvas(Modifier.fillMaxSize()) {
-                    val stepPx = step.toPx()
+                    val stepPx = gridStepDp.toPx()
                     var x = 0f
                     while (x <= size.width) {
                         drawLine(gridColor, Offset(x, 0f), Offset(x, size.height))
@@ -344,30 +367,11 @@ private fun PreviewCard(
                 }
             }
             renderShaft(spec, unit)
-
-            val freeMm  = spec.freeToEndMm()
-            val freeTxt = formatDisplay(freeMm, unit)
-
-            Surface(
-                tonalElevation = 2.dp,
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)   // <-- was TopStart
-                    .padding(top = 6.dp)          // a bit of breathing room
-            ) {
-                Text(
-                    text = "Free to end: $freeTxt ${abbr(unit)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
         }
     }
 }
 
-/* ─────────────── Unified Components List (no grouping) ─────────────── */
+/* ───────────────── Components (editable + remove) ───────────────── */
 
 private enum class RowKind { BODY, TAPER, THREAD, LINER }
 private data class RowRef(val kind: RowKind, val index: Int, val start: Float)
@@ -385,22 +389,20 @@ private fun ComponentsUnifiedList(
     onRemoveThread: (Int) -> Unit,
     onRemoveLiner: (Int) -> Unit,
 ) {
+    // Display by start position so the list reads like the drawing left→right.
     val rows = buildList {
         spec.bodies.forEachIndexed  { i, b  -> add(RowRef(RowKind.BODY,   i, b.startFromAftMm)) }
         spec.tapers.forEachIndexed  { i, t  -> add(RowRef(RowKind.TAPER,  i, t.startFromAftMm)) }
         spec.threads.forEachIndexed { i, th -> add(RowRef(RowKind.THREAD, i, th.startFromAftMm)) }
         spec.liners.forEachIndexed  { i, ln -> add(RowRef(RowKind.LINER,  i, ln.startFromAftMm)) }
-    }.sortedByDescending { it.start }
+    }.sortedBy { it.start } // ascending along the shaft
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         rows.forEach { row ->
             when (row.kind) {
                 RowKind.BODY -> {
                     val b = spec.bodies[row.index]
-                    ComponentCard(
-                        title = "Body #${row.index + 1}",
-                        onRemove = { onRemoveBody(row.index) }
-                    ) {
+                    ComponentCard("Body #${row.index + 1}", onRemove = { onRemoveBody(row.index) }) {
                         CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let { onUpdateBody(row.index, it, b.lengthMm, b.diaMm) }
                         }
@@ -414,10 +416,7 @@ private fun ComponentsUnifiedList(
                 }
                 RowKind.TAPER -> {
                     val t = spec.tapers[row.index]
-                    ComponentCard(
-                        title = "Taper #${row.index + 1}",
-                        onRemove = { onRemoveTaper(row.index) }
-                    ) {
+                    ComponentCard("Taper #${row.index + 1}", onRemove = { onRemoveTaper(row.index) }) {
                         CommitNum("Start (${abbr(unit)})", disp(t.startFromAftMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let { onUpdateTaper(row.index, it, t.lengthMm, t.startDiaMm, t.endDiaMm) }
                         }
@@ -435,10 +434,7 @@ private fun ComponentsUnifiedList(
                 RowKind.THREAD -> {
                     val th = spec.threads[row.index]
                     val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
-                    ComponentCard(
-                        title = "Thread #${row.index + 1}",
-                        onRemove = { onRemoveThread(row.index) }
-                    ) {
+                    ComponentCard("Thread #${row.index + 1}", onRemove = { onRemoveThread(row.index) }) {
                         CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let { onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm) }
                         }
@@ -450,23 +446,14 @@ private fun ComponentsUnifiedList(
                         }
                         CommitNum("TPI", tpiDisplay) { s ->
                             parseFractionOrDecimal(s)?.takeIf { it > 0f }?.let { tpi ->
-                                onUpdateThread(
-                                    row.index,
-                                    th.startFromAftMm,
-                                    th.lengthMm,
-                                    th.majorDiaMm,
-                                    tpiToPitchMm(tpi)
-                                )
+                                onUpdateThread(row.index, th.startFromAftMm, th.lengthMm, th.majorDiaMm, tpiToPitchMm(tpi))
                             }
                         }
                     }
                 }
                 RowKind.LINER -> {
                     val ln = spec.liners[row.index]
-                    ComponentCard(
-                        title = "Liner #${row.index + 1}",
-                        onRemove = { onRemoveLiner(row.index) }
-                    ) {
+                    ComponentCard("Liner #${row.index + 1}", onRemove = { onRemoveLiner(row.index) }) {
                         CommitNum("Start (${abbr(unit)})", disp(ln.startFromAftMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let { onUpdateLiner(row.index, it, ln.lengthMm, ln.odMm) }
                         }
@@ -483,8 +470,6 @@ private fun ComponentsUnifiedList(
     }
 }
 
-/* Small card wrapper for component rows */
-/* Small card wrapper for component rows */
 @Composable
 private fun ComponentCard(
     title: String,
@@ -497,38 +482,26 @@ private fun ComponentCard(
         shape = RoundedCornerShape(16.dp)
     ) {
         Box(Modifier.fillMaxWidth()) {
-            // Main content column
             Column(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp),
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 content()
             }
-
-            // Top-right remove icon (if provided)
             if (onRemove != null) {
                 IconButton(
                     onClick = onRemove,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp)
+                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Delete,
-                        contentDescription = "Remove",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                    Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
     }
 }
 
-
-/* ───────────── Collapsible section + commit-on-blur text fields ───────────── */
+/* ───────────────── Sections & Fields ───────────────── */
 
 @Composable
 private fun ExpandableSection(
@@ -602,7 +575,7 @@ private fun CommitNum(
     )
 }
 
-/* ───────────── Add chooser dialog (kept LOCAL to this file) ───────────── */
+/* ───────────────── Add chooser ───────────────── */
 
 @Composable
 private fun InlineAddChooserDialog(
@@ -628,7 +601,7 @@ private fun InlineAddChooserDialog(
     )
 }
 
-/* ───────────── Helpers: units, parsing, defaults ───────────── */
+/* ───────────────── Helpers: units, parsing, defaults ───────────────── */
 
 private fun abbr(unit: UnitSystem) = if (unit == UnitSystem.MILLIMETERS) "mm" else "in"
 
@@ -646,7 +619,7 @@ private fun toMmOrNull(text: String, unit: UnitSystem): Float? {
 
 private fun Float.fmtTrim(d: Int) = "%.${d}f".format(this).trimEnd('0').trimEnd('.')
 
-/** Accepts "12", "3/4", "1.5" or "1:12". */
+/** Accepts "12", "3/4", "1.5", or "1:12". */
 private fun parseFractionOrDecimal(input: String): Float? {
     val t = input.trim(); if (t.isEmpty()) return null
     val colon = t.indexOf(':')
@@ -670,17 +643,21 @@ private fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) 25.4f / tpi else 0f
 @Suppress("unused")
 private fun pitchMmToTpi(pitchMm: Float): Float = if (pitchMm > 0f) 25.4f / pitchMm else 0f
 
-/** Defaults for new components (in mm). */
+/** Compute reasonable defaults for new components (mm). */
 private data class AddDefaults(val startMm: Float, val lastDiaMm: Float)
 private fun computeAddDefaults(spec: ShaftSpec): AddDefaults {
-    val lastEnd = listOfNotNull(
-        spec.bodies.maxOfOrNull { it.startFromAftMm + it.lengthMm },
-        spec.tapers.maxOfOrNull { it.startFromAftMm + it.lengthMm },
-        spec.liners.maxOfOrNull { it.startFromAftMm + it.lengthMm },
-        spec.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm },
-    ).maxOrNull() ?: 0f
-    val lastDia = spec.bodies.lastOrNull()?.diaMm
-        ?: spec.tapers.lastOrNull()?.endDiaMm
-        ?: 25f
-    return AddDefaults(startMm = lastEnd, lastDiaMm = lastDia)
+    var end = 0f
+    spec.bodies.forEach  { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
+    spec.tapers.forEach  { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
+    spec.threads.forEach { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
+    spec.liners.forEach  { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
+
+    var dia = 50f
+    spec.bodies.firstOrNull  { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.diaMm }
+    spec.liners.firstOrNull  { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.odMm }
+    spec.threads.firstOrNull { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.majorDiaMm }
+    spec.tapers.firstOrNull  { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.endDiaMm }
+    if (dia == 50f && spec.bodies.isNotEmpty()) dia = spec.bodies.first().diaMm
+
+    return AddDefaults(startMm = end, lastDiaMm = dia)
 }

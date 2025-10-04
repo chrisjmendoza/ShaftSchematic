@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.nav
 
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Text
@@ -15,10 +16,14 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * One-shot SAF routes.
- * Keep exactly these signatures to avoid overload ambiguity.
+ * SAF one-shot “routes” used by the nav graph.
+ *
+ * Contract:
+ * - Exactly one public Composable for open and one for save — no overloads.
+ * - UI layer only reads/writes bytes; JSON shape/versioning lives in the ViewModel.
+ * - Caller navigates to this route; the Composable immediately launches the SAF
+ *   contract, then calls [onFinished] (typically popBackStack) when done.
  */
-
 @Composable
 fun OpenDocumentRoute(
     nav: NavController,
@@ -33,6 +38,10 @@ fun OpenDocumentRoute(
     ) { uri ->
         runCatching {
             if (uri != null) {
+                // Optional: persist read permission so future reads work without relaunch
+                val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, flags)
+
                 context.contentResolver.openInputStream(uri)?.use { inp ->
                     vm.importJson(inp.bufferedReader().readText())
                 }

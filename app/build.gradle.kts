@@ -64,6 +64,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.datastore.preferences)
 
     // Compose BOM controls versions of Compose artifacts below
     implementation(platform(libs.androidx.compose.bom))

@@ -12,4 +12,7 @@ enum class UnitSystem(val displayName: String) {
 
     abstract fun toMillimeters(value: Double): Double
     abstract fun fromMillimeters(value: Double): Double
+
+    @kotlinx.serialization.Serializable
+    enum class UnitSystem { MILLIMETERS, INCHES }
 }

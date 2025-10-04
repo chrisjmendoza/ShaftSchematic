@@ -13,10 +13,13 @@ composeBom = "2024.09.00"
 kotlinx-serialization = "1.9.0"
 navigationCompose = "2.9.5"
 roomCompiler = "2.8.1"
+serialization = "1.6.3"
+datastore = "1.1.1"          # current stable
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }

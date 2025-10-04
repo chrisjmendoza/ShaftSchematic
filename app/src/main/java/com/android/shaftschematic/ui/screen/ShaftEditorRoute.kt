@@ -1,4 +1,4 @@
-// app/src/main/java/com/android/shaftschematic/ui/screen/ShaftEditorRoute.kt
+// file: app/src/main/java/com/android/shaftschematic/ui/screen/ShaftEditorRoute.kt
 package com.android.shaftschematic.ui.screen
 
 import androidx.compose.foundation.layout.Box
@@ -19,11 +19,16 @@ import com.android.shaftschematic.ui.shaft.ShaftRoute
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 
 /**
- * Wraps the legacy ShaftRoute with a top app bar.
- * Actions: Save (internal JSON) + Export PDF (SAF).
+ * ShaftEditorRoute
+ *
+ * Purpose
+ * Wraps the editor body with a top app bar for navigation and actions.
+ *
+ * Contract
+ * - This route owns the app bar only.
+ * - Save/Open/PDF actions delegate to navigation; no I/O here.
  */
 @OptIn(ExperimentalMaterial3Api::class)
-// app/src/main/java/com/android/shaftschematic/ui/screen/ShaftEditorRoute.kt
 @Composable
 fun ShaftEditorRoute(
     vm: ShaftViewModel,
@@ -44,10 +49,9 @@ fun ShaftEditorRoute(
                 }
             )
         }
-    ) { pad ->                         // ✅ get outer scaffold padding
-        Box(Modifier.padding(pad)) {   // ✅ apply it to your editor body
-            ShaftRoute(vm = vm)        //    (ShaftRoute doesn’t take a modifier)
+    ) { pad ->
+        Box(Modifier.padding(pad)) {
+            ShaftRoute(vm = vm)
         }
     }
 }
-

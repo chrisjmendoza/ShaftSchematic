@@ -1,15 +1,21 @@
 package com.android.shaftschematic.ui.viewmodel
 
+import android.app.Application
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.android.shaftschematic.data.SettingsStore
+import com.android.shaftschematic.data.SettingsStore.UnitPref
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.UUID
@@ -18,69 +24,108 @@ import kotlin.math.max
 /**
  * File: ShaftViewModel.kt
  * Layer: ViewModel
- * Purpose: Own the current [ShaftSpec] (canonical mm), expose it as reactive state for the UI,
- * and provide mutation + persistence helpers that respect the app contract.
  *
- * Contract highlights
- * • Canonical units are millimeters; conversions happen at the UI edge.
- * • Newest-on-top lists for components.
- * • ViewModel exposes StateFlow only; it does not perform rendering or View work.
- * • Save/Load uses a versioned JSON document to preserve forward/backward compatibility.
+ * Purpose
+ * Own the current [ShaftSpec] (canonical **mm**) and editor UI state, provide mutation
+ * helpers, and persist app settings (default unit + grid). JSON save/load remembers
+ * the shaft’s preferred unit and whether unit selection is locked for that document.
+ *
+ * Contract
+ * - Canonical storage and rendering units are **millimeters**. Conversions only at the UI edge.
+ * - Save/Load uses a versioned JSON envelope to remain backward compatible.
+ * - Public API from previous versions is preserved (adds, updates, removes, flows).
  */
-class ShaftViewModel : ViewModel() {
+class ShaftViewModel(
+    application: Application
+) : AndroidViewModel(application) {
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // Public state (observed by Compose)
+    // Reactive state (observed by Compose)
     // ─────────────────────────────────────────────────────────────────────────────
 
     private val _spec = MutableStateFlow(ShaftSpec())
-    val spec: StateFlow<ShaftSpec> = _spec
+    val spec: StateFlow<ShaftSpec> = _spec.asStateFlow()
 
     private val _unit = MutableStateFlow(UnitSystem.MILLIMETERS)
-    val unit: StateFlow<UnitSystem> = _unit
+    val unit: StateFlow<UnitSystem> = _unit.asStateFlow()
+
+    private val _unitLocked = MutableStateFlow(false)
+    val unitLocked: StateFlow<Boolean> = _unitLocked.asStateFlow()
 
     private val _showGrid = MutableStateFlow(false)
-    val showGrid: StateFlow<Boolean> = _showGrid
+    val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
 
     private val _customer = MutableStateFlow("")
-    val customer: StateFlow<String> = _customer
+    val customer: StateFlow<String> = _customer.asStateFlow()
 
     private val _vessel = MutableStateFlow("")
-    val vessel: StateFlow<String> = _vessel
+    val vessel: StateFlow<String> = _vessel.asStateFlow()
 
     private val _jobNumber = MutableStateFlow("")
-    val jobNumber: StateFlow<String> = _jobNumber
+    val jobNumber: StateFlow<String> = _jobNumber.asStateFlow()
 
     private val _notes = MutableStateFlow("")
-    val notes: StateFlow<String> = _notes
+    val notes: StateFlow<String> = _notes.asStateFlow()
 
     // ─────────────────────────────────────────────────────────────────────────────
-// UI setters (commit-on-blur, unit-agnostic)
-// ─────────────────────────────────────────────────────────────────────────────
+    // Settings persistence (default unit + show grid)
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    init {
+        // Observe persisted defaults. Apply only when doc isn't unit-locked.
+        viewModelScope.launch {
+            SettingsStore.defaultUnitFlow(getApplication()).collectLatest { pref ->
+                if (!_unitLocked.value) {
+                    val u = if (pref == UnitPref.INCHES) UnitSystem.INCHES else UnitSystem.MILLIMETERS
+                    setUnit(u, persist = false) // avoid ping-ponging DataStore
+                }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showGridFlow(getApplication()).collectLatest { persisted ->
+                setShowGrid(persisted, persist = false)
+            }
+        }
+    }
 
     /** Sets the UI unit (preview/labels only). Model remains canonical mm. */
-    fun setUnit(newUnit: UnitSystem) {
+    fun setUnit(newUnit: UnitSystem, persist: Boolean = true) {
         if (newUnit != _unit.value) _unit.value = newUnit
+        if (persist && !_unitLocked.value) {
+            viewModelScope.launch {
+                val pref = if (newUnit == UnitSystem.INCHES) UnitPref.INCHES else UnitPref.MILLIMETERS
+                SettingsStore.setDefaultUnit(getApplication(), pref)
+            }
+        }
     }
 
+    /** Convenience toggle for quick unit flips (still respects [unitLocked]). */
     fun toggleUnit() {
-        _unit.value = if (_unit.value == UnitSystem.MILLIMETERS) UnitSystem.INCHES else UnitSystem.MILLIMETERS
+        if (_unitLocked.value) return
+        setUnit(
+            if (_unit.value == UnitSystem.MILLIMETERS) UnitSystem.INCHES else UnitSystem.MILLIMETERS
+        )
     }
 
-    /** Toggles grid visibility in Preview. */
-    fun setShowGrid(show: Boolean) {
+    /** Toggles grid visibility in Preview (persisted in Settings). */
+    fun setShowGrid(show: Boolean, persist: Boolean = true) {
         _showGrid.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowGrid(getApplication(), show) }
+        }
     }
 
-    /** Client metadata (footer + file metadata). */
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Client metadata (free-form)
+    // ─────────────────────────────────────────────────────────────────────────────
+
     fun setCustomer(value: String) { _customer.value = value.trim() }
     fun setVessel(value: String)   { _vessel.value = value.trim() }
     fun setJobNumber(value: String){ _jobNumber.value = value.trim() }
     fun setNotes(value: String)    { _notes.value = value }
 
-
     // ─────────────────────────────────────────────────────────────────────────────
-    // Overall length
+    // Overall length (mm)
     // ─────────────────────────────────────────────────────────────────────────────
 
     /** Set shaft overall length (mm). Clamped to ≥ 0. */
@@ -104,6 +149,7 @@ class ShaftViewModel : ViewModel() {
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Component add/update/remove — newest on top
+    // (All params in mm; UI converts at the edge)
     // ─────────────────────────────────────────────────────────────────────────────
 
     // Bodies
@@ -124,6 +170,13 @@ class ShaftViewModel : ViewModel() {
     }.also { ensureOverall() }
     fun removeBodyAt(index: Int) = _spec.update { s ->
         if (index !in s.bodies.indices) s else s.copy(bodies = s.bodies.toMutableList().apply { removeAt(index) })
+    }
+    fun removeBody(index: Int) {
+        _spec.update { s ->
+            if (index !in s.bodies.indices) s
+            else s.copy(bodies = s.bodies.toMutableList().apply { removeAt(index) })
+        }
+        ensureOverall()
     }
 
     // Tapers
@@ -151,6 +204,13 @@ class ShaftViewModel : ViewModel() {
     fun removeTaperAt(index: Int) = _spec.update { s ->
         if (index !in s.tapers.indices) s else s.copy(tapers = s.tapers.toMutableList().apply { removeAt(index) })
     }
+    fun removeTaper(index: Int) {
+        _spec.update { s ->
+            if (index !in s.tapers.indices) s
+            else s.copy(tapers = s.tapers.toMutableList().apply { removeAt(index) })
+        }
+        ensureOverall()
+    }
 
     // Threads
     fun addThread(thread: ThreadSpec) = _spec.update { it.copy(threads = listOf(thread) + it.threads) }
@@ -176,6 +236,13 @@ class ShaftViewModel : ViewModel() {
     fun removeThreadAt(index: Int) = _spec.update { s ->
         if (index !in s.threads.indices) s else s.copy(threads = s.threads.toMutableList().apply { removeAt(index) })
     }
+    fun removeThread(index: Int) {
+        _spec.update { s ->
+            if (index !in s.threads.indices) s
+            else s.copy(threads = s.threads.toMutableList().apply { removeAt(index) })
+        }
+        ensureOverall()
+    }
 
     // Liners
     fun addLiner(liner: Liner) = _spec.update { it.copy(liners = listOf(liner) + it.liners) }
@@ -196,34 +263,6 @@ class ShaftViewModel : ViewModel() {
     fun removeLinerAt(index: Int) = _spec.update { s ->
         if (index !in s.liners.indices) s else s.copy(liners = s.liners.toMutableList().apply { removeAt(index) })
     }
-
-    private fun newId(): String = UUID.randomUUID().toString()
-
-    // Removes — preserve insertion order, guard index, keep model in mm
-    fun removeBody(index: Int) {
-        _spec.update { s ->
-            if (index !in s.bodies.indices) s
-            else s.copy(bodies = s.bodies.toMutableList().apply { removeAt(index) })
-        }
-        ensureOverall()
-    }
-
-    fun removeTaper(index: Int) {
-        _spec.update { s ->
-            if (index !in s.tapers.indices) s
-            else s.copy(tapers = s.tapers.toMutableList().apply { removeAt(index) })
-        }
-        ensureOverall()
-    }
-
-    fun removeThread(index: Int) {
-        _spec.update { s ->
-            if (index !in s.threads.indices) s
-            else s.copy(threads = s.threads.toMutableList().apply { removeAt(index) })
-        }
-        ensureOverall()
-    }
-
     fun removeLiner(index: Int) {
         _spec.update { s ->
             if (index !in s.liners.indices) s
@@ -232,23 +271,40 @@ class ShaftViewModel : ViewModel() {
         ensureOverall()
     }
 
+    private fun newId(): String = UUID.randomUUID().toString()
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // New document helper (choose unit, optionally lock)
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /** Start a brand-new shaft using [unit] for UI; lock UI unit if [lockUnit] is true. */
+    fun newShaft(unit: UnitSystem, lockUnit: Boolean = true) {
+        _spec.value = ShaftSpec() // your canonical blank spec (mm)
+        _unitLocked.value = lockUnit
+        setUnit(unit) // also updates default setting unless locked; we also persist below
+        if (lockUnit) {
+            viewModelScope.launch {
+                val pref = if (unit == UnitSystem.INCHES) UnitPref.INCHES else UnitPref.MILLIMETERS
+                SettingsStore.setDefaultUnit(getApplication(), pref)
+            }
+        }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Persistence — versioned JSON document (UI wires it to SAF)
     // ─────────────────────────────────────────────────────────────────────────────
 
+    /**
+     * JSON envelope (v1) that remembers the document's preferred UI unit and unitLock flag.
+     * The [spec] is always stored in **mm**.
+     */
     @Serializable
-    data class ShaftDocument(
+    private data class ShaftDocV1(
         val version: Int = 1,
-        val spec: ShaftSpec,
-        val meta: Meta = Meta()
-    ) {
-        @Serializable
-        data class Meta(
-            val createdAtEpochMs: Long = System.currentTimeMillis(),
-            val notes: String = ""
-        )
-    }
+        @kotlinx.serialization.SerialName("preferred_unit") val preferredUnit: UnitSystem = UnitSystem.INCHES,
+        @kotlinx.serialization.SerialName("unit_locked") val unitLocked: Boolean = true,
+        val spec: ShaftSpec
+    )
 
     private val json = Json {
         prettyPrint = true
@@ -256,13 +312,38 @@ class ShaftViewModel : ViewModel() {
         ignoreUnknownKeys = true
     }
 
-    /** Export the current state as a JSON string. Use UI's SAF to write it. */
-    fun exportJson(): String = json.encodeToString(ShaftDocument(spec = _spec.value))
+    /** Export the current state as a JSON string (mm spec + unit metadata). */
+    fun exportJson(): String = json.encodeToString(
+        ShaftDocV1(
+            preferredUnit = _unit.value,
+            unitLocked = _unitLocked.value,
+            spec = _spec.value
+        )
+    )
 
-    /** Import a JSON string (from SAF) and replace current spec. */
-    fun importJson(text: String) {
-        val doc = json.decodeFromString<ShaftDocument>(text)
-        _spec.value = doc.spec
+    /**
+     * Import a JSON string and replace current state.
+     * Tries envelope first, then falls back to legacy (spec-only) files.
+     */
+    fun importJson(raw: String) {
+        // Try new envelope first
+        runCatching { json.decodeFromString<ShaftDocV1>(raw) }
+            .onSuccess { doc ->
+                _spec.value = doc.spec
+                _unitLocked.value = doc.unitLocked
+                setUnit(doc.preferredUnit, persist = false)
+                return
+            }
+
+        // Back-compat: older files were just the spec
+        runCatching { json.decodeFromString<ShaftSpec>(raw) }
+            .onSuccess { legacy ->
+                _spec.value = legacy
+                _unitLocked.value = false // no lock info in legacy
+                // unit falls back to SettingsStore default (observer in init{})
+                return
+            }
+            .onFailure { throw it }
     }
 
     // --- Dev stubs kept for local testing (filesystem). Prefer SAF in UI.
@@ -275,6 +356,8 @@ class ShaftViewModel : ViewModel() {
         if (f.exists()) runCatching { importJson(f.readText()) }
     }
 
+
+
     // ─────────────────────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────────────────────
@@ -282,10 +365,10 @@ class ShaftViewModel : ViewModel() {
     /** Last occupied end among all components (mm). */
     private fun coverageEndMm(s: ShaftSpec): Float {
         var end = 0f
-        s.bodies.forEach   { end = max(end, it.startFromAftMm + it.lengthMm) }
-        s.tapers.forEach   { end = max(end, it.startFromAftMm + it.lengthMm) }
-        s.threads.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
-        s.liners.forEach   { end = max(end, it.startFromAftMm + it.lengthMm) }
+        s.bodies.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
+        s.tapers.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
+        s.threads.forEach { end = max(end, it.startFromAftMm + it.lengthMm) }
+        s.liners.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
         return end
     }
 }

@@ -10,21 +10,31 @@ import androidx.compose.material3.Surface
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.shaftschematic.ui.nav.AppNav
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.ShaftViewModelFactory
 
 /**
  * MainActivity
  *
  * Purpose
- * Single-activity host for Compose. Entrypoint renders AppNav.
+ * Single-activity host for the Compose UI. Creates the app-scoped [ShaftViewModel]
+ * using our factory (required because the ViewModel extends AndroidViewModel)
+ * and passes it to the navigation graph.
+ *
+ * Contract
+ * - No business logic here.
+ * - Do not perform file I/O or SAF work here.
+ * - ViewModel is created once per Activity and handed to AppNav.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
         setContent {
             MaterialTheme {
                 Surface {
-                    val vm: ShaftViewModel = viewModel()
+                    // IMPORTANT: use the factory so AndroidViewModel receives Application
+                    val vm: ShaftViewModel = viewModel(factory = ShaftViewModelFactory)
                     AppNav(vm = vm)
                 }
             }
