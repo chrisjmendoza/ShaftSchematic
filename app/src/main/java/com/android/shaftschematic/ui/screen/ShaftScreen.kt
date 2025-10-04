@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
@@ -30,20 +31,24 @@ import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
 
 /**
- * ShaftScreen
+ * ShaftScreen – UI Screen Layer
+ * -----------------------------------
+ * Presents the shaft editor surface and binds ViewModel state to user controls.
  *
- * Presents:
- *  • Header row (Unit toggle pills, Grid toggle)
- *  • Fixed preview with Free-to-End badge
- *  • Overall length + project info (fixed)
- *  • Scrollable Components list (mixed types, newest→top by startFromAftMm)
- *  • IME-safe FAB for adding components
+ * Contract: docs/ShaftScreen.md (v0.3, 2025-10-04)
  *
- * Contract:
- *  • Model values are millimeters; conversion happens at the UI edge.
- *  • No grouping in the list; components share one mixed order.
- *  • Text fields commit on blur or IME “Done”.
- *  • No new dependencies required (pure Material3 + Compose).
+ * Responsibilities:
+ *  • Header row with unit selector and grid toggle.
+ *  • Fixed preview area rendering via renderShaft(spec, unit).
+ *  • Scrollable form area with overall length, project info, and unified component list.
+ *  • ComponentCard handles its own top-right remove icon.
+ *  • FloatingActionButton opens the Add-Chooser dialog.
+ *
+ * Invariants:
+ *  • Model and ViewModel data are canonical millimeters (mm).
+ *  • All unit conversions occur only at the UI edge.
+ *  • Text fields commit on blur or IME Done (no live writes).
+ *  • Renderer and layout layers are mm-only (no unit logic here).
  */
 
 @Composable
@@ -132,7 +137,7 @@ fun ShaftScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = 200.dp)
-                    .aspectRatio(3.8f)  // wide, low profile
+                    .aspectRatio(3f)  // wide, low profile
             )
 
             Spacer(Modifier.height(12.dp))
@@ -241,24 +246,21 @@ private fun HeaderRow(
     onUnitSelected: (UnitSystem) -> Unit,
     onToggleGrid: (Boolean) -> Unit
 ) {
-    Surface(tonalElevation = 2.dp) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .heightIn(min = 56.dp)
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End
-        ) {
-            // Title removed here to avoid duplicate with the top app bar
-            UnitSegment(unit = unit, onUnitSelected = onUnitSelected)
-            Spacer(Modifier.width(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Grid")
-                Spacer(Modifier.width(6.dp))
-                Switch(checked = gridChecked, onCheckedChange = onToggleGrid)
-            }
+    // Keep this area visually slim: no tonal surface band, minimal height & padding.
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp) // trimmed
+            .heightIn(min = 44.dp),                       // slimmer strip
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End
+    ) {
+        UnitSegment(unit = unit, onUnitSelected = onUnitSelected)
+        Spacer(Modifier.width(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Grid")
+            Spacer(Modifier.width(6.dp))
+            Switch(checked = gridChecked, onCheckedChange = onToggleGrid)
         }
     }
 }
@@ -318,10 +320,10 @@ private fun PreviewCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        shape = RoundedCornerShape(2.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant)) {
+        Box(Modifier.fillMaxSize().background(Color.Transparent)) {
             if (showGrid) {
                 // Read composition locals (MaterialTheme) OUTSIDE the Canvas
                 val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
@@ -343,12 +345,8 @@ private fun PreviewCard(
             }
             renderShaft(spec, unit)
 
-            val freeMm = spec.freeToEndMm().coerceAtLeast(0f)
-            val freeText = if (unit == UnitSystem.MILLIMETERS) {
-                "${formatDisplay(freeMm, unit)} mm"
-            } else {
-                "${formatDisplay(freeMm / 25.4f, unit)} in"
-            }
+            val freeMm  = spec.freeToEndMm()
+            val freeTxt = formatDisplay(freeMm, unit)
 
             Surface(
                 tonalElevation = 2.dp,
@@ -359,7 +357,7 @@ private fun PreviewCard(
                     .padding(top = 6.dp)          // a bit of breathing room
             ) {
                 Text(
-                    text = "Free to end: $freeText",
+                    text = "Free to end: $freeTxt ${abbr(unit)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -399,7 +397,10 @@ private fun ComponentsUnifiedList(
             when (row.kind) {
                 RowKind.BODY -> {
                     val b = spec.bodies[row.index]
-                    ComponentCard("Body #${row.index + 1}") {
+                    ComponentCard(
+                        title = "Body #${row.index + 1}",
+                        onRemove = { onRemoveBody(row.index) }
+                    ) {
                         CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let { onUpdateBody(row.index, it, b.lengthMm, b.diaMm) }
                         }
@@ -409,18 +410,14 @@ private fun ComponentsUnifiedList(
                         CommitNum("Ø (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let { onUpdateBody(row.index, b.startFromAftMm, b.lengthMm, it) }
                         }
-                        TextButton(onClick = { onRemoveBody(row.index) }) { Text("Remove") }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = { onRemoveBody(row.index) }) { Text("Remove") }
                     }
                 }
                 RowKind.TAPER -> {
                     val t = spec.tapers[row.index]
-                    ComponentCard("Taper #${row.index + 1}") {
+                    ComponentCard(
+                        title = "Taper #${row.index + 1}",
+                        onRemove = { onRemoveTaper(row.index) }
+                    ) {
                         CommitNum("Start (${abbr(unit)})", disp(t.startFromAftMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let { onUpdateTaper(row.index, it, t.lengthMm, t.startDiaMm, t.endDiaMm) }
                         }
@@ -433,19 +430,15 @@ private fun ComponentsUnifiedList(
                         CommitNum("L.E.T. Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let { onUpdateTaper(row.index, t.startFromAftMm, t.lengthMm, t.startDiaMm, it) }
                         }
-                        TextButton(onClick = { onRemoveTaper(row.index) }) { Text("Remove") }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = { onRemoveBody(row.index) }) { Text("Remove") }
                     }
                 }
                 RowKind.THREAD -> {
                     val th = spec.threads[row.index]
                     val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
-                    ComponentCard("Thread #${row.index + 1}") {
+                    ComponentCard(
+                        title = "Thread #${row.index + 1}",
+                        onRemove = { onRemoveThread(row.index) }
+                    ) {
                         CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let { onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm) }
                         }
@@ -466,17 +459,14 @@ private fun ComponentsUnifiedList(
                                 )
                             }
                         }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            TextButton(onClick = { onRemoveBody(row.index) }) { Text("Remove") }
-                        }
                     }
                 }
                 RowKind.LINER -> {
                     val ln = spec.liners[row.index]
-                    ComponentCard("Liner #${row.index + 1}") {
+                    ComponentCard(
+                        title = "Liner #${row.index + 1}",
+                        onRemove = { onRemoveLiner(row.index) }
+                    ) {
                         CommitNum("Start (${abbr(unit)})", disp(ln.startFromAftMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let { onUpdateLiner(row.index, it, ln.lengthMm, ln.odMm) }
                         }
@@ -486,12 +476,6 @@ private fun ComponentsUnifiedList(
                         CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let { onUpdateLiner(row.index, ln.startFromAftMm, ln.lengthMm, it) }
                         }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            TextButton(onClick = { onRemoveBody(row.index) }) { Text("Remove") }
-                        }
                     }
                 }
             }
@@ -500,9 +484,11 @@ private fun ComponentsUnifiedList(
 }
 
 /* Small card wrapper for component rows */
+/* Small card wrapper for component rows */
 @Composable
 private fun ComponentCard(
     title: String,
+    onRemove: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
@@ -510,15 +496,37 @@ private fun ComponentCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
-            content()
+        Box(Modifier.fillMaxWidth()) {
+            // Main content column
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                content()
+            }
+
+            // Top-right remove icon (if provided)
+            if (onRemove != null) {
+                IconButton(
+                    onClick = onRemove,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "Remove",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
     }
 }
+
 
 /* ───────────── Collapsible section + commit-on-blur text fields ───────────── */
 
