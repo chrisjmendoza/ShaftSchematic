@@ -22,7 +22,7 @@ data class ShaftSpec(
     val tapers: List<Taper> = emptyList(),
 
     /** External threaded segments. */
-    val threads: List<ThreadSpec> = emptyList(),
+    val threads: List<Threads> = emptyList(),
 
     /** Outer sleeves/liners. */
     val liners: List<Liner> = emptyList(),

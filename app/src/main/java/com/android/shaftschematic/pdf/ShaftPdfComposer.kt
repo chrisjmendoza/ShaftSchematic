@@ -183,7 +183,7 @@ private fun drawTapers(
 
 private fun drawThreads(
     c: Canvas,
-    threads: List<ThreadSpec>,
+    threads: List<Threads>,
     cy: Float,
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
@@ -420,8 +420,8 @@ private fun pickAftFwdTapers(spec: ShaftSpec): Pair<Taper?, Taper?> {
     return aft to fwd
 }
 
-private fun findAftThread(spec: ShaftSpec): ThreadSpec? = spec.threads.minByOrNull { it.startFromAftMm }
-private fun findFwdThread(spec: ShaftSpec): ThreadSpec? = spec.threads.maxByOrNull { it.startFromAftMm + it.lengthMm }
+private fun findAftThread(spec: ShaftSpec): Threads? = spec.threads.minByOrNull { it.startFromAftMm }
+private fun findFwdThread(spec: ShaftSpec): Threads? = spec.threads.maxByOrNull { it.startFromAftMm + it.lengthMm }
 
 private fun letSet(t: Taper): Pair<Float, Float> {
     val let = max(t.startDiaMm, t.endDiaMm)

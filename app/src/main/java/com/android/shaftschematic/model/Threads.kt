@@ -19,7 +19,7 @@ import java.util.UUID
  *                          of starting shaft measurement after the thread when desired.
  */
 @Serializable
-data class ThreadSpec(
+data class Threads(
     override val id: String = UUID.randomUUID().toString(),
     override val startFromAftMm: Float = 0f,
     val majorDiaMm: Float = 0f,
@@ -33,5 +33,5 @@ data class ThreadSpec(
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /** Basic invariants for a ThreadSpec. */
-fun ThreadSpec.isValid(overallLengthMm: Float): Boolean =
+fun Threads.isValid(overallLengthMm: Float): Boolean =
     isWithin(overallLengthMm) && majorDiaMm >= 0f && pitchMm >= 0f

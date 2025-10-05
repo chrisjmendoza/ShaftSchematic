@@ -6,5 +6,5 @@ package com.android.shaftschematic.model
 val Body.odMm: Float
     get() = this.diaMm
 
-val ThreadSpec.odMm: Float
+val Threads.odMm: Float
     get() = this.majorDiaMm

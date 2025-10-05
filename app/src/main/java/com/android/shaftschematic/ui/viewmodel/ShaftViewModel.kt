@@ -1,27 +1,22 @@
 package com.android.shaftschematic.ui.viewmodel
 
 import android.app.Application
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.data.SettingsStore.UnitPref
 import com.android.shaftschematic.model.*
-import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
-import kotlinx.coroutines.flow.update
-import kotlin.math.max
+import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.io.File
 import java.util.UUID
 import kotlin.math.max
 
@@ -35,17 +30,15 @@ import kotlin.math.max
  * the shaft’s preferred unit and whether unit selection is locked for that document.
  *
  * Contract
- * - Canonical storage and rendering units are **millimeters**. Conversions only at the UI edge.
- * - Save/Load uses a versioned JSON envelope to remain backward compatible.
- * - Public API from previous versions is preserved (adds, updates, removes, flows).
+ * • Canonical storage and rendering units are **millimeters**. Convert only at the UI edge.
+ * • Save/Load uses a versioned JSON envelope to remain backward compatible.
+ * • Public API favored by the UI: index-based add/update/remove and newest-first UI order.
  */
-class ShaftViewModel(
-    application: Application
-) : AndroidViewModel(application) {
+class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
     // Reactive state (observed by Compose)
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
 
     private val _spec = MutableStateFlow(ShaftSpec())
     val spec: StateFlow<ShaftSpec> = _spec.asStateFlow()
@@ -75,13 +68,13 @@ class ShaftViewModel(
     val overallIsManual: StateFlow<Boolean> = _overallIsManual.asStateFlow()
     fun setOverallIsManual(v: Boolean) { _overallIsManual.value = v }
 
-    // NEW: cross-type UI order (stable IDs)
+    // Cross-type UI order (stable IDs) — source of truth for list rendering (newest-first).
     private val _componentOrder = MutableStateFlow<List<ComponentKey>>(emptyList())
-    val componentOrder = _componentOrder.asStateFlow()
+    val componentOrder: StateFlow<List<ComponentKey>> = _componentOrder.asStateFlow()
 
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
     // Settings persistence (default unit + show grid)
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
 
     init {
         // Observe persisted defaults. Apply only when doc isn't unit-locked.
@@ -111,14 +104,6 @@ class ShaftViewModel(
         }
     }
 
-    /** Convenience toggle for quick unit flips (still respects [unitLocked]). */
-    fun toggleUnit() {
-        if (_unitLocked.value) return
-        setUnit(
-            if (_unit.value == UnitSystem.MILLIMETERS) UnitSystem.INCHES else UnitSystem.MILLIMETERS
-        )
-    }
-
     /** Toggles grid visibility in Preview (persisted in Settings). */
     fun setShowGrid(show: Boolean, persist: Boolean = true) {
         _showGrid.value = show
@@ -127,18 +112,18 @@ class ShaftViewModel(
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
     // Client metadata (free-form)
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
 
     fun setCustomer(value: String) { _customer.value = value.trim() }
     fun setVessel(value: String)   { _vessel.value = value.trim() }
     fun setJobNumber(value: String){ _jobNumber.value = value.trim() }
     fun setNotes(value: String)    { _notes.value = value }
 
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
     // Overall length (mm)
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
 
     /** Set shaft overall length (mm). Clamped to ≥ 0. */
     fun onSetOverallLengthMm(valueMm: Float) {
@@ -152,7 +137,10 @@ class ShaftViewModel(
         onSetOverallLengthMm(mm)
     }
 
-    /** Ensure overall length covers all components plus optional free space. */
+    /**
+     * Ensure overall length covers all components (plus optional free space).
+     * No-op when user has explicitly set overall (manual mode).
+     */
     fun ensureOverall(minFreeMm: Float = 0f) = _spec.update { s ->
         if (_overallIsManual.value) return@update s
         val end = coverageEndMm(s)
@@ -160,32 +148,30 @@ class ShaftViewModel(
         if (s.overallLengthMm < minOverall) s.copy(overallLengthMm = minOverall) else s
     }
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // Component add/update/remove — newest on top
-    // (All params in mm; UI converts at the edge)
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
+    // Component add/update/remove — newest on top (all params in mm)
+    // ────────────────────────────────────────────────────────────────────────────
 
     // Bodies
-    fun addBody(body: Body) = _spec.update { it.copy(bodies = listOf(body) + it.bodies) }
     fun addBodyAt(startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
-        val id = newId() // you already have this; keep your actual method
+        val id = newId()
         orderAdd(ComponentKind.BODY, id)
         s.copy(bodies = listOf(Body(id, startMm, max(0f, lengthMm), max(0f, diaMm))) + s.bodies)
     }.also { ensureOverall(); ensureOrderCoversSpec() }
-    fun updateBody(id: String, updater: (Body) -> Body) = _spec.update { s ->
-        s.copy(bodies = s.bodies.map { if (it.id == id) updater(it) else it })
-    }
+
     fun updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
         if (index !in s.bodies.indices) s else s.copy(
             bodies = s.bodies.toMutableList().also { l ->
                 val b = l[index]
-                l[index] = b.copy(startFromAftMm = startMm, lengthMm = max(0f, lengthMm), diaMm = max(0f, diaMm))
+                l[index] = b.copy(
+                    startFromAftMm = startMm,
+                    lengthMm = max(0f, lengthMm),
+                    diaMm = max(0f, diaMm)
+                )
             }
         )
     }.also { ensureOverall() }
-    fun removeBodyAt(index: Int) = _spec.update { s ->
-        if (index !in s.bodies.indices) s else s.copy(bodies = s.bodies.toMutableList().apply { removeAt(index) })
-    }
+
     fun removeBody(index: Int) {
         _spec.update { s ->
             if (index !in s.bodies.indices) s
@@ -198,17 +184,17 @@ class ShaftViewModel(
     }
 
     // Tapers
-    fun addTaper(taper: Taper) = _spec.update { it.copy(tapers = listOf(taper) + it.tapers) }
     fun addTaperAt(startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) = _spec.update { s ->
         val id = newId()
         orderAdd(ComponentKind.TAPER, id)
-        s.copy(tapers = listOf(Taper(id, startMm, max(0f, lengthMm), max(0f, startDiaMm), max(0f, endDiaMm))) + s.tapers)
+        s.copy(
+            tapers = listOf(
+                Taper(id, startMm, max(0f, lengthMm), max(0f, startDiaMm), max(0f, endDiaMm))
+            ) + s.tapers
+        )
     }.also { ensureOverall(); ensureOrderCoversSpec() }
-    fun updateTaper(id: String, updater: (Taper) -> Taper) = _spec.update { s ->
-        s.copy(tapers = s.tapers.map { if (it.id == id) updater(it) else it })
-    }
+
     fun updateTaper(index: Int, startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) = _spec.update { s ->
-        Log.d("ShaftVM", "updateTaper[$index] start=$startMm len=$lengthMm set=$startDiaMm let=$endDiaMm")
         if (index !in s.tapers.indices) s else s.copy(
             tapers = s.tapers.toMutableList().also { l ->
                 val t = l[index]
@@ -221,9 +207,7 @@ class ShaftViewModel(
             }
         )
     }.also { ensureOverall() }
-    fun removeTaperAt(index: Int) = _spec.update { s ->
-        if (index !in s.tapers.indices) s else s.copy(tapers = s.tapers.toMutableList().apply { removeAt(index) })
-    }
+
     fun removeTaper(index: Int) {
         _spec.update { s ->
             if (index !in s.tapers.indices) s
@@ -236,16 +220,28 @@ class ShaftViewModel(
     }
 
     // Threads
-    fun addThread(thread: ThreadSpec) = _spec.update { it.copy(threads = listOf(thread) + it.threads) }
+    /**
+     * Adds a thread segment.
+     *
+     * Parameters (mm):
+     *  • startMm — axial start from aft face
+     *  • lengthMm — axial length
+     *  • majorDiaMm — major diameter
+     *  • pitchMm — pitch in mm (e.g., 4 TPI ⇒ 6.35 mm)
+     *
+     * UI contract: Screen & Route pass arguments in exactly this order
+     * to prevent pitch/major swaps (see ShaftRoute.onAddThread).
+     */
     fun addThreadAt(startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
         val id = newId()
         orderAdd(ComponentKind.THREAD, id)
-        s.copy(threads = listOf(ThreadSpec(id, startMm, max(0f, lengthMm), max(0f, majorDiaMm), max(0f, pitchMm))) + s.threads)
+        s.copy(
+            threads = listOf(
+                Threads(id, startMm, max(0f, lengthMm), max(0f, majorDiaMm), max(0f, pitchMm))
+            ) + s.threads
+        )
     }.also { ensureOverall(); ensureOrderCoversSpec() }
 
-    fun updateThread(id: String, updater: (ThreadSpec) -> ThreadSpec) = _spec.update { s ->
-        s.copy(threads = s.threads.map { if (it.id == id) updater(it) else it })
-    }
     fun updateThread(index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
         if (index !in s.threads.indices) s else s.copy(
             threads = s.threads.toMutableList().also { l ->
@@ -259,9 +255,7 @@ class ShaftViewModel(
             }
         )
     }.also { ensureOverall() }
-    fun removeThreadAt(index: Int) = _spec.update { s ->
-        if (index !in s.threads.indices) s else s.copy(threads = s.threads.toMutableList().apply { removeAt(index) })
-    }
+
     fun removeThread(index: Int) {
         _spec.update { s ->
             if (index !in s.threads.indices) s
@@ -274,27 +268,25 @@ class ShaftViewModel(
     }
 
     // Liners
-    fun addLiner(liner: Liner) = _spec.update { it.copy(liners = listOf(liner) + it.liners) }
     fun addLinerAt(startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
         val id = newId()
         orderAdd(ComponentKind.LINER, id)
         s.copy(liners = listOf(Liner(id, startMm, max(0f, lengthMm), max(0f, odMm))) + s.liners)
     }.also { ensureOverall(); ensureOrderCoversSpec() }
 
-    fun updateLiner(id: String, updater: (Liner) -> Liner) = _spec.update { s ->
-        s.copy(liners = s.liners.map { if (it.id == id) updater(it) else it })
-    }
     fun updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
         if (index !in s.liners.indices) s else s.copy(
             liners = s.liners.toMutableList().also { l ->
                 val ln = l[index]
-                l[index] = ln.copy(startFromAftMm = startMm, lengthMm = max(0f, lengthMm), odMm = max(0f, odMm))
+                l[index] = ln.copy(
+                    startFromAftMm = startMm,
+                    lengthMm = max(0f, lengthMm),
+                    odMm = max(0f, odMm)
+                )
             }
         )
     }.also { ensureOverall() }
-    fun removeLinerAt(index: Int) = _spec.update { s ->
-        if (index !in s.liners.indices) s else s.copy(liners = s.liners.toMutableList().apply { removeAt(index) })
-    }
+
     fun removeLiner(index: Int) {
         _spec.update { s ->
             if (index !in s.liners.indices) s
@@ -308,15 +300,16 @@ class ShaftViewModel(
 
     private fun newId(): String = UUID.randomUUID().toString()
 
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
     // New document helper (choose unit, optionally lock)
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
 
     /** Start a brand-new shaft using [unit] for UI; lock UI unit if [lockUnit] is true. */
     fun newShaft(unit: UnitSystem, lockUnit: Boolean = true) {
-        _spec.value = ShaftSpec() // your canonical blank spec (mm)
+        _spec.value = ShaftSpec()
+        _componentOrder.value = emptyList() // fresh doc → empty order list
         _unitLocked.value = lockUnit
-        setUnit(unit) // also updates default setting unless locked; we also persist below
+        setUnit(unit)
         if (lockUnit) {
             viewModelScope.launch {
                 val pref = if (unit == UnitSystem.INCHES) UnitPref.INCHES else UnitPref.MILLIMETERS
@@ -325,9 +318,9 @@ class ShaftViewModel(
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
     // Persistence — versioned JSON document (UI wires it to SAF)
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
 
     /**
      * JSON envelope (v1) that remembers the document's preferred UI unit and unitLock flag.
@@ -336,8 +329,10 @@ class ShaftViewModel(
     @Serializable
     private data class ShaftDocV1(
         val version: Int = 1,
-        @kotlinx.serialization.SerialName("preferred_unit") val preferredUnit: UnitSystem = UnitSystem.INCHES,
-        @kotlinx.serialization.SerialName("unit_locked") val unitLocked: Boolean = true,
+        @kotlinx.serialization.SerialName("preferred_unit")
+        val preferredUnit: UnitSystem = UnitSystem.INCHES,
+        @kotlinx.serialization.SerialName("unit_locked")
+        val unitLocked: Boolean = true,
         val spec: ShaftSpec
     )
 
@@ -359,6 +354,7 @@ class ShaftViewModel(
     /**
      * Import a JSON string and replace current state.
      * Tries envelope first, then falls back to legacy (spec-only) files.
+     * Seeds/repairs UI order to reflect loaded spec.
      */
     fun importJson(raw: String) {
         // Try new envelope first
@@ -367,35 +363,24 @@ class ShaftViewModel(
                 _spec.value = doc.spec
                 _unitLocked.value = doc.unitLocked
                 setUnit(doc.preferredUnit, persist = false)
+                ensureOrderCoversSpec(doc.spec) // keep UI order in sync with loaded spec
                 return
             }
-
         // Back-compat: older files were just the spec
         runCatching { json.decodeFromString<ShaftSpec>(raw) }
             .onSuccess { legacy ->
                 _spec.value = legacy
                 _unitLocked.value = false // no lock info in legacy
                 // unit falls back to SettingsStore default (observer in init{})
+                ensureOrderCoversSpec(legacy) // seed order for legacy documents
                 return
             }
             .onFailure { throw it }
     }
 
-    // --- Dev stubs kept for local testing (filesystem). Prefer SAF in UI.
-    fun saveToFile(dir: File, name: String) {
-        val f = File(dir, "$name.json")
-        f.writeText(exportJson())
-    }
-    fun loadFromFile(dir: File, name: String) {
-        val f = File(dir, "$name.json")
-        if (f.exists()) runCatching { importJson(f.readText()) }
-    }
-
-
-
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
     // Private helpers
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
 
     /** Last occupied end among all components (mm). */
     private fun coverageEndMm(s: ShaftSpec): Float {
@@ -407,15 +392,23 @@ class ShaftViewModel(
         return end
     }
 
+    /**
+     * Record a newly-created component at the top of the cross-type order.
+     * Rationale: the editor list is newest-first; prepending preserves that mental model.
+     */
     private fun orderAdd(kind: ComponentKind, id: String) {
-        _componentOrder.update { it + ComponentKey(id, kind) } // append at end
+        _componentOrder.update { current -> listOf(ComponentKey(id, kind)) + current }
     }
 
+    /** Remove a component id from the cross-type order (e.g., after deletion). */
     private fun orderRemove(id: String) {
         _componentOrder.update { list -> list.filterNot { it.id == id } }
     }
 
-    /** Ensure order contains every current component id (append any missing; keep sequence). */
+    /**
+     * Ensure the UI order contains every current component id (append any missing; keep sequence).
+     * Needed on load/import to seed order for legacy docs or externally-edited specs.
+     */
     private fun ensureOrderCoversSpec(s: ShaftSpec = _spec.value) {
         val cur = _componentOrder.value.toMutableList()
         val have = cur.mapTo(mutableSetOf()) { it.id }
@@ -429,7 +422,7 @@ class ShaftViewModel(
         if (cur != _componentOrder.value) _componentOrder.value = cur
     }
 
-    // Public move helpers (used by the screen)
+    // Move controls (used by screen buttons; future enhancement may expose drag-drop)
     fun moveComponentUp(id: String)   = moveComponent(id, -1)
     fun moveComponentDown(id: String) = moveComponent(id, +1)
     private fun moveComponent(id: String, delta: Int) {
@@ -444,5 +437,4 @@ class ShaftViewModel(
             m
         }
     }
-
 }

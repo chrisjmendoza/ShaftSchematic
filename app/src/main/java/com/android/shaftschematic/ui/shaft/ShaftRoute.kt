@@ -6,18 +6,11 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.screen.ShaftScreen
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 
 /**
@@ -60,6 +53,8 @@ fun ShaftRoute(vm: ShaftViewModel) {
             notes = notes,
             showGrid = showGrid,
 
+            // Cross-type order: ensures list renders newest-first by stable IDs
+            componentOrder = order,
 
             // Unit & grid
             onSetUnit = vm::setUnit,
@@ -74,11 +69,14 @@ fun ShaftRoute(vm: ShaftViewModel) {
             onSetOverallLengthMm = vm::onSetOverallLengthMm,
             onSetOverallIsManual  = vm::setOverallIsManual,
 
-            // Adds
-            onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
-            onAddTaper  = { s, l, sd, ed -> vm.addTaperAt(s, l, sd, ed) },
-            onAddThread = { s, l, maj, p -> vm.addThreadAt(s, l, maj, p) },
-            onAddLiner  = { s, l, od     -> vm.addLinerAt(s, l, od) },
+            // Adds (note the thread mapping: screen gives pitch third, major fourth)
+            onAddBody   = { s, l, d        -> vm.addBodyAt(s, l, d) },
+            onAddTaper  = { s, l, sd, ed   -> vm.addTaperAt(s, l, sd, ed) },
+
+            onAddThread = { startMm, lengthMm, majorDiaMm, pitchMm ->
+                vm.addThreadAt(startMm, lengthMm, majorDiaMm, pitchMm) // Descriptive names prevent future swaps.
+            },
+            onAddLiner  = { s, l, od       -> vm.addLinerAt(s, l, od) },
 
             // Updates
             onUpdateBody   = { i, s, l, d        -> vm.updateBody(i, s, l, d) },

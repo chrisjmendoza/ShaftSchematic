@@ -434,9 +434,9 @@ private fun PreviewCard(
     Card(
         modifier = modifier,
         shape = RectangleShape, // white square per contract
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Box(Modifier.fillMaxSize().background(Color.White)) {
+        Box(Modifier.fillMaxSize().background(Color.Transparent)) {
             if (showGrid) {
                 val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
                 Canvas(Modifier.fillMaxSize()) {
