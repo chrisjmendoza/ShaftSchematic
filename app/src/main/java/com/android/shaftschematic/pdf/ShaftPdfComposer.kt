@@ -251,23 +251,21 @@ private fun drawDimensionsLikePreview(
     text: Paint,
     dim: Paint,
 ) {
-    val overallY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT - OVERALL_EXTRA_PT
     val firstLaneY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
 
-    // Overall
-    val xa = xAt(0f); val xf = xAt(spec.overallLengthMm)
-    drawDimWithExtensions(c, xa, xf, overallY, yTopOfShaft, fmtLen(unit, spec.overallLengthMm), text, dim)
-
-    // Component intervals (greedy lane packing)
+    // 1) Gather component intervals
+    data class Interval(val startMm: Float, val endMm: Float)
     val ivs = ArrayList<Interval>()
-    spec.bodies.forEach   { if (it.lengthMm > 0f && it.diaMm > 0f)                 ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
-    spec.tapers.forEach   { if (it.lengthMm > 0f && (it.startDiaMm > 0f || it.endDiaMm > 0f)) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
-    spec.threads.forEach  { if (it.lengthMm > 0f && it.majorDiaMm > 0f)            ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
-    spec.liners.forEach   { if (it.lengthMm > 0f && it.odMm > 0f)                  ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+    spec.bodies.forEach  { if (it.lengthMm > 0f && it.diaMm       > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+    spec.tapers.forEach  { if (it.lengthMm > 0f && (it.startDiaMm > 0f || it.endDiaMm > 0f)) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+    spec.threads.forEach { if (it.lengthMm > 0f && it.majorDiaMm  > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+    spec.liners.forEach  { if (it.lengthMm > 0f && it.odMm        > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
 
+    // 2) Greedy lane packing (same as today), but track the smallest y (topmost)
     data class Lane(var endX: Float, val y: Float)
     val lanes = mutableListOf<Lane>()
     val sorted = ivs.sortedWith(compareBy({ it.startMm }, { it.endMm }))
+    var topmostLaneY = firstLaneY
 
     sorted.forEach { iv ->
         val x0 = xAt(iv.startMm); val x1 = xAt(iv.endMm)
@@ -275,9 +273,17 @@ private fun drawDimensionsLikePreview(
         for (i in lanes.indices) if (x0 >= lanes[i].endX) { idx = i; break }
         if (idx == -1) { lanes += Lane(x1, firstLaneY - lanes.size * (TEXT_PT + LANE_GAP_PT)); idx = lanes.lastIndex } else { lanes[idx].endX = x1 }
         val y = lanes[idx].y
+        if (y < topmostLaneY) topmostLaneY = y
         drawDimWithExtensions(c, x0, x1, y, yTopOfShaft, fmtLen(unit, iv.endMm - iv.startMm), text, dim)
     }
+
+    // 3) Overall goes one lane above the topmost component lane
+    val gap = TEXT_PT + LANE_GAP_PT
+    val overallY = if (lanes.isEmpty()) firstLaneY - OVERALL_EXTRA_PT else topmostLaneY - gap
+    val xa = xAt(0f); val xf = xAt(spec.overallLengthMm)
+    drawDimWithExtensions(c, xa, xf, overallY, yTopOfShaft, fmtLen(unit, spec.overallLengthMm), text, dim)
 }
+
 
 private fun drawDimWithExtensions(
     c: Canvas,
