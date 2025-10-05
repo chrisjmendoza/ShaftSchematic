@@ -8,6 +8,10 @@ import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.data.SettingsStore.UnitPref
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.ui.order.ComponentKey
+import com.android.shaftschematic.ui.order.ComponentKind
+import kotlinx.coroutines.flow.update
+import kotlin.math.max
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,6 +70,14 @@ class ShaftViewModel(
 
     private val _notes = MutableStateFlow("")
     val notes: StateFlow<String> = _notes.asStateFlow()
+
+    private val _overallIsManual = MutableStateFlow(false)
+    val overallIsManual: StateFlow<Boolean> = _overallIsManual.asStateFlow()
+    fun setOverallIsManual(v: Boolean) { _overallIsManual.value = v }
+
+    // NEW: cross-type UI order (stable IDs)
+    private val _componentOrder = MutableStateFlow<List<ComponentKey>>(emptyList())
+    val componentOrder = _componentOrder.asStateFlow()
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Settings persistence (default unit + show grid)
@@ -142,6 +154,7 @@ class ShaftViewModel(
 
     /** Ensure overall length covers all components plus optional free space. */
     fun ensureOverall(minFreeMm: Float = 0f) = _spec.update { s ->
+        if (_overallIsManual.value) return@update s
         val end = coverageEndMm(s)
         val minOverall = end + max(0f, minFreeMm)
         if (s.overallLengthMm < minOverall) s.copy(overallLengthMm = minOverall) else s
@@ -155,8 +168,10 @@ class ShaftViewModel(
     // Bodies
     fun addBody(body: Body) = _spec.update { it.copy(bodies = listOf(body) + it.bodies) }
     fun addBodyAt(startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
-        s.copy(bodies = listOf(Body(newId(), startMm, max(0f, lengthMm), max(0f, diaMm))) + s.bodies)
-    }.also { ensureOverall() }
+        val id = newId() // you already have this; keep your actual method
+        orderAdd(ComponentKind.BODY, id)
+        s.copy(bodies = listOf(Body(id, startMm, max(0f, lengthMm), max(0f, diaMm))) + s.bodies)
+    }.also { ensureOverall(); ensureOrderCoversSpec() }
     fun updateBody(id: String, updater: (Body) -> Body) = _spec.update { s ->
         s.copy(bodies = s.bodies.map { if (it.id == id) updater(it) else it })
     }
@@ -174,16 +189,21 @@ class ShaftViewModel(
     fun removeBody(index: Int) {
         _spec.update { s ->
             if (index !in s.bodies.indices) s
-            else s.copy(bodies = s.bodies.toMutableList().apply { removeAt(index) })
+            else {
+                orderRemove(s.bodies[index].id)
+                s.copy(bodies = s.bodies.toMutableList().apply { removeAt(index) })
+            }
         }
-        ensureOverall()
+        ensureOverall(); ensureOrderCoversSpec()
     }
 
     // Tapers
     fun addTaper(taper: Taper) = _spec.update { it.copy(tapers = listOf(taper) + it.tapers) }
     fun addTaperAt(startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) = _spec.update { s ->
-        s.copy(tapers = listOf(Taper(newId(), startMm, max(0f, lengthMm), max(0f, startDiaMm), max(0f, endDiaMm))) + s.tapers)
-    }.also { ensureOverall() }
+        val id = newId()
+        orderAdd(ComponentKind.TAPER, id)
+        s.copy(tapers = listOf(Taper(id, startMm, max(0f, lengthMm), max(0f, startDiaMm), max(0f, endDiaMm))) + s.tapers)
+    }.also { ensureOverall(); ensureOrderCoversSpec() }
     fun updateTaper(id: String, updater: (Taper) -> Taper) = _spec.update { s ->
         s.copy(tapers = s.tapers.map { if (it.id == id) updater(it) else it })
     }
@@ -207,16 +227,22 @@ class ShaftViewModel(
     fun removeTaper(index: Int) {
         _spec.update { s ->
             if (index !in s.tapers.indices) s
-            else s.copy(tapers = s.tapers.toMutableList().apply { removeAt(index) })
+            else {
+                orderRemove(s.tapers[index].id)
+                s.copy(tapers = s.tapers.toMutableList().apply { removeAt(index) })
+            }
         }
-        ensureOverall()
+        ensureOverall(); ensureOrderCoversSpec()
     }
 
     // Threads
     fun addThread(thread: ThreadSpec) = _spec.update { it.copy(threads = listOf(thread) + it.threads) }
     fun addThreadAt(startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
-        s.copy(threads = listOf(ThreadSpec(newId(), startMm, max(0f, lengthMm), max(0f, majorDiaMm), max(0f, pitchMm))) + s.threads)
-    }.also { ensureOverall() }
+        val id = newId()
+        orderAdd(ComponentKind.THREAD, id)
+        s.copy(threads = listOf(ThreadSpec(id, startMm, max(0f, lengthMm), max(0f, majorDiaMm), max(0f, pitchMm))) + s.threads)
+    }.also { ensureOverall(); ensureOrderCoversSpec() }
+
     fun updateThread(id: String, updater: (ThreadSpec) -> ThreadSpec) = _spec.update { s ->
         s.copy(threads = s.threads.map { if (it.id == id) updater(it) else it })
     }
@@ -239,16 +265,22 @@ class ShaftViewModel(
     fun removeThread(index: Int) {
         _spec.update { s ->
             if (index !in s.threads.indices) s
-            else s.copy(threads = s.threads.toMutableList().apply { removeAt(index) })
+            else {
+                orderRemove(s.threads[index].id)
+                s.copy(threads = s.threads.toMutableList().apply { removeAt(index) })
+            }
         }
-        ensureOverall()
+        ensureOverall(); ensureOrderCoversSpec()
     }
 
     // Liners
     fun addLiner(liner: Liner) = _spec.update { it.copy(liners = listOf(liner) + it.liners) }
     fun addLinerAt(startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
-        s.copy(liners = listOf(Liner(newId(), startMm, max(0f, lengthMm), max(0f, odMm))) + s.liners)
-    }.also { ensureOverall() }
+        val id = newId()
+        orderAdd(ComponentKind.LINER, id)
+        s.copy(liners = listOf(Liner(id, startMm, max(0f, lengthMm), max(0f, odMm))) + s.liners)
+    }.also { ensureOverall(); ensureOrderCoversSpec() }
+
     fun updateLiner(id: String, updater: (Liner) -> Liner) = _spec.update { s ->
         s.copy(liners = s.liners.map { if (it.id == id) updater(it) else it })
     }
@@ -266,9 +298,12 @@ class ShaftViewModel(
     fun removeLiner(index: Int) {
         _spec.update { s ->
             if (index !in s.liners.indices) s
-            else s.copy(liners = s.liners.toMutableList().apply { removeAt(index) })
+            else {
+                orderRemove(s.liners[index].id)
+                s.copy(liners = s.liners.toMutableList().apply { removeAt(index) })
+            }
         }
-        ensureOverall()
+        ensureOverall(); ensureOrderCoversSpec()
     }
 
     private fun newId(): String = UUID.randomUUID().toString()
@@ -371,4 +406,43 @@ class ShaftViewModel(
         s.liners.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
         return end
     }
+
+    private fun orderAdd(kind: ComponentKind, id: String) {
+        _componentOrder.update { it + ComponentKey(id, kind) } // append at end
+    }
+
+    private fun orderRemove(id: String) {
+        _componentOrder.update { list -> list.filterNot { it.id == id } }
+    }
+
+    /** Ensure order contains every current component id (append any missing; keep sequence). */
+    private fun ensureOrderCoversSpec(s: ShaftSpec = _spec.value) {
+        val cur = _componentOrder.value.toMutableList()
+        val have = cur.mapTo(mutableSetOf()) { it.id }
+        fun addMissing(kind: ComponentKind, ids: List<String>) {
+            ids.forEach { if (it !in have) cur += ComponentKey(it, kind) }
+        }
+        addMissing(ComponentKind.BODY,   s.bodies.map { it.id })
+        addMissing(ComponentKind.TAPER,  s.tapers.map { it.id })
+        addMissing(ComponentKind.THREAD, s.threads.map { it.id })
+        addMissing(ComponentKind.LINER,  s.liners.map { it.id })
+        if (cur != _componentOrder.value) _componentOrder.value = cur
+    }
+
+    // Public move helpers (used by the screen)
+    fun moveComponentUp(id: String)   = moveComponent(id, -1)
+    fun moveComponentDown(id: String) = moveComponent(id, +1)
+    private fun moveComponent(id: String, delta: Int) {
+        _componentOrder.update { list ->
+            val i = list.indexOfFirst { it.id == id }
+            if (i < 0) return@update list
+            val j = (i + delta).coerceIn(0, list.lastIndex)
+            if (i == j) return@update list
+            val m = list.toMutableList()
+            val item = m.removeAt(i)
+            m.add(j, item)
+            m
+        }
+    }
+
 }

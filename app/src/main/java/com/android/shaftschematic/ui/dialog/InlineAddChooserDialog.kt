@@ -11,7 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 
 /**
- * InlineAddChooserDialog (v1.0)
+ * InlineAddChooserDialog.md.md (v1.0)
  *
  * Purpose: Small, stable chooser for adding a component to the current shaft spec.
  * Stable Material3 only. No experimental APIs. No business logic.

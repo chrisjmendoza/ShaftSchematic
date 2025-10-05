@@ -6,11 +6,18 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.screen.ShaftScreen
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 
 /**
@@ -36,6 +43,8 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val vessel     by vm.vessel.collectAsState()
     val jobNumber  by vm.jobNumber.collectAsState()
     val notes      by vm.notes.collectAsState()
+    val overallIsManual by vm.overallIsManual.collectAsState()
+    val order            by vm.componentOrder.collectAsState()
 
     fun showSnack(msg: String) = scope.launch { snackbarHostState.showSnackbar(msg) }
 
@@ -44,11 +53,13 @@ fun ShaftRoute(vm: ShaftViewModel) {
             spec = spec,
             unit = unit,
             unitLocked = unitLocked,
+            overallIsManual = overallIsManual,
             customer = customer,
             vessel = vessel,
             jobNumber = jobNumber,
             notes = notes,
             showGrid = showGrid,
+
 
             // Unit & grid
             onSetUnit = vm::setUnit,
@@ -61,6 +72,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
             onSetNotes = vm::setNotes,
             onSetOverallLengthRaw = vm::setOverallLength,
             onSetOverallLengthMm = vm::onSetOverallLengthMm,
+            onSetOverallIsManual  = vm::setOverallIsManual,
 
             // Adds
             onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
