@@ -57,7 +57,7 @@ import com.android.shaftschematic.util.UnitSystem
  * Responsibilities
  * • Header row (unit selector + grid toggle; unit selector disables when locked)
  * • Preview drawing (transparent; optional grid; fixed-height band)
- * • Free-to-End badge overlay (top-right of preview; mm-only math; clamped ≥ 0)
+ * • Free-to-End badge overlay (top-start of preview; mm-only math; clamped ≥ 0)
  * • Overall length input (unit-aware; commits mm; commit-on-blur/IME Done)
  * • Project fields (commit-on-blur / IME Done)
  * • Component cards (edit & remove)
@@ -398,7 +398,7 @@ private fun PreviewCard(
             // Shaft drawing
             renderShaft(spec, unit)
 
-            // Badge overlay (top-center), style restored to previous
+            // Badge overlay (top-start), style matches app contract
             FreeToEndBadge(
                 spec = spec,
                 unit = unit,
@@ -666,23 +666,6 @@ private fun parseFractionOrDecimal(input: String): Float? {
         return a / b
     }
     return t.toFloatOrNull()
-}
-
-/** Latest occupied end position along X (mm), considering all components. */
-private fun lastOccupiedEndMm(spec: ShaftSpec): Float {
-    var end = 0f
-    spec.bodies.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.tapers.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.threads.forEach { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.liners.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    return end
-}
-
-/** Contract: free = overallLengthMm – lastOccupiedEndMm; clamp to ≥ 0; mm only. */
-private fun freeToEndMm(spec: ShaftSpec): Float {
-    if (spec.overallLengthMm <= 0f) return 0f
-    val free = spec.overallLengthMm - lastOccupiedEndMm(spec)
-    return if (free < 0f) 0f else free
 }
 
 /* ───────────────── Free-to-End badge ───────────────── */
