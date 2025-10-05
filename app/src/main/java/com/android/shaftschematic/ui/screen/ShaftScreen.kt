@@ -153,11 +153,15 @@ fun ShaftScreen(
                 .padding(inner)
                 .padding(16.dp)
         ) {
+            // Preview uses a derived spec when overall is unset (model stays untouched)
+            val previewSpec = if (spec.overallLengthMm > 0f) spec
+            else spec.copy(overallLengthMm = DEFAULT_OVERALL_MM)
+
             // Preview (fixed-height band, transparent, optional grid)
             PreviewCard(
                 showGrid = showGrid,
                 gridStepDp = 16.dp,
-                spec = spec,
+                spec = previewSpec,               // ← use previewSpec
                 unit = unit,
                 renderShaft = renderShaft,
                 modifier = Modifier
@@ -184,28 +188,34 @@ fun ShaftScreen(
                     .imePadding(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Overall Length (unit-aware UI; commit-on-blur/IME)
+                // ── Overall Length (ghost default, clears on focus; preserves user values) ──
+                var hasLenFocus by remember { mutableStateOf(false) }
                 var lengthText by remember(unit, spec.overallLengthMm) {
-                    mutableStateOf(formatDisplay(spec.overallLengthMm, unit))
+                    // When model is unset (0), start empty so placeholder shows; otherwise show formatted value
+                    mutableStateOf(if (spec.overallLengthMm > 0f) formatDisplay(spec.overallLengthMm, unit) else "")
                 }
 
                 OutlinedTextField(
                     value = lengthText,
                     onValueChange = { lengthText = it },
                     label = { Text("Overall Length (${abbr(unit)})") },
+                    // Ghost placeholder: fixed text per product request (“100 in”), hidden while focused
+                    placeholder = {
+                        if (!hasLenFocus && lengthText.isEmpty()) Text("100 in")
+                    },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { onSetOverallLengthRaw(lengthText) }
-                    ),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    keyboardActions = KeyboardActions(onDone = {
+                        // Commit typed value (if any) on IME action
+                        if (lengthText.isNotBlank()) onSetOverallLengthRaw(lengthText)
+                    }),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .onFocusChanged { st ->
-                            if (!st.isFocused) {
-                                onSetOverallLengthRaw(lengthText) // commit-on-blur
+                        .onFocusChanged { f ->
+                            hasLenFocus = f.isFocused
+                            if (!f.isFocused) {
+                                // Commit typed value (if any) on blur; do nothing if still empty (keeps ghost next time)
+                                if (lengthText.isNotBlank()) onSetOverallLengthRaw(lengthText)
                             }
                         }
                 )
@@ -619,6 +629,8 @@ private fun CommitNum(
 }
 
 /* ───────────────── Helpers: units, parsing, badge math, defaults ───────────────── */
+
+private const val DEFAULT_OVERALL_MM = 100f * 25.4f // 100 in, mm-only; UI does not persist this
 
 private fun abbr(unit: UnitSystem) = if (unit == UnitSystem.MILLIMETERS) "mm" else "in"
 
