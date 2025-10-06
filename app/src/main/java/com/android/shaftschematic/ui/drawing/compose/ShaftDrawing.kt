@@ -17,6 +17,30 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.ElevatedButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.drawing.render.GridRenderer.drawAdaptiveShaftGrid
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
@@ -59,67 +83,115 @@ fun ShaftDrawing(
 ) {
     val textMeasurer = rememberTextMeasurer()
 
-    // One RenderOptions instance: Compose draws the grid, so renderer's showGrid stays false.
+    // One RenderOptions instance: grid drawn here (renderer.showGrid=false)
     val opts = remember(unit) {
         RenderOptions(
-            showGrid = false,                              // grid is drawn here, not in the renderer
+            showGrid = false,
             gridUseInches = (unit == UnitSystem.INCHES),
             paddingPx = 16,
             textSizePx = 22f,
-
-            // Outlines & fills (ARGB Ints)
             outlineColor = Color.Black.toArgb(),
             outlineWidthPx = 2f,
             bodyFillColor = Color.Transparent.toArgb(),
             linerFillColor = Color.Transparent.toArgb(),
             taperFillColor = Color.Black.copy(alpha = 0.10f).toArgb(),
-
-            // Threads
-            threadStyle = ThreadStyle.UNIFIED,             // unified rails+flanks (use HATCH to revert)
+            threadStyle = ThreadStyle.UNIFIED,
             threadUseHatchColor = true,
             threadFillColor = Color.Transparent.toArgb(),
             threadHatchColor = Color.Black.toArgb(),
-            threadStrokePx = 0f                            // 0 => use outline/dim widths internally
+            threadStrokePx = 0f
         )
     }
 
-    // Preview-only safety: if overall is 0, extend to last occupied end so something is visible.
+    // Preview-safe override: ensure something is visible even if overallLengthMm==0
     val safeSpec = remember(spec) {
         val lastEnd = listOfNotNull(
-            spec.bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
-            spec.tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
-            spec.liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
+            spec.bodies.maxOfOrNull { it.startFromAftMm + it.lengthMm },
+            spec.tapers.maxOfOrNull { it.startFromAftMm + it.lengthMm },
+            spec.liners.maxOfOrNull { it.startFromAftMm + it.lengthMm },
             spec.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm },
         ).maxOrNull() ?: 0f
         if (spec.overallLengthMm <= 0f && lastEnd > 0f) spec.copy(overallLengthMm = lastEnd) else spec
     }
 
-    Canvas(modifier = modifier) {
-        val padX = opts.paddingPx.toFloat()
-        val padY = 8f
+    // ── UI-only Transform State (pan+zoom) ───────────────────────────────────
+    val scope = rememberCoroutineScope()
+    val MIN_SCALE = 0.5f
+    val MAX_SCALE = 4.0f
+    val RESET_MS = 140
 
-        val layout = ShaftLayout.compute(
-            spec = safeSpec,
-            leftPx = padX,
-            topPx = padY,
-            rightPx = size.width - padX,
-            bottomPx = size.height - padY
+    val scale = remember { Animatable(1f) }
+    val offset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+
+    // Combined gesture system: pinch/pan + double-tap
+    val gestureMod = Modifier.pointerInput(Unit) {
+        detectTransformGestures(panZoomLock = true) { centroid, pan, zoom, _ ->
+            val oldScale = scale.value
+            val unclamped = oldScale * zoom
+            val newScale = unclamped.coerceIn(MIN_SCALE, MAX_SCALE)
+            val z = if (oldScale != 0f) newScale / oldScale else 1f
+            val newOffset = offset.value * z + centroid * (1f - z) + pan
+            scope.launch {
+                if (newScale != oldScale) scale.snapTo(newScale)
+                offset.snapTo(newOffset)
+            }
+        }
+    }.pointerInput(Unit) {
+        detectTapGestures(
+            onDoubleTap = {
+                scope.launch {
+                    scale.animateTo(1f, tween(RESET_MS))
+                    offset.animateTo(Offset.Zero, tween(RESET_MS))
+                }
+            }
         )
+    }
 
-        if (showGrid) {
-            drawAdaptiveShaftGrid(
-                layout = layout,
-                unit = unit,
-                targetMajorPx = 90f // tune between ~70–120px per major per your taste
+    // ── Layout + Draw, under transform ───────────────────────────────────────
+    Box(modifier = modifier.then(gestureMod)) {
+        Canvas(Modifier.fillMaxSize()) {
+            val padX = opts.paddingPx.toFloat()
+            val padY = 8f
+
+            val layout = ShaftLayout.compute(
+                spec = safeSpec,
+                leftPx = padX,
+                topPx = padY,
+                rightPx = size.width - padX,
+                bottomPx = size.height - padY
             )
+
+            withTransform({
+                translate(offset.value.x, offset.value.y)
+                scale(scale.value, scale.value, pivot = Offset.Zero)
+            }) {
+                if (showGrid) {
+                    drawAdaptiveShaftGrid(layout = layout, unit = unit, targetMajorPx = 90f)
+                }
+                with(ShaftRenderer) {
+                    draw(spec = safeSpec, layout = layout, opts = opts, textMeasurer = textMeasurer)
+                }
+            }
         }
 
-        with(ShaftRenderer) {
-            draw(
-                spec = safeSpec,
-                layout = layout,
-                opts = opts,
-                textMeasurer = textMeasurer
+        // Compact Reset icon (translucent, top-right)
+        IconButton(
+            onClick = {
+                scope.launch {
+                    scale.animateTo(1f, tween(RESET_MS))
+                    offset.animateTo(Offset.Zero, tween(RESET_MS))
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(6.dp)
+                .size(40.dp)
+                .background(Color.White.copy(alpha = 0.6f), CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = "Reset view",
+                tint = Color.Black.copy(alpha = 0.8f)
             )
         }
     }
