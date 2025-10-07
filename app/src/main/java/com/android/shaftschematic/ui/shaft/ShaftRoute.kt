@@ -11,6 +11,11 @@ import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.screen.ShaftScreen
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.util.UnitSystem
 
 /**
  * ShaftRoute
@@ -28,115 +33,122 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val spec       by vm.spec.collectAsState()
-    val unit       by vm.unit.collectAsState()
-    val unitLocked by vm.unitLocked.collectAsState()
-    val showGrid   by vm.showGrid.collectAsState()
-    val customer   by vm.customer.collectAsState()
-    val vessel     by vm.vessel.collectAsState()
-    val jobNumber  by vm.jobNumber.collectAsState()
-    val notes      by vm.notes.collectAsState()
+    val spec            by vm.spec.collectAsState()
+    val unit            by vm.unit.collectAsState()
+    val unitLocked      by vm.unitLocked.collectAsState()
+    val showGrid        by vm.showGrid.collectAsState()
+    val customer        by vm.customer.collectAsState()
+    val vessel          by vm.vessel.collectAsState()
+    val jobNumber       by vm.jobNumber.collectAsState()
+    val notes           by vm.notes.collectAsState()
     val overallIsManual by vm.overallIsManual.collectAsState()
-    val order            by vm.componentOrder.collectAsState()
+    val order           by vm.componentOrder.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
     fun showSnack(msg: String) = scope.launch { snackbarHostState.showSnackbar(msg) }
 
-    Box {
-        ShaftScreen(
-            spec = spec,
-            unit = unit,
-            unitLocked = unitLocked,
-            overallIsManual = overallIsManual,
-            customer = customer,
-            vessel = vessel,
-            jobNumber = jobNumber,
-            notes = notes,
-            showGrid = showGrid,
+    ShaftScreen(
+        spec = spec,
+        unit = unit,
+        unitLocked = unitLocked,
+        overallIsManual = overallIsManual,
+        customer = customer,
+        vessel = vessel,
+        jobNumber = jobNumber,
+        notes = notes,
+        showGrid = showGrid,
+        componentOrder = order,
 
-            // Cross-type order: ensures list renders newest-first by stable IDs
-            componentOrder = order,
+        // model updates (unchanged)
+        onSetUnit = vm::setUnit,            // now used by Settings sheet
+        onToggleGrid = vm::setShowGrid,     // now used by Settings sheet
+        onSetCustomer = vm::setCustomer,
+        onSetVessel = vm::setVessel,
+        onSetJobNumber = vm::setJobNumber,
+        onSetNotes = vm::setNotes,
+        onSetOverallLengthRaw = vm::setOverallLength,
+        onSetOverallLengthMm = vm::onSetOverallLengthMm,
+        onSetOverallIsManual = vm::setOverallIsManual,
 
-            // Unit & grid
-            onSetUnit = vm::setUnit,
-            onToggleGrid = vm::setShowGrid,
+        onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
+        onAddTaper  = { s, l, sd, ed -> vm.addTaperAt(s, l, sd, ed) },
+        onAddThread = { s, l, maj, p -> vm.addThreadAt(s, l, maj, p) },
+        onAddLiner  = { s, l, od     -> vm.addLinerAt(s, l, od) },
 
-            // Project fields
-            onSetCustomer = vm::setCustomer,
-            onSetVessel = vm::setVessel,
-            onSetJobNumber = vm::setJobNumber,
-            onSetNotes = vm::setNotes,
-            onSetOverallLengthRaw = vm::setOverallLength,
-            onSetOverallLengthMm = vm::onSetOverallLengthMm,
-            onSetOverallIsManual  = vm::setOverallIsManual,
+        onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
+        onUpdateTaper  = { i, s, l, sd, ed -> vm.updateTaper(i, s, l, sd, ed) },
+        onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
+        onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
 
-            // Adds
-            onAddBody   = { s, l, d        -> vm.addBodyAt(s, l, d) },
-            onAddTaper  = { s, l, sd, ed   -> vm.addTaperAt(s, l, sd, ed) },
-            onAddThread = { startMm, lengthMm, majorDiaMm, pitchMm ->
-                vm.addThreadAt(startMm, lengthMm, majorDiaMm, pitchMm)
-            },
-            onAddLiner  = { s, l, od       -> vm.addLinerAt(s, l, od) },
+        onRemoveBody   = vm::removeBody,
+        onRemoveTaper  = vm::removeTaper,
+        onRemoveThread = vm::removeThread,
+        onRemoveLiner  = vm::removeLiner,
 
-            // Updates
-            onUpdateBody   = { i, s, l, d        -> vm.updateBody(i, s, l, d) },
-            onUpdateTaper  = { i, s, l, sd, ed   -> vm.updateTaper(i, s, l, sd, ed) },
-            onUpdateThread = { i, s, l, maj, p   -> vm.updateThread(i, s, l, maj, p) },
-            onUpdateLiner  = { i, s, l, od       -> vm.updateLiner(i, s, l, od) },
+        // preview renderer
+        renderShaft = { s, u ->
+            ShaftDrawing(
+                spec = s,
+                unit = u,
+                showGrid = showGrid
+            )
+        },
 
-            // Removes
-            onRemoveBody   = vm::removeBody,
-            onRemoveTaper  = vm::removeTaper,
-            onRemoveThread = vm::removeThread,
-            onRemoveLiner  = vm::removeLiner,
+        snackbarHostState = snackbarHostState,
 
-            // Preview renderer injection (mm-only)
-            renderShaft = { s, u ->
-                ShaftDrawing(
-                    spec = s,
-                    unit = u,
-                    showGrid = showGrid   // pass actual state (was hard-coded before)
+        // top bar actions
+        onClickSave = {
+            // hook your actual save; placeholder snackbar for now
+            showSnack("Saved.")
+        },
+        onExportPdf = {
+            showSnack("PDF export not wired yet.")
+        },
+        onOpenSettings = {
+            showSettings = true
+        }
+    )
+
+    if (showSettings) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showSettings = false },
+            sheetState = sheetState
+        ) {
+            // UNIT
+            Text("Units", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                FilterChip(
+                    selected = unit == UnitSystem.MILLIMETERS,
+                    onClick = { vm.setUnit(UnitSystem.MILLIMETERS) },
+                    label = { Text("mm") },
+                    enabled = !unitLocked
                 )
-            },
-
-            snackbarHostState = snackbarHostState,
-
-            // Actions (no unresolved refs)
-            onExportPdf = {
-                // Placeholder; replace with real export when available
-                showSnack("PDF export not wired yet.")
-            },
-            onOpenSettings = {
-                showSettings = true
+                Spacer(Modifier.width(8.dp))
+                FilterChip(
+                    selected = unit == UnitSystem.INCHES,
+                    onClick = { vm.setUnit(UnitSystem.INCHES) },
+                    label = { Text("in") },
+                    enabled = !unitLocked
+                )
             }
-        )
 
-        // Minimal settings sheet (non-invasive, can be replaced with a screen later)
-        if (showSettings) {
-            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-            ModalBottomSheet(
-                onDismissRequest = { showSettings = false },
-                sheetState = sheetState
-            ) {
-                ListItem(
-                    headlineContent = { Text("Show grid in preview") },
-                    trailingContent = {
-                        Switch(
-                            checked = showGrid,
-                            onCheckedChange = { vm.setShowGrid(it) }
-                        )
-                    }
-                )
-                ListItem(
-                    headlineContent = { Text("Theme (app-wide)") },
-                    supportingContent = { Text("Managed in main Settings; coming soon.") }
-                )
-                TextButton(
-                    onClick = { showSettings = false },
-                    modifier = Modifier
-                        .padding(16.dp)
-                ) { Text("Close") }
-            }
+            // GRID
+            ListItem(
+                headlineContent = { Text("Show grid in preview") },
+                trailingContent = {
+                    Switch(
+                        checked = showGrid,
+                        onCheckedChange = { vm.setShowGrid(it) }
+                    )
+                }
+            )
+
+            Spacer(Modifier.height(8.dp))
+            TextButton(
+                onClick = { showSettings = false },
+                modifier = Modifier.padding(16.dp)
+            ) { Text("Close") }
         }
     }
 }
