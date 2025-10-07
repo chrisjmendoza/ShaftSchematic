@@ -217,11 +217,13 @@ fun ShaftScreen(
                     .imePadding(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Overall Length (ghost 0; auto vs manual)
+                // Overall Length (auto vs manual — always show a value)
                 var hasLenFocus by remember { mutableStateOf(false) }
-                var lengthText by remember(unit, spec.overallLengthMm, overallIsManual) {
-                    mutableStateOf(if (overallIsManual && spec.overallLengthMm > 0f)
-                        formatDisplay(spec.overallLengthMm, unit) else "")
+
+// keep local text in sync with unit/mode unless the user is typing
+                val displayMm = if (overallIsManual) spec.overallLengthMm else lastOccupiedEndMm(spec)
+                var lengthText by remember(unit, displayMm, overallIsManual) {
+                    mutableStateOf(formatDisplay(displayMm, unit))
                 }
 
                 val freeSignedMm = spec.overallLengthMm - lastOccupiedEndMm(spec)
@@ -229,15 +231,24 @@ fun ShaftScreen(
 
                 OutlinedTextField(
                     value = lengthText,
-                    onValueChange = { lengthText = it },
+                    onValueChange = { input ->
+                        lengthText = input
+                        if (overallIsManual) {
+                            toMmOrNull(input, unit)?.let { mm ->
+                                onSetOverallLengthMm(mm)
+                            }
+                        }
+                    },
                     label = { Text("Overall Length (${abbr(unit)})") },
-                    placeholder = { if (!hasLenFocus && lengthText.isEmpty()) Text("0") },
                     singleLine = true,
+                    enabled = overallIsManual, // auto mode is read-only
                     isError = isOversized,
                     supportingText = {
-                        if (isOversized) {
-                            Text("Oversized by ${formatDisplay(-freeSignedMm, unit)} ${abbr(unit)}")
-                        }
+                        val mode = if (overallIsManual) "Manual" else "Auto"
+                        val hint = if (isOversized)
+                            "Oversized by ${formatDisplay(-freeSignedMm, unit)} ${abbr(unit)}"
+                        else "$mode • ${formatDisplay(displayMm, unit)} ${abbr(unit)}"
+                        Text(hint)
                     },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Decimal,
@@ -245,6 +256,7 @@ fun ShaftScreen(
                     ),
                     keyboardActions = KeyboardActions(onDone = {
                         val t = lengthText.trim()
+                        // empty on Done ⇒ switch back to Auto
                         if (t.isEmpty()) {
                             onSetOverallIsManual(false)
                             onSetOverallLengthMm(lastOccupiedEndMm(spec))
@@ -252,7 +264,7 @@ fun ShaftScreen(
                             toMmOrNull(t, unit)?.let { mm ->
                                 onSetOverallLengthMm(mm)
                                 onSetOverallIsManual(true)
-                                onSetOverallLengthRaw(t)
+                                onSetOverallLengthRaw(t) // keep user’s display text
                             }
                         }
                     }),
@@ -275,6 +287,7 @@ fun ShaftScreen(
                             }
                         }
                 )
+
 
                 // Project info (optional)
                 ExpandableSection("Project Information (optional)", initiallyExpanded = false) {
@@ -425,7 +438,7 @@ private fun UnitChip(
 @Composable
 private fun PreviewCard(
     showGrid: Boolean,
-    gridStepDp: Dp,
+    gridStepDp: Dp, // kept for signature stability; unused now
     spec: ShaftSpec,
     unit: UnitSystem,
     renderShaft: @Composable (ShaftSpec, UnitSystem) -> Unit,
@@ -433,29 +446,12 @@ private fun PreviewCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RectangleShape, // white square per contract
+        shape = RectangleShape,
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
+        // IMPORTANT: No local Canvas grid here. Let renderShaft handle grid so it follows pan/zoom.
         Box(Modifier.fillMaxSize().background(Color.Transparent)) {
-            if (showGrid) {
-                val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-                Canvas(Modifier.fillMaxSize()) {
-                    val stepPx = gridStepDp.toPx()
-                    var x = 0f
-                    while (x <= size.width) {
-                        drawLine(gridColor, Offset(x, 0f), Offset(x, size.height))
-                        x += stepPx
-                    }
-                    var y = 0f
-                    while (y <= size.height) {
-                        drawLine(gridColor, Offset(0f, y), Offset(size.width, y))
-                        y += stepPx
-                    }
-                }
-            }
-
-            renderShaft(spec, unit)
-
+            renderShaft(spec, unit) // ensure this calls ShaftDrawing(spec, unit, showGrid)
             FreeToEndBadge(
                 spec = spec,
                 unit = unit,
