@@ -95,7 +95,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
                 ShaftDrawing(
                     spec = s,
                     unit = u,
-                    showGrid = false
+                    showGrid = showGrid   // ← pass the actual state instead of false
                 )
             },
 
