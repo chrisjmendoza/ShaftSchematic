@@ -49,6 +49,13 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -146,7 +153,11 @@ fun ShaftScreen(
 
     // Other
     renderShaft: @Composable (ShaftSpec, UnitSystem) -> Unit,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
+    onClickSave: () -> Unit,
+    onExportPdf: () -> Unit,
+    onOpenSettings: () -> Unit,
+
 ) {
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
@@ -160,15 +171,6 @@ fun ShaftScreen(
     }
 
     Scaffold(
-        topBar = {
-            HeaderRow(
-                unit = unit,
-                unitLocked = unitLocked,
-                gridChecked = showGrid,
-                onUnitSelected = onSetUnit,
-                onToggleGrid = onToggleGrid
-            )
-        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets.systemBars.only(
             WindowInsetsSides.Top + WindowInsetsSides.Horizontal
@@ -354,81 +356,6 @@ fun ShaftScreen(
                 val letDiaMm = setDiaMm + (len * taperRatio) // ~1:12
                 onAddTaper(d.startMm, len, setDiaMm, letDiaMm)
             }
-        )
-    }
-}
-
-/* ───────────────── Header (Unit + Grid) ───────────────── */
-
-@Composable
-private fun HeaderRow(
-    unit: UnitSystem,
-    unitLocked: Boolean,
-    gridChecked: Boolean,
-    onUnitSelected: (UnitSystem) -> Unit,
-    onToggleGrid: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .heightIn(min = 44.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End
-    ) {
-        UnitSegment(unit = unit, enabled = !unitLocked, onUnitSelected = onUnitSelected)
-        Spacer(Modifier.width(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Grid")
-            Spacer(Modifier.width(6.dp))
-            Switch(checked = gridChecked, onCheckedChange = onToggleGrid)
-        }
-    }
-}
-
-@Composable
-private fun UnitSegment(
-    unit: UnitSystem,
-    enabled: Boolean,
-    onUnitSelected: (UnitSystem) -> Unit
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 1.dp,
-        shape = MaterialTheme.shapes.large
-    ) {
-        Row(
-            Modifier.height(36.dp).padding(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            UnitChip("mm", UnitSystem.MILLIMETERS, unit, enabled, onUnitSelected)
-            Spacer(Modifier.width(4.dp))
-            UnitChip("in", UnitSystem.INCHES, unit, enabled, onUnitSelected)
-        }
-    }
-}
-
-@Composable
-private fun UnitChip(
-    label: String,
-    chipUnit: UnitSystem,
-    current: UnitSystem,
-    enabled: Boolean,
-    onUnitSelected: (UnitSystem) -> Unit
-) {
-    val selected = chipUnit == current
-    Surface(
-        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-        shape = MaterialTheme.shapes.large
-    ) {
-        Text(
-            text = label,
-            color = if (selected) MaterialTheme.colorScheme.onPrimary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .let { if (enabled) it.clickable { onUnitSelected(chipUnit) } else it }
         )
     }
 }

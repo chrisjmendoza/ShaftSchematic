@@ -2,12 +2,11 @@
 package com.android.shaftschematic.ui.shaft
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.screen.ShaftScreen
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
@@ -23,6 +22,7 @@ import kotlinx.coroutines.launch
  * - No I/O or PDF. Pure binding layer.
  * - Model stays mm; UI converts only for display/input.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShaftRoute(vm: ShaftViewModel) {
     val scope = rememberCoroutineScope()
@@ -39,6 +39,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val overallIsManual by vm.overallIsManual.collectAsState()
     val order            by vm.componentOrder.collectAsState()
 
+    var showSettings by remember { mutableStateOf(false) }
     fun showSnack(msg: String) = scope.launch { snackbarHostState.showSnackbar(msg) }
 
     Box {
@@ -69,12 +70,11 @@ fun ShaftRoute(vm: ShaftViewModel) {
             onSetOverallLengthMm = vm::onSetOverallLengthMm,
             onSetOverallIsManual  = vm::setOverallIsManual,
 
-            // Adds (note the thread mapping: screen gives pitch third, major fourth)
+            // Adds
             onAddBody   = { s, l, d        -> vm.addBodyAt(s, l, d) },
             onAddTaper  = { s, l, sd, ed   -> vm.addTaperAt(s, l, sd, ed) },
-
             onAddThread = { startMm, lengthMm, majorDiaMm, pitchMm ->
-                vm.addThreadAt(startMm, lengthMm, majorDiaMm, pitchMm) // Descriptive names prevent future swaps.
+                vm.addThreadAt(startMm, lengthMm, majorDiaMm, pitchMm)
             },
             onAddLiner  = { s, l, od       -> vm.addLinerAt(s, l, od) },
 
@@ -95,11 +95,48 @@ fun ShaftRoute(vm: ShaftViewModel) {
                 ShaftDrawing(
                     spec = s,
                     unit = u,
-                    showGrid = showGrid   // ← pass the actual state instead of false
+                    showGrid = showGrid   // pass actual state (was hard-coded before)
                 )
             },
 
-            snackbarHostState = snackbarHostState
+            snackbarHostState = snackbarHostState,
+
+            // Actions (no unresolved refs)
+            onExportPdf = {
+                // Placeholder; replace with real export when available
+                showSnack("PDF export not wired yet.")
+            },
+            onOpenSettings = {
+                showSettings = true
+            }
         )
+
+        // Minimal settings sheet (non-invasive, can be replaced with a screen later)
+        if (showSettings) {
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ModalBottomSheet(
+                onDismissRequest = { showSettings = false },
+                sheetState = sheetState
+            ) {
+                ListItem(
+                    headlineContent = { Text("Show grid in preview") },
+                    trailingContent = {
+                        Switch(
+                            checked = showGrid,
+                            onCheckedChange = { vm.setShowGrid(it) }
+                        )
+                    }
+                )
+                ListItem(
+                    headlineContent = { Text("Theme (app-wide)") },
+                    supportingContent = { Text("Managed in main Settings; coming soon.") }
+                )
+                TextButton(
+                    onClick = { showSettings = false },
+                    modifier = Modifier
+                        .padding(16.dp)
+                ) { Text("Close") }
+            }
+        }
     }
 }

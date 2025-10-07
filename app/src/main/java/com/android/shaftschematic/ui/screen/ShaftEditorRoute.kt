@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -46,6 +47,7 @@ fun ShaftEditorRoute(
                 actions = {
                     IconButton(onClick = onSave) { Icon(Icons.Filled.Save, "Save JSON") }
                     IconButton(onClick = onExportPdf) { Icon(Icons.Outlined.PictureAsPdf, "Export PDF") }
+                    IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Settings") }
                 }
             )
         }
