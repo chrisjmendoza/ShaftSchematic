@@ -1,3 +1,4 @@
+// app/src/main/java/com/android/shaftschematic/model/ShaftSpec.kt
 package com.android.shaftschematic.model
 
 import kotlinx.serialization.Serializable
@@ -5,34 +6,30 @@ import kotlinx.serialization.Serializable
 /**
  * Root aggregate for a shaft specification.
  *
- * All geometric values are stored in **millimeters (mm)**.
- * Components are positioned by **startFromAftMm** measured from the AFT end
- * toward the FWD direction. No assumptions are made about overlap; consumers
- * can call [validate] to check bounds and simple invariants.
+ * Units: **mm** (millimeters).
+ *
+ * All axial positions are measured AFT → FWD. Overlaps are permitted; call [validate] for
+ * basic bounds checks. Helper methods provide coverage, free length, and max OD summaries.
+ *
+ * @property overallLengthMm Total shaft length AFT → FWD.
+ * @property bodies Constant-diameter cylindrical segments.
+ * @property tapers Linear transitions between diameters.
+ * @property threads External threaded segments.
+ * @property liners Outer sleeves/liners.
  */
 @Serializable
 data class ShaftSpec(
-    /** Overall shaft length measured AFT→FWD in mm. */
     val overallLengthMm: Float = 0f,
-
-    /** Constant-diameter cylindrical segments. */
     val bodies: List<Body> = emptyList(),
-
-    /** Linear transitions between diameters. */
     val tapers: List<Taper> = emptyList(),
-
-    /** External threaded segments. */
     val threads: List<Threads> = emptyList(),
-
-    /** Outer sleeves/liners. */
     val liners: List<Liner> = emptyList(),
 )
 
-/* ────────────────────────────────────────────────────────────────────────────
- * Aggregate helpers (optional, non-throwing)
- * ──────────────────────────────────────────────────────────────────────────── */
-
-/** Quick bounds/negatives check for all segments; does not check overlaps. */
+/**
+ * Basic non-overlap validation: checks non-negative fields and that each segment is within
+ * [overallLengthMm]. Does not test for intersections or sequencing constraints.
+ */
 fun ShaftSpec.validate(): Boolean {
     if (overallLengthMm < 0f) return false
     if (!bodies.all { it.isValid(overallLengthMm) }) return false
@@ -42,9 +39,7 @@ fun ShaftSpec.validate(): Boolean {
     return true
 }
 
-/** End-of-coverage position (max of start+length across all segments). */
-// === SINGLE SOURCE OF TRUTH ===
-// Farther occupied end across ALL components (mm).
+/** Farthest occupied axial end across all components (mm). */
 fun ShaftSpec.coverageEndMm(): Float {
     val bodyEnd   = bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
     val taperEnd  = tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
@@ -52,10 +47,12 @@ fun ShaftSpec.coverageEndMm(): Float {
     val threadEnd = threads.maxOfOrNull { it.startFromAftMm + it.lengthMm } ?: 0f
     return maxOf(bodyEnd, taperEnd, linerEnd, threadEnd)
 }
+
+/** Remaining free axial distance from coverage end to [overallLengthMm] (≥ 0). */
 fun ShaftSpec.freeToEndMm(): Float =
     (overallLengthMm - coverageEndMm()).coerceAtLeast(0f)
 
-/** Maximum outer diameter found across all components (mm). */
+/** Maximum outer diameter observed across all components (mm). */
 fun ShaftSpec.maxOuterDiaMm(): Float {
     var maxDia = 0f
     bodies.forEach  { maxDia = maxOf(maxDia, it.diaMm) }
@@ -64,3 +61,11 @@ fun ShaftSpec.maxOuterDiaMm(): Float {
     liners.forEach  { maxDia = maxOf(maxDia, it.odMm) }
     return maxDia
 }
+
+/**
+ * Back-compat normalization:
+ * returns a copy where each [Threads] has both [Threads.pitchMm] and [Threads.tpi]
+ * populated when either one is present and > 0. Call this after JSON decode.
+ */
+fun ShaftSpec.normalized(): ShaftSpec =
+    copy(threads = threads.map { it.normalized() })

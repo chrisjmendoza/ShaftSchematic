@@ -1,3 +1,4 @@
+// app/src/main/java/com/android/shaftschematic/model/Threads.kt
 package com.android.shaftschematic.model
 
 import kotlinx.serialization.Serializable
@@ -10,13 +11,23 @@ import java.util.UUID
  *
  * Geometry is measured AFT → FWD in canonical millimeters. This type implements [Segment].
  *
+ * Back-compat:
+ * - Older saves may only provide [pitchMm] (metric).
+ * - Newer saves may provide [tpi] (imperial).
+ * - Use [normalized] so both are available at runtime when either is present.
+ *
+ * @property id Stable identifier for this segment.
  * @property startFromAftMm Where the threaded section starts (from AFT toward FWD).
  * @property majorDiaMm Major diameter of the thread (outer).
- * @property pitchMm Thread pitch (distance per turn).
+ * @property pitchMm Thread pitch (distance per turn) in **mm/turn**. May be 0 in legacy files.
  * @property lengthMm Axial length of the threaded section.
  * @property excludeFromOAL If true, this thread is **excluded** from overall-length calculations
- *                          (but still renders in the preview). This supports the common practice
- *                          of starting shaft measurement after the thread when desired.
+ *                          (but still renders in the preview/PDF).
+ * @property tpi Optional threads-per-inch (imperial). Preferred when set; see [normalized].
+ *
+ * Invariants:
+ * - All distances are ≥ 0.
+ * - [lengthMm] > 0 to produce visible output.
  */
 @Serializable
 data class Threads(
@@ -25,13 +36,41 @@ data class Threads(
     val majorDiaMm: Float = 0f,
     val pitchMm: Float = 0f,
     override val lengthMm: Float = 0f,
-    val excludeFromOAL: Boolean = false
-) : Segment
+    val excludeFromOAL: Boolean = false,
+    val tpi: Float? = null
+) : Segment {
 
-/* ────────────────────────────────────────────────────────────────────────────
- * Validation
- * ──────────────────────────────────────────────────────────────────────────── */
+    /**
+     * Returns a copy where **both** [pitchMm] (mm/turn) and [tpi] (threads/inch) are populated
+     * whenever either is provided and > 0.
+     *
+     * - If only [tpi] exists, compute `pitchMm = 25.4 / tpi`.
+     * - If only [pitchMm] exists, compute `tpi = 25.4 / pitchMm`.
+     * - If neither is valid, fields are left as-is.
+     */
+    fun normalized(): Threads {
+        val pitch = when {
+            pitchMm > 0f -> pitchMm
+            (tpi ?: 0f) > 0f -> 25.4f / (tpi ?: 1f)
+            else -> pitchMm
+        }
+        val tpiVal = when {
+            (tpi ?: 0f) > 0f -> tpi
+            pitch > 0f       -> 25.4f / pitch
+            else             -> tpi
+        }
+        return copy(pitchMm = pitch, tpi = tpiVal)
+    }
 
-/** Basic invariants for a ThreadSpec. */
+    /** True if a usable pitch is available (either metric or imperial). */
+    val hasPitch: Boolean get() = pitchMm > 0f || (tpi ?: 0f) > 0f
+}
+
+/**
+ * Quick bounds validation for this segment against an overall shaft length.
+ * Does not check overlaps; use aggregate checks if needed.
+ */
 fun Threads.isValid(overallLengthMm: Float): Boolean =
-    isWithin(overallLengthMm) && majorDiaMm >= 0f && pitchMm >= 0f
+    isWithin(overallLengthMm) &&
+        majorDiaMm >= 0f &&
+        pitchMm >= 0f

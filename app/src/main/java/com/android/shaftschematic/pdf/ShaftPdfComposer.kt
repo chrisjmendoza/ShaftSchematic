@@ -1,4 +1,4 @@
-// File: com/android/shaftschematic/pdf/ShaftPdfComposer.kt
+// File: app/src/main/java/com/android/shaftschematic/pdf/ShaftPdfComposer.kt
 @file:Suppress("MemberVisibilityCanBePrivate", "unused")
 
 package com.android.shaftschematic.pdf
@@ -17,32 +17,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-/*
- * ShaftPdfComposer
- *
- * Purpose
- * Convert the canonical mm-based [ShaftSpec] + metadata into a single-page PDF drawing that
- * mirrors our on-screen Preview style. This keeps the renderer logic consistent while using
- * Android's PdfDocument Canvas directly (no Compose dependency when exporting).
- *
- * Contracts & Invariants
- * - **Model is millimeters**. We never store inches here; convert only for text labels.
- * - Layout policy fits geometry to the available width inside margins; vertical position
- *   is centered with a slight upward bias to reserve space for footer info.
- * - Drawing order: bodies → tapers → threads (with hatch) → liners.
- * - Dimension system: overall above component lanes; 1" gap between geometry and footer.
- * - Thread look matches Preview: diagonal hatch with stride = max(8 px, pitchMm * ptPerMm).
- *
- * Inputs
- * - [page]: opened PdfDocument.Page to draw into.
- * - [spec]: the shaft spec in **mm**.
- * - [unit]: label unit (mm or inches) for dimension & footer text.
- * - [project], [appVersion], [filename]: footer metadata and stamp text.
- */
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Public API
-// ──────────────────────────────────────────────────────────────────────────────
+/*  … same header contract as before … */
 
 fun composeShaftPdf(
     page: PdfDocument.Page,
@@ -56,7 +31,6 @@ fun composeShaftPdf(
     val pageW = page.info.pageWidth.toFloat()
     val pageH = page.info.pageHeight.toFloat()
 
-    // --- Geometry area (inside margins)
     val geomRect = RectF(
         PAGE_MARGIN_PT,
         PAGE_MARGIN_PT + TOP_TEXT_PAD_PT,
@@ -64,7 +38,6 @@ fun composeShaftPdf(
         pageH - PAGE_MARGIN_PT - FOOTER_BLOCK_PT
     )
 
-    // --- Paint kit
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = OUTLINE_PT; color = 0xFF000000.toInt()
     }
@@ -77,7 +50,6 @@ fun composeShaftPdf(
         color = 0xFF000000.toInt()
     }
 
-    // --- Scale & placement (fit-to-width)
     val overallMm = max(1f, spec.overallLengthMm)
     val ptPerMm = geomRect.width() / overallMm
     val left = geomRect.left
@@ -87,25 +59,25 @@ fun composeShaftPdf(
     val cy = (geomRect.top + geomRect.bottom) * 0.5f - CY_UP_BIAS_PT
     val yTopOfShaft = cy - halfHeightPx
 
-    fun xAt(mm: Float) = left + mm * ptPerMm
-    fun rPx(diaMm: Float) = (diaMm * 0.5f) * ptPerMm
+    fun xAt(mm: Float) = (left + mm * ptPerMm).coerceIn(geomRect.left, geomRect.right)
+    fun rPx(d: Float)  = (d * 0.5f) * ptPerMm
 
-    // 1) Geometry stack
-    drawBodies(c, spec.bodies, cy, ::xAt, ::rPx, outline)
+    // geometry
+    drawBodiesCompressedCenterBreak(c, spec.bodies, cy, ::xAt, ::rPx, outline, geomRect)
     drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline)
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
 
-    // 2) Dimension lanes (overall above component lanes)
+    // dims
     drawDimensionsLikePreview(c, spec, unit, ::xAt, yTopOfShaft, text, dim)
 
-    // 3) Footer — exactly 1" below geometry
+    // footer
     val infoTop = cy + halfHeightPx + INFO_GAP_PT
     val infoBottom = min(infoTop + FOOTER_BLOCK_PT, pageH - PAGE_MARGIN_PT)
     val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
     drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text)
 
-    // 4) Page stamp (bottom-right, page coordinates)
+    // stamp
     val meta = "$filename  •  ShaftSchematic $appVersion"
     val metaW = text.measureText(meta)
     c.drawText(meta, pageW - PAGE_MARGIN_PT - metaW, pageH - PAGE_MARGIN_PT - 4f, text)
@@ -137,28 +109,95 @@ private const val EXT_OVERRUN_PT = 4f        // how much extension lines rise pa
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
 private const val FOOTER_BLOCK_PT = 96f
 
+// Compression (paper-space heuristic; bodies only)
+private const val COMPRESS_TRIGGER_PT = 220f // if body length on paper ≥ this, show center-break
+private const val ZIGZAG_GAP_MAX_PT = 40f    // max central gap width
+private const val ZIGZAG_TEETH = 3           // 2–3 looks best; using 3 by default
+
+// Label collision avoidance
+private const val LABEL_STACK_STEP_PT = 10f  // vertical nudge per collision
+private const val LABEL_LEADER_PT = 8f       // short leader when label is nudged
+
 // ──────────────────────────────────────────────────────────────────────────────
-// Geometry — components
+// Geometry — bodies with centered long-break compression
 // ──────────────────────────────────────────────────────────────────────────────
 
-private fun drawBodies(
+private fun drawBodiesCompressedCenterBreak(
     c: Canvas,
     bodies: List<Body>,
     cy: Float,
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
     outline: Paint,
+    geomRect: RectF
 ) {
+    val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
     bodies.forEach { b ->
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
-        c.drawLine(x0, top, x1, top, outline)
-        c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, outline)
-        c.drawLine(x1, top, x1, bot, outline)
+
+        val bodyLenPt = abs(x1 - x0)
+        val compress = bodyLenPt >= COMPRESS_TRIGGER_PT
+
+        if (!compress) {
+            // classic rectangle body
+            c.drawLine(x0, top, x1, top, outline)
+            c.drawLine(x0, bot, x1, bot, outline)
+            c.drawLine(x0, top, x0, bot, outline)
+            c.drawLine(x1, top, x1, bot, outline)
+        } else {
+            // centered break: two stubs + zig-zag gap
+            val mid = (x0 + x1) * 0.5f
+            val gap = min(ZIGZAG_GAP_MAX_PT, 0.25f * bodyLenPt)
+            val half = 0.5f * gap
+            val leftEnd = (mid - half).coerceIn(geomRect.left, geomRect.right)
+            val rightBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
+
+            // Left stub
+            c.drawLine(x0, top, leftEnd, top, outline)
+            c.drawLine(x0, bot, leftEnd, bot, outline)
+            c.drawLine(x0, top, x0, bot, outline)
+            c.drawLine(leftEnd, top, leftEnd, bot, capPaint)
+
+            // Right stub
+            c.drawLine(rightBeg, top, x1, top, outline)
+            c.drawLine(rightBeg, bot, x1, bot, outline)
+            c.drawLine(rightBeg, top, rightBeg, bot, capPaint)
+            c.drawLine(x1, top, x1, bot, outline)
+
+            // Zig-zag break, centered at mid within the gap
+            drawZigZagBreak(c, top, bot, mid, gap, capPaint)
+        }
     }
 }
+
+private fun drawZigZagBreak(
+    c: Canvas,
+    yTop: Float,
+    yBot: Float,
+    xMid: Float,
+    gap: Float,
+    p: Paint,
+    teeth: Int = ZIGZAG_TEETH
+) {
+    val height = yBot - yTop
+    val zTop = yTop + 0.25f * height
+    val zBot = yBot - 0.25f * height
+    val toothW = gap / max(1, teeth)
+    var xL = xMid - 0.5f * gap
+    repeat(teeth) {
+        val xR = xL + toothW
+        // “/” then “\”
+        c.drawLine(xL, zBot, (xL + xR) * 0.5f, zTop, p)
+        c.drawLine((xL + xR) * 0.5f, zTop, xR, zBot, p)
+        xL = xR
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Geometry — components (continuous for tapers/threads/liners)
+// ──────────────────────────────────────────────────────────────────────────────
 
 private fun drawTapers(
     c: Canvas,
@@ -202,7 +241,7 @@ private fun drawThreads(
         c.drawLine(x0, top, x0, bot, outline)
         c.drawLine(x1, top, x1, bot, outline)
 
-        // Hatch — match Preview: stride = max(8 px, pitchMm * ptPerMm), clipped to band
+        // Hatch — stride = max(8 px, pitchMm * ptPerMm), clipped to band
         val step = max(8f, th.pitchMm * ptPerMm)
         val rect = RectF(min(x0, x1), min(top, bot), max(x0, x1), max(top, bot))
         val save = c.save()
@@ -237,7 +276,7 @@ private fun drawLiners(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Dimensions (Preview-style: overall above components; lanes avoid collisions)
+// Dimensions (Preview-style; avoid label collisions per lane)
 // ──────────────────────────────────────────────────────────────────────────────
 
 private data class Interval(val startMm: Float, val endMm: Float)
@@ -253,7 +292,7 @@ private fun drawDimensionsLikePreview(
 ) {
     val firstLaneY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
 
-    // 1) Gather component intervals
+    // Gather component intervals
     data class Interval(val startMm: Float, val endMm: Float)
     val ivs = ArrayList<Interval>()
     spec.bodies.forEach  { if (it.lengthMm > 0f && it.diaMm       > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
@@ -261,8 +300,8 @@ private fun drawDimensionsLikePreview(
     spec.threads.forEach { if (it.lengthMm > 0f && it.majorDiaMm  > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
     spec.liners.forEach  { if (it.lengthMm > 0f && it.odMm        > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
 
-    // 2) Greedy lane packing (same as today), but track the smallest y (topmost)
-    data class Lane(var endX: Float, val y: Float)
+    // Greedy lane packing; track smallest Y (topmost)
+    data class Lane(var endX: Float, val y: Float, val labels: MutableList<RectF> = mutableListOf())
     val lanes = mutableListOf<Lane>()
     val sorted = ivs.sortedWith(compareBy({ it.startMm }, { it.endMm }))
     var topmostLaneY = firstLaneY
@@ -271,21 +310,35 @@ private fun drawDimensionsLikePreview(
         val x0 = xAt(iv.startMm); val x1 = xAt(iv.endMm)
         var idx = -1
         for (i in lanes.indices) if (x0 >= lanes[i].endX) { idx = i; break }
-        if (idx == -1) { lanes += Lane(x1, firstLaneY - lanes.size * (TEXT_PT + LANE_GAP_PT)); idx = lanes.lastIndex } else { lanes[idx].endX = x1 }
-        val y = lanes[idx].y
-        if (y < topmostLaneY) topmostLaneY = y
-        drawDimWithExtensions(c, x0, x1, y, yTopOfShaft, fmtLen(unit, iv.endMm - iv.startMm), text, dim)
+        if (idx == -1) {
+            lanes += Lane(x1, firstLaneY - lanes.size * (TEXT_PT + LANE_GAP_PT))
+            idx = lanes.lastIndex
+        } else {
+            lanes[idx].endX = x1
+        }
+        val lane = lanes[idx]
+        if (lane.y < topmostLaneY) topmostLaneY = lane.y
+
+        drawDimWithExtensionsAvoidingOverlap(
+            c, x0, x1, lane.y, yTopOfShaft,
+            fmtLen(unit, iv.endMm - iv.startMm),
+            text, dim, lane.labels
+        )
     }
 
-    // 3) Overall goes one lane above the topmost component lane
+    // Overall one lane above the topmost component lane
     val gap = TEXT_PT + LANE_GAP_PT
     val overallY = if (lanes.isEmpty()) firstLaneY - OVERALL_EXTRA_PT else topmostLaneY - gap
     val xa = xAt(0f); val xf = xAt(spec.overallLengthMm)
-    drawDimWithExtensions(c, xa, xf, overallY, yTopOfShaft, fmtLen(unit, spec.overallLengthMm), text, dim)
+
+    drawDimWithExtensionsAvoidingOverlap(
+        c, xa, xf, overallY, yTopOfShaft,
+        fmtLen(unit, spec.overallLengthMm),
+        text, dim, mutableListOf()
+    )
 }
 
-
-private fun drawDimWithExtensions(
+private fun drawDimWithExtensionsAvoidingOverlap(
     c: Canvas,
     x0: Float,
     x1: Float,
@@ -294,6 +347,7 @@ private fun drawDimWithExtensions(
     label: String,
     text: Paint,
     dim: Paint,
+    occupiedLabels: MutableList<RectF>
 ) {
     val extStartY = yTopOfShaft - EXT_OFFSET_PT
     val extEndY = yDim + EXT_OVERRUN_PT
@@ -305,14 +359,43 @@ private fun drawDimWithExtensions(
     val gap = w + LABEL_PAD_PT * 2
     val leftEnd = mid - gap / 2f
     val rightStart = mid + gap / 2f
+
+    // Leave a window for the label
     c.drawLine(x0, yDim, leftEnd, yDim, dim)
     c.drawLine(rightStart, yDim, x1, yDim, dim)
 
     drawArrowInward(c, x0, yDim, dim)
     drawArrowInward(c, x1, yDim, dim, left = false)
 
-    val ty = yDim - (text.descent() + text.ascent()) / 2f
-    c.drawText(label, mid - w / 2f, ty, text)
+    // Ideal label rect centered on the line
+    val textYCenter = yDim - (text.descent() + text.ascent()) / 2f
+    val baseRect = RectF(mid - w / 2f, textYCenter + text.ascent(), mid + w / 2f, textYCenter + text.descent())
+
+    // Stack upward until no collision with previous labels on this lane
+    var bumpedRect = RectF(baseRect)
+    var bumps = 0
+    while (occupiedLabels.any { it.intersects(bumpedRect.left, bumpedRect.top, bumpedRect.right, bumpedRect.bottom) }) {
+        bumps++
+        val dy = LABEL_STACK_STEP_PT * bumps
+        bumpedRect.set(baseRect.left, baseRect.top - dy, baseRect.right, baseRect.bottom - dy)
+    }
+
+    // If bumped, draw a tiny leader from gap center to the raised label
+    val labelCx = bumpedRect.left
+    val labelCy = (bumpedRect.top - text.ascent()) // rect→baseline
+    if (bumps > 0) {
+        val leaderY = bumpedRect.top - 2f
+        c.drawLine(mid, yDim - 2f, mid, leaderY, dim)
+        c.drawLine(mid - LABEL_LEADER_PT / 2f, leaderY, mid + LABEL_LEADER_PT / 2f, leaderY, dim)
+    }
+
+    c.drawText(label, labelCx, labelCy, text)
+    occupiedLabels += RectF(
+        labelCx,
+        labelCy + text.ascent(),
+        labelCx + w,
+        labelCy + text.descent()
+    )
 }
 
 private fun drawArrowInward(c: Canvas, x: Float, y: Float, p: Paint, left: Boolean = true) {
@@ -324,12 +407,6 @@ private fun drawArrowInward(c: Canvas, x: Float, y: Float, p: Paint, left: Boole
 // ──────────────────────────────────────────────────────────────────────────────
 // Footer (3 columns; center column is work-order info)
 // ──────────────────────────────────────────────────────────────────────────────
-
-data class ProjectInfo(
-    val customer: String = "",
-    val vessel: String = "",
-    val jobNumber: String = "",
-)
 
 private fun drawFooter(
     c: Canvas,
@@ -378,9 +455,10 @@ private fun drawFooter(
         var y = top
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         c.drawText("Customer: ${project.customer}", midX, y, text); y += lh
-        c.drawText("Vessel: ${project.vessel}", midX, y, text); y += lh
+        c.drawText("Vessel: ${project.vessel}",   midX, y, text); y += lh
         c.drawText("Job #: ${project.jobNumber}", midX, y, text); y += lh
         c.drawText("Date: $date", midX, y, text); y += lh
+        c.drawText("Not to scale: long bodies compressed for readability.", midX, y, text)
     }
 
     // Right (FWD)
