@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -408,7 +407,11 @@ private fun ComponentCarouselPager(
     // Two sentinel “add” pages at the ends: [Add] [Existing*] [Add]
     val pageCount = rows.size + 2
     val initial = if (rows.isNotEmpty()) 1 else 0
-    val pagerState = rememberPagerState(initialPage = initial)
+    val pagerState = rememberPagerState(
+        initialPage = initial,
+        pageCount = { pageCount }
+    )
+
     val scope = rememberCoroutineScope()
 
     Row(Modifier.fillMaxWidth().heightIn(min = 280.dp)) {
@@ -427,7 +430,6 @@ private fun ComponentCarouselPager(
 
         // Pager (80%)
         HorizontalPager(
-            pageCount = pageCount,
             state = pagerState,
             modifier = Modifier
                 .weight(0.8f)
@@ -878,9 +880,10 @@ private fun Modifier.clickableWithoutRipple(
     enabled: Boolean = true,
     onClick: () -> Unit
 ): Modifier = this.then(
-    androidx.compose.foundation.clickable(
+    clickable(
         enabled = enabled,
         indication = null,
-        interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource()
+        interactionSource = MutableInteractionSource()
     ) { onClick() }
 )
+

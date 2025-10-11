@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.zIndex
@@ -79,7 +82,10 @@ fun ComponentCarousel(
     }
 
     val initial = if (components.isNotEmpty()) 1 else 0
-    val pagerState = rememberPagerState(initialPage = initial) // old API style
+    val pagerState = rememberPagerState(
+        initialPage = initial,
+        pageCount = { pages.size }   // <-- lambda, not an Int
+    )
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(pagerState.currentPage, pages) {
@@ -112,7 +118,6 @@ fun ComponentCarousel(
 
         // Center pager (old API requires pageCount here)
         HorizontalPager(
-            pageCount = pages.size,
             state = pagerState,
             modifier = Modifier
                 .weight(0.8f)
@@ -300,10 +305,12 @@ private fun ArrowHint(left: Boolean) {
 private fun Modifier.clickableWithoutRipple(
     enabled: Boolean = true,
     onClick: () -> Unit
-): Modifier = this.then(
-    androidx.compose.foundation.clickable(
+): Modifier = composed {
+    val interaction = remember { MutableInteractionSource() }
+    this.clickable(
         enabled = enabled,
         indication = null,
-        interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource()
-    ) { onClick() }
-)
+        interactionSource = interaction,
+        onClick = onClick
+    )
+}
