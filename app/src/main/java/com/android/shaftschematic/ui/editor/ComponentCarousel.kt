@@ -9,16 +9,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.zIndex
+import kotlinx.coroutines.launch // <-- needed for scope.launch
 
-// --- Data model (simplified; adapt to your real model) ---
+// --- Data model (demo; adapt to your real model) ---
 sealed class ShaftComponent {
     abstract val id: String
     abstract val name: String
@@ -64,7 +63,7 @@ fun ComponentCarousel(
     components: List<ShaftComponent>,
     modifier: Modifier = Modifier,
     // callbacks
-    onAddRequested: (atIndex: Int) -> Unit,        // index where new component should be inserted
+    onAddRequested: (atIndex: Int) -> Unit,
     onUpdateComponent: (index: Int, updated: ShaftComponent) -> Unit,
     onDeleteComponent: (index: Int) -> Unit,
     // optional: preview highlight hook
@@ -79,11 +78,10 @@ fun ComponentCarousel(
         }
     }
 
-    // Start focused on first real component if present; else the trailing AddAfter
     val initial = if (components.isNotEmpty()) 1 else 0
-    val pagerState = rememberPagerState(initialPage = initial, pageCount = { pages.size })
+    val pagerState = rememberPagerState(initialPage = initial) // old API style
+    val scope = rememberCoroutineScope()
 
-    // Map page -> focused existing index (or null for add cards)
     LaunchedEffect(pagerState.currentPage, pages) {
         val p = pages[pagerState.currentPage]
         onFocusedComponentChanged((p as? Page.Existing)?.index)
@@ -93,21 +91,18 @@ fun ComponentCarousel(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 280.dp) // tune to your layout under the preview
+            .heightIn(min = 280.dp)
     ) {
         // Left arrow/tap zone
         Box(
             Modifier
                 .weight(0.1f)
                 .fillMaxHeight()
-                .zIndex(2f) // sits above pager for easy taps
-                .clickableWithoutRipple(enabled = pages.isNotEmpty()) {
+                .zIndex(2f)
+                .clickableWithoutRipple {
                     val prev = (pagerState.currentPage - 1).coerceAtLeast(0)
                     if (prev != pagerState.currentPage) {
-                        // Snap instantly to keep it feeling like a lane; you can animate if preferred
-                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                            pagerState.animateScrollToPage(prev)
-                        }
+                        scope.launch { pagerState.animateScrollToPage(prev) }
                     }
                 },
             contentAlignment = Alignment.Center
@@ -115,13 +110,13 @@ fun ComponentCarousel(
             ArrowHint(left = true)
         }
 
-        // Center pager (80%)
+        // Center pager (old API requires pageCount here)
         HorizontalPager(
+            pageCount = pages.size,
             state = pagerState,
             modifier = Modifier
                 .weight(0.8f)
-                .fillMaxHeight(),
-            beyondBoundsPageCount = 1
+                .fillMaxHeight()
         ) { page ->
             when (val p = pages[page]) {
                 Page.AddBefore -> AddComponentCard(
@@ -147,12 +142,10 @@ fun ComponentCarousel(
                 .weight(0.1f)
                 .fillMaxHeight()
                 .zIndex(2f)
-                .clickableWithoutRipple(enabled = pages.isNotEmpty()) {
+                .clickableWithoutRipple {
                     val next = (pagerState.currentPage + 1).coerceAtMost(pages.lastIndex)
                     if (next != pagerState.currentPage) {
-                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                            pagerState.animateScrollToPage(next)
-                        }
+                        scope.launch { pagerState.animateScrollToPage(next) }
                     }
                 },
             contentAlignment = Alignment.Center
@@ -178,7 +171,7 @@ private fun AddComponentCard(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .padding(20.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -221,26 +214,24 @@ private fun ComponentEditorCard(
                 fontWeight = FontWeight.SemiBold
             )
 
-            // ——— Inline field panels by type ———
             when (component) {
                 is ShaftComponent.Thread -> ThreadFields(component, onUpdate)
-                is ShaftComponent.Taper -> TaperFields(component, onUpdate)
-                is ShaftComponent.Body -> BodyFields(component, onUpdate)
-                is ShaftComponent.Liner -> LinerFields(component, onUpdate)
+                is ShaftComponent.Taper  -> TaperFields(component, onUpdate)
+                is ShaftComponent.Body   -> BodyFields(component, onUpdate)
+                is ShaftComponent.Liner  -> LinerFields(component, onUpdate)
             }
 
-            // Row of actions
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = onDelete, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                    Text("Remove")
-                }
-                // Optional: duplicate, move, etc.
+                TextButton(
+                    onClick = onDelete,
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) { Text("Remove") }
             }
         }
     }
 }
 
-// ——— Field panels (simplified; swap for your real components/validators) ———
+/* ——— Field panels (simplified) ——— */
 
 @Composable
 private fun ThreadFields(
@@ -251,15 +242,11 @@ private fun ThreadFields(
         LabeledNumberField("Major Ø (mm)", value.majorDiaMm) { onUpdate(value.copy(majorDiaMm = it)) }
         LabeledNumberField("Pitch (mm/turn)", value.pitchMm) { onUpdate(value.copy(pitchMm = it)) }
         LabeledNumberField("Length (mm)", value.lengthMm) { onUpdate(value.copy(lengthMm = it)) }
-        // Bonus: show parsed fraction ghost text next to decimal if you support fraction input
     }
 }
 
 @Composable
-private fun TaperFields(
-    value: ShaftComponent.Taper,
-    onUpdate: (ShaftComponent.Taper) -> Unit
-) {
+private fun TaperFields(value: ShaftComponent.Taper, onUpdate: (ShaftComponent.Taper) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LabeledNumberField("Start Ø (mm)", value.startDiaMm) { onUpdate(value.copy(startDiaMm = it)) }
         LabeledNumberField("End Ø (mm)", value.endDiaMm) { onUpdate(value.copy(endDiaMm = it)) }
@@ -268,10 +255,7 @@ private fun TaperFields(
 }
 
 @Composable
-private fun BodyFields(
-    value: ShaftComponent.Body,
-    onUpdate: (ShaftComponent.Body) -> Unit
-) {
+private fun BodyFields(value: ShaftComponent.Body, onUpdate: (ShaftComponent.Body) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LabeledNumberField("Ø (mm)", value.diaMm) { onUpdate(value.copy(diaMm = it)) }
         LabeledNumberField("Length (mm)", value.lengthMm) { onUpdate(value.copy(lengthMm = it)) }
@@ -279,10 +263,7 @@ private fun BodyFields(
 }
 
 @Composable
-private fun LinerFields(
-    value: ShaftComponent.Liner,
-    onUpdate: (ShaftComponent.Liner) -> Unit
-) {
+private fun LinerFields(value: ShaftComponent.Liner, onUpdate: (ShaftComponent.Liner) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LabeledNumberField("Width (mm)", value.widthMm) { onUpdate(value.copy(widthMm = it)) }
         LabeledNumberField("Length (mm)", value.lengthMm) { onUpdate(value.copy(lengthMm = it)) }
@@ -296,7 +277,7 @@ private fun LabeledNumberField(label: String, initial: Float, onValue: (Float) -
         value = text,
         onValueChange = {
             text = it
-            it.toFloatOrNull()?.let(onValue) // TODO: plug in your fraction parser here
+            it.toFloatOrNull()?.let(onValue) // hook your fraction parser here if needed
         },
         label = { Text(label) },
         singleLine = true,
@@ -304,7 +285,8 @@ private fun LabeledNumberField(label: String, initial: Float, onValue: (Float) -
     )
 }
 
-// Simple arrow hint (you can replace with icons)
+/* ——— Arrow and click helper ——— */
+
 @Composable
 private fun ArrowHint(left: Boolean) {
     Text(
@@ -314,8 +296,7 @@ private fun ArrowHint(left: Boolean) {
     )
 }
 
-// No ripple tap helper
-@Composable
+/** No-ripple click helper (non-composable; no remember) */
 private fun Modifier.clickableWithoutRipple(
     enabled: Boolean = true,
     onClick: () -> Unit
@@ -323,6 +304,6 @@ private fun Modifier.clickableWithoutRipple(
     androidx.compose.foundation.clickable(
         enabled = enabled,
         indication = null,
-        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+        interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource()
     ) { onClick() }
 )

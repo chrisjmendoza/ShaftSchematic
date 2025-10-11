@@ -427,12 +427,12 @@ private fun ComponentCarouselPager(
 
         // Pager (80%)
         HorizontalPager(
-            pageCount = pageCount,                 // pass explicit page count
+            pageCount = pageCount,
             state = pagerState,
             modifier = Modifier
                 .weight(0.8f)
                 .fillMaxSize()
-        ) { page ->
+        )  { page ->
             when (page) {
                 0 -> AddComponentCard(
                     label = "Add section at start",
@@ -881,6 +881,6 @@ private fun Modifier.clickableWithoutRipple(
     androidx.compose.foundation.clickable(
         enabled = enabled,
         indication = null,
-        interactionSource = MutableInteractionSource()
+        interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource()
     ) { onClick() }
 )
