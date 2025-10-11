@@ -1,8 +1,8 @@
 package com.android.shaftschematic.ui.screen
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +24,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -35,6 +38,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -47,26 +51,18 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.input.ImeAction
@@ -85,6 +81,7 @@ import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.util.UnitSystem
+import kotlinx.coroutines.launch
 
 /**
  * ShaftScreen — Editor surface
@@ -95,7 +92,7 @@ import com.android.shaftschematic.util.UnitSystem
  * • Free-to-End badge overlay (top-start of preview; red on oversize)
  * • Overall length input (ghost “0”; commits on blur/Done; auto when not manual)
  * • Project fields (commit-on-blur / IME Done)
- * • Component cards (edit & remove) — rendering honors cross-type ID order
+ * • Component carousel (edit & remove) — honors cross-type ID order
  * • Add-component FAB floating above IME & nav bar
  *
  * Contract / Invariants
@@ -157,7 +154,6 @@ fun ShaftScreen(
     onClickSave: () -> Unit,
     onExportPdf: () -> Unit,
     onOpenSettings: () -> Unit,
-
 ) {
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
@@ -222,8 +218,8 @@ fun ShaftScreen(
                 // Overall Length (auto vs manual — always show a value)
                 var hasLenFocus by remember { mutableStateOf(false) }
 
-// keep local text in sync with unit/mode unless the user is typing
-                val displayMm = if (overallIsManual) spec.overallLengthMm else lastOccupiedEndMm(spec)
+                val displayMm =
+                    if (overallIsManual) spec.overallLengthMm else lastOccupiedEndMm(spec)
                 var lengthText by remember(unit, displayMm, overallIsManual) {
                     mutableStateOf(formatDisplay(displayMm, unit))
                 }
@@ -258,7 +254,6 @@ fun ShaftScreen(
                     ),
                     keyboardActions = KeyboardActions(onDone = {
                         val t = lengthText.trim()
-                        // empty on Done ⇒ switch back to Auto
                         if (t.isEmpty()) {
                             onSetOverallIsManual(false)
                             onSetOverallLengthMm(lastOccupiedEndMm(spec))
@@ -290,7 +285,6 @@ fun ShaftScreen(
                         }
                 )
 
-
                 // Project info (optional)
                 ExpandableSection("Project Information (optional)", initiallyExpanded = false) {
                     CommitTextField("Job Number", jobNumber, onSetJobNumber, Modifier.fillMaxWidth())
@@ -306,13 +300,12 @@ fun ShaftScreen(
                     )
                 }
 
-                Text("Components", style = MaterialTheme.typography.titleMedium)
+                Text("Sections", style = MaterialTheme.typography.titleMedium)
 
-                // >>> PASS THE ORDER DOWN (fixes unresolved reference)
-                ComponentsUnifiedList(
+                ComponentCarouselPager(
                     spec = spec,
                     unit = unit,
-                    componentOrder = componentOrder,      // NEW
+                    componentOrder = componentOrder,
                     onUpdateBody = onUpdateBody,
                     onUpdateTaper = onUpdateTaper,
                     onUpdateThread = onUpdateThread,
@@ -320,43 +313,42 @@ fun ShaftScreen(
                     onRemoveBody = onRemoveBody,
                     onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread,
-                    onRemoveLiner = onRemoveLiner
+                    onRemoveLiner = onRemoveLiner,
+                    onTapAdd = { chooserOpen = true }
                 )
 
-                Spacer(Modifier.height(8.dp))
+                if (chooserOpen) {
+                    val d = computeAddDefaults(spec)
+
+                    // Centralized defaults (mm)
+                    val bodyLenMm     = defaultBodyLenMm(unit)
+                    val linerLenMm    = defaultLinerLenMm(unit)
+                    val taperLenMm    = defaultTaperLenMm(unit)
+                    val threadLenMm   = defaultThreadLenMm(unit)
+                    val threadMajMm   = defaultThreadMajorDiaMm(unit)
+                    val threadPitchMm = defaultThreadPitchMm()
+                    val taperRatio    = AddDefaultsConfig.TAPER_RATIO
+
+                    InlineAddChooserDialog(
+                        onDismiss = { chooserOpen = false },
+                        onAddBody = { chooserOpen = false; onAddBody(d.startMm, bodyLenMm, d.lastDiaMm) },
+                        onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, linerLenMm, d.lastDiaMm) },
+                        onAddThread = {
+                            chooserOpen = false
+                            // IMPORTANT: order = start, length, pitch, majorDia
+                            onAddThread(d.startMm, threadLenMm, threadPitchMm, threadMajMm)
+                        },
+                        onAddTaper = {
+                            chooserOpen = false
+                            val len = taperLenMm
+                            val setDiaMm = d.lastDiaMm
+                            val letDiaMm = setDiaMm + (len * taperRatio) // ~1:12
+                            onAddTaper(d.startMm, len, setDiaMm, letDiaMm)
+                        }
+                    )
+                }
             }
         }
-    }
-
-    if (chooserOpen) {
-        val d = computeAddDefaults(spec)
-
-        // Centralized defaults (mm)
-        val bodyLenMm     = defaultBodyLenMm(unit)
-        val linerLenMm    = defaultLinerLenMm(unit)
-        val taperLenMm    = defaultTaperLenMm(unit)
-        val threadLenMm   = defaultThreadLenMm(unit)
-        val threadMajMm   = defaultThreadMajorDiaMm(unit)
-        val threadPitchMm = defaultThreadPitchMm()
-        val taperRatio    = AddDefaultsConfig.TAPER_RATIO
-
-        InlineAddChooserDialog(
-            onDismiss = { chooserOpen = false },
-            onAddBody = { chooserOpen = false; onAddBody(d.startMm, bodyLenMm, d.lastDiaMm) },
-            onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, linerLenMm, d.lastDiaMm) },
-            onAddThread = {
-                chooserOpen = false
-                // IMPORTANT: order = start, length, pitch, majorDia
-                onAddThread(d.startMm, threadLenMm, threadPitchMm, threadMajMm)
-            },
-            onAddTaper = {
-                chooserOpen = false
-                val len = taperLenMm
-                val setDiaMm = d.lastDiaMm
-                val letDiaMm = setDiaMm + (len * taperRatio) // ~1:12
-                onAddTaper(d.startMm, len, setDiaMm, letDiaMm)
-            }
-        )
     }
 }
 
@@ -388,7 +380,7 @@ private fun PreviewCard(
     }
 }
 
-/* ───────────────── Components (editable + remove) ───────────────── */
+/* ───────────────── Carousel implementation ───────────────── */
 
 private data class RowRef(
     val kind: ComponentKind,
@@ -397,17 +389,136 @@ private data class RowRef(
     val id: String
 )
 
-/**
- * ComponentsUnifiedList
- * - Renders strictly by ViewModel-provided cross-type order when available.
- * - No geometry re-sorting.
- * - Legacy fallback preserves stable type grouping if order is empty.
- */
 @Composable
-private fun ComponentsUnifiedList(
+private fun ComponentCarouselPager(
     spec: ShaftSpec,
     unit: UnitSystem,
-    componentOrder: List<ComponentKey>,  // <<< NEW PARAM
+    componentOrder: List<ComponentKey>,
+    onUpdateBody: (Int, Float, Float, Float) -> Unit,
+    onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+    onRemoveBody: (Int) -> Unit,
+    onRemoveTaper: (Int) -> Unit,
+    onRemoveThread: (Int) -> Unit,
+    onRemoveLiner: (Int) -> Unit,
+    onTapAdd: () -> Unit
+) {
+    val rows = remember(spec, componentOrder) { buildOrderedRows(spec, componentOrder) }
+    // Two sentinel “add” pages at the ends: [Add] [Existing*] [Add]
+    val pageCount = rows.size + 2
+    val initial = if (rows.isNotEmpty()) 1 else 0
+    val pagerState = rememberPagerState(initialPage = initial)
+    val scope = rememberCoroutineScope()
+
+    Row(Modifier.fillMaxWidth().heightIn(min = 280.dp)) {
+        // Left tap zone (10%)
+        Box(
+            Modifier
+                .weight(0.1f)
+                .fillMaxSize()
+                .clickableWithoutRipple {
+                    scope.launch {
+                        pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) { ArrowHint(left = true) }
+
+        // Pager (80%)
+        HorizontalPager(
+            pageCount = pageCount,                 // pass explicit page count
+            state = pagerState,
+            modifier = Modifier
+                .weight(0.8f)
+                .fillMaxSize()
+        ) { page ->
+            when (page) {
+                0 -> AddComponentCard(
+                    label = "Add section at start",
+                    onAdd = onTapAdd
+                )
+                pageCount - 1 -> AddComponentCard(
+                    label = "Add section at end",
+                    onAdd = onTapAdd
+                )
+                else -> {
+                    val row = rows[page - 1]
+                    ComponentPagerCard(
+                        spec = spec,
+                        unit = unit,
+                        row = row,
+                        onUpdateBody = onUpdateBody,
+                        onUpdateTaper = onUpdateTaper,
+                        onUpdateThread = onUpdateThread,
+                        onUpdateLiner = onUpdateLiner,
+                        onRemoveBody = onRemoveBody,
+                        onRemoveTaper = onRemoveTaper,
+                        onRemoveThread = onRemoveThread,
+                        onRemoveLiner = onRemoveLiner
+                    )
+                }
+            }
+        }
+
+        // Right tap zone (10%)
+        Box(
+            Modifier
+                .weight(0.1f)
+                .fillMaxSize()
+                .clickableWithoutRipple {
+                    scope.launch {
+                        pagerState.animateScrollToPage(
+                            (pagerState.currentPage + 1).coerceAtMost(pageCount - 1)
+                        )
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) { ArrowHint(left = false) }
+    }
+}
+
+@Composable
+private fun AddComponentCard(
+    label: String,
+    onAdd: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(12.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("+", style = MaterialTheme.typography.displayMedium)
+                Spacer(Modifier.height(8.dp))
+                Text(label, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = onAdd,
+                    shape = RoundedCornerShape(16.dp)
+                ) { Text("Add component") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArrowHint(left: Boolean) {
+    Text(
+        text = if (left) "◀" else "▶",
+        style = MaterialTheme.typography.headlineSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun ComponentPagerCard(
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    row: RowRef,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
@@ -417,107 +528,137 @@ private fun ComponentsUnifiedList(
     onRemoveThread: (Int) -> Unit,
     onRemoveLiner: (Int) -> Unit
 ) {
-    // Fast ID → index maps
-    val bodyIdx   = remember(spec.bodies)  { spec.bodies.withIndex().associate { it.value.id to it.index } }
-    val taperIdx  = remember(spec.tapers)  { spec.tapers.withIndex().associate { it.value.id to it.index } }
-    val threadIdx = remember(spec.threads) { spec.threads.withIndex().associate { it.value.id to it.index } }
-    val linerIdx  = remember(spec.liners)  { spec.liners.withIndex().associate { it.value.id to it.index } }
-
-    // Build rows according to the provided cross-type order
-    val rows: List<RowRef> =
-        if (componentOrder.isNotEmpty()) {
-            buildList {
-                componentOrder.forEach { key ->
-                    when (key.kind) {
-                        ComponentKind.BODY   -> bodyIdx[key.id]?.let   { i -> add(RowRef(ComponentKind.BODY,   i, spec.bodies[i].startFromAftMm,  key.id)) }
-                        ComponentKind.TAPER  -> taperIdx[key.id]?.let  { i -> add(RowRef(ComponentKind.TAPER,  i, spec.tapers[i].startFromAftMm,  key.id)) }
-                        ComponentKind.THREAD -> threadIdx[key.id]?.let { i -> add(RowRef(ComponentKind.THREAD, i, spec.threads[i].startFromAftMm, key.id)) }
-                        ComponentKind.LINER  -> linerIdx[key.id]?.let  { i -> add(RowRef(ComponentKind.LINER,  i, spec.liners[i].startFromAftMm,  key.id)) }
-                    }
+    when (row.kind) {
+        ComponentKind.BODY -> {
+            val b = spec.bodies[row.index]
+            ComponentCard("Body #${row.index + 1}", onRemove = { onRemoveBody(row.index) }) {
+                CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateBody(row.index, it, b.lengthMm, b.diaMm) }
                 }
-            }
-        } else {
-            // Legacy fallback (no geometry resorting)
-            buildList {
-                spec.bodies.forEachIndexed  { i, b  -> add(RowRef(ComponentKind.BODY,   i, b.startFromAftMm,  b.id)) }
-                spec.tapers.forEachIndexed  { i, t  -> add(RowRef(ComponentKind.TAPER,  i, t.startFromAftMm,  t.id)) }
-                spec.threads.forEachIndexed { i, th -> add(RowRef(ComponentKind.THREAD, i, th.startFromAftMm, th.id)) }
-                spec.liners.forEachIndexed  { i, ln -> add(RowRef(ComponentKind.LINER,  i, ln.startFromAftMm, ln.id)) }
+                CommitNum("Length (${abbr(unit)})", disp(b.lengthMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateBody(row.index, b.startFromAftMm, it, b.diaMm) }
+                }
+                CommitNum("Ø (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateBody(row.index, b.startFromAftMm, b.lengthMm, it) }
+                }
             }
         }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        rows.forEach { row ->
-            when (row.kind) {
-                ComponentKind.BODY -> {
-                    val b = spec.bodies[row.index]
-                    ComponentCard("Body #${row.index + 1}", onRemove = { onRemoveBody(row.index) }) {
-                        CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateBody(row.index, it, b.lengthMm, b.diaMm) }
-                        }
-                        CommitNum("Length (${abbr(unit)})", disp(b.lengthMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateBody(row.index, b.startFromAftMm, it, b.diaMm) }
-                        }
-                        CommitNum("Ø (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateBody(row.index, b.startFromAftMm, b.lengthMm, it) }
-                        }
+        ComponentKind.TAPER -> {
+            val t = spec.tapers[row.index]
+            ComponentCard("Taper #${row.index + 1}", onRemove = { onRemoveTaper(row.index) }) {
+                CommitNum("Start (${abbr(unit)})", disp(t.startFromAftMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateTaper(row.index, it, t.lengthMm, t.startDiaMm, t.endDiaMm) }
+                }
+                CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateTaper(row.index, t.startFromAftMm, it, t.startDiaMm, t.endDiaMm) }
+                }
+                CommitNum("S.E.T. Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateTaper(row.index, t.startFromAftMm, t.lengthMm, it, t.endDiaMm) }
+                }
+                CommitNum("L.E.T. Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateTaper(row.index, t.startFromAftMm, t.lengthMm, t.startDiaMm, it) }
+                }
+            }
+        }
+        ComponentKind.THREAD -> {
+            val th = spec.threads[row.index]
+            val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
+            ComponentCard("Thread #${row.index + 1}", onRemove = { onRemoveThread(row.index) }) {
+                CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm) }
+                }
+                CommitNum("Length (${abbr(unit)})", disp(th.lengthMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateThread(row.index, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm) }
+                }
+                CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateThread(row.index, th.startFromAftMm, th.lengthMm, it, th.pitchMm) }
+                }
+                CommitNum("TPI", tpiDisplay) { s ->
+                    parseFractionOrDecimal(s)?.takeIf { it > 0f }?.let { tpi ->
+                        onUpdateThread(row.index, th.startFromAftMm, th.lengthMm, th.majorDiaMm, tpiToPitchMm(tpi))
                     }
                 }
-                ComponentKind.TAPER -> {
-                    val t = spec.tapers[row.index]
-                    ComponentCard("Taper #${row.index + 1}", onRemove = { onRemoveTaper(row.index) }) {
-                        CommitNum("Start (${abbr(unit)})", disp(t.startFromAftMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateTaper(row.index, it, t.lengthMm, t.startDiaMm, t.endDiaMm) }
-                        }
-                        CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateTaper(row.index, t.startFromAftMm, it, t.startDiaMm, t.endDiaMm) }
-                        }
-                        CommitNum("S.E.T. Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateTaper(row.index, t.startFromAftMm, t.lengthMm, it, t.endDiaMm) }
-                        }
-                        CommitNum("L.E.T. Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateTaper(row.index, t.startFromAftMm, t.lengthMm, t.startDiaMm, it) }
-                        }
-                    }
+            }
+        }
+        ComponentKind.LINER -> {
+            val ln = spec.liners[row.index]
+            ComponentCard("Liner #${row.index + 1}", onRemove = { onRemoveLiner(row.index) }) {
+                CommitNum("Start (${abbr(unit)})", disp(ln.startFromAftMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateLiner(row.index, it, ln.lengthMm, ln.odMm) }
                 }
-                ComponentKind.THREAD -> {
-                    val th = spec.threads[row.index]
-                    val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
-                    ComponentCard("Thread #${row.index + 1}", onRemove = { onRemoveThread(row.index) }) {
-                        CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm) }
-                        }
-                        CommitNum("Length (${abbr(unit)})", disp(th.lengthMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateThread(row.index, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm) }
-                        }
-                        CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateThread(row.index, th.startFromAftMm, th.lengthMm, it, th.pitchMm) }
-                        }
-                        CommitNum("TPI", tpiDisplay) { s ->
-                            parseFractionOrDecimal(s)?.takeIf { it > 0f }?.let { tpi ->
-                                onUpdateThread(row.index, th.startFromAftMm, th.lengthMm, th.majorDiaMm, tpiToPitchMm(tpi))
-                            }
-                        }
-                    }
+                CommitNum("Length (${abbr(unit)})", disp(ln.lengthMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateLiner(row.index, ln.startFromAftMm, it, ln.odMm) }
                 }
-                ComponentKind.LINER -> {
-                    val ln = spec.liners[row.index]
-                    ComponentCard("Liner #${row.index + 1}", onRemove = { onRemoveLiner(row.index) }) {
-                        CommitNum("Start (${abbr(unit)})", disp(ln.startFromAftMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateLiner(row.index, it, ln.lengthMm, ln.odMm) }
-                        }
-                        CommitNum("Length (${abbr(unit)})", disp(ln.lengthMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateLiner(row.index, ln.startFromAftMm, it, ln.odMm) }
-                        }
-                        CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
-                            toMmOrNull(s, unit)?.let { onUpdateLiner(row.index, ln.startFromAftMm, ln.lengthMm, it) }
-                        }
-                    }
+                CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateLiner(row.index, ln.startFromAftMm, ln.lengthMm, it) }
                 }
             }
         }
     }
 }
+
+/* ───────────────── Shared builders & legacy list (kept for reference) ───────────────── */
+
+// Replace the @Composable version with this pure function
+private fun buildOrderedRows(
+    spec: ShaftSpec,
+    componentOrder: List<ComponentKey>
+): List<RowRef> {
+    val bodyIdx   = spec.bodies.withIndex().associate { it.value.id to it.index }
+    val taperIdx  = spec.tapers.withIndex().associate { it.value.id to it.index }
+    val threadIdx = spec.threads.withIndex().associate { it.value.id to it.index }
+    val linerIdx  = spec.liners.withIndex().associate { it.value.id to it.index }
+
+    return if (componentOrder.isNotEmpty()) {
+        buildList {
+            componentOrder.forEach { key ->
+                when (key.kind) {
+                    ComponentKind.BODY   -> bodyIdx[key.id]?.let   { i -> add(RowRef(ComponentKind.BODY,   i, spec.bodies[i].startFromAftMm,  key.id)) }
+                    ComponentKind.TAPER  -> taperIdx[key.id]?.let  { i -> add(RowRef(ComponentKind.TAPER,  i, spec.tapers[i].startFromAftMm,  key.id)) }
+                    ComponentKind.THREAD -> threadIdx[key.id]?.let { i -> add(RowRef(ComponentKind.THREAD, i, spec.threads[i].startFromAftMm, key.id)) }
+                    ComponentKind.LINER  -> linerIdx[key.id]?.let  { i -> add(RowRef(ComponentKind.LINER,  i, spec.liners[i].startFromAftMm,  key.id)) }
+                }
+            }
+        }
+    } else {
+        buildList {
+            spec.bodies.forEachIndexed  { i, b  -> add(RowRef(ComponentKind.BODY,   i, b.startFromAftMm,  b.id)) }
+            spec.tapers.forEachIndexed  { i, t  -> add(RowRef(ComponentKind.TAPER,  i, t.startFromAftMm,  t.id)) }
+            spec.threads.forEachIndexed { i, th -> add(RowRef(ComponentKind.THREAD, i, th.startFromAftMm, th.id)) }
+            spec.liners.forEachIndexed  { i, ln -> add(RowRef(ComponentKind.LINER,  i, ln.startFromAftMm,  ln.id)) }
+        }
+    }
+}
+
+
+/* Legacy list renderer kept for comparison/testing; not used by the screen anymore. */
+@Composable
+private fun ComponentsUnifiedList(
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    componentOrder: List<ComponentKey>,
+    onUpdateBody: (Int, Float, Float, Float) -> Unit,
+    onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+    onRemoveBody: (Int) -> Unit,
+    onRemoveTaper: (Int) -> Unit,
+    onRemoveThread: (Int) -> Unit,
+    onRemoveLiner: (Int) -> Unit
+) {
+    val rows = buildOrderedRows(spec, componentOrder)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        rows.forEach { row ->
+            ComponentPagerCard(
+                spec, unit, row,
+                onUpdateBody, onUpdateTaper, onUpdateThread, onUpdateLiner,
+                onRemoveBody, onRemoveTaper, onRemoveThread, onRemoveLiner
+            )
+        }
+    }
+}
+
+/* ───────────────── Cards & fields ───────────────── */
 
 @Composable
 private fun ComponentCard(
@@ -554,8 +695,6 @@ private fun ComponentCard(
     }
 }
 
-/* ───────────────── Sections & Fields ───────────────── */
-
 @Composable
 private fun ExpandableSection(
     title: String,
@@ -570,7 +709,9 @@ private fun ExpandableSection(
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickableWithoutRipple { expanded = !expanded }
             ) {
                 Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
@@ -730,3 +871,16 @@ private fun computeAddDefaults(spec: ShaftSpec): AddDefaults {
 
     return AddDefaults(startMm = end, lastDiaMm = dia)
 }
+
+/* ───────────────── Click helper ───────────────── */
+
+private fun Modifier.clickableWithoutRipple(
+    enabled: Boolean = true,
+    onClick: () -> Unit
+): Modifier = this.then(
+    androidx.compose.foundation.clickable(
+        enabled = enabled,
+        indication = null,
+        interactionSource = MutableInteractionSource()
+    ) { onClick() }
+)
