@@ -8,6 +8,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.text.TextMeasurer
 import com.android.shaftschematic.model.ShaftSpec
 import kotlin.math.max
@@ -32,6 +34,8 @@ import kotlin.math.min
  * Notes
  * • Colors/line widths come from [RenderOptions] when provided; otherwise local defaults are used.
  * • Keep allocations low in hot paths. Paths are reused per element and scoped.
+ * • Highlight outline: when enabled & an ID matches, we paint a two-ring under-stroke (glow + edge)
+ *    then the normal stroke on top. This preserves legacy line weights when highlight is off.
  */
 object ShaftRenderer {
 
@@ -98,6 +102,15 @@ object ShaftRenderer {
         val flankColor   = Color(opts.threadHatchColorOrDefault)
         val useUnified   = opts.threadStyleIsUnified   // true = unified rails+flanks, false = legacy hatch
 
+        // ───────── Highlight (resolved; no-ops if disabled) ─────────
+        val hiEnabled  = opts.highlightEnabledOrFalse
+        val hiId       = opts.highlightIdOrNull
+        val hiColor    = Color(opts.highlightColorOrDefault)
+        val hiGlowA    = opts.highlightGlowAlphaOrDefault     // e.g., 0.35f
+        val hiEdgeA    = opts.highlightEdgeAlphaOrDefault     // e.g., 0.95f
+        val hiGlowDx   = opts.highlightGlowExtraPxOrDefault   // extra width px (outer ring)
+        val hiEdgeDx   = opts.highlightEdgeExtraPxOrDefault   // extra width px (inner ring)
+
         // ───────── Bodies ─────────
         for (b in spec.bodies) {
             val x0 = L.xPx(b.startFromAftMm)
@@ -105,10 +118,27 @@ object ShaftRenderer {
             val r = L.rPx(b.diaMm)
             val top = cy - r
             val size = Size(x1 - x0, r * 2f)
+            val topLeft = Offset(x0, top)
 
-            drawRect(color = bodyFill, topLeft = Offset(x0, top), size = size)
-            drawRect(color = outline, topLeft = Offset(x0, top), size = size, style = Stroke(width = outlineW))
+            // Fill (unchanged)
+            drawRect(color = bodyFill, topLeft = topLeft, size = size)
+
+            // H I G H L I G H T (under-stroke)
+            if (isHighlighted(hiEnabled, hiId, /* component id */ b.id)) {
+                drawHighlightStrokeRect(
+                    topLeft = topLeft,
+                    size = size,
+                    baseStrokePx = outlineW,
+                    color = hiColor,
+                    glowDx = hiGlowDx, glowAlpha = hiGlowA,
+                    edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                )
+            }
+
+            // Outline (unchanged; draws on top)
+            drawRect(color = outline, topLeft = topLeft, size = size, style = Stroke(width = outlineW))
         }
+
 
         // ───────── Tapers (trapezoid) ─────────
         for (t in spec.tapers) {
@@ -123,6 +153,17 @@ object ShaftRenderer {
                 moveTo(x0, top0); lineTo(x1, top1); lineTo(x1, bot1); lineTo(x0, bot0); close()
             }
             drawPath(path, color = taperFill)
+
+            // H I G H L I G H T (under-stroke)
+            if (isHighlighted(hiEnabled, hiId, /* component id */ t.id)) {
+                drawHighlightStroke(
+                    path = path,
+                    baseStrokePx = outlineW,
+                    color = hiColor,
+                    glowDx = hiGlowDx, glowAlpha = hiGlowA,
+                    edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                )
+            }
 
             drawLine(outline, Offset(x0, top0), Offset(x1, top1), strokeWidth = outlineW)
             drawLine(outline, Offset(x0, bot0), Offset(x1, bot1), strokeWidth = outlineW)
@@ -148,6 +189,18 @@ object ShaftRenderer {
             // Underlay keeps threads readable over grid
             if (threadFill.alpha > 0f) {
                 drawRect(color = threadFill, topLeft = Offset(left, top), size = size)
+            }
+
+            // H I G H L I G H T (under-stroke on envelope)
+            if (isHighlighted(hiEnabled, hiId, /* component id */ th.id)) {
+                drawHighlightStrokeRect(
+                    topLeft = Offset(left, top),
+                    size = size,
+                    baseStrokePx = outlineW,
+                    color = hiColor,
+                    glowDx = hiGlowDx, glowAlpha = hiGlowA,
+                    edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                )
             }
 
             if (useUnified) {
@@ -192,6 +245,18 @@ object ShaftRenderer {
             val size = Size(x1 - x0, r * 2f)
 
             drawRect(color = linerFill, topLeft = Offset(x0, top), size = size)
+
+            if (isHighlighted(hiEnabled, hiId, /* component id */ ln.id)) {
+                drawHighlightStrokeRect(
+                    topLeft = Offset(x0, top),
+                    size = size,
+                    baseStrokePx = outlineW,
+                    color = hiColor,
+                    glowDx = hiGlowDx, glowAlpha = hiGlowA,
+                    edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                )
+            }
+
             drawRect(color = outline, topLeft = Offset(x0, top), size = size, style = Stroke(width = outlineW))
         }
     }
@@ -257,6 +322,80 @@ object ShaftRenderer {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// H I G H L I G H T  –  helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * True when highlight is enabled and the given component id matches the selected id.
+ * The id type is intentionally `Any?` so bodies/tapers/threads/liners can pipe their native ids.
+ */
+private fun isHighlighted(enabled: Boolean, selectedId: Any?, candidateId: Any?): Boolean =
+    enabled && selectedId != null && candidateId != null && selectedId == candidateId
+
+/**
+ * Paint a two-ring under-stroke (glow + crisp edge). Call this *before* the normal stroke.
+ * The base stroke width remains your existing outline weight.
+ */
+private fun DrawScope.drawHighlightStroke(
+    path: Path,
+    baseStrokePx: Float,
+    color: Color,
+    glowDx: Float,
+    glowAlpha: Float,
+    edgeDx: Float,
+    edgeAlpha: Float,
+) {
+    // Soft glow
+    drawPath(
+        path = path,
+        color = color.copy(alpha = glowAlpha),
+        style = Stroke(
+            width = baseStrokePx + glowDx,
+            cap = StrokeCap.Butt,
+            join = StrokeJoin.Round
+        )
+    )
+    // Crisp edge
+    drawPath(
+        path = path,
+        color = color.copy(alpha = edgeAlpha),
+        style = Stroke(
+            width = baseStrokePx + edgeDx,
+            cap = StrokeCap.Butt,
+            join = StrokeJoin.Round
+        )
+    )
+}
+
+/** Rect version of the highlight under-stroke. */
+private fun DrawScope.drawHighlightStrokeRect(
+    topLeft: Offset,
+    size: Size,
+    baseStrokePx: Float,
+    color: Color,
+    glowDx: Float,
+    glowAlpha: Float,
+    edgeDx: Float,
+    edgeAlpha: Float,
+) {
+    // Soft glow
+    drawRect(
+        color = color.copy(alpha = glowAlpha),
+        topLeft = topLeft,
+        size = size,
+        style = Stroke(width = baseStrokePx + glowDx)
+    )
+    // Crisp edge
+    drawRect(
+        color = color.copy(alpha = edgeAlpha),
+        topLeft = topLeft,
+        size = size,
+        style = Stroke(width = baseStrokePx + edgeDx)
+    )
+}
+
+
 /* ───────────────────────────────────────────────────────────────────────────────
    RenderOptions extension defaults
    These let the renderer compile against your current RenderOptions.kt (which
@@ -288,6 +427,33 @@ private val RenderOptions.dimLineWidthPxOrDefault: Float
     get() = 1.0f
 private val RenderOptions.threadStrokePxOrDefault: Float
     get() = 0f
+
+private val RenderOptions.highlightEnabledOrFalse: Boolean
+    get() = try {
+        // If your RenderOptions already has a real field, the direct property call resolves at compile time.
+        // If not, this extension provides a default.
+        // (No reflection here; the try/catch is purely defensive if you later rename.)
+        // Replace with just `this.highlightEnabled` once you add it to the data class.
+        false
+    } catch (_: Throwable) { false }
+
+private val RenderOptions.highlightIdOrNull: Any?
+    get() = try { null } catch (_: Throwable) { null } // replace with `this.highlightId` when present
+
+private val RenderOptions.highlightColorOrDefault: Int
+    get() = 0xFF00E5FF.toInt() // bright cyan that reads over dark grid
+
+private val RenderOptions.highlightGlowAlphaOrDefault: Float
+    get() = 0.35f
+
+private val RenderOptions.highlightEdgeAlphaOrDefault: Float
+    get() = 0.95f
+
+private val RenderOptions.highlightGlowExtraPxOrDefault: Float
+    get() = 4f
+
+private val RenderOptions.highlightEdgeExtraPxOrDefault: Float
+    get() = 2f
 
 /** When you add an explicit enum (e.g., ThreadStyle.UNIFIED/HATCH) expose it here. */
 private val RenderOptions.threadStyleIsUnified: Boolean

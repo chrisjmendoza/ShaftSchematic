@@ -1,8 +1,11 @@
 package com.android.shaftschematic.ui.screen
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +26,6 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -44,6 +46,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -52,7 +55,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,11 +66,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
@@ -154,6 +164,10 @@ fun ShaftScreen(
     onExportPdf: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    // UI options for preview highlight (renderer should consume these—see comment in PreviewCard)
+    var highlightEnabled by rememberSaveable { mutableStateOf(true) }
+    var highlightId by rememberSaveable { mutableStateOf<String?>(null) }
+
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
 
@@ -197,6 +211,8 @@ fun ShaftScreen(
                     .heightIn(min = 120.dp, max = 200.dp)
                     .aspectRatio(3.0f)
             )
+            // NOTE: Your renderer should read highlightEnabled + highlightId from VM/global state.
+            // If you want me to thread them directly into renderShaft, I can add a tiny bridge later.
 
             Spacer(Modifier.height(12.dp))
             HorizontalDivider()
@@ -299,7 +315,20 @@ fun ShaftScreen(
                     )
                 }
 
-                Text("Sections", style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Highlight selection in preview", Modifier.weight(1f))
+                    androidx.compose.material3.Switch(
+                        checked = highlightEnabled,
+                        onCheckedChange = { highlightEnabled = it }
+                    )
+                }
+
+                Text(
+                    "Components",
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 ComponentCarouselPager(
                     spec = spec,
@@ -313,7 +342,12 @@ fun ShaftScreen(
                     onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread,
                     onRemoveLiner = onRemoveLiner,
-                    onTapAdd = { chooserOpen = true }
+                    onTapAdd = { chooserOpen = true },
+                    onFocusedChanged = { idOrNull ->
+                        // Hand highlight to renderer (store it however your renderer expects).
+                        highlightId = idOrNull
+                        // If your renderer reads from a VM, call that setter here instead.
+                    }
                 )
 
                 if (chooserOpen) {
@@ -388,6 +422,15 @@ private data class RowRef(
     val id: String
 )
 
+/**
+ * ComponentCarouselPager
+ *
+ * Purpose: Horizontal pager with sentinel add-cards at both ends and boxed arrow nav.
+ * Contract:
+ *  • Honors componentOrder when provided; else stable assembly order by start, tie-broken by type.
+ *  • Calls onFocusedChanged(idOrNull) whenever the current page changes (add-pages send null).
+ *  • Arrow buttons animate elevation/alpha on press/hover; pager gestures remain intact.
+ */
 @Composable
 private fun ComponentCarouselPager(
     spec: ShaftSpec,
@@ -401,32 +444,66 @@ private fun ComponentCarouselPager(
     onRemoveTaper: (Int) -> Unit,
     onRemoveThread: (Int) -> Unit,
     onRemoveLiner: (Int) -> Unit,
-    onTapAdd: () -> Unit
+    onTapAdd: () -> Unit,
+    onFocusedChanged: (String?) -> Unit
 ) {
     val rows = remember(spec, componentOrder) { buildOrderedRows(spec, componentOrder) }
+
+    /**
+     * TEMP directional switch (promote to Settings if you like):
+     *  - true  => carousel flows left→right like the shaft (AFT on the left)
+     *  - false => carousel flows right→left
+     *
+     * If you’re seeing “cards build right→left while shaft builds left→right”,
+     * set this to true.
+     */
+    val carouselDirectionLtr = true
+
+    // Order the rows as the carousel expects
+    val pagerRows = remember(rows, carouselDirectionLtr) {
+        if (carouselDirectionLtr) rows else rows.asReversed()
+    }
+
     // Two sentinel “add” pages at the ends: [Add] [Existing*] [Add]
     val pageCount = rows.size + 2
-    val initial = if (rows.isNotEmpty()) 1 else 0
+// Choose an initial page that lands on the leftmost *visible* component page
+    val initial = if (pagerRows.isNotEmpty()) {
+        if (carouselDirectionLtr) 1 else pageCount - 2
+    } else 0
     val pagerState = rememberPagerState(
         initialPage = initial,
-        pageCount = { pageCount }
+        pageCount = { pageCount } // new pager API
     )
-
     val scope = rememberCoroutineScope()
 
-    Row(Modifier.fillMaxWidth().heightIn(min = 280.dp)) {
-        // Left tap zone (10%)
-        Box(
-            Modifier
+    // Notify selection highlight target (null on add pages)
+    LaunchedEffect(pagerState.currentPage, pagerRows) {
+        val p = pagerState.currentPage
+        val id = when (p) {
+            0, pageCount - 1 -> null
+            else -> pagerRows[p - 1].id
+        }
+        onFocusedChanged(id)
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 280.dp)
+    ) {
+        // Left boxed arrow (10%)
+        ArrowNavButton(
+            left = true,
+            onClick = {
+                scope.launch {
+                    pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
+                }
+            },
+            modifier = Modifier
                 .weight(0.1f)
                 .fillMaxSize()
-                .clickableWithoutRipple {
-                    scope.launch {
-                        pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) { ArrowHint(left = true) }
+                .padding(vertical = 8.dp, horizontal = 4.dp)
+        )
 
         // Pager (80%)
         HorizontalPager(
@@ -434,7 +511,7 @@ private fun ComponentCarouselPager(
             modifier = Modifier
                 .weight(0.8f)
                 .fillMaxSize()
-        )  { page ->
+        ) { page ->
             when (page) {
                 0 -> AddComponentCard(
                     label = "Add section at start",
@@ -445,7 +522,7 @@ private fun ComponentCarouselPager(
                     onAdd = onTapAdd
                 )
                 else -> {
-                    val row = rows[page - 1]
+                    val row = pagerRows[page - 1]
                     ComponentPagerCard(
                         spec = spec,
                         unit = unit,
@@ -463,20 +540,86 @@ private fun ComponentCarouselPager(
             }
         }
 
-        // Right tap zone (10%)
-        Box(
-            Modifier
+        // Right boxed arrow (10%)
+        ArrowNavButton(
+            left = false,
+            onClick = {
+                scope.launch {
+                    pagerState.animateScrollToPage(
+                        (pagerState.currentPage + 1).coerceAtMost(pageCount - 1)
+                    )
+                }
+            },
+            modifier = Modifier
                 .weight(0.1f)
                 .fillMaxSize()
-                .clickableWithoutRipple {
-                    scope.launch {
-                        pagerState.animateScrollToPage(
-                            (pagerState.currentPage + 1).coerceAtMost(pageCount - 1)
-                        )
+                .padding(vertical = 8.dp, horizontal = 4.dp)
+        )
+    }
+}
+
+/* ───────────────── Arrow Button (reusable) ───────────────── */
+
+/**
+ * Pager direction is controlled by `carouselDirectionLtr`.
+ * When true, the first component page (index 1) corresponds to the leftmost shaft segment (AFT).
+ * When false, the last component page (index pageCount-2) is the leftmost segment.
+ */
+
+@Composable
+private fun ArrowNavButton(
+    left: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    // Lightweight hover for mouse/trackpad; harmless on touch
+    var hovered by remember { mutableStateOf(false) }
+
+    val targetElevation = when {
+        pressed -> 6.dp
+        hovered -> 4.dp
+        else -> 2.dp
+    }
+    val elevation by animateDpAsState(targetElevation, label = "arrowElevation")
+
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (pressed) 0.85f else if (hovered) 0.92f else 1f,
+        label = "arrowAlpha"
+    )
+
+    Surface(
+        tonalElevation = elevation,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = modifier
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        hovered = event.type == PointerEventType.Move || event.type == PointerEventType.Enter
                     }
-                },
+                }
+            }
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick
+            )
+    ) {
+        Box(
+            Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
-        ) { ArrowHint(left = false) }
+        ) {
+            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant) {
+                Text(
+                    text = if (left) "◀" else "▶",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.graphicsLayer { alpha = contentAlpha }
+                )
+            }
+        }
     }
 }
 
@@ -490,22 +633,25 @@ private fun AddComponentCard(
             .fillMaxSize()
             .padding(12.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("+", style = MaterialTheme.typography.displayMedium)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(label, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 Button(
                     onClick = onAdd,
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(18.dp)
                 ) { Text("Add component") }
             }
         }
     }
 }
+
 
 @Composable
 private fun ArrowHint(left: Boolean) {
@@ -599,20 +745,28 @@ private fun ComponentPagerCard(
     }
 }
 
-/* ───────────────── Shared builders & legacy list (kept for reference) ───────────────── */
+/* ───────────────── Shared builders ───────────────── */
+/* ───────────────── Ordering tiers (for stable tie-break) ───────────────── */
 
-// Replace the @Composable version with this pure function
+private const val TIE_BODY   = 0
+private const val TIE_TAPER  = 1_000_000
+private const val TIE_THREAD = 2_000_000
+private const val TIE_LINER  = 3_000_000
+
+// Assembly order: honor componentOrder if provided; else merge by physical start.
 private fun buildOrderedRows(
     spec: ShaftSpec,
     componentOrder: List<ComponentKey>
 ): List<RowRef> {
-    val bodyIdx   = spec.bodies.withIndex().associate { it.value.id to it.index }
-    val taperIdx  = spec.tapers.withIndex().associate { it.value.id to it.index }
-    val threadIdx = spec.threads.withIndex().associate { it.value.id to it.index }
-    val linerIdx  = spec.liners.withIndex().associate { it.value.id to it.index }
+    if (componentOrder.isNotEmpty()) {
+        // Respect VM-provided assembly order verbatim.
+        val bodyIdx   = spec.bodies.withIndex().associate { it.value.id to it.index }
+        val taperIdx  = spec.tapers.withIndex().associate { it.value.id to it.index }
+        val threadIdx = spec.threads.withIndex().associate { it.value.id to it.index }
+        val linerIdx  = spec.liners.withIndex().associate { it.value.id to it.index }
 
-    return if (componentOrder.isNotEmpty()) {
-        buildList {
+
+        return buildList {
             componentOrder.forEach { key ->
                 when (key.kind) {
                     ComponentKind.BODY   -> bodyIdx[key.id]?.let   { i -> add(RowRef(ComponentKind.BODY,   i, spec.bodies[i].startFromAftMm,  key.id)) }
@@ -622,42 +776,21 @@ private fun buildOrderedRows(
                 }
             }
         }
-    } else {
-        buildList {
-            spec.bodies.forEachIndexed  { i, b  -> add(RowRef(ComponentKind.BODY,   i, b.startFromAftMm,  b.id)) }
-            spec.tapers.forEachIndexed  { i, t  -> add(RowRef(ComponentKind.TAPER,  i, t.startFromAftMm,  t.id)) }
-            spec.threads.forEachIndexed { i, th -> add(RowRef(ComponentKind.THREAD, i, th.startFromAftMm, th.id)) }
-            spec.liners.forEachIndexed  { i, ln -> add(RowRef(ComponentKind.LINER,  i, ln.startFromAftMm,  ln.id)) }
-        }
     }
-}
 
 
-/* Legacy list renderer kept for comparison/testing; not used by the screen anymore. */
-@Composable
-private fun ComponentsUnifiedList(
-    spec: ShaftSpec,
-    unit: UnitSystem,
-    componentOrder: List<ComponentKey>,
-    onUpdateBody: (Int, Float, Float, Float) -> Unit,
-    onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
-    onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
-    onUpdateLiner: (Int, Float, Float, Float) -> Unit,
-    onRemoveBody: (Int) -> Unit,
-    onRemoveTaper: (Int) -> Unit,
-    onRemoveThread: (Int) -> Unit,
-    onRemoveLiner: (Int) -> Unit
-) {
-    val rows = buildOrderedRows(spec, componentOrder)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        rows.forEach { row ->
-            ComponentPagerCard(
-                spec, unit, row,
-                onUpdateBody, onUpdateTaper, onUpdateThread, onUpdateLiner,
-                onRemoveBody, onRemoveTaper, onRemoveThread, onRemoveLiner
-            )
-        }
+    // Fallback: true assembly order by start position, stable within equal starts.
+    data class AnyRow(val kind: ComponentKind, val index: Int, val start: Float, val id: String, val tie: Int)
+
+    val merged = buildList {
+        spec.bodies.forEachIndexed  { i, b  -> add(AnyRow(ComponentKind.BODY,   i, b.startFromAftMm,  b.id, TIE_BODY   + i)) }
+        spec.tapers.forEachIndexed  { i, t  -> add(AnyRow(ComponentKind.TAPER,  i, t.startFromAftMm,  t.id, TIE_TAPER  + i)) }
+        spec.threads.forEachIndexed { i, th -> add(AnyRow(ComponentKind.THREAD, i, th.startFromAftMm, th.id, TIE_THREAD + i)) }
+        spec.liners.forEachIndexed  { i, ln -> add(AnyRow(ComponentKind.LINER,  i, ln.startFromAftMm,  ln.id, TIE_LINER  + i)) }
     }
+        .sortedWith(compareBy<AnyRow>({ it.start }, { it.tie }))
+
+    return merged.map { RowRef(it.kind, it.index, it.start, it.id) }
 }
 
 /* ───────────────── Cards & fields ───────────────── */
@@ -669,22 +802,34 @@ private fun ComponentCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp), // consistent outer spacing
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
         shape = MaterialTheme.shapes.extraLarge
     ) {
         Box(Modifier.fillMaxWidth()) {
             Column(
-                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    // Medium weight reads cleaner in cards than Small + default weight
+                )
                 content()
             }
             if (onRemove != null) {
                 IconButton(
                     onClick = onRemove,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
                 ) {
                     Icon(
                         Icons.Filled.Delete,
@@ -696,6 +841,7 @@ private fun ComponentCard(
         }
     }
 }
+
 
 @Composable
 private fun ExpandableSection(
@@ -876,14 +1022,16 @@ private fun computeAddDefaults(spec: ShaftSpec): AddDefaults {
 
 /* ───────────────── Click helper ───────────────── */
 
+// Compose-safe no-ripple click helper
 private fun Modifier.clickableWithoutRipple(
     enabled: Boolean = true,
     onClick: () -> Unit
-): Modifier = this.then(
+): Modifier = composed {
+    val interaction = remember { MutableInteractionSource() }
     clickable(
         enabled = enabled,
         indication = null,
-        interactionSource = MutableInteractionSource()
-    ) { onClick() }
-)
-
+        interactionSource = interaction,
+        onClick = onClick
+    )
+}

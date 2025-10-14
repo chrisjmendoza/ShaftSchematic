@@ -97,7 +97,18 @@ data class RenderOptions(
      * Fill color under the thread envelope (low alpha helps separate thread zone from grid).
      * If fully transparent, the renderer may skip the underlay.
      */
-    val threadFillColor: Int = 0x22000000
+    val threadFillColor: Int = 0x22000000,
+
+    // ──────────────────────────────
+    // Highlighting
+    // ──────────────────────────────
+    val highlightEnabled: Boolean = false,
+    val highlightId: Any? = null, // or a strong type like ComponentId
+    val highlightColor: Int = 0xFF00E5FF.toInt(),
+    val highlightGlowAlpha: Float = 0.35f,
+    val highlightEdgeAlpha: Float = 0.95f,
+    val highlightGlowExtraPx: Float = 4f,
+    val highlightEdgeExtraPx: Float = 2f,
 )
 
 enum class ReferenceEnd { AFT, FWD }
