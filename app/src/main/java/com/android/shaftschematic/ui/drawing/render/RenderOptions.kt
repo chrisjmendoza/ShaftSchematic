@@ -1,5 +1,7 @@
 package com.android.shaftschematic.ui.drawing.render
 
+import androidx.compose.ui.graphics.Color
+
 /**
  * Visual configuration for the shaft renderer.
  *
@@ -102,13 +104,32 @@ data class RenderOptions(
     // ──────────────────────────────
     // Highlighting
     // ──────────────────────────────
+    /**
+     * When true and [highlightId] matches a component, the renderer paints a two-ring
+     * under-stroke (glow + edge) before the normal outline, then draws the normal stroke
+     * on top. When false or when ids don’t match, output is pixel-identical to legacy.
+     */
     val highlightEnabled: Boolean = false,
-    val highlightId: Any? = null, // or a strong type like ComponentId
-    val highlightColor: Int = 0xFF00E5FF.toInt(),
-    val highlightGlowAlpha: Float = 0.35f,
-    val highlightEdgeAlpha: Float = 0.95f,
-    val highlightGlowExtraPx: Float = 4f,
-    val highlightEdgeExtraPx: Float = 2f,
+    /** Id of the selected component; type should match the ids carried by your segments. */
+    val highlightId: Any? = null,
+
+    /**
+     * Wide, colored under-ring beneath the normal outline. `Color` is used instead of `Int`
+     * to allow direct use of theme colors and alpha blending in Compose.
+     */
+    val highlightGlowColor: Color = Color(0xFF00E5FF),
+
+    /** Crisp inner ring on top of the glow; usually white for maximum contrast. */
+    val highlightEdgeColor: Color = Color.White,
+
+    /** Opacity for the glow ring. */
+    val highlightGlowAlpha: Float = 0.55f,
+    /** Opacity for the edge ring. */
+    val highlightEdgeAlpha: Float = 1.0f,
+    /** Extra stroke width (px) added to the glow beyond the base outline width. */
+    val highlightGlowExtraPx: Float = 8f,
+    /** Extra stroke width (px) added to the edge beyond the base outline width. */
+    val highlightEdgeExtraPx: Float = 4f
 )
 
 enum class ReferenceEnd { AFT, FWD }
