@@ -477,11 +477,19 @@ private fun ComponentCarouselPager(
     val scope = rememberCoroutineScope()
 
     // Notify selection highlight target (null on add pages)
-    LaunchedEffect(pagerState.currentPage, pagerRows) {
+    LaunchedEffect(rows.size) {
+        // When a component is added, jump to its new card (the newest real row)
+        if (rows.isNotEmpty()) {
+            val newPage = rows.size           // page 1 = first row; so newest = rows.size
+            pagerState.scrollToPage(newPage)
+        }
+    }
+
+    LaunchedEffect(pagerState.currentPage, rows) {
         val p = pagerState.currentPage
         val id = when (p) {
             0, pageCount - 1 -> null
-            else -> pagerRows[p - 1].id
+            else -> rows[p - 1].id
         }
         onFocusedChanged(id)
     }
