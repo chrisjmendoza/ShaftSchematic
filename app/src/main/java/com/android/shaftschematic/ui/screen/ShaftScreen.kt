@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,6 +28,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -87,6 +90,7 @@ import com.android.shaftschematic.ui.config.defaultThreadLenMm
 import com.android.shaftschematic.ui.config.defaultThreadMajorDiaMm
 import com.android.shaftschematic.ui.config.defaultThreadPitchMm
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
+import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.util.UnitSystem
@@ -163,10 +167,20 @@ fun ShaftScreen(
     onClickSave: () -> Unit,
     onExportPdf: () -> Unit,
     onOpenSettings: () -> Unit,
+
+    /**
+     * Accessibility: [fabEnabled]
+     * When true, shows a floating “Add component” button as an alternative to the
+     * carousel’s add cards. Off by default; toggle from Settings for users who prefer
+     * a large, persistent affordance that sits above the IME.
+     */
+    fabEnabled: Boolean = false, // ← NEW: default off
 ) {
     // UI options for preview highlight (renderer should consume these—see comment in PreviewCard)
     var highlightEnabled by rememberSaveable { mutableStateOf(true) }
     var highlightId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    var focusedId by rememberSaveable { mutableStateOf<String?>(null) }
 
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
@@ -185,12 +199,11 @@ fun ShaftScreen(
             WindowInsetsSides.Top + WindowInsetsSides.Horizontal
         ),
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { chooserOpen = true },
-                modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
-                    .padding(16.dp)
-            ) { Icon(Icons.Filled.Add, contentDescription = "Add component") }
+            if (fabEnabled) {
+                AddComponentFab(
+                    onClick = { chooserOpen = true }
+                )
+            }
         }
     ) { inner ->
         Column(
@@ -202,10 +215,10 @@ fun ShaftScreen(
             // Preview
             PreviewCard(
                 showGrid = showGrid,
-                gridStepDp = 16.dp,
                 spec = spec,
                 unit = unit,
-                renderShaft = renderShaft,
+                highlightEnabled = highlightEnabled,
+                highlightId = focusedId,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = 200.dp)
@@ -343,10 +356,22 @@ fun ShaftScreen(
                     onRemoveThread = onRemoveThread,
                     onRemoveLiner = onRemoveLiner,
                     onTapAdd = { chooserOpen = true },
+                    onAddAtAft = {
+                        // Use your defaults but anchored AFT
+                        val d = computeAddDefaults(spec).copy(startMm = 0f) // AFT = 0
+                        chooserOpen = true
+                        // In the chooser handlers, call onAdd… with d.startMm; after add, jump to page 1:
+                        // scope.launch { pagerState.scrollToPage(1) }
+                    },
+                    onAddAtFwd = {
+                        val d = computeAddDefaults(spec) // your current behavior likely uses last end
+                        chooserOpen = true
+                        // After adding at FWD, jump to the newest page:
+                        // scope.launch { pagerState.scrollToPage(rowsSorted.size + 1) }
+                    },
+                    // Focus reporting
                     onFocusedChanged = { idOrNull ->
-                        // Hand highlight to renderer (store it however your renderer expects).
-                        highlightId = idOrNull
-                        // If your renderer reads from a VM, call that setter here instead.
+                        focusedId = idOrNull
                     }
                 )
 
@@ -390,10 +415,11 @@ fun ShaftScreen(
 @Composable
 private fun PreviewCard(
     showGrid: Boolean,
-    gridStepDp: Dp, // kept for signature stability; unused now
     spec: ShaftSpec,
     unit: UnitSystem,
-    renderShaft: @Composable (ShaftSpec, UnitSystem) -> Unit,
+    // NEW: explicit preview controls
+    highlightEnabled: Boolean,
+    highlightId: String?,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -401,9 +427,16 @@ private fun PreviewCard(
         shape = RectangleShape,
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        // IMPORTANT: No local Canvas grid here. Let renderShaft handle grid so it follows pan/zoom.
         Box(Modifier.fillMaxSize().background(Color.Transparent)) {
-            renderShaft(spec, unit) // ensure this calls ShaftDrawing(spec, unit, showGrid)
+            // Direct render: pass grid + highlight to the renderer
+            ShaftDrawing(
+                spec = spec,
+                unit = unit,
+                showGrid = showGrid,
+                highlightEnabled = highlightEnabled && (highlightId != null),
+                highlightId = highlightId
+            )
+
             FreeToEndBadge(
                 spec = spec,
                 unit = unit,
@@ -412,6 +445,7 @@ private fun PreviewCard(
         }
     }
 }
+
 
 /* ───────────────── Carousel implementation ───────────────── */
 
@@ -445,62 +479,80 @@ private fun ComponentCarouselPager(
     onRemoveThread: (Int) -> Unit,
     onRemoveLiner: (Int) -> Unit,
     onTapAdd: () -> Unit,
+    onAddAtAft: () -> Unit,
+    onAddAtFwd: () -> Unit,
     onFocusedChanged: (String?) -> Unit
 ) {
     val rows = remember(spec, componentOrder) { buildOrderedRows(spec, componentOrder) }
 
-    /**
-     * TEMP directional switch (promote to Settings if you like):
-     *  - true  => carousel flows left→right like the shaft (AFT on the left)
-     *  - false => carousel flows right→left
-     *
-     * If you’re seeing “cards build right→left while shaft builds left→right”,
-     * set this to true.
-     */
-    val carouselDirectionLtr = true
-
-    // Order the rows as the carousel expects
-    val pagerRows = remember(rows, carouselDirectionLtr) {
-        if (carouselDirectionLtr) rows else rows.asReversed()
+    // Build rows and force left→right (AFT→FWD) by actual start position in mm.
+    val rowsSorted = remember(spec, componentOrder) {
+        val base = buildOrderedRows(spec, componentOrder)
+        fun startMm(row: RowRef): Float = when (row.kind) {
+            ComponentKind.BODY   -> spec.bodies.getOrNull(row.index)?.startFromAftMm ?: Float.MAX_VALUE
+            ComponentKind.TAPER  -> spec.tapers.getOrNull(row.index)?.startFromAftMm ?: Float.MAX_VALUE
+            ComponentKind.THREAD -> spec.threads.getOrNull(row.index)?.startFromAftMm ?: Float.MAX_VALUE
+            ComponentKind.LINER  -> spec.liners.getOrNull(row.index)?.startFromAftMm ?: Float.MAX_VALUE
+        }
+        base.sortedBy { startMm(it) }
     }
 
-    // Two sentinel “add” pages at the ends: [Add] [Existing*] [Add]
-    val pageCount = rows.size + 2
-// Choose an initial page that lands on the leftmost *visible* component page
-    val initial = if (pagerRows.isNotEmpty()) {
-        if (carouselDirectionLtr) 1 else pageCount - 2
-    } else 0
+// Pager pages: [Add @ AFT] + rowsSorted + [Add @ FWD]
+    val pageCount = rowsSorted.size + 2
     val pagerState = rememberPagerState(
-        initialPage = initial,
-        pageCount = { pageCount } // new pager API
+        initialPage = if (rowsSorted.isEmpty()) 0 else 1, // land on leftmost component when present
+        pageCount = { pageCount }
     )
+
     val scope = rememberCoroutineScope()
 
-    // Notify selection highlight target (null on add pages)
-    LaunchedEffect(rows.size) {
-        // When a component is added, jump to its new card (the newest real row)
-        if (rows.isNotEmpty()) {
-            val newPage = rows.size           // page 1 = first row; so newest = rows.size
+    // Auto-jump to the newest card after insertion
+    LaunchedEffect(rowsSorted.size) {
+        if (rowsSorted.isNotEmpty()) {
+            val newPage = rowsSorted.size // page 1 = rowsSorted[0], so newest = rowsSorted.size
             pagerState.scrollToPage(newPage)
         }
     }
 
-    LaunchedEffect(pagerState.currentPage, rows) {
+    // Report focused id
+    LaunchedEffect(pagerState.currentPage, rowsSorted) {
         val p = pagerState.currentPage
-        val id = when (p) {
+        val idOrNull = when (p) {
             0, pageCount - 1 -> null
-            else -> rows[p - 1].id
+            else -> rowsSorted[p - 1].id
         }
-        onFocusedChanged(id)
+        onFocusedChanged(idOrNull)
     }
 
-    Row(
+    Box(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 280.dp)
+            .height(CAROUSEL_HEIGHT) // your existing constant (e.g., 360.dp)
     ) {
-        // Left boxed arrow (10%)
-        ArrowNavButton(
+        // Pager fills the box
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .matchParentSize()
+        ) { page ->
+            when (page) {
+                0 -> AddComponentCard(label = "Add at AFT", onAdd = onAddAtAft)   // see section 2
+                pageCount - 1 -> AddComponentCard(label = "Add at FWD", onAdd = onAddAtFwd)
+                else -> {
+                    val row = rowsSorted[page - 1]
+                    ComponentPagerCard(
+                        spec = spec, unit = unit, row = row,
+                        onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
+                        onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
+                        onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
+                        onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner
+                    )
+                }
+            }
+        }
+
+        // Left paddle
+        EdgeNavButton(
             left = true,
             onClick = {
                 scope.launch {
@@ -508,48 +560,14 @@ private fun ComponentCarouselPager(
                 }
             },
             modifier = Modifier
-                .weight(0.1f)
-                .fillMaxSize()
-                .padding(vertical = 8.dp, horizontal = 4.dp)
+                .align(Alignment.CenterStart) // vertically centered next to the card
+                .fillMaxHeight()              // same height as the card
+                .width(44.dp)                 // slim nub
+                .padding(start = 4.dp)        // tiny gutter
         )
 
-        // Pager (80%)
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .weight(0.8f)
-                .fillMaxSize()
-        ) { page ->
-            when (page) {
-                0 -> AddComponentCard(
-                    label = "Add section at start",
-                    onAdd = onTapAdd
-                )
-                pageCount - 1 -> AddComponentCard(
-                    label = "Add section at end",
-                    onAdd = onTapAdd
-                )
-                else -> {
-                    val row = pagerRows[page - 1]
-                    ComponentPagerCard(
-                        spec = spec,
-                        unit = unit,
-                        row = row,
-                        onUpdateBody = onUpdateBody,
-                        onUpdateTaper = onUpdateTaper,
-                        onUpdateThread = onUpdateThread,
-                        onUpdateLiner = onUpdateLiner,
-                        onRemoveBody = onRemoveBody,
-                        onRemoveTaper = onRemoveTaper,
-                        onRemoveThread = onRemoveThread,
-                        onRemoveLiner = onRemoveLiner
-                    )
-                }
-            }
-        }
-
-        // Right boxed arrow (10%)
-        ArrowNavButton(
+        // Right paddle
+        EdgeNavButton(
             left = false,
             onClick = {
                 scope.launch {
@@ -559,9 +577,10 @@ private fun ComponentCarouselPager(
                 }
             },
             modifier = Modifier
-                .weight(0.1f)
-                .fillMaxSize()
-                .padding(vertical = 8.dp, horizontal = 4.dp)
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .width(44.dp)
+                .padding(end = 4.dp)
         )
     }
 }
@@ -927,6 +946,7 @@ private fun CommitNum(
 
 /* ───────────────── Helpers: units, parsing, badge math, defaults ───────────────── */
 
+private val CAROUSEL_HEIGHT = 360.dp // visually nice; tweak if you like
 private fun abbr(unit: UnitSystem) = if (unit == UnitSystem.MILLIMETERS) "mm" else "in"
 
 private fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String {
@@ -962,6 +982,52 @@ private fun parseFractionOrDecimal(input: String): Float? {
     }
     return t.toFloatOrNull()
 }
+
+@Composable
+private fun EdgeNavButton(
+    left: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Soft vertical gradient to suggest “edge”
+    val scrim = androidx.compose.ui.graphics.Brush.verticalGradient(
+        0f to MaterialTheme.colorScheme.surface.copy(alpha = 0.0f),
+        0.5f to MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        1f to MaterialTheme.colorScheme.surface.copy(alpha = 0.0f)
+    )
+    Box(
+        modifier
+            .background(scrim, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = if (left) "◀" else "▶",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun AddComponentFab(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = modifier
+            // keep excellent keyboard & nav safety when enabled
+            .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+            .padding(16.dp),
+        shape = RoundedCornerShape(16.dp),
+        containerColor = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    ) {
+        Icon(Icons.Filled.Add, contentDescription = "Add component")
+    }
+}
+
 
 /** Latest occupied end position along the shaft (mm) from all components. */
 private fun lastOccupiedEndMm(spec: ShaftSpec): Float {
