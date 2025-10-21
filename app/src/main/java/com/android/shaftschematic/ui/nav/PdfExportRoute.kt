@@ -15,6 +15,12 @@ import androidx.navigation.NavController
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import android.graphics.Canvas
+import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.domain.geom.computeOalWindow
+import com.android.shaftschematic.domain.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.domain.model.LinerDim
+import com.android.shaftschematic.domain.model.LinerAnchor
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -113,4 +119,62 @@ private fun appVersionFromContext(context: Context): String {
     } catch (_: Throwable) {
         "0"
     }
+}
+private data class LinerProjection(
+    val id: String,
+    val startMm: Double,
+    val endMm: Double
+)
+
+/**
+ * Projects model liners into measurement-space using the OAL window.
+ */
+private fun projectLinersToMeasure(spec: ShaftSpec): List<LinerProjection> {
+    val win = computeOalWindow(spec)
+    return spec.liners.map { ln ->
+        val start = win.toMeasureX(ln.startFromAftMm.toDouble())
+        val end = start + ln.lengthMm.toDouble()
+        LinerProjection(id = ln.id, startMm = start, endMm = end)
+    }
+}
+
+/**
+ * Adapts projected liners to the export-only LinerDim shape.
+ * Anchor is inferred by proximity to SETs; if your liners already encode anchor, wire it here directly.
+ */
+private fun mapToLinerDims(spec: ShaftSpec): List<LinerDim> {
+    val win = computeOalWindow(spec)
+    val sets = computeSetPositionsInMeasureSpace(win)
+
+    return projectLinersToMeasure(spec).map { p ->
+        val length = (p.endMm - p.startMm).coerceAtLeast(0.0)
+        val aftGapToStart = p.startMm - sets.aftSETxMm
+        val fwdGapToStart = sets.fwdSETxMm - p.startMm
+        val anchor = if (fwdGapToStart < aftGapToStart) LinerAnchor.FWD_SET else LinerAnchor.AFT_SET
+
+        when (anchor) {
+            LinerAnchor.AFT_SET -> LinerDim(
+                id = p.id,
+                anchor = anchor,
+                offsetFromSetMm = aftGapToStart.coerceAtLeast(0.0),
+                lengthMm = length
+            )
+            LinerAnchor.FWD_SET -> LinerDim(
+                id = p.id,
+                anchor = anchor,
+                // Offset is FWD SET → FWD edge (toward AFT)
+                offsetFromSetMm = (sets.fwdSETxMm - p.endMm).coerceAtLeast(0.0),
+                // Length runs AFT from FWD edge
+                lengthMm = length
+            )
+        }
+    }
+}
+
+/**
+ * Call this from your existing PDF export flow after the shaft graphics are drawn.
+ */
+fun drawDimensionsSection(canvas: Canvas, spec: ShaftSpec, style: DimStyle) {
+    val linerDims = mapToLinerDims(spec)
+    drawLinerDimensionsPdf(canvas, spec, linerDims, style)
 }

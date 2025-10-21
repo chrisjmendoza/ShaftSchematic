@@ -8,7 +8,14 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import com.android.shaftschematic.domain.geom.computeOalWindow
+import com.android.shaftschematic.domain.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.domain.model.LinerDim
 import com.android.shaftschematic.model.*
+import com.android.shaftschematic.pdf.dim.RailPlanner
+import com.android.shaftschematic.pdf.dim.buildLinerSpans
+import com.android.shaftschematic.pdf.dim.oalSpan
+import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.util.UnitSystem
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -69,7 +76,44 @@ fun composeShaftPdf(
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
 
     // dims
-    drawDimensionsLikePreview(c, spec, unit, ::xAt, yTopOfShaft, text, dim)
+    /**
+     * Lightweight style carrier for dimension drawing.
+     */
+    data class DimStyle(
+        val paint: Paint,
+        val pxPerMm: Float,
+        val topY: Float,
+        val baseY: Float,
+        val railDy: Float
+    )
+
+    /**
+     * Draws PDF dimensions for liners only.
+     * OAL is always on the top rail; other dims are rail-packed without overlap.
+     */
+    fun drawLinerDimensionsPdf(
+        canvas: Canvas,
+        spec: ShaftSpec,
+        liners: List<LinerDim>,
+        style: DimStyle
+    ) {
+        val win = computeOalWindow(spec)
+        val sets = computeSetPositionsInMeasureSpace(win)
+
+        val spans = buildLinerSpans(liners, sets)
+        val planner = RailPlanner()
+        val assignments = spans.map { planner.assign(it) }
+
+        val renderer = PdfDimensionRenderer(
+            pxPerMm = style.pxPerMm,
+            baseY = style.baseY,
+            railDy = style.railDy,
+            topRailY = style.topY
+        )
+
+        renderer.drawTop(canvas, oalSpan(win.oalMm), style.paint)
+        assignments.forEach { rs -> renderer.drawOnRail(canvas, rs.rail, rs.span, style.paint) }
+    }
 
     // footer
     val infoTop = cy + halfHeightPx + INFO_GAP_PT
