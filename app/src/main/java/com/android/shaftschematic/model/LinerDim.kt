@@ -1,4 +1,4 @@
-package com.android.shaftschematic.domain.model
+package com.android.shaftschematic.model
 
 /**
  * Minimal, export-only shape used by the PDF dimensioning pass.

@@ -1,4 +1,4 @@
-package com.android.shaftschematic.domain.model
+package com.android.shaftschematic.model
 
 /**
  * Anchor reference for a liner dimension.

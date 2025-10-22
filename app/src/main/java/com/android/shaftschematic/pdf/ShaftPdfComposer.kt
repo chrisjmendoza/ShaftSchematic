@@ -8,9 +8,10 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
-import com.android.shaftschematic.domain.geom.computeOalWindow
-import com.android.shaftschematic.domain.geom.computeSetPositionsInMeasureSpace
-import com.android.shaftschematic.domain.model.LinerDim
+import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.model.LinerAnchor
+import com.android.shaftschematic.model.LinerDim
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.pdf.dim.RailPlanner
 import com.android.shaftschematic.pdf.dim.buildLinerSpans
@@ -24,8 +25,21 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-/*  … same header contract as before … */
-
+/**
+ * PDF Composer — draws the shaft preview and export annotations.
+ *
+ * Units: millimeters (mm) in model space. Paper units are points (1/72").
+ * Axis: AFT → FWD. Measurement origin (x=0) is the first counted AFT surface,
+ * respecting end threads flagged `excludeFromOAL` (those shift the measurement window).
+ *
+ * This composer:
+ *  • Renders bodies (with centered long-break compression), tapers, threads, and liners.
+ *  • Draws **liner-only dimensions** in the PDF: for each liner we show
+ *      – offset from SET → near edge, and
+ *      – liner length,
+ *    with stacked rails; the **top rail is OAL only**.
+ *  • Keeps all geometry unchanged; only the dimension pass was added.
+ */
 fun composeShaftPdf(
     page: PdfDocument.Page,
     spec: ShaftSpec,
@@ -75,44 +89,19 @@ fun composeShaftPdf(
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
 
-    // dims
-    /**
-     * Lightweight style carrier for dimension drawing.
-     */
-    data class DimStyle(
-        val paint: Paint,
-        val pxPerMm: Float,
-        val topY: Float,
-        val baseY: Float,
-        val railDy: Float
-    )
-
-    /**
-     * Draws PDF dimensions for liners only.
-     * OAL is always on the top rail; other dims are rail-packed without overlap.
-     */
-    fun drawLinerDimensionsPdf(
-        canvas: Canvas,
-        spec: ShaftSpec,
-        liners: List<LinerDim>,
-        style: DimStyle
-    ) {
-        val win = computeOalWindow(spec)
-        val sets = computeSetPositionsInMeasureSpace(win)
-
-        val spans = buildLinerSpans(liners, sets)
-        val planner = RailPlanner()
-        val assignments = spans.map { planner.assign(it) }
-
-        val renderer = PdfDimensionRenderer(
-            pxPerMm = style.pxPerMm,
-            baseY = style.baseY,
-            railDy = style.railDy,
-            topRailY = style.topY
+    // dims — liner-only rails with OAL on top (surgical addition)
+    run {
+        val baseY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
+        val topY  = baseY - OVERALL_EXTRA_PT
+        val style = DimStyle(
+            paint = dim,
+            pxPerMm = ptPerMm,
+            topY = topY,
+            baseY = baseY,
+            railDy = LANE_GAP_PT
         )
-
-        renderer.drawTop(canvas, oalSpan(win.oalMm), style.paint)
-        assignments.forEach { rs -> renderer.drawOnRail(canvas, rs.rail, rs.span, style.paint) }
+        val linerDims = mapToLinerDimsForPdf(spec)
+        drawLinerDimensionsPdf(c, spec, linerDims, style)
     }
 
     // footer
@@ -212,6 +201,81 @@ private fun drawBodiesCompressedCenterBreak(
 
             // Zig-zag break, centered at mid within the gap
             drawZigZagBreak(c, top, bot, mid, gap, capPaint)
+        }
+    }
+}
+
+/**
+ * Lightweight style carrier for dimension drawing.
+ */
+data class DimStyle(
+    val paint: Paint,
+    val pxPerMm: Float,
+    val topY: Float,
+    val baseY: Float,
+    val railDy: Float
+)
+
+/**
+ * Draws PDF dimensions for liners only.
+ * OAL is always on the top rail; other dims are rail-packed without overlap.
+ */
+fun drawLinerDimensionsPdf(
+    canvas: Canvas,
+    spec: ShaftSpec,
+    liners: List<LinerDim>,
+    style: DimStyle
+) {
+    val win = computeOalWindow(spec)
+    val sets = computeSetPositionsInMeasureSpace(win)
+
+    val spans = buildLinerSpans(liners, sets)
+    val planner = RailPlanner()
+    val assignments = spans.map { planner.assign(it) }
+
+    val renderer = PdfDimensionRenderer(
+        pxPerMm = style.pxPerMm,
+        baseY = style.baseY,
+        railDy = style.railDy,
+        topRailY = style.topY
+    )
+
+    renderer.drawTop(canvas, oalSpan(win.oalMm), style.paint)
+    assignments.forEach { rs -> renderer.drawOnRail(canvas, rs.rail, rs.span, style.paint) }
+}
+
+/**
+ * Adapter from model liners to export-only LinerDim.
+ * Anchor is inferred by proximity to SETs; swap to explicit anchors if your model stores them.
+ */
+private fun mapToLinerDimsForPdf(spec: ShaftSpec): List<LinerDim> {
+    val win = computeOalWindow(spec)
+    val sets = computeSetPositionsInMeasureSpace(win)
+
+    return spec.liners.map { ln ->
+        val start = win.toMeasureX(ln.startFromAftMm.toDouble())
+        val end = start + ln.lengthMm.toDouble()
+        val length = (end - start).coerceAtLeast(0.0)
+
+        val aftGapToStart = start - sets.aftSETxMm
+        val fwdGapToStart = sets.fwdSETxMm - start
+        val anchor = if (fwdGapToStart < aftGapToStart) LinerAnchor.FWD_SET else LinerAnchor.AFT_SET
+
+        when (anchor) {
+            LinerAnchor.AFT_SET -> LinerDim(
+                id = ln.id,
+                anchor = anchor,
+                offsetFromSetMm = aftGapToStart.coerceAtLeast(0.0),
+                lengthMm = length
+            )
+            LinerAnchor.FWD_SET -> LinerDim(
+                id = ln.id,
+                anchor = anchor,
+                // Offset is FWD SET → FWD edge (toward AFT)
+                offsetFromSetMm = (sets.fwdSETxMm - end).coerceAtLeast(0.0),
+                // Length runs AFT from that FWD edge
+                lengthMm = length
+            )
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.android.shaftschematic.domain.geom
+package com.android.shaftschematic.geom
 
 /**
  * SET positions expressed in measurement-space.

@@ -1,4 +1,4 @@
-package com.android.shaftschematic.domain.geom
+package com.android.shaftschematic.geom
 
 /**
  * Measurement window used for PDF dimensions.

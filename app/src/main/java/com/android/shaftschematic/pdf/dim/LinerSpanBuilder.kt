@@ -1,8 +1,8 @@
 package com.android.shaftschematic.pdf.dim
 
-import com.android.shaftschematic.domain.geom.SetPositions
-import com.android.shaftschematic.domain.model.LinerAnchor
-import com.android.shaftschematic.domain.model.LinerDim
+import com.android.shaftschematic.geom.SetPositions
+import com.android.shaftschematic.model.LinerAnchor
+import com.android.shaftschematic.model.LinerDim
 
 private fun fmt(mm: Double): String = "${"%.3f".format(mm)} mm"
 
