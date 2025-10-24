@@ -18,6 +18,7 @@ import java.util.*
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import androidx.core.graphics.withClip
 
 
 /**
@@ -93,7 +94,8 @@ fun composeShaftPdf(
 
         // Compute a higher top rail Y for OAL by adding extra multiples of the normal gap
         // Example: 2.5x the normal gap above where OAL would have been.
-        val topY = baseY - OVERALL_EXTRA_PT - railGap * (OAL_EXTRA_SPACING_FACTOR - 1f)
+        val factor = pdfPrefs.oalSpacingFactor.coerceIn(1.0f, 6.0f)
+        val topY = baseY - OVERALL_EXTRA_PT - railGap * (factor - 1f)
 
         val dimText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
@@ -175,10 +177,6 @@ fun composeShaftPdf(
 // ──────────────────────────────────────────────────────────────────────────────
 
 private const val MM_PER_IN = 25.4f
-
-// User-tunable: how many extra rail gaps to lift the OAL rail above the first liner rail.
-private const val OAL_EXTRA_SPACING_FACTOR = 2.5f
-
 
 // Strokes / text
 private const val OUTLINE_PT = 2.5f
@@ -308,31 +306,35 @@ private fun drawLinerDimensionsPdf(
  * Anchor is inferred by proximity to SETs; swap to explicit anchors if your model stores them.
  */
 private fun mapToLinerDimsForPdf(spec: ShaftSpec): List<LinerDim> {
-    val win = computeOalWindow(spec)
+    val win  = computeOalWindow(spec)
     val sets = computeSetPositionsInMeasureSpace(win)
 
     return spec.liners.map { ln ->
-        val start = win.toMeasureX(ln.startFromAftMm.toDouble())
-        val end = start + ln.lengthMm.toDouble()
-        val length = (end - start).coerceAtLeast(0.0)
+        // Edges in measurement space (AFT→FWD)
+        val aftEdge = win.toMeasureX(ln.startFromAftMm.toDouble())
+        val fwdEdge = aftEdge + ln.lengthMm.toDouble()
+        val length  = (fwdEdge - aftEdge).coerceAtLeast(0.0)
 
-        val aftGapToStart = start - sets.aftSETxMm
-        val fwdGapToStart = sets.fwdSETxMm - start
-        val anchor = if (fwdGapToStart < aftGapToStart) LinerAnchor.FWD_SET else LinerAnchor.AFT_SET
+        // Compare SET→nearest edge distances using the correct edge per SET
+        val distAft = (aftEdge - sets.aftSETxMm).coerceAtLeast(0.0)      // AFT SET → AFT edge
+        val distFwd = (sets.fwdSETxMm - fwdEdge).coerceAtLeast(0.0)      // FWD SET → FWD edge
 
-        when (anchor) {
-            LinerAnchor.AFT_SET -> LinerDim(
+        val useFwd = distFwd < distAft
+
+        if (useFwd) {
+            // FWD-anchored: offset is FWD SET → FWD edge (toward AFT); length runs AFT
+            LinerDim(
                 id = ln.id,
-                anchor = anchor,
-                offsetFromSetMm = aftGapToStart.coerceAtLeast(0.0),
+                anchor = LinerAnchor.FWD_SET,
+                offsetFromSetMm = distFwd,
                 lengthMm = length
             )
-            LinerAnchor.FWD_SET -> LinerDim(
+        } else {
+            // AFT-anchored: offset is AFT SET → AFT edge (forward); length runs FWD
+            LinerDim(
                 id = ln.id,
-                anchor = anchor,
-                // Offset is FWD SET → FWD edge (toward AFT)
-                offsetFromSetMm = (sets.fwdSETxMm - end).coerceAtLeast(0.0),
-                // Length runs AFT from that FWD edge
+                anchor = LinerAnchor.AFT_SET,
+                offsetFromSetMm = distAft,
                 lengthMm = length
             )
         }
@@ -411,14 +413,13 @@ private fun drawThreads(
         // Hatch — stride = max(8 px, pitchMm * ptPerMm), clipped to band
         val step = max(8f, th.pitchMm * ptPerMm)
         val rect = RectF(min(x0, x1), min(top, bot), max(x0, x1), max(top, bot))
-        val save = c.save()
-        c.clipRect(rect)
-        var hx = rect.left + 4f
-        while (hx <= rect.right + 4f) {
-            c.drawLine(hx - 4f, rect.bottom, hx + 4f, rect.top, dim)
-            hx += step
+        c.withClip(rect) {
+            var hx = rect.left + 4f
+            while (hx <= rect.right + 4f) {
+                c.drawLine(hx - 4f, rect.bottom, hx + 4f, rect.top, dim)
+                hx += step
+            }
         }
-        c.restoreToCount(save)
     }
 }
 
@@ -613,7 +614,7 @@ private fun drawFooter(
             val tpi = tpiFromPitch(th.pitchMm)
             val dia = fmtDiaWithUnit(unit, th.majorDiaMm)
             val len = fmtLen(unit, th.lengthMm)
-            c.drawText("Thread: ${dia} × ${fmtTpi(tpi)} TPI × ${len}", leftX, y, text)
+            c.drawText("Thread: $dia × ${fmtTpi(tpi)} TPI × $len", leftX, y, text)
         }
     }
 
@@ -643,7 +644,7 @@ private fun drawFooter(
             val tpi = tpiFromPitch(th.pitchMm)
             val dia = fmtDiaWithUnit(unit, th.majorDiaMm)
             val len = fmtLen(unit, th.lengthMm)
-            c.drawText("Thread: ${dia} × ${fmtTpi(tpi)} TPI × ${len}", rightX, y, text)
+            c.drawText("Thread: $dia × ${fmtTpi(tpi)} TPI × $len", rightX, y, text)
         }
     }
 }
@@ -749,7 +750,7 @@ private fun hasFwdTaper(spec: ShaftSpec): Boolean {
         val start = tp.startFromAftMm
         val end   = tp.startFromAftMm + tp.lengthMm
         // touches FWD end if its end is near OAL OR it spans across OAL
-        kotlin.math.abs(end - oal) <= END_EPS_MM || (start < oal && end > oal)
+        abs(end - oal) <= END_EPS_MM || (start < oal && end > oal)
     }
 }
 data class FooterConfig(
