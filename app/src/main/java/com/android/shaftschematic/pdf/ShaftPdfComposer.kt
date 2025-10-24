@@ -96,24 +96,25 @@ fun composeShaftPdf(
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
 
-    // --- dimensions (liner-only, unit-aware, extension lines) ---
-    // === DIMENSIONS (liner-only, unit-aware, with extension lines) ===
     run {
-        // rail Y positions
         val baseY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
-        val topY  = baseY - OVERALL_EXTRA_PT
 
-        // text paint for dim labels (separate from line stroke)
+        // Standard rail gap you're already using for liner rails
+        val railGap = LANE_GAP_PT + 6f
+
+        // Compute a higher top rail Y for OAL by adding extra multiples of the normal gap
+        // Example: 2.5x the normal gap above where OAL would have been.
+        val topY = baseY - OVERALL_EXTRA_PT - railGap * (OAL_EXTRA_SPACING_FACTOR - 1f)
+
         val dimText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
             textSize = TEXT_PT - 2f
             color = 0xFF000000.toInt()
         }
 
-        // shared world→page mapper (same one geometry uses)
+        // Shared world→page mapper (same geometry mapping)
         val pageX: (Double) -> Float = { mm -> (geomRect.left + (mm.toFloat() * ptPerMm)) }
 
-        // build spans (pass UNIT)
         val linerDims = mapToLinerDimsForPdf(spec)
         val win  = computeOalWindow(spec)
         val sets = computeSetPositionsInMeasureSpace(win)
@@ -121,19 +122,18 @@ fun composeShaftPdf(
         val planner = RailPlanner()
         val assignments = spans.map { planner.assign(it) }
 
-        // renderer (new signature requires these params)
         val renderer = PdfDimensionRenderer(
             pageX = pageX,
             baseY = baseY,
-            railDy = LANE_GAP_PT + 6f,      // extra breathing room
-            topRailY = topY,
+            railDy = railGap,
+            topRailY = topY,            // ← OAL sits higher thanks to the factor above
             linePaint = dim,
             textPaint = dimText,
             objectTopY = yTopOfShaft,
             objectClearance = 6f
         )
 
-        // OAL on top rail (pass UNIT; 3rd arg is Boolean: drawExtensions)
+        // NOTE: keep your canvas variable name as-is; if yours is `canvas`, use that instead of `c`.
         renderer.drawTop(c, oalSpan(win.oalMm, unit), true)
         assignments.forEach { rs ->
             renderer.drawOnRail(c, rs.rail, rs.span, true)
@@ -187,6 +187,10 @@ fun composeShaftPdf(
 // ──────────────────────────────────────────────────────────────────────────────
 
 private const val MM_PER_IN = 25.4f
+
+// User-tunable: how many extra rail gaps to lift the OAL rail above the first liner rail.
+private const val OAL_EXTRA_SPACING_FACTOR = 2.5f
+
 
 // Strokes / text
 private const val OUTLINE_PT = 2.5f
