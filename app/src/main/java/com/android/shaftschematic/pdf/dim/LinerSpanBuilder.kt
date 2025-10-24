@@ -3,31 +3,36 @@ package com.android.shaftschematic.pdf.dim
 import com.android.shaftschematic.geom.SetPositions
 import com.android.shaftschematic.model.LinerAnchor
 import com.android.shaftschematic.model.LinerDim
-
-private fun fmt(mm: Double): String = "${"%.3f".format(mm)} mm"
+import com.android.shaftschematic.pdf.formatDim
+import com.android.shaftschematic.util.UnitSystem
 
 /**
  * Builds two spans per liner: (SET→near edge) and (near edge→far edge).
+ * FWD-anchored: offset to the FWD edge (toward AFT), length AFT.
  */
-fun buildLinerSpans(liners: List<LinerDim>, sets: SetPositions): List<DimSpan> = buildList {
+fun buildLinerSpans(
+    liners: List<LinerDim>,
+    sets: SetPositions,
+    unit: UnitSystem
+): List<DimSpan> = buildList {
     liners.forEach { ln ->
         when (ln.anchor) {
             LinerAnchor.AFT_SET -> {
                 val start = sets.aftSETxMm + ln.offsetFromSetMm
                 val end = start + ln.lengthMm
-                add(DimSpan(sets.aftSETxMm, start, labelTop = fmt(ln.offsetFromSetMm), labelBottom = "AFT SET"))
-                add(DimSpan(start, end, labelTop = fmt(ln.lengthMm)))
+                add(DimSpan(sets.aftSETxMm, start, labelTop = formatDim(ln.offsetFromSetMm, unit), labelBottom = "AFT SET"))
+                add(DimSpan(start, end, labelTop = formatDim(ln.lengthMm, unit)))
             }
             LinerAnchor.FWD_SET -> {
                 val fwdEdge = sets.fwdSETxMm - ln.offsetFromSetMm
                 val aftEdge = fwdEdge - ln.lengthMm
-                add(DimSpan(sets.fwdSETxMm, fwdEdge, labelTop = fmt(ln.offsetFromSetMm), labelBottom = "FWD SET"))
-                add(DimSpan(fwdEdge, aftEdge, labelTop = fmt(ln.lengthMm)))
+                add(DimSpan(sets.fwdSETxMm, fwdEdge, labelTop = formatDim(ln.offsetFromSetMm, unit), labelBottom = "FWD SET"))
+                add(DimSpan(fwdEdge, aftEdge, labelTop = formatDim(ln.lengthMm, unit)))
             }
         }
     }
 }
 
-/** OAL span reserved for top rail. */
-fun oalSpan(oalMm: Double): DimSpan =
-    DimSpan(0.0, oalMm, labelTop = "OAL ${"%.3f".format(oalMm)}")
+/** OAL span for the top rail. */
+fun oalSpan(oalMm: Double, unit: UnitSystem): DimSpan =
+    DimSpan(0.0, oalMm, labelTop = "OAL ${formatDim(oalMm, unit)}")

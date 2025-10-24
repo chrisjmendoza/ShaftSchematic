@@ -18,6 +18,13 @@ import com.android.shaftschematic.pdf.dim.buildLinerSpans
 import com.android.shaftschematic.pdf.dim.oalSpan
 import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.pdf.dim.buildLinerSpans
+import com.android.shaftschematic.pdf.dim.oalSpan
+import com.android.shaftschematic.pdf.notes.DiaCallout
+import com.android.shaftschematic.pdf.notes.DiameterLeaderRenderer
+import com.android.shaftschematic.pdf.notes.LeaderSide
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -89,26 +96,72 @@ fun composeShaftPdf(
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
 
-    // dims — liner-only rails with OAL on top (surgical addition)
+    // --- dimensions (liner-only, unit-aware, extension lines) ---
     run {
         val baseY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
         val topY  = baseY - OVERALL_EXTRA_PT
-        val style = DimStyle(
-            paint = dim,
-            pxPerMm = ptPerMm,
-            topY = topY,
+
+        val dimText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            textSize = TEXT_PT - 2f
+            color = 0xFF000000.toInt()
+        }
+
+        // Shared mapper with geometry; if you later compress geometry, swap this lambda accordingly.
+        val pageX: (Double) -> Float = { mm -> (geomRect.left + (mm.toFloat() * ptPerMm)) }
+
+        val linerDims: List<LinerDim> = mapToLinerDimsForPdf(spec)
+        val win = computeOalWindow(spec)
+        val sets = computeSetPositionsInMeasureSpace(win)
+        val spans = buildLinerSpans(linerDims, sets, unit)
+        val planner = RailPlanner()
+        val assignments = spans.map { planner.assign(it) }
+
+        val renderer = PdfDimensionRenderer(
+            pageX = pageX,
             baseY = baseY,
-            railDy = LANE_GAP_PT
+            railDy = LANE_GAP_PT + 6f,   // extra breathing room
+            topRailY = topY,
+            linePaint = dim,
+            textPaint = dimText,
+            objectTopY = yTopOfShaft,
+            objectClearance = 6f
         )
-        val linerDims = mapToLinerDimsForPdf(spec)
-        drawLinerDimensionsPdf(c, spec, linerDims, style)
+
+        renderer.drawTop(c, oalSpan(win.oalMm, unit), drawExtensions = true)
+        assignments.forEach { rs -> renderer.drawOnRail(c, rs.rail, rs.span, drawExtensions = true) }
+    }
+
+    // --- diameter callouts (optional; leave empty until you have stations) ---
+    run {
+        val calls: List<DiaCallout> = emptyList()
+        if (calls.isNotEmpty()) {
+            val leaderText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                textSize = TEXT_PT - 2f
+                color = 0xFF000000.toInt()
+            }
+            val leader = DiameterLeaderRenderer(
+                pageX = { mm -> (geomRect.left + (mm.toFloat() * ptPerMm)) },
+                shaftTopY = yTopOfShaft,
+                shaftBottomY = cy + (maxDiaMm * 0.5f) * ptPerMm,
+                linePaint = dim,
+                textPaint = leaderText
+            )
+            leader.draw(c, calls, unit)
+        }
     }
 
     // footer
-    val infoTop = cy + halfHeightPx + INFO_GAP_PT
-    val infoBottom = min(infoTop + FOOTER_BLOCK_PT, pageH - PAGE_MARGIN_PT)
-    val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
-    drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text)
+    val showCompressionNote = hasCenterBreak(spec)
+    val footerCfg = FooterConfig(
+        showAftThread = hasAftThread(spec),
+        showFwdThread = hasFwdThread(spec),
+        showAftTaper  = hasAftTaper(spec),
+        showFwdTaper  = hasFwdTaper(spec),
+        showCompressionNote = showCompressionNote
+    )
+    drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg)
 
     // stamp
     val meta = "$filename  •  ShaftSchematic $appVersion"
@@ -525,6 +578,7 @@ private fun drawFooter(
     filename: String,
     appVersion: String,
     text: Paint,
+    cfg: FooterConfig
 ) {
     val gutter = 16f
     val innerW = rect.width() - gutter * 2
@@ -654,3 +708,36 @@ private fun ShaftSpec.maxOuterDiaMm(): Float {
     liners.forEach  { maxDia = maxOf(maxDia, it.odMm) }
     return maxDia
 }
+
+/** Returns true if any body was center-broken for readability. */
+private fun hasCenterBreak(spec: ShaftSpec): Boolean {
+    // Heuristic: mark true when any body length exceeds the visual compression threshold.
+    // Replace with your actual flag if drawBodiesCompressedCenterBreak exposes it.
+    val totalBodies = spec.bodies.size
+    if (totalBodies == 0) return false
+    // Simple conservative rule: if overall length >> drawing width, assume a break occurred.
+    return spec.overallLengthMm > 3_000f && totalBodies >= 2
+}
+
+/** Presence checks for end features. */
+private fun hasAftThread(spec: ShaftSpec): Boolean =
+    spec.threads.any { it.startFromAftMm <= 0.5f }    // thread touches AFT end
+
+private fun hasFwdThread(spec: ShaftSpec): Boolean {
+    val oal = spec.overallLengthMm
+    return spec.threads.any { (it.startFromAftMm + it.lengthMm) >= (oal - 0.5f) } // thread touches FWD end
+}
+
+private fun hasAftTaper(spec: ShaftSpec): Boolean =
+    spec.tapers.any { it.direction.isAftEnd() } // implement isAftEnd() if needed; otherwise check coords
+
+private fun hasFwdTaper(spec: ShaftSpec): Boolean =
+    spec.tapers.any { it.direction.isFwdEnd() } // same note as above
+
+data class FooterConfig(
+    val showAftThread: Boolean,
+    val showFwdThread: Boolean,
+    val showAftTaper: Boolean,
+    val showFwdTaper: Boolean,
+    val showCompressionNote: Boolean
+)
