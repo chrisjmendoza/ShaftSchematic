@@ -1,22 +1,16 @@
 package com.android.shaftschematic.pdf
 
-import com.android.shaftschematic.util.UnitSystem
 import java.util.Locale
 
 /**
- * Formats a canonical mm value for display in the selected unit system.
- * Detection is name-based to avoid coupling to specific enum constants.
+ * Converts a canonical mm value to a display string in the active unit system.
+ * Works with enums named MILLIMETERS/INCHES or any UnitSystem-like type
+ * whose name includes "MM" or "INCH".
  */
-fun formatDim(mm: Double, unit: UnitSystem): String {
-    // Accept common enum names without importing specific constants
-    val name = unit.name.uppercase(Locale.US)
-    val isInch =
-        name.contains("INCH") ||    // INCH, INCHES
-            name.contains("IMPERIAL")   // IMPERIAL, etc.
-
-    return if (isInch) {
-        String.format(Locale.US, "%.3f in", mm / 25.4)
-    } else {
-        String.format(Locale.US, "%.3f mm", mm)
+fun formatDim(mm: Double, unit: Any?): String {
+    val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
+    return when {
+        name.contains("INCH") -> String.format(Locale.US, "%.3f in", mm / 25.4)
+        else -> String.format(Locale.US, "%.3f mm", mm)
     }
 }
