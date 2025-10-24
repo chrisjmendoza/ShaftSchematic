@@ -5,11 +5,18 @@ import java.util.Locale
 
 /**
  * Formats a canonical mm value for display in the selected unit system.
- * Internal math stays in mm; only string output changes.
+ * Detection is name-based to avoid coupling to specific enum constants.
  */
 fun formatDim(mm: Double, unit: UnitSystem): String {
-    return when (unit) {
-        UnitSystem.INCH -> String.format(Locale.US, "%.3f in", mm / 25.4)
-        UnitSystem.MM   -> String.format(Locale.US, "%.3f mm", mm)
+    // Accept common enum names without importing specific constants
+    val name = unit.name.uppercase(Locale.US)
+    val isInch =
+        name.contains("INCH") ||    // INCH, INCHES
+            name.contains("IMPERIAL")   // IMPERIAL, etc.
+
+    return if (isInch) {
+        String.format(Locale.US, "%.3f in", mm / 25.4)
+    } else {
+        String.format(Locale.US, "%.3f mm", mm)
     }
 }
