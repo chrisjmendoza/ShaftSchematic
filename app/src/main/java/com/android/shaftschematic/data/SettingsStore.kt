@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.android.shaftschematic.settings.PdfPrefs
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -32,5 +33,21 @@ object SettingsStore {
 
     suspend fun setShowGrid(ctx: Context, show: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_SHOW_GRID] = show }
+    }
+
+    // --- PDF section (new) ---
+    @Volatile
+    private var _pdfPrefs: PdfPrefs = PdfPrefs() // default; load actual on init if you persist
+
+    val pdfPrefs: PdfPrefs
+        get() = _pdfPrefs
+
+    fun updatePdfPrefs(transform: (PdfPrefs) -> PdfPrefs) {
+        _pdfPrefs = transform(_pdfPrefs).clamped()
+        // TODO: persist _pdfPrefs via your existing persistence layer
+    }
+
+    fun setPdfOalSpacingFactor(f: Float) {
+        updatePdfPrefs { it.copy(oalSpacingFactor = f) }
     }
 }

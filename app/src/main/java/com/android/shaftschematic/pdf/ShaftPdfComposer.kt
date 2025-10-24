@@ -3,34 +3,22 @@
 
 package com.android.shaftschematic.pdf
 
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.RectF
-import android.graphics.Typeface
+import android.graphics.*
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
-import com.android.shaftschematic.model.LinerAnchor
-import com.android.shaftschematic.model.LinerDim
 import com.android.shaftschematic.model.*
-import com.android.shaftschematic.pdf.dim.RailPlanner
-import com.android.shaftschematic.pdf.dim.buildLinerSpans
-import com.android.shaftschematic.pdf.dim.oalSpan
+import com.android.shaftschematic.pdf.dim.*
+import com.android.shaftschematic.pdf.notes.*
 import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.UnitSystem
-import com.android.shaftschematic.geom.computeOalWindow
-import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
-import com.android.shaftschematic.pdf.dim.buildLinerSpans
-import com.android.shaftschematic.pdf.dim.oalSpan
-import com.android.shaftschematic.pdf.notes.DiaCallout
-import com.android.shaftschematic.pdf.notes.DiameterLeaderRenderer
-import com.android.shaftschematic.pdf.notes.LeaderSide
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+
 
 /**
  * PDF Composer — draws the shaft preview and export annotations.
@@ -54,6 +42,7 @@ fun composeShaftPdf(
     project: ProjectInfo,
     appVersion: String,
     filename: String,
+    pdfPrefs: PdfPrefs = PdfPrefs(),
 ) {
     val c = page.canvas
     val pageW = page.info.pageWidth.toFloat()
@@ -133,7 +122,6 @@ fun composeShaftPdf(
             objectClearance = 6f
         )
 
-        // NOTE: keep your canvas variable name as-is; if yours is `canvas`, use that instead of `c`.
         renderer.drawTop(c, oalSpan(win.oalMm, unit), true)
         assignments.forEach { rs ->
             renderer.drawOnRail(c, rs.rail, rs.span, true)
@@ -274,17 +262,6 @@ private fun drawBodiesCompressedCenterBreak(
         }
     }
 }
-
-/**
- * Lightweight style carrier for dimension drawing.
- */
-data class DimStyle(
-    val paint: Paint,
-    val pxPerMm: Float,
-    val topY: Float,
-    val baseY: Float,
-    val railDy: Float
-)
 
 /**
  * Draws liner-only dimensions using the current renderer contract.
@@ -483,7 +460,6 @@ private fun drawDimensionsLikePreview(
     val firstLaneY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
 
     // Gather component intervals
-    data class Interval(val startMm: Float, val endMm: Float)
     val ivs = ArrayList<Interval>()
     spec.bodies.forEach  { if (it.lengthMm > 0f && it.diaMm       > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
     spec.tapers.forEach  { if (it.lengthMm > 0f && (it.startDiaMm > 0f || it.endDiaMm > 0f)) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
@@ -649,7 +625,7 @@ private fun drawFooter(
         c.drawText("Vessel: ${project.vessel}",   midX, y, text); y += lh
         c.drawText("Job #: ${project.jobNumber}", midX, y, text); y += lh
         c.drawText("Date: $date", midX, y, text); y += lh
-        c.drawText("Not to scale: long bodies compressed for readability.", midX, y, text)
+        // c.drawText("Not to scale: long bodies compressed for readability.", midX, y, text)
     }
 
     // Right (FWD)
