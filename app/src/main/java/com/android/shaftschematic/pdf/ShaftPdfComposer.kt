@@ -97,30 +97,35 @@ fun composeShaftPdf(
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
 
     // --- dimensions (liner-only, unit-aware, extension lines) ---
+    // === DIMENSIONS (liner-only, unit-aware, with extension lines) ===
     run {
+        // rail Y positions
         val baseY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
         val topY  = baseY - OVERALL_EXTRA_PT
 
+        // text paint for dim labels (separate from line stroke)
         val dimText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
             textSize = TEXT_PT - 2f
             color = 0xFF000000.toInt()
         }
 
-        // Shared mapper with geometry; if you later compress geometry, swap this lambda accordingly.
+        // shared world→page mapper (same one geometry uses)
         val pageX: (Double) -> Float = { mm -> (geomRect.left + (mm.toFloat() * ptPerMm)) }
 
-        val linerDims: List<LinerDim> = mapToLinerDimsForPdf(spec)
-        val win = computeOalWindow(spec)
+        // build spans (pass UNIT)
+        val linerDims = mapToLinerDimsForPdf(spec)
+        val win  = computeOalWindow(spec)
         val sets = computeSetPositionsInMeasureSpace(win)
         val spans = buildLinerSpans(linerDims, sets, unit)
         val planner = RailPlanner()
         val assignments = spans.map { planner.assign(it) }
 
+        // renderer (new signature requires these params)
         val renderer = PdfDimensionRenderer(
             pageX = pageX,
             baseY = baseY,
-            railDy = LANE_GAP_PT + 6f,   // extra breathing room
+            railDy = LANE_GAP_PT + 6f,      // extra breathing room
             topRailY = topY,
             linePaint = dim,
             textPaint = dimText,
@@ -128,8 +133,11 @@ fun composeShaftPdf(
             objectClearance = 6f
         )
 
-        renderer.drawTop(c, oalSpan(win.oalMm, unit), drawExtensions = true)
-        assignments.forEach { rs -> renderer.drawOnRail(c, rs.rail, rs.span, drawExtensions = true) }
+        // OAL on top rail (pass UNIT; 3rd arg is Boolean: drawExtensions)
+        renderer.drawTop(c, oalSpan(win.oalMm, unit), true)
+        assignments.forEach { rs ->
+            renderer.drawOnRail(c, rs.rail, rs.span, true)
+        }
     }
 
     // --- diameter callouts (optional; leave empty until you have stations) ---
@@ -161,6 +169,11 @@ fun composeShaftPdf(
         showFwdTaper  = hasFwdTaper(spec),
         showCompressionNote = showCompressionNote
     )
+
+    val infoTop = cy + halfHeightPx + INFO_GAP_PT
+    val infoBottom = kotlin.math.min(infoTop + FOOTER_BLOCK_PT, pageH - PAGE_MARGIN_PT)
+    val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
+
     drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg)
 
     // stamp
@@ -270,32 +283,44 @@ data class DimStyle(
 )
 
 /**
- * Draws PDF dimensions for liners only.
- * OAL is always on the top rail; other dims are rail-packed without overlap.
+ * Draws liner-only dimensions using the current renderer contract.
+ * OAL is on the top rail. Spans align with geometry via the provided pageX mapper.
  */
-fun drawLinerDimensionsPdf(
+private fun drawLinerDimensionsPdf(
     canvas: Canvas,
     spec: ShaftSpec,
     liners: List<LinerDim>,
-    style: DimStyle
+    unit: UnitSystem,
+    pageX: (Double) -> Float,
+    topY: Float,
+    baseY: Float,
+    railDy: Float,
+    linePaint: Paint,
+    textPaint: Paint,
+    objectTopY: Float
 ) {
     val win = computeOalWindow(spec)
     val sets = computeSetPositionsInMeasureSpace(win)
 
-    val spans = buildLinerSpans(liners, sets)
+    val spans = buildLinerSpans(liners, sets, unit)
     val planner = RailPlanner()
     val assignments = spans.map { planner.assign(it) }
 
     val renderer = PdfDimensionRenderer(
-        pxPerMm = style.pxPerMm,
-        baseY = style.baseY,
-        railDy = style.railDy,
-        topRailY = style.topY
+        pageX = pageX,
+        baseY = baseY,
+        railDy = railDy,
+        topRailY = topY,
+        linePaint = linePaint,
+        textPaint = textPaint,
+        objectTopY = objectTopY,
+        objectClearance = 6f
     )
 
-    renderer.drawTop(canvas, oalSpan(win.oalMm), style.paint)
-    assignments.forEach { rs -> renderer.drawOnRail(canvas, rs.rail, rs.span, style.paint) }
+    renderer.drawTop(canvas, oalSpan(win.oalMm, unit), true)
+    assignments.forEach { rs -> renderer.drawOnRail(canvas, rs.rail, rs.span, true) }
 }
+
 
 /**
  * Adapter from model liners to export-only LinerDim.
@@ -728,12 +753,25 @@ private fun hasFwdThread(spec: ShaftSpec): Boolean {
     return spec.threads.any { (it.startFromAftMm + it.lengthMm) >= (oal - 0.5f) } // thread touches FWD end
 }
 
+private const val END_EPS_MM = 0.5f
+
 private fun hasAftTaper(spec: ShaftSpec): Boolean =
-    spec.tapers.any { it.direction.isAftEnd() } // implement isAftEnd() if needed; otherwise check coords
+    spec.tapers.any { tp ->
+        // touches AFT end if its start is near 0 OR it spans across 0
+        val start = tp.startFromAftMm
+        val end   = tp.startFromAftMm + tp.lengthMm
+        start <= END_EPS_MM || (start < 0f && end > 0f)
+    }
 
-private fun hasFwdTaper(spec: ShaftSpec): Boolean =
-    spec.tapers.any { it.direction.isFwdEnd() } // same note as above
-
+private fun hasFwdTaper(spec: ShaftSpec): Boolean {
+    val oal = spec.overallLengthMm
+    return spec.tapers.any { tp ->
+        val start = tp.startFromAftMm
+        val end   = tp.startFromAftMm + tp.lengthMm
+        // touches FWD end if its end is near OAL OR it spans across OAL
+        kotlin.math.abs(end - oal) <= END_EPS_MM || (start < oal && end > oal)
+    }
+}
 data class FooterConfig(
     val showAftThread: Boolean,
     val showFwdThread: Boolean,
