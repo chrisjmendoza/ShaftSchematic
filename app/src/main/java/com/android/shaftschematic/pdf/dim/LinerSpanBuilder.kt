@@ -20,13 +20,13 @@ fun buildLinerSpans(
             LinerAnchor.AFT_SET -> {
                 val start = sets.aftSETxMm + ln.offsetFromSetMm
                 val end = start + ln.lengthMm
-                add(DimSpan(sets.aftSETxMm, start, labelTop = formatDim(ln.offsetFromSetMm, unit), labelBottom = "AFT SET"))
+                add(DimSpan(sets.aftSETxMm, start, labelTop = formatDim(ln.offsetFromSetMm, unit), labelBottom = null))
                 add(DimSpan(start, end, labelTop = formatDim(ln.lengthMm, unit)))
             }
             LinerAnchor.FWD_SET -> {
                 val fwdEdge = sets.fwdSETxMm - ln.offsetFromSetMm
                 val aftEdge = fwdEdge - ln.lengthMm
-                add(DimSpan(sets.fwdSETxMm, fwdEdge, labelTop = formatDim(ln.offsetFromSetMm, unit), labelBottom = "FWD SET"))
+                add(DimSpan(sets.fwdSETxMm, fwdEdge, labelTop = formatDim(ln.offsetFromSetMm, unit), labelBottom = null))
                 add(DimSpan(fwdEdge, aftEdge, labelTop = formatDim(ln.lengthMm, unit)))
             }
         }

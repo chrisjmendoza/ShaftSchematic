@@ -256,7 +256,7 @@ private fun drawBodiesCompressedCenterBreak(
             c.drawLine(x1, top, x1, bot, outline)
 
             // Zig-zag break, centered at mid within the gap
-            drawZigZagBreak(c, top, bot, mid, gap, capPaint)
+            drawSCurveBreak(c, top, bot, mid, gap, capPaint)
         }
     }
 }
@@ -362,6 +362,41 @@ private fun drawZigZagBreak(
         c.drawLine((xL + xR) * 0.5f, zTop, xR, zBot, p)
         xL = xR
     }
+}
+
+// And add this function (near the old one):
+private fun drawSCurveBreak(
+    c: Canvas,
+    yTop: Float,
+    yBot: Float,
+    xMid: Float,
+    gap: Float,
+    p: Paint
+) {
+    // Draw two mirrored cubic Béziers to suggest a smooth long-break
+    val half = gap * 0.5f
+    val xL = xMid - half
+    val xR = xMid + half
+    val yC = (yTop + yBot) * 0.5f
+    val amp = (yBot - yTop) * 0.22f  // curvature amplitude
+
+    val path = android.graphics.Path().apply {
+        // upper S
+        moveTo(xL, yC - amp)
+        cubicTo(
+            xL + half * 0.35f, yC - amp * 1.35f,
+            xR - half * 0.35f, yC + amp * 1.35f,
+            xR, yC + amp
+        )
+        // lower S (mirror back for visual weight)
+        moveTo(xL, yC + amp)
+        cubicTo(
+            xL + half * 0.35f, yC + amp * 1.35f,
+            xR - half * 0.35f, yC - amp * 1.35f,
+            xR, yC - amp
+        )
+    }
+    c.drawPath(path, p)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -598,23 +633,31 @@ private fun drawFooter(
     val lh = text.textSize * 1.35f
 
     val (aftTaper, fwdTaper) = pickAftFwdTapers(spec)
-
+    val ends = detectEndFeatures(spec)
     // Left (AFT)
+
     run {
         var y = top
-        if (aftTaper != null) {
-            val (let, set) = letSet(aftTaper)
-            c.drawText("AFT Taper", leftX, y, text); y += lh
-            c.drawText("L.E.T.: ${fmtDia(unit, let)}", leftX, y, text); y += lh
-            c.drawText("S.E.T.: ${fmtDia(unit, set)}", leftX, y, text); y += lh
-            c.drawText("Length: ${fmtLen(unit, aftTaper.lengthMm)}", leftX, y, text); y += lh
-            c.drawText("Rate: ${rate1toN(aftTaper)}", leftX, y, text); y += lh
+
+        if (cfg.showAftTaper && ends.aftTaper) {
+            aftTaper?.let { tp ->
+                val (let, set) = letSet(tp)
+                c.drawText("AFT Taper", leftX, y, text); y += lh
+                c.drawText("L.E.T.: ${fmtDia(unit, let)}", leftX, y, text); y += lh
+                c.drawText("S.E.T.: ${fmtDia(unit, set)}", leftX, y, text); y += lh
+                c.drawText("Length: ${fmtLen(unit, tp.lengthMm)}", leftX, y, text); y += lh
+                c.drawText("Rate: ${rate1toN(tp)}", leftX, y, text); y += lh
+            }
         }
-        findAftThread(spec)?.let { th ->
-            val tpi = tpiFromPitch(th.pitchMm)
-            val dia = fmtDiaWithUnit(unit, th.majorDiaMm)
-            val len = fmtLen(unit, th.lengthMm)
-            c.drawText("Thread: $dia × ${fmtTpi(tpi)} TPI × $len", leftX, y, text)
+
+        if (cfg.showAftThread && ends.aftThread) {
+            findAftThread(spec)?.let { th ->
+                val tpi = tpiFromPitch(th.pitchMm)
+                val dia = fmtDiaWithUnit(unit, th.majorDiaMm)
+                val len = fmtLen(unit, th.lengthMm)
+                c.drawText("Thread: $dia × ${fmtTpi(tpi)} TPI × $len", leftX, y, text)
+                y += lh
+            }
         }
     }
 
@@ -632,19 +675,26 @@ private fun drawFooter(
     // Right (FWD)
     run {
         var y = top
-        if (fwdTaper != null) {
-            val (let, set) = letSet(fwdTaper)
-            c.drawText("FWD Taper", rightX, y, text); y += lh
-            c.drawText("L.E.T.: ${fmtDia(unit, let)}", rightX, y, text); y += lh
-            c.drawText("S.E.T.: ${fmtDia(unit, set)}", rightX, y, text); y += lh
-            c.drawText("Length: ${fmtLen(unit, fwdTaper.lengthMm)}", rightX, y, text); y += lh
-            c.drawText("Rate: ${rate1toN(fwdTaper)}", rightX, y, text); y += lh
+
+        if (cfg.showFwdTaper && ends.fwdTaper) {
+            fwdTaper?.let { tp ->
+                val (let, set) = letSet(tp)
+                c.drawText("FWD Taper", rightX, y, text); y += lh
+                c.drawText("L.E.T.: ${fmtDia(unit, let)}", rightX, y, text); y += lh
+                c.drawText("S.E.T.: ${fmtDia(unit, set)}", rightX, y, text); y += lh
+                c.drawText("Length: ${fmtLen(unit, tp.lengthMm)}", rightX, y, text); y += lh
+                c.drawText("Rate: ${rate1toN(tp)}", rightX, y, text); y += lh
+            }
         }
-        findFwdThread(spec)?.let { th ->
-            val tpi = tpiFromPitch(th.pitchMm)
-            val dia = fmtDiaWithUnit(unit, th.majorDiaMm)
-            val len = fmtLen(unit, th.lengthMm)
-            c.drawText("Thread: $dia × ${fmtTpi(tpi)} TPI × $len", rightX, y, text)
+
+        if (cfg.showFwdThread && ends.fwdThread) {
+            findFwdThread(spec)?.let { th ->
+                val tpi = tpiFromPitch(th.pitchMm)
+                val dia = fmtDiaWithUnit(unit, th.majorDiaMm)
+                val len = fmtLen(unit, th.lengthMm)
+                c.drawText("Thread: $dia × ${fmtTpi(tpi)} TPI × $len", rightX, y, text)
+                y += lh
+            }
         }
     }
 }
@@ -700,6 +750,20 @@ private fun fmtDiaWithUnit(unit: UnitSystem, mm: Float): String = when (unit.nam
     else -> String.format(Locale.US, "%.1f mm", mm)
 }
 
+// Threads helper – keep your house style: DIA × TPI × LEN
+private fun fmtThread(th: Threads, unit: UnitSystem): String {
+    val dia = fmtDiaWithUnit(unit, th.majorDiaMm)
+    val tpi = fmtTpi(tpiFromPitch(th.pitchMm))
+    val len = fmtLen(unit, th.lengthMm)
+    return "$dia × $tpi × $len"
+}
+
+// Taper helper – compute 1:N from (length / Δdia), then show "1:N over LEN"
+private fun fmtTaper(tp: Taper, unit: UnitSystem): String {
+    val rate = rate1toN(tp) // you already have this
+    return "$rate over ${fmtLen(unit, tp.lengthMm)}"
+}
+
 private fun tpiFromPitch(pitchMm: Float): Float = if (pitchMm > 0f) MM_PER_IN / pitchMm else 0f
 private fun fmtTpi(tpi: Float): String {
     val i = tpi.toInt()
@@ -753,6 +817,53 @@ private fun hasFwdTaper(spec: ShaftSpec): Boolean {
         abs(end - oal) <= END_EPS_MM || (start < oal && end > oal)
     }
 }
+
+// --- End-feature presence detection -----------------------------------------
+
+private data class EndFlags(
+    val aftThread: Boolean,
+    val fwdThread: Boolean,
+    val aftTaper:  Boolean,
+    val fwdTaper:  Boolean
+)
+
+/**
+ * A feature "exists at the end" iff its geometry interval actually reaches the end face.
+ * We deliberately do NOT infer from labels or components; we check start/end X against the end faces.
+ *
+ * Conventions assumed:
+ * - X increases AFT ➜ FWD.
+ * - AFT end face is at sets.aftSETxMm.
+ * - FWD end face is at sets.fwdSETxMm.
+ * - Threads/tapers expose [startXMm, endXMm] in shaft coordinates.
+ *   For AFT-end features: startX == aftSET (goes forward).
+ *   For FWD-end features: endX == fwdSET (comes from aft).
+ */
+private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = 0.01): EndFlags {
+    val aftX = 0.0
+    val fwdX = spec.overallLengthMm.toDouble()
+
+    fun near(a: Double, b: Double) = kotlin.math.abs(a - b) <= epsMm
+
+    // Threads
+    val aftThread = spec.threads.any { th ->
+        near(th.startFromAftMm.toDouble(), aftX) && th.lengthMm > epsMm
+    }
+    val fwdThread = spec.threads.any { th ->
+        near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > epsMm
+    }
+
+    // Tapers
+    val aftTaper = spec.tapers.any { tp ->
+        near(tp.startFromAftMm.toDouble(), aftX) && tp.lengthMm > epsMm
+    }
+    val fwdTaper = spec.tapers.any { tp ->
+        near((tp.startFromAftMm + tp.lengthMm).toDouble(), fwdX) && tp.lengthMm > epsMm
+    }
+
+    return EndFlags(aftThread, fwdThread, aftTaper, fwdTaper)
+}
+
 data class FooterConfig(
     val showAftThread: Boolean,
     val showFwdThread: Boolean,
