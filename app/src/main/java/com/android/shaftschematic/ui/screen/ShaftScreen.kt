@@ -950,10 +950,31 @@ private val CAROUSEL_HEIGHT = 360.dp // visually nice; tweak if you like
 private fun abbr(unit: UnitSystem) = if (unit == UnitSystem.MILLIMETERS) "mm" else "in"
 
 private fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String {
-    val v = if (unit == UnitSystem.MILLIMETERS) valueMm else valueMm / 25.4f
-    return "%.${d}f".format(v).trimEnd('0').trimEnd('.').ifEmpty { "0" }
+    // Decimals:
+    // • Millimeters: use the requested precision (default 3).
+    // • Inches: force at least 4 decimals so common fractions (1/16, 1/32) are exact
+    //   when entered as decimals (0.4375, 0.3125, etc.).
+    val decimals = when (unit) {
+        UnitSystem.INCHES -> maxOf(d, 4)
+        UnitSystem.MILLIMETERS -> d
+    }
+
+    val v = if (unit == UnitSystem.MILLIMETERS) {
+        valueMm
+    } else {
+        valueMm / 25.4f
+    }
+
+    return "%.${decimals}f"
+        .format(v)
+        .trimEnd('0')
+        .trimEnd('.')
+        .ifEmpty { "0" }
 }
-private fun disp(mm: Float, unit: UnitSystem, d: Int = 3): String = formatDisplay(mm, unit, d)
+
+/** Convenience wrapper for "mm → display" in the component cards. */
+private fun disp(mm: Float, unit: UnitSystem, d: Int = 3): String =
+    formatDisplay(mm, unit, d)
 
 private fun toMmOrNull(text: String, unit: UnitSystem): Float? {
     val t = text.trim(); if (t.isEmpty()) return null

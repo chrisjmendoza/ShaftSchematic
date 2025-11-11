@@ -634,13 +634,12 @@ private fun drawFooter(
 
     val (aftTaper, fwdTaper) = pickAftFwdTapers(spec)
     val ends = detectEndFeatures(spec)
-    // Left (AFT)
 
+    // AFT (left)
     run {
         var y = top
-
         if (cfg.showAftTaper && ends.aftTaper) {
-            aftTaper?.let { tp ->
+            getAftEndTaper(spec)?.let { tp ->
                 val (let, set) = letSet(tp)
                 c.drawText("AFT Taper", leftX, y, text); y += lh
                 c.drawText("L.E.T.: ${fmtDia(unit, let)}", leftX, y, text); y += lh
@@ -649,13 +648,12 @@ private fun drawFooter(
                 c.drawText("Rate: ${rate1toN(tp)}", leftX, y, text); y += lh
             }
         }
-
         if (cfg.showAftThread && ends.aftThread) {
-            findAftThread(spec)?.let { th ->
-                val tpi = tpiFromPitch(th.pitchMm)
-                val dia = fmtDiaWithUnit(unit, th.majorDiaMm)
-                val len = fmtLen(unit, th.lengthMm)
-                c.drawText("Thread: $dia × ${fmtTpi(tpi)} TPI × $len", leftX, y, text)
+            getAftEndThread(spec)?.let { th ->
+                c.drawText(
+                    "Thread: ${fmtDiaWithUnit(unit, th.majorDiaMm)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${fmtLen(unit, th.lengthMm)}",
+                    leftX, y, text
+                )
                 y += lh
             }
         }
@@ -672,12 +670,11 @@ private fun drawFooter(
         // c.drawText("Not to scale: long bodies compressed for readability.", midX, y, text)
     }
 
-    // Right (FWD)
+    // FWD (right)
     run {
         var y = top
-
         if (cfg.showFwdTaper && ends.fwdTaper) {
-            fwdTaper?.let { tp ->
+            getFwdEndTaper(spec)?.let { tp ->
                 val (let, set) = letSet(tp)
                 c.drawText("FWD Taper", rightX, y, text); y += lh
                 c.drawText("L.E.T.: ${fmtDia(unit, let)}", rightX, y, text); y += lh
@@ -686,13 +683,12 @@ private fun drawFooter(
                 c.drawText("Rate: ${rate1toN(tp)}", rightX, y, text); y += lh
             }
         }
-
         if (cfg.showFwdThread && ends.fwdThread) {
-            findFwdThread(spec)?.let { th ->
-                val tpi = tpiFromPitch(th.pitchMm)
-                val dia = fmtDiaWithUnit(unit, th.majorDiaMm)
-                val len = fmtLen(unit, th.lengthMm)
-                c.drawText("Thread: $dia × ${fmtTpi(tpi)} TPI × $len", rightX, y, text)
+            getFwdEndThread(spec)?.let { th ->
+                c.drawText(
+                    "Thread: ${fmtDiaWithUnit(unit, th.majorDiaMm)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${fmtLen(unit, th.lengthMm)}",
+                    rightX, y, text
+                )
                 y += lh
             }
         }
@@ -828,17 +824,28 @@ private data class EndFlags(
 )
 
 /**
- * A feature "exists at the end" iff its geometry interval actually reaches the end face.
- * We deliberately do NOT infer from labels or components; we check start/end X against the end faces.
+ * Determines which geometric features (taper, thread, etc.) physically reach
+ * each end face of the shaft. A feature "exists at the end" only if its
+ * interval in millimeters actually touches the end face within a small epsilon.
  *
- * Conventions assumed:
- * - X increases AFT ➜ FWD.
- * - AFT end face is at sets.aftSETxMm.
- * - FWD end face is at sets.fwdSETxMm.
- * - Threads/tapers expose [startXMm, endXMm] in shaft coordinates.
- *   For AFT-end features: startX == aftSET (goes forward).
- *   For FWD-end features: endX == fwdSET (comes from aft).
+ * We deliberately do NOT infer from component types or labels; only from
+ * real geometric extents in shaft coordinates.
+ *
+ * Conventions:
+ * - Shaft X-axis increases AFT ➜ FWD.
+ * - AFT end face is fixed at X = 0.0 mm.
+ * - FWD end face is at X = spec.overallLengthMm.
+ * - Threads/tapers expose [startFromAftMm, startFromAftMm + lengthMm].
+ *   • AFT-end features begin exactly at 0.0 mm and extend forward.
+ *   • FWD-end features terminate exactly at overallLengthMm and approach from aft.
+ * - A feature is considered “present” at an end when its start or end point
+ *   lies within ±epsMm of that end face and its length exceeds epsMm.
+ *
+ * The returned EndFlags report presence independently for tapers and threads
+ * at both ends, allowing combinations (e.g. a taper and a thread at the same end)
+ * to be rendered in proper stacked order in the footer.
  */
+
 private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = 0.01): EndFlags {
     val aftX = 0.0
     val fwdX = spec.overallLengthMm.toDouble()
@@ -863,6 +870,36 @@ private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = 0.01): EndFlags {
 
     return EndFlags(aftThread, fwdThread, aftTaper, fwdTaper)
 }
+
+private const val EPS_MM = 0.01
+
+private fun near(a: Double, b: Double, eps: Double = EPS_MM) =
+    kotlin.math.abs(a - b) <= eps
+
+private fun getAftEndThread(spec: ShaftSpec): Threads? =
+    spec.threads.firstOrNull { th ->
+        near(th.startFromAftMm.toDouble(), 0.0) && th.lengthMm > EPS_MM
+    }
+
+private fun getFwdEndThread(spec: ShaftSpec): Threads? {
+    val fwdX = spec.overallLengthMm.toDouble()
+    return spec.threads.firstOrNull { th ->
+        near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > EPS_MM
+    }
+}
+
+private fun getAftEndTaper(spec: ShaftSpec): Taper? =
+    spec.tapers.firstOrNull { tp ->
+        near(tp.startFromAftMm.toDouble(), 0.0) && tp.lengthMm > EPS_MM
+    }
+
+private fun getFwdEndTaper(spec: ShaftSpec): Taper? {
+    val fwdX = spec.overallLengthMm.toDouble()
+    return spec.tapers.firstOrNull { tp ->
+        near((tp.startFromAftMm + tp.lengthMm).toDouble(), fwdX) && tp.lengthMm > EPS_MM
+    }
+}
+
 
 data class FooterConfig(
     val showAftThread: Boolean,

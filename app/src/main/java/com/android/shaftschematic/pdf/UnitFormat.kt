@@ -10,7 +10,13 @@ import java.util.Locale
 fun formatDim(mm: Double, unit: Any?): String {
     val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
     return when {
-        name.contains("INCH") -> String.format(Locale.US, "%.3f in", mm / 25.4)
-        else -> String.format(Locale.US, "%.3f mm", mm)
+        name.contains("INCH") -> {
+            // Use 4 decimals for inches so common fractions (1/16, 1/32) round exactly.
+            String.format(Locale.US, "%.4f in", mm / 25.4)
+        }
+        else -> {
+            // Millimeters stay at 3 decimals – more than enough for typical shaft work.
+            String.format(Locale.US, "%.3f mm", mm)
+        }
     }
 }
