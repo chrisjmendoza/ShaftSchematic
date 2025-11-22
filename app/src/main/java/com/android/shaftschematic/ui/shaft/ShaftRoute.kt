@@ -11,6 +11,10 @@ import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.screen.ShaftScreen
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
+import com.android.shaftschematic.ui.viewmodel.UiEvent
+import com.android.shaftschematic.ui.order.ComponentKind
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.*
@@ -32,6 +36,34 @@ import com.android.shaftschematic.util.UnitSystem
 fun ShaftRoute(vm: ShaftViewModel) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Collect one-shot UI events from the ViewModel (snackbars, Undo, etc.).
+    LaunchedEffect(Unit) {
+        vm.uiEvents.collect { event ->
+            when (event) {
+                is UiEvent.ShowDeletedSnack -> {
+                    val label = when (event.kind) {
+                        ComponentKind.BODY   -> "Body"
+                        ComponentKind.TAPER  -> "Taper"
+                        ComponentKind.THREAD -> "Thread"
+                        ComponentKind.LINER  -> "Liner"
+                    }
+
+                    val result = snackbarHostState.showSnackbar(
+                        message = "$label deleted",
+                        actionLabel = "Undo",
+                        withDismissAction = true,
+                        duration = SnackbarDuration.Long // ~5s-ish, depends on platform
+                    )
+
+                    if (result == SnackbarResult.ActionPerformed) {
+                        vm.undoLastDelete()
+                    }
+                }
+            }
+        }
+    }
+
 
     val spec            by vm.spec.collectAsState()
     val unit            by vm.unit.collectAsState()

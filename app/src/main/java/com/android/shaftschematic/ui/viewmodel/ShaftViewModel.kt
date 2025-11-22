@@ -10,8 +10,12 @@ import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -19,6 +23,50 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.util.UUID
 import kotlin.math.max
+
+// Internal payload used by single-step Undo.
+// Not part of the public API; safe to change as the undo feature evolves.
+private sealed class LastDeleted {
+    abstract val id: String
+    abstract val kind: ComponentKind
+    abstract val orderIndex: Int
+
+    data class Body(
+        val value: com.android.shaftschematic.model.Body,
+        override val orderIndex: Int,
+        val listIndex: Int,
+    ) : LastDeleted() {
+        override val id: String get() = value.id
+        override val kind: ComponentKind get() = ComponentKind.BODY
+    }
+
+    data class Taper(
+        val value: com.android.shaftschematic.model.Taper,
+        override val orderIndex: Int,
+        val listIndex: Int,
+    ) : LastDeleted() {
+        override val id: String get() = value.id
+        override val kind: ComponentKind get() = ComponentKind.TAPER
+    }
+
+    data class Thread(
+        val value: com.android.shaftschematic.model.Threads,
+        override val orderIndex: Int,
+        val listIndex: Int,
+    ) : LastDeleted() {
+        override val id: String get() = value.id
+        override val kind: ComponentKind get() = ComponentKind.THREAD
+    }
+
+    data class Liner(
+        val value: com.android.shaftschematic.model.Liner,
+        override val orderIndex: Int,
+        val listIndex: Int,
+    ) : LastDeleted() {
+        override val id: String get() = value.id
+        override val kind: ComponentKind get() = ComponentKind.LINER
+    }
+}
 
 /**
  * File: ShaftViewModel.kt
@@ -71,6 +119,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // Cross-type UI order (stable IDs) — source of truth for list rendering (newest-first).
     private val _componentOrder = MutableStateFlow<List<ComponentKey>>(emptyList())
     val componentOrder: StateFlow<List<ComponentKey>> = _componentOrder.asStateFlow()
+
+    // One-shot UI events (snackbars, etc.)
+    private val _uiEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)
+    val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
+
+    // Single-step deletion buffer. Only the last delete is undoable (v1).
+    private var lastDeleted: LastDeleted? = null
 
     // ────────────────────────────────────────────────────────────────────────────
     // Settings persistence (default unit + show grid)
@@ -172,15 +227,41 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }.also { ensureOverall() }
 
-    fun removeBody(index: Int) {
+    /**
+     * Remove a [Body] by its stable [id].
+     *
+     * The removed component becomes the only undoable item until replaced by another delete.
+     */
+    fun removeBody(id: String) {
+        var deleted: LastDeleted.Body? = null
+
         _spec.update { s ->
-            if (index !in s.bodies.indices) s
-            else {
-                orderRemove(s.bodies[index].id)
-                s.copy(bodies = s.bodies.toMutableList().apply { removeAt(index) })
-            }
+            val idx = s.bodies.indexOfFirst { it.id == id }
+            if (idx < 0) return@update s
+
+            val body = s.bodies[idx]
+            val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }.let { if (it < 0) 0 else it }
+
+            deleted = LastDeleted.Body(
+                value = body,
+                orderIndex = orderIdx,
+                listIndex = idx
+            )
+
+            // Remove from UI order first, then from the spec list.
+            orderRemove(id)
+
+            s.copy(
+                bodies = s.bodies.toMutableList().apply { removeAt(idx) }
+            )
         }
-        ensureOverall(); ensureOrderCoversSpec()
+
+        deleted?.let {
+            lastDeleted = it
+            ensureOverall()
+            ensureOrderCoversSpec()
+            emitDeletedSnack(it.kind)
+        }
     }
 
     // Tapers
@@ -208,15 +289,36 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }.also { ensureOverall() }
 
-    fun removeTaper(index: Int) {
+    /** Remove a [Taper] by id with single-step undo support. */
+    fun removeTaper(id: String) {
+        var deleted: LastDeleted.Taper? = null
+
         _spec.update { s ->
-            if (index !in s.tapers.indices) s
-            else {
-                orderRemove(s.tapers[index].id)
-                s.copy(tapers = s.tapers.toMutableList().apply { removeAt(index) })
-            }
+            val idx = s.tapers.indexOfFirst { it.id == id }
+            if (idx < 0) return@update s
+
+            val taper = s.tapers[idx]
+            val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }.let { if (it < 0) 0 else it }
+
+            deleted = LastDeleted.Taper(
+                value = taper,
+                orderIndex = orderIdx,
+                listIndex = idx
+            )
+
+            orderRemove(id)
+
+            s.copy(
+                tapers = s.tapers.toMutableList().apply { removeAt(idx) }
+            )
         }
-        ensureOverall(); ensureOrderCoversSpec()
+
+        deleted?.let {
+            lastDeleted = it
+            ensureOverall()
+            ensureOrderCoversSpec()
+            emitDeletedSnack(it.kind)
+        }
     }
 
     // Threads
@@ -256,15 +358,36 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }.also { ensureOverall() }
 
-    fun removeThread(index: Int) {
+    /** Remove a [Threads] segment by id with single-step undo support. */
+    fun removeThread(id: String) {
+        var deleted: LastDeleted.Thread? = null
+
         _spec.update { s ->
-            if (index !in s.threads.indices) s
-            else {
-                orderRemove(s.threads[index].id)
-                s.copy(threads = s.threads.toMutableList().apply { removeAt(index) })
-            }
+            val idx = s.threads.indexOfFirst { it.id == id }
+            if (idx < 0) return@update s
+
+            val thread = s.threads[idx]
+            val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }.let { if (it < 0) 0 else it }
+
+            deleted = LastDeleted.Thread(
+                value = thread,
+                orderIndex = orderIdx,
+                listIndex = idx
+            )
+
+            orderRemove(id)
+
+            s.copy(
+                threads = s.threads.toMutableList().apply { removeAt(idx) }
+            )
         }
-        ensureOverall(); ensureOrderCoversSpec()
+
+        deleted?.let {
+            lastDeleted = it
+            ensureOverall()
+            ensureOrderCoversSpec()
+            emitDeletedSnack(it.kind)
+        }
     }
 
     // Liners
@@ -287,15 +410,36 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }.also { ensureOverall() }
 
-    fun removeLiner(index: Int) {
+    /** Remove a [Liner] by id with single-step undo support. */
+    fun removeLiner(id: String) {
+        var deleted: LastDeleted.Liner? = null
+
         _spec.update { s ->
-            if (index !in s.liners.indices) s
-            else {
-                orderRemove(s.liners[index].id)
-                s.copy(liners = s.liners.toMutableList().apply { removeAt(index) })
-            }
+            val idx = s.liners.indexOfFirst { it.id == id }
+            if (idx < 0) return@update s
+
+            val liner = s.liners[idx]
+            val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }.let { if (it < 0) 0 else it }
+
+            deleted = LastDeleted.Liner(
+                value = liner,
+                orderIndex = orderIdx,
+                listIndex = idx
+            )
+
+            orderRemove(id)
+
+            s.copy(
+                liners = s.liners.toMutableList().apply { removeAt(idx) }
+            )
         }
-        ensureOverall(); ensureOrderCoversSpec()
+
+        deleted?.let {
+            lastDeleted = it
+            ensureOverall()
+            ensureOrderCoversSpec()
+            emitDeletedSnack(it.kind)
+        }
     }
 
     private fun newId(): String = UUID.randomUUID().toString()
@@ -437,4 +581,77 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             m
         }
     }
+
+    /** Emits a deletion snackbar request for the given [ComponentKind]. */
+    private fun emitDeletedSnack(kind: ComponentKind) {
+        viewModelScope.launch {
+            _uiEvents.emit(UiEvent.ShowDeletedSnack(kind))
+        }
+    }
+
+    /**
+     * Undo the most recent delete, if any.
+     *
+     * Restores both the spec list entry and the cross-type UI order at their original positions.
+     * If the component is already present (id collision), this is a no-op.
+     */
+    fun undoLastDelete() {
+        val snapshot = lastDeleted ?: return
+        lastDeleted = null
+
+        // 1) Restore into the spec
+        _spec.update { s ->
+            // If somehow the id already exists, do not re-add to avoid duplicates.
+            if (when (snapshot) {
+                    is LastDeleted.Body   -> s.bodies.any   { it.id == snapshot.id }
+                    is LastDeleted.Taper  -> s.tapers.any   { it.id == snapshot.id }
+                    is LastDeleted.Thread -> s.threads.any  { it.id == snapshot.id }
+                    is LastDeleted.Liner  -> s.liners.any   { it.id == snapshot.id }
+                }
+            ) {
+                return@update s
+            }
+
+            when (snapshot) {
+                is LastDeleted.Body -> {
+                    val list = s.bodies.toMutableList()
+                    val idx = snapshot.listIndex.coerceIn(0, list.size)
+                    list.add(idx, snapshot.value)
+                    s.copy(bodies = list)
+                }
+                is LastDeleted.Taper -> {
+                    val list = s.tapers.toMutableList()
+                    val idx = snapshot.listIndex.coerceIn(0, list.size)
+                    list.add(idx, snapshot.value)
+                    s.copy(tapers = list)
+                }
+                is LastDeleted.Thread -> {
+                    val list = s.threads.toMutableList()
+                    val idx = snapshot.listIndex.coerceIn(0, list.size)
+                    list.add(idx, snapshot.value)
+                    s.copy(threads = list)
+                }
+                is LastDeleted.Liner -> {
+                    val list = s.liners.toMutableList()
+                    val idx = snapshot.listIndex.coerceIn(0, list.size)
+                    list.add(idx, snapshot.value)
+                    s.copy(liners = list)
+                }
+            }
+        }
+
+        // 2) Restore into the cross-type UI order
+        _componentOrder.update { current ->
+            if (current.any { it.id == snapshot.id }) return@update current
+
+            val insertAt = snapshot.orderIndex.coerceIn(0, current.size)
+            current.toMutableList().apply {
+                add(insertAt, ComponentKey(snapshot.id, snapshot.kind))
+            }
+        }
+
+        ensureOverall()
+        ensureOrderCoversSpec()
+    }
+
 }
