@@ -698,7 +698,6 @@ private fun ComponentPagerCard(
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
-    // CHANGE THESE TO String
     onRemoveBody: (String) -> Unit,
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
@@ -708,29 +707,106 @@ private fun ComponentPagerCard(
         ComponentKind.BODY -> {
             val b = spec.bodies[row.index]
             ComponentCard("Body #${row.index + 1}", onRemove = { onRemoveBody(b.id) }) {
-                // ...
+                CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateBody(row.index, it, b.lengthMm, b.diaMm)
+                    }
+                }
+                CommitNum("Length (${abbr(unit)})", disp(b.lengthMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateBody(row.index, b.startFromAftMm, it, b.diaMm)
+                    }
+                }
+                CommitNum("Ø (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateBody(row.index, b.startFromAftMm, b.lengthMm, it)
+                    }
+                }
             }
         }
+
         ComponentKind.TAPER -> {
             val t = spec.tapers[row.index]
             ComponentCard("Taper #${row.index + 1}", onRemove = { onRemoveTaper(t.id) }) {
-                // ...
+                CommitNum("Start (${abbr(unit)})", disp(t.startFromAftMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateTaper(row.index, it, t.lengthMm, t.startDiaMm, t.endDiaMm)
+                    }
+                }
+                CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateTaper(row.index, t.startFromAftMm, it, t.startDiaMm, t.endDiaMm)
+                    }
+                }
+                CommitNum("S.E.T. Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateTaper(row.index, t.startFromAftMm, t.lengthMm, it, t.endDiaMm)
+                    }
+                }
+                CommitNum("L.E.T. Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateTaper(row.index, t.startFromAftMm, t.lengthMm, t.startDiaMm, it)
+                    }
+                }
             }
         }
+
         ComponentKind.THREAD -> {
             val th = spec.threads[row.index]
+            val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
             ComponentCard("Thread #${row.index + 1}", onRemove = { onRemoveThread(th.id) }) {
-                // ...
+                CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm)
+                    }
+                }
+                CommitNum("Length (${abbr(unit)})", disp(th.lengthMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateThread(row.index, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm)
+                    }
+                }
+                CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateThread(row.index, th.startFromAftMm, th.lengthMm, it, th.pitchMm)
+                    }
+                }
+                CommitNum("TPI", tpiDisplay) { s ->
+                    parseFractionOrDecimal(s)?.takeIf { it > 0f }?.let { tpi ->
+                        onUpdateThread(
+                            row.index,
+                            th.startFromAftMm,
+                            th.lengthMm,
+                            th.majorDiaMm,
+                            tpiToPitchMm(tpi)
+                        )
+                    }
+                }
             }
         }
+
         ComponentKind.LINER -> {
             val ln = spec.liners[row.index]
             ComponentCard("Liner #${row.index + 1}", onRemove = { onRemoveLiner(ln.id) }) {
-                // ...
+                CommitNum("Start (${abbr(unit)})", disp(ln.startFromAftMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateLiner(row.index, it, ln.lengthMm, ln.odMm)
+                    }
+                }
+                CommitNum("Length (${abbr(unit)})", disp(ln.lengthMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateLiner(row.index, ln.startFromAftMm, it, ln.odMm)
+                    }
+                }
+                CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateLiner(row.index, ln.startFromAftMm, ln.lengthMm, it)
+                    }
+                }
             }
         }
     }
 }
+
 
 /* ───────────────── Shared builders ───────────────── */
 /* ───────────────── Ordering tiers (for stable tie-break) ───────────────── */

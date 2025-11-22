@@ -1,134 +1,163 @@
-# ShaftSchematic
+📐 ShaftSchematic
 
-ShaftSchematic is an Android app for quickly modeling and exporting a dimensioned shaft drawing. It supports variable body segments, tapers, threads, and liners, with a live preview and PDF export.
+ShaftSchematic is an Android application for rapidly modeling marine prop-shaft assemblies and exporting clean, dimensioned drawings as PDFs. It supports multi-segment shafts with bodies, tapers, threads, and liners, and includes a live render preview that updates as you edit.
 
-## Features
+This tool is built for machinists, shipyards, repair techs, and engineering teams that need fast, clear shaft visualizations without CAD overhead.
 
-- **Live preview** of the shaft:
-  - Bodies & liners as full rectangles
-  - Tapers as closed polygons
-  - Centerline only in *gaps* (masked under components)
-- **Unit switching** (mm / in) with DataStore-backed persistence (UnitSystem)
-- **Incremental modeling**: add bodies, tapers, threads, liners in the order you build the shaft
-- **Validation nudges**: optional hints if total component length doesn’t match the overall length
-- **Export to PDF** from the top bar
-- **Clear all** to start fresh
+✨ Current Features
+Real-Time Shaft Modeling
 
-## Screens & Structure
+Add Bodies, Tapers, Threads, and Liners
 
-app/
-└─ com.android.shaftschematic
-├─ MainActivity.kt
-├─ data/
-│ ├─ ShaftSpecMm.kt
-│ └─ (BodySegmentSpec, TaperSpec, ThreadSpec, LinerSpec, etc.)
-├─ pdf/
-│ └─ ShaftPdfComposer.kt
-├─ ui/
-│ ├─ screen/
-│ │ └─ ShaftScreen.kt
-│ └─ drawing/
-│ └─ compose/
-│ └─ ShaftDrawing.kt
-├─ ui/viewmodel/
-│ ├─ ShaftViewModel.kt
-│ └─ ShaftViewModelFactory.kt (no-arg)
-└─ util/
-├─ UnitSystem.kt
-└─ UnitsStore.kt (DataStore Preferences)
+Components rendered with:
 
-markdown
-Copy code
+Bodies & liners as closed rectangles
 
-## Requirements
+Tapers as true 4-point polygons
 
-- Android Studio Giraffe/Koala+ (AGP 8.x)
-- Kotlin 1.9+
-- Jetpack Compose BOM (Material3)
-- DataStore Preferences `1.1.7`
-- Coroutines `1.8.x` or newer
+Threads as dimensioned segments
 
-```gradle
-dependencies {
-  implementation(platform("androidx.compose:compose-bom:<latest>"))
-  implementation("androidx.compose.material3:material3")
-  implementation("androidx.datastore:datastore-preferences:1.1.7")
-  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-}
-Build & Run
-Open the project in Android Studio.
+Live preview that masks the centerline underneath occupied spans
 
-Sync Gradle.
+Clean Editing Workflow
 
-Run on a device/emulator (Android 8+ recommended).
+Incremental component creation (in the order you build the shaft)
 
-Usage
-Start with Overall Length.
+Unit switching (mm / inch) with DataStore persistence
 
-Use the ➕ FAB to add Body, Taper, Thread, or Liner components.
+Validation nudges when component total length doesn’t match overall length
 
-Units can be switched from the top bar (mm/in).
+Delete + Undo (v1)
 
-Export PDF from the top bar.
+Tap trash icon → segment is removed instantly
 
-Use ⋮ → Clear all to reset to a fresh shaft (default overall length).
+Snackbar with Undo restores it in the correct order and position
 
-Tip: Components are inserted in the order you add them—matching how you build the shaft.
+Single-step undo buffer (multi-step undo coming later)
 
 PDF Export
-Current implementation exports a single-page landscape PDF with a clear title block (see ShaftPdfComposer).
 
-Files are created via the system document picker (SAF) or app-scoped files depending on the code path you use.
+One-page, landscape technical drawing
 
-Persistence
-Units selection is saved via DataStore (see UnitsStore).
+Includes:
 
-TODO: Persist full shaft specs (on roadmap).
+Component labels
 
-Contributing
-Use conventional commits or detailed messages (recommended for solo dev tracking).
+Major/minor grid
 
-Keep CHANGELOG.md fresh (see below).
+Centerline rules
 
-License
-Private/internal for now. Add a license here when ready.
+Dimensioning and callouts
 
-yaml
-Copy code
+Reliable system-document picker integration (SAF)
 
----
+Session Tools
 
-# CHANGELOG.md (append)
+Clear All → resets to a clean shaft
 
-```markdown
-# Changelog
-All notable changes to this project will be documented in this file.
+Dynamic layout that shows advanced sections only when components exist
 
-## [0.3.0] - 2025-09-16
-### Added
-- **Preview drawing** now renders:
-  - Bodies & liners as full rectangles (all 4 edges)
-  - Tapers as closed 4-sided polygons
-  - Dashed centerline is masked under components and shown only in gaps
-- **Clear all** action in top bar overflow
-- **No-arg ViewModelFactory** scaffold (future DI-ready)
+📂 Project Structure
+app/
+└─ com.android.shaftschematic/
+├─ MainActivity.kt
+├─ data/
+│   ├─ model segments: Body, Taper, Threads, Liner, ShaftSpecMm
+│   └─ Segment geometry helpers
+├─ pdf/
+│   └─ ShaftPdfComposer.kt
+├─ ui/
+│   ├─ screen/ → Editor UI (ShaftScreen)
+│   ├─ drawing/ → Canvas rendering engine (ShaftDrawing)
+│   └─ compose/ → UI components (cards, dialogs, inputs)
+├─ ui/viewmodel/
+│   ├─ ShaftViewModel.kt
+│   └─ ShaftViewModelFactory.kt
+└─ util/
+├─ UnitSystem.kt
+└─ UnitsStore.kt
 
-### Changed
-- **ShaftScreen** simplified to the preferred flow:
-  - Initial view shows Overall Length, with dynamic sections only when components exist
-  - Units dropdown and PDF export in top bar
-  - Numeric field input handling (correct KeyboardOptions)
-- **UnitsStore** now uses `UnitSystem` and DataStore Preferences `1.1.7`
-- Compose modernization: `HorizontalDivider`, `menuAnchor` API, cleaner imports
+🔧 Requirements
 
-### Fixed
-- Unresolved references from older API usages (`KeyboardOptions`, deprecated calls)
-- Crashes from duplicate LazyColumn keys and inconsistent state delegates
-- Incorrect centerline rendering under occupied spans
+Android Studio Koala or newer
 
-### Notes
-- PDF composer unchanged functionally in this release; geometry cleanup queued for next iteration.
-- Grid toggle will return when preview `RenderOptions` integration is reintroduced.
+Kotlin 1.9+
 
-## [0.2.0] - 2025-09-15
-- (Previous milestone: dynamic lists, basic PDF export, menu cleanups, etc.)
+Jetpack Compose (Material3) via BOM
+
+DataStore Preferences 1.1.7
+
+Coroutines 1.8+
+
+Android 8.0+ recommended
+
+Dependencies (simplified):
+
+dependencies {
+implementation(platform("androidx.compose:compose-bom:<latest>"))
+implementation("androidx.compose.material3:material3")
+implementation("androidx.datastore:datastore-preferences:1.1.7")
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+}
+
+🚀 Build & Run
+
+Clone repository
+
+Open in Android Studio
+
+Let Gradle sync
+
+Run on a device or emulator
+
+📘 Usage Guide
+
+Set the overall shaft length
+
+Press the ➕ Add Component FAB
+
+Add bodies, tapers, threads, or liners in physical build order
+
+Switch units anytime (top bar dropdown)
+
+Export to PDF from the top-right icon
+
+Use ⋮ → Clear All to reset the layout
+
+Components are always sorted by their starting X-position, matching machining logic.
+
+🧠 Persistence
+
+Units persist via DataStore
+
+Full shaft autosave is planned for an upcoming sprint
+
+“Save” / “Save As” project files will be introduced with versioned file formats
+
+🛠️ Roadmap
+Active
+
+Delete + Undo (v1) — in progress
+
+Better precision input (fractions, 4–6 decimals)
+
+Next Sprints
+
+Inline “+ Add here” between segments
+
+Tap-to-edit directly from the preview
+
+File save system (autosave/drafts/Save As)
+
+PDF dimension clarity improvements
+
+Web/Multi-platform port (concept phase)
+
+📄 License
+
+Pending — private/closed until final licensing decision.
+
+📜 Changelog
+
+See CHANGELOG.md for version history.
+Latest entries include rendering updates, UI cleanups, validation improvements, and the new Delete/Undo system.
