@@ -1,15 +1,30 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# Gradle
+.gradle/
+build/
+*/build/
+!gradle-wrapper.jar
+
+# Local configuration
 local.properties
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# Android Studio specifics
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore security
+*.jks
+*.keystore
+
+# Logs
+*.log
+
+# Misc
+.DS_Store
+Thumbs.db
