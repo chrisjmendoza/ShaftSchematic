@@ -1,4 +1,4 @@
-package com.android.shaftschematic.ui.components
+package com.android.shaftschematic.ui.input
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.heightIn

@@ -1,4 +1,4 @@
-package com.android.shaftschematic.ui.widgets
+package com.android.shaftschematic.ui.input
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*

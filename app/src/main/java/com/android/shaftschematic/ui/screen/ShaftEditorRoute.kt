@@ -20,7 +20,7 @@ import androidx.compose.material.icons.filled.Undo
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import com.android.shaftschematic.ui.shaft.ShaftRoute
+import com.android.shaftschematic.ui.screen.ShaftRoute
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 
 /**

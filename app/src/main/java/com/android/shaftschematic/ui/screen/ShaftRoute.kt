@@ -1,5 +1,5 @@
-// file: app/src/main/java/com/android/shaftschematic/ui/shaft/ShaftRoute.kt
-package com.android.shaftschematic.ui.shaft
+// file: app/src/main/java/com/android/shaftschematic/ui/screen/ShaftRoute.kt
+package com.android.shaftschematic.ui.screen
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
