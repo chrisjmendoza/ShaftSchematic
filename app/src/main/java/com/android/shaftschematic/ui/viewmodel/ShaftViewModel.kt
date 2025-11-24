@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -24,7 +23,7 @@ import kotlinx.serialization.json.Json
 import java.util.UUID
 import kotlin.math.max
 
-// Internal payload used by single-step Undo.
+// Internal payload used by Undo/Redo for deletes.
 // Not part of the public API; safe to change as the undo feature evolves.
 private sealed class LastDeleted {
     abstract val id: String
@@ -67,6 +66,9 @@ private sealed class LastDeleted {
         override val kind: ComponentKind get() = ComponentKind.LINER
     }
 }
+
+/** Maximum number of delete steps tracked for undo/redo. */
+private const val MAX_DELETE_HISTORY = 10
 
 /**
  * File: ShaftViewModel.kt
@@ -124,8 +126,27 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)
     val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
 
-    // Single-step deletion buffer. Only the last delete is undoable (v1).
-    private var lastDeleted: LastDeleted? = null
+    // Delete / Undo / Redo history (delete-only, v1.5)
+    private val deleteHistory = ArrayDeque<LastDeleted>()
+    private val redoHistory = ArrayDeque<LastDeleted>()
+
+    // Expose whether deletes can be undone/redone for UI buttons.
+    private val _canUndoDeletes = MutableStateFlow(false)
+    val canUndoDeletes: StateFlow<Boolean> = _canUndoDeletes.asStateFlow()
+
+    private val _canRedoDeletes = MutableStateFlow(false)
+    val canRedoDeletes: StateFlow<Boolean> = _canRedoDeletes.asStateFlow()
+
+    private fun updateUndoRedoFlags() {
+        _canUndoDeletes.value = deleteHistory.isNotEmpty()
+        _canRedoDeletes.value = redoHistory.isNotEmpty()
+    }
+
+    private fun clearDeleteHistory() {
+        deleteHistory.clear()
+        redoHistory.clear()
+        updateUndoRedoFlags()
+    }
 
     // ────────────────────────────────────────────────────────────────────────────
     // Settings persistence (default unit + show grid)
@@ -230,7 +251,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Remove a [Body] by its stable [id].
      *
-     * The removed component becomes the only undoable item until replaced by another delete.
+     * The removed component is pushed into the delete history and becomes
+     * undoable (multi-step, last-in-first-out).
      */
     fun removeBody(id: String) {
         var deleted: LastDeleted.Body? = null
@@ -257,9 +279,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         deleted?.let {
-            lastDeleted = it
+            // Record into undo stack; clear redo history (new branch).
+            deleteHistory.addLast(it)
+            if (deleteHistory.size > MAX_DELETE_HISTORY) {
+                deleteHistory.removeFirst()
+            }
+            redoHistory.clear()
+
             ensureOverall()
             ensureOrderCoversSpec()
+            updateUndoRedoFlags()
             emitDeletedSnack(it.kind)
         }
     }
@@ -289,7 +318,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }.also { ensureOverall() }
 
-    /** Remove a [Taper] by id with single-step undo support. */
+    /** Remove a [Taper] by id with multi-step delete history support. */
     fun removeTaper(id: String) {
         var deleted: LastDeleted.Taper? = null
 
@@ -314,9 +343,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         deleted?.let {
-            lastDeleted = it
+            deleteHistory.addLast(it)
+            if (deleteHistory.size > MAX_DELETE_HISTORY) {
+                deleteHistory.removeFirst()
+            }
+            redoHistory.clear()
+
             ensureOverall()
             ensureOrderCoversSpec()
+            updateUndoRedoFlags()
             emitDeletedSnack(it.kind)
         }
     }
@@ -358,7 +393,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }.also { ensureOverall() }
 
-    /** Remove a [Threads] segment by id with single-step undo support. */
+    /** Remove a [Threads] segment by id with multi-step delete history support. */
     fun removeThread(id: String) {
         var deleted: LastDeleted.Thread? = null
 
@@ -383,9 +418,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         deleted?.let {
-            lastDeleted = it
+            deleteHistory.addLast(it)
+            if (deleteHistory.size > MAX_DELETE_HISTORY) {
+                deleteHistory.removeFirst()
+            }
+            redoHistory.clear()
+
             ensureOverall()
             ensureOrderCoversSpec()
+            updateUndoRedoFlags()
             emitDeletedSnack(it.kind)
         }
     }
@@ -410,7 +451,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }.also { ensureOverall() }
 
-    /** Remove a [Liner] by id with single-step undo support. */
+    /** Remove a [Liner] by id with multi-step delete history support. */
     fun removeLiner(id: String) {
         var deleted: LastDeleted.Liner? = null
 
@@ -435,9 +476,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         deleted?.let {
-            lastDeleted = it
+            deleteHistory.addLast(it)
+            if (deleteHistory.size > MAX_DELETE_HISTORY) {
+                deleteHistory.removeFirst()
+            }
+            redoHistory.clear()
+
             ensureOverall()
             ensureOrderCoversSpec()
+            updateUndoRedoFlags()
             emitDeletedSnack(it.kind)
         }
     }
@@ -450,6 +497,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Start a brand-new shaft using [unit] for UI; lock UI unit if [lockUnit] is true. */
     fun newShaft(unit: UnitSystem, lockUnit: Boolean = true) {
+        clearDeleteHistory()
         _spec.value = ShaftSpec()
         _componentOrder.value = emptyList() // fresh doc → empty order list
         _unitLocked.value = lockUnit
@@ -504,6 +552,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Try new envelope first
         runCatching { json.decodeFromString<ShaftDocV1>(raw) }
             .onSuccess { doc ->
+                clearDeleteHistory()
                 _spec.value = doc.spec
                 _unitLocked.value = doc.unitLocked
                 setUnit(doc.preferredUnit, persist = false)
@@ -513,6 +562,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Back-compat: older files were just the spec
         runCatching { json.decodeFromString<ShaftSpec>(raw) }
             .onSuccess { legacy ->
+                clearDeleteHistory()
                 _spec.value = legacy
                 _unitLocked.value = false // no lock info in legacy
                 // unit falls back to SettingsStore default (observer in init{})
@@ -596,8 +646,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * If the component is already present (id collision), this is a no-op.
      */
     fun undoLastDelete() {
-        val snapshot = lastDeleted ?: return
-        lastDeleted = null
+        val snapshot = deleteHistory.removeLastOrNull() ?: return
 
         // 1) Restore into the spec
         _spec.update { s ->
@@ -650,8 +699,64 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // 3) Make this action redoable
+        redoHistory.addLast(snapshot)
+        if (redoHistory.size > MAX_DELETE_HISTORY) {
+            redoHistory.removeFirst()
+        }
+
         ensureOverall()
         ensureOrderCoversSpec()
+        updateUndoRedoFlags()
     }
 
+    /**
+     * Redo the most recent undone delete, if any.
+     *
+     * Deletes the restored component again (without creating a new history entry)
+     * and moves the snapshot back to the undo stack.
+     */
+    fun redoLastDelete() {
+        val snapshot = redoHistory.removeLastOrNull() ?: return
+
+        // 1) Remove the component again from the spec + order
+        _spec.update { s ->
+            when (snapshot) {
+                is LastDeleted.Body -> {
+                    val idx = s.bodies.indexOfFirst { it.id == snapshot.id }
+                    if (idx < 0) return@update s
+                    orderRemove(snapshot.id)
+                    s.copy(bodies = s.bodies.toMutableList().apply { removeAt(idx) })
+                }
+                is LastDeleted.Taper -> {
+                    val idx = s.tapers.indexOfFirst { it.id == snapshot.id }
+                    if (idx < 0) return@update s
+                    orderRemove(snapshot.id)
+                    s.copy(tapers = s.tapers.toMutableList().apply { removeAt(idx) })
+                }
+                is LastDeleted.Thread -> {
+                    val idx = s.threads.indexOfFirst { it.id == snapshot.id }
+                    if (idx < 0) return@update s
+                    orderRemove(snapshot.id)
+                    s.copy(threads = s.threads.toMutableList().apply { removeAt(idx) })
+                }
+                is LastDeleted.Liner -> {
+                    val idx = s.liners.indexOfFirst { it.id == snapshot.id }
+                    if (idx < 0) return@update s
+                    orderRemove(snapshot.id)
+                    s.copy(liners = s.liners.toMutableList().apply { removeAt(idx) })
+                }
+            }
+        }
+
+        // 2) Move snapshot back onto deleteHistory (so it can be undone again)
+        deleteHistory.addLast(snapshot)
+        if (deleteHistory.size > MAX_DELETE_HISTORY) {
+            deleteHistory.removeFirst()
+        }
+
+        ensureOverall()
+        ensureOrderCoversSpec()
+        updateUndoRedoFlags()
+    }
 }

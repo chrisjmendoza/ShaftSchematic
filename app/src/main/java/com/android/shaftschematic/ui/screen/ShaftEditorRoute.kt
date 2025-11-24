@@ -15,6 +15,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.filled.Redo
+import androidx.compose.material.icons.filled.Undo
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.android.shaftschematic.ui.shaft.ShaftRoute
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
@@ -39,15 +43,38 @@ fun ShaftEditorRoute(
     onSettings: () -> Unit,
     onExportPdf: () -> Unit
 ) {
+    val canUndoDeletes by vm.canUndoDeletes.collectAsState()
+    val canRedoDeletes by vm.canRedoDeletes.collectAsState()
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Shaft Editor") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
                 actions = {
-                    IconButton(onClick = onSave) { Icon(Icons.Filled.Save, "Save JSON") }
-                    IconButton(onClick = onExportPdf) { Icon(Icons.Outlined.PictureAsPdf, "Export PDF") }
-                    IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Settings") }
+                    // Undo / Redo for delete history (multi-step)
+                    IconButton(
+                        onClick = { vm.undoLastDelete() },
+                        enabled = canUndoDeletes
+                    ) {
+                        Icon(Icons.Filled.Undo, contentDescription = "Undo delete")
+                    }
+                    IconButton(
+                        onClick = { vm.redoLastDelete() },
+                        enabled = canRedoDeletes
+                    ) {
+                        Icon(Icons.Filled.Redo, contentDescription = "Redo delete")
+                    }
+
+                    // Existing actions
+                    IconButton(onClick = onSave) {
+                        Icon(Icons.Filled.Save, contentDescription = "Save JSON")
+                    }
+                    IconButton(onClick = onExportPdf) {
+                        Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF")
+                    }
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    }
                 }
             )
         }

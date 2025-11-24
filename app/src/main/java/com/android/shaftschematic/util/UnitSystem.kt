@@ -1,5 +1,6 @@
 package com.android.shaftschematic.util
 
+@kotlinx.serialization.Serializable
 enum class UnitSystem(val displayName: String) {
     INCHES("Inches") {
         override fun toMillimeters(value: Double): Double = value * 25.4
@@ -12,7 +13,4 @@ enum class UnitSystem(val displayName: String) {
 
     abstract fun toMillimeters(value: Double): Double
     abstract fun fromMillimeters(value: Double): Double
-
-    @kotlinx.serialization.Serializable
-    enum class UnitSystem { MILLIMETERS, INCHES }
 }

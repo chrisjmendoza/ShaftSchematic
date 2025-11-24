@@ -112,7 +112,7 @@ Commit-on-blur/Done; no VM state mutation while typing.
 
 Tap-to-clear numeric fields only when the committed value is exactly 0 (clear on focus gain).
 
-NumberField.kt in ui/input/ implements this behavior.
+NumberField.kt in ui/input/ implements this behavior (exists in codebase).
 
 5) File creation & placement rules
 
@@ -181,10 +181,9 @@ The preview stack remains:
 
 ui/drawing/compose/ShaftDrawing.kt → draws grid + axis labels only.
 
-ui/drawing/render/ShaftRenderer.kt → draws geometry + single “Overall” label.
+ui/drawing/render/ShaftRenderer.kt → draws geometry + single "Overall" label.
 
 ui/drawing/render/ShaftLayout.kt → computes pxPerMm, minXMm/maxXMm, centerlineYPx with two-axis fit.
 
-NumberField.kt does not exist today. If/when we add the “tap-to-clear when 0” input, it belongs at:
-
-ui/input/NumberField.kt (new file).
+Highlight feature (v1.1+): ShaftDrawing bridges highlightEnabled + highlightId → RenderOptions → ShaftRenderer
+for tap-to-select visual feedback.

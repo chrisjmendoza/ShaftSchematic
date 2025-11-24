@@ -33,7 +33,7 @@ Tap trash icon → segment is removed instantly
 
 Snackbar with Undo restores it in the correct order and position
 
-Single-step undo buffer (multi-step undo coming later)
+Multi-step undo buffer (up to 10 deletes)
 
 PDF Export
 
@@ -60,45 +60,56 @@ Dynamic layout that shows advanced sections only when components exist
 📂 Project Structure
 app/
 └─ com.android.shaftschematic/
-├─ MainActivity.kt
+├─ MainActivity.kt (single-activity host)
 ├─ data/
-│   ├─ model segments: Body, Taper, Threads, Liner, ShaftSpecMm
-│   └─ Segment geometry helpers
+│   ├─ SettingsStore.kt → DataStore persistence
+│   └─ ShaftRepository / ShaftFileRepository → JSON I/O
+├─ model/
+│   ├─ ShaftSpec.kt → root aggregate (mm)
+│   ├─ Body, Taper, Threads, Liner → component models
+│   └─ Segment.kt → shared interface
 ├─ pdf/
-│   └─ ShaftPdfComposer.kt
+│   ├─ ShaftPdfComposer.kt → PDF export engine
+│   └─ render/, dim/, notes/ → dimension & annotation rendering
 ├─ ui/
-│   ├─ screen/ → Editor UI (ShaftScreen)
-│   ├─ drawing/ → Canvas rendering engine (ShaftDrawing)
-│   └─ compose/ → UI components (cards, dialogs, inputs)
-├─ ui/viewmodel/
-│   ├─ ShaftViewModel.kt
-│   └─ ShaftViewModelFactory.kt
-└─ util/
-├─ UnitSystem.kt
-└─ UnitsStore.kt
+│   ├─ drawing/
+│   │   ├─ compose/ShaftDrawing.kt → preview wrapper
+│   │   └─ render/ → ShaftLayout, ShaftRenderer, GridRenderer
+│   ├─ screen/ → ShaftScreen, AddComponentDialogs
+│   ├─ input/ → ShaftMetaSection, NumberField
+│   ├─ viewmodel/ → ShaftViewModel, factory
+│   └─ nav/ → AppNav, routing
+├─ util/
+│   ├─ UnitSystem.kt → mm/inch conversions
+│   └─ Parsing.kt, TaperParser.kt → input parsing
+└─ settings/ → PdfPrefs configuration
 
 🔧 Requirements
 
 Android Studio Koala or newer
 
-Kotlin 1.9+
+Kotlin 2.2.20 (with Compose compiler plugin)
 
-Jetpack Compose (Material3) via BOM
+Jetpack Compose (Material3) via BOM 2024.09.00
 
-DataStore Preferences 1.1.7
+DataStore Preferences 1.1.1
 
 Coroutines 1.8+
 
-Android 8.0+ recommended
+Min SDK 28, Target SDK 36
 
-Dependencies (simplified):
+Dependencies (gradle/libs.versions.toml):
 
-dependencies {
-implementation(platform("androidx.compose:compose-bom:<latest>"))
-implementation("androidx.compose.material3:material3")
-implementation("androidx.datastore:datastore-preferences:1.1.7")
-implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-}
+```toml
+[versions]
+kotlin = "2.2.20"
+composeBom = "2024.09.00"
+datastore = "1.1.1"
+
+[libraries]
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+```
 
 🚀 Build & Run
 
@@ -128,28 +139,34 @@ Components are always sorted by their starting X-position, matching machining lo
 
 🧠 Persistence
 
-Units persist via DataStore
+Unit preference persists via DataStore (default unit + grid visibility)
 
-Full shaft autosave is planned for an upcoming sprint
+Document state: JSON save/load via Storage Access Framework (SAF)
 
-“Save” / “Save As” project files will be introduced with versioned file formats
+Versioned JSON envelope preserves unit preference and lock state per-document
+
+Thread pitch normalization: auto-populates both `pitchMm` and `tpi` when either is present
 
 🛠️ Roadmap
 Active
 
-Delete + Undo (v1) — in progress
+Component highlighting in preview (tap-to-select)
 
 Better precision input (fractions, 4–6 decimals)
 
+Liner dimension rendering improvements
+
 Next Sprints
 
-Inline “+ Add here” between segments
+Inline "+ Add here" between segments
 
 Tap-to-edit directly from the preview
 
-File save system (autosave/drafts/Save As)
+Autosave/drafts system
 
 PDF dimension clarity improvements
+
+Overlap detection and warnings
 
 Web/Multi-platform port (concept phase)
 

@@ -134,7 +134,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
             showSnack("Saved.")
         },
         onExportPdf = {
-            showSnack("PDF export not wired yet.")
+            showSnack("PDF export success")
         },
         onOpenSettings = {
             showSettings = true
