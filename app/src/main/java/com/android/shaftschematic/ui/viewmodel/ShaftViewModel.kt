@@ -270,15 +270,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 listIndex = idx
             )
 
-            // Remove from UI order first, then from the spec list.
-            orderRemove(id)
-
             s.copy(
                 bodies = s.bodies.toMutableList().apply { removeAt(idx) }
             )
         }
 
         deleted?.let {
+            // Remove from UI order AFTER spec update to avoid race condition
+            orderRemove(id)
+            
             // Record into undo stack; clear redo history (new branch).
             deleteHistory.addLast(it)
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
@@ -287,7 +287,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             redoHistory.clear()
 
             ensureOverall()
-            ensureOrderCoversSpec()
             updateUndoRedoFlags()
             emitDeletedSnack(it.kind)
         }
@@ -335,14 +334,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 listIndex = idx
             )
 
-            orderRemove(id)
-
             s.copy(
                 tapers = s.tapers.toMutableList().apply { removeAt(idx) }
             )
         }
 
         deleted?.let {
+            // Remove from UI order AFTER spec update to avoid race condition
+            orderRemove(id)
+            
             deleteHistory.addLast(it)
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
@@ -350,7 +350,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             redoHistory.clear()
 
             ensureOverall()
-            ensureOrderCoversSpec()
             updateUndoRedoFlags()
             emitDeletedSnack(it.kind)
         }
@@ -410,14 +409,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 listIndex = idx
             )
 
-            orderRemove(id)
-
             s.copy(
                 threads = s.threads.toMutableList().apply { removeAt(idx) }
             )
         }
 
         deleted?.let {
+            // Remove from UI order AFTER spec update to avoid race condition
+            orderRemove(id)
+            
             deleteHistory.addLast(it)
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
@@ -425,7 +425,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             redoHistory.clear()
 
             ensureOverall()
-            ensureOrderCoversSpec()
             updateUndoRedoFlags()
             emitDeletedSnack(it.kind)
         }
@@ -468,14 +467,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 listIndex = idx
             )
 
-            orderRemove(id)
-
             s.copy(
                 liners = s.liners.toMutableList().apply { removeAt(idx) }
             )
         }
 
         deleted?.let {
+            // Remove from UI order AFTER spec update to avoid race condition
+            orderRemove(id)
+            
             deleteHistory.addLast(it)
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
@@ -483,7 +483,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             redoHistory.clear()
 
             ensureOverall()
-            ensureOrderCoversSpec()
             updateUndoRedoFlags()
             emitDeletedSnack(it.kind)
         }
