@@ -102,6 +102,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _showGrid = MutableStateFlow(false)
     val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
 
+    // Auto-snap keeps components end-to-end in physical order when geometry changes.
+    private val _autoSnap = MutableStateFlow(true)
+    val autoSnap: StateFlow<Boolean> = _autoSnap.asStateFlow()
+
     private val _customer = MutableStateFlow("")
     val customer: StateFlow<String> = _customer.asStateFlow()
 
@@ -188,6 +192,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Enables or disables auto-snapping of components after edits/deletes. */
+    fun setAutoSnap(enabled: Boolean) {
+        _autoSnap.value = enabled
+        // Persistence can be wired into SettingsStore later if desired.
+    }
+
     // ────────────────────────────────────────────────────────────────────────────
     // Client metadata (free-form)
     // ────────────────────────────────────────────────────────────────────────────
@@ -236,16 +246,26 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }.also { ensureOverall(); ensureOrderCoversSpec() }
 
     fun updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
-        if (index !in s.bodies.indices) s else s.copy(
-            bodies = s.bodies.toMutableList().also { l ->
-                val b = l[index]
-                l[index] = b.copy(
+        if (index !in s.bodies.indices) s else {
+            val old = s.bodies[index]
+            val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
+
+            val updatedBodies = s.bodies.toMutableList().also { list ->
+                list[index] = old.copy(
                     startFromAftMm = startMm,
                     lengthMm = max(0f, lengthMm),
                     diaMm = max(0f, diaMm)
                 )
             }
-        )
+
+            val base = s.copy(bodies = updatedBodies)
+
+            if (_autoSnap.value && startChanged) {
+                base.snapForwardFrom(ComponentKey(old.id, ComponentKind.BODY))
+            } else {
+                base
+            }
+        }
     }.also { ensureOverall() }
 
     /**
@@ -303,19 +323,36 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }.also { ensureOverall(); ensureOrderCoversSpec() }
 
-    fun updateTaper(index: Int, startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) = _spec.update { s ->
-        if (index !in s.tapers.indices) s else s.copy(
-            tapers = s.tapers.toMutableList().also { l ->
-                val t = l[index]
-                l[index] = t.copy(
+    fun updateTaper(
+        index: Int,
+        startMm: Float,
+        lengthMm: Float,
+        startDiaMm: Float,
+        endDiaMm: Float
+    ) = _spec.update { s ->
+        if (index !in s.tapers.indices) s else {
+            val old = s.tapers[index]
+            val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
+
+            val updatedTapers = s.tapers.toMutableList().also { list ->
+                list[index] = old.copy(
                     startFromAftMm = startMm,
                     lengthMm = max(0f, lengthMm),
                     startDiaMm = max(0f, startDiaMm),
                     endDiaMm = max(0f, endDiaMm)
                 )
             }
-        )
+
+            val base = s.copy(tapers = updatedTapers)
+
+            if (_autoSnap.value && startChanged) {
+                base.snapForwardFrom(ComponentKey(old.id, ComponentKind.TAPER))
+            } else {
+                base
+            }
+        }
     }.also { ensureOverall() }
+
 
     /** Remove a [Taper] by id with multi-step delete history support. */
     fun removeTaper(id: String) {
@@ -483,6 +520,123 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             updateUndoRedoFlags()
             emitDeletedSnack(snapshot.kind)
         }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // Axial snapping — keep components end-to-end in physical order
+    // ────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Computes the physical (AFT → FWD) order of all components by startFromAftMm.
+     * Ties are broken by kind + id to keep ordering deterministic.
+     */
+    private fun buildPhysicalKeyOrder(spec: ShaftSpec): List<ComponentKey> {
+        val keysWithStart = mutableListOf<Pair<ComponentKey, Float>>()
+
+        spec.bodies.forEach { b ->
+            keysWithStart += ComponentKey(b.id, ComponentKind.BODY) to b.startFromAftMm
+        }
+        spec.tapers.forEach { t ->
+            keysWithStart += ComponentKey(t.id, ComponentKind.TAPER) to t.startFromAftMm
+        }
+        spec.threads.forEach { th ->
+            keysWithStart += ComponentKey(th.id, ComponentKind.THREAD) to th.startFromAftMm
+        }
+        spec.liners.forEach { ln ->
+            keysWithStart += ComponentKey(ln.id, ComponentKind.LINER) to ln.startFromAftMm
+        }
+
+        return keysWithStart
+            .sortedWith(
+                compareBy<Pair<ComponentKey, Float>> { it.second }      // startFromAftMm
+                    .thenBy { it.first.kind.ordinal }                  // kind for stability
+                    .thenBy { it.first.id }                            // id as final tie-breaker
+            )
+            .map { it.first }
+    }
+
+    /** Look up the Segment for a ComponentKey in this spec. */
+    private fun ShaftSpec.segmentFor(key: ComponentKey): Segment? =
+        when (key.kind) {
+            ComponentKind.BODY   -> bodies.firstOrNull { it.id == key.id }
+            ComponentKind.TAPER  -> tapers.firstOrNull { it.id == key.id }
+            ComponentKind.THREAD -> threads.firstOrNull { it.id == key.id }
+            ComponentKind.LINER  -> liners.firstOrNull { it.id == key.id }
+        }
+
+    /** Return a copy where exactly the addressed segment has a new startFromAftMm. */
+    private fun ShaftSpec.withSegmentStart(key: ComponentKey, newStartMm: Float): ShaftSpec =
+        when (key.kind) {
+            ComponentKind.BODY -> {
+                val idx = bodies.indexOfFirst { it.id == key.id }
+                if (idx < 0) this else copy(
+                    bodies = bodies.toMutableList().also { list ->
+                        val b = list[idx]
+                        list[idx] = b.copy(startFromAftMm = newStartMm)
+                    }
+                )
+            }
+            ComponentKind.TAPER -> {
+                val idx = tapers.indexOfFirst { it.id == key.id }
+                if (idx < 0) this else copy(
+                    tapers = tapers.toMutableList().also { list ->
+                        val t = list[idx]
+                        list[idx] = t.copy(startFromAftMm = newStartMm)
+                    }
+                )
+            }
+            ComponentKind.THREAD -> {
+                val idx = threads.indexOfFirst { it.id == key.id }
+                if (idx < 0) this else copy(
+                    threads = threads.toMutableList().also { list ->
+                        val th = list[idx]
+                        list[idx] = th.copy(startFromAftMm = newStartMm)
+                    }
+                )
+            }
+            ComponentKind.LINER -> {
+                val idx = liners.indexOfFirst { it.id == key.id }
+                if (idx < 0) this else copy(
+                    liners = liners.toMutableList().also { list ->
+                        val ln = list[idx]
+                        list[idx] = ln.copy(startFromAftMm = newStartMm)
+                    }
+                )
+            }
+        }
+
+    /**
+     * Returns a copy of this [ShaftSpec] where all components to the **right** of [anchor]
+     * are snapped so that `start = previous.end`, in physical order.
+     */
+    private fun ShaftSpec.snapForwardFrom(anchor: ComponentKey): ShaftSpec {
+        val ordered = buildPhysicalKeyOrder(this)
+        val startIndex = ordered.indexOf(anchor)
+        if (startIndex == -1) return this
+
+        var working = this
+
+        for (i in startIndex until ordered.lastIndex) {
+            val leftKey = ordered[i]
+            val rightKey = ordered[i + 1]
+
+            val left = working.segmentFor(leftKey) ?: continue
+            val newStart = left.startFromAftMm + left.lengthMm
+            val right = working.segmentFor(rightKey) ?: continue
+
+            if (right.startFromAftMm != newStart) {
+                working = working.withSegmentStart(rightKey, newStart)
+            }
+        }
+
+        return working
+    }
+
+    /** Find the first component to the **right** of [removed] in physical order. */
+    private fun findRightNeighbor(spec: ShaftSpec, removed: ComponentKey): ComponentKey? {
+        val ordered = buildPhysicalKeyOrder(spec)
+        val idx = ordered.indexOf(removed)
+        return if (idx >= 0 && idx + 1 < ordered.size) ordered[idx + 1] else null
     }
 
     private fun newId(): String = UUID.randomUUID().toString()
