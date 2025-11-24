@@ -275,12 +275,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        deleted?.let {
-            // Remove from UI order AFTER spec update to avoid race condition
-            orderRemove(id)
-            
+        deleted?.let { snapshot ->
+            // Remove from UI order AFTER spec update to avoid cross-state mutation
+            orderRemove(snapshot.id)
+
             // Record into undo stack; clear redo history (new branch).
-            deleteHistory.addLast(it)
+            deleteHistory.addLast(snapshot)
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
             }
@@ -288,7 +288,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
             ensureOverall()
             updateUndoRedoFlags()
-            emitDeletedSnack(it.kind)
+            emitDeletedSnack(snapshot.kind)
         }
     }
 
@@ -339,11 +339,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        deleted?.let {
-            // Remove from UI order AFTER spec update to avoid race condition
-            orderRemove(id)
-            
-            deleteHistory.addLast(it)
+        deleted?.let { snapshot ->
+            orderRemove(snapshot.id)
+
+            deleteHistory.addLast(snapshot)
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
             }
@@ -351,7 +350,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
             ensureOverall()
             updateUndoRedoFlags()
-            emitDeletedSnack(it.kind)
+            emitDeletedSnack(snapshot.kind)
         }
     }
 
@@ -414,11 +413,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        deleted?.let {
-            // Remove from UI order AFTER spec update to avoid race condition
-            orderRemove(id)
-            
-            deleteHistory.addLast(it)
+        deleted?.let { snapshot ->
+            orderRemove(snapshot.id)
+
+            deleteHistory.addLast(snapshot)
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
             }
@@ -426,7 +424,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
             ensureOverall()
             updateUndoRedoFlags()
-            emitDeletedSnack(it.kind)
+            emitDeletedSnack(snapshot.kind)
         }
     }
 
@@ -472,11 +470,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        deleted?.let {
-            // Remove from UI order AFTER spec update to avoid race condition
-            orderRemove(id)
-            
-            deleteHistory.addLast(it)
+        deleted?.let { snapshot ->
+            orderRemove(snapshot.id)
+
+            deleteHistory.addLast(snapshot)
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
             }
@@ -484,7 +481,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
             ensureOverall()
             updateUndoRedoFlags()
-            emitDeletedSnack(it.kind)
+            emitDeletedSnack(snapshot.kind)
         }
     }
 
@@ -555,9 +552,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 _spec.value = doc.spec
                 _unitLocked.value = doc.unitLocked
                 setUnit(doc.preferredUnit, persist = false)
-                ensureOrderCoversSpec(doc.spec) // keep UI order in sync with loaded spec
+
+                // Reset order to this document's components only
+                _componentOrder.value = emptyList()
+                ensureOrderCoversSpec(doc.spec)
+
                 return
             }
+
         // Back-compat: older files were just the spec
         runCatching { json.decodeFromString<ShaftSpec>(raw) }
             .onSuccess { legacy ->
@@ -565,7 +567,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 _spec.value = legacy
                 _unitLocked.value = false // no lock info in legacy
                 // unit falls back to SettingsStore default (observer in init{})
-                ensureOrderCoversSpec(legacy) // seed order for legacy documents
+
+                _componentOrder.value = emptyList()
+                ensureOrderCoversSpec(legacy)
+
                 return
             }
             .onFailure { throw it }
@@ -600,19 +605,42 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Ensure the UI order contains every current component id (append any missing; keep sequence).
+     * Also drops any order entries whose ids are no longer present in the spec.
      * Needed on load/import to seed order for legacy docs or externally-edited specs.
      */
     private fun ensureOrderCoversSpec(s: ShaftSpec = _spec.value) {
-        val cur = _componentOrder.value.toMutableList()
-        val have = cur.mapTo(mutableSetOf()) { it.id }
-        fun addMissing(kind: ComponentKind, ids: List<String>) {
-            ids.forEach { if (it !in have) cur += ComponentKey(it, kind) }
+        // Compute the set of ids that actually exist in the spec
+        val specIds = buildSet {
+            addAll(s.bodies.map { it.id })
+            addAll(s.tapers.map { it.id })
+            addAll(s.threads.map { it.id })
+            addAll(s.liners.map { it.id })
         }
+
+        // Start from current order, but drop any ids that no longer exist
+        val cur = _componentOrder.value
+            .filter { it.id in specIds }
+            .toMutableList()
+
+        val have = cur.mapTo(mutableSetOf()) { it.id }
+
+        fun addMissing(kind: ComponentKind, ids: List<String>) {
+            ids.forEach { id ->
+                if (id !in have) {
+                    cur += ComponentKey(id, kind)
+                    have += id
+                }
+            }
+        }
+
         addMissing(ComponentKind.BODY,   s.bodies.map { it.id })
         addMissing(ComponentKind.TAPER,  s.tapers.map { it.id })
         addMissing(ComponentKind.THREAD, s.threads.map { it.id })
         addMissing(ComponentKind.LINER,  s.liners.map { it.id })
-        if (cur != _componentOrder.value) _componentOrder.value = cur
+
+        if (cur != _componentOrder.value) {
+            _componentOrder.value = cur
+        }
     }
 
     // Move controls (used by screen buttons; future enhancement may expose drag-drop)
@@ -718,37 +746,35 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun redoLastDelete() {
         val snapshot = redoHistory.removeLastOrNull() ?: return
 
-        // 1) Remove the component again from the spec + order
+        // 1) Remove the component again from the spec
         _spec.update { s ->
             when (snapshot) {
                 is LastDeleted.Body -> {
                     val idx = s.bodies.indexOfFirst { it.id == snapshot.id }
                     if (idx < 0) return@update s
-                    orderRemove(snapshot.id)
                     s.copy(bodies = s.bodies.toMutableList().apply { removeAt(idx) })
                 }
                 is LastDeleted.Taper -> {
                     val idx = s.tapers.indexOfFirst { it.id == snapshot.id }
                     if (idx < 0) return@update s
-                    orderRemove(snapshot.id)
                     s.copy(tapers = s.tapers.toMutableList().apply { removeAt(idx) })
                 }
                 is LastDeleted.Thread -> {
                     val idx = s.threads.indexOfFirst { it.id == snapshot.id }
                     if (idx < 0) return@update s
-                    orderRemove(snapshot.id)
                     s.copy(threads = s.threads.toMutableList().apply { removeAt(idx) })
                 }
                 is LastDeleted.Liner -> {
                     val idx = s.liners.indexOfFirst { it.id == snapshot.id }
                     if (idx < 0) return@update s
-                    orderRemove(snapshot.id)
                     s.copy(liners = s.liners.toMutableList().apply { removeAt(idx) })
                 }
             }
         }
 
-        // 2) Move snapshot back onto deleteHistory (so it can be undone again)
+        // 2) Remove from order and push back onto undo stack
+        orderRemove(snapshot.id)
+
         deleteHistory.addLast(snapshot)
         if (deleteHistory.size > MAX_DELETE_HISTORY) {
             deleteHistory.removeFirst()
