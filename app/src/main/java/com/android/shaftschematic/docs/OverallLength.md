@@ -25,7 +25,7 @@ Defines how the **Overall Length** field behaves, how it interacts with componen
 ## Computation
 
 ### Last occupied end (mm)
-```kotlin
+```
 /** Latest occupied end (in mm) from all components. */
 fun lastOccupiedEndMm(spec: ShaftSpec): Float {
     var end = 0f
