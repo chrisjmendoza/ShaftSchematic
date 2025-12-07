@@ -9,7 +9,7 @@ Modal chooser to add a new component to the current ShaftSpec. Lives outside `Sh
 - Provide a “Close” button that only dismisses.
 
 ## API (lambda-based, stable)
-```kotlin
+```
 @Composable
 fun InlineAddChooserDialog(
   onDismiss: () -> Unit,
