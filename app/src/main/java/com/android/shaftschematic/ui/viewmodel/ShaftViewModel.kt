@@ -204,6 +204,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Persistence can be wired into SettingsStore later if desired.
     }
 
+    /** Explicitly snap forward from the given anchor key, end-to-end along the chain. */
+    fun snapChainFrom(anchor: ComponentKey) {
+        _spec.update { base -> base.snapForwardFrom(anchor) }
+    }
+
+    /** Convenience: snap forward from a component id by looking up its kind in UI order. */
+    fun snapChainFromId(id: String) {
+        val key = _componentOrder.value.firstOrNull { it.id == id }
+        if (key != null) snapChainFrom(key)
+    }
+
     // ────────────────────────────────────────────────────────────────────────────
     // Client metadata (free-form)
     // ────────────────────────────────────────────────────────────────────────────
