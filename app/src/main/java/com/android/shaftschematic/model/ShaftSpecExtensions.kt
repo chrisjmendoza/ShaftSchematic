@@ -60,6 +60,53 @@ fun ShaftSpec.buildPhysicalKeyOrder(): List<ComponentKey> {
         .map { it.first }
 }
 
+/**
+ * Find the immediate physical neighbor to the **left** of [anchor] in this spec,
+ * based on [buildPhysicalKeyOrder].
+ */
+fun ShaftSpec.findLeftNeighbor(anchor: ComponentKey): ComponentKey? {
+    val ordered = buildPhysicalKeyOrder()
+    val idx = ordered.indexOf(anchor)
+    return if (idx > 0) ordered[idx - 1] else null
+}
+
+/**
+ * Find the immediate physical neighbor to the **right** of [anchor], if any.
+ */
+fun ShaftSpec.findRightNeighbor(anchor: ComponentKey): ComponentKey? {
+    val ordered = buildPhysicalKeyOrder()
+    val idx = ordered.indexOf(anchor)
+    return if (idx >= 0 && idx + 1 < ordered.size) ordered[idx + 1] else null
+}
+
+/** Shift every component's start position by [delta] millimeters (clamped at 0). */
+fun ShaftSpec.shiftAllBy(delta: Float): ShaftSpec {
+    if (delta == 0f) return this
+    fun Float.shift(): Float = (this + delta).coerceAtLeast(0f)
+
+    return copy(
+        bodies = bodies.map { it.copy(startFromAftMm = it.startFromAftMm.shift()) },
+        tapers = tapers.map { it.copy(startFromAftMm = it.startFromAftMm.shift()) },
+        threads = threads.map { it.copy(startFromAftMm = it.startFromAftMm.shift()) },
+        liners = liners.map { it.copy(startFromAftMm = it.startFromAftMm.shift()) }
+    )
+}
+
+/**
+ * When no left neighbor exists (deleting the first component), align the leading component to 0
+ * and snap all following components end-to-start.
+ */
+fun ShaftSpec.snapFromOrigin(): ShaftSpec {
+    val ordered = buildPhysicalKeyOrder()
+    val first = ordered.firstOrNull() ?: return this
+    val firstSegment = segmentFor(first) ?: return this
+
+    val shifted = if (firstSegment.startFromAftMm == 0f) this
+    else shiftAllBy(-firstSegment.startFromAftMm)
+
+    return shifted.snapForwardFrom(first)
+}
+
 /** Look up the Segment for a ComponentKey in this spec. */
 private fun ShaftSpec.segmentFor(key: ComponentKey): Segment? =
     when (key.kind) {
@@ -124,6 +171,41 @@ fun ShaftSpec.snapForwardFrom(anchor: ComponentKey): ShaftSpec {
     for (i in startIndex until ordered.lastIndex) {
         val leftKey = ordered[i]
         val rightKey = ordered[i + 1]
+
+        val left = working.segmentFor(leftKey) ?: continue
+        val newStart = left.startFromAftMm + left.lengthMm
+        val right = working.segmentFor(rightKey) ?: continue
+
+        if (right.startFromAftMm != newStart) {
+            working = working.withSegmentStart(rightKey, newStart)
+        }
+    }
+
+    return working
+}
+
+/**
+ * Variant of [snapForwardFrom] that uses the supplied [order] (typically UI order)
+ * to determine left/right relationships rather than recomputing by start position.
+ *
+ * Useful when components were previously shifted (e.g., delete snap) and we want to
+ * push a restored component's followers back to the right based on their stable order.
+ * Currently used by JVM tests and debugging helpers; no harm keeping it around for
+ * future ViewModel flows that need deterministic order-driven snapping.
+ */
+fun ShaftSpec.snapForwardFromOrdered(
+    anchor: ComponentKey,
+    order: List<ComponentKey>
+): ShaftSpec {
+    if (order.isEmpty()) return this
+    val filtered = order.filter { segmentFor(it) != null }
+    val startIndex = filtered.indexOf(anchor)
+    if (startIndex == -1) return this
+
+    var working = this
+    for (i in startIndex until filtered.lastIndex) {
+        val leftKey = filtered[i]
+        val rightKey = filtered[i + 1]
 
         val left = working.segmentFor(leftKey) ?: continue
         val newStart = left.startFromAftMm + left.lengthMm

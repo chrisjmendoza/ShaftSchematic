@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
+import android.util.Log
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -93,6 +94,9 @@ import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.order.ComponentKey
+import com.android.shaftschematic.ui.viewmodel.SnapConfig
+import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
+import com.android.shaftschematic.ui.viewmodel.snapPositionMm
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
 
@@ -184,6 +188,62 @@ fun ShaftScreen(
 
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
+
+    val snapAnchors = remember(spec) { buildSnapAnchors(spec) }
+
+    val snappedBodyUpdater = remember(snapAnchors, onUpdateBody) {
+        { index: Int, startMm: Float, lengthMm: Float, diaMm: Float ->
+            applySnappedBodyUpdate(
+                onUpdate = onUpdateBody,
+                index = index,
+                rawStartMm = startMm,
+                rawEndMm = startMm + lengthMm,
+                diaMm = diaMm,
+                anchors = snapAnchors
+            )
+        }
+    }
+
+    val snappedTaperUpdater = remember(snapAnchors, onUpdateTaper) {
+        { index: Int, startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float ->
+            applySnappedTaperUpdate(
+                onUpdate = onUpdateTaper,
+                index = index,
+                rawStartMm = startMm,
+                rawEndMm = startMm + lengthMm,
+                startDiaMm = startDiaMm,
+                endDiaMm = endDiaMm,
+                anchors = snapAnchors
+            )
+        }
+    }
+
+    val snappedThreadUpdater = remember(snapAnchors, onUpdateThread) {
+        { index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float ->
+            applySnappedThreadUpdate(
+                onUpdate = onUpdateThread,
+                index = index,
+                rawStartMm = startMm,
+                rawEndMm = startMm + lengthMm,
+                majorDiaMm = majorDiaMm,
+                pitchMm = pitchMm,
+                anchors = snapAnchors
+            )
+        }
+    }
+
+    val snappedLinerUpdater = remember(snapAnchors, onUpdateLiner) {
+        { index: Int, startMm: Float, lengthMm: Float, odMm: Float ->
+            applySnappedLinerUpdate(
+                onUpdate = onUpdateLiner,
+                index = index,
+                rawStartMm = startMm,
+                rawEndMm = startMm + lengthMm,
+                odMm = odMm,
+                anchors = snapAnchors
+            )
+        }
+    }
 
     // Auto-sync overall when not manual
     LaunchedEffect(overallIsManual, spec.bodies, spec.tapers, spec.threads, spec.liners) {
@@ -347,10 +407,10 @@ fun ShaftScreen(
                     spec = spec,
                     unit = unit,
                     componentOrder = componentOrder,
-                    onUpdateBody = onUpdateBody,
-                    onUpdateTaper = onUpdateTaper,
-                    onUpdateThread = onUpdateThread,
-                    onUpdateLiner = onUpdateLiner,
+                    onUpdateBody = snappedBodyUpdater,
+                    onUpdateTaper = snappedTaperUpdater,
+                    onUpdateThread = snappedThreadUpdater,
+                    onUpdateLiner = snappedLinerUpdater,
                     onRemoveBody = onRemoveBody,
                     onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread,
@@ -503,6 +563,7 @@ private fun ComponentCarouselPager(
         initialPage = if (rowsSorted.isEmpty()) 0 else 1, // land on leftmost component when present
         pageCount = { pageCount }
     )
+    val arrowWidth = 40.dp // keep paddles slim so they do not overlap card delete affordances
 
     val scope = rememberCoroutineScope()
 
@@ -540,13 +601,19 @@ private fun ComponentCarouselPager(
                 pageCount - 1 -> AddComponentCard(label = "Add at FWD", onAdd = onAddAtFwd)
                 else -> {
                     val row = rowsSorted[page - 1]
-                    ComponentPagerCard(
-                        spec = spec, unit = unit, row = row,
-                        onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
-                        onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
-                        onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
-                        onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        ComponentPagerCard(
+                            spec = spec, unit = unit, row = row, physicalIndex = page - 1,
+                            onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
+                            onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
+                            onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
+                            onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner
+                        )
+                    }
                 }
             }
         }
@@ -562,7 +629,7 @@ private fun ComponentCarouselPager(
             modifier = Modifier
                 .align(Alignment.CenterStart) // vertically centered next to the card
                 .fillMaxHeight()              // same height as the card
-                .width(44.dp)                 // slim nub
+                .width(arrowWidth)            // slim nub
                 .padding(start = 4.dp)        // tiny gutter
         )
 
@@ -579,74 +646,9 @@ private fun ComponentCarouselPager(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .fillMaxHeight()
-                .width(44.dp)
+                .width(arrowWidth)
                 .padding(end = 4.dp)
         )
-    }
-}
-
-/* ───────────────── Arrow Button (reusable) ───────────────── */
-
-/**
- * Pager direction is controlled by `carouselDirectionLtr`.
- * When true, the first component page (index 1) corresponds to the leftmost shaft segment (AFT).
- * When false, the last component page (index pageCount-2) is the leftmost segment.
- */
-
-@Composable
-private fun ArrowNavButton(
-    left: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    // Lightweight hover for mouse/trackpad; harmless on touch
-    var hovered by remember { mutableStateOf(false) }
-
-    val targetElevation = when {
-        pressed -> 6.dp
-        hovered -> 4.dp
-        else -> 2.dp
-    }
-    val elevation by animateDpAsState(targetElevation, label = "arrowElevation")
-
-    val contentAlpha by animateFloatAsState(
-        targetValue = if (pressed) 0.85f else if (hovered) 0.92f else 1f,
-        label = "arrowAlpha"
-    )
-
-    Surface(
-        tonalElevation = elevation,
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = modifier
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        hovered = event.type == PointerEventType.Move || event.type == PointerEventType.Enter
-                    }
-                }
-            }
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick
-            )
-    ) {
-        Box(
-            Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant) {
-                Text(
-                    text = if (left) "◀" else "▶",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.graphicsLayer { alpha = contentAlpha }
-                )
-            }
-        }
     }
 }
 
@@ -679,21 +681,12 @@ private fun AddComponentCard(
     }
 }
 
-
-@Composable
-private fun ArrowHint(left: Boolean) {
-    Text(
-        text = if (left) "◀" else "▶",
-        style = MaterialTheme.typography.headlineSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-}
-
 @Composable
 private fun ComponentPagerCard(
     spec: ShaftSpec,
     unit: UnitSystem,
     row: RowRef,
+    physicalIndex: Int,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
@@ -706,7 +699,18 @@ private fun ComponentPagerCard(
     when (row.kind) {
         ComponentKind.BODY -> {
             val b = spec.bodies[row.index]
-            ComponentCard("Body #${row.index + 1}", onRemove = { onRemoveBody(b.id) }) {
+            ComponentCard(
+                title = "Body #${row.index + 1}",
+                componentId = b.id,
+                componentKind = ComponentKind.BODY,
+                onRemove = {
+                Log.d(
+                    "ShaftUI",
+                    "Body delete clicked: id=${b.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                )
+                onRemoveBody(b.id)
+                }
+            ) {
                 CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateBody(row.index, it, b.lengthMm, b.diaMm)
@@ -727,7 +731,18 @@ private fun ComponentPagerCard(
 
         ComponentKind.TAPER -> {
             val t = spec.tapers[row.index]
-            ComponentCard("Taper #${row.index + 1}", onRemove = { onRemoveTaper(t.id) }) {
+            ComponentCard(
+                title = "Taper #${row.index + 1}",
+                componentId = t.id,
+                componentKind = ComponentKind.TAPER,
+                onRemove = {
+                Log.d(
+                    "ShaftUI",
+                    "Taper delete clicked: id=${t.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                )
+                onRemoveTaper(t.id)
+                }
+            ) {
                 CommitNum("Start (${abbr(unit)})", disp(t.startFromAftMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateTaper(row.index, it, t.lengthMm, t.startDiaMm, t.endDiaMm)
@@ -754,7 +769,18 @@ private fun ComponentPagerCard(
         ComponentKind.THREAD -> {
             val th = spec.threads[row.index]
             val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
-            ComponentCard("Thread #${row.index + 1}", onRemove = { onRemoveThread(th.id) }) {
+            ComponentCard(
+                title = "Thread #${row.index + 1}",
+                componentId = th.id,
+                componentKind = ComponentKind.THREAD,
+                onRemove = {
+                Log.d(
+                    "ShaftUI",
+                    "Thread delete clicked: id=${th.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                )
+                onRemoveThread(th.id)
+                }
+            ) {
                 CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm)
@@ -786,7 +812,18 @@ private fun ComponentPagerCard(
 
         ComponentKind.LINER -> {
             val ln = spec.liners[row.index]
-            ComponentCard("Liner #${row.index + 1}", onRemove = { onRemoveLiner(ln.id) }) {
+            ComponentCard(
+                title = "Liner #${row.index + 1}",
+                componentId = ln.id,
+                componentKind = ComponentKind.LINER,
+                onRemove = {
+                Log.d(
+                    "ShaftUI",
+                    "Liner delete clicked: id=${ln.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                )
+                onRemoveLiner(ln.id)
+                }
+            ) {
                 CommitNum("Start (${abbr(unit)})", disp(ln.startFromAftMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateLiner(row.index, it, ln.lengthMm, ln.odMm)
@@ -858,9 +895,17 @@ private fun buildOrderedRows(
 
 /* ───────────────── Cards & fields ───────────────── */
 
+/**
+ * Shared card chrome for component editors.
+ *
+ * [componentId] and [componentKind] are optional metadata used purely for logging the
+ * instrumented delete IconButton, allowing us to correlate pointer + click events in Logcat.
+ */
 @Composable
 private fun ComponentCard(
     title: String,
+    componentId: String? = null,
+    componentKind: ComponentKind? = null,
     onRemove: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -889,10 +934,33 @@ private fun ComponentCard(
             }
             if (onRemove != null) {
                 IconButton(
-                    onClick = onRemove,
+                    onClick = {
+                        Log.d(
+                            "ShaftUIButton",
+                            "Delete IconButton onClick fired for id=${componentId ?: "<unknown>"} " +
+                                "(componentType=${componentKind?.name ?: "<unknown>"})"
+                        )
+                        onRemove()
+                    },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(4.dp)
+                        .padding(top = 8.dp, end = 8.dp)
+                        .pointerInput(componentId, componentKind) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val pressed = event.changes.firstOrNull()?.pressed
+                                    if (pressed != null) {
+                                        Log.d(
+                                            "ShaftUIButton",
+                                            "Pointer event on delete button: pressed=$pressed " +
+                                                "for id=${componentId ?: "<unknown>"} " +
+                                                "(componentType=${componentKind?.name ?: "<unknown>"})"
+                                        )
+                                    }
+                                }
+                            }
+                        }
                 ) {
                     Icon(
                         Icons.Filled.Delete,
@@ -1149,6 +1217,77 @@ private fun computeAddDefaults(spec: ShaftSpec): AddDefaults {
     if (dia == 50f && spec.bodies.isNotEmpty()) dia = spec.bodies.first().diaMm
 
     return AddDefaults(startMm = end, lastDiaMm = dia)
+}
+
+/* ───────────────── Snap helpers ───────────────── */
+
+private fun applySnappedBodyUpdate(
+    onUpdate: (Int, Float, Float, Float) -> Unit,
+    index: Int,
+    rawStartMm: Float,
+    rawEndMm: Float,
+    diaMm: Float,
+    anchors: List<Float>,
+    config: SnapConfig = SnapConfig()
+) {
+    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
+    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
+    onUpdate(index, snappedStart, lengthMm, diaMm)
+}
+
+private fun applySnappedTaperUpdate(
+    onUpdate: (Int, Float, Float, Float, Float) -> Unit,
+    index: Int,
+    rawStartMm: Float,
+    rawEndMm: Float,
+    startDiaMm: Float,
+    endDiaMm: Float,
+    anchors: List<Float>,
+    config: SnapConfig = SnapConfig()
+) {
+    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
+    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
+    onUpdate(index, snappedStart, lengthMm, startDiaMm, endDiaMm)
+}
+
+private fun applySnappedThreadUpdate(
+    onUpdate: (Int, Float, Float, Float, Float) -> Unit,
+    index: Int,
+    rawStartMm: Float,
+    rawEndMm: Float,
+    majorDiaMm: Float,
+    pitchMm: Float,
+    anchors: List<Float>,
+    config: SnapConfig = SnapConfig()
+) {
+    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
+    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
+    onUpdate(index, snappedStart, lengthMm, majorDiaMm, pitchMm)
+}
+
+private fun applySnappedLinerUpdate(
+    onUpdate: (Int, Float, Float, Float) -> Unit,
+    index: Int,
+    rawStartMm: Float,
+    rawEndMm: Float,
+    odMm: Float,
+    anchors: List<Float>,
+    config: SnapConfig = SnapConfig()
+) {
+    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
+    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
+    onUpdate(index, snappedStart, lengthMm, odMm)
+}
+
+private fun snapBounds(
+    rawStartMm: Float,
+    rawEndMm: Float,
+    anchors: List<Float>,
+    config: SnapConfig
+): Pair<Float, Float> {
+    val snappedStart = snapPositionMm(rawStartMm, anchors, config)
+    val snappedEnd = snapPositionMm(rawEndMm, anchors, config)
+    return snappedStart to snappedEnd
 }
 
 /* ───────────────── Click helper ───────────────── */

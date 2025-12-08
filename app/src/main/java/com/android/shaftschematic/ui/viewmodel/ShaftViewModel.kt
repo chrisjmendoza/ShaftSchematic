@@ -1,12 +1,14 @@
 package com.android.shaftschematic.ui.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.data.SettingsStore.UnitPref
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.model.snapForwardFrom
+import com.android.shaftschematic.model.snapForwardFromOrdered
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.util.UnitSystem
@@ -31,15 +33,21 @@ import kotlin.text.get
 
 // Internal payload used by Undo/Redo for deletes.
 // Not part of the public API; safe to change as the undo feature evolves.
+// Captures the exact spec + order before the delete so undo can restore
+// geometry that may have been temporarily re-snapped during delete.
 private sealed class LastDeleted {
     abstract val id: String
     abstract val kind: ComponentKind
     abstract val orderIndex: Int
+    abstract val beforeSpec: ShaftSpec
+    abstract val beforeOrder: List<ComponentKey>
 
     data class Body(
         val value: com.android.shaftschematic.model.Body,
         override val orderIndex: Int,
         val listIndex: Int,
+        override val beforeSpec: ShaftSpec,
+        override val beforeOrder: List<ComponentKey>,
     ) : LastDeleted() {
         override val id: String get() = value.id
         override val kind: ComponentKind get() = ComponentKind.BODY
@@ -49,6 +57,8 @@ private sealed class LastDeleted {
         val value: com.android.shaftschematic.model.Taper,
         override val orderIndex: Int,
         val listIndex: Int,
+        override val beforeSpec: ShaftSpec,
+        override val beforeOrder: List<ComponentKey>,
     ) : LastDeleted() {
         override val id: String get() = value.id
         override val kind: ComponentKind get() = ComponentKind.TAPER
@@ -58,6 +68,8 @@ private sealed class LastDeleted {
         val value: com.android.shaftschematic.model.Threads,
         override val orderIndex: Int,
         val listIndex: Int,
+        override val beforeSpec: ShaftSpec,
+        override val beforeOrder: List<ComponentKey>,
     ) : LastDeleted() {
         override val id: String get() = value.id
         override val kind: ComponentKind get() = ComponentKind.THREAD
@@ -67,6 +79,8 @@ private sealed class LastDeleted {
         val value: com.android.shaftschematic.model.Liner,
         override val orderIndex: Int,
         val listIndex: Int,
+        override val beforeSpec: ShaftSpec,
+        override val beforeOrder: List<ComponentKey>,
     ) : LastDeleted() {
         override val id: String get() = value.id
         override val kind: ComponentKind get() = ComponentKind.LINER
@@ -292,11 +306,29 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * undoable (multi-step, last-in-first-out).
      */
     fun removeBody(id: String) {
+        Log.d("ShaftViewModel", "removeBody invoked for id=$id")
+        val specBefore = _spec.value
+        val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Body? = null
+        var snapFromKey: ComponentKey? = null
+        var snapFromOrigin = false
+        val removedKey = ComponentKey(id, ComponentKind.BODY)
 
         _spec.update { s ->
             val idx = s.bodies.indexOfFirst { it.id == id }
-            if (idx < 0) return@update s
+            if (idx < 0) {
+                Log.w(
+                    "ShaftViewModel",
+                    "removeBody: requested id=$id not found. current ids=${s.bodies.map { it.id }}"
+                )
+                // NOTE: This should never happen during normal UI usage.
+                return@update s
+            }
+
+            if (_autoSnap.value) {
+                snapFromKey = s.findLeftNeighbor(removedKey)
+                snapFromOrigin = snapFromKey == null
+            }
 
             val body = s.bodies[idx]
             val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }.let { if (it < 0) 0 else it }
@@ -304,7 +336,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             deleted = LastDeleted.Body(
                 value = body,
                 orderIndex = orderIdx,
-                listIndex = idx
+                listIndex = idx,
+                beforeSpec = specBefore,
+                beforeOrder = orderBefore
             )
 
             s.copy(
@@ -322,6 +356,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
+
+            if (_autoSnap.value) {
+                when {
+                    snapFromKey != null ->
+                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
+                    snapFromOrigin ->
+                        _spec.update { spec -> spec.snapFromOrigin() }
+                }
+            }
 
             ensureOverall()
             updateUndoRedoFlags()
@@ -373,11 +416,29 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Remove a [Taper] by id with multi-step delete history support. */
     fun removeTaper(id: String) {
+        Log.d("ShaftViewModel", "removeTaper invoked for id=$id")
+        val specBefore = _spec.value
+        val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Taper? = null
+        var snapFromKey: ComponentKey? = null
+        var snapFromOrigin = false
+        val removedKey = ComponentKey(id, ComponentKind.TAPER)
 
         _spec.update { s ->
             val idx = s.tapers.indexOfFirst { it.id == id }
-            if (idx < 0) return@update s
+            if (idx < 0) {
+                Log.w(
+                    "ShaftViewModel",
+                    "removeTaper: requested id=$id not found. current ids=${s.tapers.map { it.id }}"
+                )
+                // NOTE: This should never happen during normal UI usage.
+                return@update s
+            }
+
+            if (_autoSnap.value) {
+                snapFromKey = s.findLeftNeighbor(removedKey)
+                snapFromOrigin = snapFromKey == null
+            }
 
             val taper = s.tapers[idx]
             val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }.let { if (it < 0) 0 else it }
@@ -385,7 +446,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             deleted = LastDeleted.Taper(
                 value = taper,
                 orderIndex = orderIdx,
-                listIndex = idx
+                listIndex = idx,
+                beforeSpec = specBefore,
+                beforeOrder = orderBefore
             )
 
             s.copy(
@@ -401,6 +464,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
+
+            if (_autoSnap.value) {
+                when {
+                    snapFromKey != null ->
+                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
+                    snapFromOrigin ->
+                        _spec.update { spec -> spec.snapFromOrigin() }
+                }
+            }
 
             ensureOverall()
             updateUndoRedoFlags()
@@ -457,11 +529,29 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Remove a [Threads] segment by id with multi-step delete history support. */
     fun removeThread(id: String) {
+        Log.d("ShaftViewModel", "removeThread invoked for id=$id")
+        val specBefore = _spec.value
+        val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Thread? = null
+        var snapFromKey: ComponentKey? = null
+        var snapFromOrigin = false
+        val removedKey = ComponentKey(id, ComponentKind.THREAD)
 
         _spec.update { s ->
             val idx = s.threads.indexOfFirst { it.id == id }
-            if (idx < 0) return@update s
+            if (idx < 0) {
+                Log.w(
+                    "ShaftViewModel",
+                    "removeThread: requested id=$id not found. current ids=${s.threads.map { it.id }}"
+                )
+                // NOTE: This should never happen during normal UI usage.
+                return@update s
+            }
+
+            if (_autoSnap.value) {
+                snapFromKey = s.findLeftNeighbor(removedKey)
+                snapFromOrigin = snapFromKey == null
+            }
 
             val thread = s.threads[idx]
             val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }
@@ -470,7 +560,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             deleted = LastDeleted.Thread(
                 value = thread,
                 orderIndex = orderIdx,
-                listIndex = idx
+                listIndex = idx,
+                beforeSpec = specBefore,
+                beforeOrder = orderBefore
             )
 
             s.copy(
@@ -488,6 +580,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
+
+            if (_autoSnap.value) {
+                when {
+                    snapFromKey != null ->
+                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
+                    snapFromOrigin ->
+                        _spec.update { spec -> spec.snapFromOrigin() }
+                }
+            }
 
             // Maintain coverage + flags and show snackbar
             ensureOverall()
@@ -528,11 +629,29 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Remove a [Liner] by id with multi-step delete history support. */
     fun removeLiner(id: String) {
+        Log.d("ShaftViewModel", "removeLiner invoked for id=$id")
+        val specBefore = _spec.value
+        val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Liner? = null
+        var snapFromKey: ComponentKey? = null
+        var snapFromOrigin = false
+        val removedKey = ComponentKey(id, ComponentKind.LINER)
 
         _spec.update { s ->
             val idx = s.liners.indexOfFirst { it.id == id }
-            if (idx < 0) return@update s
+            if (idx < 0) {
+                Log.w(
+                    "ShaftViewModel",
+                    "removeLiner: requested id=$id not found. current ids=${s.liners.map { it.id }}"
+                )
+                // NOTE: This should never happen during normal UI usage.
+                return@update s
+            }
+
+            if (_autoSnap.value) {
+                snapFromKey = s.findLeftNeighbor(removedKey)
+                snapFromOrigin = snapFromKey == null
+            }
 
             val liner = s.liners[idx]
             val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }
@@ -541,7 +660,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             deleted = LastDeleted.Liner(
                 value = liner,
                 orderIndex = orderIdx,
-                listIndex = idx
+                listIndex = idx,
+                beforeSpec = specBefore,
+                beforeOrder = orderBefore
             )
 
             s.copy(
@@ -557,6 +678,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
+
+            if (_autoSnap.value) {
+                when {
+                    snapFromKey != null ->
+                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
+                    snapFromOrigin ->
+                        _spec.update { spec -> spec.snapFromOrigin() }
+                }
+            }
 
             ensureOverall()
             updateUndoRedoFlags()
@@ -753,66 +883,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Undo the most recent delete, if any.
-     *
-     * Restores both the spec list entry and the cross-type UI order at their original positions.
-     * If the component is already present (id collision), this is a no-op.
+        * Undo the most recent delete, if any.
+        *
+        * Restores the entire spec + component order snapshot that existed before the delete
+        * (including any geometry that may have been shifted by delete-time snapping).
      */
     fun undoLastDelete() {
         val snapshot = deleteHistory.removeLastOrNull() ?: return
 
-        // 1) Restore into the spec
-        _spec.update { s ->
-            // If somehow the id already exists, do not re-add to avoid duplicates.
-            if (when (snapshot) {
-                    is LastDeleted.Body   -> s.bodies.any   { it.id == snapshot.id }
-                    is LastDeleted.Taper  -> s.tapers.any   { it.id == snapshot.id }
-                    is LastDeleted.Thread -> s.threads.any  { it.id == snapshot.id }
-                    is LastDeleted.Liner  -> s.liners.any   { it.id == snapshot.id }
-                }
-            ) {
-                return@update s
-            }
+        _spec.value = snapshot.beforeSpec
+        _componentOrder.value = snapshot.beforeOrder.toList()
 
-            when (snapshot) {
-                is LastDeleted.Body -> {
-                    val list = s.bodies.toMutableList()
-                    val idx = snapshot.listIndex.coerceIn(0, list.size)
-                    list.add(idx, snapshot.value)
-                    s.copy(bodies = list)
-                }
-                is LastDeleted.Taper -> {
-                    val list = s.tapers.toMutableList()
-                    val idx = snapshot.listIndex.coerceIn(0, list.size)
-                    list.add(idx, snapshot.value)
-                    s.copy(tapers = list)
-                }
-                is LastDeleted.Thread -> {
-                    val list = s.threads.toMutableList()
-                    val idx = snapshot.listIndex.coerceIn(0, list.size)
-                    list.add(idx, snapshot.value)
-                    s.copy(threads = list)
-                }
-                is LastDeleted.Liner -> {
-                    val list = s.liners.toMutableList()
-                    val idx = snapshot.listIndex.coerceIn(0, list.size)
-                    list.add(idx, snapshot.value)
-                    s.copy(liners = list)
-                }
-            }
-        }
-
-        // 2) Restore into the cross-type UI order
-        _componentOrder.update { current ->
-            if (current.any { it.id == snapshot.id }) return@update current
-
-            val insertAt = snapshot.orderIndex.coerceIn(0, current.size)
-            current.toMutableList().apply {
-                add(insertAt, ComponentKey(snapshot.id, snapshot.kind))
-            }
-        }
-
-        // 3) Make this action redoable
         redoHistory.addLast(snapshot)
         if (redoHistory.size > MAX_DELETE_HISTORY) {
             redoHistory.removeFirst()
@@ -826,48 +907,20 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Redo the most recent undone delete, if any.
      *
-     * Deletes the restored component again (without creating a new history entry)
-     * and moves the snapshot back to the undo stack.
+     * Delegates to the public removeX APIs so redo reuses the same snap/logging logic
+     * as a normal delete (and intentionally records a fresh LastDeleted snapshot for
+     * subsequent undos).
      */
     fun redoLastDelete() {
         val snapshot = redoHistory.removeLastOrNull() ?: return
 
-        // 1) Remove the component again from the spec
-        _spec.update { s ->
-            when (snapshot) {
-                is LastDeleted.Body -> {
-                    val idx = s.bodies.indexOfFirst { it.id == snapshot.id }
-                    if (idx < 0) return@update s
-                    s.copy(bodies = s.bodies.toMutableList().apply { removeAt(idx) })
-                }
-                is LastDeleted.Taper -> {
-                    val idx = s.tapers.indexOfFirst { it.id == snapshot.id }
-                    if (idx < 0) return@update s
-                    s.copy(tapers = s.tapers.toMutableList().apply { removeAt(idx) })
-                }
-                is LastDeleted.Thread -> {
-                    val idx = s.threads.indexOfFirst { it.id == snapshot.id }
-                    if (idx < 0) return@update s
-                    s.copy(threads = s.threads.toMutableList().apply { removeAt(idx) })
-                }
-                is LastDeleted.Liner -> {
-                    val idx = s.liners.indexOfFirst { it.id == snapshot.id }
-                    if (idx < 0) return@update s
-                    s.copy(liners = s.liners.toMutableList().apply { removeAt(idx) })
-                }
-            }
+        when (snapshot) {
+            is LastDeleted.Body -> removeBody(snapshot.id)
+            is LastDeleted.Taper -> removeTaper(snapshot.id)
+            is LastDeleted.Thread -> removeThread(snapshot.id)
+            is LastDeleted.Liner -> removeLiner(snapshot.id)
         }
 
-        // 2) Remove from order and push back onto undo stack
-        orderRemove(snapshot.id)
-
-        deleteHistory.addLast(snapshot)
-        if (deleteHistory.size > MAX_DELETE_HISTORY) {
-            deleteHistory.removeFirst()
-        }
-
-        ensureOverall()
-        ensureOrderCoversSpec()
         updateUndoRedoFlags()
     }
 }

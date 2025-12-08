@@ -1,7 +1,9 @@
-package com.yourpackage.shaftschematic.ui.viewmodel
+package com.android.shaftschematic.ui.viewmodel
 
+import com.android.shaftschematic.model.Segment
+import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.endFromAftMm
 import kotlin.math.abs
-import com.yourpackage.shaftschematic.model.ShaftSpec
 
 data class SnapConfig(
     val toleranceMm: Float = 1.0f,   // tweak later
@@ -13,25 +15,20 @@ fun buildSnapAnchors(spec: ShaftSpec): List<Float> {
     anchors += 0f
     anchors += spec.overallLengthMm
 
-    spec.bodies.forEach { body ->
-        anchors += body.startFromAftMm
-        anchors += body.endFromAftMm
-    }
-    spec.tapers.forEach { taper ->
-        anchors += taper.startFromAftMm
-        anchors += taper.endFromAftMm
-    }
-    spec.threads.forEach { th ->
-        anchors += th.startFromAftMm
-        anchors += th.endFromAftMm
-    }
-    spec.liners.forEach { liner ->
-        anchors += liner.startFromAftMm
-        anchors += liner.endFromAftMm
+    fun MutableSet<Float>.addSegmentEnds(segments: List<out Segment>) {
+        segments.forEach { seg ->
+            add(seg.startFromAftMm)
+            add(seg.endFromAftMm)
+        }
     }
 
+    anchors.addSegmentEnds(spec.bodies)
+    anchors.addSegmentEnds(spec.tapers)
+    anchors.addSegmentEnds(spec.threads)
+    anchors.addSegmentEnds(spec.liners)
+
     return anchors
-        .filter { it >= 0f }
+        .filter { it >= 0f && it <= spec.overallLengthMm }
         .sorted()
 }
 
