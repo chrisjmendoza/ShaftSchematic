@@ -882,6 +882,36 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+        // ────────────────────────────────────────────────────────────────────────────
+    // Snapping helpers (unit-aware tolerance, pure mm-space)
+    // ────────────────────────────────────────────────────────────────────────────
+
+    private companion object {
+        private const val METRIC_SNAP_TOL_MM = 1.0f         // 1 mm
+        private const val IMPERIAL_SNAP_TOL_IN = 0.04f      // ~0.04 in ≈ 1.016 mm
+        private const val INCH_TO_MM = 25.4f
+    }
+
+    /** Current snap tolerance expressed in mm, based on the active UI unit system. */
+    private fun currentSnapToleranceMm(): Float {
+        return when (_unit.value) {
+            UnitSystem.MILLIMETERS -> METRIC_SNAP_TOL_MM
+            UnitSystem.INCHES      -> IMPERIAL_SNAP_TOL_IN * INCH_TO_MM
+        }
+    }
+
+    /**
+     * Snap a raw mm position against the current spec, using anchors built from the
+     * latest [ShaftSpec] and a unit-aware tolerance. This is the main entry point for
+     * tap-to-add and future cursor-based snapping.
+     */
+    fun snapRawPositionMm(rawMm: Float): Float {
+        val anchors = buildSnapAnchors(_spec.value)
+        val config = SnapConfig(toleranceMm = currentSnapToleranceMm())
+        return snapPositionMm(rawMm, anchors, config)
+    }
+
+
     /**
         * Undo the most recent delete, if any.
         *
