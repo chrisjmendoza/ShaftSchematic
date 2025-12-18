@@ -46,6 +46,9 @@ fun composeShaftPdf(
     pdfPrefs: PdfPrefs = PdfPrefs(),
 ) {
     val c = page.canvas
+    // PDF safety: explicitly paint a white page background so geometry/labels are visible
+    // even if the viewer/app is in dark mode (some viewers treat an unpainted page as dark).
+    c.drawColor(Color.WHITE)
     val pageW = page.info.pageWidth.toFloat()
     val pageH = page.info.pageHeight.toFloat()
 

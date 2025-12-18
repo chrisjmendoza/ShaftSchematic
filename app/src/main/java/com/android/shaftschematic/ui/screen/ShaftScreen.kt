@@ -77,6 +77,9 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -655,15 +658,24 @@ private fun ComponentCarouselPager(
 @Composable
 private fun AddComponentCard(
     label: String,
-    onAdd: () -> Unit
+    onAdd: () -> Unit,
+    enabled: Boolean = true
 ) {
+    val onAddClick = onAdd
     Card(
+        onClick = onAddClick,
+        enabled = enabled,
         modifier = Modifier
             .fillMaxSize()
-            .padding(12.dp),
+            .padding(12.dp)
+            .semantics {
+                role = androidx.compose.ui.semantics.Role.Button
+                contentDescription = "Add component $label"
+            },
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
         )
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -673,7 +685,8 @@ private fun AddComponentCard(
                 Text(label, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(10.dp))
                 Button(
-                    onClick = onAdd,
+                    onClick = onAddClick,
+                    enabled = enabled,
                     shape = RoundedCornerShape(18.dp)
                 ) { Text("Add component") }
             }
