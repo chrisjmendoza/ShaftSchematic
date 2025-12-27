@@ -1,6 +1,6 @@
 📐 ShaftSchematic
 
-ShaftSchematic is an Android application for rapidly modeling marine prop-shaft assemblies and exporting clean, dimensioned drawings as PDFs. It supports multi-segment shafts with bodies, tapers, threads, and liners, and includes a live render preview that updates as you edit.
+ShaftSchematic is an Android application for rapidly modeling marine prop-shaft assemblies and exporting clean, dimensioned drawings as PDFs. It supports multi-segment shafts with bodies, tapers, threads, and liners.
 
 This tool is built for machinists, shipyards, repair techs, and engineering teams that need fast, clear shaft visualizations without CAD overhead.
 
@@ -25,7 +25,7 @@ Incremental component creation (in the order you build the shaft)
 
 Unit switching (mm / inch) with DataStore persistence
 
-Validation nudges when component total length doesn’t match overall length
+Validation nudges when component total length doesn't match overall length
 
 Delete + Undo (v1)
 
@@ -58,31 +58,33 @@ Clear All → resets to a clean shaft
 Dynamic layout that shows advanced sections only when components exist
 
 📂 Project Structure
+```
 app/
 └─ com.android.shaftschematic/
-├─ MainActivity.kt (single-activity host)
-├─ data/
-│   ├─ SettingsStore.kt → DataStore persistence
-│   └─ ShaftRepository / ShaftFileRepository → JSON I/O
-├─ model/
-│   ├─ ShaftSpec.kt → root aggregate (mm)
-│   ├─ Body, Taper, Threads, Liner → component models
-│   └─ Segment.kt → shared interface
-├─ pdf/
-│   ├─ ShaftPdfComposer.kt → PDF export engine
-│   └─ render/, dim/, notes/ → dimension & annotation rendering
-├─ ui/
-│   ├─ drawing/
-│   │   ├─ compose/ShaftDrawing.kt → preview wrapper
-│   │   └─ render/ → ShaftLayout, ShaftRenderer, GridRenderer
-│   ├─ screen/ → ShaftScreen, AddComponentDialogs
-│   ├─ input/ → ShaftMetaSection, NumberField
-│   ├─ viewmodel/ → ShaftViewModel, factory
-│   └─ nav/ → AppNav, routing
-├─ util/
-│   ├─ UnitSystem.kt → mm/inch conversions
-│   └─ Parsing.kt, TaperParser.kt → input parsing
-└─ settings/ → PdfPrefs configuration
+   ├─ MainActivity.kt (single-activity host)
+   ├─ data/
+   │   ├─ SettingsStore.kt → DataStore persistence
+   │   └─ ShaftRepository / ShaftFileRepository → JSON I/O
+   ├─ model/
+   │   ├─ ShaftSpec.kt → root aggregate (mm)
+   │   ├─ Body, Taper, Threads, Liner → component models
+   │   └─ Segment.kt → shared interface
+   ├─ pdf/
+   │   ├─ ShaftPdfComposer.kt → PDF export engine
+   │   └─ render/, dim/, notes/ → dimension & annotation rendering
+   ├─ ui/
+   │   ├─ drawing/
+   │   │   ├─ compose/ShaftDrawing.kt → preview wrapper
+   │   │   └─ render/ → ShaftLayout, ShaftRenderer, GridRenderer
+   │   ├─ screen/ → ShaftScreen, AddComponentDialogs
+   │   ├─ input/ → ShaftMetaSection, NumberField
+   │   ├─ viewmodel/ → ShaftViewModel, factory
+   │   └─ nav/ → AppNav, routing
+   ├─ util/
+   │   ├─ UnitSystem.kt → mm/inch conversions
+   │   └─ Parsing.kt, TaperParser.kt → input parsing
+   └─ settings/ → PdfPrefs configuration
+```
 
 🔧 Requirements
 
