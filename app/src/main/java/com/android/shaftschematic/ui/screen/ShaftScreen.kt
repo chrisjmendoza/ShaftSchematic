@@ -153,7 +153,7 @@ fun ShaftScreen(
     // Adds (all mm)
     onAddBody: (Float, Float, Float) -> Unit,
     onAddTaper: (Float, Float, Float, Float) -> Unit,
-    onAddThread: (Float, Float, Float, Float) -> Unit, // order: start, length, pitch, majorDia
+    onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean) -> Unit,
     onAddLiner: (Float, Float, Float) -> Unit,
 
     // Updates (all mm)
@@ -161,6 +161,8 @@ fun ShaftScreen(
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+
+    onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
 
     // Removes by stable id
     onRemoveBody: (String) -> Unit,
@@ -188,6 +190,8 @@ fun ShaftScreen(
     var highlightId by rememberSaveable { mutableStateOf<String?>(null) }
 
     var focusedId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    var addThreadOpen by rememberSaveable { mutableStateOf(false) }
 
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
@@ -414,6 +418,9 @@ fun ShaftScreen(
                     onUpdateTaper = snappedTaperUpdater,
                     onUpdateThread = snappedThreadUpdater,
                     onUpdateLiner = snappedLinerUpdater,
+
+                    onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
+
                     onRemoveBody = onRemoveBody,
                     onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread,
@@ -456,8 +463,7 @@ fun ShaftScreen(
                         onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, linerLenMm, d.lastDiaMm) },
                         onAddThread = {
                             chooserOpen = false
-                            // IMPORTANT: order = start, length, pitch, majorDia
-                            onAddThread(d.startMm, threadLenMm, threadPitchMm, threadMajMm)
+                            addThreadOpen = true
                         },
                         onAddTaper = {
                             chooserOpen = false
@@ -465,6 +471,26 @@ fun ShaftScreen(
                             val setDiaMm = d.lastDiaMm
                             val letDiaMm = setDiaMm + (len * taperRatio) // ~1:12
                             onAddTaper(d.startMm, len, setDiaMm, letDiaMm)
+                        }
+                    )
+                }
+
+                if (addThreadOpen) {
+                    AddThreadDialog(
+                        unit = unit,
+                        spec = spec,
+                        onSubmit = { startMm, lengthMm, majorDiaMm, tpi, excludeFromOAL ->
+                            addThreadOpen = false
+                            // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL.
+                            // Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt` to avoid
+                            // pitch/major swaps.
+                            onAddThread(
+                                startMm,
+                                lengthMm,
+                                majorDiaMm,
+                                tpiToPitchMm(tpi),
+                                excludeFromOAL
+                            )
                         }
                     )
                 }
@@ -537,6 +563,9 @@ private fun ComponentCarouselPager(
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+
+    onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+
     onRemoveBody: (String) -> Unit,
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
@@ -613,6 +642,7 @@ private fun ComponentCarouselPager(
                             spec = spec, unit = unit, row = row, physicalIndex = page - 1,
                             onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
                             onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
+                            onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
                             onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
                             onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner
                         )
@@ -704,6 +734,9 @@ private fun ComponentPagerCard(
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+
+    onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+
     onRemoveBody: (String) -> Unit,
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
@@ -819,6 +852,24 @@ private fun ComponentPagerCard(
                             tpiToPitchMm(tpi)
                         )
                     }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Count in OAL",
+                        modifier = Modifier.weight(1f)
+                    )
+                    val countInOal = !th.excludeFromOAL
+                    androidx.compose.material3.Switch(
+                        checked = countInOal,
+                        onCheckedChange = { checked ->
+                            onSetThreadExcludeFromOal(th.id, !checked)
+                        }
+                    )
                 }
             }
         }

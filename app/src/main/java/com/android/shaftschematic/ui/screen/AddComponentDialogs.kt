@@ -2,6 +2,8 @@
 package com.android.shaftschematic.ui.screen
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -189,7 +191,7 @@ fun AddLinerDialog(
 fun AddThreadDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
-    onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, tpi: Float) -> Unit
+    onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, tpi: Float, excludeFromOAL: Boolean) -> Unit
 ) {
     val d = rememberAddDialogDefaults(spec)
 
@@ -197,6 +199,7 @@ fun AddThreadDialog(
     var length by remember(unit) { mutableStateOf(toDisplayString(32f, unit)) }
     var major by remember(unit, d.lastDiaMm) { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
     var tpiText by remember { mutableStateOf("10") }
+    var countInOal by remember { mutableStateOf(true) }
 
     val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
     val lengthMm = toMmOrNullFromDialog(length, unit) ?: -1f
@@ -215,11 +218,23 @@ fun AddThreadDialog(
                 CommitNumField("Major Ø (${abbrFor(unit)})", major) { major = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("TPI", tpiText) { tpiText = it }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Text("Count in OAL")
+                    androidx.compose.material3.Switch(
+                        checked = countInOal,
+                        onCheckedChange = { countInOal = it }
+                    )
+                }
             }
         },
         confirmButton = {
             val ok = startMm >= 0f && lengthMm > 0f && majorMm > 0f && tpi > 0f
-            Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, majorMm, tpi) }) { Text("Add") }
+            Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, majorMm, tpi, !countInOal) }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = { }) { Text("Cancel") } }
     )

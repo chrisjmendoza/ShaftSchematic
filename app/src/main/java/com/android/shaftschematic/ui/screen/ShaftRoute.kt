@@ -104,13 +104,15 @@ fun ShaftRoute(vm: ShaftViewModel) {
 
         onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
         onAddTaper  = { s, l, sd, ed -> vm.addTaperAt(s, l, sd, ed) },
-        onAddThread = { s, l, maj, p -> vm.addThreadAt(s, l, maj, p) },
+        onAddThread = { s, l, maj, p, ex -> vm.addThreadAt(s, l, maj, p, ex) },
         onAddLiner  = { s, l, od     -> vm.addLinerAt(s, l, od) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateTaper  = { i, s, l, sd, ed -> vm.updateTaper(i, s, l, sd, ed) },
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
+
+        onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
 
         onRemoveBody   = vm::removeBody,
         onRemoveTaper  = vm::removeTaper,

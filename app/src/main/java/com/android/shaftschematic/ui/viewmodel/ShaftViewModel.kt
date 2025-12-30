@@ -489,16 +489,30 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      *  • lengthMm — axial length
      *  • majorDiaMm — major diameter
      *  • pitchMm — pitch in mm (e.g., 4 TPI ⇒ 6.35 mm)
+     *  • excludeFromOAL — when true, thread length is excluded from OAL/measure-space
      *
-     * UI contract: Screen & Route pass arguments in exactly this order
-     * to prevent pitch/major swaps (see ShaftRoute.onAddThread).
+     * UI contract: Screen & Route pass arguments in exactly this order.
+     * We also construct `Threads(...)` with named arguments to avoid pitch/major swaps.
      */
-    fun addThreadAt(startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
+    fun addThreadAt(
+        startMm: Float,
+        lengthMm: Float,
+        majorDiaMm: Float,
+        pitchMm: Float,
+        excludeFromOAL: Boolean = false
+    ) = _spec.update { s ->
         val id = newId()
         orderAdd(ComponentKind.THREAD, id)
         s.copy(
             threads = listOf(
-                Threads(id, startMm, max(0f, lengthMm), max(0f, majorDiaMm), max(0f, pitchMm))
+                Threads(
+                    id = id,
+                    startFromAftMm = startMm,
+                    majorDiaMm = max(0f, majorDiaMm),
+                    pitchMm = max(0f, pitchMm),
+                    lengthMm = max(0f, lengthMm),
+                    excludeFromOAL = excludeFromOAL
+                )
             ) + s.threads
         )
     }.also { ensureOverall(); ensureOrderCoversSpec() }
@@ -525,6 +539,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 base
             }
         }
+    }.also { ensureOverall() }
+
+    fun setThreadExcludeFromOal(id: String, excludeFromOAL: Boolean) = _spec.update { s ->
+        val idx = s.threads.indexOfFirst { it.id == id }
+        if (idx == -1) s
+        else s.copy(
+            threads = s.threads.toMutableList().also { l ->
+                val old = l[idx]
+                l[idx] = old.copy(excludeFromOAL = excludeFromOAL)
+            }
+        )
     }.also { ensureOverall() }
 
     /** Remove a [Threads] segment by id with multi-step delete history support. */
