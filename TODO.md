@@ -138,6 +138,19 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [x] Proper ripple + accessibility semantics
 - [x] Visual affordance now matches interaction
 
+### 3.4 PDF Footer: AFT Taper Info Block Missing (DONE)
+
+- [x] Fix end-feature detection to be thread-shoulder aware
+- [x] Remove/neutralize redundant gating (hasAftTaper vs detector mismatch)
+- [x] Preserve taper RATE formatting
+- [x] Add JVM tests via `buildFooterEndColumns()` seam
+
+### 3.5 Threads: “Count in OAL” Toggle (Create + Edit) (DONE)
+
+- [x] Wire UI + dialog + ViewModel (`excludeFromOAL`)
+- [x] Confirm OAL shifting uses threads only
+- [x] Add JVM tests for `computeOalWindow` measurement-space shifting
+
 ---
 
 ## 4. Tech Debt & Structural Cleanups
@@ -176,6 +189,8 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [ ] `freeToEndMm()`
 - [ ] Taper rate parsing + derivation
 - [ ] Thread pitch ↔ TPI conversions
+- [x] `computeOalWindow` shifts measurement origin for excluded end threads
+- [x] PDF footer end-feature detection for AFT/FWD taper blocks
 
 ### 5.2 Instrumentation
 
@@ -206,6 +221,11 @@ _Not in the current sprint, but next in line._
 - PDF pages must always paint a white background explicitly
 - PDF rendering must not depend on app theme or system dark mode
 - Export path must remain Canvas/PdfDocument-based (no Compose coupling)
+
+**Guardrails**
+
+- Single source of truth for footer end-feature presence is `detectEndFeatures()`
+- Keep `buildFooterEndColumns()` internal + unit-tested; avoid regressions to draw-only logic
 
 ---
 
