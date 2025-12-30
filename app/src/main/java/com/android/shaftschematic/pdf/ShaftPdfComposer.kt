@@ -120,7 +120,7 @@ fun composeShaftPdf(
             pageX = pageX,
             baseY = baseY,
             railDy = railGap,
-            topRailY = topY,            // ← OAL sits higher thanks to the factor above
+            topRailY = topY,
             linePaint = dim,
             textPaint = dimText,
             objectTopY = yTopOfShaft,
@@ -158,8 +158,10 @@ fun composeShaftPdf(
     val footerCfg = FooterConfig(
         showAftThread = hasAftThread(spec),
         showFwdThread = hasFwdThread(spec),
-        showAftTaper  = hasAftTaper(spec),
-        showFwdTaper  = hasFwdTaper(spec),
+        // Taper rendering is gated by detectEndFeatures(); this flag only controls whether
+        // taper details are enabled for the footer at all.
+        showAftTaper  = spec.tapers.isNotEmpty(),
+        showFwdTaper  = spec.tapers.isNotEmpty(),
         showCompressionNote = showCompressionNote
     )
 
@@ -367,7 +369,7 @@ private fun drawZigZagBreak(
     }
 }
 
-// And add this function (near the old one):
+/** Draws a smooth long-break glyph (alternative to the zig-zag break). */
 private fun drawSCurveBreak(
     c: Canvas,
     yTop: Float,
@@ -376,7 +378,7 @@ private fun drawSCurveBreak(
     gap: Float,
     p: Paint
 ) {
-    // Draw two mirrored cubic Béziers to suggest a smooth long-break
+    // Two mirrored cubic Béziers to suggest a long-break.
     val half = gap * 0.5f
     val xL = xMid - half
     val xR = xMid + half
@@ -635,30 +637,14 @@ private fun drawFooter(
     val top = rect.top + 6f
     val lh = text.textSize * 1.35f
 
-    val (aftTaper, fwdTaper) = pickAftFwdTapers(spec)
-    val ends = detectEndFeatures(spec)
+    val cols = buildFooterEndColumns(spec, unit, cfg)
 
     // AFT (left)
     run {
         var y = top
-        if (cfg.showAftTaper && ends.aftTaper) {
-            getAftEndTaper(spec)?.let { tp ->
-                val (let, set) = letSet(tp)
-                c.drawText("AFT Taper", leftX, y, text); y += lh
-                c.drawText("L.E.T.: ${fmtDia(unit, let)}", leftX, y, text); y += lh
-                c.drawText("S.E.T.: ${fmtDia(unit, set)}", leftX, y, text); y += lh
-                c.drawText("Length: ${fmtLen(unit, tp.lengthMm)}", leftX, y, text); y += lh
-                c.drawText("Rate: ${rate1toN(tp)}", leftX, y, text); y += lh
-            }
-        }
-        if (cfg.showAftThread && ends.aftThread) {
-            getAftEndThread(spec)?.let { th ->
-                c.drawText(
-                    "Thread: ${fmtDiaWithUnit(unit, th.majorDiaMm)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${fmtLen(unit, th.lengthMm)}",
-                    leftX, y, text
-                )
-                y += lh
-            }
+        cols.aftLines.forEach { line ->
+            c.drawText(line, leftX, y, text)
+            y += lh
         }
     }
 
@@ -676,26 +662,61 @@ private fun drawFooter(
     // FWD (right)
     run {
         var y = top
-        if (cfg.showFwdTaper && ends.fwdTaper) {
-            getFwdEndTaper(spec)?.let { tp ->
-                val (let, set) = letSet(tp)
-                c.drawText("FWD Taper", rightX, y, text); y += lh
-                c.drawText("L.E.T.: ${fmtDia(unit, let)}", rightX, y, text); y += lh
-                c.drawText("S.E.T.: ${fmtDia(unit, set)}", rightX, y, text); y += lh
-                c.drawText("Length: ${fmtLen(unit, tp.lengthMm)}", rightX, y, text); y += lh
-                c.drawText("Rate: ${rate1toN(tp)}", rightX, y, text); y += lh
-            }
-        }
-        if (cfg.showFwdThread && ends.fwdThread) {
-            getFwdEndThread(spec)?.let { th ->
-                c.drawText(
-                    "Thread: ${fmtDiaWithUnit(unit, th.majorDiaMm)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${fmtLen(unit, th.lengthMm)}",
-                    rightX, y, text
-                )
-                y += lh
-            }
+        cols.fwdLines.forEach { line ->
+            c.drawText(line, rightX, y, text)
+            y += lh
         }
     }
+}
+
+internal data class FooterColumns(
+    val aftLines: List<String>,
+    val fwdLines: List<String>
+)
+
+/**
+ * Builds the exact left/right footer text lines that [drawFooter] will render.
+ * Exposed for JVM unit tests so we can validate end-feature detection without
+ * depending on Android Canvas/PdfDocument runtime.
+ */
+internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: FooterConfig): FooterColumns {
+    val ends = detectEndFeatures(spec)
+
+    val aft = mutableListOf<String>()
+    if (cfg.showAftTaper && ends.aftTaper) {
+        getAftEndTaper(spec)?.let { tp ->
+            val (let, set) = letSet(tp)
+            aft += "AFT Taper"
+            aft += "L.E.T.: ${fmtDia(unit, let)}"
+            aft += "S.E.T.: ${fmtDia(unit, set)}"
+            aft += "Length: ${fmtLen(unit, tp.lengthMm)}"
+            aft += "Rate: ${rate1toN(tp)}"
+        }
+    }
+    if (cfg.showAftThread && ends.aftThread) {
+        getAftEndThread(spec)?.let { th ->
+            aft += "Thread: ${fmtDiaWithUnit(unit, th.majorDiaMm)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${fmtLen(unit, th.lengthMm)}"
+        }
+    }
+
+    val fwd = mutableListOf<String>()
+    if (cfg.showFwdTaper && ends.fwdTaper) {
+        getFwdEndTaper(spec)?.let { tp ->
+            val (let, set) = letSet(tp)
+            fwd += "FWD Taper"
+            fwd += "L.E.T.: ${fmtDia(unit, let)}"
+            fwd += "S.E.T.: ${fmtDia(unit, set)}"
+            fwd += "Length: ${fmtLen(unit, tp.lengthMm)}"
+            fwd += "Rate: ${rate1toN(tp)}"
+        }
+    }
+    if (cfg.showFwdThread && ends.fwdThread) {
+        getFwdEndThread(spec)?.let { th ->
+            fwd += "Thread: ${fmtDiaWithUnit(unit, th.majorDiaMm)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${fmtLen(unit, th.lengthMm)}"
+        }
+    }
+
+    return FooterColumns(aftLines = aft, fwdLines = fwd)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -759,7 +780,7 @@ private fun fmtThread(th: Threads, unit: UnitSystem): String {
 
 // Taper helper – compute 1:N from (length / Δdia), then show "1:N over LEN"
 private fun fmtTaper(tp: Taper, unit: UnitSystem): String {
-    val rate = rate1toN(tp) // you already have this
+    val rate = rate1toN(tp)
     return "$rate over ${fmtLen(unit, tp.lengthMm)}"
 }
 
@@ -849,7 +870,7 @@ private data class EndFlags(
  * to be rendered in proper stacked order in the footer.
  */
 
-private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = 0.01): EndFlags {
+private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = END_EPS_MM.toDouble()): EndFlags {
     val aftX = 0.0
     val fwdX = spec.overallLengthMm.toDouble()
 
@@ -863,12 +884,34 @@ private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = 0.01): EndFlags {
         near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > epsMm
     }
 
+    // If an end-thread exists, its shoulder can be the effective boundary for a taper.
+    // Example: AFT thread starts at X=0 and a taper starts at X=threadEnd.
+    val aftThreadEndX = spec.threads
+        .asSequence()
+        .filter { th -> near(th.startFromAftMm.toDouble(), aftX) && th.lengthMm > epsMm }
+        .minByOrNull { it.startFromAftMm }
+        ?.let { (it.startFromAftMm + it.lengthMm).toDouble() }
+
+    val fwdThreadStartX = spec.threads
+        .asSequence()
+        .filter { th -> near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > epsMm }
+        .maxByOrNull { it.startFromAftMm + it.lengthMm }
+        ?.startFromAftMm
+        ?.toDouble()
+
     // Tapers
     val aftTaper = spec.tapers.any { tp ->
-        near(tp.startFromAftMm.toDouble(), aftX) && tp.lengthMm > epsMm
+        tp.lengthMm > epsMm && (
+            near(tp.startFromAftMm.toDouble(), aftX) ||
+                (aftThreadEndX != null && near(tp.startFromAftMm.toDouble(), aftThreadEndX))
+            )
     }
     val fwdTaper = spec.tapers.any { tp ->
-        near((tp.startFromAftMm + tp.lengthMm).toDouble(), fwdX) && tp.lengthMm > epsMm
+        val endX = (tp.startFromAftMm + tp.lengthMm).toDouble()
+        tp.lengthMm > epsMm && (
+            near(endX, fwdX) ||
+                (fwdThreadStartX != null && near(endX, fwdThreadStartX))
+            )
     }
 
     return EndFlags(aftThread, fwdThread, aftTaper, fwdTaper)
@@ -876,31 +919,53 @@ private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = 0.01): EndFlags {
 
 private const val EPS_MM = 0.01
 
-private fun near(a: Double, b: Double, eps: Double = EPS_MM) =
+private fun near(a: Double, b: Double, eps: Double = END_EPS_MM.toDouble()) =
     kotlin.math.abs(a - b) <= eps
 
 private fun getAftEndThread(spec: ShaftSpec): Threads? =
-    spec.threads.firstOrNull { th ->
-        near(th.startFromAftMm.toDouble(), 0.0) && th.lengthMm > EPS_MM
-    }
+    spec.threads
+        .asSequence()
+        .filter { th -> near(th.startFromAftMm.toDouble(), 0.0) && th.lengthMm > EPS_MM }
+        .minByOrNull { it.startFromAftMm }
 
 private fun getFwdEndThread(spec: ShaftSpec): Threads? {
     val fwdX = spec.overallLengthMm.toDouble()
-    return spec.threads.firstOrNull { th ->
-        near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > EPS_MM
-    }
+    return spec.threads
+        .asSequence()
+        .filter { th -> near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > EPS_MM }
+        .maxByOrNull { it.startFromAftMm + it.lengthMm }
 }
 
-private fun getAftEndTaper(spec: ShaftSpec): Taper? =
-    spec.tapers.firstOrNull { tp ->
-        near(tp.startFromAftMm.toDouble(), 0.0) && tp.lengthMm > EPS_MM
+private fun getAftEndTaper(spec: ShaftSpec): Taper? {
+    val aftThread = getAftEndThread(spec)
+    val anchors = mutableListOf(0.0)
+    if (aftThread != null) {
+        anchors += (aftThread.startFromAftMm + aftThread.lengthMm).toDouble()
     }
+
+    return spec.tapers
+        .asSequence()
+        .filter { tp ->
+            tp.lengthMm > EPS_MM && anchors.any { a -> near(tp.startFromAftMm.toDouble(), a) }
+        }
+        .minByOrNull { it.startFromAftMm }
+}
 
 private fun getFwdEndTaper(spec: ShaftSpec): Taper? {
     val fwdX = spec.overallLengthMm.toDouble()
-    return spec.tapers.firstOrNull { tp ->
-        near((tp.startFromAftMm + tp.lengthMm).toDouble(), fwdX) && tp.lengthMm > EPS_MM
+    val fwdThread = getFwdEndThread(spec)
+    val anchors = mutableListOf(fwdX)
+    if (fwdThread != null) {
+        anchors += fwdThread.startFromAftMm.toDouble()
     }
+
+    return spec.tapers
+        .asSequence()
+        .filter { tp ->
+            val endX = (tp.startFromAftMm + tp.lengthMm).toDouble()
+            tp.lengthMm > EPS_MM && anchors.any { a -> near(endX, a) }
+        }
+        .maxByOrNull { it.startFromAftMm + it.lengthMm }
 }
 
 
