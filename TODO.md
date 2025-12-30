@@ -11,7 +11,7 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 **Core model** → stable  
 **ShaftLayout & renderer** → contract locked  
-**One-page PDF export** → stable & tested  
+**One-page PDF export** → stable, theme-safe, background explicitly painted  
 **Validation rules** → formalized, ready for UI wiring  
 **Taper components** → taper-rate logic restored in docs but not fully re-implemented  
 **Carousel, selection logic** → recently repaired; refactor still pending  
@@ -117,7 +117,7 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 ### 3.1 Preview Badge: Free-to-End
 
 - [ ] Compute `freeToEndMm` in mm-space only
-- [ ] Replace any px-dependent logic
+- [ ] Replace any px- or layout-dependent logic (mm-space only, deterministic)
 - [ ] Clamp negative to zero
 - [ ] Use `safeSpec` if `overallLengthMm=0` (preview mode)
 
@@ -130,6 +130,13 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [ ] Validate slope only when length > 0
 - [ ] Persist new field in the model
 - [ ] Ensure renderer remains unchanged (draws from diameters)
+
+### 3.3 Components Empty-State UX (DONE)
+
+- [x] Make entire empty-state card tappable (not just button)
+- [x] Card tap and button share same add-handler
+- [x] Proper ripple + accessibility semantics
+- [x] Visual affordance now matches interaction
 
 ---
 
@@ -152,6 +159,12 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [ ] Standardize confirm/cancel patterns
 - [ ] Standardize commit-on-blur across all fields
 - [ ] Remove leftover legacy length-editing utilities
+
+### 4.3 Build Tooling & Version Catalog Hygiene
+
+- [ ] Keep Gradle wrapper, AGP, and libs.versions.toml in sync
+- [ ] Do not revert Android Studio–initiated catalog updates unless breaking
+- [ ] When tooling updates occur, isolate into chore(build) commit where possible
 
 ---
 
@@ -188,7 +201,15 @@ _Not in the current sprint, but next in line._
 
 ---
 
-## 7. Explicit Non-Goals (Do NOT Implement Yet)
+## 7. PDF Export Contract (Explicit)
+
+- PDF pages must always paint a white background explicitly
+- PDF rendering must not depend on app theme or system dark mode
+- Export path must remain Canvas/PdfDocument-based (no Compose coupling)
+
+---
+
+## 8. Explicit Non-Goals (Do NOT Implement Yet)
 
 - Multi-page PDF or foldouts
 - DXF export
@@ -201,7 +222,7 @@ _Not in the current sprint, but next in line._
 
 ---
 
-## 8. Future Ideas (v0.6.x+ / nice-to-have)
+## 9. Future Ideas (v0.6.x+ / nice-to-have)
 
 _These are explicitly out-of-scope for current work, but worth keeping on the radar._
 
