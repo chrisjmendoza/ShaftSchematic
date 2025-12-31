@@ -124,6 +124,7 @@ fun composeShaftPdf(
             linePaint = dim,
             textPaint = dimText,
             objectTopY = yTopOfShaft,
+            contentTopPx = geomRect.top,
             objectClearance = 6f
         )
 
