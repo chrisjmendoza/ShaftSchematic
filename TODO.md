@@ -15,10 +15,10 @@ Tasks are grouped by sequencing and dependency rather than category.
 **Validation rules** → formalized, ready for UI wiring  
 **Taper components** → taper-rate logic restored in docs but not fully re-implemented  
 **Carousel, selection logic** → recently repaired; refactor still pending  
-**Snapping** → not implemented (highest priority)  
+**Snapping (edit/delete auto-snap)** → implemented + unit tested; tap-to-add snapping not implemented  
 **"Add at position" UX** → not implemented  
 **Delete** → present; Insert-Between workflow still missing  
-**Preview free-to-end badge** → doc-corrected; code update pending
+**Preview free-to-end badge** → implemented in mm-space; preview-mode OAL=0 behavior may still need alignment
 
 ---
 
@@ -30,17 +30,21 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 **Tasks**
 
-- [ ] Create `SnapEngine.kt` in `ui/viewmodel/`
-- [ ] Implement:
-  - [ ] `buildSnapAnchors(spec: ShaftSpec): List<Float>`  
+- [x] Create `SnapEngine.kt` in `ui/viewmodel/`
+- [x] Implement:
+  - [x] `buildSnapAnchors(spec: ShaftSpec): List<Float>`  
         _anchors = 0, overallLengthMm, all component start/end positions_
-  - [ ] `snapPositionMm(rawMm, anchors, toleranceMm)`
+  - [x] `snapPositionMm(rawMm, anchors, toleranceMm)`
 
 **Requirements**
 
 - No px math
 - No UI dependencies
-- Unit tested (edge cases: empty anchors, near-ties, far-out values)
+- [x] Unit tested (edge cases: empty anchors, near-ties, far-out values)
+- Source of truth for snapping (next features: tap-to-add / insert-at-position): **ViewModel**
+      - UI may convert tap px→mm and pass **raw mm** to VM
+      - VM performs snapping and stores `pendingAddPositionMm`
+      - UI must not decide final snapped positions
 - Default snap tolerance:
   - Metric UI: `toleranceMm = 1.0`
   - Imperial UI: `toleranceMm` equivalent of `0.04 in` (≈ 1.0 mm)
@@ -65,6 +69,7 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 - UI must never decide geometry.
 - VM must never know pixels.
+- VM is the snapping authority: UI passes raw mm.
 - Only horizontal tap position matters; vertical is used for hit-testing only.
 
 ---
@@ -116,9 +121,9 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 
 ### 3.1 Preview Badge: Free-to-End
 
-- [ ] Compute `freeToEndMm` in mm-space only
-- [ ] Replace any px- or layout-dependent logic (mm-space only, deterministic)
-- [ ] Clamp negative to zero
+- [x] Compute `freeToEndMm` in mm-space only
+- [x] Replace any px- or layout-dependent logic (mm-space only, deterministic)
+- [ ] Clamp negative to zero (**applies to model helper** `freeToEndMm()`; UI badge may use signed value for oversize warning)
 - [ ] Use `safeSpec` if `overallLengthMm=0` (preview mode)
 
 ### 3.2 Taper-Rate Restoration
@@ -161,7 +166,7 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 
 **Plan**
 
-- [ ] Extract carousel into `ComponentCarousel.kt`
+- [ ] Extract carousel into a production `ComponentCarousel.kt` (currently implemented inside `ShaftScreen.kt`; `ui/editor/ComponentCarousel.kt` exists but is not the wired implementation)
 - [ ] Extract preview region into `ShaftPreviewPanel.kt`
 - [ ] Move event wiring into a dedicated `ShaftScreenController.kt` (VM → UI glue)
 - [ ] Ensure controller owns all VM-side intents so composables stay stateless
@@ -185,10 +190,10 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 
 ### 5.1 Unit
 
-- [ ] SnapEngine
-- [ ] `freeToEndMm()`
+- [x] SnapEngine
+- [x] `freeToEndMm()`
 - [ ] Taper rate parsing + derivation
-- [ ] Thread pitch ↔ TPI conversions
+- [x] Thread pitch ↔ TPI conversions
 - [x] `computeOalWindow` shifts measurement origin for excluded end threads
 - [x] PDF footer end-feature detection for AFT/FWD taper blocks
 
@@ -226,6 +231,14 @@ _Not in the current sprint, but next in line._
 
 - Single source of truth for footer end-feature presence is `detectEndFeatures()`
 - Keep `buildFooterEndColumns()` internal + unit-tested; avoid regressions to draw-only logic
+
+### 7.1 Next PDF Priority: Legibility (After Footer Fix)
+
+- [x] Center dimension labels over measured spans (midpoint-centered; bounded vertical bump only, no horizontal shifting)
+- [ ] Arrowheads inside/outside based on fit
+- [ ] Reduce inch decimals to 3 places (fraction system later)
+
+_Deferred until after layout stability:_ fraction display + tolerance settings
 
 ---
 
