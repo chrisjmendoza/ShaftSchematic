@@ -3,30 +3,78 @@ package com.android.shaftschematic.geom
 import com.android.shaftschematic.model.ShaftSpec
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 
-private const val END_EPS_MM = 0.5
+private const val EPS_MM = 1e-3
+
+data class ExcludedThreadLengths(
+    val aftExcludedMm: Double,
+    val fwdExcludedMm: Double,
+)
+
+private fun findAftEndThread(spec: ShaftSpec): com.android.shaftschematic.model.Threads? {
+    // Coordinate-anchored selection only: an AFT end-attached thread must start at x=0 (within epsilon).
+    // This avoids any list-order dependence or "first adjacent" heuristics.
+    val candidates = spec.threads.asSequence().filter { th ->
+        abs(th.startFromAftMm.toDouble() - 0.0) <= EPS_MM
+    }
+
+    return candidates
+        .sortedWith(
+            compareBy<com.android.shaftschematic.model.Threads> { it.startFromAftMm.toDouble() }
+                .thenByDescending { (it.startFromAftMm + it.lengthMm).toDouble() }
+        )
+        .firstOrNull()
+}
+
+private fun findFwdEndThread(spec: ShaftSpec, overallLengthMm: Double): com.android.shaftschematic.model.Threads? {
+    // Coordinate-anchored selection only: a FWD end-attached thread must end at x=overallLength (within epsilon).
+    // This avoids any list-order dependence or "last adjacent" heuristics.
+    val candidates = spec.threads.asSequence().filter { th ->
+        val end = (th.startFromAftMm + th.lengthMm).toDouble()
+        abs(end - overallLengthMm) <= EPS_MM
+    }
+
+    return candidates
+        .sortedWith(
+            compareByDescending<com.android.shaftschematic.model.Threads> { (it.startFromAftMm + it.lengthMm).toDouble() }
+                .thenBy { it.startFromAftMm.toDouble() }
+        )
+        .firstOrNull()
+}
+
+/**
+ * Computes how much length is excluded from OAL at the AFT and FWD ends.
+ *
+ * Contract:
+ * - This is a **dimensioning-frame offset**, not a geometry change.
+ * - Uses the per-end thread engagement length from the model ([Threads.lengthMm]) for the
+ *   actual AFT/FWD end-attached thread components.
+ * - Each excluded length is clamped to 0..overallLengthMm.
+ * - If no excluded end threads exist, both are 0.
+ */
+fun computeExcludedThreadLengths(spec: ShaftSpec): ExcludedThreadLengths {
+    val oalRaw = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
+    if (oalRaw <= 0.0) return ExcludedThreadLengths(0.0, 0.0)
+
+    val aftThread = findAftEndThread(spec)
+    val fwdThread = findFwdEndThread(spec, overallLengthMm = oalRaw)
+
+    val aft = if (aftThread?.excludeFromOAL == true) aftThread.lengthMm.toDouble().coerceIn(0.0, oalRaw) else 0.0
+    val fwd = if (fwdThread?.excludeFromOAL == true) fwdThread.lengthMm.toDouble().coerceIn(0.0, oalRaw) else 0.0
+    return ExcludedThreadLengths(aftExcludedMm = aft, fwdExcludedMm = fwd)
+}
 
 fun computeOalWindow(spec: ShaftSpec): OalWindow {
-    val oalRaw = spec.overallLengthMm.toDouble()
+    val oalRaw = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
+    val ex = computeExcludedThreadLengths(spec)
 
-    val aftStart = spec.threads.asSequence()
-        .filter { it.excludeFromOAL }
-        .map { it.startFromAftMm.toDouble() to (it.startFromAftMm + it.lengthMm).toDouble() }
-        .filter { (start, _) -> abs(start - 0.0) <= END_EPS_MM }
-        .map { (_, end) -> end }
-        .fold(0.0) { acc, end -> max(acc, end) }
-
-    val fwdEnd = spec.threads.asSequence()
-        .filter { it.excludeFromOAL }
-        .map { (it.startFromAftMm + it.lengthMm).toDouble() to it.startFromAftMm.toDouble() }
-        .filter { (end, _) -> abs(end - oalRaw) <= END_EPS_MM }
-        .map { (_, start) -> start }
-        .fold(oalRaw) { acc, start -> min(acc, start) }
+    val aft = ex.aftExcludedMm.coerceIn(0.0, oalRaw)
+    val fwd = ex.fwdExcludedMm.coerceIn(0.0, oalRaw)
+    val effective = max(0.0, oalRaw - aft - fwd)
 
     return OalWindow(
-        measureStartMm = aftStart.coerceAtLeast(0.0),
-        measureEndMm   = fwdEnd.coerceIn(0.0, oalRaw)
+        measureStartMm = aft,
+        measureEndMm = aft + effective,
     )
 }
 

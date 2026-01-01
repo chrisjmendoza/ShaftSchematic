@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -636,7 +637,9 @@ private fun ComponentCarouselPager(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 16.dp)
+                            // Keep interactive controls (delete, switches, etc.) out from under the
+                            // edge navigation paddles, which are overlaid on top of the pager.
+                            .padding(horizontal = 16.dp + arrowWidth)
                     ) {
                         ComponentPagerCard(
                             spec = spec, unit = unit, row = row, physicalIndex = page - 1,
@@ -827,6 +830,31 @@ private fun ComponentPagerCard(
                 onRemoveThread(th.id)
                 }
             ) {
+                val includeInOal = !th.excludeFromOAL
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .toggleable(
+                            value = includeInOal,
+                            role = androidx.compose.ui.semantics.Role.Switch,
+                            onValueChange = { checked ->
+                                onSetThreadExcludeFromOal(th.id, !checked)
+                            }
+                        )
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Include thread in OAL",
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.Switch(
+                        checked = includeInOal,
+                        onCheckedChange = null
+                    )
+                }
+
                 CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm)
@@ -852,24 +880,6 @@ private fun ComponentPagerCard(
                             tpiToPitchMm(tpi)
                         )
                     }
-                }
-
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Count in OAL",
-                        modifier = Modifier.weight(1f)
-                    )
-                    val countInOal = !th.excludeFromOAL
-                    androidx.compose.material3.Switch(
-                        checked = countInOal,
-                        onCheckedChange = { checked ->
-                            onSetThreadExcludeFromOal(th.id, !checked)
-                        }
-                    )
                 }
             }
         }
@@ -1152,9 +1162,32 @@ private fun toMmOrNull(text: String, unit: UnitSystem): Float? {
 
 private fun Float.fmtTrim(d: Int) = "%.${d}f".format(this).trimEnd('0').trimEnd('.')
 
-/** Accepts "12", "3/4", "1.5", or "1:12". */
+/** Accepts "12", "3/4", "15 1/2", "1.5", or "1:12" (tolerates trailing unit suffixes). */
 private fun parseFractionOrDecimal(input: String): Float? {
-    val t = input.trim(); if (t.isEmpty()) return null
+    var t = input.replace(",", "").trim(); if (t.isEmpty()) return null
+
+    // Strip trailing unit-ish suffixes like "in", "mm", or quotes.
+    run {
+        val allowed = "0123456789./:+- "
+        var end = t.length - 1
+        while (end >= 0 && !allowed.contains(t[end])) end--
+        t = if (end >= 0) t.substring(0, end + 1).trim() else ""
+        t = t.replace(Regex("\\s+"), " ")
+        if (t.isEmpty()) return null
+    }
+
+    // Mixed fraction: W N/D
+    val parts = t.split(' ').filter { it.isNotBlank() }
+    if (parts.size == 2 && parts[1].contains('/')) {
+        val whole = parts[0].toFloatOrNull() ?: return null
+        val slash = parts[1].indexOf('/')
+        val a = parts[1].substring(0, slash).trim().toFloatOrNull() ?: return null
+        val b = parts[1].substring(slash + 1).trim().toFloatOrNull() ?: return null
+        if (b == 0f) return null
+        val frac = a / b
+        return if (whole < 0f) whole - frac else whole + frac
+    }
+
     val colon = t.indexOf(':')
     if (colon >= 0) {
         val a = t.substring(0, colon).trim().toFloatOrNull() ?: return null

@@ -106,11 +106,14 @@ fun composeShaftPdf(
             color = 0xFF000000.toInt()
         }
 
-        // Shared world→page mapper (same geometry mapping)
-        val pageX: (Double) -> Float = { mm -> (geomRect.left + (mm.toFloat() * ptPerMm)) }
-
         val linerDims = mapToLinerDimsForPdf(spec)
         val win  = computeOalWindow(spec)
+
+        // Map measurement-space X (dimension axis) onto the physical drawing axis.
+        // Geometry stays in physical mm; dimensions are rebased by aftExcluded (win.measureStartMm).
+        val pageX: (Double) -> Float = { dimMm ->
+            (geomRect.left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
+        }
         val sets = computeSetPositionsInMeasureSpace(win)
         val spans = buildLinerSpans(linerDims, sets, unit)
         val planner = RailPlanner()
@@ -287,12 +290,15 @@ private fun drawLinerDimensionsPdf(
     val win = computeOalWindow(spec)
     val sets = computeSetPositionsInMeasureSpace(win)
 
+    // Spans are in measurement space (rebased so AFT SET = 0). Convert to physical axis for rendering.
+    val pageXMeasure: (Double) -> Float = { dimMm -> pageX(dimMm + win.measureStartMm) }
+
     val spans = buildLinerSpans(liners, sets, unit)
     val planner = RailPlanner()
     val assignments = spans.map { planner.assign(it) }
 
     val renderer = PdfDimensionRenderer(
-        pageX = pageX,
+        pageX = pageXMeasure,
         baseY = baseY,
         railDy = railDy,
         topRailY = topY,
@@ -499,13 +505,20 @@ private fun drawDimensionsLikePreview(
     text: Paint,
     dim: Paint,
 ) {
+    val win = computeOalWindow(spec)
     val firstLaneY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
 
     // Gather component intervals
     val ivs = ArrayList<Interval>()
     spec.bodies.forEach  { if (it.lengthMm > 0f && it.diaMm       > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
     spec.tapers.forEach  { if (it.lengthMm > 0f && (it.startDiaMm > 0f || it.endDiaMm > 0f)) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
-    spec.threads.forEach { if (it.lengthMm > 0f && it.majorDiaMm  > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+    spec.threads.forEach { th ->
+        // Excluded threads still render, but their length is intentionally not
+        // part of the SET-to-SET dimensioning.
+        if (!th.excludeFromOAL && th.lengthMm > 0f && th.majorDiaMm > 0f) {
+            ivs += Interval(th.startFromAftMm, th.startFromAftMm + th.lengthMm)
+        }
+    }
     spec.liners.forEach  { if (it.lengthMm > 0f && it.odMm        > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
 
     // Greedy lane packing; track smallest Y (topmost)
@@ -537,11 +550,11 @@ private fun drawDimensionsLikePreview(
     // Overall one lane above the topmost component lane
     val gap = TEXT_PT + LANE_GAP_PT
     val overallY = if (lanes.isEmpty()) firstLaneY - OVERALL_EXTRA_PT else topmostLaneY - gap
-    val xa = xAt(0f); val xf = xAt(spec.overallLengthMm)
+    val xa = xAt(win.measureStartMm.toFloat()); val xf = xAt(win.measureEndMm.toFloat())
 
     drawDimWithExtensionsAvoidingOverlap(
         c, xa, xf, overallY, yTopOfShaft,
-        fmtLen(unit, spec.overallLengthMm),
+        fmtLen(unit, win.oalMm.toFloat()),
         text, dim, mutableListOf()
     )
 }

@@ -12,6 +12,7 @@ import com.android.shaftschematic.model.snapForwardFromOrdered
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.parseToMm
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -249,8 +250,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Parses text in current UI units and forwards to [onSetOverallLengthMm]. */
     fun setOverallLength(raw: String) {
-        val v = raw.replace(",", "").trim().toFloatOrNull() ?: 0f
-        val mm = if (_unit.value == UnitSystem.INCHES) v * 25.4f else v
+        val mm = parseToMm(raw, _unit.value).toFloat()
         onSetOverallLengthMm(mm)
     }
 

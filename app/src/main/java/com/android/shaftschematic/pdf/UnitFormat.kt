@@ -1,5 +1,6 @@
 package com.android.shaftschematic.pdf
 
+import com.android.shaftschematic.util.LengthFormat
 import java.util.Locale
 
 /**
@@ -18,5 +19,20 @@ fun formatDim(mm: Double, unit: Any?): String {
             // Millimeters stay at 3 decimals – more than enough for typical shaft work.
             String.format(Locale.US, "%.3f mm", mm)
         }
+    }
+}
+
+/**
+ * Formats a *length* dimension for PDF labels.
+ *
+ * - Model geometry remains in millimeters.
+ * - In inches mode, prefers mixed fractions snapped to nearest 1/16 (reduced),
+ *   with fallback to 3-decimal inches.
+ */
+fun formatLenDim(mm: Double, unit: Any?): String {
+    val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
+    return when {
+        name.contains("INCH") -> LengthFormat.formatInchesSmart(mm / 25.4) + " in"
+        else -> String.format(Locale.US, "%.3f mm", mm)
     }
 }
