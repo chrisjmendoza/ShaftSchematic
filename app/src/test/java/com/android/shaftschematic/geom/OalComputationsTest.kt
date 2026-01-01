@@ -5,6 +5,9 @@ import com.android.shaftschematic.model.MM_PER_IN
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -12,6 +15,58 @@ import org.junit.Test
 class OalComputationsTest {
 
     private fun inToMm(inches: Double): Double = inches * MM_PER_IN
+    private val eps = 1e-6
+
+    private fun makeSpec(
+        overallIn: Double,
+        aftThreadIn: Double? = null,
+        fwdThreadIn: Double? = null,
+        excludeAft: Boolean = false,
+        excludeFwd: Boolean = false,
+        globalExcludeToggle: Boolean = true,
+    ): ShaftSpec {
+        // NOTE: Production `computeOalWindow()` does not currently accept a global toggle.
+        // This helper simulates a "global toggle off" by gating per-thread flags.
+        val overallMm = inToMm(overallIn).toFloat()
+
+        val threads = buildList {
+            if (fwdThreadIn != null) {
+                val lenMm = inToMm(fwdThreadIn).toFloat()
+                add(
+                    Threads(
+                        startFromAftMm = overallMm - lenMm,
+                        lengthMm = lenMm,
+                        majorDiaMm = 50f,
+                        pitchMm = 2f,
+                        excludeFromOAL = globalExcludeToggle && excludeFwd
+                    )
+                )
+            }
+            if (aftThreadIn != null) {
+                val lenMm = inToMm(aftThreadIn).toFloat()
+                add(
+                    Threads(
+                        startFromAftMm = 0f,
+                        lengthMm = lenMm,
+                        majorDiaMm = 50f,
+                        pitchMm = 2f,
+                        excludeFromOAL = globalExcludeToggle && excludeAft
+                    )
+                )
+            }
+        }
+
+        return ShaftSpec(
+            overallLengthMm = overallMm,
+            threads = threads,
+        )
+    }
+
+    private val json = Json {
+        prettyPrint = true
+        encodeDefaults = true
+        ignoreUnknownKeys = true
+    }
 
     @Test
     fun `excluded aft thread shifts measure origin so following body starts at 0`() {
@@ -109,15 +164,74 @@ class OalComputationsTest {
     }
 
     @Test
-    fun `effective OAL clamps to zero when excluded length exceeds overall`() {
-        val overall = 50.0
-        val aft = Threads(startFromAftMm = 0f, lengthMm = 100f, majorDiaMm = 10f, pitchMm = 2f, excludeFromOAL = true)
-        val spec = ShaftSpec(overallLengthMm = overall.toFloat(), threads = listOf(aft))
+    fun `toggle off leaves OAL unchanged`() {
+        val spec = makeSpec(
+            overallIn = 96.0,
+            aftThreadIn = 5.0,
+            excludeAft = true,
+            globalExcludeToggle = false
+        )
 
         val win = computeOalWindow(spec)
 
-        assertEquals(overall, win.measureStartMm, 1e-9)
+        assertEquals(0.0, win.measureStartMm, eps)
+        assertEquals(spec.overallLengthMm.toDouble(), win.oalMm, eps)
+        assertEquals(spec.overallLengthMm.toDouble(), win.measureEndMm, eps)
+    }
+
+    @Test
+    fun `aft-only excluded follows OalWindow contract`() {
+        val spec = makeSpec(
+            overallIn = 96.0,
+            aftThreadIn = 5.0,
+            excludeAft = true,
+            globalExcludeToggle = true
+        )
+        val aftMm = spec.threads.single { it.startFromAftMm == 0f }.lengthMm.toDouble()
+
+        val win = computeOalWindow(spec)
+
+        assertEquals(aftMm, win.measureStartMm, eps)
+        assertEquals(spec.overallLengthMm.toDouble() - aftMm, win.oalMm, 1e-3)
+        assertTrue(win.measureEndMm >= win.measureStartMm)
+        assertEquals(0.0, win.toMeasureX(aftMm), eps)
+    }
+
+    @Test
+    fun `fwd-only excluded shortens window end`() {
+        val spec = makeSpec(
+            overallIn = 96.0,
+            fwdThreadIn = 6.5,
+            excludeFwd = true,
+            globalExcludeToggle = true
+        )
+        val fwdMm = spec.threads.single().lengthMm.toDouble()
+
+        val win = computeOalWindow(spec)
+
+        assertEquals(0.0, win.measureStartMm, eps)
+        assertEquals(spec.overallLengthMm.toDouble() - fwdMm, win.oalMm, 1e-3)
+        assertEquals(win.oalMm, win.measureEndMm, eps)
+        assertTrue(win.measureEndMm >= win.measureStartMm)
+    }
+
+    @Test
+    fun `effective OAL clamps to zero when excluded length exceeds overall`() {
+        val spec = makeSpec(
+            overallIn = 8.0,
+            aftThreadIn = 5.5,
+            fwdThreadIn = 5.0,
+            excludeAft = true,
+            excludeFwd = true,
+            globalExcludeToggle = true
+        )
+
+        val win = computeOalWindow(spec)
+
+        val expectedStart = spec.threads.single { it.startFromAftMm == 0f }.lengthMm.toDouble()
+        assertEquals(expectedStart, win.measureStartMm, 1e-3)
         assertEquals(0.0, win.oalMm, 1e-9)
+        assertEquals(win.measureStartMm, win.measureEndMm, 1e-9)
         assertTrue("measure end must be >= measure start", win.measureEndMm >= win.measureStartMm)
     }
 
@@ -149,6 +263,25 @@ class OalComputationsTest {
         assertEquals(0.0, win.measureStartMm, 1e-9)
         assertEquals(1000.0, win.measureEndMm, 1e-9)
         assertEquals(1000.0, win.oalMm, 1e-9)
+    }
+
+    @Test
+    fun `json round trip preserves excludeFromOAL and affects computeOalWindow`() {
+        val spec = makeSpec(
+            overallIn = 96.0,
+            aftThreadIn = 5.0,
+            excludeAft = true,
+            globalExcludeToggle = true
+        )
+
+        val raw = json.encodeToString(spec)
+        val decoded = json.decodeFromString<ShaftSpec>(raw)
+
+        val aft = decoded.threads.single { it.startFromAftMm == 0f }
+        assertTrue(aft.excludeFromOAL)
+
+        val win = computeOalWindow(decoded)
+        assertEquals(decoded.overallLengthMm.toDouble() - aft.lengthMm.toDouble(), win.oalMm, 1e-3)
     }
 
     @Test
