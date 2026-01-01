@@ -72,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import com.android.shaftschematic.geom.computeOalWindow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -380,6 +381,21 @@ fun ShaftScreen(
                             }
                         }
                 )
+
+                // Read-only: computed OAL in measurement space (less excluded end threads)
+                val win = remember(spec) { computeOalWindow(spec) }
+                val physicalOalMm = spec.overallLengthMm.toDouble()
+                val effectiveOalMm = win.oalMm
+                val excluded = kotlin.math.abs(effectiveOalMm - physicalOalMm) > OAL_EPS_MM
+
+                if (excluded) {
+                    Text(
+                        text = "Dimensioned OAL (less threads): ${formatDisplay(effectiveOalMm.toFloat(), unit)} ${abbr(unit)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
 
                 // Project info (optional)
                 ExpandableSection("Project Information (optional)", initiallyExpanded = false) {
@@ -855,6 +871,15 @@ private fun ComponentPagerCard(
                     )
                 }
 
+                if (!includeInOal) {
+                    Text(
+                        text = "OAL will be shown as length excluding this thread.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
                 CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm)
@@ -1273,6 +1298,15 @@ private fun FreeToEndBadge(
     val freeSignedMm = spec.overallLengthMm - endMm
     val isOversized = freeSignedMm < 0f
 
+    // Effective OAL in measurement space (respects end threads flagged excludeFromOAL)
+    val win = remember(spec) { computeOalWindow(spec) }
+    val physicalOalMm = spec.overallLengthMm.toDouble()
+    val effectiveOalMm = win.oalMm
+    val excluded = kotlin.math.abs(effectiveOalMm - physicalOalMm) > OAL_EPS_MM
+
+    val oalLabel = if (excluded) "OAL (less threads)" else "OAL"
+    val oalDisplayMm = if (excluded) effectiveOalMm.toFloat() else spec.overallLengthMm
+
     val bg = if (isOversized) MaterialTheme.colorScheme.errorContainer
     else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
     val fg = if (isOversized) MaterialTheme.colorScheme.onErrorContainer
@@ -1285,13 +1319,15 @@ private fun FreeToEndBadge(
         modifier = modifier
     ) {
         Text(
-            text = "Free to end: ${formatDisplay(freeSignedMm, unit)} ${abbr(unit)}",
+            text = "$oalLabel: ${formatDisplay(oalDisplayMm, unit)} ${abbr(unit)}  •  Free to end: ${formatDisplay(freeSignedMm, unit)} ${abbr(unit)}",
             style = MaterialTheme.typography.labelSmall,
             color = fg,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }
+
+private const val OAL_EPS_MM: Double = 1e-3
 
 private fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) 25.4f / tpi else 0f
 @Suppress("unused")
