@@ -1,21 +1,32 @@
 package com.android.shaftschematic.geom
 
 import com.android.shaftschematic.model.Body
-import com.android.shaftschematic.model.MM_PER_IN
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private const val EPS_EXACT = 1e-6
+private const val EPS_LOOSE = 1e-3
+
 class OalComputationsTest {
 
-    private fun inToMm(inches: Double): Double = inches * MM_PER_IN
-    private val eps = 1e-6
+    private fun inToMm(inches: Double): Double = inches * 25.4
+
+    private fun aftEndThread(spec: ShaftSpec): Threads =
+        spec.threads.first { th -> abs(th.startFromAftMm.toDouble() - 0.0) <= EPS_LOOSE }
+
+    private fun fwdEndThread(spec: ShaftSpec): Threads =
+        spec.threads.first { th ->
+            val end = (th.startFromAftMm + th.lengthMm).toDouble()
+            abs(end - spec.overallLengthMm.toDouble()) <= EPS_LOOSE
+        }
 
     private fun makeSpec(
         overallIn: Double,
@@ -23,10 +34,10 @@ class OalComputationsTest {
         fwdThreadIn: Double? = null,
         excludeAft: Boolean = false,
         excludeFwd: Boolean = false,
-        globalExcludeToggle: Boolean = true,
+        applyExcludeFromOalFlags: Boolean = true,
     ): ShaftSpec {
-        // NOTE: Production `computeOalWindow()` does not currently accept a global toggle.
-        // This helper simulates a "global toggle off" by gating per-thread flags.
+        // NOTE: Production `computeOalWindow()` consumes only per-thread `excludeFromOAL` flags.
+        // This helper can optionally *not* apply those flags to simulate an "exclude flags off" case.
         val overallMm = inToMm(overallIn).toFloat()
 
         val threads = buildList {
@@ -38,7 +49,7 @@ class OalComputationsTest {
                         lengthMm = lenMm,
                         majorDiaMm = 50f,
                         pitchMm = 2f,
-                        excludeFromOAL = globalExcludeToggle && excludeFwd
+                        excludeFromOAL = applyExcludeFromOalFlags && excludeFwd
                     )
                 )
             }
@@ -50,7 +61,7 @@ class OalComputationsTest {
                         lengthMm = lenMm,
                         majorDiaMm = 50f,
                         pitchMm = 2f,
-                        excludeFromOAL = globalExcludeToggle && excludeAft
+                        excludeFromOAL = applyExcludeFromOalFlags && excludeAft
                     )
                 )
             }
@@ -83,8 +94,8 @@ class OalComputationsTest {
 
         val win = computeOalWindow(spec)
 
-        assertEquals(th.lengthMm.toDouble(), win.measureStartMm, 1e-9)
-        assertEquals(0.0, win.toMeasureX(body.startFromAftMm.toDouble()), 1e-9)
+        assertEquals(th.lengthMm.toDouble(), win.measureStartMm, EPS_EXACT)
+        assertEquals(0.0, win.toMeasureX(body.startFromAftMm.toDouble()), EPS_EXACT)
     }
 
     @Test
@@ -104,8 +115,8 @@ class OalComputationsTest {
 
         val expectedOal = spec.overallLengthMm.toDouble() - th.lengthMm.toDouble()
 
-        assertEquals(th.lengthMm.toDouble(), win.measureStartMm, 1e-9)
-        assertEquals(expectedOal, win.oalMm, 1e-3)
+        assertEquals(th.lengthMm.toDouble(), win.measureStartMm, EPS_EXACT)
+        assertEquals(expectedOal, win.oalMm, EPS_LOOSE)
     }
 
     @Test
@@ -128,8 +139,8 @@ class OalComputationsTest {
 
         val win = computeOalWindow(spec)
 
-        assertEquals(th.lengthMm.toDouble(), win.measureStartMm, 1e-9)
-        assertEquals(0.0, win.toMeasureX(taper.startFromAftMm.toDouble()), 1e-9)
+        assertEquals(th.lengthMm.toDouble(), win.measureStartMm, EPS_EXACT)
+        assertEquals(0.0, win.toMeasureX(taper.startFromAftMm.toDouble()), EPS_EXACT)
     }
 
     @Test
@@ -158,25 +169,25 @@ class OalComputationsTest {
         val expectedStart = aft.lengthMm.toDouble()
         val expectedOal = spec.overallLengthMm.toDouble() - aft.lengthMm.toDouble() - fwd.lengthMm.toDouble()
 
-        assertEquals(expectedStart, win.measureStartMm, 1e-9)
-        assertEquals(expectedOal, win.oalMm, 1e-6)
+        assertEquals(expectedStart, win.measureStartMm, EPS_EXACT)
+        assertEquals(expectedOal, win.oalMm, EPS_LOOSE)
         assertTrue("measure end must be >= measure start", win.measureEndMm >= win.measureStartMm)
     }
 
     @Test
-    fun `toggle off leaves OAL unchanged`() {
+    fun `excludeFromOAL flags off leaves OAL unchanged`() {
         val spec = makeSpec(
             overallIn = 96.0,
             aftThreadIn = 5.0,
             excludeAft = true,
-            globalExcludeToggle = false
+            applyExcludeFromOalFlags = false
         )
 
         val win = computeOalWindow(spec)
 
-        assertEquals(0.0, win.measureStartMm, eps)
-        assertEquals(spec.overallLengthMm.toDouble(), win.oalMm, eps)
-        assertEquals(spec.overallLengthMm.toDouble(), win.measureEndMm, eps)
+        assertEquals(0.0, win.measureStartMm, EPS_EXACT)
+        assertEquals(spec.overallLengthMm.toDouble(), win.oalMm, EPS_EXACT)
+        assertEquals(spec.overallLengthMm.toDouble(), win.measureEndMm, EPS_EXACT)
     }
 
     @Test
@@ -185,16 +196,16 @@ class OalComputationsTest {
             overallIn = 96.0,
             aftThreadIn = 5.0,
             excludeAft = true,
-            globalExcludeToggle = true
+            applyExcludeFromOalFlags = true
         )
-        val aftMm = spec.threads.single { it.startFromAftMm == 0f }.lengthMm.toDouble()
+        val aftMm = aftEndThread(spec).lengthMm.toDouble()
 
         val win = computeOalWindow(spec)
 
-        assertEquals(aftMm, win.measureStartMm, eps)
-        assertEquals(spec.overallLengthMm.toDouble() - aftMm, win.oalMm, 1e-3)
+        assertEquals(aftMm, win.measureStartMm, EPS_LOOSE)
+        assertEquals(spec.overallLengthMm.toDouble() - aftMm, win.oalMm, EPS_LOOSE)
         assertTrue(win.measureEndMm >= win.measureStartMm)
-        assertEquals(0.0, win.toMeasureX(aftMm), eps)
+        assertEquals(0.0, win.toMeasureX(aftMm), EPS_EXACT)
     }
 
     @Test
@@ -203,15 +214,15 @@ class OalComputationsTest {
             overallIn = 96.0,
             fwdThreadIn = 6.5,
             excludeFwd = true,
-            globalExcludeToggle = true
+            applyExcludeFromOalFlags = true
         )
-        val fwdMm = spec.threads.single().lengthMm.toDouble()
+        val fwdMm = fwdEndThread(spec).lengthMm.toDouble()
 
         val win = computeOalWindow(spec)
 
-        assertEquals(0.0, win.measureStartMm, eps)
-        assertEquals(spec.overallLengthMm.toDouble() - fwdMm, win.oalMm, 1e-3)
-        assertEquals(win.oalMm, win.measureEndMm, eps)
+        assertEquals(0.0, win.measureStartMm, EPS_EXACT)
+        assertEquals(spec.overallLengthMm.toDouble() - fwdMm, win.oalMm, EPS_LOOSE)
+        assertEquals(win.oalMm, win.measureEndMm - win.measureStartMm, EPS_EXACT)
         assertTrue(win.measureEndMm >= win.measureStartMm)
     }
 
@@ -223,15 +234,15 @@ class OalComputationsTest {
             fwdThreadIn = 5.0,
             excludeAft = true,
             excludeFwd = true,
-            globalExcludeToggle = true
+            applyExcludeFromOalFlags = true
         )
 
         val win = computeOalWindow(spec)
 
-        val expectedStart = spec.threads.single { it.startFromAftMm == 0f }.lengthMm.toDouble()
-        assertEquals(expectedStart, win.measureStartMm, 1e-3)
-        assertEquals(0.0, win.oalMm, 1e-9)
-        assertEquals(win.measureStartMm, win.measureEndMm, 1e-9)
+        val expectedStart = aftEndThread(spec).lengthMm.toDouble()
+        assertEquals(expectedStart, win.measureStartMm, EPS_LOOSE)
+        assertEquals(0.0, win.oalMm, EPS_EXACT)
+        assertEquals(win.measureStartMm, win.measureEndMm, EPS_EXACT)
         assertTrue("measure end must be >= measure start", win.measureEndMm >= win.measureStartMm)
     }
 
@@ -242,9 +253,9 @@ class OalComputationsTest {
 
         val win = computeOalWindow(spec)
 
-        assertEquals(0.0, win.measureStartMm, 1e-9)
-        assertEquals(1000.0, win.measureEndMm, 1e-9)
-        assertEquals(1000.0, win.oalMm, 1e-9)
+        assertEquals(0.0, win.measureStartMm, EPS_EXACT)
+        assertEquals(1000.0, win.measureEndMm, EPS_EXACT)
+        assertEquals(1000.0, win.oalMm, EPS_EXACT)
     }
 
     @Test
@@ -260,9 +271,33 @@ class OalComputationsTest {
 
         val win = computeOalWindow(spec)
 
-        assertEquals(0.0, win.measureStartMm, 1e-9)
-        assertEquals(1000.0, win.measureEndMm, 1e-9)
-        assertEquals(1000.0, win.oalMm, 1e-9)
+        assertEquals(0.0, win.measureStartMm, EPS_EXACT)
+        assertEquals(1000.0, win.measureEndMm, EPS_EXACT)
+        assertEquals(1000.0, win.oalMm, EPS_EXACT)
+    }
+
+    @Test
+    fun `internal excluded thread does not affect end-excluded OAL`() {
+        val base = makeSpec(
+            overallIn = 96.0,
+            aftThreadIn = 5.0,
+            excludeAft = true,
+            applyExcludeFromOalFlags = true
+        )
+        val internal = Threads(
+            startFromAftMm = inToMm(10.0).toFloat(),
+            lengthMm = inToMm(2.0).toFloat(),
+            majorDiaMm = 50f,
+            pitchMm = 2f,
+            excludeFromOAL = true
+        )
+        val spec = base.copy(threads = base.threads + internal)
+
+        val win = computeOalWindow(spec)
+        val aftMm = aftEndThread(spec).lengthMm.toDouble()
+
+        assertEquals(aftMm, win.measureStartMm, EPS_LOOSE)
+        assertEquals(spec.overallLengthMm.toDouble() - aftMm, win.oalMm, EPS_LOOSE)
     }
 
     @Test
@@ -271,17 +306,17 @@ class OalComputationsTest {
             overallIn = 96.0,
             aftThreadIn = 5.0,
             excludeAft = true,
-            globalExcludeToggle = true
+            applyExcludeFromOalFlags = true
         )
 
         val raw = json.encodeToString(spec)
         val decoded = json.decodeFromString<ShaftSpec>(raw)
 
-        val aft = decoded.threads.single { it.startFromAftMm == 0f }
+        val aft = aftEndThread(decoded)
         assertTrue(aft.excludeFromOAL)
 
         val win = computeOalWindow(decoded)
-        assertEquals(decoded.overallLengthMm.toDouble() - aft.lengthMm.toDouble(), win.oalMm, 1e-3)
+        assertEquals(decoded.overallLengthMm.toDouble() - aft.lengthMm.toDouble(), win.oalMm, EPS_LOOSE)
     }
 
     @Test
@@ -302,10 +337,10 @@ class OalComputationsTest {
         )
 
         val exWithin = computeExcludedThreadLengths(ShaftSpec(overallLengthMm = 1000f, threads = listOf(withinEps)))
-        assertEquals(withinEps.lengthMm.toDouble(), exWithin.aftExcludedMm, 1e-9)
+        assertEquals(withinEps.lengthMm.toDouble(), exWithin.aftExcludedMm, EPS_EXACT)
 
         val exBeyond = computeExcludedThreadLengths(ShaftSpec(overallLengthMm = 1000f, threads = listOf(beyondEps)))
-        assertEquals(0.0, exBeyond.aftExcludedMm, 1e-9)
+        assertEquals(0.0, exBeyond.aftExcludedMm, EPS_EXACT)
     }
 
     @Test
@@ -327,9 +362,9 @@ class OalComputationsTest {
         )
 
         val exWithin = computeExcludedThreadLengths(ShaftSpec(overallLengthMm = overall, threads = listOf(withinEps)))
-        assertEquals(withinEps.lengthMm.toDouble(), exWithin.fwdExcludedMm, 1e-9)
+        assertEquals(withinEps.lengthMm.toDouble(), exWithin.fwdExcludedMm, EPS_EXACT)
 
         val exBeyond = computeExcludedThreadLengths(ShaftSpec(overallLengthMm = overall, threads = listOf(beyondEps)))
-        assertEquals(0.0, exBeyond.fwdExcludedMm, 1e-9)
+        assertEquals(0.0, exBeyond.fwdExcludedMm, EPS_EXACT)
     }
 }
