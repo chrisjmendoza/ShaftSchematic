@@ -390,7 +390,7 @@ fun ShaftScreen(
 
                 if (excluded) {
                     Text(
-                        text = "Dimensioned OAL (less threads): ${formatDisplay(effectiveOalMm.toFloat(), unit)} ${abbr(unit)}",
+                        text = "Dimensioned OAL: ${formatDisplay(effectiveOalMm.toFloat(), unit)} ${abbr(unit)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)
@@ -1304,7 +1304,7 @@ private fun FreeToEndBadge(
     val effectiveOalMm = win.oalMm
     val excluded = kotlin.math.abs(effectiveOalMm - physicalOalMm) > OAL_EPS_MM
 
-    val oalLabel = if (excluded) "OAL (less threads)" else "OAL"
+    val oalLabel = "OAL"
     val oalDisplayMm = if (excluded) effectiveOalMm.toFloat() else spec.overallLengthMm
 
     val bg = if (isOversized) MaterialTheme.colorScheme.errorContainer

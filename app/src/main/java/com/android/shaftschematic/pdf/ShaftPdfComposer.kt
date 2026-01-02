@@ -701,10 +701,10 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
         getAftEndTaper(spec)?.let { tp ->
             val (let, set) = letSet(tp)
             aft += "AFT Taper"
+            aft += "Rate: ${rate1toN(tp)}"
             aft += "L.E.T.: ${fmtDia(unit, let)}"
             aft += "S.E.T.: ${fmtDia(unit, set)}"
             aft += "Length: ${fmtLen(unit, tp.lengthMm)}"
-            aft += "Rate: ${rate1toN(tp)}"
         }
     }
     if (cfg.showAftThread && ends.aftThread) {
@@ -718,10 +718,10 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
         getFwdEndTaper(spec)?.let { tp ->
             val (let, set) = letSet(tp)
             fwd += "FWD Taper"
+            fwd += "Rate: ${rate1toN(tp)}"
             fwd += "L.E.T.: ${fmtDia(unit, let)}"
             fwd += "S.E.T.: ${fmtDia(unit, set)}"
             fwd += "Length: ${fmtLen(unit, tp.lengthMm)}"
-            fwd += "Rate: ${rate1toN(tp)}"
         }
     }
     if (cfg.showFwdThread && ends.fwdThread) {
