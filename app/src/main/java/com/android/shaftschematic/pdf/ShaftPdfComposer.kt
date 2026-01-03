@@ -77,7 +77,15 @@ fun composeShaftPdf(
 
     val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
     val halfHeightPx = (maxDiaMm * 0.5f) * ptPerMm
-    val cy = (geomRect.top + geomRect.bottom) * 0.5f - CY_UP_BIAS_PT
+    // Place the shaft centered on the paper when possible.
+    // Clamp so the shaft stays inside geomRect and the footer block can still fit below.
+    val minCy = geomRect.top + halfHeightPx
+    val maxCy = min(
+        geomRect.bottom - halfHeightPx,
+        pageH - PAGE_MARGIN_PT - FOOTER_BLOCK_PT - INFO_GAP_PT - halfHeightPx
+    )
+    val desiredCy = pageH * 0.5f + SHAFT_DOWN_PT
+    val cy = desiredCy.coerceIn(minCy, maxCy)
     val yTopOfShaft = cy - halfHeightPx
 
     fun xAt(mm: Float) = (left + mm * ptPerMm).coerceIn(geomRect.left, geomRect.right)
@@ -95,11 +103,6 @@ fun composeShaftPdf(
         // Standard rail gap you're already using for liner rails
         val railGap = LANE_GAP_PT + 6f
 
-        // Compute a higher top rail Y for OAL by adding extra multiples of the normal gap
-        // Example: 2.5x the normal gap above where OAL would have been.
-        val factor = pdfPrefs.oalSpacingFactor.coerceIn(1.0f, 6.0f)
-        val topY = baseY - OVERALL_EXTRA_PT - railGap * (factor - 1f)
-
         val dimText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
             textSize = TEXT_PT - 2f
@@ -115,9 +118,17 @@ fun composeShaftPdf(
             (geomRect.left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
         }
         val sets = computeSetPositionsInMeasureSpace(win)
-        val spans = buildLinerSpans(linerDims, sets, unit)
+        val spans = buildLinerSpans(linerDims, sets, unit) + buildTaperLengthSpans(spec, win, unit)
         val planner = RailPlanner()
-        val assignments = spans.map { planner.assign(it) }
+        val assignments = planner.assignAll(spans)
+
+        // Place OAL on its own top rail, guaranteed above the highest assigned rail.
+        // Reserve additional clearance using the existing preference (interpreted as extra rail gaps).
+        val maxRail = assignments.maxOfOrNull { it.rail } ?: 0
+        // Keep OAL above all other rails, but don't push it excessively high.
+        // Interpret the preference as extra clearance beyond the mandatory +1 rail.
+        val extraClearRails = (pdfPrefs.oalSpacingFactor.coerceIn(1.0f, 6.0f) - 1.0f) * 0.5f
+        val topY = baseY - OVERALL_EXTRA_PT - railGap * (maxRail + 1.0f + extraClearRails).toFloat()
 
         val renderer = PdfDimensionRenderer(
             pageX = pageX,
@@ -131,10 +142,10 @@ fun composeShaftPdf(
             objectClearance = 6f
         )
 
-        renderer.drawTop(c, oalSpan(win.oalMm, unit), true)
         assignments.forEach { rs ->
             renderer.drawOnRail(c, rs.rail, rs.span, true)
         }
+        renderer.drawTop(c, oalSpan(win.oalMm, unit), true)
     }
 
     // --- diameter callouts (optional; leave empty until you have stations) ---
@@ -174,11 +185,6 @@ fun composeShaftPdf(
     val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
 
     drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg)
-
-    // stamp
-    val meta = "$filename  •  ShaftSchematic $appVersion"
-    val metaW = text.measureText(meta)
-    c.drawText(meta, pageW - PAGE_MARGIN_PT - metaW, pageH - PAGE_MARGIN_PT - 4f, text)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -195,7 +201,7 @@ private const val TEXT_PT = 12f
 // Layout
 private const val PAGE_MARGIN_PT = 36f       // 0.5 in
 private const val TOP_TEXT_PAD_PT = 12f
-private const val CY_UP_BIAS_PT = 40f        // bias geometry upward to make room for footer
+private const val SHAFT_DOWN_PT = 72f        // 1 inch downward shift (moves footer down too)
 private const val BAND_CLEAR_PT = 12f        // breathing room above shaft before first dim line
 private const val BASE_DIM_OFFSET_PT = 24f   // distance from shaft top to first component dim
 private const val OVERALL_EXTRA_PT = 16f     // overall lane sits above components
@@ -293,9 +299,9 @@ private fun drawLinerDimensionsPdf(
     // Spans are in measurement space (rebased so AFT SET = 0). Convert to physical axis for rendering.
     val pageXMeasure: (Double) -> Float = { dimMm -> pageX(dimMm + win.measureStartMm) }
 
-    val spans = buildLinerSpans(liners, sets, unit)
+    val spans = buildLinerSpans(liners, sets, unit) + buildTaperLengthSpans(spec, win, unit)
     val planner = RailPlanner()
-    val assignments = spans.map { planner.assign(it) }
+    val assignments = planner.assignAll(spans)
 
     val renderer = PdfDimensionRenderer(
         pageX = pageXMeasure,
@@ -308,8 +314,42 @@ private fun drawLinerDimensionsPdf(
         objectClearance = 6f
     )
 
-    renderer.drawTop(canvas, oalSpan(win.oalMm, unit), true)
     assignments.forEach { rs -> renderer.drawOnRail(canvas, rs.rail, rs.span, true) }
+    renderer.drawTop(canvas, oalSpan(win.oalMm, unit), true)
+}
+
+/**
+ * Adds one LOCAL span per end-taper so taper lengths are shown on the diagram.
+ *
+ * Span endpoints are expressed in measurement-space (rebased by [win.measureStartMm]).
+ * Do not classify these as DATUM even if they touch a SET; these are feature↔feature lengths.
+ */
+internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschematic.geom.OalWindow, unit: UnitSystem): List<DimSpan> = buildList {
+    getAftEndTaper(spec)?.let { tp ->
+        val x0 = win.toMeasureX(tp.startFromAftMm.toDouble())
+        val x1 = win.toMeasureX((tp.startFromAftMm + tp.lengthMm).toDouble())
+        add(
+            DimSpan(
+                x0,
+                x1,
+                labelTop = formatLenDim(kotlin.math.abs(x1 - x0), unit),
+                kind = SpanKind.LOCAL
+            )
+        )
+    }
+
+    getFwdEndTaper(spec)?.let { tp ->
+        val x0 = win.toMeasureX(tp.startFromAftMm.toDouble())
+        val x1 = win.toMeasureX((tp.startFromAftMm + tp.lengthMm).toDouble())
+        add(
+            DimSpan(
+                x0,
+                x1,
+                labelTop = formatLenDim(kotlin.math.abs(x1 - x0), unit),
+                kind = SpanKind.LOCAL
+            )
+        )
+    }
 }
 
 
@@ -702,14 +742,14 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
             val (let, set) = letSet(tp)
             aft += "AFT Taper"
             aft += "Rate: ${rate1toN(tp)}"
-            aft += "L.E.T.: ${fmtDia(unit, let)}"
-            aft += "S.E.T.: ${fmtDia(unit, set)}"
-            aft += "Length: ${fmtLen(unit, tp.lengthMm)}"
+            aft += "L.E.T.: ${formatDiaWithUnit(let.toDouble(), unit)}"
+            aft += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
+            aft += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
         }
     }
     if (cfg.showAftThread && ends.aftThread) {
         getAftEndThread(spec)?.let { th ->
-            aft += "Thread: ${fmtDiaWithUnit(unit, th.majorDiaMm)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${fmtLen(unit, th.lengthMm)}"
+            aft += "Thread: ${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}"
         }
     }
 
@@ -719,14 +759,14 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
             val (let, set) = letSet(tp)
             fwd += "FWD Taper"
             fwd += "Rate: ${rate1toN(tp)}"
-            fwd += "L.E.T.: ${fmtDia(unit, let)}"
-            fwd += "S.E.T.: ${fmtDia(unit, set)}"
-            fwd += "Length: ${fmtLen(unit, tp.lengthMm)}"
+            fwd += "L.E.T.: ${formatDiaWithUnit(let.toDouble(), unit)}"
+            fwd += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
+            fwd += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
         }
     }
     if (cfg.showFwdThread && ends.fwdThread) {
         getFwdEndThread(spec)?.let { th ->
-            fwd += "Thread: ${fmtDiaWithUnit(unit, th.majorDiaMm)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${fmtLen(unit, th.lengthMm)}"
+            fwd += "Thread: ${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}"
         }
     }
 

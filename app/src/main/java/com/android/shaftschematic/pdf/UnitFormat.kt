@@ -36,3 +36,40 @@ fun formatLenDim(mm: Double, unit: Any?): String {
         else -> String.format(Locale.US, "%.3f mm", mm)
     }
 }
+
+/**
+ * Formats a *length* for footer fields, always including a unit suffix.
+ *
+ * - Inches: uses the existing smart inch formatter (fractions when appropriate).
+ * - Millimeters: uses a compact 1-decimal format to keep footer lines readable.
+ */
+fun formatLenWithUnit(mm: Double, unit: Any?): String {
+    val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
+    return when {
+        name.contains("INCH") -> LengthFormat.formatInchesSmart(mm / 25.4) + " in"
+        else -> {
+            val s = String.format(Locale.US, "%.1f", mm).trimEnd('0').trimEnd('.')
+            "$s mm"
+        }
+    }
+}
+
+/**
+ * Formats a *diameter* for footer fields, always including a unit suffix.
+ *
+ * - Inches: fixed 3 decimals (shop print convention).
+ * - Millimeters: compact 1-decimal.
+ */
+fun formatDiaWithUnit(mm: Double, unit: Any?): String {
+    val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
+    return when {
+        name.contains("INCH") -> {
+            val s = String.format(Locale.US, "%.3f", mm / 25.4).trimEnd('0').trimEnd('.')
+            "$s in"
+        }
+        else -> {
+            val s = String.format(Locale.US, "%.1f", mm).trimEnd('0').trimEnd('.')
+            "$s mm"
+        }
+    }
+}
