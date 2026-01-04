@@ -14,6 +14,8 @@ import androidx.navigation.NavController
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.Achievements
+import com.android.shaftschematic.util.VerboseLog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -36,7 +38,9 @@ fun PdfExportRoute(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
         runCatching {
+            var wrotePdf = false
             if (uri != null) {
+                VerboseLog.d(VerboseLog.Category.IO, "PdfExport") { "picked uri=$uri" }
                 ctx.contentResolver.openOutputStream(uri)?.use { out ->
                     val doc = PdfDocument()
                     try {
@@ -46,6 +50,10 @@ fun PdfExportRoute(
 
                         val filename = uri.lastPathSegment ?: defaultFilename()
                         val project = ProjectInfo(customer = "", vessel = "", jobNumber = "")
+
+                        VerboseLog.d(VerboseLog.Category.PDF, "PdfExport") {
+                            "writing: page=${pageInfo.pageWidth}x${pageInfo.pageHeight}pt filename=$filename"
+                        }
 
                         composeShaftPdf(
                             page = page,
@@ -58,14 +66,20 @@ fun PdfExportRoute(
 
                         doc.finishPage(page)
                         doc.writeTo(out)
+                        wrotePdf = true
                     } finally {
                         try { out.flush() } catch (_: Throwable) {}
                         doc.close()
                     }
                 }
             }
+
+            if (wrotePdf) {
+                VerboseLog.i(VerboseLog.Category.PDF, "PdfExport") { "write complete" }
+                vm.unlockAchievement(Achievements.Id.FIRST_PDF)
+            }
         }.onFailure {
-            // Optional: show a snackbar or log.
+            VerboseLog.e(VerboseLog.Category.PDF, "PdfExport") { "failed: ${it.javaClass.simpleName}: ${it.message}" }
         }
         finished = true
     }

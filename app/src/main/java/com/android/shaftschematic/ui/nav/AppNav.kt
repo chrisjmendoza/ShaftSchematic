@@ -5,6 +5,9 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.android.shaftschematic.ui.screen.AchievementsRoute
+import com.android.shaftschematic.ui.screen.AboutRoute
+import com.android.shaftschematic.ui.screen.DeveloperOptionsRoute
 import com.android.shaftschematic.ui.screen.SettingsRoute
 import com.android.shaftschematic.ui.screen.ShaftEditorRoute
 import com.android.shaftschematic.ui.screen.StartScreen
@@ -62,7 +65,28 @@ fun AppNav(vm: ShaftViewModel) {
 
         /* ───────── Settings ───────── */
         composable("settings") {
-            SettingsRoute(vm = vm, onBack = { nav.popBackStack() })
+            SettingsRoute(
+                vm = vm,
+                onBack = { nav.popBackStack() },
+                onOpenAchievements = { nav.navigate("achievements") },
+                onOpenAbout = { nav.navigate("about") },
+                onOpenDeveloperOptions = { nav.navigate("developerOptions") },
+            )
+        }
+
+        /* ───────── About ───────── */
+        composable("about") {
+            AboutRoute(vm = vm, onBack = { nav.popBackStack() })
+        }
+
+        /* ───────── Developer Options ───────── */
+        composable("developerOptions") {
+            DeveloperOptionsRoute(vm = vm, onBack = { nav.popBackStack() })
+        }
+
+        /* ───────── Achievements ───────── */
+        composable("achievements") {
+            AchievementsRoute(vm = vm, onBack = { nav.popBackStack() })
         }
 
         /* ───────── Internal JSON routes (app sandbox) ─────────

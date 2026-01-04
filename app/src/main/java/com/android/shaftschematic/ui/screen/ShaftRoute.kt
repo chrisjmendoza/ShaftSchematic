@@ -69,12 +69,18 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val unit            by vm.unit.collectAsState()
     val unitLocked      by vm.unitLocked.collectAsState()
     val showGrid        by vm.showGrid.collectAsState()
+    val showOalDebugLabel by vm.showOalDebugLabel.collectAsState()
+    val showOalHelperLine by vm.showOalHelperLine.collectAsState()
     val customer        by vm.customer.collectAsState()
     val vessel          by vm.vessel.collectAsState()
     val jobNumber       by vm.jobNumber.collectAsState()
     val notes           by vm.notes.collectAsState()
     val overallIsManual by vm.overallIsManual.collectAsState()
     val order           by vm.componentOrder.collectAsState()
+
+    val showComponentDebugLabels by vm.showComponentDebugLabels.collectAsState()
+    val showRenderLayoutDebugOverlay by vm.showRenderLayoutDebugOverlay.collectAsState()
+    val showRenderOalMarkers by vm.showRenderOalMarkers.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
     fun showSnack(msg: String) = scope.launch { snackbarHostState.showSnackbar(msg) }
@@ -89,6 +95,11 @@ fun ShaftRoute(vm: ShaftViewModel) {
         jobNumber = jobNumber,
         notes = notes,
         showGrid = showGrid,
+        showOalDebugLabel = showOalDebugLabel,
+        showOalHelperLine = showOalHelperLine,
+        showComponentDebugLabels = showComponentDebugLabels,
+        showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
+        showRenderOalMarkers = showRenderOalMarkers,
         componentOrder = order,
 
         // model updates (unchanged)
@@ -104,13 +115,15 @@ fun ShaftRoute(vm: ShaftViewModel) {
 
         onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
         onAddTaper  = { s, l, sd, ed -> vm.addTaperAt(s, l, sd, ed) },
-        onAddThread = { s, l, maj, p -> vm.addThreadAt(s, l, maj, p) },
+        onAddThread = { s, l, maj, p, ex -> vm.addThreadAt(s, l, maj, p, ex) },
         onAddLiner  = { s, l, od     -> vm.addLinerAt(s, l, od) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateTaper  = { i, s, l, sd, ed -> vm.updateTaper(i, s, l, sd, ed) },
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
+
+        onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
 
         onRemoveBody   = vm::removeBody,
         onRemoveTaper  = vm::removeTaper,
@@ -122,7 +135,9 @@ fun ShaftRoute(vm: ShaftViewModel) {
             ShaftDrawing(
                 spec = s,
                 unit = u,
-                showGrid = showGrid
+                showGrid = showGrid,
+                showLayoutDebugOverlay = showRenderLayoutDebugOverlay,
+                showOalMarkers = showRenderOalMarkers
             )
         },
 

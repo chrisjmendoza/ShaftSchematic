@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.VerboseLog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,11 +40,14 @@ fun OpenInternalRoute(
     ) { uri ->
         runCatching {
             if (uri != null) {
+                VerboseLog.d(VerboseLog.Category.IO, "SafRoutes") { "open picked uri=$uri" }
                 context.contentResolver.takePersistableUriPermission(
                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
                 context.contentResolver.openInputStream(uri)?.use { inp ->
-                    vm.importJson(inp.bufferedReader().readText())
+                    val text = inp.bufferedReader().readText()
+                    VerboseLog.d(VerboseLog.Category.IO, "SafRoutes") { "open read chars=${text.length}" }
+                    vm.importJson(text)
                 }
             }
         }
@@ -68,8 +72,11 @@ fun SaveInternalRoute(
     ) { uri ->
         runCatching {
             if (uri != null) {
+                VerboseLog.d(VerboseLog.Category.IO, "SafRoutes") { "save picked uri=$uri" }
                 context.contentResolver.openOutputStream(uri)?.use { out ->
-                    out.writer().use { w -> w.write(vm.exportJson()) }
+                    val json = vm.exportJson()
+                    VerboseLog.d(VerboseLog.Category.IO, "SafRoutes") { "save write chars=${json.length}" }
+                    out.writer().use { w -> w.write(json) }
                 }
             }
         }

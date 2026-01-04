@@ -1,15 +1,20 @@
 package com.android.shaftschematic.ui.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.data.SettingsStore.UnitPref
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.model.snapForwardFrom
+import com.android.shaftschematic.model.snapForwardFromOrdered
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.parseToMm
+import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -31,15 +36,21 @@ import kotlin.text.get
 
 // Internal payload used by Undo/Redo for deletes.
 // Not part of the public API; safe to change as the undo feature evolves.
+// Captures the exact spec + order before the delete so undo can restore
+// geometry that may have been temporarily re-snapped during delete.
 private sealed class LastDeleted {
     abstract val id: String
     abstract val kind: ComponentKind
     abstract val orderIndex: Int
+    abstract val beforeSpec: ShaftSpec
+    abstract val beforeOrder: List<ComponentKey>
 
     data class Body(
         val value: com.android.shaftschematic.model.Body,
         override val orderIndex: Int,
         val listIndex: Int,
+        override val beforeSpec: ShaftSpec,
+        override val beforeOrder: List<ComponentKey>,
     ) : LastDeleted() {
         override val id: String get() = value.id
         override val kind: ComponentKind get() = ComponentKind.BODY
@@ -49,6 +60,8 @@ private sealed class LastDeleted {
         val value: com.android.shaftschematic.model.Taper,
         override val orderIndex: Int,
         val listIndex: Int,
+        override val beforeSpec: ShaftSpec,
+        override val beforeOrder: List<ComponentKey>,
     ) : LastDeleted() {
         override val id: String get() = value.id
         override val kind: ComponentKind get() = ComponentKind.TAPER
@@ -58,6 +71,8 @@ private sealed class LastDeleted {
         val value: com.android.shaftschematic.model.Threads,
         override val orderIndex: Int,
         val listIndex: Int,
+        override val beforeSpec: ShaftSpec,
+        override val beforeOrder: List<ComponentKey>,
     ) : LastDeleted() {
         override val id: String get() = value.id
         override val kind: ComponentKind get() = ComponentKind.THREAD
@@ -67,6 +82,8 @@ private sealed class LastDeleted {
         val value: com.android.shaftschematic.model.Liner,
         override val orderIndex: Int,
         val listIndex: Int,
+        override val beforeSpec: ShaftSpec,
+        override val beforeOrder: List<ComponentKey>,
     ) : LastDeleted() {
         override val id: String get() = value.id
         override val kind: ComponentKind get() = ComponentKind.LINER
@@ -107,6 +124,56 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _showGrid = MutableStateFlow(false)
     val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
+
+    private val _devOptionsEnabled = MutableStateFlow(false)
+    val devOptionsEnabled: StateFlow<Boolean> = _devOptionsEnabled.asStateFlow()
+
+    private val _showOalDebugLabel = MutableStateFlow(false)
+    val showOalDebugLabel: StateFlow<Boolean> = _showOalDebugLabel.asStateFlow()
+
+    private val _showOalHelperLine = MutableStateFlow(false)
+    val showOalHelperLine: StateFlow<Boolean> = _showOalHelperLine.asStateFlow()
+
+    private val _showComponentDebugLabels = MutableStateFlow(false)
+    val showComponentDebugLabels: StateFlow<Boolean> = _showComponentDebugLabels.asStateFlow()
+
+    private val _showRenderLayoutDebugOverlay = MutableStateFlow(false)
+    val showRenderLayoutDebugOverlay: StateFlow<Boolean> = _showRenderLayoutDebugOverlay.asStateFlow()
+
+    private val _showRenderOalMarkers = MutableStateFlow(false)
+    val showRenderOalMarkers: StateFlow<Boolean> = _showRenderOalMarkers.asStateFlow()
+
+    private val _verboseLoggingEnabled = MutableStateFlow(false)
+    val verboseLoggingEnabled: StateFlow<Boolean> = _verboseLoggingEnabled.asStateFlow()
+
+    private val _verboseLoggingRender = MutableStateFlow(false)
+    val verboseLoggingRender: StateFlow<Boolean> = _verboseLoggingRender.asStateFlow()
+
+    private val _verboseLoggingOal = MutableStateFlow(false)
+    val verboseLoggingOal: StateFlow<Boolean> = _verboseLoggingOal.asStateFlow()
+
+    private val _verboseLoggingPdf = MutableStateFlow(false)
+    val verboseLoggingPdf: StateFlow<Boolean> = _verboseLoggingPdf.asStateFlow()
+
+    private val _verboseLoggingIo = MutableStateFlow(false)
+    val verboseLoggingIo: StateFlow<Boolean> = _verboseLoggingIo.asStateFlow()
+
+    private fun syncVerboseLogConfig() {
+        VerboseLog.configure(
+            devOptionsEnabled = _devOptionsEnabled.value,
+            verboseEnabled = _verboseLoggingEnabled.value,
+            renderEnabled = _verboseLoggingRender.value,
+            oalEnabled = _verboseLoggingOal.value,
+            pdfEnabled = _verboseLoggingPdf.value,
+            ioEnabled = _verboseLoggingIo.value,
+        )
+    }
+
+    private val _achievementsEnabled = MutableStateFlow(false)
+    val achievementsEnabled: StateFlow<Boolean> = _achievementsEnabled.asStateFlow()
+
+    private val _unlockedAchievementIds = MutableStateFlow<Set<String>>(emptySet())
+    val unlockedAchievementIds: StateFlow<Set<String>> = _unlockedAchievementIds.asStateFlow()
 
     // Auto-snap keeps components end-to-end in physical order when geometry changes.
     private val _autoSnap = MutableStateFlow(true)
@@ -177,6 +244,80 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 setShowGrid(persisted, persist = false)
             }
         }
+
+        viewModelScope.launch {
+            SettingsStore.devOptionsEnabledFlow(getApplication()).collectLatest { persisted ->
+                _devOptionsEnabled.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showOalDebugLabelFlow(getApplication()).collectLatest { persisted ->
+                _showOalDebugLabel.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showOalHelperLineFlow(getApplication()).collectLatest { persisted ->
+                _showOalHelperLine.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showComponentDebugLabelsFlow(getApplication()).collectLatest { persisted ->
+                _showComponentDebugLabels.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showRenderLayoutDebugOverlayFlow(getApplication()).collectLatest { persisted ->
+                _showRenderLayoutDebugOverlay.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showRenderOalMarkersFlow(getApplication()).collectLatest { persisted ->
+                _showRenderOalMarkers.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.verboseLoggingEnabledFlow(getApplication()).collectLatest { persisted ->
+                _verboseLoggingEnabled.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.verboseLoggingRenderFlow(getApplication()).collectLatest { persisted ->
+                _verboseLoggingRender.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.verboseLoggingOalFlow(getApplication()).collectLatest { persisted ->
+                _verboseLoggingOal.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.verboseLoggingPdfFlow(getApplication()).collectLatest { persisted ->
+                _verboseLoggingPdf.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.verboseLoggingIoFlow(getApplication()).collectLatest { persisted ->
+                _verboseLoggingIo.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.achievementsEnabledFlow(getApplication()).collectLatest { persisted ->
+                _achievementsEnabled.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.unlockedAchievementIdsFlow(getApplication()).collectLatest { persisted ->
+                _unlockedAchievementIds.value = persisted
+            }
+        }
     }
 
     /** Sets the UI unit (preview/labels only). Model remains canonical mm. */
@@ -198,10 +339,123 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setDevOptionsEnabled(enabled: Boolean, persist: Boolean = true) {
+        _devOptionsEnabled.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setDevOptionsEnabled(getApplication(), enabled) }
+        }
+    }
+
+    fun setShowOalDebugLabel(show: Boolean, persist: Boolean = true) {
+        _showOalDebugLabel.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowOalDebugLabel(getApplication(), show) }
+        }
+    }
+
+    fun setShowOalHelperLine(show: Boolean, persist: Boolean = true) {
+        _showOalHelperLine.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowOalHelperLine(getApplication(), show) }
+        }
+    }
+
+    fun setShowComponentDebugLabels(show: Boolean, persist: Boolean = true) {
+        _showComponentDebugLabels.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowComponentDebugLabels(getApplication(), show) }
+        }
+    }
+
+    fun setShowRenderLayoutDebugOverlay(show: Boolean, persist: Boolean = true) {
+        _showRenderLayoutDebugOverlay.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowRenderLayoutDebugOverlay(getApplication(), show) }
+        }
+    }
+
+    fun setShowRenderOalMarkers(show: Boolean, persist: Boolean = true) {
+        _showRenderOalMarkers.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowRenderOalMarkers(getApplication(), show) }
+        }
+    }
+
+    fun setVerboseLoggingEnabled(enabled: Boolean, persist: Boolean = true) {
+        _verboseLoggingEnabled.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setVerboseLoggingEnabled(getApplication(), enabled) }
+        }
+    }
+
+    fun setVerboseLoggingRender(enabled: Boolean, persist: Boolean = true) {
+        _verboseLoggingRender.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setVerboseLoggingRender(getApplication(), enabled) }
+        }
+    }
+
+    fun setVerboseLoggingOal(enabled: Boolean, persist: Boolean = true) {
+        _verboseLoggingOal.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setVerboseLoggingOal(getApplication(), enabled) }
+        }
+    }
+
+    fun setVerboseLoggingPdf(enabled: Boolean, persist: Boolean = true) {
+        _verboseLoggingPdf.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setVerboseLoggingPdf(getApplication(), enabled) }
+        }
+    }
+
+    fun setVerboseLoggingIo(enabled: Boolean, persist: Boolean = true) {
+        _verboseLoggingIo.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setVerboseLoggingIo(getApplication(), enabled) }
+        }
+    }
+
+    fun setAchievementsEnabled(enabled: Boolean, persist: Boolean = true) {
+        _achievementsEnabled.value = enabled
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setAchievementsEnabled(getApplication(), enabled) }
+        }
+    }
+
+    fun unlockAchievement(id: String) {
+        if (!_achievementsEnabled.value) return
+        if (_unlockedAchievementIds.value.contains(id)) return
+        viewModelScope.launch {
+            SettingsStore.unlockAchievement(getApplication(), id)
+        }
+    }
+
+    fun unlockAchievement(definition: Achievements.Definition) {
+        unlockAchievement(definition.id)
+    }
+
     /** Enables or disables auto-snapping of components after edits/deletes. */
     fun setAutoSnap(enabled: Boolean) {
         _autoSnap.value = enabled
         // Persistence can be wired into SettingsStore later if desired.
+    }
+
+    /** Explicitly snap forward from the given anchor key, end-to-end along the chain. */
+    fun snapChainFrom(anchor: ComponentKey) {
+        _spec.update { base -> base.snapForwardFrom(anchor) }
+    }
+
+    /** Convenience: snap forward from a component id by looking up its kind in UI order. */
+    fun snapChainFromId(id: String) {
+        val key = _componentOrder.value.firstOrNull { it.id == id }
+        if (key != null) snapChainFrom(key)
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -224,8 +478,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Parses text in current UI units and forwards to [onSetOverallLengthMm]. */
     fun setOverallLength(raw: String) {
-        val v = raw.replace(",", "").trim().toFloatOrNull() ?: 0f
-        val mm = if (_unit.value == UnitSystem.INCHES) v * 25.4f else v
+        val mm = parseToMm(raw, _unit.value).toFloat()
         onSetOverallLengthMm(mm)
     }
 
@@ -281,11 +534,29 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * undoable (multi-step, last-in-first-out).
      */
     fun removeBody(id: String) {
+        Log.d("ShaftViewModel", "removeBody invoked for id=$id")
+        val specBefore = _spec.value
+        val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Body? = null
+        var snapFromKey: ComponentKey? = null
+        var snapFromOrigin = false
+        val removedKey = ComponentKey(id, ComponentKind.BODY)
 
         _spec.update { s ->
             val idx = s.bodies.indexOfFirst { it.id == id }
-            if (idx < 0) return@update s
+            if (idx < 0) {
+                Log.w(
+                    "ShaftViewModel",
+                    "removeBody: requested id=$id not found. current ids=${s.bodies.map { it.id }}"
+                )
+                // NOTE: This should never happen during normal UI usage.
+                return@update s
+            }
+
+            if (_autoSnap.value) {
+                snapFromKey = s.findLeftNeighbor(removedKey)
+                snapFromOrigin = snapFromKey == null
+            }
 
             val body = s.bodies[idx]
             val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }.let { if (it < 0) 0 else it }
@@ -293,7 +564,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             deleted = LastDeleted.Body(
                 value = body,
                 orderIndex = orderIdx,
-                listIndex = idx
+                listIndex = idx,
+                beforeSpec = specBefore,
+                beforeOrder = orderBefore
             )
 
             s.copy(
@@ -311,6 +584,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
+
+            if (_autoSnap.value) {
+                when {
+                    snapFromKey != null ->
+                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
+                    snapFromOrigin ->
+                        _spec.update { spec -> spec.snapFromOrigin() }
+                }
+            }
 
             ensureOverall()
             updateUndoRedoFlags()
@@ -362,11 +644,29 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Remove a [Taper] by id with multi-step delete history support. */
     fun removeTaper(id: String) {
+        Log.d("ShaftViewModel", "removeTaper invoked for id=$id")
+        val specBefore = _spec.value
+        val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Taper? = null
+        var snapFromKey: ComponentKey? = null
+        var snapFromOrigin = false
+        val removedKey = ComponentKey(id, ComponentKind.TAPER)
 
         _spec.update { s ->
             val idx = s.tapers.indexOfFirst { it.id == id }
-            if (idx < 0) return@update s
+            if (idx < 0) {
+                Log.w(
+                    "ShaftViewModel",
+                    "removeTaper: requested id=$id not found. current ids=${s.tapers.map { it.id }}"
+                )
+                // NOTE: This should never happen during normal UI usage.
+                return@update s
+            }
+
+            if (_autoSnap.value) {
+                snapFromKey = s.findLeftNeighbor(removedKey)
+                snapFromOrigin = snapFromKey == null
+            }
 
             val taper = s.tapers[idx]
             val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }.let { if (it < 0) 0 else it }
@@ -374,7 +674,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             deleted = LastDeleted.Taper(
                 value = taper,
                 orderIndex = orderIdx,
-                listIndex = idx
+                listIndex = idx,
+                beforeSpec = specBefore,
+                beforeOrder = orderBefore
             )
 
             s.copy(
@@ -391,6 +693,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
             redoHistory.clear()
 
+            if (_autoSnap.value) {
+                when {
+                    snapFromKey != null ->
+                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
+                    snapFromOrigin ->
+                        _spec.update { spec -> spec.snapFromOrigin() }
+                }
+            }
+
             ensureOverall()
             updateUndoRedoFlags()
             emitDeletedSnack(snapshot.kind)
@@ -406,16 +717,30 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      *  • lengthMm — axial length
      *  • majorDiaMm — major diameter
      *  • pitchMm — pitch in mm (e.g., 4 TPI ⇒ 6.35 mm)
+     *  • excludeFromOAL — when true, thread length is excluded from OAL/measure-space
      *
-     * UI contract: Screen & Route pass arguments in exactly this order
-     * to prevent pitch/major swaps (see ShaftRoute.onAddThread).
+     * UI contract: Screen & Route pass arguments in exactly this order.
+     * We also construct `Threads(...)` with named arguments to avoid pitch/major swaps.
      */
-    fun addThreadAt(startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
+    fun addThreadAt(
+        startMm: Float,
+        lengthMm: Float,
+        majorDiaMm: Float,
+        pitchMm: Float,
+        excludeFromOAL: Boolean = false
+    ) = _spec.update { s ->
         val id = newId()
         orderAdd(ComponentKind.THREAD, id)
         s.copy(
             threads = listOf(
-                Threads(id, startMm, max(0f, lengthMm), max(0f, majorDiaMm), max(0f, pitchMm))
+                Threads(
+                    id = id,
+                    startFromAftMm = startMm,
+                    majorDiaMm = max(0f, majorDiaMm),
+                    pitchMm = max(0f, pitchMm),
+                    lengthMm = max(0f, lengthMm),
+                    excludeFromOAL = excludeFromOAL
+                )
             ) + s.threads
         )
     }.also { ensureOverall(); ensureOrderCoversSpec() }
@@ -444,13 +769,42 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.also { ensureOverall() }
 
+    fun setThreadExcludeFromOal(id: String, excludeFromOAL: Boolean) = _spec.update { s ->
+        val idx = s.threads.indexOfFirst { it.id == id }
+        if (idx == -1) s
+        else s.copy(
+            threads = s.threads.toMutableList().also { l ->
+                val old = l[idx]
+                l[idx] = old.copy(excludeFromOAL = excludeFromOAL)
+            }
+        )
+    }.also { ensureOverall() }
+
     /** Remove a [Threads] segment by id with multi-step delete history support. */
     fun removeThread(id: String) {
+        Log.d("ShaftViewModel", "removeThread invoked for id=$id")
+        val specBefore = _spec.value
+        val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Thread? = null
+        var snapFromKey: ComponentKey? = null
+        var snapFromOrigin = false
+        val removedKey = ComponentKey(id, ComponentKind.THREAD)
 
         _spec.update { s ->
             val idx = s.threads.indexOfFirst { it.id == id }
-            if (idx < 0) return@update s
+            if (idx < 0) {
+                Log.w(
+                    "ShaftViewModel",
+                    "removeThread: requested id=$id not found. current ids=${s.threads.map { it.id }}"
+                )
+                // NOTE: This should never happen during normal UI usage.
+                return@update s
+            }
+
+            if (_autoSnap.value) {
+                snapFromKey = s.findLeftNeighbor(removedKey)
+                snapFromOrigin = snapFromKey == null
+            }
 
             val thread = s.threads[idx]
             val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }
@@ -459,7 +813,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             deleted = LastDeleted.Thread(
                 value = thread,
                 orderIndex = orderIdx,
-                listIndex = idx
+                listIndex = idx,
+                beforeSpec = specBefore,
+                beforeOrder = orderBefore
             )
 
             s.copy(
@@ -477,6 +833,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
+
+            if (_autoSnap.value) {
+                when {
+                    snapFromKey != null ->
+                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
+                    snapFromOrigin ->
+                        _spec.update { spec -> spec.snapFromOrigin() }
+                }
+            }
 
             // Maintain coverage + flags and show snackbar
             ensureOverall()
@@ -517,11 +882,29 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Remove a [Liner] by id with multi-step delete history support. */
     fun removeLiner(id: String) {
+        Log.d("ShaftViewModel", "removeLiner invoked for id=$id")
+        val specBefore = _spec.value
+        val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Liner? = null
+        var snapFromKey: ComponentKey? = null
+        var snapFromOrigin = false
+        val removedKey = ComponentKey(id, ComponentKind.LINER)
 
         _spec.update { s ->
             val idx = s.liners.indexOfFirst { it.id == id }
-            if (idx < 0) return@update s
+            if (idx < 0) {
+                Log.w(
+                    "ShaftViewModel",
+                    "removeLiner: requested id=$id not found. current ids=${s.liners.map { it.id }}"
+                )
+                // NOTE: This should never happen during normal UI usage.
+                return@update s
+            }
+
+            if (_autoSnap.value) {
+                snapFromKey = s.findLeftNeighbor(removedKey)
+                snapFromOrigin = snapFromKey == null
+            }
 
             val liner = s.liners[idx]
             val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }
@@ -530,7 +913,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             deleted = LastDeleted.Liner(
                 value = liner,
                 orderIndex = orderIdx,
-                listIndex = idx
+                listIndex = idx,
+                beforeSpec = specBefore,
+                beforeOrder = orderBefore
             )
 
             s.copy(
@@ -546,6 +931,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
+
+            if (_autoSnap.value) {
+                when {
+                    snapFromKey != null ->
+                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
+                    snapFromOrigin ->
+                        _spec.update { spec -> spec.snapFromOrigin() }
+                }
+            }
 
             ensureOverall()
             updateUndoRedoFlags()
@@ -741,67 +1135,48 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+        // ────────────────────────────────────────────────────────────────────────────
+    // Snapping helpers (unit-aware tolerance, pure mm-space)
+    // ────────────────────────────────────────────────────────────────────────────
+
+    private companion object {
+        private const val METRIC_SNAP_TOL_MM = 1.0f         // 1 mm
+        private const val IMPERIAL_SNAP_TOL_IN = 0.04f      // ~0.04 in ≈ 1.016 mm
+        private const val INCH_TO_MM = 25.4f
+    }
+
+    /** Current snap tolerance expressed in mm, based on the active UI unit system. */
+    private fun currentSnapToleranceMm(): Float {
+        return when (_unit.value) {
+            UnitSystem.MILLIMETERS -> METRIC_SNAP_TOL_MM
+            UnitSystem.INCHES      -> IMPERIAL_SNAP_TOL_IN * INCH_TO_MM
+        }
+    }
+
     /**
-     * Undo the most recent delete, if any.
-     *
-     * Restores both the spec list entry and the cross-type UI order at their original positions.
-     * If the component is already present (id collision), this is a no-op.
+     * Snap a raw mm position against the current spec, using anchors built from the
+     * latest [ShaftSpec] and a unit-aware tolerance. This is the main entry point for
+     * tap-to-add and future cursor-based snapping.
+     */
+    fun snapRawPositionMm(rawMm: Float): Float {
+        val anchors = buildSnapAnchors(_spec.value)
+        val config = SnapConfig(toleranceMm = currentSnapToleranceMm())
+        return snapPositionMm(rawMm, anchors, config)
+    }
+
+
+    /**
+        * Undo the most recent delete, if any.
+        *
+        * Restores the entire spec + component order snapshot that existed before the delete
+        * (including any geometry that may have been shifted by delete-time snapping).
      */
     fun undoLastDelete() {
         val snapshot = deleteHistory.removeLastOrNull() ?: return
 
-        // 1) Restore into the spec
-        _spec.update { s ->
-            // If somehow the id already exists, do not re-add to avoid duplicates.
-            if (when (snapshot) {
-                    is LastDeleted.Body   -> s.bodies.any   { it.id == snapshot.id }
-                    is LastDeleted.Taper  -> s.tapers.any   { it.id == snapshot.id }
-                    is LastDeleted.Thread -> s.threads.any  { it.id == snapshot.id }
-                    is LastDeleted.Liner  -> s.liners.any   { it.id == snapshot.id }
-                }
-            ) {
-                return@update s
-            }
+        _spec.value = snapshot.beforeSpec
+        _componentOrder.value = snapshot.beforeOrder.toList()
 
-            when (snapshot) {
-                is LastDeleted.Body -> {
-                    val list = s.bodies.toMutableList()
-                    val idx = snapshot.listIndex.coerceIn(0, list.size)
-                    list.add(idx, snapshot.value)
-                    s.copy(bodies = list)
-                }
-                is LastDeleted.Taper -> {
-                    val list = s.tapers.toMutableList()
-                    val idx = snapshot.listIndex.coerceIn(0, list.size)
-                    list.add(idx, snapshot.value)
-                    s.copy(tapers = list)
-                }
-                is LastDeleted.Thread -> {
-                    val list = s.threads.toMutableList()
-                    val idx = snapshot.listIndex.coerceIn(0, list.size)
-                    list.add(idx, snapshot.value)
-                    s.copy(threads = list)
-                }
-                is LastDeleted.Liner -> {
-                    val list = s.liners.toMutableList()
-                    val idx = snapshot.listIndex.coerceIn(0, list.size)
-                    list.add(idx, snapshot.value)
-                    s.copy(liners = list)
-                }
-            }
-        }
-
-        // 2) Restore into the cross-type UI order
-        _componentOrder.update { current ->
-            if (current.any { it.id == snapshot.id }) return@update current
-
-            val insertAt = snapshot.orderIndex.coerceIn(0, current.size)
-            current.toMutableList().apply {
-                add(insertAt, ComponentKey(snapshot.id, snapshot.kind))
-            }
-        }
-
-        // 3) Make this action redoable
         redoHistory.addLast(snapshot)
         if (redoHistory.size > MAX_DELETE_HISTORY) {
             redoHistory.removeFirst()
@@ -815,48 +1190,20 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Redo the most recent undone delete, if any.
      *
-     * Deletes the restored component again (without creating a new history entry)
-     * and moves the snapshot back to the undo stack.
+     * Delegates to the public removeX APIs so redo reuses the same snap/logging logic
+     * as a normal delete (and intentionally records a fresh LastDeleted snapshot for
+     * subsequent undos).
      */
     fun redoLastDelete() {
         val snapshot = redoHistory.removeLastOrNull() ?: return
 
-        // 1) Remove the component again from the spec
-        _spec.update { s ->
-            when (snapshot) {
-                is LastDeleted.Body -> {
-                    val idx = s.bodies.indexOfFirst { it.id == snapshot.id }
-                    if (idx < 0) return@update s
-                    s.copy(bodies = s.bodies.toMutableList().apply { removeAt(idx) })
-                }
-                is LastDeleted.Taper -> {
-                    val idx = s.tapers.indexOfFirst { it.id == snapshot.id }
-                    if (idx < 0) return@update s
-                    s.copy(tapers = s.tapers.toMutableList().apply { removeAt(idx) })
-                }
-                is LastDeleted.Thread -> {
-                    val idx = s.threads.indexOfFirst { it.id == snapshot.id }
-                    if (idx < 0) return@update s
-                    s.copy(threads = s.threads.toMutableList().apply { removeAt(idx) })
-                }
-                is LastDeleted.Liner -> {
-                    val idx = s.liners.indexOfFirst { it.id == snapshot.id }
-                    if (idx < 0) return@update s
-                    s.copy(liners = s.liners.toMutableList().apply { removeAt(idx) })
-                }
-            }
+        when (snapshot) {
+            is LastDeleted.Body -> removeBody(snapshot.id)
+            is LastDeleted.Taper -> removeTaper(snapshot.id)
+            is LastDeleted.Thread -> removeThread(snapshot.id)
+            is LastDeleted.Liner -> removeLiner(snapshot.id)
         }
 
-        // 2) Remove from order and push back onto undo stack
-        orderRemove(snapshot.id)
-
-        deleteHistory.addLast(snapshot)
-        if (deleteHistory.size > MAX_DELETE_HISTORY) {
-            deleteHistory.removeFirst()
-        }
-
-        ensureOverall()
-        ensureOrderCoversSpec()
         updateUndoRedoFlags()
     }
 }

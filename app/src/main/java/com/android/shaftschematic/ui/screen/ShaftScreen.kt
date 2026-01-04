@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
+import android.util.Log
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -33,6 +34,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -45,6 +47,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -70,12 +73,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import com.android.shaftschematic.geom.computeOalWindow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -93,6 +100,9 @@ import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.order.ComponentKey
+import com.android.shaftschematic.ui.viewmodel.SnapConfig
+import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
+import com.android.shaftschematic.ui.viewmodel.snapPositionMm
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
 
@@ -131,6 +141,13 @@ fun ShaftScreen(
     jobNumber: String,
     notes: String,
     showGrid: Boolean,
+    showOalDebugLabel: Boolean,
+    showOalHelperLine: Boolean,
+    showComponentDebugLabels: Boolean,
+    showRenderLayoutDebugOverlay: Boolean,
+    showRenderOalMarkers: Boolean,
+    showComponentArrows: Boolean = false,
+    componentArrowWidthDp: Int = 40,
 
     // Setters
     onSetUnit: (UnitSystem) -> Unit,
@@ -146,7 +163,7 @@ fun ShaftScreen(
     // Adds (all mm)
     onAddBody: (Float, Float, Float) -> Unit,
     onAddTaper: (Float, Float, Float, Float) -> Unit,
-    onAddThread: (Float, Float, Float, Float) -> Unit, // order: start, length, pitch, majorDia
+    onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean) -> Unit,
     onAddLiner: (Float, Float, Float) -> Unit,
 
     // Updates (all mm)
@@ -154,6 +171,8 @@ fun ShaftScreen(
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+
+    onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
 
     // Removes by stable id
     onRemoveBody: (String) -> Unit,
@@ -182,8 +201,66 @@ fun ShaftScreen(
 
     var focusedId by rememberSaveable { mutableStateOf<String?>(null) }
 
+    var addThreadOpen by rememberSaveable { mutableStateOf(false) }
+
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
+
+    val snapAnchors = remember(spec) { buildSnapAnchors(spec) }
+
+    val snappedBodyUpdater = remember(snapAnchors, onUpdateBody) {
+        { index: Int, startMm: Float, lengthMm: Float, diaMm: Float ->
+            applySnappedBodyUpdate(
+                onUpdate = onUpdateBody,
+                index = index,
+                rawStartMm = startMm,
+                rawEndMm = startMm + lengthMm,
+                diaMm = diaMm,
+                anchors = snapAnchors
+            )
+        }
+    }
+
+    val snappedTaperUpdater = remember(snapAnchors, onUpdateTaper) {
+        { index: Int, startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float ->
+            applySnappedTaperUpdate(
+                onUpdate = onUpdateTaper,
+                index = index,
+                rawStartMm = startMm,
+                rawEndMm = startMm + lengthMm,
+                startDiaMm = startDiaMm,
+                endDiaMm = endDiaMm,
+                anchors = snapAnchors
+            )
+        }
+    }
+
+    val snappedThreadUpdater = remember(snapAnchors, onUpdateThread) {
+        { index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float ->
+            applySnappedThreadUpdate(
+                onUpdate = onUpdateThread,
+                index = index,
+                rawStartMm = startMm,
+                rawEndMm = startMm + lengthMm,
+                majorDiaMm = majorDiaMm,
+                pitchMm = pitchMm,
+                anchors = snapAnchors
+            )
+        }
+    }
+
+    val snappedLinerUpdater = remember(snapAnchors, onUpdateLiner) {
+        { index: Int, startMm: Float, lengthMm: Float, odMm: Float ->
+            applySnappedLinerUpdate(
+                onUpdate = onUpdateLiner,
+                index = index,
+                rawStartMm = startMm,
+                rawEndMm = startMm + lengthMm,
+                odMm = odMm,
+                anchors = snapAnchors
+            )
+        }
+    }
 
     // Auto-sync overall when not manual
     LaunchedEffect(overallIsManual, spec.bodies, spec.tapers, spec.threads, spec.liners) {
@@ -196,7 +273,7 @@ fun ShaftScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets.systemBars.only(
-            WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+            WindowInsetsSides.Horizontal
         ),
         floatingActionButton = {
             if (fabEnabled) {
@@ -210,8 +287,12 @@ fun ShaftScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner)
-                .padding(16.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 16.dp)
         ) {
+            // Separator (matches the divider below the preview)
+            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
+
             // Preview
             PreviewCard(
                 showGrid = showGrid,
@@ -219,6 +300,8 @@ fun ShaftScreen(
                 unit = unit,
                 highlightEnabled = highlightEnabled,
                 highlightId = focusedId,
+                showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
+                showRenderOalMarkers = showRenderOalMarkers,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = 200.dp)
@@ -245,76 +328,159 @@ fun ShaftScreen(
             ) {
                 // Overall Length (auto vs manual — always show a value)
                 var hasLenFocus by remember { mutableStateOf(false) }
+                var lenTextOnFocus by remember { mutableStateOf<String?>(null) }
 
-                val displayMm =
-                    if (overallIsManual) spec.overallLengthMm else lastOccupiedEndMm(spec)
+                val effectiveOalDisplayMm = remember(spec) { computeOalWindow(spec).oalMm.toFloat() }
+                val displayMm = if (overallIsManual) spec.overallLengthMm else effectiveOalDisplayMm
                 var lengthText by remember(unit, displayMm, overallIsManual) {
                     mutableStateOf(formatDisplay(displayMm, unit))
                 }
 
-                val freeSignedMm = spec.overallLengthMm - lastOccupiedEndMm(spec)
-                val isOversized = freeSignedMm < 0f
+                val isOversized = spec.overallLengthMm < lastOccupiedEndMm(spec)
 
-                OutlinedTextField(
-                    value = lengthText,
-                    onValueChange = { input ->
-                        lengthText = input
-                        if (overallIsManual) {
-                            toMmOrNull(input, unit)?.let { mm ->
-                                onSetOverallLengthMm(mm)
-                            }
-                        }
-                    },
-                    label = { Text("Overall Length (${abbr(unit)})") },
-                    singleLine = true,
-                    enabled = overallIsManual, // auto mode is read-only
-                    isError = isOversized,
-                    supportingText = {
-                        val mode = if (overallIsManual) "Manual" else "Auto"
-                        val hint = if (isOversized)
-                            "Oversized by ${formatDisplay(-freeSignedMm, unit)} ${abbr(unit)}"
-                        else "$mode • ${formatDisplay(displayMm, unit)} ${abbr(unit)}"
-                        Text(hint)
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(onDone = {
-                        val t = lengthText.trim()
-                        if (t.isEmpty()) {
-                            onSetOverallIsManual(false)
-                            onSetOverallLengthMm(lastOccupiedEndMm(spec))
-                        } else {
-                            toMmOrNull(t, unit)?.let { mm ->
-                                onSetOverallLengthMm(mm)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    OutlinedTextField(
+                        value = lengthText,
+                        onValueChange = { input ->
+                            // Default to Auto until the user types.
+                            if (!overallIsManual && input != lengthText) {
                                 onSetOverallIsManual(true)
-                                onSetOverallLengthRaw(t) // keep user’s display text
                             }
-                        }
-                    }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { f ->
-                            hasLenFocus = f.isFocused
-                            if (!f.isFocused) {
-                                val t = lengthText.trim()
-                                if (t.isEmpty()) {
-                                    onSetOverallIsManual(false)
-                                    onSetOverallLengthMm(lastOccupiedEndMm(spec))
-                                } else {
-                                    toMmOrNull(t, unit)?.let { mm ->
-                                        onSetOverallLengthMm(mm)
-                                        onSetOverallIsManual(true)
-                                        onSetOverallLengthRaw(t)
+
+                            lengthText = input
+                            if (overallIsManual) {
+                                toMmOrNull(input, unit)?.let { mm ->
+                                    onSetOverallLengthMm(mm)
+                                }
+                            }
+                        },
+                        label = { Text("Overall Length (${abbr(unit)})") },
+                        singleLine = true,
+                        enabled = true,
+                        isError = isOversized,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = {
+                            val t = lengthText.trim()
+                            if (t.isEmpty()) {
+                                onSetOverallIsManual(false)
+                                val end = lastOccupiedEndMm(spec)
+                                onSetOverallLengthMm(end)
+                                val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
+                                lengthText = formatDisplay(effective, unit)
+                            } else {
+                                toMmOrNull(t, unit)?.let { mm ->
+                                    onSetOverallLengthMm(mm)
+                                    onSetOverallIsManual(true)
+                                    onSetOverallLengthRaw(t) // keep user’s display text
+                                }
+                            }
+                        }),
+                        modifier = Modifier
+                            .weight(1f)
+                            .onFocusChanged { f ->
+                                val wasFocused = hasLenFocus
+                                hasLenFocus = f.isFocused
+
+                                if (!wasFocused && f.isFocused) {
+                                    // Capture initial text so tapping the field in Auto doesn't
+                                    // accidentally flip us into Manual when the user didn't edit.
+                                    lenTextOnFocus = lengthText
+                                }
+
+                                if (wasFocused && !f.isFocused) {
+                                    val baseline = lenTextOnFocus
+                                    lenTextOnFocus = null
+                                    val t = lengthText.trim()
+
+                                    // If we were in Auto and the user didn't change anything,
+                                    // don't flip into Manual.
+                                    if (!overallIsManual && baseline != null && lengthText == baseline) {
+                                        return@onFocusChanged
+                                    }
+
+                                    if (t.isEmpty()) {
+                                        onSetOverallIsManual(false)
+                                        val end = lastOccupiedEndMm(spec)
+                                        onSetOverallLengthMm(end)
+                                        val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
+                                        lengthText = formatDisplay(effective, unit)
+                                    } else {
+                                        toMmOrNull(t, unit)?.let { mm ->
+                                            onSetOverallLengthMm(mm)
+                                            onSetOverallIsManual(true)
+                                            onSetOverallLengthRaw(t)
+                                        }
                                     }
                                 }
                             }
-                        }
-                )
+                    )
+
+                    Spacer(Modifier.width(12.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = !overallIsManual,
+                            onClick = {
+                                if (overallIsManual) {
+                                    onSetOverallIsManual(false)
+                                    val end = lastOccupiedEndMm(spec)
+                                    onSetOverallLengthMm(end)
+                                    val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
+                                    lengthText = formatDisplay(effective, unit)
+                                }
+                            },
+                            label = { Text("Auto") }
+                        )
+                        FilterChip(
+                            selected = overallIsManual,
+                            onClick = {
+                                if (!overallIsManual) {
+                                    onSetOverallIsManual(true)
+                                }
+                            },
+                            label = { Text("Manual") }
+                        )
+                    }
+                }
+
+                // Read-only: computed OAL in measurement space (less excluded end threads)
+                val win = remember(spec) { computeOalWindow(spec) }
+                val physicalOalMm = spec.overallLengthMm.toDouble()
+                val effectiveOalWindowMm = win.oalMm
+                val excluded = kotlin.math.abs(effectiveOalWindowMm - physicalOalMm) > OAL_EPS_MM
+
+                // Normally only show in Manual mode; Auto already displays effective OAL.
+                // Developer option can force it on for debugging.
+                if (excluded && (overallIsManual || showOalHelperLine)) {
+                    Text(
+                        text = "Dimensioned OAL: ${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                if (showOalDebugLabel) {
+                    val coveredEndMm = lastOccupiedEndMm(spec)
+                    Text(
+                        text = "OAL debug • physical=${formatDisplay(spec.overallLengthMm, unit)} ${abbr(unit)} • effective=${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)} • covered=${formatDisplay(coveredEndMm, unit)} ${abbr(unit)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
 
                 // Project info (optional)
-                ExpandableSection("Project Information (optional)", initiallyExpanded = false) {
+                ExpandableSection("Project Information", initiallyExpanded = false) {
                     CommitTextField("Job Number", jobNumber, onSetJobNumber, Modifier.fillMaxWidth())
                     CommitTextField("Customer", customer, onSetCustomer, Modifier.fillMaxWidth())
                     CommitTextField("Vessel", vessel, onSetVessel, Modifier.fillMaxWidth())
@@ -336,21 +502,37 @@ fun ShaftScreen(
                     )
                 }
 
-                Text(
-                    "Components",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Components",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "Swipe to select",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 ComponentCarouselPager(
                     spec = spec,
                     unit = unit,
                     componentOrder = componentOrder,
-                    onUpdateBody = onUpdateBody,
-                    onUpdateTaper = onUpdateTaper,
-                    onUpdateThread = onUpdateThread,
-                    onUpdateLiner = onUpdateLiner,
+                    showEdgeArrows = showComponentArrows,
+                    edgeArrowWidthDp = componentArrowWidthDp,
+                    showComponentDebugLabels = showComponentDebugLabels,
+                    onUpdateBody = snappedBodyUpdater,
+                    onUpdateTaper = snappedTaperUpdater,
+                    onUpdateThread = snappedThreadUpdater,
+                    onUpdateLiner = snappedLinerUpdater,
+
+                    onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
+
                     onRemoveBody = onRemoveBody,
                     onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread,
@@ -393,8 +575,7 @@ fun ShaftScreen(
                         onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, linerLenMm, d.lastDiaMm) },
                         onAddThread = {
                             chooserOpen = false
-                            // IMPORTANT: order = start, length, pitch, majorDia
-                            onAddThread(d.startMm, threadLenMm, threadPitchMm, threadMajMm)
+                            addThreadOpen = true
                         },
                         onAddTaper = {
                             chooserOpen = false
@@ -402,6 +583,26 @@ fun ShaftScreen(
                             val setDiaMm = d.lastDiaMm
                             val letDiaMm = setDiaMm + (len * taperRatio) // ~1:12
                             onAddTaper(d.startMm, len, setDiaMm, letDiaMm)
+                        }
+                    )
+                }
+
+                if (addThreadOpen) {
+                    AddThreadDialog(
+                        unit = unit,
+                        spec = spec,
+                        onSubmit = { startMm, lengthMm, majorDiaMm, tpi, excludeFromOAL ->
+                            addThreadOpen = false
+                            // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL.
+                            // Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt` to avoid
+                            // pitch/major swaps.
+                            onAddThread(
+                                startMm,
+                                lengthMm,
+                                majorDiaMm,
+                                tpiToPitchMm(tpi),
+                                excludeFromOAL
+                            )
                         }
                     )
                 }
@@ -420,6 +621,8 @@ private fun PreviewCard(
     // NEW: explicit preview controls
     highlightEnabled: Boolean,
     highlightId: String?,
+    showRenderLayoutDebugOverlay: Boolean,
+    showRenderOalMarkers: Boolean,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -434,7 +637,9 @@ private fun PreviewCard(
                 unit = unit,
                 showGrid = showGrid,
                 highlightEnabled = highlightEnabled && (highlightId != null),
-                highlightId = highlightId
+                highlightId = highlightId,
+                showLayoutDebugOverlay = showRenderLayoutDebugOverlay,
+                showOalMarkers = showRenderOalMarkers
             )
 
             FreeToEndBadge(
@@ -459,21 +664,27 @@ private data class RowRef(
 /**
  * ComponentCarouselPager
  *
- * Purpose: Horizontal pager with sentinel add-cards at both ends and boxed arrow nav.
+ * Purpose: Horizontal pager with sentinel add-cards at both ends.
  * Contract:
  *  • Honors componentOrder when provided; else stable assembly order by start, tie-broken by type.
  *  • Calls onFocusedChanged(idOrNull) whenever the current page changes (add-pages send null).
- *  • Arrow buttons animate elevation/alpha on press/hover; pager gestures remain intact.
+ *  • Pager gestures remain intact.
  */
 @Composable
 private fun ComponentCarouselPager(
     spec: ShaftSpec,
     unit: UnitSystem,
     componentOrder: List<ComponentKey>,
+    showEdgeArrows: Boolean,
+    edgeArrowWidthDp: Int,
+    showComponentDebugLabels: Boolean,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+
+    onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+
     onRemoveBody: (String) -> Unit,
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
@@ -503,8 +714,12 @@ private fun ComponentCarouselPager(
         initialPage = if (rowsSorted.isEmpty()) 0 else 1, // land on leftmost component when present
         pageCount = { pageCount }
     )
-
     val scope = rememberCoroutineScope()
+    val arrowWidth = if (showEdgeArrows) edgeArrowWidthDp.coerceIn(24, 72).dp else 0.dp
+    val edgeGap = if (showEdgeArrows) 1.dp else 0.dp
+    val pageGutter = if (showEdgeArrows) 2.dp else 16.dp
+    val addCardOuterPadding = if (showEdgeArrows) 6.dp else 12.dp
+    val componentCardOuterPadding = if (showEdgeArrows) 4.dp else 8.dp
 
     // Auto-jump to the newest card after insertion
     LaunchedEffect(rowsSorted.size) {
@@ -524,144 +739,125 @@ private fun ComponentCarouselPager(
         onFocusedChanged(idOrNull)
     }
 
-    Box(
+    Row(
         Modifier
             .fillMaxWidth()
-            .height(CAROUSEL_HEIGHT) // your existing constant (e.g., 360.dp)
+            .height(CAROUSEL_HEIGHT)
     ) {
-        // Pager fills the box
+        if (showEdgeArrows) {
+            EdgeNavButton(
+                left = true,
+                onClick = {
+                    scope.launch {
+                        pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(arrowWidth)
+                    .padding(start = edgeGap)
+            )
+        }
+
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
-                .matchParentSize()
+                .weight(1f)
+                .fillMaxHeight()
         ) { page ->
-            when (page) {
-                0 -> AddComponentCard(label = "Add at AFT", onAdd = onAddAtAft)   // see section 2
-                pageCount - 1 -> AddComponentCard(label = "Add at FWD", onAdd = onAddAtFwd)
-                else -> {
-                    val row = rowsSorted[page - 1]
-                    ComponentPagerCard(
-                        spec = spec, unit = unit, row = row,
-                        onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
-                        onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
-                        onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
-                        onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner
-                    )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = pageGutter)
+            ) {
+                when (page) {
+                    0 -> AddComponentCard(label = "Add at AFT", onAdd = onAddAtAft, outerPadding = addCardOuterPadding)
+                    pageCount - 1 -> AddComponentCard(label = "Add at FWD", onAdd = onAddAtFwd, outerPadding = addCardOuterPadding)
+                    else -> {
+                        val row = rowsSorted[page - 1]
+                        ComponentPagerCard(
+                            spec = spec, unit = unit, row = row, physicalIndex = page - 1,
+                            outerPaddingHorizontal = componentCardOuterPadding,
+                            showComponentDebugLabels = showComponentDebugLabels,
+                            onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
+                            onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
+                            onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
+                            onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
+                            onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner
+                        )
+                    }
                 }
             }
         }
 
-        // Left paddle
-        EdgeNavButton(
-            left = true,
-            onClick = {
-                scope.launch {
-                    pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.CenterStart) // vertically centered next to the card
-                .fillMaxHeight()              // same height as the card
-                .width(44.dp)                 // slim nub
-                .padding(start = 4.dp)        // tiny gutter
-        )
-
-        // Right paddle
-        EdgeNavButton(
-            left = false,
-            onClick = {
-                scope.launch {
-                    pagerState.animateScrollToPage(
-                        (pagerState.currentPage + 1).coerceAtMost(pageCount - 1)
-                    )
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .fillMaxHeight()
-                .width(44.dp)
-                .padding(end = 4.dp)
-        )
+        if (showEdgeArrows) {
+            EdgeNavButton(
+                left = false,
+                onClick = {
+                    scope.launch {
+                        pagerState.animateScrollToPage(
+                            (pagerState.currentPage + 1).coerceAtMost(pageCount - 1)
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(arrowWidth)
+                    .padding(end = edgeGap)
+            )
+        }
     }
 }
 
-/* ───────────────── Arrow Button (reusable) ───────────────── */
-
-/**
- * Pager direction is controlled by `carouselDirectionLtr`.
- * When true, the first component page (index 1) corresponds to the leftmost shaft segment (AFT).
- * When false, the last component page (index pageCount-2) is the leftmost segment.
- */
-
 @Composable
-private fun ArrowNavButton(
+private fun EdgeNavButton(
     left: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    // Lightweight hover for mouse/trackpad; harmless on touch
-    var hovered by remember { mutableStateOf(false) }
-
-    val targetElevation = when {
-        pressed -> 6.dp
-        hovered -> 4.dp
-        else -> 2.dp
-    }
-    val elevation by animateDpAsState(targetElevation, label = "arrowElevation")
-
-    val contentAlpha by animateFloatAsState(
-        targetValue = if (pressed) 0.85f else if (hovered) 0.92f else 1f,
-        label = "arrowAlpha"
+    // Soft vertical gradient to suggest “edge”
+    val scrim = androidx.compose.ui.graphics.Brush.verticalGradient(
+        0f to MaterialTheme.colorScheme.surface.copy(alpha = 0.0f),
+        0.5f to MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        1f to MaterialTheme.colorScheme.surface.copy(alpha = 0.0f)
     )
-
-    Surface(
-        tonalElevation = elevation,
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = modifier
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        hovered = event.type == PointerEventType.Move || event.type == PointerEventType.Enter
-                    }
-                }
-            }
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick
-            )
+    Box(
+        modifier
+            .background(scrim, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = if (left) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        Box(
-            Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant) {
-                Text(
-                    text = if (left) "◀" else "▶",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.graphicsLayer { alpha = contentAlpha }
-                )
-            }
-        }
+        Text(
+            text = if (left) "◀" else "▶",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 2.dp)
+        )
     }
 }
 
 @Composable
 private fun AddComponentCard(
     label: String,
-    onAdd: () -> Unit
+    onAdd: () -> Unit,
+    enabled: Boolean = true,
+    outerPadding: Dp = 12.dp
 ) {
+    val onAddClick = onAdd
     Card(
+        onClick = onAddClick,
+        enabled = enabled,
         modifier = Modifier
             .fillMaxSize()
-            .padding(12.dp),
+            .padding(outerPadding)
+            .semantics {
+                role = androidx.compose.ui.semantics.Role.Button
+                contentDescription = "Add component $label"
+            },
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
         )
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -671,7 +867,8 @@ private fun AddComponentCard(
                 Text(label, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(10.dp))
                 Button(
-                    onClick = onAdd,
+                    onClick = onAddClick,
+                    enabled = enabled,
                     shape = RoundedCornerShape(18.dp)
                 ) { Text("Add component") }
             }
@@ -679,34 +876,47 @@ private fun AddComponentCard(
     }
 }
 
-
-@Composable
-private fun ArrowHint(left: Boolean) {
-    Text(
-        text = if (left) "◀" else "▶",
-        style = MaterialTheme.typography.headlineSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-}
-
 @Composable
 private fun ComponentPagerCard(
     spec: ShaftSpec,
     unit: UnitSystem,
     row: RowRef,
+    physicalIndex: Int,
+    outerPaddingHorizontal: Dp,
+    showComponentDebugLabels: Boolean,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+
+    onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+
     onRemoveBody: (String) -> Unit,
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit
 ) {
+    fun f1(mm: Float): String = "%.1f".format(mm)
+
     when (row.kind) {
         ComponentKind.BODY -> {
             val b = spec.bodies[row.index]
-            ComponentCard("Body #${row.index + 1}", onRemove = { onRemoveBody(b.id) }) {
+            ComponentCard(
+                title = "Body #${row.index + 1}",
+                debugText = if (showComponentDebugLabels) {
+                    "id=${b.id} • startMm=${f1(b.startFromAftMm)} • endMm=${f1(b.startFromAftMm + b.lengthMm)}"
+                } else null,
+                componentId = b.id,
+                componentKind = ComponentKind.BODY,
+                outerPaddingHorizontal = outerPaddingHorizontal,
+                onRemove = {
+                Log.d(
+                    "ShaftUI",
+                    "Body delete clicked: id=${b.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                )
+                onRemoveBody(b.id)
+                }
+            ) {
                 CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateBody(row.index, it, b.lengthMm, b.diaMm)
@@ -727,7 +937,22 @@ private fun ComponentPagerCard(
 
         ComponentKind.TAPER -> {
             val t = spec.tapers[row.index]
-            ComponentCard("Taper #${row.index + 1}", onRemove = { onRemoveTaper(t.id) }) {
+            ComponentCard(
+                title = "Taper #${row.index + 1}",
+                debugText = if (showComponentDebugLabels) {
+                    "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}"
+                } else null,
+                componentId = t.id,
+                componentKind = ComponentKind.TAPER,
+                outerPaddingHorizontal = outerPaddingHorizontal,
+                onRemove = {
+                Log.d(
+                    "ShaftUI",
+                    "Taper delete clicked: id=${t.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                )
+                onRemoveTaper(t.id)
+                }
+            ) {
                 CommitNum("Start (${abbr(unit)})", disp(t.startFromAftMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateTaper(row.index, it, t.lengthMm, t.startDiaMm, t.endDiaMm)
@@ -754,7 +979,56 @@ private fun ComponentPagerCard(
         ComponentKind.THREAD -> {
             val th = spec.threads[row.index]
             val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
-            ComponentCard("Thread #${row.index + 1}", onRemove = { onRemoveThread(th.id) }) {
+            ComponentCard(
+                title = "Thread #${row.index + 1}",
+                debugText = if (showComponentDebugLabels) {
+                    "id=${th.id} • startMm=${f1(th.startFromAftMm)} • endMm=${f1(th.startFromAftMm + th.lengthMm)}"
+                } else null,
+                componentId = th.id,
+                componentKind = ComponentKind.THREAD,
+                outerPaddingHorizontal = outerPaddingHorizontal,
+                onRemove = {
+                Log.d(
+                    "ShaftUI",
+                    "Thread delete clicked: id=${th.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                )
+                onRemoveThread(th.id)
+                }
+            ) {
+                val includeInOal = !th.excludeFromOAL
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .toggleable(
+                            value = includeInOal,
+                            role = androidx.compose.ui.semantics.Role.Switch,
+                            onValueChange = { checked ->
+                                onSetThreadExcludeFromOal(th.id, !checked)
+                            }
+                        )
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Include thread in OAL",
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.Switch(
+                        checked = includeInOal,
+                        onCheckedChange = null
+                    )
+                }
+
+                if (!includeInOal) {
+                    Text(
+                        text = "OAL will be shown as length excluding this thread.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
                 CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm)
@@ -786,7 +1060,22 @@ private fun ComponentPagerCard(
 
         ComponentKind.LINER -> {
             val ln = spec.liners[row.index]
-            ComponentCard("Liner #${row.index + 1}", onRemove = { onRemoveLiner(ln.id) }) {
+            ComponentCard(
+                title = "Liner #${row.index + 1}",
+                debugText = if (showComponentDebugLabels) {
+                    "id=${ln.id} • startMm=${f1(ln.startFromAftMm)} • endMm=${f1(ln.startFromAftMm + ln.lengthMm)}"
+                } else null,
+                componentId = ln.id,
+                componentKind = ComponentKind.LINER,
+                outerPaddingHorizontal = outerPaddingHorizontal,
+                onRemove = {
+                Log.d(
+                    "ShaftUI",
+                    "Liner delete clicked: id=${ln.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                )
+                onRemoveLiner(ln.id)
+                }
+            ) {
                 CommitNum("Start (${abbr(unit)})", disp(ln.startFromAftMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateLiner(row.index, it, ln.lengthMm, ln.odMm)
@@ -858,16 +1147,26 @@ private fun buildOrderedRows(
 
 /* ───────────────── Cards & fields ───────────────── */
 
+/**
+ * Shared card chrome for component editors.
+ *
+ * [componentId] and [componentKind] are optional metadata used purely for logging the
+ * instrumented delete IconButton, allowing us to correlate pointer + click events in Logcat.
+ */
 @Composable
 private fun ComponentCard(
     title: String,
+    debugText: String? = null,
+    componentId: String? = null,
+    componentKind: ComponentKind? = null,
+    outerPaddingHorizontal: Dp = 8.dp,
     onRemove: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp), // consistent outer spacing
+            .padding(horizontal = outerPaddingHorizontal), // consistent outer spacing
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
@@ -877,7 +1176,8 @@ private fun ComponentCard(
             Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
@@ -885,14 +1185,44 @@ private fun ComponentCard(
                     style = MaterialTheme.typography.titleMedium,
                     // Medium weight reads cleaner in cards than Small + default weight
                 )
+                if (debugText != null) {
+                    Text(
+                        debugText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 content()
             }
             if (onRemove != null) {
                 IconButton(
-                    onClick = onRemove,
+                    onClick = {
+                        Log.d(
+                            "ShaftUIButton",
+                            "Delete IconButton onClick fired for id=${componentId ?: "<unknown>"} " +
+                                "(componentType=${componentKind?.name ?: "<unknown>"})"
+                        )
+                        onRemove()
+                    },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(4.dp)
+                        .padding(top = 8.dp, end = 8.dp)
+                        .pointerInput(componentId, componentKind) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val pressed = event.changes.firstOrNull()?.pressed
+                                    if (pressed != null) {
+                                        Log.d(
+                                            "ShaftUIButton",
+                                            "Pointer event on delete button: pressed=$pressed " +
+                                                "for id=${componentId ?: "<unknown>"} " +
+                                                "(componentType=${componentKind?.name ?: "<unknown>"})"
+                                        )
+                                    }
+                                }
+                            }
+                        }
                 ) {
                     Icon(
                         Icons.Filled.Delete,
@@ -1020,9 +1350,32 @@ private fun toMmOrNull(text: String, unit: UnitSystem): Float? {
 
 private fun Float.fmtTrim(d: Int) = "%.${d}f".format(this).trimEnd('0').trimEnd('.')
 
-/** Accepts "12", "3/4", "1.5", or "1:12". */
+/** Accepts "12", "3/4", "15 1/2", "1.5", or "1:12" (tolerates trailing unit suffixes). */
 private fun parseFractionOrDecimal(input: String): Float? {
-    val t = input.trim(); if (t.isEmpty()) return null
+    var t = input.replace(",", "").trim(); if (t.isEmpty()) return null
+
+    // Strip trailing unit-ish suffixes like "in", "mm", or quotes.
+    run {
+        val allowed = "0123456789./:+- "
+        var end = t.length - 1
+        while (end >= 0 && !allowed.contains(t[end])) end--
+        t = if (end >= 0) t.substring(0, end + 1).trim() else ""
+        t = t.replace(Regex("\\s+"), " ")
+        if (t.isEmpty()) return null
+    }
+
+    // Mixed fraction: W N/D
+    val parts = t.split(' ').filter { it.isNotBlank() }
+    if (parts.size == 2 && parts[1].contains('/')) {
+        val whole = parts[0].toFloatOrNull() ?: return null
+        val slash = parts[1].indexOf('/')
+        val a = parts[1].substring(0, slash).trim().toFloatOrNull() ?: return null
+        val b = parts[1].substring(slash + 1).trim().toFloatOrNull() ?: return null
+        if (b == 0f) return null
+        val frac = a / b
+        return if (whole < 0f) whole - frac else whole + frac
+    }
+
     val colon = t.indexOf(':')
     if (colon >= 0) {
         val a = t.substring(0, colon).trim().toFloatOrNull() ?: return null
@@ -1038,32 +1391,6 @@ private fun parseFractionOrDecimal(input: String): Float? {
         return a / b
     }
     return t.toFloatOrNull()
-}
-
-@Composable
-private fun EdgeNavButton(
-    left: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Soft vertical gradient to suggest “edge”
-    val scrim = androidx.compose.ui.graphics.Brush.verticalGradient(
-        0f to MaterialTheme.colorScheme.surface.copy(alpha = 0.0f),
-        0.5f to MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        1f to MaterialTheme.colorScheme.surface.copy(alpha = 0.0f)
-    )
-    Box(
-        modifier
-            .background(scrim, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = if (left) "◀" else "▶",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 @Composable
@@ -1108,6 +1435,15 @@ private fun FreeToEndBadge(
     val freeSignedMm = spec.overallLengthMm - endMm
     val isOversized = freeSignedMm < 0f
 
+    // Effective OAL in measurement space (respects end threads flagged excludeFromOAL)
+    val win = remember(spec) { computeOalWindow(spec) }
+    val physicalOalMm = spec.overallLengthMm.toDouble()
+    val effectiveOalMm = win.oalMm
+    val excluded = kotlin.math.abs(effectiveOalMm - physicalOalMm) > OAL_EPS_MM
+
+    val oalLabel = "OAL"
+    val oalDisplayMm = if (excluded) effectiveOalMm.toFloat() else spec.overallLengthMm
+
     val bg = if (isOversized) MaterialTheme.colorScheme.errorContainer
     else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
     val fg = if (isOversized) MaterialTheme.colorScheme.onErrorContainer
@@ -1120,13 +1456,15 @@ private fun FreeToEndBadge(
         modifier = modifier
     ) {
         Text(
-            text = "Free to end: ${formatDisplay(freeSignedMm, unit)} ${abbr(unit)}",
+            text = "$oalLabel: ${formatDisplay(oalDisplayMm, unit)} ${abbr(unit)}  •  Free to end: ${formatDisplay(freeSignedMm, unit)} ${abbr(unit)}",
             style = MaterialTheme.typography.labelSmall,
             color = fg,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }
+
+private const val OAL_EPS_MM: Double = 1e-3
 
 private fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) 25.4f / tpi else 0f
 @Suppress("unused")
@@ -1149,6 +1487,77 @@ private fun computeAddDefaults(spec: ShaftSpec): AddDefaults {
     if (dia == 50f && spec.bodies.isNotEmpty()) dia = spec.bodies.first().diaMm
 
     return AddDefaults(startMm = end, lastDiaMm = dia)
+}
+
+/* ───────────────── Snap helpers ───────────────── */
+
+private fun applySnappedBodyUpdate(
+    onUpdate: (Int, Float, Float, Float) -> Unit,
+    index: Int,
+    rawStartMm: Float,
+    rawEndMm: Float,
+    diaMm: Float,
+    anchors: List<Float>,
+    config: SnapConfig = SnapConfig()
+) {
+    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
+    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
+    onUpdate(index, snappedStart, lengthMm, diaMm)
+}
+
+private fun applySnappedTaperUpdate(
+    onUpdate: (Int, Float, Float, Float, Float) -> Unit,
+    index: Int,
+    rawStartMm: Float,
+    rawEndMm: Float,
+    startDiaMm: Float,
+    endDiaMm: Float,
+    anchors: List<Float>,
+    config: SnapConfig = SnapConfig()
+) {
+    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
+    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
+    onUpdate(index, snappedStart, lengthMm, startDiaMm, endDiaMm)
+}
+
+private fun applySnappedThreadUpdate(
+    onUpdate: (Int, Float, Float, Float, Float) -> Unit,
+    index: Int,
+    rawStartMm: Float,
+    rawEndMm: Float,
+    majorDiaMm: Float,
+    pitchMm: Float,
+    anchors: List<Float>,
+    config: SnapConfig = SnapConfig()
+) {
+    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
+    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
+    onUpdate(index, snappedStart, lengthMm, majorDiaMm, pitchMm)
+}
+
+private fun applySnappedLinerUpdate(
+    onUpdate: (Int, Float, Float, Float) -> Unit,
+    index: Int,
+    rawStartMm: Float,
+    rawEndMm: Float,
+    odMm: Float,
+    anchors: List<Float>,
+    config: SnapConfig = SnapConfig()
+) {
+    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
+    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
+    onUpdate(index, snappedStart, lengthMm, odMm)
+}
+
+private fun snapBounds(
+    rawStartMm: Float,
+    rawEndMm: Float,
+    anchors: List<Float>,
+    config: SnapConfig
+): Pair<Float, Float> {
+    val snappedStart = snapPositionMm(rawStartMm, anchors, config)
+    val snappedEnd = snapPositionMm(rawEndMm, anchors, config)
+    return snappedStart to snappedEnd
 }
 
 /* ───────────────── Click helper ───────────────── */

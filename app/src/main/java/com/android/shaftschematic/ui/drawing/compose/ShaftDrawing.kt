@@ -1,6 +1,7 @@
 // file: com/android/shaftschematic/ui/drawing/compose/ShaftDrawing.kt
 package com.android.shaftschematic.ui.drawing.compose
 
+import android.graphics.Paint
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
@@ -26,11 +27,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.drawing.render.GridRenderer.drawAdaptiveShaftGrid
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
@@ -38,6 +41,7 @@ import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.drawing.render.ThreadStyle
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.launch
 
 /**
@@ -66,6 +70,8 @@ fun ShaftDrawing(
     spec: ShaftSpec,
     unit: UnitSystem,
     showGrid: Boolean,
+    showLayoutDebugOverlay: Boolean = false,
+    showOalMarkers: Boolean = false,
     // Highlight bridge (safe defaults)
     highlightEnabled: Boolean = false,
     highlightId: Any? = null,
@@ -76,6 +82,7 @@ fun ShaftDrawing(
 
     // Theme-derived highlight glow color (edge stays white for contrast)
     val themeGlow: Color = MaterialTheme.colorScheme.primary
+    val debugMarkerColor: Color = MaterialTheme.colorScheme.error
 
     // RenderOptions (keep most defaults; set only what we actively control here)
     // NOTE: legacy color fields in RenderOptions are ARGB Ints → use toArgb().
@@ -159,6 +166,9 @@ fun ShaftDrawing(
     // Layout + Draw
     // ──────────────────────────────
     Box(modifier = modifier.then(gestures)) {
+        val lastLayoutDbg = remember { arrayOfNulls<String>(1) }
+        val lastOalWinDbg = remember { arrayOfNulls<String>(1) }
+
         Canvas(Modifier.fillMaxSize()) {
             val padX = options.paddingPx.toFloat()
             val padY = 8f
@@ -170,6 +180,12 @@ fun ShaftDrawing(
                 rightPx = size.width - padX,
                 bottomPx = size.height - padY
             )
+
+            val dbg = layout.dbg()
+            if (VerboseLog.isEnabled(VerboseLog.Category.RENDER) && lastLayoutDbg[0] != dbg) {
+                lastLayoutDbg[0] = dbg
+                VerboseLog.d(VerboseLog.Category.RENDER, "ShaftDrawing") { "layout: $dbg" }
+            }
 
             withTransform({
                 translate(offset.value.x, offset.value.y)
@@ -187,6 +203,51 @@ fun ShaftDrawing(
                         textMeasurer = textMeasurer
                     )
                 }
+
+                val wantOal = showOalMarkers || VerboseLog.isEnabled(VerboseLog.Category.OAL)
+                if (wantOal) {
+                    val win = computeOalWindow(safeSpec)
+                    if (VerboseLog.isEnabled(VerboseLog.Category.OAL)) {
+                        val winDbg = "oalWindow: startMm=${"%.3f".format(win.measureStartMm)} endMm=${"%.3f".format(win.measureEndMm)} oalMm=${"%.3f".format(win.oalMm)}"
+                        if (lastOalWinDbg[0] != winDbg) {
+                            lastOalWinDbg[0] = winDbg
+                            VerboseLog.d(VerboseLog.Category.OAL, "ShaftDrawing") { winDbg }
+                        }
+                    }
+
+                    if (showOalMarkers) {
+                        val xStart = layout.xPx(win.measureStartMm.toFloat())
+                        val xEnd = layout.xPx(win.measureEndMm.toFloat())
+                        val stroke = (2f / scale.value).coerceAtLeast(0.5f)
+                        drawLine(
+                            color = debugMarkerColor,
+                            start = Offset(xStart, layout.contentTopPx),
+                            end = Offset(xStart, layout.contentBottomPx),
+                            strokeWidth = stroke
+                        )
+                        drawLine(
+                            color = debugMarkerColor,
+                            start = Offset(xEnd, layout.contentTopPx),
+                            end = Offset(xEnd, layout.contentBottomPx),
+                            strokeWidth = stroke
+                        )
+                    }
+                }
+            }
+
+            if (showLayoutDebugOverlay) {
+                val p = Paint().apply {
+                    isAntiAlias = true
+                    color = Color.Black.toArgb()
+                    textSize = 28f
+                }
+                drawContext.canvas.nativeCanvas.drawText(layout.dbg(), 12f, 32f, p)
+                drawContext.canvas.nativeCanvas.drawText(
+                    "zoom=${"%.2f".format(scale.value)} pan=(${"%.0f".format(offset.value.x)},${"%.0f".format(offset.value.y)})",
+                    12f,
+                    64f,
+                    p
+                )
             }
         }
 

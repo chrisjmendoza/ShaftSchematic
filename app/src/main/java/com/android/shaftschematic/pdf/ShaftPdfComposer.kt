@@ -13,6 +13,7 @@ import com.android.shaftschematic.pdf.notes.*
 import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.VerboseLog
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.abs
@@ -49,6 +50,11 @@ fun composeShaftPdf(
     val pageW = page.info.pageWidth.toFloat()
     val pageH = page.info.pageHeight.toFloat()
 
+    VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
+        "compose start: page=${page.info.pageWidth}x${page.info.pageHeight}pt filename=$filename unit=$unit oalMm=${"%.3f".format(spec.overallLengthMm)}" +
+            " parts(bodies=${spec.bodies.size}, tapers=${spec.tapers.size}, threads=${spec.threads.size}, liners=${spec.liners.size})"
+    }
+
     val geomRect = RectF(
         PAGE_MARGIN_PT,
         PAGE_MARGIN_PT + TOP_TEXT_PAD_PT,
@@ -71,6 +77,12 @@ fun composeShaftPdf(
     val overallMm = max(1f, spec.overallLengthMm)
     val ptPerMm = geomRect.width() / overallMm
     val left = geomRect.left
+
+    val winDbg = computeOalWindow(spec)
+    VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
+        "layout: geomRect=${geomRect.width().toInt()}x${geomRect.height().toInt()}pt ptPerMm=${"%.4f".format(ptPerMm)} maxDiaMm=${"%.3f".format(spec.maxOuterDiaMm())}" +
+            " oalWindow(start=${"%.3f".format(winDbg.measureStartMm)}, end=${"%.3f".format(winDbg.measureEndMm)}, oal=${"%.3f".format(winDbg.oalMm)})"
+    }
 
     val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
     val halfHeightPx = (maxDiaMm * 0.5f) * ptPerMm
