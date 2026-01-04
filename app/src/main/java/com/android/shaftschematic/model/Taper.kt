@@ -13,6 +13,8 @@ import kotlin.math.max
  * @property lengthMm Axial length of the taper.
  * @property startDiaMm Diameter at the taper's start.
  * @property endDiaMm Diameter at the taper's end.
+ * @property keywayWidthMm Optional keyway width (0 = none).
+ * @property keywayDepthMm Optional keyway depth (0 = none).
  */
 @Serializable
 data class Taper(
@@ -21,11 +23,13 @@ data class Taper(
     override val lengthMm: Float = 0f,
     val startDiaMm: Float = 0f,
     val endDiaMm: Float = 0f,
+    val keywayWidthMm: Float = 0f,
+    val keywayDepthMm: Float = 0f,
 ) : Segment
 
 /** Basic invariants for a Taper. */
 fun Taper.isValid(overallLengthMm: Float): Boolean =
-    isWithin(overallLengthMm) && startDiaMm >= 0f && endDiaMm >= 0f
+    isWithin(overallLengthMm) && startDiaMm >= 0f && endDiaMm >= 0f && keywayWidthMm >= 0f && keywayDepthMm >= 0f
 
 /** Maximum diameter across the taper span. */
 val Taper.maxDiaMm: Float get() = max(startDiaMm, endDiaMm)

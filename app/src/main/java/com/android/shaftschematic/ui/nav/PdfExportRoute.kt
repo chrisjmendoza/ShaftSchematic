@@ -2,6 +2,8 @@ package com.android.shaftschematic.ui.nav
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -55,18 +57,37 @@ fun PdfExportRoute(
                             "writing: page=${pageInfo.pageWidth}x${pageInfo.pageHeight}pt filename=$filename"
                         }
 
-                        composeShaftPdf(
-                            page = page,
-                            spec = vm.spec.value,
-                            unit = vm.unit.value,
-                            project = project,
-                            appVersion = appVersionFromContext(ctx),
-                            filename = filename
-                        )
+                        val exportError = try {
+                            composeShaftPdf(
+                                page = page,
+                                spec = vm.spec.value,
+                                unit = vm.unit.value,
+                                project = project,
+                                appVersion = appVersionFromContext(ctx),
+                                filename = filename
+                            )
+                            null
+                        } catch (t: Throwable) {
+                            // Never leave a truncated/unopenable PDF behind.
+                            // Write a valid error page so the output opens and the user can see what failed.
+                            val canvas = page.canvas
+                            canvas.drawColor(Color.WHITE)
+                            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                color = Color.BLACK
+                                textSize = 14f
+                            }
+                            val header = "PDF export failed"
+                            val detail = "${t.javaClass.simpleName}: ${t.message ?: "(no message)"}"
+                            canvas.drawText(header, 48f, 96f, paint)
+                            canvas.drawText(detail, 48f, 120f, paint)
+                            t
+                        }
 
                         doc.finishPage(page)
                         doc.writeTo(out)
-                        wrotePdf = true
+
+                        wrotePdf = (exportError == null)
+                        if (exportError != null) throw exportError
                     } finally {
                         try { out.flush() } catch (_: Throwable) {}
                         doc.close()

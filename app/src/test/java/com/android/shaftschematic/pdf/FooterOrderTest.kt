@@ -22,7 +22,9 @@ class FooterOrderTest {
             startFromAftMm = 100f,
             lengthMm = 200f,
             startDiaMm = 50f,
-            endDiaMm = 40f
+            endDiaMm = 40f,
+            keywayWidthMm = 10f,
+            keywayDepthMm = 3f
         )
         val spec = ShaftSpec(
             overallLengthMm = 1000f,
@@ -44,18 +46,22 @@ class FooterOrderTest {
         val idxRate = lines.indexOfFirst { it.startsWith("Rate: ") }
         val idxLet = lines.indexOfFirst { it.startsWith("L.E.T.: ") }
         val idxSet = lines.indexOfFirst { it.startsWith("S.E.T.: ") }
+        val idxKw = lines.indexOfFirst { it.startsWith("KW: ") }
         val idxLen = lines.indexOfFirst { it.startsWith("Length: ") }
         val idxThread = lines.indexOfFirst { it.startsWith("Thread: ") }
 
         assertTrue("Expected Rate line", idxRate >= 0)
         assertTrue("Expected L.E.T. line", idxLet >= 0)
         assertTrue("Expected S.E.T. line", idxSet >= 0)
+        assertTrue("Expected KW line", idxKw >= 0)
         assertTrue("Expected Length line", idxLen >= 0)
         assertTrue("Expected Thread line", idxThread >= 0)
 
         assertTrue("Rate should come before LET", idxRate < idxLet)
         assertTrue("LET should come before SET", idxLet < idxSet)
         assertTrue("SET should come before Length", idxSet < idxLen)
+        assertTrue("Length should come before KW", idxLen < idxKw)
+        assertTrue("KW should come before Thread", idxKw < idxThread)
         assertTrue("Length should come before Thread", idxLen < idxThread)
     }
 }

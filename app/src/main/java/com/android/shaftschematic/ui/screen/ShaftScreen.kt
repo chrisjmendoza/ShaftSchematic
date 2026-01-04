@@ -98,11 +98,13 @@ import com.android.shaftschematic.ui.config.defaultThreadMajorDiaMm
 import com.android.shaftschematic.ui.config.defaultThreadPitchMm
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
+import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.viewmodel.SnapConfig
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
 import com.android.shaftschematic.ui.viewmodel.snapPositionMm
+import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
 
@@ -169,6 +171,7 @@ fun ShaftScreen(
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
 
@@ -340,7 +343,7 @@ fun ShaftScreen(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedTextField(
                         value = lengthText,
@@ -528,6 +531,7 @@ fun ShaftScreen(
                     showComponentDebugLabels = showComponentDebugLabels,
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateTaper = snappedTaperUpdater,
+                    onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateThread = snappedThreadUpdater,
                     onUpdateLiner = snappedLinerUpdater,
 
@@ -680,6 +684,7 @@ private fun ComponentCarouselPager(
     showComponentDebugLabels: Boolean,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
 
@@ -780,6 +785,7 @@ private fun ComponentCarouselPager(
                             outerPaddingHorizontal = componentCardOuterPadding,
                             showComponentDebugLabels = showComponentDebugLabels,
                             onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
+                            onUpdateTaperKeyway = onUpdateTaperKeyway,
                             onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
                             onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
                             onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
@@ -886,6 +892,7 @@ private fun ComponentPagerCard(
     showComponentDebugLabels: Boolean,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
 
@@ -937,6 +944,7 @@ private fun ComponentPagerCard(
 
         ComponentKind.TAPER -> {
             val t = spec.tapers[row.index]
+            val endMap = taperSetLetMapping(t, spec.overallLengthMm)
             ComponentCard(
                 title = "Taper #${row.index + 1}",
                 debugText = if (showComponentDebugLabels) {
@@ -963,14 +971,42 @@ private fun ComponentPagerCard(
                         onUpdateTaper(row.index, t.startFromAftMm, it, t.startDiaMm, t.endDiaMm)
                     }
                 }
-                CommitNum("S.E.T. Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
+                CommitNum("${endMap.leftCode} Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateTaper(row.index, t.startFromAftMm, t.lengthMm, it, t.endDiaMm)
                     }
                 }
-                CommitNum("L.E.T. Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
+                CommitNum("${endMap.rightCode} Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateTaper(row.index, t.startFromAftMm, t.lengthMm, t.startDiaMm, it)
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CommitNum(
+                        label = "KW W (${abbr(unit)})",
+                        initialDisplay = dispKw(t.keywayWidthMm, unit),
+                        modifier = Modifier.weight(1f),
+                        fillMaxWidth = false
+                    ) { s ->
+                        val widthMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                        onUpdateTaperKeyway(row.index, widthMm, t.keywayDepthMm)
+                    }
+
+                    Text("×", style = MaterialTheme.typography.titleMedium)
+
+                    CommitNum(
+                        label = "KW D (${abbr(unit)})",
+                        initialDisplay = dispKw(t.keywayDepthMm, unit),
+                        modifier = Modifier.weight(1f),
+                        fillMaxWidth = false
+                    ) { s ->
+                        val depthMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                        onUpdateTaperKeyway(row.index, t.keywayWidthMm, depthMm)
                     }
                 }
             }
@@ -1034,11 +1070,6 @@ private fun ComponentPagerCard(
                         onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm)
                     }
                 }
-                CommitNum("Length (${abbr(unit)})", disp(th.lengthMm, unit)) { s ->
-                    toMmOrNull(s, unit)?.let {
-                        onUpdateThread(row.index, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm)
-                    }
-                }
                 CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateThread(row.index, th.startFromAftMm, th.lengthMm, it, th.pitchMm)
@@ -1053,6 +1084,11 @@ private fun ComponentPagerCard(
                             th.majorDiaMm,
                             tpiToPitchMm(tpi)
                         )
+                    }
+                }
+                CommitNum("Length (${abbr(unit)})", disp(th.lengthMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateThread(row.index, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm)
                     }
                 }
             }
@@ -1294,6 +1330,8 @@ private fun CommitTextField(
 private fun CommitNum(
     label: String,
     initialDisplay: String,
+    modifier: Modifier = Modifier,
+    fillMaxWidth: Boolean = true,
     onCommit: (String) -> Unit
 ) {
     var text by remember(initialDisplay) { mutableStateOf(initialDisplay) }
@@ -1305,7 +1343,8 @@ private fun CommitNum(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
         modifier = Modifier
-            .fillMaxWidth()
+            .let { if (fillMaxWidth) it.fillMaxWidth() else it }
+            .then(modifier)
             .onFocusChanged { f -> if (!f.isFocused) onCommit(text) }
     )
 }
@@ -1341,6 +1380,22 @@ private fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String 
 /** Convenience wrapper for "mm → display" in the component cards. */
 private fun disp(mm: Float, unit: UnitSystem, d: Int = 3): String =
     formatDisplay(mm, unit, d)
+
+/**
+ * Keyway (KW) dims are commonly written as shop fractions in inches.
+ * Keep the input field display aligned with PDF formatting.
+ */
+private fun dispKw(mm: Float, unit: UnitSystem): String = when (unit) {
+    UnitSystem.INCHES -> if (kotlin.math.abs(mm) < 1e-6f) {
+        "0"
+    } else {
+        LengthFormat.formatInchesSmart(
+            inches = mm.toDouble() / 25.4,
+            opts = LengthFormat.InchFormatOptions(maxDenominator = 32)
+        )
+    }
+    UnitSystem.MILLIMETERS -> disp(mm, unit)
+}
 
 private fun toMmOrNull(text: String, unit: UnitSystem): Float? {
     val t = text.trim(); if (t.isEmpty()) return null

@@ -65,6 +65,13 @@ fun composeShaftPdf(
         pageH - PAGE_MARGIN_PT - FOOTER_BLOCK_PT
     )
 
+    // PDF-only guard: a shaft with exactly one Body and no other detail components.
+    // For body-only shafts there is nothing to "make room for", so do not apply
+    // any body compression/break logic.
+    val bodyOnly = isBodyOnlyShaft(spec)
+    val singleTaperOnly = isSingleTaperOnly(spec)
+    val hasNonBodyDetail = spec.tapers.isNotEmpty() || spec.threads.isNotEmpty() || spec.liners.isNotEmpty()
+
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = OUTLINE_PT; color = 0xFF000000.toInt()
     }
@@ -77,8 +84,22 @@ fun composeShaftPdf(
         color = 0xFF000000.toInt()
     }
 
-    val overallMm = max(1f, spec.overallLengthMm)
-    val ptPerMm = geomRect.width() / overallMm
+    val ptPerMm = when {
+        bodyOnly || hasNonBodyDetail -> {
+            // PDF schematic scaling rule:
+            // - For any spec with "detail" (tapers/threads/liners), target a stable drawn shaft height
+            //   of ~1.25" when possible (uniform scale; no x/y distortion).
+            // - Body center-break/compression is a readability fallback, not the default.
+            // For any detailed shaft (tapers/threads/liners) prefer a stable schematic height
+            // (~1.0–1.5 in). Keep uniform scaling (no x/y distortion), and still respect page width.
+            computeDetailPtPerMm(spec, geomRect.width(), geomRect.height())
+        }
+        else -> {
+            // Bodies-only: classic width-fit.
+            val overallMm = max(1f, spec.overallLengthMm)
+            geomRect.width() / overallMm
+        }
+    }
     val left = geomRect.left
 
     val winDbg = computeOalWindow(spec)
@@ -97,14 +118,18 @@ fun composeShaftPdf(
         pageH - PAGE_MARGIN_PT - FOOTER_BLOCK_PT - INFO_GAP_PT - halfHeightPx
     )
     val desiredCy = pageH * 0.5f + SHAFT_DOWN_PT
-    val cy = desiredCy.coerceIn(minCy, maxCy)
+    val cy = if (minCy <= maxCy) desiredCy.coerceIn(minCy, maxCy) else (geomRect.top + geomRect.bottom) * 0.5f
     val yTopOfShaft = cy - halfHeightPx
 
     fun xAt(mm: Float) = (left + mm * ptPerMm).coerceIn(geomRect.left, geomRect.right)
     fun rPx(d: Float)  = (d * 0.5f) * ptPerMm
 
     // geometry
-    drawBodiesCompressedCenterBreak(c, spec.bodies, cy, ::xAt, ::rPx, outline, geomRect)
+    if (bodyOnly || singleTaperOnly) {
+        drawBodiesPlain(c, spec.bodies, cy, ::xAt, ::rPx, outline)
+    } else {
+        drawBodiesCompressedCenterBreak(c, spec.bodies, cy, ::xAt, ::rPx, outline, geomRect)
+    }
     drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline)
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
@@ -181,14 +206,16 @@ fun composeShaftPdf(
     }
 
     // footer
-    val showCompressionNote = hasCenterBreak(spec)
+    val showCompressionNote = !bodyOnly && hasCenterBreak(spec)
+
+    val footerTapers = selectFooterTapers(spec)
     val footerCfg = FooterConfig(
         showAftThread = hasAftThread(spec),
         showFwdThread = hasFwdThread(spec),
         // Taper rendering is gated by detectEndFeatures(); this flag only controls whether
         // taper details are enabled for the footer at all.
-        showAftTaper  = spec.tapers.isNotEmpty(),
-        showFwdTaper  = spec.tapers.isNotEmpty(),
+        showAftTaper  = footerTapers.aft != null,
+        showFwdTaper  = footerTapers.fwd != null,
         showCompressionNote = showCompressionNote
     )
 
@@ -204,6 +231,10 @@ fun composeShaftPdf(
 // ──────────────────────────────────────────────────────────────────────────────
 
 private const val MM_PER_IN = 25.4f
+
+// Body-only PDF rendering uses a stable, fixed target drawing height.
+// 1.25 in keeps the shaft visible without eating the page.
+private const val BODY_ONLY_TARGET_HEIGHT_PT = 1.25f * 72f
 
 // Strokes / text
 private const val OUTLINE_PT = 2.5f
@@ -233,6 +264,121 @@ private const val ZIGZAG_TEETH = 3           // 2–3 looks best; using 3 by def
 // Label collision avoidance
 private const val LABEL_STACK_STEP_PT = 10f  // vertical nudge per collision
 private const val LABEL_LEADER_PT = 8f       // short leader when label is nudged
+
+private fun isBodyOnlyShaft(spec: ShaftSpec): Boolean {
+    if (
+        spec.bodies.size != 1 ||
+        spec.tapers.isNotEmpty() ||
+        spec.threads.isNotEmpty() ||
+        spec.liners.isNotEmpty()
+    ) {
+        return false
+    }
+
+    // Future-proofing: also require *no* features that reach either end.
+    // This prevents accidentally treating “body + end details” as “body-only”.
+    val ends = detectEndFeatures(spec)
+    return !(ends.aftThread || ends.fwdThread || ends.aftTaper || ends.fwdTaper)
+}
+
+private fun isSingleTaperOnly(spec: ShaftSpec): Boolean {
+    if (spec.tapers.size != 1) return false
+    if (spec.threads.isNotEmpty()) return false
+    if (spec.liners.isNotEmpty()) return false
+    // Allow at most one base body under the taper; more implies a multi-body shaft.
+    if (spec.bodies.size > 1) return false
+    return true
+}
+
+internal data class FooterTapers(
+    val aft: Taper?,
+    val fwd: Taper?
+)
+
+internal fun selectFooterTapers(spec: ShaftSpec): FooterTapers {
+    val oal = spec.overallLengthMm
+    val tapers = spec.tapers
+        .asSequence()
+        .filter { it.lengthMm > 0f && it.startDiaMm > 0f && it.endDiaMm > 0f }
+        .toList()
+    if (tapers.isEmpty()) return FooterTapers(aft = null, fwd = null)
+
+    fun midMm(t: Taper): Float = t.startFromAftMm + t.lengthMm * 0.5f
+
+    if (tapers.size == 1) {
+        val t = tapers.first()
+        // Default to AFT if we can't meaningfully classify.
+        if (oal <= 0f) return FooterTapers(aft = t, fwd = null)
+        return if (midMm(t) <= oal * 0.5f) FooterTapers(aft = t, fwd = null) else FooterTapers(aft = null, fwd = t)
+    }
+
+    val sorted = tapers.sortedBy(::midMm)
+    return FooterTapers(aft = sorted.first(), fwd = sorted.last())
+}
+
+internal fun computeBodyOnlyPtPerMm(spec: ShaftSpec, geomWidthPt: Float): Float {
+    // Explicit guards: avoid divide-by-zero / infinity scaling.
+    // In pathological specs, fall back to a safe 1mm baseline.
+    val overallMm = if (spec.overallLengthMm > 0f) spec.overallLengthMm else 1f
+    val maxDiaMmRaw = spec.maxOuterDiaMm()
+    val maxDiaMm = if (maxDiaMmRaw > 0f) maxDiaMmRaw else 1f
+
+    val byWidth = geomWidthPt / overallMm
+    val byTargetHeight = BODY_ONLY_TARGET_HEIGHT_PT / maxDiaMm
+    return min(byWidth, byTargetHeight)
+}
+
+internal fun computeDetailPtPerMm(spec: ShaftSpec, geomWidthPt: Float, geomHeightPt: Float): Float {
+    // Same target-height behavior as body-only, but also never exceed the available content height.
+    val overallMm = if (spec.overallLengthMm > 0f) spec.overallLengthMm else 1f
+    val maxDiaMmRaw = spec.maxOuterDiaMm()
+    val maxDiaMm = if (maxDiaMmRaw > 0f) maxDiaMmRaw else 1f
+
+    val byWidth = geomWidthPt / overallMm
+    val byTargetHeight = BODY_ONLY_TARGET_HEIGHT_PT / maxDiaMm
+    val byGeomHeight = geomHeightPt / maxDiaMm
+    return requireFinite("ptPerMm", min(byWidth, min(byTargetHeight, byGeomHeight)).coerceAtLeast(1e-6f))
+}
+
+internal fun computePdfPtPerMmFitAxes(spec: ShaftSpec, geomWidthPt: Float, geomHeightPt: Float): Float {
+    // Explicit guards: prevent divide-by-zero / infinity scaling.
+    val overallMm = spec.overallLengthMm.takeIf { it > 0f } ?: 1f
+    val maxDiaMmRaw = spec.maxOuterDiaMm()
+    val maxDiaMm = maxDiaMmRaw.takeIf { it > 0f } ?: 1f
+
+    val byWidth = geomWidthPt / overallMm
+    val byHeight = geomHeightPt / maxDiaMm
+
+    return requireFinite("ptPerMm", min(byWidth, byHeight).coerceAtLeast(1e-6f))
+}
+
+private fun requireFinite(name: String, v: Float): Float {
+    if (!v.isFinite()) throw IllegalArgumentException("$name is not finite: $v")
+    return v
+}
+
+private fun drawBodiesPlain(
+    c: Canvas,
+    bodies: List<Body>,
+    cy: Float,
+    xAt: (Float) -> Float,
+    rPx: (Float) -> Float,
+    outline: Paint,
+) {
+    bodies.forEach { b ->
+        if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
+        val x0 = xAt(b.startFromAftMm)
+        val x1 = xAt(b.startFromAftMm + b.lengthMm)
+        val r = rPx(b.diaMm)
+        val top = cy - r
+        val bot = cy + r
+
+        c.drawLine(x0, top, x1, top, outline)
+        c.drawLine(x0, bot, x1, bot, outline)
+        c.drawLine(x0, top, x0, bot, outline)
+        c.drawLine(x1, top, x1, bot, outline)
+    }
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Geometry — bodies with centered long-break compression
@@ -477,10 +623,12 @@ private fun drawTapers(
 ) {
     tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
-        val x0 = xAt(t.startFromAftMm); val x1 = xAt(t.startFromAftMm + t.lengthMm)
-        val r0 = rPx(t.startDiaMm); val r1 = rPx(t.endDiaMm)
-        val top0 = cy - r0; val bot0 = cy + r0
-        val top1 = cy - r1; val bot1 = cy + r1
+        val x0 = requireFinite("taper.x0", xAt(t.startFromAftMm))
+        val x1 = requireFinite("taper.x1", xAt(t.startFromAftMm + t.lengthMm))
+        val r0 = requireFinite("taper.r0", rPx(t.startDiaMm))
+        val r1 = requireFinite("taper.r1", rPx(t.endDiaMm))
+        val top0 = requireFinite("taper.top0", cy - r0); val bot0 = requireFinite("taper.bot0", cy + r0)
+        val top1 = requireFinite("taper.top1", cy - r1); val bot1 = requireFinite("taper.bot1", cy + r1)
         c.drawLine(x0, top0, x1, top1, outline)
         c.drawLine(x0, bot0, x1, bot1, outline)
         c.drawLine(x0, top0, x0, bot0, outline)
@@ -747,16 +895,20 @@ internal data class FooterColumns(
  */
 internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: FooterConfig): FooterColumns {
     val ends = detectEndFeatures(spec)
+    val taperSides = selectFooterTapers(spec)
 
     val aft = mutableListOf<String>()
-    if (cfg.showAftTaper && ends.aftTaper) {
-        getAftEndTaper(spec)?.let { tp ->
+    if (cfg.showAftTaper) {
+        taperSides.aft?.let { tp ->
             val (let, set) = letSet(tp)
             aft += "AFT Taper"
             aft += "Rate: ${rate1toN(tp)}"
             aft += "L.E.T.: ${formatDiaWithUnit(let.toDouble(), unit)}"
             aft += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
             aft += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
+            if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
+                aft += "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}"
+            }
         }
     }
     if (cfg.showAftThread && ends.aftThread) {
@@ -766,14 +918,17 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
     }
 
     val fwd = mutableListOf<String>()
-    if (cfg.showFwdTaper && ends.fwdTaper) {
-        getFwdEndTaper(spec)?.let { tp ->
+    if (cfg.showFwdTaper) {
+        taperSides.fwd?.let { tp ->
             val (let, set) = letSet(tp)
             fwd += "FWD Taper"
             fwd += "Rate: ${rate1toN(tp)}"
             fwd += "L.E.T.: ${formatDiaWithUnit(let.toDouble(), unit)}"
             fwd += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
             fwd += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
+            if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
+                fwd += "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}"
+            }
         }
     }
     if (cfg.showFwdThread && ends.fwdThread) {

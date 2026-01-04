@@ -636,7 +636,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         orderAdd(ComponentKind.TAPER, id)
         s.copy(
             tapers = listOf(
-                Taper(id, startMm, max(0f, lengthMm), max(0f, startDiaMm), max(0f, endDiaMm))
+                Taper(
+                    id = id,
+                    startFromAftMm = startMm,
+                    lengthMm = max(0f, lengthMm),
+                    startDiaMm = max(0f, startDiaMm),
+                    endDiaMm = max(0f, endDiaMm),
+                    keywayWidthMm = 0f,
+                    keywayDepthMm = 0f
+                )
             ) + s.tapers
         )
     }.also { ensureOverall(); ensureOrderCoversSpec() }
@@ -657,7 +665,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     startFromAftMm = startMm,
                     lengthMm = max(0f, lengthMm),
                     startDiaMm = max(0f, startDiaMm),
-                    endDiaMm = max(0f, endDiaMm)
+                    endDiaMm = max(0f, endDiaMm),
+                    keywayWidthMm = old.keywayWidthMm,
+                    keywayDepthMm = old.keywayDepthMm
                 )
             }
 
@@ -670,6 +680,19 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }.also { ensureOverall() }
+
+    fun updateTaperKeyway(index: Int, widthMm: Float, depthMm: Float) = _spec.update { s ->
+        if (index !in s.tapers.indices) s else {
+            val old = s.tapers[index]
+            val updatedTapers = s.tapers.toMutableList().also { list ->
+                list[index] = old.copy(
+                    keywayWidthMm = max(0f, widthMm),
+                    keywayDepthMm = max(0f, depthMm)
+                )
+            }
+            s.copy(tapers = updatedTapers)
+        }
+    }
 
 
     /** Remove a [Taper] by id with multi-step delete history support. */

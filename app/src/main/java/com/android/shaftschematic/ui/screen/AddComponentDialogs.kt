@@ -221,7 +221,7 @@ fun AddThreadDialog(
     var start by remember(unit, d.startMm) { mutableStateOf(toDisplayString(d.startMm, unit)) }
     var length by remember(unit) { mutableStateOf(toDisplayString(32f, unit)) }
     var major by remember(unit, d.lastDiaMm) { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
-    var tpiText by remember { mutableStateOf("10") }
+    var tpiText by remember { mutableStateOf("4") }
     var countInOal by remember { mutableStateOf(true) }
 
     val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
@@ -236,11 +236,11 @@ fun AddThreadDialog(
             Column(Modifier.padding(top = 4.dp)) {
                 CommitNumField("Start (${abbrFor(unit)})", start) { start = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Length (${abbrFor(unit)})", length) { length = it }
-                Spacer(Modifier.height(8.dp))
                 CommitNumField("Major Ø (${abbrFor(unit)})", major) { major = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("TPI", tpiText) { tpiText = it }
+                Spacer(Modifier.height(8.dp))
+                CommitNumField("Length (${abbrFor(unit)})", length) { length = it }
                 Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
