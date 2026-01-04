@@ -26,11 +26,15 @@ import java.io.File
  */
 
 object InternalStorage {
-    private fun dir(ctx: Context): File = File(ctx.filesDir, "shafts").apply { mkdirs() }
+    private fun dir(ctx: Context): File = dir(ctx.filesDir)
 
-    fun list(ctx: Context): List<String> =
-        dir(ctx).listFiles()?.filter { it.isFile && it.extension == "json" }?.map { it.name }?.sorted()
+    internal fun dir(filesDir: File): File = File(filesDir, "shafts").apply { mkdirs() }
+
+    internal fun list(dir: File): List<String> =
+        dir.listFiles()?.filter { it.isFile && it.extension == "json" }?.map { it.name }?.sorted()
             ?: emptyList()
+
+    fun list(ctx: Context): List<String> = list(dir(ctx))
 
     fun exists(ctx: Context, name: String): Boolean = File(dir(ctx), name).exists()
 
@@ -65,7 +69,8 @@ object InternalStorage {
             VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") { "load name=$name chars=${content.length}" }
         }
 
-    fun delete(ctx: Context, name: String) {
-        File(dir(ctx), name).delete()
-    }
+    /** Returns true when the file was actually deleted. */
+    fun delete(ctx: Context, name: String): Boolean = delete(dir(ctx), name)
+
+    internal fun delete(dir: File, name: String): Boolean = File(dir, name).delete()
 }

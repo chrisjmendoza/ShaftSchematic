@@ -2,6 +2,8 @@
 package com.android.shaftschematic.ui.screen
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -72,8 +74,31 @@ private fun toDisplayString(mm: Float, unit: UnitSystem, d: Int = 3): String {
 
 /** Decimal/fraction/ratio parser. Accepts "12", "3/4", "1.25", "1:12". Returns numeric value. */
 private fun parseFractionOrDecimalOrRatio(input: String): Float? {
-    val t = input.trim()
+    var t = input.replace(",", "").trim()
     if (t.isEmpty()) return null
+
+    // Tolerate unit-ish suffixes like "in", "mm", or quotes.
+    run {
+        val allowed = "0123456789./:+- "
+        var end = t.length - 1
+        while (end >= 0 && !allowed.contains(t[end])) end--
+        t = if (end >= 0) t.substring(0, end + 1).trim() else ""
+        t = t.replace(Regex("\\s+"), " ")
+        if (t.isEmpty()) return null
+    }
+
+    // Mixed fraction: W N/D
+    val parts = t.split(' ').filter { it.isNotBlank() }
+    if (parts.size == 2 && parts[1].contains('/')) {
+        val whole = parts[0].toFloatOrNull() ?: return null
+        val slash = parts[1].indexOf('/')
+        val a = parts[1].substring(0, slash).trim().toFloatOrNull() ?: return null
+        val b = parts[1].substring(slash + 1).trim().toFloatOrNull() ?: return null
+        if (b == 0f) return null
+        val frac = a / b
+        return if (whole < 0f) whole - frac else whole + frac
+    }
+
     val colon = t.indexOf(':')
     if (colon >= 0) {
         val a = t.substring(0, colon).trim().toFloatOrNull() ?: return null
@@ -189,7 +214,7 @@ fun AddLinerDialog(
 fun AddThreadDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
-    onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, tpi: Float) -> Unit
+    onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, tpi: Float, excludeFromOAL: Boolean) -> Unit
 ) {
     val d = rememberAddDialogDefaults(spec)
 
@@ -197,6 +222,7 @@ fun AddThreadDialog(
     var length by remember(unit) { mutableStateOf(toDisplayString(32f, unit)) }
     var major by remember(unit, d.lastDiaMm) { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
     var tpiText by remember { mutableStateOf("10") }
+    var countInOal by remember { mutableStateOf(true) }
 
     val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
     val lengthMm = toMmOrNullFromDialog(length, unit) ?: -1f
@@ -215,11 +241,23 @@ fun AddThreadDialog(
                 CommitNumField("Major Ø (${abbrFor(unit)})", major) { major = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("TPI", tpiText) { tpiText = it }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Text("Count in OAL")
+                    androidx.compose.material3.Switch(
+                        checked = countInOal,
+                        onCheckedChange = { countInOal = it }
+                    )
+                }
             }
         },
         confirmButton = {
             val ok = startMm >= 0f && lengthMm > 0f && majorMm > 0f && tpi > 0f
-            Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, majorMm, tpi) }) { Text("Add") }
+            Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, majorMm, tpi, !countInOal) }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = { }) { Text("Cancel") } }
     )

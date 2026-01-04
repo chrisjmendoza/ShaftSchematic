@@ -69,6 +69,8 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val unit            by vm.unit.collectAsState()
     val unitLocked      by vm.unitLocked.collectAsState()
     val showGrid        by vm.showGrid.collectAsState()
+    val showComponentArrows by vm.showComponentArrows.collectAsState()
+    val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
     val showOalDebugLabel by vm.showOalDebugLabel.collectAsState()
     val showOalHelperLine by vm.showOalHelperLine.collectAsState()
     val customer        by vm.customer.collectAsState()
@@ -100,6 +102,8 @@ fun ShaftRoute(vm: ShaftViewModel) {
         showComponentDebugLabels = showComponentDebugLabels,
         showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
         showRenderOalMarkers = showRenderOalMarkers,
+        showComponentArrows = showComponentArrows,
+        componentArrowWidthDp = componentArrowWidthDp,
         componentOrder = order,
 
         // model updates (unchanged)

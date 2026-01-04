@@ -8,6 +8,7 @@ import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.data.SettingsStore.UnitPref
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.model.snapForwardFrom
+import com.android.shaftschematic.model.snapForwardFromOrdered
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.util.Achievements
@@ -123,6 +124,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _showGrid = MutableStateFlow(false)
     val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
+
+    private val _showComponentArrows = MutableStateFlow(false)
+    val showComponentArrows: StateFlow<Boolean> = _showComponentArrows.asStateFlow()
+
+    private val _componentArrowWidthDp = MutableStateFlow(40)
+    val componentArrowWidthDp: StateFlow<Int> = _componentArrowWidthDp.asStateFlow()
 
     private val _devOptionsEnabled = MutableStateFlow(false)
     val devOptionsEnabled: StateFlow<Boolean> = _devOptionsEnabled.asStateFlow()
@@ -243,6 +250,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 setShowGrid(persisted, persist = false)
             }
         }
+        viewModelScope.launch {
+            SettingsStore.showComponentArrowsFlow(getApplication()).collectLatest { persisted ->
+                setShowComponentArrows(persisted, persist = false)
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.componentArrowWidthDpFlow(getApplication()).collectLatest { persisted ->
+                setComponentArrowWidthDp(persisted, persist = false)
+            }
+        }
 
         viewModelScope.launch {
             SettingsStore.devOptionsEnabledFlow(getApplication()).collectLatest { persisted ->
@@ -338,6 +355,20 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setShowComponentArrows(show: Boolean, persist: Boolean = true) {
+        _showComponentArrows.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowComponentArrows(getApplication(), show) }
+        }
+    }
+
+    fun setComponentArrowWidthDp(widthDp: Int, persist: Boolean = true) {
+        val clamped = widthDp.coerceIn(24, 72)
+        _componentArrowWidthDp.value = clamped
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setComponentArrowWidthDp(getApplication(), clamped) }
+        }
+    }
     fun setDevOptionsEnabled(enabled: Boolean, persist: Boolean = true) {
         _devOptionsEnabled.value = enabled
         syncVerboseLogConfig()

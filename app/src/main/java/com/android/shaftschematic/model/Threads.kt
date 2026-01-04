@@ -2,6 +2,8 @@
 package com.android.shaftschematic.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.JsonNames
 import java.util.UUID
 
 /**
@@ -30,12 +32,14 @@ import java.util.UUID
  * - [lengthMm] > 0 to produce visible output.
  */
 @Serializable
+@OptIn(ExperimentalSerializationApi::class)
 data class Threads(
     override val id: String = UUID.randomUUID().toString(),
     override val startFromAftMm: Float = 0f,
     val majorDiaMm: Float = 0f,
     val pitchMm: Float = 0f,
     override val lengthMm: Float = 0f,
+    @JsonNames("excludeFromOAL", "excludeFromOal", "exclude_from_oal")
     val excludeFromOAL: Boolean = false,
     val tpi: Float? = null
 ) : Segment {

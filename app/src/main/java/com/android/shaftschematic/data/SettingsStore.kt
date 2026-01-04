@@ -17,6 +17,8 @@ val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(na
 object SettingsStore {
     private val KEY_DEFAULT_UNIT = intPreferencesKey("default_unit") // 0=MM, 1=IN
     private val KEY_SHOW_GRID    = booleanPreferencesKey("show_grid")
+    private val KEY_SHOW_COMPONENT_ARROWS = booleanPreferencesKey("show_component_arrows")
+    private val KEY_COMPONENT_ARROW_WIDTH_DP = intPreferencesKey("component_arrow_width_dp")
 
     // Developer options (hidden behind About taps)
     private val KEY_DEV_OPTIONS_ENABLED = booleanPreferencesKey("dev_options_enabled")
@@ -47,6 +49,11 @@ object SettingsStore {
     fun showGridFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_GRID] ?: false }
 
+    fun showComponentArrowsFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_COMPONENT_ARROWS] ?: false }
+
+    fun componentArrowWidthDpFlow(ctx: Context): Flow<Int> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_COMPONENT_ARROW_WIDTH_DP] ?: 40 }
     fun devOptionsEnabledFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsDataStore.data.map { p -> p[KEY_DEV_OPTIONS_ENABLED] ?: false }
 
@@ -94,6 +101,13 @@ object SettingsStore {
         ctx.settingsDataStore.edit { it[KEY_SHOW_GRID] = show }
     }
 
+    suspend fun setShowComponentArrows(ctx: Context, show: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_SHOW_COMPONENT_ARROWS] = show }
+    }
+
+    suspend fun setComponentArrowWidthDp(ctx: Context, widthDp: Int) {
+        ctx.settingsDataStore.edit { it[KEY_COMPONENT_ARROW_WIDTH_DP] = widthDp }
+    }
     suspend fun setDevOptionsEnabled(ctx: Context, enabled: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_DEV_OPTIONS_ENABLED] = enabled }
     }

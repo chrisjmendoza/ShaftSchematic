@@ -146,8 +146,8 @@ fun ShaftScreen(
     showComponentDebugLabels: Boolean,
     showRenderLayoutDebugOverlay: Boolean,
     showRenderOalMarkers: Boolean,
-    showComponentArrows: Boolean = false,
-    componentArrowWidthDp: Int = 40,
+    showComponentArrows: Boolean,
+    componentArrowWidthDp: Int,
 
     // Setters
     onSetUnit: (UnitSystem) -> Unit,
@@ -591,7 +591,7 @@ fun ShaftScreen(
                     AddThreadDialog(
                         unit = unit,
                         spec = spec,
-                        onSubmit = { startMm, lengthMm, majorDiaMm, tpi ->
+                        onSubmit = { startMm, lengthMm, majorDiaMm, tpi, excludeFromOAL ->
                             addThreadOpen = false
                             // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL.
                             // Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt` to avoid
@@ -601,7 +601,7 @@ fun ShaftScreen(
                                 lengthMm,
                                 majorDiaMm,
                                 tpiToPitchMm(tpi),
-                                false
+                                excludeFromOAL
                             )
                         }
                     )

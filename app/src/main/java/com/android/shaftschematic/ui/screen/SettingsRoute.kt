@@ -19,6 +19,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -52,8 +54,12 @@ fun SettingsRoute(
 ) {
     val unit by vm.unit.collectAsState()
     val showGrid by vm.showGrid.collectAsState()
+    val showComponentArrows by vm.showComponentArrows.collectAsState()
+    val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
     val achievementsEnabled by vm.achievementsEnabled.collectAsState()
     val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
+
+    val snackbarHostState = SnackbarHostState()
 
     Scaffold(
         topBar = {
@@ -63,7 +69,8 @@ fun SettingsRoute(
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null) }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { pad ->
         Column(
             modifier = Modifier.padding(pad).padding(16.dp),
@@ -87,6 +94,34 @@ fun SettingsRoute(
                 Switch(checked = showGrid, onCheckedChange = { vm.setShowGrid(it) })
                 Spacer(Modifier.width(8.dp))
                 Text("Show Grid in Preview")
+            }
+
+            HorizontalDivider()
+            Text("Editor Screen", style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = showComponentArrows,
+                    onCheckedChange = { vm.setShowComponentArrows(it) }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Show Left/Right Arrows on Component Cards")
+            }
+
+            // Keep it simple: three preset sizes.
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val options = listOf(
+                    32 to "Small",
+                    40 to "Medium",
+                    56 to "Large"
+                )
+                options.forEach { (dp, label) ->
+                    FilterChip(
+                        selected = componentArrowWidthDp == dp,
+                        onClick = { vm.setComponentArrowWidthDp(dp) },
+                        enabled = showComponentArrows,
+                        label = { Text(label) }
+                    )
+                }
             }
 
             HorizontalDivider()

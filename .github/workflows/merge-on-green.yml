@@ -1,0 +1,30 @@
+name: Merge on Green
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened, ready_for_review]
+    branches: [main]
+  check_suite:
+    types: [completed]
+
+jobs:
+  merge:
+    if: github.event_name == 'check_suite' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: write
+    steps:
+      - name: Check PR status and approvals
+        uses: actions-ecosystem/action-get-merged-pull-request@v1
+        continue-on-error: true
+      - name: Merge if approved and checks passed
+        uses: pascalgn/automerge-action@v0.16.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          mergeMethod: squash
+          doNotMergeLabel: no-automerge
+          requiredLabels: auto-merge
+          reviewRequired: true
+          method: squash
+          deleteBranchAfterMerge: true
