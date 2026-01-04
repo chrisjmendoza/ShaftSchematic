@@ -591,7 +591,7 @@ fun ShaftScreen(
                     AddThreadDialog(
                         unit = unit,
                         spec = spec,
-                        onSubmit = { startMm, lengthMm, majorDiaMm, tpi, excludeFromOAL ->
+                        onSubmit = { startMm, lengthMm, majorDiaMm, tpi ->
                             addThreadOpen = false
                             // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL.
                             // Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt` to avoid
@@ -601,7 +601,7 @@ fun ShaftScreen(
                                 lengthMm,
                                 majorDiaMm,
                                 tpiToPitchMm(tpi),
-                                excludeFromOAL
+                                false
                             )
                         }
                     )

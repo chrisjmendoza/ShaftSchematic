@@ -8,7 +8,6 @@ import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.data.SettingsStore.UnitPref
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.model.snapForwardFrom
-import com.android.shaftschematic.model.snapForwardFromOrdered
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.util.Achievements
