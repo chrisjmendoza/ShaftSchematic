@@ -29,7 +29,8 @@ import androidx.compose.ui.unit.dp
 fun StartScreen(
     onNew: () -> Unit,
     onOpen: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    onSendFeedback: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -42,5 +43,6 @@ fun StartScreen(
         Button(onClick = onNew, modifier = Modifier.fillMaxWidth()) { Text("New drawing") }
         Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text("Open…") }
         OutlinedButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Settings") }
+        OutlinedButton(onClick = onSendFeedback, modifier = Modifier.fillMaxWidth()) { Text("Send feedback") }
     }
 }

@@ -1,5 +1,7 @@
 package com.android.shaftschematic.ui.nav
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,12 +18,15 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.FeedbackIntentFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.runtime.collectAsState
+import java.io.File
 
 /**
 # InternalDocRoutes – open/save JSON *inside app storage*
@@ -45,6 +50,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var files by remember { mutableStateOf(listOf<String>()) }
+    val unit by vm.unit.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
@@ -84,7 +90,29 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Open drawing") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Open drawing") },
+                actions = {
+                    TextButton(
+                        onClick = {
+                            val intent = FeedbackIntentFactory.create(
+                                context = ctx,
+                                screen = "Open/Saved",
+                                unit = unit,
+                                selectedSaveName = null,
+                                attachments = emptyList()
+                            )
+                            try {
+                                ctx.startActivity(Intent.createChooser(intent, "Send feedback"))
+                            } catch (_: ActivityNotFoundException) {
+                                scope.launch { snackbarHostState.showSnackbar("No email app found.") }
+                            }
+                        }
+                    ) { Text("Send Feedback") }
+                }
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { pad ->
         LazyColumn(
@@ -123,6 +151,37 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                     expanded = menuOpen,
                                     onDismissRequest = { menuOpen = false }
                                 ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Send Feedback") },
+                                        onClick = {
+                                            menuOpen = false
+                                            scope.launch {
+                                                val attachments = withContext(Dispatchers.IO) {
+                                                    val dir = InternalStorage.dir(ctx.filesDir)
+                                                    val file = File(dir, name)
+                                                    val out = mutableListOf<android.net.Uri>()
+                                                    if (file.exists()) {
+                                                        out += FeedbackIntentFactory.uriForFile(ctx, file)
+                                                    }
+                                                    out
+                                                }
+
+                                                val intent = FeedbackIntentFactory.create(
+                                                    context = ctx,
+                                                    screen = "Open/Saved",
+                                                    unit = unit,
+                                                    selectedSaveName = name.removeSuffix(".json"),
+                                                    attachments = attachments
+                                                )
+
+                                                try {
+                                                    ctx.startActivity(Intent.createChooser(intent, "Send feedback"))
+                                                } catch (_: ActivityNotFoundException) {
+                                                    snackbarHostState.showSnackbar("No email app found.")
+                                                }
+                                            }
+                                        },
+                                    )
                                     DropdownMenuItem(
                                         text = { Text("Delete") },
                                         onClick = {

@@ -1,16 +1,21 @@
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/ShaftEditorRoute.kt
 package com.android.shaftschematic.ui.screen
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -19,9 +24,14 @@ import androidx.compose.material.icons.filled.Redo
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.android.shaftschematic.ui.screen.ShaftRoute
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.FeedbackIntentFactory
+import kotlinx.coroutines.launch
 
 /**
  * ShaftEditorRoute
@@ -45,12 +55,38 @@ fun ShaftEditorRoute(
 ) {
     val canUndoDeletes by vm.canUndoDeletes.collectAsState()
     val canRedoDeletes by vm.canRedoDeletes.collectAsState()
+
+    val unit by vm.unit.collectAsState()
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Shaft Editor") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            val intent = FeedbackIntentFactory.create(
+                                context = ctx,
+                                screen = "Editor",
+                                unit = unit,
+                                selectedSaveName = null,
+                                attachments = emptyList()
+                            )
+                            try {
+                                ctx.startActivity(Intent.createChooser(intent, "Send feedback"))
+                            } catch (_: ActivityNotFoundException) {
+                                scope.launch { snackbarHostState.showSnackbar("No email app found.") }
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Filled.Email, contentDescription = "Send feedback")
+                    }
+
                     // Undo / Redo for delete history (multi-step)
                     IconButton(
                         onClick = { vm.undoLastDelete() },
