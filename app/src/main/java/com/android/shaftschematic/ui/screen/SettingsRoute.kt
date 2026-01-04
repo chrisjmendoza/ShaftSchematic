@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Divider
@@ -42,6 +43,8 @@ import androidx.compose.runtime.collectAsState
 fun SettingsRoute(vm: ShaftViewModel, onBack: () -> Unit) {
     val unit by vm.unit.collectAsState()
     val showGrid by vm.showGrid.collectAsState()
+    val showComponentArrows by vm.showComponentArrows.collectAsState()
+    val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
 
     Scaffold(
         topBar = {
@@ -75,6 +78,34 @@ fun SettingsRoute(vm: ShaftViewModel, onBack: () -> Unit) {
                 Switch(checked = showGrid, onCheckedChange = { vm.setShowGrid(it) })
                 Spacer(Modifier.width(8.dp))
                 Text("Show grid in preview")
+            }
+
+            Divider()
+            Text("Components", style = MaterialTheme.typography.titleMedium)
+            Row {
+                Switch(
+                    checked = showComponentArrows,
+                    onCheckedChange = { vm.setShowComponentArrows(it) }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Show left/right arrows")
+            }
+
+            // Keep it simple: three preset sizes.
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val options = listOf(
+                    32 to "Small",
+                    40 to "Medium",
+                    56 to "Large"
+                )
+                options.forEach { (dp, label) ->
+                    FilterChip(
+                        selected = componentArrowWidthDp == dp,
+                        onClick = { vm.setComponentArrowWidthDp(dp) },
+                        enabled = showComponentArrows,
+                        label = { Text(label) }
+                    )
+                }
             }
         }
     }

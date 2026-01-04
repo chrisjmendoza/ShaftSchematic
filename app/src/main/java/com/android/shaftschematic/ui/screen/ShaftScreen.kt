@@ -140,6 +140,8 @@ fun ShaftScreen(
     jobNumber: String,
     notes: String,
     showGrid: Boolean,
+    showComponentArrows: Boolean,
+    componentArrowWidthDp: Int,
 
     // Setters
     onSetUnit: (UnitSystem) -> Unit,
@@ -420,17 +422,29 @@ fun ShaftScreen(
                     )
                 }
 
-                Text(
-                    "Components",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Components",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "Swipe to select",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 ComponentCarouselPager(
                     spec = spec,
                     unit = unit,
                     componentOrder = componentOrder,
+                    showEdgeArrows = showComponentArrows,
+                    edgeArrowWidthDp = componentArrowWidthDp,
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateTaper = snappedTaperUpdater,
                     onUpdateThread = snappedThreadUpdater,
@@ -565,17 +579,19 @@ private data class RowRef(
 /**
  * ComponentCarouselPager
  *
- * Purpose: Horizontal pager with sentinel add-cards at both ends and boxed arrow nav.
+ * Purpose: Horizontal pager with sentinel add-cards at both ends.
  * Contract:
  *  • Honors componentOrder when provided; else stable assembly order by start, tie-broken by type.
  *  • Calls onFocusedChanged(idOrNull) whenever the current page changes (add-pages send null).
- *  • Arrow buttons animate elevation/alpha on press/hover; pager gestures remain intact.
+ *  • Pager gestures remain intact.
  */
 @Composable
 private fun ComponentCarouselPager(
     spec: ShaftSpec,
     unit: UnitSystem,
     componentOrder: List<ComponentKey>,
+    showEdgeArrows: Boolean,
+    edgeArrowWidthDp: Int,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
@@ -612,9 +628,12 @@ private fun ComponentCarouselPager(
         initialPage = if (rowsSorted.isEmpty()) 0 else 1, // land on leftmost component when present
         pageCount = { pageCount }
     )
-    val arrowWidth = 40.dp // keep paddles slim so they do not overlap card delete affordances
-
     val scope = rememberCoroutineScope()
+    val arrowWidth = if (showEdgeArrows) edgeArrowWidthDp.coerceIn(24, 72).dp else 0.dp
+    val edgeGap = if (showEdgeArrows) 1.dp else 0.dp
+    val pageGutter = if (showEdgeArrows) 2.dp else 16.dp
+    val addCardOuterPadding = if (showEdgeArrows) 6.dp else 12.dp
+    val componentCardOuterPadding = if (showEdgeArrows) 4.dp else 8.dp
 
     // Auto-jump to the newest card after insertion
     LaunchedEffect(rowsSorted.size) {
@@ -634,31 +653,45 @@ private fun ComponentCarouselPager(
         onFocusedChanged(idOrNull)
     }
 
-    Box(
+    Row(
         Modifier
             .fillMaxWidth()
-            .height(CAROUSEL_HEIGHT) // your existing constant (e.g., 360.dp)
+            .height(CAROUSEL_HEIGHT)
     ) {
-        // Pager fills the box
+        if (showEdgeArrows) {
+            EdgeNavButton(
+                left = true,
+                onClick = {
+                    scope.launch {
+                        pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(arrowWidth)
+                    .padding(start = edgeGap)
+            )
+        }
+
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
-                .matchParentSize()
+                .weight(1f)
+                .fillMaxHeight()
         ) { page ->
-            when (page) {
-                0 -> AddComponentCard(label = "Add at AFT", onAdd = onAddAtAft)   // see section 2
-                pageCount - 1 -> AddComponentCard(label = "Add at FWD", onAdd = onAddAtFwd)
-                else -> {
-                    val row = rowsSorted[page - 1]
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            // Keep interactive controls (delete, switches, etc.) out from under the
-                            // edge navigation paddles, which are overlaid on top of the pager.
-                            .padding(horizontal = 16.dp + arrowWidth)
-                    ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = pageGutter)
+            ) {
+                when (page) {
+                    0 -> AddComponentCard(label = "Add at AFT", onAdd = onAddAtAft, outerPadding = addCardOuterPadding)
+                    pageCount - 1 -> AddComponentCard(label = "Add at FWD", onAdd = onAddAtFwd, outerPadding = addCardOuterPadding)
+                    else -> {
+                        val row = rowsSorted[page - 1]
                         ComponentPagerCard(
                             spec = spec, unit = unit, row = row, physicalIndex = page - 1,
+                            outerPaddingHorizontal = componentCardOuterPadding,
                             onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
                             onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
                             onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
@@ -670,36 +703,48 @@ private fun ComponentCarouselPager(
             }
         }
 
-        // Left paddle
-        EdgeNavButton(
-            left = true,
-            onClick = {
-                scope.launch {
-                    pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.CenterStart) // vertically centered next to the card
-                .fillMaxHeight()              // same height as the card
-                .width(arrowWidth)            // slim nub
-                .padding(start = 4.dp)        // tiny gutter
-        )
+        if (showEdgeArrows) {
+            EdgeNavButton(
+                left = false,
+                onClick = {
+                    scope.launch {
+                        pagerState.animateScrollToPage(
+                            (pagerState.currentPage + 1).coerceAtMost(pageCount - 1)
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(arrowWidth)
+                    .padding(end = edgeGap)
+            )
+        }
+    }
+}
 
-        // Right paddle
-        EdgeNavButton(
-            left = false,
-            onClick = {
-                scope.launch {
-                    pagerState.animateScrollToPage(
-                        (pagerState.currentPage + 1).coerceAtMost(pageCount - 1)
-                    )
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .fillMaxHeight()
-                .width(arrowWidth)
-                .padding(end = 4.dp)
+@Composable
+private fun EdgeNavButton(
+    left: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Soft vertical gradient to suggest “edge”
+    val scrim = androidx.compose.ui.graphics.Brush.verticalGradient(
+        0f to MaterialTheme.colorScheme.surface.copy(alpha = 0.0f),
+        0.5f to MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        1f to MaterialTheme.colorScheme.surface.copy(alpha = 0.0f)
+    )
+    Box(
+        modifier
+            .background(scrim, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = if (left) Alignment.CenterEnd else Alignment.CenterStart
+    ) {
+        Text(
+            text = if (left) "◀" else "▶",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
     }
 }
@@ -708,7 +753,8 @@ private fun ComponentCarouselPager(
 private fun AddComponentCard(
     label: String,
     onAdd: () -> Unit,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    outerPadding: Dp = 12.dp
 ) {
     val onAddClick = onAdd
     Card(
@@ -716,7 +762,7 @@ private fun AddComponentCard(
         enabled = enabled,
         modifier = Modifier
             .fillMaxSize()
-            .padding(12.dp)
+            .padding(outerPadding)
             .semantics {
                 role = androidx.compose.ui.semantics.Role.Button
                 contentDescription = "Add component $label"
@@ -749,6 +795,7 @@ private fun ComponentPagerCard(
     unit: UnitSystem,
     row: RowRef,
     physicalIndex: Int,
+    outerPaddingHorizontal: Dp,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
@@ -768,6 +815,7 @@ private fun ComponentPagerCard(
                 title = "Body #${row.index + 1}",
                 componentId = b.id,
                 componentKind = ComponentKind.BODY,
+                outerPaddingHorizontal = outerPaddingHorizontal,
                 onRemove = {
                 Log.d(
                     "ShaftUI",
@@ -800,6 +848,7 @@ private fun ComponentPagerCard(
                 title = "Taper #${row.index + 1}",
                 componentId = t.id,
                 componentKind = ComponentKind.TAPER,
+                outerPaddingHorizontal = outerPaddingHorizontal,
                 onRemove = {
                 Log.d(
                     "ShaftUI",
@@ -838,6 +887,7 @@ private fun ComponentPagerCard(
                 title = "Thread #${row.index + 1}",
                 componentId = th.id,
                 componentKind = ComponentKind.THREAD,
+                outerPaddingHorizontal = outerPaddingHorizontal,
                 onRemove = {
                 Log.d(
                     "ShaftUI",
@@ -915,6 +965,7 @@ private fun ComponentPagerCard(
                 title = "Liner #${row.index + 1}",
                 componentId = ln.id,
                 componentKind = ComponentKind.LINER,
+                outerPaddingHorizontal = outerPaddingHorizontal,
                 onRemove = {
                 Log.d(
                     "ShaftUI",
@@ -1005,13 +1056,14 @@ private fun ComponentCard(
     title: String,
     componentId: String? = null,
     componentKind: ComponentKind? = null,
+    outerPaddingHorizontal: Dp = 8.dp,
     onRemove: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp), // consistent outer spacing
+            .padding(horizontal = outerPaddingHorizontal), // consistent outer spacing
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
@@ -1021,7 +1073,8 @@ private fun ComponentCard(
             Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
@@ -1228,32 +1281,6 @@ private fun parseFractionOrDecimal(input: String): Float? {
         return a / b
     }
     return t.toFloatOrNull()
-}
-
-@Composable
-private fun EdgeNavButton(
-    left: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Soft vertical gradient to suggest “edge”
-    val scrim = androidx.compose.ui.graphics.Brush.verticalGradient(
-        0f to MaterialTheme.colorScheme.surface.copy(alpha = 0.0f),
-        0.5f to MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        1f to MaterialTheme.colorScheme.surface.copy(alpha = 0.0f)
-    )
-    Box(
-        modifier
-            .background(scrim, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = if (left) "◀" else "▶",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 @Composable

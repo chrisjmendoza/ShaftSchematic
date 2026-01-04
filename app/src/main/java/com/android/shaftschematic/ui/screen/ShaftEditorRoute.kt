@@ -4,7 +4,12 @@ package com.android.shaftschematic.ui.screen
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Email
@@ -14,9 +19,11 @@ import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -26,8 +33,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.ui.screen.ShaftRoute
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.FeedbackIntentFactory
@@ -64,55 +73,71 @@ fun ShaftEditorRoute(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("Shaft Editor") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            val intent = FeedbackIntentFactory.create(
-                                context = ctx,
-                                screen = "Editor",
-                                unit = unit,
-                                selectedSaveName = null,
-                                attachments = emptyList()
-                            )
-                            try {
-                                ctx.startActivity(Intent.createChooser(intent, "Send feedback"))
-                            } catch (_: ActivityNotFoundException) {
-                                scope.launch { snackbarHostState.showSnackbar("No email app found.") }
-                            }
-                        }
+            Column(
+                modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars)
+            ) {
+                Surface {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 0.dp),
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        Icon(Icons.Filled.Email, contentDescription = "Send feedback")
-                    }
-
-                    // Undo / Redo for delete history (multi-step)
-                    IconButton(
-                        onClick = { vm.undoLastDelete() },
-                        enabled = canUndoDeletes
-                    ) {
-                        Icon(Icons.Filled.Undo, contentDescription = "Undo delete")
-                    }
-                    IconButton(
-                        onClick = { vm.redoLastDelete() },
-                        enabled = canRedoDeletes
-                    ) {
-                        Icon(Icons.Filled.Redo, contentDescription = "Redo delete")
-                    }
-
-                    // Existing actions
-                    IconButton(onClick = onSave) {
-                        Icon(Icons.Filled.Save, contentDescription = "Save JSON")
-                    }
-                    IconButton(onClick = onExportPdf) {
-                        Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF")
-                    }
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                        Text("Shaft Editor", style = MaterialTheme.typography.titleLarge)
                     }
                 }
-            )
+
+                TopAppBar(
+                    title = { },
+                    windowInsets = WindowInsets(0, 0, 0, 0),
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                val intent = FeedbackIntentFactory.create(
+                                    context = ctx,
+                                    screen = "Editor",
+                                    unit = unit,
+                                    selectedSaveName = null,
+                                    attachments = emptyList()
+                                )
+                                try {
+                                    ctx.startActivity(Intent.createChooser(intent, "Send feedback"))
+                                } catch (_: ActivityNotFoundException) {
+                                    scope.launch { snackbarHostState.showSnackbar("No email app found.") }
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Filled.Email, contentDescription = "Send feedback")
+                        }
+
+                        // Undo / Redo for delete history (multi-step)
+                        IconButton(
+                            onClick = { vm.undoLastDelete() },
+                            enabled = canUndoDeletes
+                        ) {
+                            Icon(Icons.Filled.Undo, contentDescription = "Undo delete")
+                        }
+                        IconButton(
+                            onClick = { vm.redoLastDelete() },
+                            enabled = canRedoDeletes
+                        ) {
+                            Icon(Icons.Filled.Redo, contentDescription = "Redo delete")
+                        }
+
+                        // Existing actions
+                        IconButton(onClick = onSave) {
+                            Icon(Icons.Filled.Save, contentDescription = "Save JSON")
+                        }
+                        IconButton(onClick = onExportPdf) {
+                            Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF")
+                        }
+                        IconButton(onClick = onSettings) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                        }
+                    }
+                )
+            }
         }
     ) { pad ->
         Box(Modifier.padding(pad)) {

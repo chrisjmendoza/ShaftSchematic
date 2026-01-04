@@ -123,6 +123,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _showGrid = MutableStateFlow(false)
     val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
 
+    private val _showComponentArrows = MutableStateFlow(false)
+    val showComponentArrows: StateFlow<Boolean> = _showComponentArrows.asStateFlow()
+
+    private val _componentArrowWidthDp = MutableStateFlow(40)
+    val componentArrowWidthDp: StateFlow<Int> = _componentArrowWidthDp.asStateFlow()
+
     // Auto-snap keeps components end-to-end in physical order when geometry changes.
     private val _autoSnap = MutableStateFlow(true)
     val autoSnap: StateFlow<Boolean> = _autoSnap.asStateFlow()
@@ -192,6 +198,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 setShowGrid(persisted, persist = false)
             }
         }
+        viewModelScope.launch {
+            SettingsStore.showComponentArrowsFlow(getApplication()).collectLatest { persisted ->
+                setShowComponentArrows(persisted, persist = false)
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.componentArrowWidthDpFlow(getApplication()).collectLatest { persisted ->
+                setComponentArrowWidthDp(persisted, persist = false)
+            }
+        }
     }
 
     /** Sets the UI unit (preview/labels only). Model remains canonical mm. */
@@ -210,6 +226,21 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _showGrid.value = show
         if (persist) {
             viewModelScope.launch { SettingsStore.setShowGrid(getApplication(), show) }
+        }
+    }
+
+    fun setShowComponentArrows(show: Boolean, persist: Boolean = true) {
+        _showComponentArrows.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowComponentArrows(getApplication(), show) }
+        }
+    }
+
+    fun setComponentArrowWidthDp(widthDp: Int, persist: Boolean = true) {
+        val clamped = widthDp.coerceIn(24, 72)
+        _componentArrowWidthDp.value = clamped
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setComponentArrowWidthDp(getApplication(), clamped) }
         }
     }
 
