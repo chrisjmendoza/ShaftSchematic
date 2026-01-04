@@ -2,6 +2,7 @@
 package com.android.shaftschematic.io
 
 import android.content.Context
+import com.android.shaftschematic.util.VerboseLog
 import java.io.File
 
 /**
@@ -37,13 +38,36 @@ object InternalStorage {
 
     fun exists(ctx: Context, name: String): Boolean = File(dir(ctx), name).exists()
 
+    /**
+     * Normalizes a user-provided name into a saved-shaft JSON filename.
+     * - Trims whitespace
+     * - Appends `.json` if missing
+     * - Forces lowercase `.json` extension
+     *
+     * Returns null if the input is blank.
+     */
+    internal fun normalizeJsonName(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+
+        val lower = trimmed.lowercase()
+        return if (lower.endsWith(".json")) {
+            trimmed.dropLast(5) + ".json"
+        } else {
+            "$trimmed.json"
+        }
+    }
+
     fun save(ctx: Context, name: String, content: String) {
-        require(name.endsWith(".json")) { "Name must end with .json" }
+        require(name.endsWith(".json", ignoreCase = true)) { "Name must end with .json" }
+        VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") { "save name=$name chars=${content.length}" }
         File(dir(ctx), name).writeText(content)
     }
 
     fun load(ctx: Context, name: String): String =
-        File(dir(ctx), name).readText()
+        File(dir(ctx), name).readText().also { content ->
+            VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") { "load name=$name chars=${content.length}" }
+        }
 
     /** Returns true when the file was actually deleted. */
     fun delete(ctx: Context, name: String): Boolean = delete(dir(ctx), name)

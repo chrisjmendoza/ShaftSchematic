@@ -32,7 +32,7 @@ object FeedbackIntentFactory {
         return buildString {
             appendLine("ShaftSchematic Feedback")
             appendLine()
-            appendLine("App version: $versionName ($versionCode)")
+            appendLine("App Version: $versionName ($versionCode)")
             appendLine("Device: $device")
             appendLine("Android: $sdk")
             appendLine("Units: $units")

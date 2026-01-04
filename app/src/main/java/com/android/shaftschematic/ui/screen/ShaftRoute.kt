@@ -71,12 +71,18 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val showGrid        by vm.showGrid.collectAsState()
     val showComponentArrows by vm.showComponentArrows.collectAsState()
     val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
+    val showOalDebugLabel by vm.showOalDebugLabel.collectAsState()
+    val showOalHelperLine by vm.showOalHelperLine.collectAsState()
     val customer        by vm.customer.collectAsState()
     val vessel          by vm.vessel.collectAsState()
     val jobNumber       by vm.jobNumber.collectAsState()
     val notes           by vm.notes.collectAsState()
     val overallIsManual by vm.overallIsManual.collectAsState()
     val order           by vm.componentOrder.collectAsState()
+
+    val showComponentDebugLabels by vm.showComponentDebugLabels.collectAsState()
+    val showRenderLayoutDebugOverlay by vm.showRenderLayoutDebugOverlay.collectAsState()
+    val showRenderOalMarkers by vm.showRenderOalMarkers.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
     fun showSnack(msg: String) = scope.launch { snackbarHostState.showSnackbar(msg) }
@@ -91,6 +97,11 @@ fun ShaftRoute(vm: ShaftViewModel) {
         jobNumber = jobNumber,
         notes = notes,
         showGrid = showGrid,
+        showOalDebugLabel = showOalDebugLabel,
+        showOalHelperLine = showOalHelperLine,
+        showComponentDebugLabels = showComponentDebugLabels,
+        showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
+        showRenderOalMarkers = showRenderOalMarkers,
         showComponentArrows = showComponentArrows,
         componentArrowWidthDp = componentArrowWidthDp,
         componentOrder = order,

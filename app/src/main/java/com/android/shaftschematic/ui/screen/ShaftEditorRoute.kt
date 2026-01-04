@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
@@ -27,8 +27,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.material.icons.filled.Redo
-import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -90,7 +90,7 @@ fun ShaftEditorRoute(
                 TopAppBar(
                     title = { },
                     windowInsets = WindowInsets(0, 0, 0, 0),
-                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
                     actions = {
                         IconButton(
                             onClick = {
@@ -102,13 +102,13 @@ fun ShaftEditorRoute(
                                     attachments = emptyList()
                                 )
                                 try {
-                                    ctx.startActivity(Intent.createChooser(intent, "Send feedback"))
+                                    ctx.startActivity(Intent.createChooser(intent, "Send Feedback"))
                                 } catch (_: ActivityNotFoundException) {
                                     scope.launch { snackbarHostState.showSnackbar("No email app found.") }
                                 }
                             }
                         ) {
-                            Icon(Icons.Filled.Email, contentDescription = "Send feedback")
+                            Icon(Icons.Filled.Email, contentDescription = "Send Feedback")
                         }
 
                         // Undo / Redo for delete history (multi-step)
@@ -116,13 +116,13 @@ fun ShaftEditorRoute(
                             onClick = { vm.undoLastDelete() },
                             enabled = canUndoDeletes
                         ) {
-                            Icon(Icons.Filled.Undo, contentDescription = "Undo delete")
+                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo delete")
                         }
                         IconButton(
                             onClick = { vm.redoLastDelete() },
                             enabled = canRedoDeletes
                         ) {
-                            Icon(Icons.Filled.Redo, contentDescription = "Redo delete")
+                            Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo delete")
                         }
 
                         // Existing actions

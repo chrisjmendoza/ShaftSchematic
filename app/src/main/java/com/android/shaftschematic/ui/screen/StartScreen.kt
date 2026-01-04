@@ -40,9 +40,9 @@ fun StartScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text("ShaftSchematic", style = MaterialTheme.typography.headlineMedium)
-        Button(onClick = onNew, modifier = Modifier.fillMaxWidth()) { Text("New drawing") }
+        Button(onClick = onNew, modifier = Modifier.fillMaxWidth()) { Text("New Drawing") }
         Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text("Open…") }
         OutlinedButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Settings") }
-        OutlinedButton(onClick = onSendFeedback, modifier = Modifier.fillMaxWidth()) { Text("Send feedback") }
+        OutlinedButton(onClick = onSendFeedback, modifier = Modifier.fillMaxWidth()) { Text("Send Feedback") }
     }
 }

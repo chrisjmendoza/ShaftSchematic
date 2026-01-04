@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -140,6 +141,11 @@ fun ShaftScreen(
     jobNumber: String,
     notes: String,
     showGrid: Boolean,
+    showOalDebugLabel: Boolean,
+    showOalHelperLine: Boolean,
+    showComponentDebugLabels: Boolean,
+    showRenderLayoutDebugOverlay: Boolean,
+    showRenderOalMarkers: Boolean,
     showComponentArrows: Boolean,
     componentArrowWidthDp: Int,
 
@@ -267,7 +273,7 @@ fun ShaftScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets.systemBars.only(
-            WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+            WindowInsetsSides.Horizontal
         ),
         floatingActionButton = {
             if (fabEnabled) {
@@ -281,8 +287,12 @@ fun ShaftScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner)
-                .padding(16.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 16.dp)
         ) {
+            // Separator (matches the divider below the preview)
+            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
+
             // Preview
             PreviewCard(
                 showGrid = showGrid,
@@ -290,6 +300,8 @@ fun ShaftScreen(
                 unit = unit,
                 highlightEnabled = highlightEnabled,
                 highlightId = focusedId,
+                showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
+                showRenderOalMarkers = showRenderOalMarkers,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = 200.dp)
@@ -316,83 +328,151 @@ fun ShaftScreen(
             ) {
                 // Overall Length (auto vs manual — always show a value)
                 var hasLenFocus by remember { mutableStateOf(false) }
+                var lenTextOnFocus by remember { mutableStateOf<String?>(null) }
 
-                val displayMm =
-                    if (overallIsManual) spec.overallLengthMm else lastOccupiedEndMm(spec)
+                val effectiveOalDisplayMm = remember(spec) { computeOalWindow(spec).oalMm.toFloat() }
+                val displayMm = if (overallIsManual) spec.overallLengthMm else effectiveOalDisplayMm
                 var lengthText by remember(unit, displayMm, overallIsManual) {
                     mutableStateOf(formatDisplay(displayMm, unit))
                 }
 
-                val freeSignedMm = spec.overallLengthMm - lastOccupiedEndMm(spec)
-                val isOversized = freeSignedMm < 0f
+                val isOversized = spec.overallLengthMm < lastOccupiedEndMm(spec)
 
-                OutlinedTextField(
-                    value = lengthText,
-                    onValueChange = { input ->
-                        lengthText = input
-                        if (overallIsManual) {
-                            toMmOrNull(input, unit)?.let { mm ->
-                                onSetOverallLengthMm(mm)
-                            }
-                        }
-                    },
-                    label = { Text("Overall Length (${abbr(unit)})") },
-                    singleLine = true,
-                    enabled = overallIsManual, // auto mode is read-only
-                    isError = isOversized,
-                    supportingText = {
-                        val mode = if (overallIsManual) "Manual" else "Auto"
-                        val hint = if (isOversized)
-                            "Oversized by ${formatDisplay(-freeSignedMm, unit)} ${abbr(unit)}"
-                        else "$mode • ${formatDisplay(displayMm, unit)} ${abbr(unit)}"
-                        Text(hint)
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(onDone = {
-                        val t = lengthText.trim()
-                        if (t.isEmpty()) {
-                            onSetOverallIsManual(false)
-                            onSetOverallLengthMm(lastOccupiedEndMm(spec))
-                        } else {
-                            toMmOrNull(t, unit)?.let { mm ->
-                                onSetOverallLengthMm(mm)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    OutlinedTextField(
+                        value = lengthText,
+                        onValueChange = { input ->
+                            // Default to Auto until the user types.
+                            if (!overallIsManual && input != lengthText) {
                                 onSetOverallIsManual(true)
-                                onSetOverallLengthRaw(t) // keep user’s display text
                             }
-                        }
-                    }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { f ->
-                            hasLenFocus = f.isFocused
-                            if (!f.isFocused) {
-                                val t = lengthText.trim()
-                                if (t.isEmpty()) {
-                                    onSetOverallIsManual(false)
-                                    onSetOverallLengthMm(lastOccupiedEndMm(spec))
-                                } else {
-                                    toMmOrNull(t, unit)?.let { mm ->
-                                        onSetOverallLengthMm(mm)
-                                        onSetOverallIsManual(true)
-                                        onSetOverallLengthRaw(t)
+
+                            lengthText = input
+                            if (overallIsManual) {
+                                toMmOrNull(input, unit)?.let { mm ->
+                                    onSetOverallLengthMm(mm)
+                                }
+                            }
+                        },
+                        label = { Text("Overall Length (${abbr(unit)})") },
+                        singleLine = true,
+                        enabled = true,
+                        isError = isOversized,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = {
+                            val t = lengthText.trim()
+                            if (t.isEmpty()) {
+                                onSetOverallIsManual(false)
+                                val end = lastOccupiedEndMm(spec)
+                                onSetOverallLengthMm(end)
+                                val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
+                                lengthText = formatDisplay(effective, unit)
+                            } else {
+                                toMmOrNull(t, unit)?.let { mm ->
+                                    onSetOverallLengthMm(mm)
+                                    onSetOverallIsManual(true)
+                                    onSetOverallLengthRaw(t) // keep user’s display text
+                                }
+                            }
+                        }),
+                        modifier = Modifier
+                            .weight(1f)
+                            .onFocusChanged { f ->
+                                val wasFocused = hasLenFocus
+                                hasLenFocus = f.isFocused
+
+                                if (!wasFocused && f.isFocused) {
+                                    // Capture initial text so tapping the field in Auto doesn't
+                                    // accidentally flip us into Manual when the user didn't edit.
+                                    lenTextOnFocus = lengthText
+                                }
+
+                                if (wasFocused && !f.isFocused) {
+                                    val baseline = lenTextOnFocus
+                                    lenTextOnFocus = null
+                                    val t = lengthText.trim()
+
+                                    // If we were in Auto and the user didn't change anything,
+                                    // don't flip into Manual.
+                                    if (!overallIsManual && baseline != null && lengthText == baseline) {
+                                        return@onFocusChanged
+                                    }
+
+                                    if (t.isEmpty()) {
+                                        onSetOverallIsManual(false)
+                                        val end = lastOccupiedEndMm(spec)
+                                        onSetOverallLengthMm(end)
+                                        val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
+                                        lengthText = formatDisplay(effective, unit)
+                                    } else {
+                                        toMmOrNull(t, unit)?.let { mm ->
+                                            onSetOverallLengthMm(mm)
+                                            onSetOverallIsManual(true)
+                                            onSetOverallLengthRaw(t)
+                                        }
                                     }
                                 }
                             }
-                        }
-                )
+                    )
+
+                    Spacer(Modifier.width(12.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = !overallIsManual,
+                            onClick = {
+                                if (overallIsManual) {
+                                    onSetOverallIsManual(false)
+                                    val end = lastOccupiedEndMm(spec)
+                                    onSetOverallLengthMm(end)
+                                    val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
+                                    lengthText = formatDisplay(effective, unit)
+                                }
+                            },
+                            label = { Text("Auto") }
+                        )
+                        FilterChip(
+                            selected = overallIsManual,
+                            onClick = {
+                                if (!overallIsManual) {
+                                    onSetOverallIsManual(true)
+                                }
+                            },
+                            label = { Text("Manual") }
+                        )
+                    }
+                }
 
                 // Read-only: computed OAL in measurement space (less excluded end threads)
                 val win = remember(spec) { computeOalWindow(spec) }
                 val physicalOalMm = spec.overallLengthMm.toDouble()
-                val effectiveOalMm = win.oalMm
-                val excluded = kotlin.math.abs(effectiveOalMm - physicalOalMm) > OAL_EPS_MM
+                val effectiveOalWindowMm = win.oalMm
+                val excluded = kotlin.math.abs(effectiveOalWindowMm - physicalOalMm) > OAL_EPS_MM
 
-                if (excluded) {
+                // Normally only show in Manual mode; Auto already displays effective OAL.
+                // Developer option can force it on for debugging.
+                if (excluded && (overallIsManual || showOalHelperLine)) {
                     Text(
-                        text = "Dimensioned OAL: ${formatDisplay(effectiveOalMm.toFloat(), unit)} ${abbr(unit)}",
+                        text = "Dimensioned OAL: ${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                if (showOalDebugLabel) {
+                    val coveredEndMm = lastOccupiedEndMm(spec)
+                    Text(
+                        text = "OAL debug • physical=${formatDisplay(spec.overallLengthMm, unit)} ${abbr(unit)} • effective=${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)} • covered=${formatDisplay(coveredEndMm, unit)} ${abbr(unit)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)
@@ -400,7 +480,7 @@ fun ShaftScreen(
                 }
 
                 // Project info (optional)
-                ExpandableSection("Project Information (optional)", initiallyExpanded = false) {
+                ExpandableSection("Project Information", initiallyExpanded = false) {
                     CommitTextField("Job Number", jobNumber, onSetJobNumber, Modifier.fillMaxWidth())
                     CommitTextField("Customer", customer, onSetCustomer, Modifier.fillMaxWidth())
                     CommitTextField("Vessel", vessel, onSetVessel, Modifier.fillMaxWidth())
@@ -445,6 +525,7 @@ fun ShaftScreen(
                     componentOrder = componentOrder,
                     showEdgeArrows = showComponentArrows,
                     edgeArrowWidthDp = componentArrowWidthDp,
+                    showComponentDebugLabels = showComponentDebugLabels,
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateTaper = snappedTaperUpdater,
                     onUpdateThread = snappedThreadUpdater,
@@ -540,6 +621,8 @@ private fun PreviewCard(
     // NEW: explicit preview controls
     highlightEnabled: Boolean,
     highlightId: String?,
+    showRenderLayoutDebugOverlay: Boolean,
+    showRenderOalMarkers: Boolean,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -554,7 +637,9 @@ private fun PreviewCard(
                 unit = unit,
                 showGrid = showGrid,
                 highlightEnabled = highlightEnabled && (highlightId != null),
-                highlightId = highlightId
+                highlightId = highlightId,
+                showLayoutDebugOverlay = showRenderLayoutDebugOverlay,
+                showOalMarkers = showRenderOalMarkers
             )
 
             FreeToEndBadge(
@@ -592,6 +677,7 @@ private fun ComponentCarouselPager(
     componentOrder: List<ComponentKey>,
     showEdgeArrows: Boolean,
     edgeArrowWidthDp: Int,
+    showComponentDebugLabels: Boolean,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
@@ -692,6 +778,7 @@ private fun ComponentCarouselPager(
                         ComponentPagerCard(
                             spec = spec, unit = unit, row = row, physicalIndex = page - 1,
                             outerPaddingHorizontal = componentCardOuterPadding,
+                            showComponentDebugLabels = showComponentDebugLabels,
                             onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
                             onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
                             onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
@@ -796,6 +883,7 @@ private fun ComponentPagerCard(
     row: RowRef,
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
+    showComponentDebugLabels: Boolean,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
@@ -808,11 +896,16 @@ private fun ComponentPagerCard(
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit
 ) {
+    fun f1(mm: Float): String = "%.1f".format(mm)
+
     when (row.kind) {
         ComponentKind.BODY -> {
             val b = spec.bodies[row.index]
             ComponentCard(
                 title = "Body #${row.index + 1}",
+                debugText = if (showComponentDebugLabels) {
+                    "id=${b.id} • startMm=${f1(b.startFromAftMm)} • endMm=${f1(b.startFromAftMm + b.lengthMm)}"
+                } else null,
                 componentId = b.id,
                 componentKind = ComponentKind.BODY,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -846,6 +939,9 @@ private fun ComponentPagerCard(
             val t = spec.tapers[row.index]
             ComponentCard(
                 title = "Taper #${row.index + 1}",
+                debugText = if (showComponentDebugLabels) {
+                    "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}"
+                } else null,
                 componentId = t.id,
                 componentKind = ComponentKind.TAPER,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -885,6 +981,9 @@ private fun ComponentPagerCard(
             val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
             ComponentCard(
                 title = "Thread #${row.index + 1}",
+                debugText = if (showComponentDebugLabels) {
+                    "id=${th.id} • startMm=${f1(th.startFromAftMm)} • endMm=${f1(th.startFromAftMm + th.lengthMm)}"
+                } else null,
                 componentId = th.id,
                 componentKind = ComponentKind.THREAD,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -963,6 +1062,9 @@ private fun ComponentPagerCard(
             val ln = spec.liners[row.index]
             ComponentCard(
                 title = "Liner #${row.index + 1}",
+                debugText = if (showComponentDebugLabels) {
+                    "id=${ln.id} • startMm=${f1(ln.startFromAftMm)} • endMm=${f1(ln.startFromAftMm + ln.lengthMm)}"
+                } else null,
                 componentId = ln.id,
                 componentKind = ComponentKind.LINER,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -1054,6 +1156,7 @@ private fun buildOrderedRows(
 @Composable
 private fun ComponentCard(
     title: String,
+    debugText: String? = null,
     componentId: String? = null,
     componentKind: ComponentKind? = null,
     outerPaddingHorizontal: Dp = 8.dp,
@@ -1082,6 +1185,13 @@ private fun ComponentCard(
                     style = MaterialTheme.typography.titleMedium,
                     // Medium weight reads cleaner in cards than Small + default weight
                 )
+                if (debugText != null) {
+                    Text(
+                        debugText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 content()
             }
             if (onRemove != null) {

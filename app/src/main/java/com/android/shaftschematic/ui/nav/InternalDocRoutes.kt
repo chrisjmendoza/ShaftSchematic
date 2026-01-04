@@ -19,6 +19,7 @@ import androidx.navigation.NavController
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.FeedbackIntentFactory
+import com.android.shaftschematic.util.Achievements
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,13 +33,11 @@ import java.io.File
 # InternalDocRoutes – open/save JSON *inside app storage*
  **Purpose**: UI for listing and saving JSON drawings stored **internally** (app sandbox).
  **Contract**
-- No SAF here. Uses [InternalStorage] (app-private files dir).
+ No SAF here. Uses [InternalStorage] (app-private files dir).
 - Emits navigation completion via [onFinished].
 - ViewModel owns JSON shape/version (importJson/exportJson).
 - Names are unique to avoid conflicts with SAF routes.
  */
-
-/* ───────────────────── OPEN (from app storage) ───────────────────── */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,7 +103,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                 attachments = emptyList()
                             )
                             try {
-                                ctx.startActivity(Intent.createChooser(intent, "Send feedback"))
+                                ctx.startActivity(Intent.createChooser(intent, "Send Feedback"))
                             } catch (_: ActivityNotFoundException) {
                                 scope.launch { snackbarHostState.showSnackbar("No email app found.") }
                             }
@@ -175,7 +174,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                                 )
 
                                                 try {
-                                                    ctx.startActivity(Intent.createChooser(intent, "Send feedback"))
+                                                    ctx.startActivity(Intent.createChooser(intent, "Send Feedback"))
                                                 } catch (_: ActivityNotFoundException) {
                                                     snackbarHostState.showSnackbar("No email app found.")
                                                 }
@@ -196,7 +195,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                             }
                         }
                     }
-                    Divider()
+                    HorizontalDivider()
                 }
             }
         }
@@ -217,11 +216,11 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
 
     var name by remember {
         val default = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
-        mutableStateOf(TextFieldValue("Shaft_$default.json"))
+        mutableStateOf(TextFieldValue("Shaft_$default"))
     }
     var error by remember { mutableStateOf<String?>(null) }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Save drawing") }) }) { pad ->
+    Scaffold(topBar = { TopAppBar(title = { Text("Save Drawing") }) }) { pad ->
         Column(
             modifier = Modifier
                 .padding(pad)
@@ -234,21 +233,22 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                     name = it
                     error = null
                 },
-                label = { Text("File name (.json)") },
+                label = { Text("File name") },
                 isError = error != null,
                 supportingText = { if (error != null) Text(error!!) },
                 modifier = Modifier.fillMaxWidth()
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = {
-                    val n = name.text.trim()
-                    when {
-                        n.isEmpty() -> error = "Enter a file name."
-                        !n.endsWith(".json", ignoreCase = true) -> error = "Name must end with .json"
-                        else -> scope.launch {
+                    val normalized = InternalStorage.normalizeJsonName(name.text)
+                    if (normalized == null) {
+                        error = "Enter a file name."
+                    } else {
+                        scope.launch {
                             withContext(Dispatchers.IO) {
-                                InternalStorage.save(ctx, n, vm.exportJson())
+                                InternalStorage.save(ctx, normalized, vm.exportJson())
                             }
+                            vm.unlockAchievement(Achievements.Id.FIRST_SAVE)
                             onFinished()
                         }
                     }

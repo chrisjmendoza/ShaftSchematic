@@ -11,8 +11,10 @@ import com.android.shaftschematic.model.snapForwardFrom
 import com.android.shaftschematic.model.snapForwardFromOrdered
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.parseToMm
+import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -129,6 +131,56 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _componentArrowWidthDp = MutableStateFlow(40)
     val componentArrowWidthDp: StateFlow<Int> = _componentArrowWidthDp.asStateFlow()
 
+    private val _devOptionsEnabled = MutableStateFlow(false)
+    val devOptionsEnabled: StateFlow<Boolean> = _devOptionsEnabled.asStateFlow()
+
+    private val _showOalDebugLabel = MutableStateFlow(false)
+    val showOalDebugLabel: StateFlow<Boolean> = _showOalDebugLabel.asStateFlow()
+
+    private val _showOalHelperLine = MutableStateFlow(false)
+    val showOalHelperLine: StateFlow<Boolean> = _showOalHelperLine.asStateFlow()
+
+    private val _showComponentDebugLabels = MutableStateFlow(false)
+    val showComponentDebugLabels: StateFlow<Boolean> = _showComponentDebugLabels.asStateFlow()
+
+    private val _showRenderLayoutDebugOverlay = MutableStateFlow(false)
+    val showRenderLayoutDebugOverlay: StateFlow<Boolean> = _showRenderLayoutDebugOverlay.asStateFlow()
+
+    private val _showRenderOalMarkers = MutableStateFlow(false)
+    val showRenderOalMarkers: StateFlow<Boolean> = _showRenderOalMarkers.asStateFlow()
+
+    private val _verboseLoggingEnabled = MutableStateFlow(false)
+    val verboseLoggingEnabled: StateFlow<Boolean> = _verboseLoggingEnabled.asStateFlow()
+
+    private val _verboseLoggingRender = MutableStateFlow(false)
+    val verboseLoggingRender: StateFlow<Boolean> = _verboseLoggingRender.asStateFlow()
+
+    private val _verboseLoggingOal = MutableStateFlow(false)
+    val verboseLoggingOal: StateFlow<Boolean> = _verboseLoggingOal.asStateFlow()
+
+    private val _verboseLoggingPdf = MutableStateFlow(false)
+    val verboseLoggingPdf: StateFlow<Boolean> = _verboseLoggingPdf.asStateFlow()
+
+    private val _verboseLoggingIo = MutableStateFlow(false)
+    val verboseLoggingIo: StateFlow<Boolean> = _verboseLoggingIo.asStateFlow()
+
+    private fun syncVerboseLogConfig() {
+        VerboseLog.configure(
+            devOptionsEnabled = _devOptionsEnabled.value,
+            verboseEnabled = _verboseLoggingEnabled.value,
+            renderEnabled = _verboseLoggingRender.value,
+            oalEnabled = _verboseLoggingOal.value,
+            pdfEnabled = _verboseLoggingPdf.value,
+            ioEnabled = _verboseLoggingIo.value,
+        )
+    }
+
+    private val _achievementsEnabled = MutableStateFlow(false)
+    val achievementsEnabled: StateFlow<Boolean> = _achievementsEnabled.asStateFlow()
+
+    private val _unlockedAchievementIds = MutableStateFlow<Set<String>>(emptySet())
+    val unlockedAchievementIds: StateFlow<Set<String>> = _unlockedAchievementIds.asStateFlow()
+
     // Auto-snap keeps components end-to-end in physical order when geometry changes.
     private val _autoSnap = MutableStateFlow(true)
     val autoSnap: StateFlow<Boolean> = _autoSnap.asStateFlow()
@@ -208,6 +260,80 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 setComponentArrowWidthDp(persisted, persist = false)
             }
         }
+
+        viewModelScope.launch {
+            SettingsStore.devOptionsEnabledFlow(getApplication()).collectLatest { persisted ->
+                _devOptionsEnabled.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showOalDebugLabelFlow(getApplication()).collectLatest { persisted ->
+                _showOalDebugLabel.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showOalHelperLineFlow(getApplication()).collectLatest { persisted ->
+                _showOalHelperLine.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showComponentDebugLabelsFlow(getApplication()).collectLatest { persisted ->
+                _showComponentDebugLabels.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showRenderLayoutDebugOverlayFlow(getApplication()).collectLatest { persisted ->
+                _showRenderLayoutDebugOverlay.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showRenderOalMarkersFlow(getApplication()).collectLatest { persisted ->
+                _showRenderOalMarkers.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.verboseLoggingEnabledFlow(getApplication()).collectLatest { persisted ->
+                _verboseLoggingEnabled.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.verboseLoggingRenderFlow(getApplication()).collectLatest { persisted ->
+                _verboseLoggingRender.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.verboseLoggingOalFlow(getApplication()).collectLatest { persisted ->
+                _verboseLoggingOal.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.verboseLoggingPdfFlow(getApplication()).collectLatest { persisted ->
+                _verboseLoggingPdf.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.verboseLoggingIoFlow(getApplication()).collectLatest { persisted ->
+                _verboseLoggingIo.value = persisted
+                syncVerboseLogConfig()
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.achievementsEnabledFlow(getApplication()).collectLatest { persisted ->
+                _achievementsEnabled.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.unlockedAchievementIdsFlow(getApplication()).collectLatest { persisted ->
+                _unlockedAchievementIds.value = persisted
+            }
+        }
     }
 
     /** Sets the UI unit (preview/labels only). Model remains canonical mm. */
@@ -242,6 +368,108 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         if (persist) {
             viewModelScope.launch { SettingsStore.setComponentArrowWidthDp(getApplication(), clamped) }
         }
+    }
+
+    fun setDevOptionsEnabled(enabled: Boolean, persist: Boolean = true) {
+        _devOptionsEnabled.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setDevOptionsEnabled(getApplication(), enabled) }
+        }
+    }
+
+    fun setShowOalDebugLabel(show: Boolean, persist: Boolean = true) {
+        _showOalDebugLabel.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowOalDebugLabel(getApplication(), show) }
+        }
+    }
+
+    fun setShowOalHelperLine(show: Boolean, persist: Boolean = true) {
+        _showOalHelperLine.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowOalHelperLine(getApplication(), show) }
+        }
+    }
+
+    fun setShowComponentDebugLabels(show: Boolean, persist: Boolean = true) {
+        _showComponentDebugLabels.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowComponentDebugLabels(getApplication(), show) }
+        }
+    }
+
+    fun setShowRenderLayoutDebugOverlay(show: Boolean, persist: Boolean = true) {
+        _showRenderLayoutDebugOverlay.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowRenderLayoutDebugOverlay(getApplication(), show) }
+        }
+    }
+
+    fun setShowRenderOalMarkers(show: Boolean, persist: Boolean = true) {
+        _showRenderOalMarkers.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowRenderOalMarkers(getApplication(), show) }
+        }
+    }
+
+    fun setVerboseLoggingEnabled(enabled: Boolean, persist: Boolean = true) {
+        _verboseLoggingEnabled.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setVerboseLoggingEnabled(getApplication(), enabled) }
+        }
+    }
+
+    fun setVerboseLoggingRender(enabled: Boolean, persist: Boolean = true) {
+        _verboseLoggingRender.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setVerboseLoggingRender(getApplication(), enabled) }
+        }
+    }
+
+    fun setVerboseLoggingOal(enabled: Boolean, persist: Boolean = true) {
+        _verboseLoggingOal.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setVerboseLoggingOal(getApplication(), enabled) }
+        }
+    }
+
+    fun setVerboseLoggingPdf(enabled: Boolean, persist: Boolean = true) {
+        _verboseLoggingPdf.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setVerboseLoggingPdf(getApplication(), enabled) }
+        }
+    }
+
+    fun setVerboseLoggingIo(enabled: Boolean, persist: Boolean = true) {
+        _verboseLoggingIo.value = enabled
+        syncVerboseLogConfig()
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setVerboseLoggingIo(getApplication(), enabled) }
+        }
+    }
+
+    fun setAchievementsEnabled(enabled: Boolean, persist: Boolean = true) {
+        _achievementsEnabled.value = enabled
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setAchievementsEnabled(getApplication(), enabled) }
+        }
+    }
+
+    fun unlockAchievement(id: String) {
+        if (!_achievementsEnabled.value) return
+        if (_unlockedAchievementIds.value.contains(id)) return
+        viewModelScope.launch {
+            SettingsStore.unlockAchievement(getApplication(), id)
+        }
+    }
+
+    fun unlockAchievement(definition: Achievements.Definition) {
+        unlockAchievement(definition.id)
     }
 
     /** Enables or disables auto-snapping of components after edits/deletes. */
