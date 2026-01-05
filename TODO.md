@@ -18,7 +18,23 @@ Tasks are grouped by sequencing and dependency rather than category.
 **Snapping (edit/delete auto-snap)** → implemented + unit tested; tap-to-add snapping not implemented  
 **"Add at position" UX** → not implemented  
 **Delete** → present; Insert-Between workflow still missing  
-**Preview free-to-end badge** → implemented in mm-space; preview-mode OAL=0 behavior may still need alignment
+**Preview free-to-end badge** → implemented in mm-space; preview-mode OAL=0 behavior may still need alignment  
+**Internal saves (app storage)** → existing-saves list + filtering + overwrite confirmation  
+**Default filenames** → add shaft position suffix when meaningful; never position-only (falls back to generated name)  
+**Open drawing list** → long filenames wrap (no overlap with action/menu)
+
+---
+
+## 0.1 Recently Completed (UX/Workflow)
+
+- [x] Default save name includes shaft position suffix (PORT/STBD/CENTER)
+- [x] Position-only naming falls back to generated `Shaft_yyyyMMdd_HHmm`
+- [x] Save screen shows existing saves under input and filters as user types
+- [x] Clicking an existing save name populates the field for quick edits (mated jobs)
+- [x] Overwrite confirmation when saving over an existing internal file
+- [x] Open drawing list wraps long filenames to prevent overlap
+- [x] PDF default filename uses same naming convention (job/customer/vessel + optional side)
+- [x] SAF JSON default filename updated to match naming convention (future-proof; UI may not expose this yet)
 
 ---
 

@@ -175,3 +175,19 @@ if ($flags.Count -eq 0) {
 }
 
 Write-Host ""
+
+Write-Section 'GPG (commit signing)'
+$gpgSign = GitInRepo -GitParams 'config', '--get', 'commit.gpgsign'
+if ($gpgSign -eq 'true') {
+    Write-Host 'Commit signing: enabled'
+    Write-Host 'If git commit fails with GPG/keybox errors, reboot the services and retry:'
+    Write-Host '  gpgconf --kill gpg-agent ; gpgconf --kill keyboxd ; gpgconf --kill dirmngr'
+    Write-Host '  gpgconf --launch gpg-agent ; gpgconf --launch keyboxd'
+} elseif ([string]::IsNullOrWhiteSpace($gpgSign)) {
+    Write-Host 'Commit signing: (not set in repo config)'
+    Write-Host 'Tip: If your global config enables signing and gpg acts up, reboot services:'
+    Write-Host '  gpgconf --kill gpg-agent ; gpgconf --kill keyboxd ; gpgconf --kill dirmngr'
+    Write-Host '  gpgconf --launch gpg-agent ; gpgconf --launch keyboxd'
+} else {
+    Write-Host "Commit signing: $gpgSign"
+}

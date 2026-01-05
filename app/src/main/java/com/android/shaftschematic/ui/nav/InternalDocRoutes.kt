@@ -11,9 +11,11 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -140,9 +142,17 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                 }
                             }
                             .padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Text(name.removeSuffix(".json"))
+                        Text(
+                            text = name.removeSuffix(".json"),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Open", color = MaterialTheme.colorScheme.primary)
                             Box {
