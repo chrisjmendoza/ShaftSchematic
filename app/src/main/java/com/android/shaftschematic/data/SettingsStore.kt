@@ -46,6 +46,9 @@ object SettingsStore {
     // Preview colors (theme roles; preview-only)
     private val KEY_PREVIEW_BW_ONLY = booleanPreferencesKey("preview_bw_only")
 
+    // PDF export
+    private val KEY_OPEN_PDF_AFTER_EXPORT = booleanPreferencesKey("open_pdf_after_export")
+
     // Legacy role-only keys (kept for migration)
     private val KEY_PREVIEW_OUTLINE_ROLE = stringPreferencesKey("preview_outline_role")
     private val KEY_PREVIEW_BODY_FILL_ROLE = stringPreferencesKey("preview_body_fill_role")
@@ -129,6 +132,9 @@ object SettingsStore {
 
     fun previewBlackWhiteOnlyFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsDataStore.data.map { p -> p[KEY_PREVIEW_BW_ONLY] ?: false }
+
+    fun openPdfAfterExportFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_OPEN_PDF_AFTER_EXPORT] ?: false }
 
     private fun parseRole(raw: String?, fallback: PreviewColorRole): PreviewColorRole {
         if (raw.isNullOrBlank()) return fallback
@@ -258,6 +264,10 @@ object SettingsStore {
 
     suspend fun setShowComponentArrows(ctx: Context, show: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_SHOW_COMPONENT_ARROWS] = show }
+    }
+
+    suspend fun setOpenPdfAfterExport(ctx: Context, enabled: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_OPEN_PDF_AFTER_EXPORT] = enabled }
     }
 
     suspend fun setComponentArrowWidthDp(ctx: Context, widthDp: Int) {

@@ -128,6 +128,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _showGrid = MutableStateFlow(false)
     val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
 
+    private val _openPdfAfterExport = MutableStateFlow(false)
+    val openPdfAfterExport: StateFlow<Boolean> = _openPdfAfterExport.asStateFlow()
+
     private val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
 
@@ -279,6 +282,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
+            SettingsStore.openPdfAfterExportFlow(getApplication()).collectLatest { persisted ->
+                _openPdfAfterExport.value = persisted
+            }
+        }
+
+        viewModelScope.launch {
             SettingsStore.previewBlackWhiteOnlyFlow(getApplication()).collectLatest { persisted ->
                 _previewBlackWhiteOnly.value = persisted
             }
@@ -416,6 +425,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _showGrid.value = show
         if (persist) {
             viewModelScope.launch { SettingsStore.setShowGrid(getApplication(), show) }
+        }
+    }
+
+    fun setOpenPdfAfterExport(enabled: Boolean, persist: Boolean = true) {
+        _openPdfAfterExport.value = enabled
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setOpenPdfAfterExport(getApplication(), enabled) }
         }
     }
 

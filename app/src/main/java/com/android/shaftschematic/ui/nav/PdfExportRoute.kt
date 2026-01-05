@@ -1,11 +1,15 @@
 package com.android.shaftschematic.ui.nav
 
+import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.os.Build
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Text
@@ -36,6 +40,8 @@ fun PdfExportRoute(
     val ctx = LocalContext.current
     var launched by rememberSaveable { mutableStateOf(false) }
     var finished by rememberSaveable { mutableStateOf(false) }
+
+    val openAfterExport by vm.openPdfAfterExport.collectAsState()
 
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
@@ -109,6 +115,10 @@ fun PdfExportRoute(
             if (wrotePdf) {
                 VerboseLog.i(VerboseLog.Category.PDF, "PdfExport") { "write complete" }
                 vm.unlockAchievement(Achievements.Id.FIRST_PDF)
+
+                if (openAfterExport && uri != null) {
+                    openPdf(ctx, uri)
+                }
             }
         }.onFailure {
             VerboseLog.e(VerboseLog.Category.PDF, "PdfExport") { "failed: ${it.javaClass.simpleName}: ${it.message}" }
@@ -127,6 +137,31 @@ fun PdfExportRoute(
         onFinished()
     } else {
         Text("") // keep composition alive while the picker is open
+    }
+}
+
+private fun openPdf(context: Context, uri: Uri) {
+    val intent = Intent(Intent.ACTION_VIEW)
+        .setDataAndType(uri, "application/pdf")
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    // Some viewers require ClipData to honor grant flags.
+    intent.clipData = ClipData.newUri(context.contentResolver, "Exported PDF", uri)
+
+    // Proactively grant read permission to all potential handlers.
+    val handlers = context.packageManager.queryIntentActivities(intent, 0)
+    handlers.forEach { ri ->
+        val pkg = ri.activityInfo?.packageName ?: return@forEach
+        runCatching {
+            context.grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
+    try {
+        context.startActivity(Intent.createChooser(intent, "Open PDF"))
+    } catch (_: ActivityNotFoundException) {
+        // No PDF viewer installed.
     }
 }
 

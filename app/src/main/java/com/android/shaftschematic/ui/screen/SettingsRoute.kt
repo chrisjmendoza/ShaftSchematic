@@ -82,6 +82,8 @@ fun SettingsRoute(
     val previewThreadHatch by vm.previewThreadHatchSetting.collectAsState()
     val previewBlackWhiteOnly by vm.previewBlackWhiteOnly.collectAsState()
 
+    val openPdfAfterExport by vm.openPdfAfterExport.collectAsState()
+
     val snackbarHostState = SnackbarHostState()
 
     var page by rememberSaveable { mutableStateOf(SettingsPage.MAIN) }
@@ -138,6 +140,17 @@ fun SettingsRoute(
                         Switch(checked = showGrid, onCheckedChange = { vm.setShowGrid(it) })
                         Spacer(Modifier.width(8.dp))
                         Text("Show Grid in Preview")
+                    }
+
+                    HorizontalDivider()
+                    Text("PDF Export", style = MaterialTheme.typography.titleMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = openPdfAfterExport,
+                            onCheckedChange = { vm.setOpenPdfAfterExport(it) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Open PDF after export")
                     }
 
                     ListItem(
