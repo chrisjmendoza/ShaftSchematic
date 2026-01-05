@@ -101,6 +101,14 @@ fun ShaftDrawing(
     val threadFill = if (blackWhiteOnly) Color.Transparent else previewThreadFill.resolve(previewScheme)
     val threadHatch = if (blackWhiteOnly) Color.Black else previewThreadHatch.resolve(previewScheme)
 
+    fun fillAlpha(preset: PreviewColorPreset, fallback: Float): Float = when (preset) {
+        PreviewColorPreset.TRANSPARENT -> 0f
+        PreviewColorPreset.STEEL -> 0.18f
+        PreviewColorPreset.STAINLESS -> 0.14f
+        PreviewColorPreset.BRONZE -> 0.16f
+        PreviewColorPreset.CUSTOM -> fallback
+    }
+
     // RenderOptions (keep most defaults; set only what we actively control here)
     // NOTE: legacy color fields in RenderOptions are ARGB Ints → use toArgb().
     //       highlight colors are Color → pass Color directly.
@@ -114,14 +122,14 @@ fun ShaftDrawing(
         textSizePx = 22f,
         outlineColor = outlineColor.toArgb(),
         outlineWidthPx = 2f,
-        bodyFillColor = bodyFill.copy(alpha = if (bodyFill == Color.Transparent) 0f else 0.06f).toArgb(),
-        linerFillColor = linerFill.copy(alpha = if (linerFill == Color.Transparent) 0f else 0.14f).toArgb(),
-        taperFillColor = taperFill.copy(alpha = if (taperFill == Color.Transparent) 0f else 0.10f).toArgb(),
+        bodyFillColor = bodyFill.copy(alpha = fillAlpha(previewBodyFill.preset, fallback = 0.10f)).toArgb(),
+        linerFillColor = linerFill.copy(alpha = fillAlpha(previewLinerFill.preset, fallback = 0.16f)).toArgb(),
+        taperFillColor = taperFill.copy(alpha = fillAlpha(previewTaperFill.preset, fallback = 0.14f)).toArgb(),
 
         // Threads (preview uses legacy hatch style)
         threadStyle = ThreadStyle.HATCH,      // ← legacy look restored
         threadUseHatchColor = true,
-        threadFillColor = threadFill.copy(alpha = if (threadFill == Color.Transparent) 0f else 0.08f).toArgb(),
+        threadFillColor = threadFill.copy(alpha = fillAlpha(previewThreadFill.preset, fallback = 0.10f)).toArgb(),
         threadHatchColor = threadHatch.toArgb(),
         threadStrokePx = 0f,
 
