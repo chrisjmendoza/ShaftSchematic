@@ -19,11 +19,19 @@ Threads as dimensioned segments
 
 Live preview that masks the centerline underneath occupied spans
 
+Preview Styling (on-screen only)
+
+Preview colors configurable via Settings (presets + Custom theme palette)
+
+Black/White Only mode for drafting-style preview
+
 Clean Editing Workflow
 
 Incremental component creation (in the order you build the shaft)
 
 Unit switching (mm / inch) with DataStore persistence
+
+Grid visibility persistence (DataStore)
 
 Validation nudges when component total length doesn't match overall length
 
@@ -50,6 +58,10 @@ Centerline rules
 Dimensioning and callouts
 
 Reliable system-document picker integration (SAF)
+
+Portrait UI
+
+The editor UI is locked to portrait orientation (landscape is currently disabled).
 
 Session Tools
 
@@ -137,7 +149,8 @@ Export to PDF from the top-right icon
 
 Use ⋮ → Clear All to reset the layout
 
-Components are always sorted by their starting X-position, matching machining logic.
+Component ordering honors a persisted/explicit component order when provided.
+Otherwise, components are ordered by their physical starting X-position.
 
 🧠 Persistence
 
