@@ -188,6 +188,25 @@ object SettingsStore {
         return legacyRoleToSetting(legacyRole, legacyDefaultPreset = defaultPreset)
     }
 
+    /**
+     * Test hook: exercises the same preview-color parsing/migration logic used by the
+     * DataStore-backed flows, without requiring an Android [Context].
+     */
+    internal fun parsePreviewColorSettingForTest(
+        presetRaw: String?,
+        customRoleRaw: String?,
+        legacyRoleRaw: String?,
+        defaultPreset: PreviewColorPreset,
+        defaultCustomRole: PreviewColorRole = PreviewColorRole.PRIMARY,
+    ): PreviewColorSetting =
+        parseSetting(
+            presetRaw = presetRaw,
+            customRoleRaw = customRoleRaw,
+            legacyRoleRaw = legacyRoleRaw,
+            defaultPreset = defaultPreset,
+            defaultCustomRole = defaultCustomRole
+        )
+
     fun previewOutlineSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
         ctx.settingsDataStore.data.map { p ->
             parseSetting(

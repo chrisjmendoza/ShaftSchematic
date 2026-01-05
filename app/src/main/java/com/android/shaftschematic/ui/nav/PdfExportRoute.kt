@@ -22,6 +22,7 @@ import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.Achievements
+import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.VerboseLog
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -147,13 +148,7 @@ fun PdfExportRoute(
 }
 
 private fun openPdf(context: Context, uri: Uri) {
-    val intent = Intent(Intent.ACTION_VIEW)
-        .setDataAndType(uri, "application/pdf")
-        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-    // Some viewers require ClipData to honor grant flags.
-    intent.clipData = ClipData.newUri(context.contentResolver, "Exported PDF", uri)
+    val intent = buildOpenPdfIntent(context, uri)
 
     // Proactively grant read permission to all potential handlers.
     val handlers = context.packageManager.queryIntentActivities(intent, 0)
