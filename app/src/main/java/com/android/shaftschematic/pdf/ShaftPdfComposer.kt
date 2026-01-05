@@ -244,7 +244,7 @@ private const val TEXT_PT = 12f
 // Layout
 private const val PAGE_MARGIN_PT = 36f       // 0.5 in
 private const val TOP_TEXT_PAD_PT = 12f
-private const val SHAFT_DOWN_PT = 72f        // 1 inch downward shift (moves footer down too)
+private const val SHAFT_DOWN_PT = 36f        // 0.5 in downward shift (moves footer down too)
 private const val BAND_CLEAR_PT = 12f        // breathing room above shaft before first dim line
 private const val BASE_DIM_OFFSET_PT = 24f   // distance from shaft top to first component dim
 private const val OVERALL_EXTRA_PT = 16f     // overall lane sits above components
