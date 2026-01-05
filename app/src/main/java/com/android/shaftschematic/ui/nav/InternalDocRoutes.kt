@@ -13,10 +13,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.android.shaftschematic.io.InternalStorage
+import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import com.android.shaftschematic.util.Achievements
@@ -218,17 +220,55 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
     val jobNumber by vm.jobNumber.collectAsState()
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
+    val shaftPosition by vm.shaftPosition.collectAsState()
+
+    var existingFiles by remember { mutableStateOf(listOf<String>()) }
+    LaunchedEffect(Unit) { existingFiles = InternalStorage.list(ctx) }
 
     var name by remember {
         val default = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+        val positionSuffix = shaftPosition.printableLabelOrNull()
         val suggested = DocumentNaming.suggestedBaseName(
             jobNumber = jobNumber,
             customer = customer,
-            vessel = vessel
+            vessel = vessel,
+            suffix = positionSuffix
         )
         mutableStateOf(TextFieldValue(suggested ?: "Shaft_$default"))
     }
     var error by remember { mutableStateOf<String?>(null) }
+
+    val normalizedName = remember(name.text) { InternalStorage.normalizeJsonName(name.text) }
+    val willOverwrite = remember(normalizedName, existingFiles) {
+        normalizedName != null && existingFiles.any { it.equals(normalizedName, ignoreCase = true) }
+    }
+    var pendingOverwrite by remember { mutableStateOf<String?>(null) }
+
+    if (pendingOverwrite != null) {
+        val file = pendingOverwrite!!
+        AlertDialog(
+            onDismissRequest = { pendingOverwrite = null },
+            title = { Text("Overwrite existing save?") },
+            text = { Text("A saved shaft named ‘${file.removeSuffix(".json")}’ already exists. Overwrite it?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                InternalStorage.save(ctx, file, vm.exportJson())
+                            }
+                            vm.unlockAchievement(Achievements.Id.FIRST_SAVE)
+                            pendingOverwrite = null
+                            onFinished()
+                        }
+                    }
+                ) { Text("Overwrite") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingOverwrite = null }) { Text("Cancel") }
+            }
+        )
+    }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Save Drawing") }) }) { pad ->
         Column(
@@ -245,21 +285,70 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                 },
                 label = { Text("File name") },
                 isError = error != null,
-                supportingText = { if (error != null) Text(error!!) },
+                supportingText = {
+                    when {
+                        error != null -> Text(error!!)
+                        willOverwrite -> Text("Matches an existing save. You’ll be asked to overwrite.")
+                    }
+                },
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // Existing saves list: shown under the input and filtered as the user types.
+            val query = name.text.trim()
+            val existingBaseNames = remember(existingFiles) { existingFiles.map { it.removeSuffix(".json") } }
+            val filtered = remember(existingBaseNames, query) {
+                if (query.isBlank()) {
+                    existingBaseNames
+                } else {
+                    existingBaseNames.filter { it.contains(query, ignoreCase = true) }
+                }
+            }
+            if (existingBaseNames.isNotEmpty()) {
+                Text("Existing saves", style = MaterialTheme.typography.titleSmall)
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                ) {
+                    items(filtered, key = { it }) { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    name = TextFieldValue(
+                                        text = item,
+                                        selection = TextRange(item.length)
+                                    )
+                                    error = null
+                                }
+                                .padding(vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(item)
+                            Text("Use", color = MaterialTheme.colorScheme.primary)
+                        }
+                        HorizontalDivider()
+                    }
+                }
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = {
                     val normalized = InternalStorage.normalizeJsonName(name.text)
                     if (normalized == null) {
                         error = "Enter a file name."
                     } else {
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                InternalStorage.save(ctx, normalized, vm.exportJson())
+                        if (InternalStorage.exists(ctx, normalized)) {
+                            pendingOverwrite = normalized
+                        } else {
+                            scope.launch {
+                                withContext(Dispatchers.IO) {
+                                    InternalStorage.save(ctx, normalized, vm.exportJson())
+                                }
+                                vm.unlockAchievement(Achievements.Id.FIRST_SAVE)
+                                onFinished()
                             }
-                            vm.unlockAchievement(Achievements.Id.FIRST_SAVE)
-                            onFinished()
                         }
                     }
                 }) { Text("Save") }

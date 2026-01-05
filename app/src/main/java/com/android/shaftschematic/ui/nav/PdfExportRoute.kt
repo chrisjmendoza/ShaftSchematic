@@ -22,6 +22,7 @@ import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.Achievements
+import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.VerboseLog
 import java.text.SimpleDateFormat
@@ -69,7 +70,13 @@ fun PdfExportRoute(
                         val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
                         val page = doc.startPage(pageInfo)
 
-                        val filename = uri.lastPathSegment ?: defaultFilename()
+                        val filename = uri.lastPathSegment
+                            ?: defaultFilename(
+                                jobNumber = jobNumber,
+                                customer = customer,
+                                vessel = vessel,
+                                shaftPosition = shaftPosition
+                            )
                         val project = ProjectInfo(
                             customer = customer,
                             vessel = vessel,
@@ -136,7 +143,14 @@ fun PdfExportRoute(
     LaunchedEffect(Unit) {
         if (!launched) {
             launched = true
-            launcher.launch(defaultFilename())
+            launcher.launch(
+                defaultFilename(
+                    jobNumber = jobNumber,
+                    customer = customer,
+                    vessel = vessel,
+                    shaftPosition = shaftPosition
+                )
+            )
         }
     }
 
@@ -166,9 +180,20 @@ private fun openPdf(context: Context, uri: Uri) {
     }
 }
 
-private fun defaultFilename(): String {
+private fun defaultFilename(
+    jobNumber: String,
+    customer: String,
+    vessel: String,
+    shaftPosition: ShaftPosition
+): String {
     val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
-    return "Shaft_$stamp.pdf"
+    val suggested = DocumentNaming.suggestedBaseName(
+        jobNumber = jobNumber,
+        customer = customer,
+        vessel = vessel,
+        suffix = shaftPosition.printableLabelOrNull()
+    )
+    return (suggested ?: "Shaft_$stamp") + ".pdf"
 }
 
 private fun appVersionFromContext(context: Context): String {

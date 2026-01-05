@@ -6,11 +6,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
+import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.VerboseLog
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -67,6 +71,13 @@ fun SaveInternalRoute(
     val context = LocalContext.current
     val done = remember { mutableStateOf(false) }
 
+    // If/when JSON export via SAF becomes user-facing, keep the suggested filename
+    // aligned with internal saves and PDF export.
+    val jobNumber by vm.jobNumber.collectAsState()
+    val customer by vm.customer.collectAsState()
+    val vessel by vm.vessel.collectAsState()
+    val shaftPosition by vm.shaftPosition.collectAsState()
+
     val saver = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
@@ -83,13 +94,33 @@ fun SaveInternalRoute(
         done.value = true
     }
 
-    LaunchedEffect(Unit) { saver.launch(defaultJsonFileName()) }
+    LaunchedEffect(Unit) {
+        saver.launch(
+            defaultJsonFileName(
+                jobNumber = jobNumber,
+                customer = customer,
+                vessel = vessel,
+                shaftPosition = shaftPosition
+            )
+        )
+    }
     if (done.value) onFinished() else Text("")
 }
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
-private fun defaultJsonFileName(): String {
-    val sdf = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US)
-    return "Shaft_${sdf.format(Date())}.json"
+private fun defaultJsonFileName(
+    jobNumber: String,
+    customer: String,
+    vessel: String,
+    shaftPosition: ShaftPosition
+): String {
+    val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+    val suggested = DocumentNaming.suggestedBaseName(
+        jobNumber = jobNumber,
+        customer = customer,
+        vessel = vessel,
+        suffix = shaftPosition.printableLabelOrNull()
+    )
+    return (suggested ?: "Shaft_$stamp") + ".json"
 }
