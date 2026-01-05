@@ -29,7 +29,13 @@ import java.util.Locale
 
 /**
  * Route that exports the current shaft as a single-page PDF via SAF (“Create Document”).
- * Units are mm in the model; the composer handles unit labels.
+ *
+ * Notes for contributors
+ * - Units: model geometry is always mm; the PDF composer handles unit labels/formatting.
+ * - Robustness: if the composer throws, we still write a valid PDF with an error page
+ *   (avoid leaving behind a truncated/unopenable file).
+ * - UX: the export flow may optionally open the resulting document in an external PDF
+ *   viewer after a successful write; this is separate from PDF content/styling.
  */
 @Composable
 fun PdfExportRoute(

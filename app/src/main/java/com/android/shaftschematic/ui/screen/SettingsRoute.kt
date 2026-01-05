@@ -52,11 +52,18 @@ import com.android.shaftschematic.util.UnitSystem
  * SettingsRoute
  *
  * Purpose
- * Minimal settings: measurement units for UI labels and grid visibility in Preview.
+ * User preferences that affect UI presentation and export UX.
+ *
+ * This screen is intentionally “preferences-only”:
+ * - Units: changes formatting/labels, never the underlying model geometry (mm-only).
+ * - Preview: visual aids (grid) and preview-only styling controls.
+ * - PDF export: user experience around exporting (not PDF styling).
+ * - Editor screen: editor presentation toggles (e.g., component card affordances).
  *
  * Contract
  * - Unit selection must not mutate the model (mm-only). It only changes UI presentation.
- * - Grid is a visual-only toggle for Preview.
+ * - Settings are persisted via the ViewModel/SettingsStore; this route is a UI surface.
+ * - Preview styling must never leak into PDF output (PDF has its own styling).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

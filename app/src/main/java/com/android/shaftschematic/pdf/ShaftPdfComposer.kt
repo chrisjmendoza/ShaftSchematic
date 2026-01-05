@@ -29,13 +29,20 @@ import androidx.core.graphics.withClip
  * Axis: AFT → FWD. Measurement origin (x=0) is the first counted AFT surface,
  * respecting end threads flagged `excludeFromOAL` (those shift the measurement window).
  *
+ * Layout notes
+ * - The page is explicitly painted white for viewer compatibility.
+ * - A fixed footer band is reserved at the bottom of the page; all geometry is clamped
+ *   to stay above it.
+ * - Vertical placement uses a small paper-space bias (see `SHAFT_DOWN_PT`) but is still
+ *   clamped to keep the schematic and footer readable.
+ *
  * This composer:
  *  • Renders bodies (with centered long-break compression), tapers, threads, and liners.
  *  • Draws **liner-only dimensions** in the PDF: for each liner we show
  *      – offset from SET → near edge, and
  *      – liner length,
  *    with stacked rails; the **top rail is OAL only**.
- *  • Keeps all geometry unchanged; only the dimension pass was added.
+ *  • Uses PDF-specific styling; preview-only styling options are not consumed here.
  */
 fun composeShaftPdf(
     page: PdfDocument.Page,

@@ -207,8 +207,8 @@ fun ShaftScreen(
     /**
      * Accessibility: [fabEnabled]
      * When true, shows a floating “Add component” button as an alternative to the
-     * carousel’s add cards. Off by default; toggle from Settings for users who prefer
-     * a large, persistent affordance that sits above the IME.
+     * carousel’s add cards. Off by default; intended for users who prefer a large,
+     * persistent affordance that sits above the IME.
      */
     fabEnabled: Boolean = false, // ← NEW: default off
 ) {
