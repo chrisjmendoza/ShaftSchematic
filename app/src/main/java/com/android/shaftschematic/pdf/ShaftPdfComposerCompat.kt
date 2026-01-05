@@ -19,7 +19,7 @@ fun exportShaftPdf(
     unit: UnitSystem,
     appVersion: String,
     filename: String,
-    project: ProjectInfo = ProjectInfo(customer = "", vessel = "", jobNumber = "")
+    project: ProjectInfo = ProjectInfo()
 ) {
     // Since this file shares the same package, the top-level composeShaftPdf() is visible directly.
     composeShaftPdf(page, spec, unit, project, appVersion, filename)

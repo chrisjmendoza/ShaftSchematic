@@ -14,6 +14,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.Achievements
@@ -36,6 +37,11 @@ fun PdfExportRoute(
     var launched by rememberSaveable { mutableStateOf(false) }
     var finished by rememberSaveable { mutableStateOf(false) }
 
+    val customer by vm.customer.collectAsState()
+    val vessel by vm.vessel.collectAsState()
+    val jobNumber by vm.jobNumber.collectAsState()
+    val shaftPosition by vm.shaftPosition.collectAsState()
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
@@ -51,7 +57,12 @@ fun PdfExportRoute(
                         val page = doc.startPage(pageInfo)
 
                         val filename = uri.lastPathSegment ?: defaultFilename()
-                        val project = ProjectInfo(customer = "", vessel = "", jobNumber = "")
+                        val project = ProjectInfo(
+                            customer = customer,
+                            vessel = vessel,
+                            side = shaftPosition,
+                            jobNumber = jobNumber
+                        )
 
                         VerboseLog.d(VerboseLog.Category.PDF, "PdfExport") {
                             "writing: page=${pageInfo.pageWidth}x${pageInfo.pageHeight}pt filename=$filename"

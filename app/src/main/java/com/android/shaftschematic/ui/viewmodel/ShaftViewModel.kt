@@ -197,6 +197,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _notes = MutableStateFlow("")
     val notes: StateFlow<String> = _notes.asStateFlow()
 
+    private val _shaftPosition = MutableStateFlow(ShaftPosition.OTHER)
+    val shaftPosition: StateFlow<ShaftPosition> = _shaftPosition.asStateFlow()
+
     private val _overallIsManual = MutableStateFlow(false)
     val overallIsManual: StateFlow<Boolean> = _overallIsManual.asStateFlow()
     fun setOverallIsManual(v: Boolean) { _overallIsManual.value = v }
@@ -496,6 +499,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun setVessel(value: String)   { _vessel.value = value.trim() }
     fun setJobNumber(value: String){ _jobNumber.value = value.trim() }
     fun setNotes(value: String)    { _notes.value = value }
+    fun setShaftPosition(value: ShaftPosition) { _shaftPosition.value = value }
 
     // ────────────────────────────────────────────────────────────────────────────
     // Overall length (mm)
@@ -1019,6 +1023,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _spec.value = ShaftSpec()
         _componentOrder.value = emptyList() // fresh doc → empty order list
         _unitLocked.value = lockUnit
+        _customer.value = ""
+        _vessel.value = ""
+        _jobNumber.value = ""
+        _shaftPosition.value = ShaftPosition.OTHER
+        _notes.value = ""
         setUnit(unit)
         if (lockUnit) {
             viewModelScope.launch {
@@ -1043,6 +1052,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val preferredUnit: UnitSystem = UnitSystem.INCHES,
         @kotlinx.serialization.SerialName("unit_locked")
         val unitLocked: Boolean = true,
+        @kotlinx.serialization.SerialName("job_number")
+        val jobNumber: String = "",
+        val customer: String = "",
+        val vessel: String = "",
+        @kotlinx.serialization.SerialName("shaft_position")
+        val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
+        val notes: String = "",
         val spec: ShaftSpec
     )
 
@@ -1057,6 +1073,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         ShaftDocV1(
             preferredUnit = _unit.value,
             unitLocked = _unitLocked.value,
+            jobNumber = _jobNumber.value,
+            customer = _customer.value,
+            vessel = _vessel.value,
+            shaftPosition = _shaftPosition.value,
+            notes = _notes.value,
             spec = _spec.value
         )
     )
@@ -1075,6 +1096,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 _unitLocked.value = doc.unitLocked
                 setUnit(doc.preferredUnit, persist = false)
 
+                _jobNumber.value = doc.jobNumber
+                _customer.value = doc.customer
+                _vessel.value = doc.vessel
+                _shaftPosition.value = doc.shaftPosition
+                _notes.value = doc.notes
+
                 // Reset order to this document's components only
                 _componentOrder.value = emptyList()
                 ensureOrderCoversSpec(doc.spec)
@@ -1089,6 +1116,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 _spec.value = legacy
                 _unitLocked.value = false // no lock info in legacy
                 // unit falls back to SettingsStore default (observer in init{})
+
+                _customer.value = ""
+                _vessel.value = ""
+                _jobNumber.value = ""
+                _shaftPosition.value = ShaftPosition.OTHER
+                _notes.value = ""
 
                 _componentOrder.value = emptyList()
                 ensureOrderCoversSpec(legacy)

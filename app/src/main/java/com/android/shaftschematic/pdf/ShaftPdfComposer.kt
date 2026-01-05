@@ -870,6 +870,16 @@ private fun drawFooter(
         c.drawText("Vessel: ${project.vessel}",   midX, y, text); y += lh
         c.drawText("Job #: ${project.jobNumber}", midX, y, text); y += lh
         c.drawText("Date: $date", midX, y, text); y += lh
+
+        project.side.printableLabelOrNull()?.let { pos ->
+            // A little breathing room under Date; position stands out.
+            y += lh * 0.35f
+            val posPaint = Paint(text).apply {
+                textSize = text.textSize * 1.20f
+                isFakeBoldText = true
+            }
+            c.drawText(pos, midX, y, posPaint)
+        }
         // c.drawText("Not to scale: long bodies compressed for readability.", midX, y, text)
     }
 

@@ -47,6 +47,8 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -54,6 +56,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -88,6 +91,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.config.AddDefaultsConfig
 import com.android.shaftschematic.ui.config.defaultBodyLenMm
@@ -141,6 +145,7 @@ fun ShaftScreen(
     customer: String,
     vessel: String,
     jobNumber: String,
+    shaftPosition: ShaftPosition,
     notes: String,
     showGrid: Boolean,
     showOalDebugLabel: Boolean,
@@ -157,6 +162,7 @@ fun ShaftScreen(
     onSetCustomer: (String) -> Unit,
     onSetVessel: (String) -> Unit,
     onSetJobNumber: (String) -> Unit,
+    onSetShaftPosition: (ShaftPosition) -> Unit,
     onSetNotes: (String) -> Unit,
     onSetOverallLengthRaw: (String) -> Unit,
     onSetOverallLengthMm: (Float) -> Unit,
@@ -487,6 +493,13 @@ fun ShaftScreen(
                     CommitTextField("Job Number", jobNumber, onSetJobNumber, Modifier.fillMaxWidth())
                     CommitTextField("Customer", customer, onSetCustomer, Modifier.fillMaxWidth())
                     CommitTextField("Vessel", vessel, onSetVessel, Modifier.fillMaxWidth())
+
+                    ShaftPositionDropdown(
+                        selected = shaftPosition,
+                        onSelected = onSetShaftPosition,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
                     CommitTextField(
                         label = "Notes",
                         initial = notes,
@@ -607,6 +620,52 @@ fun ShaftScreen(
                                 tpiToPitchMm(tpi),
                                 excludeFromOAL
                             )
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShaftPositionDropdown(
+    selected: ShaftPosition,
+    onSelected: (ShaftPosition) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val options = remember {
+        listOf(ShaftPosition.PORT, ShaftPosition.STBD, ShaftPosition.CENTER, ShaftPosition.OTHER)
+    }
+
+    Column(modifier = modifier) {
+        Text(
+            text = "Shaft Position",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
+        Box {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(selected.uiLabel(), modifier = Modifier.weight(1f), textAlign = TextAlign.Start)
+                Icon(Icons.Filled.ExpandMore, contentDescription = null)
+            }
+
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                options.forEach { opt ->
+                    DropdownMenuItem(
+                        text = { Text(opt.uiLabel()) },
+                        onClick = {
+                            onSelected(opt)
+                            expanded = false
                         }
                     )
                 }

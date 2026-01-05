@@ -7,6 +7,6 @@ package com.android.shaftschematic.model
 data class ProjectInfo(
     val customer: String = "",
     val vessel: String = "",
-    val side: String = "",       // "STBD" / "PORT", etc.
+    val side: ShaftPosition = ShaftPosition.OTHER,
     val jobNumber: String = ""
 )

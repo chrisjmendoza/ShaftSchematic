@@ -76,6 +76,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val customer        by vm.customer.collectAsState()
     val vessel          by vm.vessel.collectAsState()
     val jobNumber       by vm.jobNumber.collectAsState()
+    val shaftPosition   by vm.shaftPosition.collectAsState()
     val notes           by vm.notes.collectAsState()
     val overallIsManual by vm.overallIsManual.collectAsState()
     val order           by vm.componentOrder.collectAsState()
@@ -95,6 +96,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
         customer = customer,
         vessel = vessel,
         jobNumber = jobNumber,
+        shaftPosition = shaftPosition,
         notes = notes,
         showGrid = showGrid,
         showOalDebugLabel = showOalDebugLabel,
@@ -112,6 +114,7 @@ fun ShaftRoute(vm: ShaftViewModel) {
         onSetCustomer = vm::setCustomer,
         onSetVessel = vm::setVessel,
         onSetJobNumber = vm::setJobNumber,
+        onSetShaftPosition = vm::setShaftPosition,
         onSetNotes = vm::setNotes,
         onSetOverallLengthRaw = vm::setOverallLength,
         onSetOverallLengthMm = vm::onSetOverallLengthMm,

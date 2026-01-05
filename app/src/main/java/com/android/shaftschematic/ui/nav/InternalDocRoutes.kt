@@ -20,6 +20,7 @@ import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import com.android.shaftschematic.util.Achievements
+import com.android.shaftschematic.util.DocumentNaming
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -214,9 +215,18 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    val jobNumber by vm.jobNumber.collectAsState()
+    val customer by vm.customer.collectAsState()
+    val vessel by vm.vessel.collectAsState()
+
     var name by remember {
         val default = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
-        mutableStateOf(TextFieldValue("Shaft_$default"))
+        val suggested = DocumentNaming.suggestedBaseName(
+            jobNumber = jobNumber,
+            customer = customer,
+            vessel = vessel
+        )
+        mutableStateOf(TextFieldValue(suggested ?: "Shaft_$default"))
     }
     var error by remember { mutableStateOf<String?>(null) }
 
