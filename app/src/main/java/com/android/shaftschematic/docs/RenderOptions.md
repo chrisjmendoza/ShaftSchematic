@@ -4,7 +4,7 @@ RenderOptions Contract
 Layer: UI → Drawing → Config  
 Purpose: Define styling and toggles for ShaftRenderer and ShaftDrawing.
 
-Version: v0.3 (2025-10-04)
+Version: v0.4 (2026-01-04)
 
 Invariants
 - RenderOptions is immutable; each change creates a new instance.  
@@ -13,10 +13,10 @@ Invariants
 
 Responsibilities
 - Hold visual parameters:
-  - Line widths (`shaftWidthPx`, `dimWidthPx`)
-  - Colors for bodies/tapers/liners/thread hatch
-  - Grid visibility (`showGrid`)
-  - Centerline visibility (`showCenterline`)
+  - Line widths (`outlineWidthPx`, `dimLineWidthPx`)
+  - Colors (`outlineColor`, `bodyFillColor`, `taperFillColor`, `linerFillColor`, thread colors)
+  - Grid semantics (`showGrid`, `gridUseInches`, legend controls)
+  - Highlighting controls (enabled + glow/edge colors)
 - Provide stable defaults for light/dark themes.
 - Supply configuration to both ShaftDrawing and ShaftRenderer.
 
@@ -30,5 +30,5 @@ Notes
 - ColorScheme accessed at construction, never inside draw lambdas.
 
 Future Enhancements
-- User color presets and print/dark modes.  
+- PDF-facing color configuration (preview color settings are preview-only).  
 - Hatch angle customization and dimension line colors.

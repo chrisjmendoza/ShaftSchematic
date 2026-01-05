@@ -102,6 +102,7 @@ Responsibilities:
 - Show dialogs for component creation and editing
 - Handle text input with commit-on-blur
 - Display validation errors and warnings
+- Persist and expose user preferences (units, grid, preview colors)
 
 UI must NOT:
 - Compute layout logic

@@ -34,6 +34,9 @@ No additional geometry logic is permitted.
 
 ShaftDrawing is NOT used for PDF; PDF uses layout + renderer only.
 
+Note: Preview color settings (presets/custom palette and Black/White Only) are preview-only.
+PDF currently uses its own fixed styling via `RenderOptions` inside the PDF composer.
+
 ---
 
 # 3. Layout Flow

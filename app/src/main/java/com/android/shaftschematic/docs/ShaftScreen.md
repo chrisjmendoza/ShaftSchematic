@@ -4,7 +4,7 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.3 (2025-10-04)
+Version: v0.4 (2026-01-04)
 
 ---
 
@@ -23,15 +23,22 @@ Invariants
 Responsibilities
 ----------------
 - **Header Row:**  
-  Compact top strip providing:
-  - Unit selector (mm/in)
-  - Grid toggle switch
+  App bar providing:
+  - Navigation/back
+  - Editor actions (save/export/etc)
+  - Settings entry point
 
 - **Preview Card:**  
-  - Fixed preview area rendering the shaft via `renderShaft(spec, unit)`  
-  - Optional grid overlay, toggled from header  
+  - Fixed preview area rendering the shaft via `ShaftDrawing(...)`  
+  - Optional grid overlay (user setting)  
   - Transparent or theme-color background (user selectable)  
   - “Free to end” badge aligned **TopCenter** with formatted distance and unit suffix
+
+- **Settings (Preferences):**
+  - Units (mm/in) affect labels and input formatting only (model remains mm)
+  - Grid visibility in Preview
+  - Preview Colors: presets (Stainless/Steel/Bronze/Transparent) + Custom palette
+  - Black/White Only mode (forces black outlines and disables fills in Preview)
 
 - **Scrollable Form Area:**  
   - Overall length field (unit-aware, commit-on-blur)  

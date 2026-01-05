@@ -120,12 +120,24 @@ If reordering UI added later:
 UI element `ShaftDrawing` is responsible only for:
 - Drawing grid
 - Drawing axis labels
+- Building `renderOptions` from UI + user preferences (grid toggle, preview colors, black/white override)
 - Passing `layoutResult` and `renderOptions` to `ShaftRenderer`
 
 UI must never:
 - Draw geometry
 - Compute pxPerMm
 - Compute component boundaries
+
+ 
+
+# 5.1 Preview Color Preferences (Settings)
+
+Preview color preferences apply to the on-screen Preview only.
+
+- Users select from presets: Stainless, Steel, Bronze, Transparent, or Custom.
+- When Custom is selected, a theme-based palette is available.
+- A “Black/White Only” toggle forces black outlines and disables fills in Preview.
+- When Black/White Only is enabled, color controls are disabled but retain their last selections.
 
 ---
 

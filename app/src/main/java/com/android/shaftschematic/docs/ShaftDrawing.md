@@ -6,7 +6,7 @@ Purpose: Provide a composable surface for rendering shaft previews. Handles
 text measurement, layout computation, optional grid drawing, and delegates
 component geometry rendering to ShaftRenderer.
 
-Version: v0.3 (2025-10-04)
+Version: v0.4 (2026-01-04)
 
 Invariants
 - Input model ([ShaftSpec]) always uses canonical millimeters.  
@@ -19,6 +19,10 @@ Responsibilities
   1) Computes layout with ShaftLayout.compute().
   2) Draws the optional engineering grid (if enabled).
   3) Delegates component geometry drawing to ShaftRenderer.draw().
+- Bridge persisted preview preferences into RenderOptions:
+  - Preview colors (presets + Custom palette)
+  - Black/White Only override (forces black outlines and disables fills)
+  - Highlight selection (glow + edge under-stroke)
 - Manage text measurement via rememberTextMeasurer to avoid allocations.
 - Ensure preview always shows something:
   - If spec.overallLengthMm == 0, extend length to last occupied component end.

@@ -7,7 +7,7 @@
 - Fixed-height band: `heightIn(min = 120.dp, max = 200.dp)`, `aspectRatio(3.8)`.
 
 ## Behavior
-- Renders shaft via `renderShaft(spec, unit)`.
+- Renders shaft via `ShaftDrawing(spec, unit, ...)`.
 - Does not scale or modify geometry; preview only.
 
 ## Invariants

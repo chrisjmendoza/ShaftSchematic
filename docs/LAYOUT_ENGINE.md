@@ -18,7 +18,8 @@ The layout engine does **not**:
 ## Input
 - `spec: ShaftSpec`
 - `renderBoundsPx: RectF` (drawing region inside padding)
-- `renderOptions: RenderOptions` (text size, padding, grid settings)
+
+Note: `ShaftLayout.compute(...)` receives explicit pixel bounds (left/top/right/bottom). Styling (grid, text size, colors) is handled by `RenderOptions` in the drawing layer, not by the layout engine.
 
 ## Output
 A fully normalized `ShaftLayout.Result`, containing:
@@ -129,8 +130,9 @@ Renderer performs **no mm→px conversion** and **no geometry calculations** (e.
 # 2. Stroke Conventions
 
 ### Strokes from DrawingConfig:
-- `shaftWidth`: For bodies, tapers, liners’ top/bottom
-- `dimWidth`: For ticks, hatch strokes, dimension lines
+### Strokes from RenderOptions:
+- `outlineWidthPx`: For bodies, tapers, liners, and envelopes
+- `dimLineWidthPx`: For ticks, hatch strokes, and auxiliary lines
 
 ### Anti-rules:
 - Renderer must never create arbitrary stroke widths.
