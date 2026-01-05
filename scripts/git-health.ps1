@@ -1,4 +1,3 @@
-[CmdletBinding()]
 param(
     [switch]$VerboseInfo
 )
@@ -13,35 +12,35 @@ function Write-Section([string]$Title) {
     Write-Host "`n== $Title ==" -ForegroundColor Cyan
 }
 
-function Invoke-GitSafe([string[]]$GitArguments) {
-    try {
-        if (-not $GitArguments -or $GitArguments.Count -eq 0) {
-            return $null
-        }
-        if ($VerboseInfo) {
-            Write-Host ("git " + ($GitArguments -join ' ')) -ForegroundColor DarkGray
-        }
-        $out = & git @GitArguments 2>$null
-        $text = ($out -join "`n").Trim()
-        if ($text -match '^\s*(fatal|usage):') {
-            return $null
-        }
-        return $text
-    } catch {
-        if ($VerboseInfo) {
-            Write-Host "git call failed" -ForegroundColor DarkGray
-        }
+function Invoke-GitSafe([string[]]$GitParams) {
+    if (-not $GitParams -or $GitParams.Count -eq 0) {
         return $null
     }
+
+    if ($VerboseInfo) {
+        Write-Host ("git " + ($GitParams -join ' ')) -ForegroundColor DarkGray
+    }
+
+    # Passing a string[] to an external command expands to individual args in Windows PowerShell.
+    $out = & git $GitParams 2>$null
+    if (-not $?) {
+        return $null
+    }
+
+    $text = ($out -join "`n").Trim()
+    if ($text -match '^\s*(fatal|usage):') {
+        return $null
+    }
+    return $text
 }
 
 # Walk up parent directories to find a .git directory/file.
-function Find-GitRoot([string]$StartDir) {
-    try {
-        $dir = (Resolve-Path $StartDir).Path
-    } catch {
+function Get-GitRoot([string]$StartDir) {
+    $resolved = Resolve-Path $StartDir -ErrorAction SilentlyContinue
+    if (-not $resolved) {
         return $null
     }
+    $dir = $resolved.Path
 
     while ($true) {
         if (Test-Path (Join-Path $dir '.git')) {
@@ -57,32 +56,30 @@ function Find-GitRoot([string]$StartDir) {
 }
 
 # Resolve repo root robustly (don’t assume the child PowerShell starts in the repo)
-$repoCandidate = $null
-try {
-    $repoCandidate = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-} catch {
-    $repoCandidate = $PSScriptRoot
-}
+$repoCandidateResolved = Resolve-Path (Join-Path $PSScriptRoot '..') -ErrorAction SilentlyContinue
+$repoCandidate = if ($repoCandidateResolved) { $repoCandidateResolved.Path } else { $PSScriptRoot }
 
-$top = Find-GitRoot (Get-Location)
-if (-not $top) { $top = Find-GitRoot $repoCandidate }
-if (-not $top) { $top = Invoke-GitSafe @('rev-parse', '--show-toplevel') }
-if (-not $top) { $top = Invoke-GitSafe @('-C', $repoCandidate, 'rev-parse', '--show-toplevel') }
+$top = Get-GitRoot (Get-Location)
+if (-not $top) { $top = Get-GitRoot $repoCandidate }
+$revParseTopParams = 'rev-parse', '--show-toplevel'
+$revParseTopFromCandidateParams = '-C', $repoCandidate, 'rev-parse', '--show-toplevel'
+if (-not $top) { $top = Invoke-GitSafe -GitParams $revParseTopParams }
+if (-not $top) { $top = Invoke-GitSafe -GitParams $revParseTopFromCandidateParams }
 if (-not $top) {
     Write-Error 'Not inside a git repository.'
 }
 
-$gitBaseArguments = @('-C', $top)
+$gitBaseParams = '-C', $top
 
-function GitInRepo([string[]]$GitArguments) {
-    return Invoke-GitSafe ($gitBaseArguments + $GitArguments)
+function GitInRepo([string[]]$GitParams) {
+    return Invoke-GitSafe ($gitBaseParams + $GitParams)
 }
 
 Write-Section 'Repo'
 Write-Host "Root: $top"
 
 Write-Section 'Branch'
-$statusShort = GitInRepo @('status', '-sb')
+$statusShort = GitInRepo -GitParams 'status', '-sb'
 $statusLine = ($statusShort -split "`r?`n")[0]
 
 if ($VerboseInfo) {
@@ -114,8 +111,8 @@ if ($statusLine -match '^##\s+(?<rest>.*)$') {
 if (-not $branch) { $branch = '(unknown)' }
 Write-Host "Branch: $branch"
 
-$head = GitInRepo @('rev-parse', '--short', 'HEAD')
-$subject = GitInRepo @('log', '-1', '--pretty=%s')
+$head = GitInRepo -GitParams 'rev-parse', '--short', 'HEAD'
+$subject = GitInRepo -GitParams 'log', '-1', '--pretty=%s'
 if ($head) {
     Write-Host "HEAD:   $head  $subject"
 }
@@ -124,7 +121,7 @@ Write-Section 'Upstream'
 $upstream = $upstreamFromStatus
 if ($upstream) {
     Write-Host "Upstream: $upstream"
-    $counts = GitInRepo @('rev-list', '--left-right', '--count', "HEAD...$upstream")
+    $counts = GitInRepo -GitParams 'rev-list', '--left-right', '--count', "HEAD...$upstream"
     if ($counts -and ($counts -match '^\s*(\d+)\s+(\d+)\s*$')) {
         $ahead = [int]$Matches[1]
         $behind = [int]$Matches[2]
@@ -136,7 +133,7 @@ if ($upstream) {
 }
 
 Write-Section 'Working Tree'
-$status = GitInRepo @('status', '--porcelain')
+$status = GitInRepo -GitParams 'status', '--porcelain'
 if ([string]::IsNullOrWhiteSpace($status)) {
     Write-Host 'Status: clean'
 } else {
@@ -148,18 +145,17 @@ if ([string]::IsNullOrWhiteSpace($status)) {
 }
 
 Write-Section 'Operations'
-$gitDir = GitInRepo @('rev-parse', '--git-dir')
+$gitDir = GitInRepo -GitParams 'rev-parse', '--git-dir'
 if (-not $gitDir) { $gitDir = '.git' }
 
 # `git rev-parse --git-dir` is often relative to the repo root; make it absolute so
 # Test-Path works even when the script is run from elsewhere.
-try {
-    if (-not [System.IO.Path]::IsPathRooted($gitDir)) {
-        $gitDir = Join-Path $top $gitDir
-    }
-    $gitDir = (Resolve-Path $gitDir).Path
-} catch {
-    # Keep the raw value; we'll simply fail to detect in-progress operations.
+if (-not [System.IO.Path]::IsPathRooted($gitDir)) {
+    $gitDir = Join-Path $top $gitDir
+}
+$resolvedGitDir = Resolve-Path $gitDir -ErrorAction SilentlyContinue
+if ($resolvedGitDir) {
+    $gitDir = $resolvedGitDir.Path
 }
 
 $flags = [System.Collections.Generic.List[string]]::new()
