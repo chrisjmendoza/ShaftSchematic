@@ -375,7 +375,20 @@ private fun PreviewColorRow(
                             }
                         },
                         onClick = {
-                            onChanged(value.copy(preset = PreviewColorPreset.CUSTOM, customRole = role))
+                            val inferredPreset = when (role) {
+                                PreviewColorRole.TRANSPARENT -> PreviewColorPreset.TRANSPARENT
+                                PreviewColorRole.SURFACE_VARIANT -> PreviewColorPreset.STAINLESS
+                                PreviewColorRole.OUTLINE -> PreviewColorPreset.STEEL
+                                PreviewColorRole.TERTIARY -> PreviewColorPreset.BRONZE
+                                else -> PreviewColorPreset.CUSTOM
+                            }
+                            if (inferredPreset == PreviewColorPreset.CUSTOM) {
+                                onChanged(value.copy(preset = PreviewColorPreset.CUSTOM, customRole = role))
+                            } else {
+                                // Preserve the existing customRole so returning to Custom
+                                // keeps the last true custom selection.
+                                onChanged(value.copy(preset = inferredPreset))
+                            }
                             paletteExpanded = false
                         }
                     )
