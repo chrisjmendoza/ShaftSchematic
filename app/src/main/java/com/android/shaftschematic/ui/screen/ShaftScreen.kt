@@ -199,7 +199,6 @@ fun ShaftScreen(
     onRemoveLiner: (String) -> Unit,
 
     // Other
-    renderShaft: @Composable (ShaftSpec, UnitSystem) -> Unit,
     snackbarHostState: SnackbarHostState,
     onClickSave: () -> Unit,
     onExportPdf: () -> Unit,
@@ -332,8 +331,7 @@ fun ShaftScreen(
                     .heightIn(min = 120.dp, max = 200.dp)
                     .aspectRatio(3.0f)
             )
-            // NOTE: Your renderer should read highlightEnabled + highlightId from VM/global state.
-            // If you want me to thread them directly into renderShaft, I can add a tiny bridge later.
+            // NOTE: Highlight state is threaded into ShaftDrawing via PreviewCard.
 
             Spacer(Modifier.height(12.dp))
             HorizontalDivider()

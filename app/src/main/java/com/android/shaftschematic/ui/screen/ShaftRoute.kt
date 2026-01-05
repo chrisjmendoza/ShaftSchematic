@@ -153,24 +153,6 @@ fun ShaftRoute(vm: ShaftViewModel) {
         onRemoveThread = vm::removeThread,
         onRemoveLiner  = vm::removeLiner,
 
-        // preview renderer
-        renderShaft = { s, u ->
-            ShaftDrawing(
-                spec = s,
-                unit = u,
-                showGrid = showGrid,
-                showLayoutDebugOverlay = showRenderLayoutDebugOverlay,
-                showOalMarkers = showRenderOalMarkers,
-                blackWhiteOnly = previewBlackWhiteOnly,
-                previewOutline = previewOutline,
-                previewBodyFill = previewBodyFill,
-                previewTaperFill = previewTaperFill,
-                previewLinerFill = previewLinerFill,
-                previewThreadFill = previewThreadFill,
-                previewThreadHatch = previewThreadHatch
-            )
-        },
-
         snackbarHostState = snackbarHostState,
 
         // top bar actions
