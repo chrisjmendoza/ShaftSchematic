@@ -6,9 +6,13 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.util.PreviewColorPreset
+import com.android.shaftschematic.util.PreviewColorRole
+import com.android.shaftschematic.util.PreviewColorSetting
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -38,6 +42,36 @@ object SettingsStore {
     // Achievements (Steam-style)
     private val KEY_ACHIEVEMENTS_ENABLED = booleanPreferencesKey("achievements_enabled")
     private val KEY_UNLOCKED_ACHIEVEMENT_IDS = stringSetPreferencesKey("unlocked_achievement_ids")
+
+    // Preview colors (theme roles; preview-only)
+    private val KEY_PREVIEW_BW_ONLY = booleanPreferencesKey("preview_bw_only")
+
+    // Legacy role-only keys (kept for migration)
+    private val KEY_PREVIEW_OUTLINE_ROLE = stringPreferencesKey("preview_outline_role")
+    private val KEY_PREVIEW_BODY_FILL_ROLE = stringPreferencesKey("preview_body_fill_role")
+    private val KEY_PREVIEW_TAPER_FILL_ROLE = stringPreferencesKey("preview_taper_fill_role")
+    private val KEY_PREVIEW_LINER_FILL_ROLE = stringPreferencesKey("preview_liner_fill_role")
+    private val KEY_PREVIEW_THREAD_FILL_ROLE = stringPreferencesKey("preview_thread_fill_role")
+    private val KEY_PREVIEW_THREAD_HATCH_ROLE = stringPreferencesKey("preview_thread_hatch_role")
+
+    // New preset + custom keys
+    private val KEY_PREVIEW_OUTLINE_PRESET = stringPreferencesKey("preview_outline_preset")
+    private val KEY_PREVIEW_OUTLINE_CUSTOM_ROLE = stringPreferencesKey("preview_outline_custom_role")
+
+    private val KEY_PREVIEW_BODY_FILL_PRESET = stringPreferencesKey("preview_body_fill_preset")
+    private val KEY_PREVIEW_BODY_FILL_CUSTOM_ROLE = stringPreferencesKey("preview_body_fill_custom_role")
+
+    private val KEY_PREVIEW_TAPER_FILL_PRESET = stringPreferencesKey("preview_taper_fill_preset")
+    private val KEY_PREVIEW_TAPER_FILL_CUSTOM_ROLE = stringPreferencesKey("preview_taper_fill_custom_role")
+
+    private val KEY_PREVIEW_LINER_FILL_PRESET = stringPreferencesKey("preview_liner_fill_preset")
+    private val KEY_PREVIEW_LINER_FILL_CUSTOM_ROLE = stringPreferencesKey("preview_liner_fill_custom_role")
+
+    private val KEY_PREVIEW_THREAD_FILL_PRESET = stringPreferencesKey("preview_thread_fill_preset")
+    private val KEY_PREVIEW_THREAD_FILL_CUSTOM_ROLE = stringPreferencesKey("preview_thread_fill_custom_role")
+
+    private val KEY_PREVIEW_THREAD_HATCH_PRESET = stringPreferencesKey("preview_thread_hatch_preset")
+    private val KEY_PREVIEW_THREAD_HATCH_CUSTOM_ROLE = stringPreferencesKey("preview_thread_hatch_custom_role")
 
     enum class UnitPref { MILLIMETERS, INCHES }
 
@@ -92,6 +126,127 @@ object SettingsStore {
 
     fun unlockedAchievementIdsFlow(ctx: Context): Flow<Set<String>> =
         ctx.settingsDataStore.data.map { p -> p[KEY_UNLOCKED_ACHIEVEMENT_IDS] ?: emptySet() }
+
+    fun previewBlackWhiteOnlyFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_PREVIEW_BW_ONLY] ?: false }
+
+    private fun parseRole(raw: String?, fallback: PreviewColorRole): PreviewColorRole {
+        if (raw.isNullOrBlank()) return fallback
+        return runCatching { PreviewColorRole.valueOf(raw) }.getOrElse { fallback }
+    }
+
+    private fun parsePreset(raw: String?, fallback: PreviewColorPreset): PreviewColorPreset {
+        if (raw.isNullOrBlank()) return fallback
+        return runCatching { PreviewColorPreset.valueOf(raw) }.getOrElse { fallback }
+    }
+
+    private fun legacyRoleToSetting(role: PreviewColorRole, legacyDefaultPreset: PreviewColorPreset): PreviewColorSetting {
+        val preset = when (role) {
+            PreviewColorRole.TRANSPARENT -> PreviewColorPreset.TRANSPARENT
+            PreviewColorRole.SURFACE_VARIANT -> PreviewColorPreset.STAINLESS
+            PreviewColorRole.OUTLINE, PreviewColorRole.ON_SURFACE, PreviewColorRole.MONOCHROME -> PreviewColorPreset.STEEL
+            PreviewColorRole.TERTIARY -> PreviewColorPreset.BRONZE
+            else -> PreviewColorPreset.CUSTOM
+        }
+        return if (preset == PreviewColorPreset.CUSTOM) {
+            PreviewColorSetting(preset = preset, customRole = role)
+        } else {
+            // If we can map, prefer the mapped preset (over legacy default).
+            PreviewColorSetting(preset = preset)
+        }
+    }
+
+    private fun parseSetting(
+        presetRaw: String?,
+        customRoleRaw: String?,
+        legacyRoleRaw: String?,
+        defaultPreset: PreviewColorPreset,
+        defaultCustomRole: PreviewColorRole = PreviewColorRole.PRIMARY,
+    ): PreviewColorSetting {
+        // New format takes precedence when present.
+        val preset = parsePreset(presetRaw, fallback = PreviewColorPreset.CUSTOM)
+        val hasNew = !presetRaw.isNullOrBlank()
+        if (hasNew) {
+            val customRole = parseRole(customRoleRaw, fallback = defaultCustomRole)
+            return PreviewColorSetting(preset = preset, customRole = customRole)
+        }
+
+        // Legacy: role-only.
+        val legacyRole = parseRole(legacyRoleRaw, fallback = when (defaultPreset) {
+            PreviewColorPreset.TRANSPARENT -> PreviewColorRole.TRANSPARENT
+            PreviewColorPreset.STAINLESS -> PreviewColorRole.SURFACE_VARIANT
+            PreviewColorPreset.STEEL -> PreviewColorRole.OUTLINE
+            PreviewColorPreset.BRONZE -> PreviewColorRole.TERTIARY
+            PreviewColorPreset.CUSTOM -> defaultCustomRole
+        })
+        return legacyRoleToSetting(legacyRole, legacyDefaultPreset = defaultPreset)
+    }
+
+    fun previewOutlineSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
+        ctx.settingsDataStore.data.map { p ->
+            parseSetting(
+                presetRaw = p[KEY_PREVIEW_OUTLINE_PRESET],
+                customRoleRaw = p[KEY_PREVIEW_OUTLINE_CUSTOM_ROLE],
+                legacyRoleRaw = p[KEY_PREVIEW_OUTLINE_ROLE],
+                defaultPreset = PreviewColorPreset.STEEL,
+                defaultCustomRole = PreviewColorRole.MONOCHROME
+            )
+        }
+
+    fun previewBodyFillSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
+        ctx.settingsDataStore.data.map { p ->
+            parseSetting(
+                presetRaw = p[KEY_PREVIEW_BODY_FILL_PRESET],
+                customRoleRaw = p[KEY_PREVIEW_BODY_FILL_CUSTOM_ROLE],
+                legacyRoleRaw = p[KEY_PREVIEW_BODY_FILL_ROLE],
+                defaultPreset = PreviewColorPreset.TRANSPARENT,
+                defaultCustomRole = PreviewColorRole.PRIMARY
+            )
+        }
+
+    fun previewTaperFillSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
+        ctx.settingsDataStore.data.map { p ->
+            parseSetting(
+                presetRaw = p[KEY_PREVIEW_TAPER_FILL_PRESET],
+                customRoleRaw = p[KEY_PREVIEW_TAPER_FILL_CUSTOM_ROLE],
+                legacyRoleRaw = p[KEY_PREVIEW_TAPER_FILL_ROLE],
+                defaultPreset = PreviewColorPreset.STEEL,
+                defaultCustomRole = PreviewColorRole.MONOCHROME
+            )
+        }
+
+    fun previewLinerFillSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
+        ctx.settingsDataStore.data.map { p ->
+            parseSetting(
+                presetRaw = p[KEY_PREVIEW_LINER_FILL_PRESET],
+                customRoleRaw = p[KEY_PREVIEW_LINER_FILL_CUSTOM_ROLE],
+                legacyRoleRaw = p[KEY_PREVIEW_LINER_FILL_ROLE],
+                defaultPreset = PreviewColorPreset.BRONZE,
+                defaultCustomRole = PreviewColorRole.TERTIARY
+            )
+        }
+
+    fun previewThreadFillSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
+        ctx.settingsDataStore.data.map { p ->
+            parseSetting(
+                presetRaw = p[KEY_PREVIEW_THREAD_FILL_PRESET],
+                customRoleRaw = p[KEY_PREVIEW_THREAD_FILL_CUSTOM_ROLE],
+                legacyRoleRaw = p[KEY_PREVIEW_THREAD_FILL_ROLE],
+                defaultPreset = PreviewColorPreset.TRANSPARENT,
+                defaultCustomRole = PreviewColorRole.PRIMARY
+            )
+        }
+
+    fun previewThreadHatchSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
+        ctx.settingsDataStore.data.map { p ->
+            parseSetting(
+                presetRaw = p[KEY_PREVIEW_THREAD_HATCH_PRESET],
+                customRoleRaw = p[KEY_PREVIEW_THREAD_HATCH_CUSTOM_ROLE],
+                legacyRoleRaw = p[KEY_PREVIEW_THREAD_HATCH_ROLE],
+                defaultPreset = PreviewColorPreset.STEEL,
+                defaultCustomRole = PreviewColorRole.MONOCHROME
+            )
+        }
 
     suspend fun setDefaultUnit(ctx: Context, unit: UnitPref) {
         ctx.settingsDataStore.edit { it[KEY_DEFAULT_UNIT] = if (unit == UnitPref.INCHES) 1 else 0 }
@@ -165,6 +320,52 @@ object SettingsStore {
             prefs[KEY_UNLOCKED_ACHIEVEMENT_IDS] = current
         }
         return added
+    }
+
+    suspend fun setPreviewOutlineSetting(ctx: Context, setting: PreviewColorSetting) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PREVIEW_OUTLINE_PRESET] = setting.preset.name
+            it[KEY_PREVIEW_OUTLINE_CUSTOM_ROLE] = setting.customRole.name
+        }
+    }
+
+    suspend fun setPreviewBodyFillSetting(ctx: Context, setting: PreviewColorSetting) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PREVIEW_BODY_FILL_PRESET] = setting.preset.name
+            it[KEY_PREVIEW_BODY_FILL_CUSTOM_ROLE] = setting.customRole.name
+        }
+    }
+
+    suspend fun setPreviewTaperFillSetting(ctx: Context, setting: PreviewColorSetting) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PREVIEW_TAPER_FILL_PRESET] = setting.preset.name
+            it[KEY_PREVIEW_TAPER_FILL_CUSTOM_ROLE] = setting.customRole.name
+        }
+    }
+
+    suspend fun setPreviewLinerFillSetting(ctx: Context, setting: PreviewColorSetting) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PREVIEW_LINER_FILL_PRESET] = setting.preset.name
+            it[KEY_PREVIEW_LINER_FILL_CUSTOM_ROLE] = setting.customRole.name
+        }
+    }
+
+    suspend fun setPreviewThreadFillSetting(ctx: Context, setting: PreviewColorSetting) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PREVIEW_THREAD_FILL_PRESET] = setting.preset.name
+            it[KEY_PREVIEW_THREAD_FILL_CUSTOM_ROLE] = setting.customRole.name
+        }
+    }
+
+    suspend fun setPreviewThreadHatchSetting(ctx: Context, setting: PreviewColorSetting) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PREVIEW_THREAD_HATCH_PRESET] = setting.preset.name
+            it[KEY_PREVIEW_THREAD_HATCH_CUSTOM_ROLE] = setting.customRole.name
+        }
+    }
+
+    suspend fun setPreviewBlackWhiteOnly(ctx: Context, enabled: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_PREVIEW_BW_ONLY] = enabled }
     }
 
     // --- PDF section (new) ---

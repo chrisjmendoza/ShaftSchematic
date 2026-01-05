@@ -41,6 +41,8 @@ import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.drawing.render.ThreadStyle
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.PreviewColorSetting
+import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.launch
 
@@ -72,6 +74,13 @@ fun ShaftDrawing(
     showGrid: Boolean,
     showLayoutDebugOverlay: Boolean = false,
     showOalMarkers: Boolean = false,
+    blackWhiteOnly: Boolean = false,
+    previewOutline: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.STEEL),
+    previewBodyFill: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT),
+    previewTaperFill: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.STEEL),
+    previewLinerFill: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.BRONZE),
+    previewThreadFill: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT),
+    previewThreadHatch: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.STEEL),
     // Highlight bridge (safe defaults)
     highlightEnabled: Boolean = false,
     highlightId: Any? = null,
@@ -84,6 +93,14 @@ fun ShaftDrawing(
     val themeGlow: Color = MaterialTheme.colorScheme.primary
     val debugMarkerColor: Color = MaterialTheme.colorScheme.error
 
+    val previewScheme = MaterialTheme.colorScheme
+    val outlineColor = if (blackWhiteOnly) Color.Black else previewOutline.resolve(previewScheme)
+    val bodyFill = if (blackWhiteOnly) Color.Transparent else previewBodyFill.resolve(previewScheme)
+    val taperFill = if (blackWhiteOnly) Color.Transparent else previewTaperFill.resolve(previewScheme)
+    val linerFill = if (blackWhiteOnly) Color.Transparent else previewLinerFill.resolve(previewScheme)
+    val threadFill = if (blackWhiteOnly) Color.Transparent else previewThreadFill.resolve(previewScheme)
+    val threadHatch = if (blackWhiteOnly) Color.Black else previewThreadHatch.resolve(previewScheme)
+
     // RenderOptions (keep most defaults; set only what we actively control here)
     // NOTE: legacy color fields in RenderOptions are ARGB Ints → use toArgb().
     //       highlight colors are Color → pass Color directly.
@@ -95,17 +112,17 @@ fun ShaftDrawing(
         // Visual tuning (retain prior look)
         paddingPx = 16,
         textSizePx = 22f,
-        outlineColor = Color.Black.toArgb(),
+        outlineColor = outlineColor.toArgb(),
         outlineWidthPx = 2f,
-        bodyFillColor = Color.Transparent.toArgb(),
-        linerFillColor = Color.Transparent.toArgb(),
-        taperFillColor = Color.Black.copy(alpha = 0.10f).toArgb(),
+        bodyFillColor = bodyFill.copy(alpha = if (bodyFill == Color.Transparent) 0f else 0.06f).toArgb(),
+        linerFillColor = linerFill.copy(alpha = if (linerFill == Color.Transparent) 0f else 0.14f).toArgb(),
+        taperFillColor = taperFill.copy(alpha = if (taperFill == Color.Transparent) 0f else 0.10f).toArgb(),
 
         // Threads (preview uses legacy hatch style)
         threadStyle = ThreadStyle.HATCH,      // ← legacy look restored
         threadUseHatchColor = true,
-        threadFillColor = Color.Transparent.toArgb(),
-        threadHatchColor = Color.Black.toArgb(),
+        threadFillColor = threadFill.copy(alpha = if (threadFill == Color.Transparent) 0f else 0.08f).toArgb(),
+        threadHatchColor = threadHatch.toArgb(),
         threadStrokePx = 0f,
 
         // Highlight preset (obvious: colored glow + white edge)

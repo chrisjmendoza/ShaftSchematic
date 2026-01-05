@@ -12,6 +12,9 @@ import com.android.shaftschematic.model.snapForwardFromOrdered
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.util.Achievements
+import com.android.shaftschematic.util.PreviewColorSetting
+import com.android.shaftschematic.util.PreviewColorRole
+import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.parseToMm
 import com.android.shaftschematic.util.VerboseLog
@@ -124,6 +127,27 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _showGrid = MutableStateFlow(false)
     val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
+
+    private val _previewBlackWhiteOnly = MutableStateFlow(false)
+    val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
+
+    private val _previewOutlineSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.STEEL, customRole = PreviewColorRole.MONOCHROME))
+    val previewOutlineSetting: StateFlow<PreviewColorSetting> = _previewOutlineSetting.asStateFlow()
+
+    private val _previewBodyFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT))
+    val previewBodyFillSetting: StateFlow<PreviewColorSetting> = _previewBodyFillSetting.asStateFlow()
+
+    private val _previewTaperFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.STEEL, customRole = PreviewColorRole.MONOCHROME))
+    val previewTaperFillSetting: StateFlow<PreviewColorSetting> = _previewTaperFillSetting.asStateFlow()
+
+    private val _previewLinerFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.BRONZE, customRole = PreviewColorRole.TERTIARY))
+    val previewLinerFillSetting: StateFlow<PreviewColorSetting> = _previewLinerFillSetting.asStateFlow()
+
+    private val _previewThreadFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT))
+    val previewThreadFillSetting: StateFlow<PreviewColorSetting> = _previewThreadFillSetting.asStateFlow()
+
+    private val _previewThreadHatchSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.STEEL, customRole = PreviewColorRole.MONOCHROME))
+    val previewThreadHatchSetting: StateFlow<PreviewColorSetting> = _previewThreadHatchSetting.asStateFlow()
 
     private val _showComponentArrows = MutableStateFlow(false)
     val showComponentArrows: StateFlow<Boolean> = _showComponentArrows.asStateFlow()
@@ -253,6 +277,43 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 setShowGrid(persisted, persist = false)
             }
         }
+
+        viewModelScope.launch {
+            SettingsStore.previewBlackWhiteOnlyFlow(getApplication()).collectLatest { persisted ->
+                _previewBlackWhiteOnly.value = persisted
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.previewOutlineSettingFlow(getApplication()).collectLatest { persisted ->
+                _previewOutlineSetting.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.previewBodyFillSettingFlow(getApplication()).collectLatest { persisted ->
+                _previewBodyFillSetting.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.previewTaperFillSettingFlow(getApplication()).collectLatest { persisted ->
+                _previewTaperFillSetting.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.previewLinerFillSettingFlow(getApplication()).collectLatest { persisted ->
+                _previewLinerFillSetting.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.previewThreadFillSettingFlow(getApplication()).collectLatest { persisted ->
+                _previewThreadFillSetting.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.previewThreadHatchSettingFlow(getApplication()).collectLatest { persisted ->
+                _previewThreadHatchSetting.value = persisted
+            }
+        }
         viewModelScope.launch {
             SettingsStore.showComponentArrowsFlow(getApplication()).collectLatest { persisted ->
                 setShowComponentArrows(persisted, persist = false)
@@ -355,6 +416,55 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _showGrid.value = show
         if (persist) {
             viewModelScope.launch { SettingsStore.setShowGrid(getApplication(), show) }
+        }
+    }
+
+    fun setPreviewBlackWhiteOnly(enabled: Boolean, persist: Boolean = true) {
+        _previewBlackWhiteOnly.value = enabled
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPreviewBlackWhiteOnly(getApplication(), enabled) }
+        }
+    }
+
+    fun setPreviewOutlineSetting(setting: PreviewColorSetting, persist: Boolean = true) {
+        _previewOutlineSetting.value = setting
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPreviewOutlineSetting(getApplication(), setting) }
+        }
+    }
+
+    fun setPreviewBodyFillSetting(setting: PreviewColorSetting, persist: Boolean = true) {
+        _previewBodyFillSetting.value = setting
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPreviewBodyFillSetting(getApplication(), setting) }
+        }
+    }
+
+    fun setPreviewTaperFillSetting(setting: PreviewColorSetting, persist: Boolean = true) {
+        _previewTaperFillSetting.value = setting
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPreviewTaperFillSetting(getApplication(), setting) }
+        }
+    }
+
+    fun setPreviewLinerFillSetting(setting: PreviewColorSetting, persist: Boolean = true) {
+        _previewLinerFillSetting.value = setting
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPreviewLinerFillSetting(getApplication(), setting) }
+        }
+    }
+
+    fun setPreviewThreadFillSetting(setting: PreviewColorSetting, persist: Boolean = true) {
+        _previewThreadFillSetting.value = setting
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPreviewThreadFillSetting(getApplication(), setting) }
+        }
+    }
+
+    fun setPreviewThreadHatchSetting(setting: PreviewColorSetting, persist: Boolean = true) {
+        _previewThreadHatchSetting.value = setting
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPreviewThreadHatchSetting(getApplication(), setting) }
         }
     }
 

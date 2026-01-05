@@ -34,13 +34,17 @@ import kotlin.math.max
 
 private data class AddDialogDefaults(
     val startMm: Float,
-    val lastDiaMm: Float
+    val lastDiaMm: Float,
+    val bodyDiaMm: Float,
+    val linerOdMm: Float
 )
 
 /**
  * Compute convenient dialog defaults:
  * - startMm = end of the last component (max end across all lists) or 0 if none
  * - lastDiaMm = last known diameter (body.dia, else taper.endDia, else 25 mm)
+ * - bodyDiaMm = first body diameter when present, else lastDiaMm
+ * - linerOdMm = first liner OD when present, else lastDiaMm
  */
 @Composable
 private fun rememberAddDialogDefaults(spec: ShaftSpec): AddDialogDefaults {
@@ -57,7 +61,9 @@ private fun rememberAddDialogDefaults(spec: ShaftSpec): AddDialogDefaults {
             ?: spec.tapers.lastOrNull()?.endDiaMm
             ?: 25f
     }
-    return AddDialogDefaults(startMm = startMm, lastDiaMm = lastDia)
+    val bodyDia = remember(spec) { spec.bodies.firstOrNull()?.diaMm ?: lastDia }
+    val linerOd = remember(spec) { spec.liners.firstOrNull()?.odMm ?: lastDia }
+    return AddDialogDefaults(startMm = startMm, lastDiaMm = lastDia, bodyDiaMm = bodyDia, linerOdMm = linerOd)
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -140,7 +146,7 @@ fun AddBodyDialog(
 
     var start by remember(unit, d.startMm) { mutableStateOf(toDisplayString(d.startMm, unit)) }
     var length by remember(unit) { mutableStateOf(toDisplayString(100f, unit)) }
-    var dia by remember(unit, d.lastDiaMm) { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
+    var dia by remember(unit, d.bodyDiaMm) { mutableStateOf(toDisplayString(max(1f, d.bodyDiaMm), unit)) }
 
     val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
     val lengthMm = toMmOrNullFromDialog(length, unit) ?: -1f
@@ -180,7 +186,7 @@ fun AddLinerDialog(
 
     var start by remember(unit, d.startMm) { mutableStateOf(toDisplayString(d.startMm, unit)) }
     var length by remember(unit) { mutableStateOf(toDisplayString(100f, unit)) }
-    var od by remember(unit, d.lastDiaMm) { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
+    var od by remember(unit, d.linerOdMm) { mutableStateOf(toDisplayString(max(1f, d.linerOdMm), unit)) }
 
     val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
     val lengthMm = toMmOrNullFromDialog(length, unit) ?: -1f

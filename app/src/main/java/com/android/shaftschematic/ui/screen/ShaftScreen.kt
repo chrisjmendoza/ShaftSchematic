@@ -110,6 +110,7 @@ import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
 import com.android.shaftschematic.ui.viewmodel.snapPositionMm
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.PreviewColorSetting
 import kotlinx.coroutines.launch
 
 /**
@@ -155,6 +156,14 @@ fun ShaftScreen(
     showRenderOalMarkers: Boolean,
     showComponentArrows: Boolean,
     componentArrowWidthDp: Int,
+
+    previewOutline: PreviewColorSetting,
+    previewBodyFill: PreviewColorSetting,
+    previewTaperFill: PreviewColorSetting,
+    previewLinerFill: PreviewColorSetting,
+    previewThreadFill: PreviewColorSetting,
+    previewThreadHatch: PreviewColorSetting,
+    previewBlackWhiteOnly: Boolean,
 
     // Setters
     onSetUnit: (UnitSystem) -> Unit,
@@ -311,6 +320,13 @@ fun ShaftScreen(
                 highlightId = focusedId,
                 showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
                 showRenderOalMarkers = showRenderOalMarkers,
+                previewOutline = previewOutline,
+                previewBodyFill = previewBodyFill,
+                previewTaperFill = previewTaperFill,
+                previewLinerFill = previewLinerFill,
+                previewThreadFill = previewThreadFill,
+                previewThreadHatch = previewThreadHatch,
+                previewBlackWhiteOnly = previewBlackWhiteOnly,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = 200.dp)
@@ -577,6 +593,9 @@ fun ShaftScreen(
                 if (chooserOpen) {
                     val d = computeAddDefaults(spec)
 
+                    val bodyDiaMmDefault = spec.bodies.firstOrNull()?.diaMm ?: d.lastDiaMm
+                    val linerOdMmDefault = spec.liners.firstOrNull()?.odMm ?: d.lastDiaMm
+
                     // Centralized defaults (mm)
                     val bodyLenMm     = defaultBodyLenMm(unit)
                     val linerLenMm    = defaultLinerLenMm(unit)
@@ -588,8 +607,8 @@ fun ShaftScreen(
 
                     InlineAddChooserDialog(
                         onDismiss = { chooserOpen = false },
-                        onAddBody = { chooserOpen = false; onAddBody(d.startMm, bodyLenMm, d.lastDiaMm) },
-                        onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, linerLenMm, d.lastDiaMm) },
+                        onAddBody = { chooserOpen = false; onAddBody(d.startMm, bodyLenMm, bodyDiaMmDefault) },
+                        onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, linerLenMm, linerOdMmDefault) },
                         onAddThread = {
                             chooserOpen = false
                             addThreadOpen = true
@@ -686,6 +705,13 @@ private fun PreviewCard(
     highlightId: String?,
     showRenderLayoutDebugOverlay: Boolean,
     showRenderOalMarkers: Boolean,
+    previewOutline: PreviewColorSetting,
+    previewBodyFill: PreviewColorSetting,
+    previewTaperFill: PreviewColorSetting,
+    previewLinerFill: PreviewColorSetting,
+    previewThreadFill: PreviewColorSetting,
+    previewThreadHatch: PreviewColorSetting,
+    previewBlackWhiteOnly: Boolean,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -699,6 +725,13 @@ private fun PreviewCard(
                 spec = spec,
                 unit = unit,
                 showGrid = showGrid,
+                blackWhiteOnly = previewBlackWhiteOnly,
+                previewOutline = previewOutline,
+                previewBodyFill = previewBodyFill,
+                previewTaperFill = previewTaperFill,
+                previewLinerFill = previewLinerFill,
+                previewThreadFill = previewThreadFill,
+                previewThreadHatch = previewThreadHatch,
                 highlightEnabled = highlightEnabled && (highlightId != null),
                 highlightId = highlightId,
                 showLayoutDebugOverlay = showRenderLayoutDebugOverlay,

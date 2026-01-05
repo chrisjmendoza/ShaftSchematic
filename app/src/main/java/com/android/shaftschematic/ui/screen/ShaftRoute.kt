@@ -69,6 +69,13 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val unit            by vm.unit.collectAsState()
     val unitLocked      by vm.unitLocked.collectAsState()
     val showGrid        by vm.showGrid.collectAsState()
+    val previewBlackWhiteOnly by vm.previewBlackWhiteOnly.collectAsState()
+    val previewOutline by vm.previewOutlineSetting.collectAsState()
+    val previewBodyFill by vm.previewBodyFillSetting.collectAsState()
+    val previewTaperFill by vm.previewTaperFillSetting.collectAsState()
+    val previewLinerFill by vm.previewLinerFillSetting.collectAsState()
+    val previewThreadFill by vm.previewThreadFillSetting.collectAsState()
+    val previewThreadHatch by vm.previewThreadHatchSetting.collectAsState()
     val showComponentArrows by vm.showComponentArrows.collectAsState()
     val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
     val showOalDebugLabel by vm.showOalDebugLabel.collectAsState()
@@ -106,6 +113,14 @@ fun ShaftRoute(vm: ShaftViewModel) {
         showRenderOalMarkers = showRenderOalMarkers,
         showComponentArrows = showComponentArrows,
         componentArrowWidthDp = componentArrowWidthDp,
+
+        previewOutline = previewOutline,
+        previewBodyFill = previewBodyFill,
+        previewTaperFill = previewTaperFill,
+        previewLinerFill = previewLinerFill,
+        previewThreadFill = previewThreadFill,
+        previewThreadHatch = previewThreadHatch,
+        previewBlackWhiteOnly = previewBlackWhiteOnly,
         componentOrder = order,
 
         // model updates (unchanged)
@@ -145,7 +160,14 @@ fun ShaftRoute(vm: ShaftViewModel) {
                 unit = u,
                 showGrid = showGrid,
                 showLayoutDebugOverlay = showRenderLayoutDebugOverlay,
-                showOalMarkers = showRenderOalMarkers
+                showOalMarkers = showRenderOalMarkers,
+                blackWhiteOnly = previewBlackWhiteOnly,
+                previewOutline = previewOutline,
+                previewBodyFill = previewBodyFill,
+                previewTaperFill = previewTaperFill,
+                previewLinerFill = previewLinerFill,
+                previewThreadFill = previewThreadFill,
+                previewThreadHatch = previewThreadHatch
             )
         },
 
