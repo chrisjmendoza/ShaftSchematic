@@ -12,6 +12,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
+import com.android.shaftschematic.doc.SHAFT_DOT_EXT
+import com.android.shaftschematic.doc.SHAFT_MIME
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.DocumentNaming
@@ -21,8 +23,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
-# SAF Routes – JSON open/save
- **Purpose**: One-shot composables that launch system pickers to open/save JSON.
+# SAF Routes – shaft doc open/save
+ **Purpose**: One-shot composables that launch system pickers to open/save shaft documents.
  **Contract**:
 - Only two public composables: `OpenInternalRoute`, `SaveInternalRoute`.
 - UI reads/writes bytes; VM owns JSON schema/versioning (importJson/exportJson).
@@ -58,7 +60,7 @@ fun OpenInternalRoute(
         done.value = true
     }
 
-    LaunchedEffect(Unit) { opener.launch(arrayOf("application/json")) }
+    LaunchedEffect(Unit) { opener.launch(arrayOf(SHAFT_MIME, "application/json")) }
     if (done.value) onFinished() else Text("") // headless route body
 }
 
@@ -79,7 +81,7 @@ fun SaveInternalRoute(
     val shaftPosition by vm.shaftPosition.collectAsState()
 
     val saver = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.CreateDocument(SHAFT_MIME)
     ) { uri ->
         runCatching {
             if (uri != null) {
@@ -96,7 +98,7 @@ fun SaveInternalRoute(
 
     LaunchedEffect(Unit) {
         saver.launch(
-            defaultJsonFileName(
+            defaultShaftFileName(
                 jobNumber = jobNumber,
                 customer = customer,
                 vessel = vessel,
@@ -109,7 +111,7 @@ fun SaveInternalRoute(
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
-private fun defaultJsonFileName(
+private fun defaultShaftFileName(
     jobNumber: String,
     customer: String,
     vessel: String,
@@ -122,5 +124,5 @@ private fun defaultJsonFileName(
         vessel = vessel,
         suffix = shaftPosition.printableLabelOrNull()
     )
-    return (suggested ?: "Shaft_$stamp") + ".json"
+    return (suggested ?: "Shaft_$stamp") + SHAFT_DOT_EXT
 }

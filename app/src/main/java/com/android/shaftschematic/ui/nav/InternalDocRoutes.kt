@@ -33,10 +33,12 @@ import java.util.Date
 import java.util.Locale
 import androidx.compose.runtime.collectAsState
 import java.io.File
+import com.android.shaftschematic.doc.SHAFT_DOT_EXT
+import com.android.shaftschematic.doc.stripShaftDocExtension
 
 /**
-# InternalDocRoutes – open/save JSON *inside app storage*
- **Purpose**: UI for listing and saving JSON drawings stored **internally** (app sandbox).
+# InternalDocRoutes – open/save shaft docs *inside app storage*
+ **Purpose**: UI for listing and saving shaft documents stored **internally** (app sandbox).
  **Contract**
  No SAF here. Uses [InternalStorage] (app-private files dir).
 - Emits navigation completion via [onFinished].
@@ -67,7 +69,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text("Delete saved shaft?") },
-            text = { Text("Delete saved shaft ‘${name.removeSuffix(".json")}’? This cannot be undone.") },
+            text = { Text("Delete saved shaft ‘${stripShaftDocExtension(name)}’? This cannot be undone.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -79,7 +81,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                 files = InternalStorage.list(ctx)
                             } else {
                                 snackbarHostState.showSnackbar(
-                                    message = "Could not delete ‘${name.removeSuffix(".json")}’."
+                                    message = "Could not delete ‘${stripShaftDocExtension(name)}’."
                                 )
                             }
                             pendingDelete = null
@@ -146,7 +148,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                         verticalAlignment = Alignment.Top
                     ) {
                         Text(
-                            text = name.removeSuffix(".json"),
+                            text = stripShaftDocExtension(name),
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(end = 8.dp),
@@ -182,7 +184,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                                     context = ctx,
                                                     screen = "Open/Saved",
                                                     unit = unit,
-                                                    selectedSaveName = name.removeSuffix(".json"),
+                                                    selectedSaveName = stripShaftDocExtension(name),
                                                     attachments = attachments
                                                 )
 
@@ -248,9 +250,10 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
     }
     var error by remember { mutableStateOf<String?>(null) }
 
-    val normalizedName = remember(name.text) { InternalStorage.normalizeJsonName(name.text) }
+    val normalizedName = remember(name.text) { InternalStorage.normalizeShaftDocName(name.text) }
     val willOverwrite = remember(normalizedName, existingFiles) {
-        normalizedName != null && existingFiles.any { it.equals(normalizedName, ignoreCase = true) }
+        val base = normalizedName?.let(::stripShaftDocExtension)
+        base != null && existingFiles.any { stripShaftDocExtension(it).equals(base, ignoreCase = true) }
     }
     var pendingOverwrite by remember { mutableStateOf<String?>(null) }
 
@@ -259,7 +262,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
         AlertDialog(
             onDismissRequest = { pendingOverwrite = null },
             title = { Text("Overwrite existing save?") },
-            text = { Text("A saved shaft named ‘${file.removeSuffix(".json")}’ already exists. Overwrite it?") },
+            text = { Text("A saved shaft named ‘${stripShaftDocExtension(file)}’ already exists. Overwrite it?") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -306,7 +309,9 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
 
             // Existing saves list: shown under the input and filtered as the user types.
             val query = name.text.trim()
-            val existingBaseNames = remember(existingFiles) { existingFiles.map { it.removeSuffix(".json") } }
+            val existingBaseNames = remember(existingFiles) {
+                existingFiles.map(::stripShaftDocExtension).distinctBy { it.lowercase() }
+            }
             val filtered = remember(existingBaseNames, query) {
                 if (query.isBlank()) {
                     existingBaseNames
@@ -345,16 +350,18 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = {
-                    val normalized = InternalStorage.normalizeJsonName(name.text)
+                    val normalized = InternalStorage.normalizeShaftDocName(name.text)
                     if (normalized == null) {
                         error = "Enter a file name."
                     } else {
-                        if (InternalStorage.exists(ctx, normalized)) {
-                            pendingOverwrite = normalized
+                        val base = stripShaftDocExtension(normalized)
+                        val targetName = base + SHAFT_DOT_EXT
+                        if (existingFiles.any { stripShaftDocExtension(it).equals(base, ignoreCase = true) }) {
+                            pendingOverwrite = targetName
                         } else {
                             scope.launch {
                                 withContext(Dispatchers.IO) {
-                                    InternalStorage.save(ctx, normalized, vm.exportJson())
+                                    InternalStorage.save(ctx, targetName, vm.exportJson())
                                 }
                                 vm.unlockAchievement(Achievements.Id.FIRST_SAVE)
                                 onFinished()

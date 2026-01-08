@@ -14,6 +14,7 @@ import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -48,6 +49,9 @@ object SettingsStore {
 
     // PDF export
     private val KEY_OPEN_PDF_AFTER_EXPORT = booleanPreferencesKey("open_pdf_after_export")
+
+    // One-time migrations
+    private val KEY_MIGRATED_INTERNAL_DOCS_TO_SHAFT = booleanPreferencesKey("migrated_internal_docs_to_shaft")
 
     // Legacy role-only keys (kept for migration)
     private val KEY_PREVIEW_OUTLINE_ROLE = stringPreferencesKey("preview_outline_role")
@@ -135,6 +139,13 @@ object SettingsStore {
 
     fun openPdfAfterExportFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsDataStore.data.map { p -> p[KEY_OPEN_PDF_AFTER_EXPORT] ?: false }
+
+    suspend fun internalDocsMigratedToShaft(ctx: Context): Boolean =
+        ctx.settingsDataStore.data.first()[KEY_MIGRATED_INTERNAL_DOCS_TO_SHAFT] ?: false
+
+    suspend fun setInternalDocsMigratedToShaft(ctx: Context, migrated: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_MIGRATED_INTERNAL_DOCS_TO_SHAFT] = migrated }
+    }
 
     private fun parseRole(raw: String?, fallback: PreviewColorRole): PreviewColorRole {
         if (raw.isNullOrBlank()) return fallback

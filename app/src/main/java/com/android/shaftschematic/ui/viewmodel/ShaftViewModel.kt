@@ -1,11 +1,13 @@
 package com.android.shaftschematic.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.data.SettingsStore.UnitPref
+import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.model.snapForwardFrom
 import com.android.shaftschematic.model.snapForwardFromOrdered
@@ -26,7 +28,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.util.UUID
@@ -271,6 +275,33 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ────────────────────────────────────────────────────────────────────────────
 
     init {
+        // One-time migration: internal saved shafts were historically `*.json`.
+        // Keep them visible/openable, but prefer `*.shaft` going forward.
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            val alreadyMigrated = runCatching { SettingsStore.internalDocsMigratedToShaft(app) }
+                .getOrDefault(false)
+            if (!alreadyMigrated) {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        migrateLegacyInternalDocs(app)
+                    }
+                }.onSuccess { report ->
+                    VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") {
+                        "legacy migration finished: migrated=${report.migratedCount} skipped=${report.skippedCount}"
+                    }
+                    // Mark done as long as the migration completed without throwing.
+                    // Skips can be legitimate; don't retry forever.
+                    SettingsStore.setInternalDocsMigratedToShaft(app, true)
+                }.onFailure {
+                    // Ignore; we'll retry next launch.
+                    VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") {
+                        "legacy migration failed: ${it.javaClass.simpleName}: ${it.message}"
+                    }
+                }
+            }
+        }
+
         // Observe persisted defaults. Apply only when doc isn't unit-locked.
         viewModelScope.launch {
             SettingsStore.defaultUnitFlow(getApplication()).collectLatest { pref ->
@@ -1385,7 +1416,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // Snapping helpers (unit-aware tolerance, pure mm-space)
     // ────────────────────────────────────────────────────────────────────────────
 
-    private companion object {
+    companion object {
+        /** Injectable for tests; defaults to the real internal-storage migration. */
+        internal var migrateLegacyInternalDocs: suspend (Context) -> InternalStorage.MigrationReport = { ctx ->
+            InternalStorage.migrateLegacyJsonToShaft(ctx)
+        }
+
         private const val METRIC_SNAP_TOL_MM = 1.0f         // 1 mm
         private const val IMPERIAL_SNAP_TOL_IN = 0.04f      // ~0.04 in ≈ 1.016 mm
         private const val INCH_TO_MM = 25.4f
