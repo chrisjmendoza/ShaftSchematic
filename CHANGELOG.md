@@ -6,6 +6,22 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## [1.1.1] - 2026-01-08
+
+### Added
+- New document filename extension: `.shaft` (content remains JSON) with legacy `.json` compatibility.
+- One-time internal document migration from `.json` to `.shaft`.
+- Inline component titling improvements:
+    - Liners: positional AFT/MID/FWD names with optional user override (tap title to edit).
+    - Tapers: AFT/FWD direction naming based on diameter trend.
+
+### Changed
+- Editor component card titles are now deterministic by physical position (more stable than list index).
+- Shaft Editor header typography updated for a stronger visual hierarchy.
+
+### Fixed
+- Gradle connected-test safety guard adjusted for Kotlin DSL compatibility.
+
 ## [0.2.0] - 2025-09-14
 
 ### Added
