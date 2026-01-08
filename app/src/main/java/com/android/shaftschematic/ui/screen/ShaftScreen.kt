@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
@@ -39,11 +40,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.ManageHistory
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -63,11 +77,14 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -88,9 +105,11 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.config.AddDefaultsConfig
@@ -132,7 +151,9 @@ import kotlinx.coroutines.launch
  * • No file I/O or routing here.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun ShaftScreen(
+    resetNonce: Int,
     // Ordering (from VM via Route)
     componentOrder: List<ComponentKey> = emptyList(),
     onMoveComponentUp: (String) -> Unit = {},      // reserved for future Move UI
@@ -200,9 +221,25 @@ fun ShaftScreen(
 
     // Other
     snackbarHostState: SnackbarHostState,
-    onClickSave: () -> Unit,
+
+    // Navigation / actions (routing is owned by the Route layer)
+    onNavigateHome: () -> Unit,
+    onNew: () -> Unit,
+    onOpen: () -> Unit,
+    onSave: () -> Unit,
     onExportPdf: () -> Unit,
     onOpenSettings: () -> Unit,
+    onSendFeedback: () -> Unit,
+    onOpenDeveloperOptions: () -> Unit,
+
+    // Feature flags
+    devOptionsEnabled: Boolean,
+
+    // History (Undo/Redo)
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
 
     /**
      * Accessibility: [fabEnabled]
@@ -212,6 +249,7 @@ fun ShaftScreen(
      */
     fabEnabled: Boolean = false, // ← NEW: default off
 ) {
+    key(resetNonce) {
     // UI options for preview highlight (renderer should consume these—see comment in PreviewCard)
     var highlightEnabled by rememberSaveable { mutableStateOf(true) }
     var highlightId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -222,6 +260,12 @@ fun ShaftScreen(
 
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
+    val topBarScope = rememberCoroutineScope()
+
+    val exportPdfEnabled = remember(spec) {
+        spec.bodies.isNotEmpty() || spec.tapers.isNotEmpty() || spec.threads.isNotEmpty() || spec.liners.isNotEmpty()
+    }
+    val exportPdfDisabledMessage = "Please add at least 1 component before export is active."
 
     val snapAnchors = remember(spec) { buildSnapAnchors(spec) }
 
@@ -292,6 +336,94 @@ fun ShaftScreen(
         contentWindowInsets = WindowInsets.systemBars.only(
             WindowInsetsSides.Horizontal
         ),
+        topBar = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Shaft Editor",
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                TopAppBar(
+                    title = { },
+                    windowInsets = WindowInsets(0, 0, 0, 0),
+                    navigationIcon = {
+                        IconButton(
+                            onClick = onNavigateHome,
+                            modifier = Modifier.testTag("toolbar_home")
+                        ) {
+                            Icon(Icons.Filled.Home, contentDescription = "Home")
+                        }
+                    },
+                    actions = {
+                        HistoryMenu(
+                            canUndo = canUndo,
+                            canRedo = canRedo,
+                            onUndo = onUndo,
+                            onRedo = onRedo
+                        )
+
+                        IconButton(
+                            onClick = onNew,
+                            modifier = Modifier.testTag("toolbar_new")
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = "New")
+                        }
+
+                        IconButton(
+                            onClick = onOpen,
+                            modifier = Modifier.testTag("toolbar_open")
+                        ) {
+                            Icon(Icons.Filled.FolderOpen, contentDescription = "Open")
+                        }
+
+                        IconButton(
+                            onClick = onSave,
+                            modifier = Modifier.testTag("toolbar_save")
+                        ) {
+                            Icon(Icons.Filled.Save, contentDescription = "Save")
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .testTag("toolbar_export_pdf_container")
+                                .then(
+                                    if (!exportPdfEnabled) {
+                                        Modifier.pointerInput(Unit) {
+                                            detectTapGestures {
+                                                topBarScope.launch {
+                                                    snackbarHostState.showSnackbar(exportPdfDisabledMessage)
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
+                            IconButton(
+                                onClick = onExportPdf,
+                                enabled = exportPdfEnabled,
+                                modifier = Modifier.testTag("toolbar_export_pdf")
+                            ) {
+                                Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF")
+                            }
+                        }
+
+                        OverflowMenu(
+                            onOpenSettings = onOpenSettings,
+                            onSendFeedback = onSendFeedback,
+                            onOpenDeveloperOptions = onOpenDeveloperOptions,
+                            showDeveloperOptions = devOptionsEnabled,
+                        )
+                    }
+                )
+            }
+        },
         floatingActionButton = {
             if (fabEnabled) {
                 AddComponentFab(
@@ -640,6 +772,109 @@ fun ShaftScreen(
                         }
                     )
                 }
+            }
+        }
+    }
+    }
+}
+
+@Composable
+private fun HistoryMenu(
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.testTag("toolbar_history")
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ManageHistory,
+                contentDescription = "History"
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Undo delete") },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null) },
+                enabled = canUndo,
+                modifier = Modifier.testTag("history_undo_delete"),
+                onClick = {
+                    expanded = false
+                    onUndo()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Redo delete") },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null) },
+                enabled = canRedo,
+                modifier = Modifier.testTag("history_redo_delete"),
+                onClick = {
+                    expanded = false
+                    onRedo()
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun OverflowMenu(
+    onOpenSettings: () -> Unit,
+    onSendFeedback: () -> Unit,
+    onOpenDeveloperOptions: () -> Unit,
+    showDeveloperOptions: Boolean,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.testTag("toolbar_overflow")
+        ) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Settings") },
+                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                modifier = Modifier.testTag("overflow_settings"),
+                onClick = {
+                    expanded = false
+                    onOpenSettings()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Send feedback") },
+                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                modifier = Modifier.testTag("overflow_feedback"),
+                onClick = {
+                    expanded = false
+                    onSendFeedback()
+                }
+            )
+            if (showDeveloperOptions) {
+                DropdownMenuItem(
+                    text = { Text("Developer options") },
+                    leadingIcon = { Icon(Icons.Default.Build, contentDescription = null) },
+                    modifier = Modifier.testTag("overflow_dev_options"),
+                    onClick = {
+                        expanded = false
+                        onOpenDeveloperOptions()
+                    }
+                )
             }
         }
     }

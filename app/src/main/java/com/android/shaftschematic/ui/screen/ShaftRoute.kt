@@ -1,25 +1,24 @@
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/ShaftRoute.kt
 package com.android.shaftschematic.ui.screen
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
-import com.android.shaftschematic.ui.screen.ShaftScreen
-import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
-import kotlinx.coroutines.launch
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import com.android.shaftschematic.ui.viewmodel.UiEvent
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import com.android.shaftschematic.ui.order.ComponentKind
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.ui.unit.dp
-import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.UiEvent
+import com.android.shaftschematic.util.FeedbackIntentFactory
+import kotlinx.coroutines.launch
 
 /**
  * ShaftRoute
@@ -33,9 +32,19 @@ import com.android.shaftschematic.util.UnitSystem
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ShaftRoute(vm: ShaftViewModel) {
+fun ShaftRoute(
+    vm: ShaftViewModel,
+    onNavigateHome: () -> Unit,
+    onNew: () -> Unit,
+    onOpen: () -> Unit,
+    onSave: () -> Unit,
+    onExportPdf: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenDeveloperOptions: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val ctx = LocalContext.current
 
     // Collect one-shot UI events from the ViewModel (snackbars, Undo, etc.).
     LaunchedEffect(Unit) {
@@ -92,10 +101,29 @@ fun ShaftRoute(vm: ShaftViewModel) {
     val showRenderLayoutDebugOverlay by vm.showRenderLayoutDebugOverlay.collectAsState()
     val showRenderOalMarkers by vm.showRenderOalMarkers.collectAsState()
 
-    var showSettings by remember { mutableStateOf(false) }
-    fun showSnack(msg: String) = scope.launch { snackbarHostState.showSnackbar(msg) }
+    val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
+    val editorResetNonce by vm.editorResetNonce.collectAsState()
+
+    val canUndoDeletes by vm.canUndoDeletes.collectAsState()
+    val canRedoDeletes by vm.canRedoDeletes.collectAsState()
+
+    val onSendFeedback: () -> Unit = {
+        val intent = FeedbackIntentFactory.create(
+            context = ctx,
+            screen = "Editor",
+            unit = unit,
+            selectedSaveName = null,
+            attachments = emptyList()
+        )
+        try {
+            ctx.startActivity(Intent.createChooser(intent, "Send Feedback"))
+        } catch (_: ActivityNotFoundException) {
+            scope.launch { snackbarHostState.showSnackbar("No email app found.") }
+        }
+    }
 
     ShaftScreen(
+        resetNonce = editorResetNonce,
         spec = spec,
         unit = unit,
         unitLocked = unitLocked,
@@ -155,59 +183,20 @@ fun ShaftRoute(vm: ShaftViewModel) {
 
         snackbarHostState = snackbarHostState,
 
-        // top bar actions
-        onClickSave = {
-            // hook your actual save; placeholder snackbar for now
-            showSnack("Saved.")
-        },
-        onExportPdf = {
-            showSnack("PDF export success")
-        },
-        onOpenSettings = {
-            showSettings = true
-        }
+        onNavigateHome = onNavigateHome,
+        onNew = onNew,
+        onOpen = onOpen,
+        onSave = onSave,
+        onExportPdf = onExportPdf,
+        onOpenSettings = onOpenSettings,
+        onSendFeedback = onSendFeedback,
+        onOpenDeveloperOptions = onOpenDeveloperOptions,
+
+        devOptionsEnabled = devOptionsEnabled,
+
+        canUndo = canUndoDeletes,
+        canRedo = canRedoDeletes,
+        onUndo = vm::undoLastDelete,
+        onRedo = vm::redoLastDelete,
     )
-
-    if (showSettings) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(
-            onDismissRequest = { showSettings = false },
-            sheetState = sheetState
-        ) {
-            // UNIT
-            Text("Units", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                FilterChip(
-                    selected = unit == UnitSystem.MILLIMETERS,
-                    onClick = { vm.setUnit(UnitSystem.MILLIMETERS) },
-                    label = { Text("mm") },
-                    enabled = !unitLocked
-                )
-                Spacer(Modifier.width(8.dp))
-                FilterChip(
-                    selected = unit == UnitSystem.INCHES,
-                    onClick = { vm.setUnit(UnitSystem.INCHES) },
-                    label = { Text("in") },
-                    enabled = !unitLocked
-                )
-            }
-
-            // GRID
-            ListItem(
-                headlineContent = { Text("Show grid in preview") },
-                trailingContent = {
-                    Switch(
-                        checked = showGrid,
-                        onCheckedChange = { vm.setShowGrid(it) }
-                    )
-                }
-            )
-
-            Spacer(Modifier.height(8.dp))
-            TextButton(
-                onClick = { showSettings = false },
-                modifier = Modifier.padding(16.dp)
-            ) { Text("Close") }
-        }
-    }
 }

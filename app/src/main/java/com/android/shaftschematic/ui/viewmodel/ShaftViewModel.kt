@@ -231,6 +231,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     val overallIsManual: StateFlow<Boolean> = _overallIsManual.asStateFlow()
     fun setOverallIsManual(v: Boolean) { _overallIsManual.value = v }
 
+    // Incrementing key used by the editor UI to reset Compose-local state (dialogs, focus, scroll, etc.)
+    // without relocating that state into the ViewModel.
+    private val _editorResetNonce = MutableStateFlow(0)
+    val editorResetNonce: StateFlow<Int> = _editorResetNonce.asStateFlow()
+
     // Cross-type UI order (stable IDs) — source of truth for list rendering (newest-first).
     private val _componentOrder = MutableStateFlow<List<ComponentKey>>(emptyList())
     val componentOrder: StateFlow<List<ComponentKey>> = _componentOrder.asStateFlow()
@@ -1255,6 +1260,35 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 return
             }
             .onFailure { throw it }
+    }
+
+    /**
+     * Reset the editor to a new blank document.
+     *
+     * Contract:
+     * - Uses the same defaults as the app's start/new flow (blank spec, empty metadata).
+     * - Clears delete undo/redo history and resets cross-type component order.
+     */
+    fun newDocument() {
+        _editorResetNonce.update { it + 1 }
+        clearDeleteHistory()
+
+        val blankSpec = ShaftSpec()
+        _spec.value = blankSpec
+
+        // Mirror envelope defaults used by the existing start/new seed path.
+        _unitLocked.value = true
+        setUnit(UnitSystem.INCHES, persist = false)
+
+        _jobNumber.value = ""
+        _customer.value = ""
+        _vessel.value = ""
+        _shaftPosition.value = ShaftPosition.OTHER
+        _notes.value = ""
+        _overallIsManual.value = false
+
+        _componentOrder.value = emptyList()
+        ensureOrderCoversSpec(blankSpec)
     }
 
     // ────────────────────────────────────────────────────────────────────────────

@@ -5,9 +5,9 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -91,11 +91,21 @@ fun AppNav(vm: ShaftViewModel) {
         composable("editor") {
             ShaftEditorRoute(
                 vm = vm,
-                onBack = { nav.popBackStack() },
+                onNavigateHome = {
+                    nav.navigate("start") {
+                        launchSingleTop = true
+                        popUpTo(nav.graph.startDestinationId) { inclusive = false }
+                    }
+                },
+                onNew = {
+                    vm.newDocument()
+                    // Stay on editor; state resets via VM
+                },
                 // OPEN/SAVE = internal storage
                 onOpen = { nav.navigate("openLocal") },
                 onSave = { nav.navigate("saveLocal") },
-                onSettings = { nav.navigate("settings") },
+                onOpenSettings = { nav.navigate("settings") },
+                onOpenDeveloperOptions = { nav.navigate("developerOptions") },
                 // PDF EXPORT = external SAF
                 onExportPdf = { nav.navigate("exportPdf") }
             )

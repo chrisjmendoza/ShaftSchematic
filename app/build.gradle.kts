@@ -34,9 +34,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // Kotlin target is configured via kotlin { compilerOptions { ... } } below.
 
     buildFeatures {
         compose = true
@@ -47,6 +45,7 @@ android {
 
 kotlin {
     compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         freeCompilerArgs.add("-Xlambdas=class")
     }
 }
@@ -96,3 +95,44 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Safety guard: prevent accidental on-device instrumentation test runs
+//
+// Rationale:
+// Running connected instrumentation tests (e.g. `connectedAndroidTest`) on a
+// personal device can uninstall/reinstall the app and wipe its internal storage.
+// We make these tasks opt-in.
+//
+// Opt-in via one of:
+//   - `-PallowConnectedAndroidTests=true`
+//   - env var `ALLOW_CONNECTED_ANDROID_TESTS=1`
+//
+// This does NOT affect normal debug builds (`assembleDebug`, Android Studio Run).
+// ─────────────────────────────────────────────────────────────────────────────
+gradle.taskGraph.whenReady(
+    org.gradle.api.Action<org.gradle.api.execution.TaskExecutionGraph> { graph ->
+        val willRunConnectedTests = graph.allTasks.any { task: org.gradle.api.Task ->
+            val name = task.name
+        // Typical tasks: connectedAndroidTest, connectedDebugAndroidTest, connectedCheck
+        name.equals("connectedAndroidTest", ignoreCase = true) ||
+            name.equals("connectedCheck", ignoreCase = true) ||
+            (name.contains("connected", ignoreCase = true) && name.contains("AndroidTest", ignoreCase = true))
+        }
+
+        if (willRunConnectedTests) {
+            val allowProp = (project.findProperty("allowConnectedAndroidTests") as String?)
+            val allow = allowProp.equals("true", ignoreCase = true) ||
+                (System.getenv("ALLOW_CONNECTED_ANDROID_TESTS") == "1")
+
+            if (!allow) {
+                throw GradleException(
+                    "Blocked connected-device instrumentation tests by default. " +
+                        "These can uninstall/reinstall the app and wipe internal saves. " +
+                        "To run anyway, pass -PallowConnectedAndroidTests=true " +
+                        "or set ALLOW_CONNECTED_ANDROID_TESTS=1."
+                )
+            }
+        }
+    }
+)
