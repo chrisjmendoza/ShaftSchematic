@@ -173,6 +173,7 @@ fun ShaftRoute(
         onUpdateTaperKeyway = { i, w, d    -> vm.updateTaperKeyway(i, w, d) },
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
+        onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
 
         onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
 

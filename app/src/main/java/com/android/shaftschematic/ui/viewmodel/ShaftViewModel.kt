@@ -1099,6 +1099,19 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.also { ensureOverall() }
 
+    fun updateLinerLabel(index: Int, label: String?) = _spec.update { s ->
+        if (index !in s.liners.indices) s else {
+            val old = s.liners[index]
+            val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
+            if (old.label == normalized) return@update s
+            s.copy(
+                liners = s.liners.toMutableList().also { l ->
+                    l[index] = old.copy(label = normalized)
+                }
+            )
+        }
+    }
+
     /** Remove a [Liner] by id with multi-step delete history support. */
     fun removeLiner(id: String) {
         Log.d("ShaftViewModel", "removeLiner invoked for id=$id")

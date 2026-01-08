@@ -159,6 +159,13 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [x] Proper ripple + accessibility semantics
 - [x] Visual affordance now matches interaction
 
+---
+
+## 4. Rendering / Component Enhancements (Backlog)
+
+- [ ] Liner shoulders: add aft/fwd shoulder length fields and render stepped shoulders
+- [ ] Keyways drawing: render keyway indicator on taper segments (schematic symbol), using existing KW dims
+
 ### 3.4 PDF Footer: AFT Taper Info Block Missing (DONE)
 
 - [x] Fix end-feature detection to be thread-shoulder aware

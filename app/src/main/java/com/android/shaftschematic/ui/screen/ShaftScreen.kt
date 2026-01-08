@@ -95,6 +95,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import com.android.shaftschematic.geom.computeOalWindow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -105,6 +107,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -124,6 +127,9 @@ import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.order.ComponentKey
+import com.android.shaftschematic.ui.util.buildBodyTitleById
+import com.android.shaftschematic.ui.util.buildLinerTitleById
+import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.viewmodel.SnapConfig
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
 import com.android.shaftschematic.ui.viewmodel.snapPositionMm
@@ -210,6 +216,7 @@ fun ShaftScreen(
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+    onUpdateLinerLabel: (Int, String?) -> Unit,
 
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
 
@@ -340,7 +347,7 @@ fun ShaftScreen(
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Shaft Editor",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
@@ -693,6 +700,7 @@ fun ShaftScreen(
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateThread = snappedThreadUpdater,
                     onUpdateLiner = snappedLinerUpdater,
+                    onUpdateLinerLabel = onUpdateLinerLabel,
 
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
 
@@ -990,6 +998,7 @@ private data class RowRef(
     val id: String
 )
 
+
 /**
  * ComponentCarouselPager
  *
@@ -1012,6 +1021,7 @@ private fun ComponentCarouselPager(
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+    onUpdateLinerLabel: (Int, String?) -> Unit,
 
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
 
@@ -1025,6 +1035,18 @@ private fun ComponentCarouselPager(
     onFocusedChanged: (String?) -> Unit
 ) {
     val rows = remember(spec, componentOrder) { buildOrderedRows(spec, componentOrder) }
+
+    val bodyTitleById = remember(spec.bodies) {
+        buildBodyTitleById(spec)
+    }
+
+    val taperTitleById = remember(spec.tapers) {
+        buildTaperTitleById(spec)
+    }
+
+    val linerTitleById = remember(spec.liners, spec.overallLengthMm) {
+        buildLinerTitleById(spec)
+    }
 
     // Build rows and force left→right (AFT→FWD) by actual start position in mm.
     val rowsSorted = remember(spec, componentOrder) {
@@ -1112,6 +1134,10 @@ private fun ComponentCarouselPager(
                             onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
                             onUpdateTaperKeyway = onUpdateTaperKeyway,
                             onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
+                            onUpdateLinerLabel = onUpdateLinerLabel,
+                            bodyTitleById = bodyTitleById,
+                            taperTitleById = taperTitleById,
+                            linerTitleById = linerTitleById,
                             onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
                             onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
                             onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner
@@ -1220,6 +1246,10 @@ private fun ComponentPagerCard(
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+    onUpdateLinerLabel: (Int, String?) -> Unit,
+    bodyTitleById: Map<String, String>,
+    taperTitleById: Map<String, String>,
+    linerTitleById: Map<String, String>,
 
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
 
@@ -1234,7 +1264,7 @@ private fun ComponentPagerCard(
         ComponentKind.BODY -> {
             val b = spec.bodies[row.index]
             ComponentCard(
-                title = "Body #${row.index + 1}",
+                title = bodyTitleById[b.id] ?: "Body",
                 debugText = if (showComponentDebugLabels) {
                     "id=${b.id} • startMm=${f1(b.startFromAftMm)} • endMm=${f1(b.startFromAftMm + b.lengthMm)}"
                 } else null,
@@ -1271,7 +1301,7 @@ private fun ComponentPagerCard(
             val t = spec.tapers[row.index]
             val endMap = taperSetLetMapping(t, spec.overallLengthMm)
             ComponentCard(
-                title = "Taper #${row.index + 1}",
+                title = taperTitleById[t.id] ?: "Taper",
                 debugText = if (showComponentDebugLabels) {
                     "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}"
                 } else null,
@@ -1421,8 +1451,50 @@ private fun ComponentPagerCard(
 
         ComponentKind.LINER -> {
             val ln = spec.liners[row.index]
+
+            val computedTitle = linerTitleById[ln.id] ?: "Liner"
+            var editingTitle by rememberSaveable(ln.id) { mutableStateOf(false) }
+            val focusRequester = remember { FocusRequester() }
             ComponentCard(
-                title = "Liner #${row.index + 1}",
+                title = computedTitle,
+                titleContent = {
+                    if (!editingTitle) {
+                        Text(
+                            computedTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { editingTitle = true },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else {
+                        var text by remember(ln.id, ln.label) { mutableStateOf(ln.label.orEmpty()) }
+                        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                        OutlinedTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            singleLine = true,
+                            placeholder = { Text(computedTitle) },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                val trimmed = text.trim().takeIf { it.isNotEmpty() }
+                                onUpdateLinerLabel(row.index, trimmed)
+                                editingTitle = false
+                            }),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { f ->
+                                    if (!f.isFocused) {
+                                        val trimmed = text.trim().takeIf { it.isNotEmpty() }
+                                        onUpdateLinerLabel(row.index, trimmed)
+                                        editingTitle = false
+                                    }
+                                }
+                        )
+                    }
+                },
                 debugText = if (showComponentDebugLabels) {
                     "id=${ln.id} • startMm=${f1(ln.startFromAftMm)} • endMm=${f1(ln.startFromAftMm + ln.lengthMm)}"
                 } else null,
@@ -1517,6 +1589,7 @@ private fun buildOrderedRows(
 @Composable
 private fun ComponentCard(
     title: String,
+    titleContent: (@Composable () -> Unit)? = null,
     debugText: String? = null,
     componentId: String? = null,
     componentKind: ComponentKind? = null,
@@ -1541,11 +1614,15 @@ private fun ComponentCard(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    // Medium weight reads cleaner in cards than Small + default weight
-                )
+                if (titleContent != null) {
+                    titleContent()
+                } else {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        // Medium weight reads cleaner in cards than Small + default weight
+                    )
+                }
                 if (debugText != null) {
                     Text(
                         debugText,
