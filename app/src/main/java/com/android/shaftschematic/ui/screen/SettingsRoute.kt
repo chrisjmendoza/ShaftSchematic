@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -124,8 +126,12 @@ fun SettingsRoute(
     ) { pad ->
         when (page) {
             SettingsPage.MAIN -> {
+                val scrollState = rememberScrollState()
                 Column(
-                    modifier = Modifier.padding(pad).padding(16.dp),
+                    modifier = Modifier
+                        .padding(pad)
+                        .verticalScroll(scrollState)
+                        .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text("Units", style = MaterialTheme.typography.titleMedium)
@@ -237,8 +243,12 @@ fun SettingsRoute(
             }
 
             SettingsPage.PREVIEW_COLORS -> {
+                val scrollState = rememberScrollState()
                 Column(
-                    modifier = Modifier.padding(pad).padding(16.dp),
+                    modifier = Modifier
+                        .padding(pad)
+                        .verticalScroll(scrollState)
+                        .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text("Applies to Preview only", style = MaterialTheme.typography.bodySmall)
