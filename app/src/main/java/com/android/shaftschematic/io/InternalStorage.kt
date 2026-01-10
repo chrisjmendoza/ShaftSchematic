@@ -59,7 +59,7 @@ object InternalStorage {
      *
      * Returns null if the input is blank.
      */
-    internal fun normalizeShaftDocName(raw: String): String? {
+    fun normalizeShaftDocName(raw: String): String? {
         val trimmed = raw.trim()
         if (trimmed.isEmpty()) return null
 
@@ -86,6 +86,31 @@ object InternalStorage {
     fun delete(ctx: Context, name: String): Boolean = delete(dir(ctx), name)
 
     internal fun delete(dir: File, name: String): Boolean = File(dir, name).delete()
+
+    /**
+     * Renames an existing saved shaft.
+     *
+     * Contract:
+     * - [fromName] must be an existing filename returned by [list] (may be `.shaft` or legacy).
+     * - [toName] must end with `.shaft`.
+     * - Returns false if the source is missing, the target already exists, or the rename fails.
+     */
+    fun rename(ctx: Context, fromName: String, toName: String): Boolean = rename(dir(ctx), fromName, toName)
+
+    internal fun rename(dir: File, fromName: String, toName: String): Boolean {
+        require(toName.endsWith(SHAFT_DOT_EXT, ignoreCase = true)) { "Target name must end with $SHAFT_DOT_EXT" }
+
+        val src = File(dir, fromName)
+        if (!src.exists()) return false
+
+        val dst = File(dir, toName)
+        if (dst.exists()) return false
+
+        return src.renameTo(dst) || runCatching {
+            src.copyTo(dst, overwrite = false)
+            src.delete()
+        }.getOrDefault(false)
+    }
 
     data class MigrationReport(
         val migratedCount: Int,

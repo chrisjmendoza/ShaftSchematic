@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -60,6 +61,17 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
 
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
+    var pendingRename by remember { mutableStateOf<String?>(null) }
+
+    fun sanitizeUserBaseName(raw: String): String {
+        val collapsed = raw.trim().replace(Regex("\\s+"), " ")
+        if (collapsed.isEmpty()) return ""
+
+        return collapsed
+            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .replace(Regex("[\\u0000-\\u001F]"), "")
+            .trim()
+    }
 
     // Load list once on enter (keeps behavior the same as your original)
     LaunchedEffect(Unit) { files = InternalStorage.list(ctx) }
@@ -91,6 +103,65 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (pendingRename != null) {
+        val fromName = pendingRename!!
+        var value by remember(fromName) {
+            val base = stripShaftDocExtension(fromName)
+            mutableStateOf(TextFieldValue(base, selection = TextRange(0, base.length)))
+        }
+        AlertDialog(
+            onDismissRequest = { pendingRename = null },
+            title = { Text("Rename saved shaft") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter a new name. The file will be saved as $SHAFT_DOT_EXT.")
+                    OutlinedTextField(
+                        value = value,
+                        onValueChange = { value = it },
+                        singleLine = true,
+                        label = { Text("Name") },
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val sanitizedBase = sanitizeUserBaseName(value.text)
+                        val toName = InternalStorage.normalizeShaftDocName(sanitizedBase)
+                        if (toName == null) {
+                            scope.launch { snackbarHostState.showSnackbar("Name cannot be blank.") }
+                            return@TextButton
+                        }
+
+                        if (toName.equals(fromName, ignoreCase = true)) {
+                            pendingRename = null
+                            return@TextButton
+                        }
+
+                        scope.launch {
+                            val ok = withContext(Dispatchers.IO) {
+                                // Avoid overwrites.
+                                if (InternalStorage.exists(ctx, toName)) return@withContext false
+                                InternalStorage.rename(ctx, fromName, toName)
+                            }
+                            if (ok) {
+                                files = InternalStorage.list(ctx)
+                                pendingRename = null
+                            } else {
+                                snackbarHostState.showSnackbar(
+                                    message = "Could not rename to ‘${stripShaftDocExtension(toName)}’."
+                                )
+                            }
+                        }
+                    }
+                ) { Text("Rename") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRename = null }) { Text("Cancel") }
             }
         )
     }
@@ -165,6 +236,16 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                     expanded = menuOpen,
                                     onDismissRequest = { menuOpen = false }
                                 ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Rename") },
+                                        onClick = {
+                                            menuOpen = false
+                                            pendingRename = name
+                                        },
+                                        leadingIcon = {
+                                            Icon(Icons.Filled.Edit, contentDescription = null)
+                                        }
+                                    )
                                     DropdownMenuItem(
                                         text = { Text("Send Feedback") },
                                         onClick = {
