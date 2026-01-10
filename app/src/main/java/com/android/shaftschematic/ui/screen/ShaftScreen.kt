@@ -130,6 +130,7 @@ import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
+import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.viewmodel.SnapConfig
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
 import com.android.shaftschematic.ui.viewmodel.snapPositionMm
@@ -1307,35 +1308,9 @@ private fun ComponentPagerCard(
     fun f1(mm: Float): String = "%.1f".format(mm)
 
     fun startValidator(selfId: String, selfKind: ComponentKind, selfLengthMm: Float): (String) -> String? {
-        val selfKey = ComponentKey(selfId, selfKind)
-        val others = buildList {
-            spec.bodies.forEach { add(ComponentKey(it.id, ComponentKind.BODY) to (it.startFromAftMm to it.lengthMm)) }
-            spec.tapers.forEach { add(ComponentKey(it.id, ComponentKind.TAPER) to (it.startFromAftMm to it.lengthMm)) }
-            spec.threads.forEach { add(ComponentKey(it.id, ComponentKind.THREAD) to (it.startFromAftMm to it.lengthMm)) }
-            spec.liners.forEach { add(ComponentKey(it.id, ComponentKind.LINER) to (it.startFromAftMm to it.lengthMm)) }
-        }
-
-        fun overlapsStrict(aStart: Float, aLen: Float, bStart: Float, bLen: Float): Boolean {
-            // Endpoints touching are allowed.
-            val eps = 1e-3f
-            val aEnd = aStart + aLen
-            val bEnd = bStart + bLen
-            return (aStart < bEnd - eps) && (aEnd > bStart + eps)
-        }
-
         return fun(raw: String): String? {
             val startMm = toMmOrNull(raw, unit) ?: return "Enter a number"
-            if (startMm < 0f) return "Must be ≥ 0"
-
-            val overlaps = others
-                .asSequence()
-                .filterNot { (k, _) -> k == selfKey }
-                .any { (_, seg) ->
-                    val (otherStart, otherLen) = seg
-                    overlapsStrict(startMm, selfLengthMm, otherStart, otherLen)
-                }
-
-            return if (overlaps) "Overlaps another component" else null
+            return startOverlapErrorMm(spec, selfId, selfKind, selfLengthMm, startMm)
         }
     }
 
