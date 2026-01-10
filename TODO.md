@@ -112,6 +112,20 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 ## 2. Validation & UI Connection
 
+### 2.x Regression Note — Thread Start/Placement & Allowed Locations
+
+- [ ] REGRESSION: Thread start set to `0` can still render/behave as if it begins after a body.
+      Repro (editor):
+      1) Add a Body starting at 0.
+      2) Add a Thread.
+      3) Edit the Thread “Start” field and enter `0`.
+      4) Observe preview placement vs. expected.
+      Expected: thread begins at 0 in preview (or is rejected by validation if disallowed).
+      Observed: thread may appear positioned after the body (needs diagnosis).
+
+- [ ] RULE: Threads are only allowed at shaft ends. If a thread is surrounded on both sides by
+      either Body or Liner (i.e., thread is between components), it is not allowed.
+
 ### 2.1 Hook Validation System Into UI
 
 **Goal:** Surface blocking errors + warnings consistently across dialogs and list.

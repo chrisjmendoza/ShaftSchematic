@@ -49,6 +49,23 @@ class LinerNamingTest {
     }
 
     @Test
+    fun `two liners are always categorized as aft and fwd (no mid)`() {
+        // If we used pure region-by-ratio naming, the second liner's center would be ~50% of OAL
+        // and could incorrectly land in MID. For a two-liner setup we want AFT + FWD.
+        val aft = Liner(id = "A", startFromAftMm = 0f, lengthMm = 10f, odMm = 50f)
+        val forwardButMidByRatio = Liner(id = "B", startFromAftMm = 45f, lengthMm = 10f, odMm = 50f)
+        val spec = ShaftSpec(overallLengthMm = 100f, liners = listOf(forwardButMidByRatio, aft))
+
+        assertEquals(
+            mapOf(
+                "A" to "AFT Liner",
+                "B" to "FWD Liner",
+            ),
+            buildLinerTitleById(spec),
+        )
+    }
+
+    @Test
     fun `tie-break uses id when start positions equal`() {
         val a = Liner(id = "A", startFromAftMm = 0f, lengthMm = 10f, odMm = 50f)
         val b = Liner(id = "B", startFromAftMm = 0f, lengthMm = 10f, odMm = 50f)
@@ -56,8 +73,8 @@ class LinerNamingTest {
 
         assertEquals(
             mapOf(
-                "A" to "AFT Liner #1",
-                "B" to "AFT Liner #2",
+                "A" to "AFT Liner",
+                "B" to "FWD Liner",
             ),
             buildLinerTitleById(spec),
         )

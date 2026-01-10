@@ -1306,6 +1306,39 @@ private fun ComponentPagerCard(
 ) {
     fun f1(mm: Float): String = "%.1f".format(mm)
 
+    fun startValidator(selfId: String, selfKind: ComponentKind, selfLengthMm: Float): (String) -> String? {
+        val selfKey = ComponentKey(selfId, selfKind)
+        val others = buildList {
+            spec.bodies.forEach { add(ComponentKey(it.id, ComponentKind.BODY) to (it.startFromAftMm to it.lengthMm)) }
+            spec.tapers.forEach { add(ComponentKey(it.id, ComponentKind.TAPER) to (it.startFromAftMm to it.lengthMm)) }
+            spec.threads.forEach { add(ComponentKey(it.id, ComponentKind.THREAD) to (it.startFromAftMm to it.lengthMm)) }
+            spec.liners.forEach { add(ComponentKey(it.id, ComponentKind.LINER) to (it.startFromAftMm to it.lengthMm)) }
+        }
+
+        fun overlapsStrict(aStart: Float, aLen: Float, bStart: Float, bLen: Float): Boolean {
+            // Endpoints touching are allowed.
+            val eps = 1e-3f
+            val aEnd = aStart + aLen
+            val bEnd = bStart + bLen
+            return (aStart < bEnd - eps) && (aEnd > bStart + eps)
+        }
+
+        return fun(raw: String): String? {
+            val startMm = toMmOrNull(raw, unit) ?: return "Enter a number"
+            if (startMm < 0f) return "Must be ≥ 0"
+
+            val overlaps = others
+                .asSequence()
+                .filterNot { (k, _) -> k == selfKey }
+                .any { (_, seg) ->
+                    val (otherStart, otherLen) = seg
+                    overlapsStrict(startMm, selfLengthMm, otherStart, otherLen)
+                }
+
+            return if (overlaps) "Overlaps another component" else null
+        }
+    }
+
     when (row.kind) {
         ComponentKind.BODY -> {
             val b = spec.bodies[row.index]
@@ -1325,7 +1358,11 @@ private fun ComponentPagerCard(
                 onRemoveBody(b.id)
                 }
             ) {
-                CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit)) { s ->
+                CommitNum(
+                    label = "Start (${abbr(unit)})",
+                    initialDisplay = disp(b.startFromAftMm, unit),
+                    validator = startValidator(b.id, ComponentKind.BODY, b.lengthMm)
+                ) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateBody(row.index, it, b.lengthMm, b.diaMm)
                     }
@@ -1362,7 +1399,11 @@ private fun ComponentPagerCard(
                 onRemoveTaper(t.id)
                 }
             ) {
-                CommitNum("Start (${abbr(unit)})", disp(t.startFromAftMm, unit)) { s ->
+                CommitNum(
+                    label = "Start (${abbr(unit)})",
+                    initialDisplay = disp(t.startFromAftMm, unit),
+                    validator = startValidator(t.id, ComponentKind.TAPER, t.lengthMm)
+                ) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateTaper(row.index, it, t.lengthMm, t.startDiaMm, t.endDiaMm)
                     }
@@ -1466,7 +1507,11 @@ private fun ComponentPagerCard(
                     )
                 }
 
-                CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit)) { s ->
+                CommitNum(
+                    label = "Start (${abbr(unit)})",
+                    initialDisplay = disp(th.startFromAftMm, unit),
+                    validator = startValidator(th.id, ComponentKind.THREAD, th.lengthMm)
+                ) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm)
                     }
@@ -1555,7 +1600,11 @@ private fun ComponentPagerCard(
                 onRemoveLiner(ln.id)
                 }
             ) {
-                CommitNum("Start (${abbr(unit)})", disp(ln.startFromAftMm, unit)) { s ->
+                CommitNum(
+                    label = "Start (${abbr(unit)})",
+                    initialDisplay = disp(ln.startFromAftMm, unit),
+                    validator = startValidator(ln.id, ComponentKind.LINER, ln.lengthMm)
+                ) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateLiner(row.index, it, ln.lengthMm, ln.odMm)
                     }
@@ -1780,20 +1829,40 @@ private fun CommitNum(
     initialDisplay: String,
     modifier: Modifier = Modifier,
     fillMaxWidth: Boolean = true,
+    validator: ((String) -> String?)? = null,
     onCommit: (String) -> Unit
 ) {
     var text by remember(initialDisplay) { mutableStateOf(initialDisplay) }
+    var error by remember(initialDisplay) { mutableStateOf<String?>(null) }
+
+    fun validateNow(raw: String): String? {
+        val err = validator?.invoke(raw)
+        error = err
+        return err
+    }
+
     OutlinedTextField(
         value = text,
-        onValueChange = { text = it },
+        onValueChange = {
+            text = it
+            if (validator != null) validateNow(it)
+        },
         label = { Text(label) },
+        isError = error != null,
+        supportingText = { error?.let { Text(it) } },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
+        keyboardActions = KeyboardActions(onDone = {
+            if (validateNow(text) == null) onCommit(text)
+        }),
         modifier = Modifier
             .let { if (fillMaxWidth) it.fillMaxWidth() else it }
             .then(modifier)
-            .onFocusChanged { f -> if (!f.isFocused) onCommit(text) }
+            .onFocusChanged { f ->
+                if (!f.isFocused) {
+                    if (validateNow(text) == null) onCommit(text)
+                }
+            }
     )
 }
 

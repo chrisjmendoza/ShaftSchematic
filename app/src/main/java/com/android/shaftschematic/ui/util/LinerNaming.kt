@@ -39,7 +39,16 @@ fun buildLinerTitleById(spec: ShaftSpec): Map<String, String> {
         LinerRegion.FWD -> "FWD"
     }
 
-    val regionById: Map<String, LinerRegion> = sorted.associate { it.id to regionOf(it) }
+    // Special case: if there are exactly two liners, treat them as AFT and FWD
+    // (no MID naming unless there are 3+ liners).
+    val regionById: Map<String, LinerRegion> = if (sorted.size == 2) {
+        mapOf(
+            sorted[0].id to LinerRegion.AFT,
+            sorted[1].id to LinerRegion.FWD,
+        )
+    } else {
+        sorted.associate { it.id to regionOf(it) }
+    }
     val countByRegion: Map<LinerRegion, Int> = regionById.values
         .groupingBy { it }
         .eachCount()
