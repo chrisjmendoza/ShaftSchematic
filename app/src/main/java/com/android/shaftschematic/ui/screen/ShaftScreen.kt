@@ -178,6 +178,7 @@ fun ShaftScreen(
     showGrid: Boolean,
     showOalDebugLabel: Boolean,
     showOalHelperLine: Boolean,
+    showOalInPreviewBox: Boolean,
     showComponentDebugLabels: Boolean,
     showRenderLayoutDebugOverlay: Boolean,
     showRenderOalMarkers: Boolean,
@@ -454,6 +455,9 @@ fun ShaftScreen(
                 showGrid = showGrid,
                 spec = spec,
                 unit = unit,
+                overallIsManual = overallIsManual,
+                devOptionsEnabled = devOptionsEnabled,
+                showOalInPreviewBox = showOalInPreviewBox,
                 highlightEnabled = highlightEnabled,
                 highlightId = focusedId,
                 showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
@@ -941,6 +945,9 @@ private fun PreviewCard(
     showGrid: Boolean,
     spec: ShaftSpec,
     unit: UnitSystem,
+    overallIsManual: Boolean,
+    devOptionsEnabled: Boolean,
+    showOalInPreviewBox: Boolean,
     // NEW: explicit preview controls
     highlightEnabled: Boolean,
     highlightId: String?,
@@ -979,12 +986,51 @@ private fun PreviewCard(
                 showOalMarkers = showRenderOalMarkers
             )
 
-            FreeToEndBadge(
-                spec = spec,
-                unit = unit,
-                modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
-            )
+            Column(
+                modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (devOptionsEnabled && showOalInPreviewBox) {
+                    PreviewOalBadge(
+                        spec = spec,
+                        unit = unit,
+                        overallIsManual = overallIsManual,
+                    )
+                }
+
+                if (overallIsManual) {
+                    FreeToEndBadge(
+                        spec = spec,
+                        unit = unit,
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun PreviewOalBadge(
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    overallIsManual: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val effectiveOalMm = remember(spec) { computeOalWindow(spec).oalMm.toFloat() }
+    val displayOalMm = if (overallIsManual) spec.overallLengthMm else effectiveOalMm
+
+    Surface(
+        tonalElevation = 2.dp,
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+        modifier = modifier
+    ) {
+        Text(
+            text = "OAL: ${formatDisplay(displayOalMm, unit)} ${abbr(unit)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
     }
 }
 
@@ -1892,15 +1938,6 @@ private fun FreeToEndBadge(
     val freeSignedMm = spec.overallLengthMm - endMm
     val isOversized = freeSignedMm < 0f
 
-    // Effective OAL in measurement space (respects end threads flagged excludeFromOAL)
-    val win = remember(spec) { computeOalWindow(spec) }
-    val physicalOalMm = spec.overallLengthMm.toDouble()
-    val effectiveOalMm = win.oalMm
-    val excluded = kotlin.math.abs(effectiveOalMm - physicalOalMm) > OAL_EPS_MM
-
-    val oalLabel = "OAL"
-    val oalDisplayMm = if (excluded) effectiveOalMm.toFloat() else spec.overallLengthMm
-
     val bg = if (isOversized) MaterialTheme.colorScheme.errorContainer
     else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
     val fg = if (isOversized) MaterialTheme.colorScheme.onErrorContainer
@@ -1913,7 +1950,7 @@ private fun FreeToEndBadge(
         modifier = modifier
     ) {
         Text(
-            text = "$oalLabel: ${formatDisplay(oalDisplayMm, unit)} ${abbr(unit)}  •  Free to end: ${formatDisplay(freeSignedMm, unit)} ${abbr(unit)}",
+            text = "Free to end: ${formatDisplay(freeSignedMm, unit)} ${abbr(unit)}",
             style = MaterialTheme.typography.labelSmall,
             color = fg,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)

@@ -89,6 +89,7 @@ fun ShaftRoute(
     val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
     val showOalDebugLabel by vm.showOalDebugLabel.collectAsState()
     val showOalHelperLine by vm.showOalHelperLine.collectAsState()
+    val showOalInPreviewBox by vm.showOalInPreviewBox.collectAsState()
     val customer        by vm.customer.collectAsState()
     val vessel          by vm.vessel.collectAsState()
     val jobNumber       by vm.jobNumber.collectAsState()
@@ -136,6 +137,7 @@ fun ShaftRoute(
         showGrid = showGrid,
         showOalDebugLabel = showOalDebugLabel,
         showOalHelperLine = showOalHelperLine,
+        showOalInPreviewBox = showOalInPreviewBox,
         showComponentDebugLabels = showComponentDebugLabels,
         showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
         showRenderOalMarkers = showRenderOalMarkers,

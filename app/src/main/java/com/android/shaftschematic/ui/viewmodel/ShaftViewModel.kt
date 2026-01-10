@@ -171,6 +171,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _showOalHelperLine = MutableStateFlow(false)
     val showOalHelperLine: StateFlow<Boolean> = _showOalHelperLine.asStateFlow()
 
+    private val _showOalInPreviewBox = MutableStateFlow(false)
+    val showOalInPreviewBox: StateFlow<Boolean> = _showOalInPreviewBox.asStateFlow()
+
     private val _showComponentDebugLabels = MutableStateFlow(false)
     val showComponentDebugLabels: StateFlow<Boolean> = _showComponentDebugLabels.asStateFlow()
 
@@ -387,6 +390,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
+            SettingsStore.showOalInPreviewBoxFlow(getApplication()).collectLatest { persisted ->
+                _showOalInPreviewBox.value = persisted
+            }
+        }
+        viewModelScope.launch {
             SettingsStore.showComponentDebugLabelsFlow(getApplication()).collectLatest { persisted ->
                 _showComponentDebugLabels.value = persisted
             }
@@ -553,6 +561,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _showOalHelperLine.value = show
         if (persist) {
             viewModelScope.launch { SettingsStore.setShowOalHelperLine(getApplication(), show) }
+        }
+    }
+
+    fun setShowOalInPreviewBox(show: Boolean, persist: Boolean = true) {
+        _showOalInPreviewBox.value = show
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setShowOalInPreviewBox(getApplication(), show) }
         }
     }
 
