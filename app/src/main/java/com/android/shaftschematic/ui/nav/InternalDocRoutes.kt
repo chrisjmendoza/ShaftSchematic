@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -247,6 +248,17 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                         }
                                     )
                                     DropdownMenuItem(
+                                        text = { Text("Delete") },
+                                        onClick = {
+                                            menuOpen = false
+                                            pendingDelete = name
+                                        },
+                                        leadingIcon = {
+                                            Icon(Icons.Filled.Delete, contentDescription = null)
+                                        }
+                                    )
+
+                                    DropdownMenuItem(
                                         text = { Text("Send Feedback") },
                                         onClick = {
                                             menuOpen = false
@@ -276,15 +288,8 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                                 }
                                             }
                                         },
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Delete") },
-                                        onClick = {
-                                            menuOpen = false
-                                            pendingDelete = name
-                                        },
                                         leadingIcon = {
-                                            Icon(Icons.Filled.Delete, contentDescription = null)
+                                            Icon(Icons.Filled.Email, contentDescription = null)
                                         }
                                     )
                                 }
