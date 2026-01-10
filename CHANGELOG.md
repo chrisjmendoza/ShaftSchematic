@@ -9,45 +9,64 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 ## Versioning Notes
 
 - Early development used git tags (`v0.2.0`, `v0.3.1`) for milestones.
-- App `versionName` wasn’t kept in sync with those tags; starting with `1.1.1` we’re using the changelog + app version together.
+- Starting with `1.1.1`, the changelog and the app `versionName` are kept in sync; future releases follow this convention.
+- Note: `v0.2.0` and `v0.3.0` point to the same commit (`d1a4da5`).
 
 ## [1.1.1] - 2026-01-08
 
 ### Added
-- `.shaft` document filenames (content remains JSON), plus legacy `.json` compatibility.
-- One-time internal document migration from `.json` → `.shaft`.
-- Component snapping (`SnapEngine`) and related workflow scaffolding.
-- Component deletion + single-step undo (expanded coverage across components over time).
-- Thread “Include in OAL” toggle (end threads can be excluded from the OAL measurement window).
-- Preview color presets and B/W mode.
-- Shaft position field persisted and reflected in the PDF footer.
-- Taper keyway (KW) width/depth fields.
+- `.shaft` document filenames (content remains JSON), plus legacy `.json` compatibility and migration (`c98550f`).
+- Connected-device instrumentation test guard (opt-in) to protect internal saves (multiple commits).
+- Component snapping engine and helpers (multiple commits).
+- Developer Options for debug tooling / gated verbose logging (multiple commits).
+- Saved-shaft delete support plus tests (multiple commits).
+- Thread “Include in OAL” toggle (exclude end threads from OAL window) (multiple commits).
+- OAL window contract tests for determinism (multiple commits).
+- Preview color presets + B/W mode (multiple commits).
+- Shaft position selection persisted and printed in PDF footer (`a96a889`).
+- Taper keyway (KW) width/depth fields + footer output (`15701e1`).
 
 ### Changed
-- Save/open behavior and filename suggestions improved; overwrite confirmation added.
-- PDF export UX improved (including optional auto-open after export).
-- Editor titles made more informative/deterministic:
-    - Bodies/tapers/liners use physical aft→fwd ordering for display naming.
-    - Liners: positional AFT/MID/FWD names, numbers only when needed, optional user override (tap title to edit).
-    - Tapers: AFT/FWD direction naming based on diameter trend, numbered only when needed.
-- PDF layout and dimension labeling refined over multiple iterations.
-- App locked to portrait for more predictable editor layout.
-- “Shaft Editor” header typography strengthened for clearer hierarchy.
+- Save/open behavior and filename suggestions improved; overwrite confirmation added (`8743637`).
+- PDF export UX improved (optional auto-open after export) (`56a293d`).
+- PDF layout refined (shifted content for better spacing) (`c592a1c`).
+- PDF footer and taper dimensioning refined (multiple commits).
+- Editor toolbar/navigation redesigned (Home button, New/Open/Save, History dropdown, overflow menu) (multiple commits).
+- Editor component carousel: tighter arrows/UX tweaks (multiple commits).
+- Editor component titles made deterministic and more informative (`7a2e37e`):
+    - Bodies: physical aft→fwd numbering.
+    - Liners: positional AFT/MID/FWD naming; numbers only when needed; optional user override via inline title editing.
+    - Tapers: AFT/FWD direction naming based on diameter trend; numbers only when needed.
+- App locked to portrait for more predictable editor layout (`700d8b2`).
+- “Shaft Editor” header typography strengthened for clearer hierarchy (`7a2e37e`).
+- Project/docs and dev tooling iterated (multiple commits).
+- Android Gradle Plugin bumped (`070d916`).
 
 ### Fixed
-- Gradle connected-test safety guard adjusted for Kotlin DSL compatibility.
-- Multiple PDF/export/preview correctness issues (spacing, labeling, footer rules) addressed over time.
+- Gradle connected-test safety guard adjusted for Kotlin DSL compatibility (`c98550f`).
+- Feedback email chooser behavior (`c80a7d5`).
+- Stabilized component delete behavior (remove action timing, snackbar/undo flow) (multiple commits).
+- Fixed PDF scaling/layout edge cases, taper dimension rendering, and unit-safe footer formatting (multiple commits).
+
+### Internal
+- Version bump to `1.1.1` (`1027792`).
+- Changelog refresh work (`4e502de`).
 
 ---
 
 ## [0.3.1] - 2025-09-16
 
 ### Added
-- Full-rectangle preview rendering for components and improved editor scaffolding.
+- Full-rectangle preview rendering for components (multiple commits).
+- Editor UI structure improvements (FAB + bottom sheet; more usable scaffolding) (`2f99695`).
 
 ### Changed
-- Editor structure and input UX improved (including taper handling groundwork).
-- PDF title block and layout helpers refactored/cleaned up.
+- Editor unit handling and dropdown behavior improved (`663157a`).
+- Taper handling + input UX improvements (`48aaad6`).
+- PDF title block / layout helpers refactor (`2d2f61c`).
+
+### Fixed
+- Updated `ShaftDrawingView` layout call to match `ShaftLayout` API (`2f424bd`).
 
 ## [0.2.0] - 2025-09-14
 
@@ -56,6 +75,9 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 - Settings menu in `TopAppBar` with toggle to choose between **chip-style** or **text-style** coverage hints.
 - `SettingsDialog` component with temporary state management (persistence TODO).
 - Export PDF action added to `TopAppBar` (optional), keeping Floating Action Button export as well.
+
+### Internal
+- Initial changelog created (`d1a4da5`).
 
 ### Changed
 - Updated `ShaftScreen` scaffold to include Settings and Export actions in the `TopAppBar`.
@@ -83,3 +105,6 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
     - Dimension arrows and overall length.
     - Simple title block with project info.
 - Git integration with `.gitignore`, initial README, and project structure.
+
+### Internal
+- Initial project import (multiple commits).
