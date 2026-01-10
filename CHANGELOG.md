@@ -25,6 +25,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 - Preview color presets + B/W mode (multiple commits).
 - Shaft position selection persisted and printed in PDF footer (`a96a889`).
 - Taper keyway (KW) width/depth fields + footer output (`15701e1`).
+- Developer option to show OAL value in the preview box (`c0eb165`).
 
 ### Changed
 - Save/open behavior and filename suggestions improved; overwrite confirmation added (`8743637`).
@@ -37,6 +38,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
     - Bodies: physical aft→fwd numbering.
     - Liners: positional AFT/MID/FWD naming; numbers only when needed; optional user override via inline title editing.
     - Tapers: AFT/FWD direction naming based on diameter trend; numbers only when needed.
+- Preview overlay: removed OAL from the Free-to-End badge; Free-to-End only shows in Manual mode (`c0eb165`).
 - App locked to portrait for more predictable editor layout (`700d8b2`).
 - “Shaft Editor” header typography strengthened for clearer hierarchy (`7a2e37e`).
 - Project/docs and dev tooling iterated (multiple commits).
@@ -47,6 +49,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 - Feedback email chooser behavior (`c80a7d5`).
 - Stabilized component delete behavior (remove action timing, snackbar/undo flow) (multiple commits).
 - Fixed PDF scaling/layout edge cases, taper dimension rendering, and unit-safe footer formatting (multiple commits).
+- Settings and Developer Options screens are scrollable so all options are reachable (`27a8761`).
 
 ### Internal
 - Version bump to `1.1.1` (`1027792`).
