@@ -2,11 +2,18 @@
 package com.android.shaftschematic.io
 
 import android.content.Context
+import android.content.res.AssetManager
+import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.doc.SHAFT_DOT_EXT
 import com.android.shaftschematic.doc.SHAFT_EXT
+import com.android.shaftschematic.doc.ShaftDocCodec
+import com.android.shaftschematic.doc.isSeededSampleNotes
 import com.android.shaftschematic.doc.isLegacyExtension
 import com.android.shaftschematic.doc.stripShaftDocExtension
+import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.VerboseLog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -74,7 +81,12 @@ object InternalStorage {
     fun save(ctx: Context, name: String, content: String) {
         require(name.endsWith(SHAFT_DOT_EXT, ignoreCase = true)) { "Name must end with $SHAFT_DOT_EXT" }
         VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") { "save name=$name chars=${content.length}" }
-        File(dir(ctx), name).writeText(content)
+        save(dir(ctx), name, content)
+    }
+
+    internal fun save(dir: File, name: String, content: String) {
+        require(name.endsWith(SHAFT_DOT_EXT, ignoreCase = true)) { "Name must end with $SHAFT_DOT_EXT" }
+        File(dir, name).writeText(content)
     }
 
     fun load(ctx: Context, name: String): String =
@@ -160,5 +172,295 @@ object InternalStorage {
         }
 
         return MigrationReport(migratedCount = migrated, skippedCount = skipped)
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // Bundled sample seeding (first-run)
+    // ────────────────────────────────────────────────────────────────────────────
+
+    internal interface SampleAssetSource {
+        suspend fun listSampleShaftFiles(): List<String>
+        suspend fun readSampleShaftText(filename: String): String
+    }
+
+    internal class AndroidSampleAssetSource(
+        private val assets: AssetManager,
+        private val dir: String = "sample_shafts",
+    ) : SampleAssetSource {
+        override suspend fun listSampleShaftFiles(): List<String> =
+            assets.list(dir)?.toList().orEmpty()
+
+        override suspend fun readSampleShaftText(filename: String): String =
+            assets.open("$dir/$filename").bufferedReader().use { it.readText() }
+    }
+
+    internal interface SampleSeedSettings {
+        val currentSeedVersion: Int
+        suspend fun getSeedVersion(): Int
+        suspend fun setSeedVersion(v: Int)
+    }
+
+    internal class SettingsStoreSampleSeedSettings(
+        private val ctx: Context,
+        private val settingsStore: SettingsStore,
+    ) : SampleSeedSettings {
+        override val currentSeedVersion: Int
+            get() = settingsStore.currentSampleSeedVersion()
+
+        override suspend fun getSeedVersion(): Int = settingsStore.getSampleSeedVersion(ctx)
+
+        override suspend fun setSeedVersion(v: Int) {
+            settingsStore.setSampleSeedVersion(ctx, v)
+        }
+    }
+
+    data class SeedReport(
+        val attemptedCount: Int,
+        val savedCount: Int,
+        val failedCount: Int,
+    )
+
+    /**
+     * Seeds bundled sample shafts into internal storage on first run (or when seed version bumps).
+     *
+     * Contract:
+     * - Never overwrites existing user documents.
+     * - Uses the same JSON decode path as import (via [ShaftDocCodec]).
+     * - Runs on [Dispatchers.IO].
+     */
+    suspend fun seedBundledSamplesIfNeeded(
+        context: Context,
+        settingsStore: SettingsStore,
+    ): SeedReport = seedBundledSamples(context, settingsStore, force = false)
+
+    /**
+     * Seeds bundled sample shafts into internal storage.
+     *
+     * When [force] is true, bypasses the version gate (for Settings → "Restore sample shafts").
+     * Still never overwrites user docs; collisions get suffixed with "(Sample)".
+     */
+    suspend fun seedBundledSamples(
+        context: Context,
+        settingsStore: SettingsStore,
+        force: Boolean = false,
+    ): SeedReport = withContext(Dispatchers.IO) {
+        val dir = dir(context)
+        val assets = AndroidSampleAssetSource(context.assets)
+        val settings = SettingsStoreSampleSeedSettings(context, settingsStore)
+        seedBundledSamples(dir, assets, settings, force = force)
+    }
+
+    internal suspend fun seedBundledSamplesIfNeeded(
+        dir: File,
+        assets: SampleAssetSource,
+        settings: SampleSeedSettings,
+    ): SeedReport {
+        return seedBundledSamples(dir, assets, settings, force = false)
+    }
+
+    internal suspend fun seedBundledSamples(
+        dir: File,
+        assets: SampleAssetSource,
+        settings: SampleSeedSettings,
+        force: Boolean,
+    ): SeedReport {
+        if (!force) {
+            val seedVersion = settings.getSeedVersion()
+            if (seedVersion >= settings.currentSeedVersion) {
+                return SeedReport(attemptedCount = 0, savedCount = 0, failedCount = 0)
+            }
+
+            // Version-bump cleanup: remove previously seeded *legacy* sample docs so the
+            // Saved list doesn't accumulate old+new bundled examples.
+            //
+            // Safety constraints:
+            // - Only runs when upgrading from a non-zero seed version.
+            // - Matches by stable notes marker + base-name match against current bundled samples.
+            if (seedVersion > 0) {
+                prunePreviouslySeededBundledSamples(dir, assets)
+            }
+        }
+
+        val filenames = assets.listSampleShaftFiles()
+            .filter { it.endsWith(SHAFT_DOT_EXT, ignoreCase = true) }
+            .sorted()
+
+        if (filenames.isEmpty()) {
+            return SeedReport(attemptedCount = 0, savedCount = 0, failedCount = 0)
+        }
+
+        val existingBaseNames = list(dir).map(::stripShaftDocExtension).toMutableSet()
+        val existingSeededSampleRoots = if (force) {
+            existingSeededSampleRootBases(dir)
+        } else {
+            emptySet()
+        }
+
+        var saved = 0
+        var failed = 0
+
+        for (filename in filenames) {
+            val raw = runCatching { assets.readSampleShaftText(filename) }.getOrElse {
+                failed++
+                continue
+            }
+
+            val decoded = runCatching { ShaftDocCodec.decode(raw) }.getOrElse {
+                failed++
+                continue
+            }
+
+            val suffix = decoded.shaftPosition.printableLabelOrNull()
+            val preferredBase =
+                DocumentNaming.suggestedBaseName(
+                    jobNumber = decoded.jobNumber,
+                    customer = decoded.customer,
+                    vessel = decoded.vessel,
+                    suffix = suffix,
+                ) ?: deriveBaseNameFromFilename(filename)
+
+            val preferredBaseClean = sanitizeFilenameBase(preferredBase)
+
+            // Settings → "Restore sample shafts" should only re-add missing samples.
+            // In particular: don't create duplicate "(Sample)" suffixed copies when the
+            // sample is already present.
+            if (force && existingSeededSampleRoots.contains(preferredBaseClean)) {
+                continue
+            }
+
+            val uniqueBase = if (force) {
+                // Missing-only restore: prefer the canonical base name, but still avoid overwrites.
+                ensureUniqueBaseName(existingBaseNames, preferredBaseClean)
+            } else {
+                ensureUniqueBaseName(existingBaseNames, preferredBase)
+            }
+            val targetName = uniqueBase + SHAFT_DOT_EXT
+
+            val ok = runCatching {
+                save(dir, targetName, raw)
+                true
+            }.getOrDefault(false)
+
+            if (ok) {
+                existingBaseNames.add(uniqueBase)
+                saved++
+            } else {
+                failed++
+            }
+        }
+
+        if (!force && saved > 0) {
+            settings.setSeedVersion(settings.currentSeedVersion)
+        }
+
+        return SeedReport(
+            attemptedCount = filenames.size,
+            savedCount = saved,
+            failedCount = failed,
+        )
+    }
+
+    private fun deriveBaseNameFromFilename(filename: String): String {
+        val base = stripShaftDocExtension(filename)
+        val stripped = base
+            .replace(Regex("^\\d+[_\\-\\s]*"), "")
+            .replace('_', ' ')
+            .replace('-', ' ')
+            .trim()
+        return sanitizeFilenameBase(stripped.ifBlank { base })
+    }
+
+    private fun sanitizeFilenameBase(raw: String): String {
+        val collapsed = raw.trim().replace(Regex("\\s+"), " ")
+        if (collapsed.isEmpty()) return "Sample"
+        return collapsed
+            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .replace(Regex("[\\u0000-\\u001F]"), "")
+            .trim()
+            .ifBlank { "Sample" }
+    }
+
+    private fun ensureUniqueBaseName(existing: Set<String>, desired: String): String {
+        val desiredClean = sanitizeFilenameBase(desired)
+        if (!existing.contains(desiredClean)) return desiredClean
+
+        val first = "$desiredClean (Sample)"
+        if (!existing.contains(first)) return first
+
+        var n = 2
+        while (true) {
+            val candidate = "$desiredClean (Sample $n)"
+            if (!existing.contains(candidate)) return candidate
+            n++
+        }
+    }
+
+    private fun existingSeededSampleRootBases(dir: File): Set<String> {
+        val roots = mutableSetOf<String>()
+        val names = list(dir).filter { it.endsWith(SHAFT_DOT_EXT, ignoreCase = true) }
+        for (name in names) {
+            val raw = runCatching { File(dir, name).readText() }.getOrNull() ?: continue
+            val doc = runCatching { ShaftDocCodec.decode(raw) }.getOrNull() ?: continue
+            if (!isSeededSampleNotes(doc.notes)) continue
+
+            val base = stripShaftDocExtension(name)
+            roots.add(sampleRootBaseName(base))
+        }
+        return roots
+    }
+
+    private fun sampleRootBaseName(base: String): String {
+        val stripped = base.replace(Regex(" \\((?:Sample)(?: \\d+)?\\)$"), "")
+        return sanitizeFilenameBase(stripped)
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // Bundled samples: versioned cleanup
+    // ────────────────────────────────────────────────────────────────────────────
+
+    private suspend fun prunePreviouslySeededBundledSamples(dir: File, assets: SampleAssetSource): Int {
+        val bundledSampleBases = bundledSampleBaseNames(assets)
+        if (bundledSampleBases.isEmpty()) return 0
+
+        var deleted = 0
+
+        // Only consider `.shaft` docs. Legacy `.json` docs are user data and shouldn't be touched.
+        val names = list(dir).filter { it.endsWith(SHAFT_DOT_EXT, ignoreCase = true) }
+        for (name in names) {
+            val base = stripShaftDocExtension(name)
+            if (!bundledSampleBases.contains(base)) continue
+
+            val raw = runCatching { File(dir, name).readText() }.getOrNull() ?: continue
+            val doc = runCatching { ShaftDocCodec.decode(raw) }.getOrNull() ?: continue
+            if (!isSeededSampleNotes(doc.notes)) continue
+
+            if (delete(dir, name)) deleted++
+        }
+
+        return deleted
+    }
+
+    private suspend fun bundledSampleBaseNames(assets: SampleAssetSource): Set<String> {
+        val filenames = runCatching { assets.listSampleShaftFiles() }.getOrDefault(emptyList())
+            .filter { it.endsWith(SHAFT_DOT_EXT, ignoreCase = true) }
+
+        val bases = mutableSetOf<String>()
+        for (filename in filenames) {
+            val raw = runCatching { assets.readSampleShaftText(filename) }.getOrNull() ?: continue
+            val decoded = runCatching { ShaftDocCodec.decode(raw) }.getOrNull() ?: continue
+
+            val suffix = decoded.shaftPosition.printableLabelOrNull()
+            val preferredBase =
+                DocumentNaming.suggestedBaseName(
+                    jobNumber = decoded.jobNumber,
+                    customer = decoded.customer,
+                    vessel = decoded.vessel,
+                    suffix = suffix,
+                ) ?: deriveBaseNameFromFilename(filename)
+
+            bases.add(sanitizeFilenameBase(preferredBase))
+        }
+
+        return bases
     }
 }

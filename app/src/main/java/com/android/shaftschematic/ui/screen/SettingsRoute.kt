@@ -34,6 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
@@ -93,7 +95,20 @@ fun SettingsRoute(
 
     val openPdfAfterExport by vm.openPdfAfterExport.collectAsState()
 
-    val snackbarHostState = SnackbarHostState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Collect one-shot VM events for transient UI feedback (e.g., restore samples).
+    LaunchedEffect(Unit) {
+        vm.uiEvents.collect { event ->
+            when (event) {
+                is UiEvent.ShowSnackbarMessage -> {
+                    snackbarHostState.currentSnackbarData?.dismiss()
+                    snackbarHostState.showSnackbar(event.message)
+                }
+                else -> Unit
+            }
+        }
+    }
 
     var page by rememberSaveable { mutableStateOf(SettingsPage.MAIN) }
 
@@ -220,6 +235,16 @@ fun SettingsRoute(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable(enabled = achievementsEnabled, onClick = onOpenAchievements)
+                    )
+
+                    HorizontalDivider()
+                    Text("Data", style = MaterialTheme.typography.titleMedium)
+                    ListItem(
+                        headlineContent = { Text("Restore sample shafts") },
+                        supportingContent = { Text("Re-add bundled examples to Saved (won't overwrite your files)") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { vm.restoreSampleShafts() }
                     )
 
                     HorizontalDivider()

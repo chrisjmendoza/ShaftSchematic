@@ -13,6 +13,17 @@ package com.android.shaftschematic.doc
 const val SHAFT_EXT = "shaft"
 const val SHAFT_DOT_EXT = ".shaft"
 
+// Seeded/bundled sample docs are tagged via notes so we can safely identify them later.
+// This marker is intended to be stable across versions.
+const val SEEDED_SAMPLE_NOTES_PREFIX = "[SAMPLE] "
+
+/** Returns true when [notes] indicates a bundled/seeded sample document. */
+fun isSeededSampleNotes(notes: String?): Boolean {
+    val trimmed = notes?.trimStart() ?: return false
+    // Accept the stable marker, plus any historical sample markers.
+    return trimmed.startsWith("[SAMPLE]") || trimmed.startsWith("[SAMPLE_")
+}
+
 // Custom MIME for SAF create/open. Content is still JSON.
 const val SHAFT_MIME = "application/x-shaftschematic"
 

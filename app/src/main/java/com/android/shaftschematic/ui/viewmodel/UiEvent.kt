@@ -10,6 +10,9 @@ import com.android.shaftschematic.ui.order.ComponentKind
  */
 sealed interface UiEvent {
 
+    /** Request to show a simple snackbar message (no action). */
+    data class ShowSnackbarMessage(val message: String) : UiEvent
+
     /**
      * Request to show a deletion snackbar with “Undo”.
      *

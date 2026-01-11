@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "preferred_unit": "INCHES",
+  "unit_locked": true,
+  "job_number": "814318",
+  "customer": "Harborline Propulsion",
+  "vessel": "MV Sound Runner",
+  "shaft_position": "STBD",
+  "notes": "[SAMPLE] Ferry STBD: coarse aft threads → prop taper w/ keyway → 7\" body → two liners (seal + cutless) → forward taper.",
+  "spec": {
+    "overallLengthMm": 3200.0,
+    "bodies": [
+      {
+        "id": "b1",
+        "startFromAftMm": 533.4,
+        "lengthMm": 666.6,
+        "diaMm": 177.8
+      },
+      {
+        "id": "b2",
+        "startFromAftMm": 2100.0,
+        "lengthMm": 795.2,
+        "diaMm": 177.8
+      }
+    ],
+    "tapers": [
+      {
+        "id": "t1",
+        "startFromAftMm": 127.0,
+        "lengthMm": 406.4,
+        "startDiaMm": 152.4,
+        "endDiaMm": 177.8,
+        "keywayWidthMm": 25.4,
+        "keywayDepthMm": 9.525
+      },
+      {
+        "id": "t2",
+        "startFromAftMm": 2895.2,
+        "lengthMm": 304.8,
+        "startDiaMm": 177.8,
+        "endDiaMm": 152.4,
+        "keywayWidthMm": 0.0,
+        "keywayDepthMm": 0.0
+      }
+    ],
+    "threads": [
+      {
+        "id": "th1",
+        "startFromAftMm": 0.0,
+        "majorDiaMm": 152.4,
+        "pitchMm": 6.35,
+        "lengthMm": 127.0,
+        "excludeFromOAL": false,
+        "tpi": 4.0
+      }
+    ],
+    "liners": [
+      {
+        "id": "l1",
+        "startFromAftMm": 1200.0,
+        "lengthMm": 400.0,
+        "odMm": 187.0,
+        "label": "Seal sleeve"
+      },
+      {
+        "id": "l2",
+        "startFromAftMm": 1600.0,
+        "lengthMm": 500.0,
+        "odMm": 186.0,
+        "label": "Cutless"
+      }
+    ]
+  }
+}

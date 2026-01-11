@@ -54,6 +54,10 @@ object SettingsStore {
     // One-time migrations
     private val KEY_MIGRATED_INTERNAL_DOCS_TO_SHAFT = booleanPreferencesKey("migrated_internal_docs_to_shaft")
 
+    // Bundled sample documents seeding (internal storage)
+    private val KEY_SAMPLE_SEED_VERSION = intPreferencesKey("sample_seed_version")
+    private const val CURRENT_SAMPLE_SEED_VERSION = 4
+
     // Legacy role-only keys (kept for migration)
     private val KEY_PREVIEW_OUTLINE_ROLE = stringPreferencesKey("preview_outline_role")
     private val KEY_PREVIEW_BODY_FILL_ROLE = stringPreferencesKey("preview_body_fill_role")
@@ -149,6 +153,15 @@ object SettingsStore {
 
     suspend fun setInternalDocsMigratedToShaft(ctx: Context, migrated: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_MIGRATED_INTERNAL_DOCS_TO_SHAFT] = migrated }
+    }
+
+    fun currentSampleSeedVersion(): Int = CURRENT_SAMPLE_SEED_VERSION
+
+    suspend fun getSampleSeedVersion(ctx: Context): Int =
+        ctx.settingsDataStore.data.first()[KEY_SAMPLE_SEED_VERSION] ?: 0
+
+    suspend fun setSampleSeedVersion(ctx: Context, v: Int) {
+        ctx.settingsDataStore.edit { it[KEY_SAMPLE_SEED_VERSION] = v }
     }
 
     private fun parseRole(raw: String?, fallback: PreviewColorRole): PreviewColorRole {

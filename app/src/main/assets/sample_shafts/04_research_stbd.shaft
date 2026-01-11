@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "preferred_unit": "INCHES",
+  "unit_locked": true,
+  "job_number": "814552",
+  "customer": "NorthSound Marine",
+  "vessel": "RV Blue Heron",
+  "shaft_position": "STBD",
+  "notes": "[SAMPLE] Research STBD: 4\" threads → taper w/ keyway → 5\" body → two short liners → forward taper.",
+  "spec": {
+    "overallLengthMm": 2600.0,
+    "bodies": [
+      {
+        "id": "b1",
+        "startFromAftMm": 406.4,
+        "lengthMm": 493.6,
+        "diaMm": 127.0
+      },
+      {
+        "id": "b2",
+        "startFromAftMm": 1600.0,
+        "lengthMm": 593.6,
+        "diaMm": 127.0
+      }
+    ],
+    "tapers": [
+      {
+        "id": "t1",
+        "startFromAftMm": 101.6,
+        "lengthMm": 304.8,
+        "startDiaMm": 101.6,
+        "endDiaMm": 127.0,
+        "keywayWidthMm": 19.05,
+        "keywayDepthMm": 6.35
+      },
+      {
+        "id": "t2",
+        "startFromAftMm": 2193.6,
+        "lengthMm": 406.4,
+        "startDiaMm": 127.0,
+        "endDiaMm": 101.6,
+        "keywayWidthMm": 0.0,
+        "keywayDepthMm": 0.0
+      }
+    ],
+    "threads": [
+      {
+        "id": "th1",
+        "startFromAftMm": 0.0,
+        "majorDiaMm": 101.6,
+        "pitchMm": 6.35,
+        "lengthMm": 101.6,
+        "excludeFromOAL": false,
+        "tpi": 4.0
+      }
+    ],
+    "liners": [
+      {
+        "id": "l1",
+        "startFromAftMm": 900.0,
+        "lengthMm": 350.0,
+        "odMm": 136.0,
+        "label": "Seal sleeve"
+      },
+      {
+        "id": "l2",
+        "startFromAftMm": 1250.0,
+        "lengthMm": 350.0,
+        "odMm": 135.0,
+        "label": "Cutless"
+      }
+    ]
+  }
+}

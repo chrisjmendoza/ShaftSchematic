@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.data.SettingsStore.UnitPref
+import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.model.snapForwardFrom
@@ -31,8 +32,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.util.UUID
 import kotlin.collections.removeFirst
 import kotlin.compareTo
@@ -305,6 +304,22 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") {
                         "legacy migration failed: ${it.javaClass.simpleName}: ${it.message}"
                     }
+                }
+            }
+        }
+
+        // One-time (versioned) seeding: bundled sample shafts into internal Saved list.
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            runCatching {
+                InternalStorage.seedBundledSamplesIfNeeded(app, SettingsStore)
+            }.onSuccess { report ->
+                VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") {
+                    "sample seeding finished: attempted=${report.attemptedCount} saved=${report.savedCount} failed=${report.failedCount}"
+                }
+            }.onFailure {
+                VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") {
+                    "sample seeding failed: ${it.javaClass.simpleName}: ${it.message}"
                 }
             }
         }
@@ -1269,38 +1284,36 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     // ────────────────────────────────────────────────────────────────────────────
     // Persistence — versioned JSON document (UI wires it to SAF)
-    // ────────────────────────────────────────────────────��───────────────────────
+    // ────────────────────────────────────────────────────────────────────────────
 
     /**
-     * JSON envelope (v1) that remembers the document's preferred UI unit and unitLock flag.
-     * The [spec] is always stored in **mm**.
+     * Re-seeds bundled samples into the internal Saved list (Settings action).
+     * Safe: never overwrites existing docs; collisions create suffixed duplicates.
      */
-    @Serializable
-    private data class ShaftDocV1(
-        val version: Int = 1,
-        @kotlinx.serialization.SerialName("preferred_unit")
-        val preferredUnit: UnitSystem = UnitSystem.INCHES,
-        @kotlinx.serialization.SerialName("unit_locked")
-        val unitLocked: Boolean = true,
-        @kotlinx.serialization.SerialName("job_number")
-        val jobNumber: String = "",
-        val customer: String = "",
-        val vessel: String = "",
-        @kotlinx.serialization.SerialName("shaft_position")
-        val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
-        val notes: String = "",
-        val spec: ShaftSpec
-    )
+    fun restoreSampleShafts() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
 
-    private val json = Json {
-        prettyPrint = true
-        encodeDefaults = true
-        ignoreUnknownKeys = true
+            val report = runCatching {
+                InternalStorage.seedBundledSamples(app, SettingsStore, force = true)
+            }.getOrElse {
+                _uiEvents.emit(UiEvent.ShowSnackbarMessage("Restore sample shafts failed"))
+                return@launch
+            }
+
+            val msg = when {
+                report.savedCount > 0 -> "Restored sample shafts: +${report.savedCount}"
+                report.attemptedCount == 0 -> "No bundled sample shafts found"
+                else -> "Sample shafts already present"
+            }
+
+            _uiEvents.emit(UiEvent.ShowSnackbarMessage(msg))
+        }
     }
 
     /** Export the current state as a JSON string (mm spec + unit metadata). */
-    fun exportJson(): String = json.encodeToString(
-        ShaftDocV1(
+    fun exportJson(): String = ShaftDocCodec.encodeV1(
+        ShaftDocCodec.ShaftDocV1(
             preferredUnit = _unit.value,
             unitLocked = _unitLocked.value,
             jobNumber = _jobNumber.value,
@@ -1318,49 +1331,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * Seeds/repairs UI order to reflect loaded spec.
      */
     fun importJson(raw: String) {
-        // Try new envelope first
-        runCatching { json.decodeFromString<ShaftDocV1>(raw) }
-            .onSuccess { doc ->
-                clearDeleteHistory()
-                _spec.value = doc.spec
-                seedSessionAddDefaultsFromSpec(doc.spec)
-                _unitLocked.value = doc.unitLocked
-                setUnit(doc.preferredUnit, persist = false)
+        val decoded = runCatching { ShaftDocCodec.decode(raw) }.getOrElse { throw it }
 
-                _jobNumber.value = doc.jobNumber
-                _customer.value = doc.customer
-                _vessel.value = doc.vessel
-                _shaftPosition.value = doc.shaftPosition
-                _notes.value = doc.notes
+        clearDeleteHistory()
+        _spec.value = decoded.spec
+        seedSessionAddDefaultsFromSpec(decoded.spec)
 
-                // Reset order to this document's components only
-                _componentOrder.value = emptyList()
-                ensureOrderCoversSpec(doc.spec)
+        _unitLocked.value = decoded.unitLocked
+        decoded.preferredUnit?.let { setUnit(it, persist = false) }
 
-                return
-            }
+        _jobNumber.value = decoded.jobNumber
+        _customer.value = decoded.customer
+        _vessel.value = decoded.vessel
+        _shaftPosition.value = decoded.shaftPosition
+        _notes.value = decoded.notes
 
-        // Back-compat: older files were just the spec
-        runCatching { json.decodeFromString<ShaftSpec>(raw) }
-            .onSuccess { legacy ->
-                clearDeleteHistory()
-                _spec.value = legacy
-                seedSessionAddDefaultsFromSpec(legacy)
-                _unitLocked.value = false // no lock info in legacy
-                // unit falls back to SettingsStore default (observer in init{})
-
-                _customer.value = ""
-                _vessel.value = ""
-                _jobNumber.value = ""
-                _shaftPosition.value = ShaftPosition.OTHER
-                _notes.value = ""
-
-                _componentOrder.value = emptyList()
-                ensureOrderCoversSpec(legacy)
-
-                return
-            }
-            .onFailure { throw it }
+        // Reset order to this document's components only
+        _componentOrder.value = emptyList()
+        ensureOrderCoversSpec(decoded.spec)
     }
 
     /**

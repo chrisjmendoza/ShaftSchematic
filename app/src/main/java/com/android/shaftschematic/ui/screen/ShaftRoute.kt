@@ -50,6 +50,14 @@ fun ShaftRoute(
     LaunchedEffect(Unit) {
         vm.uiEvents.collect { event ->
             when (event) {
+                is UiEvent.ShowSnackbarMessage -> {
+                    snackbarHostState.currentSnackbarData?.dismiss()
+                    snackbarHostState.showSnackbar(
+                        message = event.message,
+                        withDismissAction = true,
+                        duration = SnackbarDuration.Short,
+                    )
+                }
                 is UiEvent.ShowDeletedSnack -> {
                     val label = when (event.kind) {
                         ComponentKind.BODY   -> "Body"

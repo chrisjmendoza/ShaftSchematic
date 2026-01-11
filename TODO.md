@@ -179,6 +179,7 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 
 - [ ] Liner shoulders: add aft/fwd shoulder length fields and render stepped shoulders
 - [ ] Keyways drawing: render keyway indicator on taper segments (schematic symbol), using existing KW dims
+- [ ] FIBERGLASS: support fiberglassed body segments (model flag + renderer treatment TBD; decide hatch/pattern and labeling)
 
 ### 3.4 PDF Footer: AFT Taper Info Block Missing (DONE)
 

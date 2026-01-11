@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "preferred_unit": "INCHES",
+  "unit_locked": true,
+  "job_number": "814689",
+  "customer": "Seaway Machine & Propeller",
+  "vessel": "MV Coastal Titan",
+  "shaft_position": "PORT",
+  "notes": "[SAMPLE] Cargo PORT: 8\" threads → long keyway taper → 9\" body → two liners → forward taper.",
+  "spec": {
+    "overallLengthMm": 4200.0,
+    "bodies": [
+      {
+        "id": "b1",
+        "startFromAftMm": 457.2,
+        "lengthMm": 1242.8,
+        "diaMm": 228.6
+      },
+      {
+        "id": "b2",
+        "startFromAftMm": 2950.0,
+        "lengthMm": 843.6,
+        "diaMm": 228.6
+      }
+    ],
+    "tapers": [
+      {
+        "id": "t1",
+        "startFromAftMm": 152.4,
+        "lengthMm": 304.8,
+        "startDiaMm": 203.2,
+        "endDiaMm": 228.6,
+        "keywayWidthMm": 31.75,
+        "keywayDepthMm": 11.1125
+      },
+      {
+        "id": "t2",
+        "startFromAftMm": 3793.6,
+        "lengthMm": 406.4,
+        "startDiaMm": 228.6,
+        "endDiaMm": 203.2,
+        "keywayWidthMm": 0.0,
+        "keywayDepthMm": 0.0
+      }
+    ],
+    "threads": [
+      {
+        "id": "th1",
+        "startFromAftMm": 0.0,
+        "majorDiaMm": 203.2,
+        "pitchMm": 6.35,
+        "lengthMm": 152.4,
+        "excludeFromOAL": false,
+        "tpi": 4.0
+      }
+    ],
+    "liners": [
+      {
+        "id": "l1",
+        "startFromAftMm": 1700.0,
+        "lengthMm": 900.0,
+        "odMm": 238.0,
+        "label": "Seal sleeve"
+      },
+      {
+        "id": "l2",
+        "startFromAftMm": 2600.0,
+        "lengthMm": 350.0,
+        "odMm": 237.0,
+        "label": "Cutless"
+      }
+    ]
+  }
+}

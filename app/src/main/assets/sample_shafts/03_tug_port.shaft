@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "preferred_unit": "INCHES",
+  "unit_locked": true,
+  "job_number": "814437",
+  "customer": "Seacoast Shaft & Prop",
+  "vessel": "ATB Iron Plover",
+  "shaft_position": "PORT",
+  "notes": "[SAMPLE] Tug PORT: aft threads → short keyway taper → 6\" body → long liner through stern tube → forward taper.",
+  "spec": {
+    "overallLengthMm": 2800.0,
+    "bodies": [
+      {
+        "id": "b1",
+        "startFromAftMm": 431.8,
+        "lengthMm": 718.2,
+        "diaMm": 152.4
+      },
+      {
+        "id": "b2",
+        "startFromAftMm": 1950.0,
+        "lengthMm": 443.6,
+        "diaMm": 152.4
+      }
+    ],
+    "tapers": [
+      {
+        "id": "t1",
+        "startFromAftMm": 127.0,
+        "lengthMm": 304.8,
+        "startDiaMm": 127.0,
+        "endDiaMm": 152.4,
+        "keywayWidthMm": 22.225,
+        "keywayDepthMm": 9.525
+      },
+      {
+        "id": "t2",
+        "startFromAftMm": 2393.6,
+        "lengthMm": 406.4,
+        "startDiaMm": 152.4,
+        "endDiaMm": 127.0,
+        "keywayWidthMm": 0.0,
+        "keywayDepthMm": 0.0
+      }
+    ],
+    "threads": [
+      {
+        "id": "th1",
+        "startFromAftMm": 0.0,
+        "majorDiaMm": 127.0,
+        "pitchMm": 6.35,
+        "lengthMm": 127.0,
+        "excludeFromOAL": false,
+        "tpi": 4.0
+      }
+    ],
+    "liners": [
+      {
+        "id": "l1",
+        "startFromAftMm": 1150.0,
+        "lengthMm": 800.0,
+        "odMm": 160.0,
+        "label": "Stern tube"
+      }
+    ]
+  }
+}
