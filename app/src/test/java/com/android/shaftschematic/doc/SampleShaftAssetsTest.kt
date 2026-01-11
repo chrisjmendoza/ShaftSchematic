@@ -49,6 +49,10 @@ class SampleShaftAssetsTest {
             // Shop-style realism checks: threads → taper → body → liners → taper.
             val spec = doc.spec
             assertTrue("Need ≥1 thread in ${f.name}", spec.threads.isNotEmpty())
+            assertTrue(
+                "Sample threads should default to excluded-from-OAL in ${f.name}",
+                spec.threads.all { it.excludeFromOAL },
+            )
             assertTrue("Need ≥2 tapers in ${f.name}", spec.tapers.size >= 2)
             assertTrue("Need ≥1 body in ${f.name}", spec.bodies.isNotEmpty())
             assertTrue("Need ≥1 liner in ${f.name}", spec.liners.isNotEmpty())

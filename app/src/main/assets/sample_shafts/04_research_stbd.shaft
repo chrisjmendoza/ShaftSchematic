@@ -50,7 +50,7 @@
         "majorDiaMm": 101.6,
         "pitchMm": 6.35,
         "lengthMm": 101.6,
-        "excludeFromOAL": false,
+        "excludeFromOAL": true,
         "tpi": 4.0
       }
     ],
