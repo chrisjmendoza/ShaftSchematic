@@ -30,8 +30,10 @@
         "lengthMm": 304.8,
         "startDiaMm": 88.9,
         "endDiaMm": 114.3,
-        "keywayWidthMm": 19.05,
-        "keywayDepthMm": 7.94
+        "keywayWidthMm": 25.4,
+        "keywayDepthMm": 7.9375,
+        "keywayLengthMm": 304.8,
+        "keywaySpooned": false
       },
       {
         "id": "t2",
@@ -39,8 +41,10 @@
         "lengthMm": 406.4,
         "startDiaMm": 114.3,
         "endDiaMm": 88.9,
-        "keywayWidthMm": 0.0,
-        "keywayDepthMm": 0.0
+        "keywayWidthMm": 25.4,
+        "keywayDepthMm": 7.9375,
+        "keywayLengthMm": 406.4,
+        "keywaySpooned": false
       }
     ],
     "threads": [

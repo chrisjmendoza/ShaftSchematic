@@ -924,7 +924,12 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
             aft += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
             aft += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
             if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
-                aft += "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}"
+                val spoon = if (tp.keywaySpooned) " (spooned)" else ""
+                aft += if (tp.keywayLengthMm > 0f) {
+                    "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayLengthMm.toDouble(), unit)}$spoon"
+                } else {
+                    "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}$spoon"
+                }
             }
         }
     }
@@ -944,7 +949,12 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
             fwd += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
             fwd += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
             if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
-                fwd += "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}"
+                val spoon = if (tp.keywaySpooned) " (spooned)" else ""
+                fwd += if (tp.keywayLengthMm > 0f) {
+                    "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayLengthMm.toDouble(), unit)}$spoon"
+                } else {
+                    "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}$spoon"
+                }
             }
         }
     }

@@ -852,7 +852,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     startDiaMm = max(0f, startDiaMm),
                     endDiaMm = max(0f, endDiaMm),
                     keywayWidthMm = 0f,
-                    keywayDepthMm = 0f
+                    keywayDepthMm = 0f,
+                    keywayLengthMm = 0f,
+                    keywaySpooned = false,
                 )
             ) + s.tapers
         )
@@ -880,7 +882,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     startDiaMm = max(0f, startDiaMm),
                     endDiaMm = max(0f, endDiaMm),
                     keywayWidthMm = old.keywayWidthMm,
-                    keywayDepthMm = old.keywayDepthMm
+                    keywayDepthMm = old.keywayDepthMm,
+                    keywayLengthMm = old.keywayLengthMm,
+                    keywaySpooned = old.keywaySpooned,
                 )
             }
 
@@ -899,13 +903,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         ensureOverall()
     }
 
-    fun updateTaperKeyway(index: Int, widthMm: Float, depthMm: Float) = _spec.update { s ->
+    fun updateTaperKeyway(index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) = _spec.update { s ->
         if (index !in s.tapers.indices) s else {
             val old = s.tapers[index]
             val updatedTapers = s.tapers.toMutableList().also { list ->
                 list[index] = old.copy(
                     keywayWidthMm = max(0f, widthMm),
-                    keywayDepthMm = max(0f, depthMm)
+                    keywayDepthMm = max(0f, depthMm),
+                    keywayLengthMm = max(0f, lengthMm),
+                    keywaySpooned = spooned,
                 )
             }
             s.copy(tapers = updatedTapers)

@@ -15,6 +15,8 @@ import kotlin.math.max
  * @property endDiaMm Diameter at the taper's end.
  * @property keywayWidthMm Optional keyway width (0 = none).
  * @property keywayDepthMm Optional keyway depth (0 = none).
+ * @property keywayLengthMm Optional keyway length (0 = none).
+ * @property keywaySpooned Whether the keyway is spooned.
  */
 @Serializable
 data class Taper(
@@ -25,11 +27,18 @@ data class Taper(
     val endDiaMm: Float = 0f,
     val keywayWidthMm: Float = 0f,
     val keywayDepthMm: Float = 0f,
+    val keywayLengthMm: Float = 0f,
+    val keywaySpooned: Boolean = false,
 ) : Segment
 
 /** Basic invariants for a Taper. */
 fun Taper.isValid(overallLengthMm: Float): Boolean =
-    isWithin(overallLengthMm) && startDiaMm >= 0f && endDiaMm >= 0f && keywayWidthMm >= 0f && keywayDepthMm >= 0f
+    isWithin(overallLengthMm) &&
+        startDiaMm >= 0f &&
+        endDiaMm >= 0f &&
+        keywayWidthMm >= 0f &&
+        keywayDepthMm >= 0f &&
+        keywayLengthMm >= 0f
 
 /** Maximum diameter across the taper span. */
 val Taper.maxDiaMm: Float get() = max(startDiaMm, endDiaMm)

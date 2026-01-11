@@ -213,7 +213,7 @@ fun ShaftScreen(
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
-    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float) -> Unit,
+    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -1059,7 +1059,7 @@ private fun ComponentCarouselPager(
     showComponentDebugLabels: Boolean,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
-    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float) -> Unit,
+    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -1289,7 +1289,7 @@ private fun ComponentPagerCard(
     showComponentDebugLabels: Boolean,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
-    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float) -> Unit,
+    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -1411,7 +1411,7 @@ private fun ComponentPagerCard(
                         fillMaxWidth = false
                     ) { s ->
                         val widthMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
-                        onUpdateTaperKeyway(row.index, widthMm, t.keywayDepthMm)
+                        onUpdateTaperKeyway(row.index, widthMm, t.keywayDepthMm, t.keywayLengthMm, t.keywaySpooned)
                     }
 
                     Text("×", style = MaterialTheme.typography.titleMedium)
@@ -1423,8 +1423,40 @@ private fun ComponentPagerCard(
                         fillMaxWidth = false
                     ) { s ->
                         val depthMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
-                        onUpdateTaperKeyway(row.index, t.keywayWidthMm, depthMm)
+                        onUpdateTaperKeyway(row.index, t.keywayWidthMm, depthMm, t.keywayLengthMm, t.keywaySpooned)
                     }
+                }
+
+                CommitNum(
+                    label = "KW L (${abbr(unit)})",
+                    initialDisplay = dispKw(t.keywayLengthMm, unit),
+                ) { s ->
+                    val lenMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                    onUpdateTaperKeyway(row.index, t.keywayWidthMm, t.keywayDepthMm, lenMm, t.keywaySpooned)
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .toggleable(
+                            value = t.keywaySpooned,
+                            role = androidx.compose.ui.semantics.Role.Switch,
+                            onValueChange = { checked ->
+                                onUpdateTaperKeyway(row.index, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, checked)
+                            }
+                        )
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Keyway spooned",
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.Switch(
+                        checked = t.keywaySpooned,
+                        onCheckedChange = null
+                    )
                 }
             }
         }

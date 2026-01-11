@@ -31,7 +31,9 @@
         "startDiaMm": 203.2,
         "endDiaMm": 228.6,
         "keywayWidthMm": 31.75,
-        "keywayDepthMm": 11.1125
+        "keywayDepthMm": 14.2875,
+        "keywayLengthMm": 304.8,
+        "keywaySpooned": false
       },
       {
         "id": "t2",
@@ -39,8 +41,10 @@
         "lengthMm": 406.4,
         "startDiaMm": 228.6,
         "endDiaMm": 203.2,
-        "keywayWidthMm": 0.0,
-        "keywayDepthMm": 0.0
+        "keywayWidthMm": 31.75,
+        "keywayDepthMm": 14.2875,
+        "keywayLengthMm": 406.4,
+        "keywaySpooned": false
       }
     ],
     "threads": [

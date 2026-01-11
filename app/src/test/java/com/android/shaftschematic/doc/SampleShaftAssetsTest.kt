@@ -17,6 +17,13 @@ class SampleShaftAssetsTest {
     private val maxTaperRateInPerFt = 1.05f
     private val chainToleranceMm = 1.0f
 
+    private val sevenInMm = 7.0f * 25.4f
+    private val keywaySmallWidthMm = 25.4f // 1"
+    private val keywaySmallDepthMm = 0.3125f * 25.4f // 5/16"
+    private val keywayLargeWidthMm = 1.25f * 25.4f // 1 1/4"
+    private val keywayLargeDepthMm = 0.5625f * 25.4f // 9/16"
+    private val keywayTolMm = 0.25f
+
     @Test
     fun `bundled sample shafts exist and decode with realistic metadata`() {
         val userDir = System.getProperty("user.dir") ?: error("Missing system property: user.dir")
@@ -88,6 +95,36 @@ class SampleShaftAssetsTest {
 
             // Tapers: keep lengths in a shop-realistic range and ensure rate is roughly 1:12 to 1:16.
             for (taper in spec.tapers) {
+                // Keyways: samples always include keyways on all tapers.
+                assertTrue("Taper keyway width must be > 0 in ${f.name}", taper.keywayWidthMm > 0f)
+                assertTrue("Taper keyway depth must be > 0 in ${f.name}", taper.keywayDepthMm > 0f)
+                assertTrue("Taper keyway length must be > 0 in ${f.name}", taper.keywayLengthMm > 0f)
+                assertTrue(
+                    "Taper keyway length should not exceed taper length in ${f.name}",
+                    taper.keywayLengthMm <= taper.lengthMm + 1e-3f,
+                )
+
+                val maxDia = kotlin.math.max(taper.startDiaMm, taper.endDiaMm)
+                val (expW, expD) = if (maxDia + 1e-3f >= sevenInMm) {
+                    keywayLargeWidthMm to keywayLargeDepthMm
+                } else {
+                    keywaySmallWidthMm to keywaySmallDepthMm
+                }
+                assertTrue(
+                    "Taper keyway width should match expected size in ${f.name}",
+                    kotlin.math.abs(taper.keywayWidthMm - expW) <= keywayTolMm,
+                )
+                assertTrue(
+                    "Taper keyway depth should match expected size in ${f.name}",
+                    kotlin.math.abs(taper.keywayDepthMm - expD) <= keywayTolMm,
+                )
+
+                // Samples set KW length to match taper length for simplicity.
+                assertTrue(
+                    "Taper keyway length should match taper length in ${f.name}",
+                    kotlin.math.abs(taper.keywayLengthMm - taper.lengthMm) <= 0.5f,
+                )
+
                 val lengthIn = taper.lengthMm / 25.4f
                 assertTrue(
                     "Taper length should be 12–24in in ${f.name}",
