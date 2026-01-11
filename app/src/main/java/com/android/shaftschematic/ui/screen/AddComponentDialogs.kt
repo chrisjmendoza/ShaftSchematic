@@ -220,14 +220,25 @@ fun AddLinerDialog(
 fun AddThreadDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
+    initialStartMm: Float,
+    initialLengthMm: Float,
+    initialMajorDiaMm: Float,
+    initialPitchMm: Float,
     onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, tpi: Float, excludeFromOAL: Boolean) -> Unit
 ) {
     val d = rememberAddDialogDefaults(spec)
 
-    var start by remember(unit, d.startMm) { mutableStateOf(toDisplayString(d.startMm, unit)) }
-    var length by remember(unit) { mutableStateOf(toDisplayString(32f, unit)) }
-    var major by remember(unit, d.lastDiaMm) { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
-    var tpiText by remember { mutableStateOf("4") }
+    val effectiveStartMm = if (initialStartMm >= 0f) initialStartMm else d.startMm
+    val effectiveLengthMm = if (initialLengthMm > 0f) initialLengthMm else 0f
+    val effectiveMajorMm = if (initialMajorDiaMm > 0f) initialMajorDiaMm else d.lastDiaMm
+    val initialTpi = pitchMmToTpi(initialPitchMm).takeIf { it > 0f } ?: 4f
+
+    fun formatTpi(v: Float): String = "%1.3f".format(v).trimEnd('0').trimEnd('.').ifEmpty { "0" }
+
+    var start by remember(unit, effectiveStartMm) { mutableStateOf(toDisplayString(effectiveStartMm, unit)) }
+    var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
+    var major by remember(unit, effectiveMajorMm) { mutableStateOf(toDisplayString(max(1f, effectiveMajorMm), unit)) }
+    var tpiText by remember(initialTpi) { mutableStateOf(formatTpi(initialTpi)) }
     var countInOal by remember { mutableStateOf(true) }
 
     val startMm = toMmOrNullFromDialog(start, unit) ?: -1f

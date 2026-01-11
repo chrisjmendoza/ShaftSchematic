@@ -85,6 +85,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -115,13 +116,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.ui.config.AddDefaultsConfig
-import com.android.shaftschematic.ui.config.defaultBodyLenMm
-import com.android.shaftschematic.ui.config.defaultLinerLenMm
-import com.android.shaftschematic.ui.config.defaultTaperLenMm
-import com.android.shaftschematic.ui.config.defaultThreadLenMm
-import com.android.shaftschematic.ui.config.defaultThreadMajorDiaMm
-import com.android.shaftschematic.ui.config.defaultThreadPitchMm
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.input.taperSetLetMapping
@@ -130,8 +124,10 @@ import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
+import com.android.shaftschematic.ui.util.buildThreadTitleById
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.viewmodel.SnapConfig
+import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
 import com.android.shaftschematic.ui.viewmodel.snapPositionMm
 import com.android.shaftschematic.util.LengthFormat
@@ -193,6 +189,8 @@ fun ShaftScreen(
     previewThreadFill: PreviewColorSetting,
     previewThreadHatch: PreviewColorSetting,
     previewBlackWhiteOnly: Boolean,
+
+    sessionAddDefaults: SessionAddDefaults,
 
     // Setters
     onSetUnit: (UnitSystem) -> Unit,
@@ -266,6 +264,7 @@ fun ShaftScreen(
     var focusedId by rememberSaveable { mutableStateOf<String?>(null) }
 
     var addThreadOpen by rememberSaveable { mutableStateOf(false) }
+    var addThreadStartMm by rememberSaveable { mutableFloatStateOf(0f) }
 
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
@@ -736,32 +735,23 @@ fun ShaftScreen(
                 if (chooserOpen) {
                     val d = computeAddDefaults(spec)
 
-                    val bodyDiaMmDefault = spec.bodies.firstOrNull()?.diaMm ?: d.lastDiaMm
-                    val linerOdMmDefault = spec.liners.firstOrNull()?.odMm ?: d.lastDiaMm
-
-                    // Centralized defaults (mm)
-                    val bodyLenMm     = defaultBodyLenMm(unit)
-                    val linerLenMm    = defaultLinerLenMm(unit)
-                    val taperLenMm    = defaultTaperLenMm(unit)
-                    val threadLenMm   = defaultThreadLenMm(unit)
-                    val threadMajMm   = defaultThreadMajorDiaMm(unit)
-                    val threadPitchMm = defaultThreadPitchMm()
-                    val taperRatio    = AddDefaultsConfig.TAPER_RATIO
-
                     InlineAddChooserDialog(
                         onDismiss = { chooserOpen = false },
-                        onAddBody = { chooserOpen = false; onAddBody(d.startMm, bodyLenMm, bodyDiaMmDefault) },
-                        onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, linerLenMm, linerOdMmDefault) },
+                        onAddBody = { chooserOpen = false; onAddBody(d.startMm, sessionAddDefaults.bodyLenMm, sessionAddDefaults.bodyDiaMm) },
+                        onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, sessionAddDefaults.linerLenMm, sessionAddDefaults.linerOdMm) },
                         onAddThread = {
                             chooserOpen = false
+                            addThreadStartMm = d.startMm
                             addThreadOpen = true
                         },
                         onAddTaper = {
                             chooserOpen = false
-                            val len = taperLenMm
-                            val setDiaMm = d.lastDiaMm
-                            val letDiaMm = setDiaMm + (len * taperRatio) // ~1:12
-                            onAddTaper(d.startMm, len, setDiaMm, letDiaMm)
+                            onAddTaper(
+                                d.startMm,
+                                sessionAddDefaults.taperLenMm,
+                                sessionAddDefaults.taperSetDiaMm,
+                                sessionAddDefaults.taperLetDiaMm
+                            )
                         }
                     )
                 }
@@ -770,6 +760,10 @@ fun ShaftScreen(
                     AddThreadDialog(
                         unit = unit,
                         spec = spec,
+                        initialStartMm = addThreadStartMm,
+                        initialLengthMm = sessionAddDefaults.threadLenMm,
+                        initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
+                        initialPitchMm = sessionAddDefaults.threadPitchMm,
                         onSubmit = { startMm, lengthMm, majorDiaMm, tpi, excludeFromOAL ->
                             addThreadOpen = false
                             // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL.
@@ -1095,6 +1089,10 @@ private fun ComponentCarouselPager(
         buildLinerTitleById(spec)
     }
 
+    val threadTitleById = remember(spec) {
+        buildThreadTitleById(spec)
+    }
+
     // Build rows and force left→right (AFT→FWD) by actual start position in mm.
     val rowsSorted = remember(spec, componentOrder) {
         val base = buildOrderedRows(spec, componentOrder)
@@ -1185,6 +1183,7 @@ private fun ComponentCarouselPager(
                             bodyTitleById = bodyTitleById,
                             taperTitleById = taperTitleById,
                             linerTitleById = linerTitleById,
+                            threadTitleById = threadTitleById,
                             onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
                             onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
                             onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner
@@ -1297,6 +1296,7 @@ private fun ComponentPagerCard(
     bodyTitleById: Map<String, String>,
     taperTitleById: Map<String, String>,
     linerTitleById: Map<String, String>,
+    threadTitleById: Map<String, String>,
 
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
 
@@ -1433,7 +1433,7 @@ private fun ComponentPagerCard(
             val th = spec.threads[row.index]
             val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
             ComponentCard(
-                title = "Thread #${row.index + 1}",
+                title = threadTitleById[th.id] ?: "Thread",
                 debugText = if (showComponentDebugLabels) {
                     "id=${th.id} • startMm=${f1(th.startFromAftMm)} • endMm=${f1(th.startFromAftMm + th.lengthMm)}"
                 } else null,

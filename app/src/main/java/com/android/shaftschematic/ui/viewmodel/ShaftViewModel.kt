@@ -238,6 +238,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     val overallIsManual: StateFlow<Boolean> = _overallIsManual.asStateFlow()
     fun setOverallIsManual(v: Boolean) { _overallIsManual.value = v }
 
+    // Session-scoped "last used" add defaults (mm). Reset on new/open/import.
+    private val _sessionAddDefaults = MutableStateFlow(SessionAddDefaults.initial())
+    val sessionAddDefaults: StateFlow<SessionAddDefaults> = _sessionAddDefaults.asStateFlow()
+
     // Incrementing key used by the editor UI to reset Compose-local state (dialogs, focus, scroll, etc.)
     // without relocating that state into the ViewModel.
     private val _editorResetNonce = MutableStateFlow(0)
@@ -713,7 +717,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val id = newId()
         orderAdd(ComponentKind.BODY, id)
         s.copy(bodies = listOf(Body(id, startMm, max(0f, lengthMm), max(0f, diaMm))) + s.bodies)
-    }.also { ensureOverall(); ensureOrderCoversSpec() }
+    }.also {
+        rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
+        ensureOverall()
+        ensureOrderCoversSpec()
+    }
 
     fun updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
         if (index !in s.bodies.indices) s else {
@@ -736,7 +744,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 base
             }
         }
-    }.also { ensureOverall() }
+    }.also {
+        if (index in _spec.value.bodies.indices) {
+            rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
+        }
+        ensureOverall()
+    }
 
     /**
      * Remove a [Body] by its stable [id].
@@ -828,7 +841,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
             ) + s.tapers
         )
-    }.also { ensureOverall(); ensureOrderCoversSpec() }
+    }.also {
+        rememberTaperDefaults(lengthMm = lengthMm, setDiaMm = startDiaMm, letDiaMm = endDiaMm)
+        ensureOverall()
+        ensureOrderCoversSpec()
+    }
 
     fun updateTaper(
         index: Int,
@@ -860,7 +877,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 base
             }
         }
-    }.also { ensureOverall() }
+    }.also {
+        if (index in _spec.value.tapers.indices) {
+            rememberTaperDefaults(lengthMm = lengthMm, setDiaMm = startDiaMm, letDiaMm = endDiaMm)
+        }
+        ensureOverall()
+    }
 
     fun updateTaperKeyway(index: Int, widthMm: Float, depthMm: Float) = _spec.update { s ->
         if (index !in s.tapers.indices) s else {
@@ -977,7 +999,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
             ) + s.threads
         )
-    }.also { ensureOverall(); ensureOrderCoversSpec() }
+    }.also {
+        rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
+        ensureOverall()
+        ensureOrderCoversSpec()
+    }
 
     fun updateThread(index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
         if (index !in s.threads.indices) s else {
@@ -1001,7 +1027,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 base
             }
         }
-    }.also { ensureOverall() }
+    }.also {
+        if (index in _spec.value.threads.indices) {
+            rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
+        }
+        ensureOverall()
+    }
 
     fun setThreadExcludeFromOal(id: String, excludeFromOAL: Boolean) = _spec.update { s ->
         val idx = s.threads.indexOfFirst { it.id == id }
@@ -1089,7 +1120,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val id = newId()
         orderAdd(ComponentKind.LINER, id)
         s.copy(liners = listOf(Liner(id, startMm, max(0f, lengthMm), max(0f, odMm))) + s.liners)
-    }.also { ensureOverall(); ensureOrderCoversSpec() }
+    }.also {
+        rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
+        ensureOverall()
+        ensureOrderCoversSpec()
+    }
 
     fun updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
         if (index !in s.liners.indices) s else {
@@ -1112,7 +1147,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 base
             }
         }
-    }.also { ensureOverall() }
+    }.also {
+        if (index in _spec.value.liners.indices) {
+            rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
+        }
+        ensureOverall()
+    }
 
     fun updateLinerLabel(index: Int, label: String?) = _spec.update { s ->
         if (index !in s.liners.indices) s else {
@@ -1283,6 +1323,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             .onSuccess { doc ->
                 clearDeleteHistory()
                 _spec.value = doc.spec
+                seedSessionAddDefaultsFromSpec(doc.spec)
                 _unitLocked.value = doc.unitLocked
                 setUnit(doc.preferredUnit, persist = false)
 
@@ -1304,6 +1345,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             .onSuccess { legacy ->
                 clearDeleteHistory()
                 _spec.value = legacy
+                seedSessionAddDefaultsFromSpec(legacy)
                 _unitLocked.value = false // no lock info in legacy
                 // unit falls back to SettingsStore default (observer in init{})
 
@@ -1332,6 +1374,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _editorResetNonce.update { it + 1 }
         clearDeleteHistory()
 
+        resetSessionAddDefaults()
+
         val blankSpec = ShaftSpec()
         _spec.value = blankSpec
 
@@ -1348,6 +1392,72 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
         _componentOrder.value = emptyList()
         ensureOrderCoversSpec(blankSpec)
+    }
+
+    private fun resetSessionAddDefaults() {
+        _sessionAddDefaults.value = SessionAddDefaults.initial()
+    }
+
+    private fun seedSessionAddDefaultsFromSpec(spec: ShaftSpec) {
+        val base = SessionAddDefaults.initial()
+        val newestBody = spec.bodies.firstOrNull { it.lengthMm > 0f || it.diaMm > 0f }
+        val newestLiner = spec.liners.firstOrNull { it.lengthMm > 0f || it.odMm > 0f }
+        val newestTaper = spec.tapers.firstOrNull { it.lengthMm > 0f || it.startDiaMm > 0f || it.endDiaMm > 0f }
+        val newestThread = spec.threads.firstOrNull { it.lengthMm > 0f || it.majorDiaMm > 0f || it.pitchMm > 0f }
+
+        _sessionAddDefaults.value = base.copy(
+            bodyLenMm = newestBody?.lengthMm?.takeIf { it > 0f } ?: base.bodyLenMm,
+            bodyDiaMm = newestBody?.diaMm?.takeIf { it > 0f } ?: base.bodyDiaMm,
+
+            linerLenMm = newestLiner?.lengthMm?.takeIf { it > 0f } ?: base.linerLenMm,
+            linerOdMm = newestLiner?.odMm?.takeIf { it > 0f } ?: base.linerOdMm,
+
+            taperLenMm = newestTaper?.lengthMm?.takeIf { it > 0f } ?: base.taperLenMm,
+            taperSetDiaMm = newestTaper?.startDiaMm?.takeIf { it > 0f } ?: base.taperSetDiaMm,
+            taperLetDiaMm = newestTaper?.endDiaMm?.takeIf { it > 0f } ?: base.taperLetDiaMm,
+
+            threadLenMm = newestThread?.lengthMm?.takeIf { it > 0f } ?: base.threadLenMm,
+            threadMajorDiaMm = newestThread?.majorDiaMm?.takeIf { it > 0f } ?: base.threadMajorDiaMm,
+            threadPitchMm = newestThread?.pitchMm?.takeIf { it > 0f } ?: base.threadPitchMm,
+        )
+    }
+
+    private fun rememberBodyDefaults(lengthMm: Float, diaMm: Float) {
+        _sessionAddDefaults.update { cur ->
+            cur.copy(
+                bodyLenMm = if (lengthMm > 0f) lengthMm else cur.bodyLenMm,
+                bodyDiaMm = if (diaMm > 0f) diaMm else cur.bodyDiaMm
+            )
+        }
+    }
+
+    private fun rememberLinerDefaults(lengthMm: Float, odMm: Float) {
+        _sessionAddDefaults.update { cur ->
+            cur.copy(
+                linerLenMm = if (lengthMm > 0f) lengthMm else cur.linerLenMm,
+                linerOdMm = if (odMm > 0f) odMm else cur.linerOdMm
+            )
+        }
+    }
+
+    private fun rememberTaperDefaults(lengthMm: Float, setDiaMm: Float, letDiaMm: Float) {
+        _sessionAddDefaults.update { cur ->
+            cur.copy(
+                taperLenMm = if (lengthMm > 0f) lengthMm else cur.taperLenMm,
+                taperSetDiaMm = if (setDiaMm > 0f) setDiaMm else cur.taperSetDiaMm,
+                taperLetDiaMm = if (letDiaMm > 0f) letDiaMm else cur.taperLetDiaMm
+            )
+        }
+    }
+
+    private fun rememberThreadDefaults(lengthMm: Float, majorDiaMm: Float, pitchMm: Float) {
+        _sessionAddDefaults.update { cur ->
+            cur.copy(
+                threadLenMm = if (lengthMm > 0f) lengthMm else cur.threadLenMm,
+                threadMajorDiaMm = if (majorDiaMm > 0f) majorDiaMm else cur.threadMajorDiaMm,
+                threadPitchMm = if (pitchMm > 0f) pitchMm else cur.threadPitchMm
+            )
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────────────

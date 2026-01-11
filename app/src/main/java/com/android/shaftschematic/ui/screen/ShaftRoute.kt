@@ -108,6 +108,8 @@ fun ShaftRoute(
     val canUndoDeletes by vm.canUndoDeletes.collectAsState()
     val canRedoDeletes by vm.canRedoDeletes.collectAsState()
 
+    val sessionAddDefaults by vm.sessionAddDefaults.collectAsState()
+
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
             context = ctx,
@@ -201,5 +203,7 @@ fun ShaftRoute(
         canRedo = canRedoDeletes,
         onUndo = vm::undoLastDelete,
         onRedo = vm::redoLastDelete,
+
+        sessionAddDefaults = sessionAddDefaults,
     )
 }
