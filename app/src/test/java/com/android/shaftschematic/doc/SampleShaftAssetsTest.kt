@@ -119,10 +119,11 @@ class SampleShaftAssetsTest {
                     kotlin.math.abs(taper.keywayDepthMm - expD) <= keywayTolMm,
                 )
 
-                // Samples set KW length to match taper length for simplicity.
+                // Samples set KW length to ~75% of taper length for a shop-realistic convention.
+                val expectedKwLengthMm = taper.lengthMm * 0.75f
                 assertTrue(
-                    "Taper keyway length should match taper length in ${f.name}",
-                    kotlin.math.abs(taper.keywayLengthMm - taper.lengthMm) <= 0.5f,
+                    "Taper keyway length should be ~75% of taper length in ${f.name}",
+                    kotlin.math.abs(taper.keywayLengthMm - expectedKwLengthMm) <= 1.0f,
                 )
 
                 val lengthIn = taper.lengthMm / 25.4f
