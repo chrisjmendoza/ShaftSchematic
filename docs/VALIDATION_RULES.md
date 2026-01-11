@@ -116,6 +116,17 @@ Required:
 - startDiaMm ≥ 0
 - endDiaMm ≥ 0
 
+Keyway (taper-hosted feature):
+- keywayLengthMm ≥ 0 (blocking)
+- keywayLengthMm ≤ taper.lengthMm (blocking)
+- Spoon is optional and non-blocking.
+- Spoon is allowed only when a keyway exists:
+	- If keywayLengthMm == 0, keywaySpooned must be false (blocking)
+
+Missing keyway data is valid (all keyway fields may be 0/false).
+
+TODO: Body keyway validation not yet implemented.
+
 ### Taper Rate Behavior
 - If **both** SET & LET provided → taperRate ignored  
 - If **one** diameter missing → taperRate is required  

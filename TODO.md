@@ -110,6 +110,19 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 ---
 
+### 1.4 HIGH: Add keyway support to Body components
+
+Keyways are hosted features (not standalone components).
+
+Scope:
+- data model
+- editor UI
+- validation
+- preview rendering
+- PDF footer output
+
+---
+
 ## 2. Validation & UI Connection
 
 ### 2.x Regression Note — Thread Start/Placement & Allowed Locations

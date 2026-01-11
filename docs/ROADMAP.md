@@ -23,7 +23,7 @@ No unapproved features (multi-page PDF, BOM tables, compression) appear here.
 
 # v0.5.x — Component Expansion
 **Primary Features:**
-- Add Keyway component type
+- Keyway feature support (taper-hosted; body-hosted planned)
 - Add Shoulder/Relief component type
 - Add Coupling component type (hub + flange)
 - Extend validation system to cover new types

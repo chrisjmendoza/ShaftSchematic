@@ -60,7 +60,22 @@ data class Taper(
     override val lengthMm: Float = 0f,
     val startDiaMm: Float = 0f,
     val endDiaMm: Float = 0f,
+    // Keyway is a cut feature owned by the host component (Taper).
+    // 0 values represent “no keyway”.
+    val keywayWidthMm: Float = 0f,
+    val keywayDepthMm: Float = 0f,
+    val keywayLengthMm: Float = 0f,
+    val keywaySpooned: Boolean = false, // aka “keywayHasSpoon”
 ) : Segment
+
+Keyways are features, not standalone components.
+They are currently taper-associated and cannot exist without a host.
+
+Note: Keyways may also be added to Body components in a future revision.
+
+Keyway invariants (hosted feature):
+- keywayLengthMm >= 0
+- keywayLengthMm <= host component length
 Derived:
 val Taper.maxDiaMm get() = max(startDiaMm, endDiaMm)
 val Taper.minDiaMm get() = min(startDiaMm, endDiaMm)
@@ -146,123 +161,9 @@ This document defines all geometry data structures in the system.
 
 ---
 
-# 📄 **COMPONENT_CONTRACTS.md**
-```
-# Component Contracts
-Version: v0.4.x
-
-## Overview
-This document defines the exact rules for **validation**, **interpretation**, and **rendering responsibilities** for each component type in ShaftSchematic.
-
-Rendering rules here describe geometric intent only; pixel computation always occurs in the Layout Engine.
-
----
-
-# 1. Body Contract
-
-## Data
-Body defines a constant-diameter cylindrical section.
-
-Fields:
-- startFromAftMm
-- lengthMm
-- diaMm
-
-## Validation
-- All fields ≥ 0
-- endFromAftMm ≤ overallLengthMm
-
-## Rendering
-Body renders as two horizontal lines at +radius and –radius, from xStart to xEnd.
-
-Renderer uses:
-top = cy - rPx(diaMm/2)
-bottom = cy + rPx(diaMm/2)
-left = xPx(start)
-right = xPx(end)
-
- 
-
-Stroke rules:
-- Top/bottom edges: `shaftWidth`
-- No end-ticks (bodies visually merge into adjacent bodies/tapers)
-
----
-
-# 2. Taper Contract
-
-## Data
-Taper defines a linear transition between two diameters.
-
-Fields:
-- startDiaMm
-- endDiaMm
-
-## Validation
-- lengthMm > 0
-- diameters ≥ 0
-- startFromAftMm ≥ 0
-- endFromAftMm ≤ overallLengthMm
-
-## Taper Rate Logic
-Parsing supported:
-- 1:12
-- 1/12
-- decimal ("0.0833")
-- legacy integer (“1” → “1:12”)
-
-Rules:
-1. If both SET and LET provided → taperRate ignored.
-2. If one missing → derive from taperRate.
-3. If both missing → invalid input.
-
-ViewModel performs derivation; renderer never interprets taperRate.
-
-## Rendering
-Renderer draws:
-- Top edge sloping from startRadius → endRadius
-- Bottom edge parallel to top
-
-Stroke: `shaftWidth`.
-
----
-
-# 3. Thread Contract
-
-## Data
-External thread definition.
-
-Fields:
-- majorDiaMm
-- pitchMm (mm/turn)
-- tpi (optional)
-- lengthMm
-
-## Validation
-- All fields ≥ 0
-- pitchMm may be 0 (renders with no hatch)
-- Thread section must lie within overallLengthMm
-
-## Normalization
-Rules:
-- If pitch present but tpi missing → compute tpi
-- If tpi present but pitch missing → compute pitchMm
-- If both present → leave as-is
-
-## Rendering
-Thread area renders as:
-- Outer rectangle (major diameter)
-- 45° hatch lines spaced at a constant pixel spacing (e.g., 8px)
-
-Renderer uses:
-left = xPx(start)
-right = xPx(end)
-radius = rPx(majorDia/2)
-top = cy - radius
-bottom = cy + radius
-
-yaml
- 
+See also:
+- docs/COMPONENT_CONTRACT.md (normative component vs feature rules)
+- docs/UI_CONTRACT.md (UI, rendering, and responsibility boundaries)
 
 Hatch lines are drawn entirely in pixel space using fixed dp widths.  
 Renderer never recalculates pitchMm → pixels.

@@ -121,8 +121,15 @@ Compose wrapper that draws grid and delegates to renderer.
 
 # 7. Misc Marine Terms
 
-### Keyway (future)
-Rectangular torque-transfer slot.
+### Keyway
+Rectangular torque-transfer slot (a cut feature), owned by a host component.
+
+Current state:
+- Supported on `Taper` (taper-hosted), including keyway length and a spooned flag.
+
+Planned:
+- Body-hosted keyways.
+- Keyways will never exist as standalone components.
 
 ### Pilot Diameter (future)
 Centering diameter for couplings.
