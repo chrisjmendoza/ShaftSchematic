@@ -275,6 +275,7 @@ private const val LABEL_PAD_PT = 6f
 
 // Component title labels (PDF only)
 private const val COMPONENT_LABEL_OFFSET_PT = 32f
+private const val COMPONENT_LABEL_MIN_GAP_PT = 12f
 private const val EXT_OFFSET_PT = 9f         // gap from shaft to start of extension line
 private const val EXT_OVERRUN_PT = 4f        // how much extension lines rise past dim line
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
@@ -298,23 +299,56 @@ private fun drawComponentLabelsPdf(
     val yBottomOfShaft = cy + halfHeightPx
     val y = (yBottomOfShaft + COMPONENT_LABEL_OFFSET_PT).coerceAtMost(geomRect.bottom - 6f)
 
-    fun drawCentered(label: String, startMm: Float, endMm: Float) {
+    data class PendingLabel(
+        val key: String,
+        val text: String,
+        val midX: Float,
+        val width: Float,
+        val allowedLeft: Float,
+        val allowedRight: Float,
+        var x: Float,
+    )
+
+    fun pendingLabel(key: String, label: String, startMm: Float, endMm: Float): PendingLabel? {
         val trimmed = label.trim()
-        if (trimmed.isEmpty()) return
+        if (trimmed.isEmpty()) return null
+
         val x0 = xAt(startMm)
         val x1 = xAt(endMm)
-        val cx = (x0 + x1) * 0.5f
+        val left = min(x0, x1)
+        val right = max(x0, x1)
+        val cx = (left + right) * 0.5f
         val w = labelPaint.measureText(trimmed)
-        val xText = (cx - w * 0.5f).coerceIn(geomRect.left, geomRect.right - w)
-        canvas.drawText(trimmed, xText, y, labelPaint)
+
+        val (allowedLeft, allowedRight) = if ((right - left) >= w) {
+            // Prefer staying within the component span when possible.
+            left to (right - w)
+        } else {
+            // If the title is wider than the component span, allow it to float within the content box.
+            geomRect.left to (geomRect.right - w)
+        }
+
+        val desired = cx - w * 0.5f
+        val xText = desired.coerceIn(allowedLeft, allowedRight)
+        return PendingLabel(
+            key = key,
+            text = trimmed,
+            midX = cx,
+            width = w,
+            allowedLeft = allowedLeft,
+            allowedRight = allowedRight,
+            x = xText,
+        )
     }
+
+    val pending = mutableListOf<PendingLabel>()
 
     val bodyTitleById = buildBodyTitleById(spec)
     spec.bodies
         .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
         .forEachIndexed { i, b ->
             val label = bodyTitleById[b.id] ?: "Body #${i + 1}"
-            drawCentered(label, b.startFromAftMm, b.startFromAftMm + b.lengthMm)
+            pendingLabel("body:${b.id}", label, b.startFromAftMm, b.startFromAftMm + b.lengthMm)?.let(pending::add)
         }
 
     val taperTitleById = buildTaperTitleById(spec)
@@ -322,7 +356,7 @@ private fun drawComponentLabelsPdf(
         .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
         .forEachIndexed { i, t ->
             val label = taperTitleById[t.id] ?: "Taper #${i + 1}"
-            drawCentered(label, t.startFromAftMm, t.startFromAftMm + t.lengthMm)
+            pendingLabel("taper:${t.id}", label, t.startFromAftMm, t.startFromAftMm + t.lengthMm)?.let(pending::add)
         }
 
     val threadTitleById = buildThreadTitleById(spec)
@@ -330,7 +364,7 @@ private fun drawComponentLabelsPdf(
         .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
         .forEachIndexed { i, th ->
             val label = threadTitleById[th.id] ?: "Thread #${i + 1}"
-            drawCentered(label, th.startFromAftMm, th.startFromAftMm + th.lengthMm)
+            pendingLabel("thread:${th.id}", label, th.startFromAftMm, th.startFromAftMm + th.lengthMm)?.let(pending::add)
         }
 
     val linerTitleById = buildLinerTitleById(spec)
@@ -340,8 +374,31 @@ private fun drawComponentLabelsPdf(
             val custom = ln.label?.trim()?.takeIf { it.isNotEmpty() }
             val computed = linerTitleById[ln.id]
             val label = custom ?: computed ?: "Liner ${i + 1}"
-            drawCentered(label, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm)
+            pendingLabel("liner:${ln.id}", label, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm)?.let(pending::add)
         }
+
+    if (pending.isEmpty()) return
+
+    // Enforce a small horizontal gap between adjacent titles.
+    val ordered = pending.sortedWith(compareBy<PendingLabel>({ it.midX }, { it.key }))
+    for (i in 1 until ordered.size) {
+        val prev = ordered[i - 1]
+        val cur = ordered[i]
+        val minX = prev.x + prev.width + COMPONENT_LABEL_MIN_GAP_PT
+        if (cur.x < minX) cur.x = minX
+        if (cur.x > cur.allowedRight) cur.x = cur.allowedRight
+    }
+    for (i in ordered.size - 2 downTo 0) {
+        val next = ordered[i + 1]
+        val cur = ordered[i]
+        val maxX = next.x - (cur.width + COMPONENT_LABEL_MIN_GAP_PT)
+        if (cur.x > maxX) cur.x = maxX
+        if (cur.x < cur.allowedLeft) cur.x = cur.allowedLeft
+    }
+
+    ordered.forEach { pl ->
+        canvas.drawText(pl.text, pl.x, y, labelPaint)
+    }
 }
 
 // Compression (paper-space heuristic; bodies only)
