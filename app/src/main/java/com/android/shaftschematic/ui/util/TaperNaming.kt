@@ -1,9 +1,7 @@
 package com.android.shaftschematic.ui.util
 
 import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.model.Taper
-
-private enum class TaperDirection { AFT, FWD }
+import com.android.shaftschematic.util.buildTaperTitleById as buildTaperTitleByIdShared
 
 /**
  * Deterministic display titles for tapers.
@@ -16,48 +14,5 @@ private enum class TaperDirection { AFT, FWD }
  * - Ordering is stable: sort by startMm (AFT→FWD), tie-break by stable id.
  */
 fun buildTaperTitleById(spec: ShaftSpec): Map<String, String> {
-    val tapers = spec.tapers
-    if (tapers.isEmpty()) return emptyMap()
-
-    fun directionOf(t: Taper): TaperDirection = if (t.startDiaMm <= t.endDiaMm) {
-        TaperDirection.AFT
-    } else {
-        TaperDirection.FWD
-    }
-
-    val sorted = tapers.sortedWith(compareBy<Taper>({ it.startFromAftMm }, { it.id }))
-    val directionById = sorted.associate { it.id to directionOf(it) }
-
-    val countByDirection: Map<TaperDirection, Int> = directionById.values
-        .groupingBy { it }
-        .eachCount()
-
-    val nById: Map<String, Int> = buildMap {
-        TaperDirection.entries.forEach { dir ->
-            var n = 0
-            sorted.forEach { t ->
-                if (directionById[t.id] == dir) {
-                    n += 1
-                    put(t.id, n)
-                }
-            }
-        }
-    }
-
-    fun prefix(dir: TaperDirection) = when (dir) {
-        TaperDirection.AFT -> "AFT"
-        TaperDirection.FWD -> "FWD"
-    }
-
-    return sorted.associate { t ->
-        val dir = directionById[t.id] ?: TaperDirection.AFT
-        val count = countByDirection[dir] ?: 0
-        val title = if (count <= 1) {
-            "${prefix(dir)} Taper"
-        } else {
-            val n = nById[t.id] ?: 0
-            "${prefix(dir)} Taper #$n"
-        }
-        t.id to title
-    }
+    return buildTaperTitleByIdShared(spec)
 }

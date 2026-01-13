@@ -14,6 +14,10 @@ import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
+import com.android.shaftschematic.util.buildBodyTitleById
+import com.android.shaftschematic.util.buildLinerTitleById
+import com.android.shaftschematic.util.buildTaperTitleById
+import com.android.shaftschematic.util.buildThreadTitleById
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.abs
@@ -141,6 +145,16 @@ fun composeShaftPdf(
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
 
+    drawComponentLabelsPdf(
+        canvas = c,
+        spec = spec,
+        geomRect = geomRect,
+        cy = cy,
+        halfHeightPx = halfHeightPx,
+        xAt = ::xAt,
+        textPaint = text,
+    )
+
     run {
         val baseY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
 
@@ -258,10 +272,77 @@ private const val OVERALL_EXTRA_PT = 16f     // overall lane sits above componen
 private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
 private const val ARROW_PT = 6f
 private const val LABEL_PAD_PT = 6f
+
+// Component title labels (PDF only)
+private const val COMPONENT_LABEL_OFFSET_PT = 32f
 private const val EXT_OFFSET_PT = 9f         // gap from shaft to start of extension line
 private const val EXT_OVERRUN_PT = 4f        // how much extension lines rise past dim line
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
 private const val FOOTER_BLOCK_PT = 96f
+
+private fun drawComponentLabelsPdf(
+    canvas: Canvas,
+    spec: ShaftSpec,
+    geomRect: RectF,
+    cy: Float,
+    halfHeightPx: Float,
+    xAt: (Float) -> Float,
+    textPaint: Paint,
+) {
+    if (spec.bodies.isEmpty() && spec.tapers.isEmpty() && spec.threads.isEmpty() && spec.liners.isEmpty()) return
+
+    val labelPaint = Paint(textPaint).apply {
+        textSize = (textSize - 2f).coerceAtLeast(8f)
+    }
+
+    val yBottomOfShaft = cy + halfHeightPx
+    val y = (yBottomOfShaft + COMPONENT_LABEL_OFFSET_PT).coerceAtMost(geomRect.bottom - 6f)
+
+    fun drawCentered(label: String, startMm: Float, endMm: Float) {
+        val trimmed = label.trim()
+        if (trimmed.isEmpty()) return
+        val x0 = xAt(startMm)
+        val x1 = xAt(endMm)
+        val cx = (x0 + x1) * 0.5f
+        val w = labelPaint.measureText(trimmed)
+        val xText = (cx - w * 0.5f).coerceIn(geomRect.left, geomRect.right - w)
+        canvas.drawText(trimmed, xText, y, labelPaint)
+    }
+
+    val bodyTitleById = buildBodyTitleById(spec)
+    spec.bodies
+        .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, b ->
+            val label = bodyTitleById[b.id] ?: "Body #${i + 1}"
+            drawCentered(label, b.startFromAftMm, b.startFromAftMm + b.lengthMm)
+        }
+
+    val taperTitleById = buildTaperTitleById(spec)
+    spec.tapers
+        .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, t ->
+            val label = taperTitleById[t.id] ?: "Taper #${i + 1}"
+            drawCentered(label, t.startFromAftMm, t.startFromAftMm + t.lengthMm)
+        }
+
+    val threadTitleById = buildThreadTitleById(spec)
+    spec.threads
+        .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, th ->
+            val label = threadTitleById[th.id] ?: "Thread #${i + 1}"
+            drawCentered(label, th.startFromAftMm, th.startFromAftMm + th.lengthMm)
+        }
+
+    val linerTitleById = buildLinerTitleById(spec)
+    spec.liners
+        .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, ln ->
+            val custom = ln.label?.trim()?.takeIf { it.isNotEmpty() }
+            val computed = linerTitleById[ln.id]
+            val label = custom ?: computed ?: "Liner ${i + 1}"
+            drawCentered(label, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm)
+        }
+}
 
 // Compression (paper-space heuristic; bodies only)
 private const val COMPRESS_TRIGGER_PT = 220f // if body length on paper ≥ this, show center-break
