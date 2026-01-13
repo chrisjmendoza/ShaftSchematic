@@ -166,7 +166,7 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 
 - [x] Compute `freeToEndMm` in mm-space only
 - [x] Replace any px- or layout-dependent logic (mm-space only, deterministic)
-- [ ] Clamp negative to zero (**applies to model helper** `freeToEndMm()`; UI badge may use signed value for oversize warning)
+- [x] Clamp negative to zero (**applies to model helper** `freeToEndMm()`; UI badge may use signed value for oversize warning)
 - [ ] Use `safeSpec` if `overallLengthMm=0` (preview mode)
 
 ### 3.2 Taper-Rate Restoration
@@ -286,10 +286,11 @@ _Not in the current sprint, but next in line._
 ### 8.1 Next PDF Priority: Legibility (After Footer Fix)
 
 - [x] Center dimension labels over measured spans (midpoint-centered; bounded vertical bump only, no horizontal shifting)
-- [ ] Arrowheads inside/outside based on fit
-- [ ] Reduce inch decimals to 3 places (fraction system later)
+- [x] Arrowheads inside/outside based on fit
+- [x] Reduce inch decimals to 3 places (fallback when not a clean fraction)
+- [x] Fraction display for PDF inch dims (mixed fractions snapped to nearest 1/16)
 
-_Deferred until after layout stability:_ fraction display + tolerance settings
+_Deferred until after layout stability:_ tolerance settings
 
 ---
 
