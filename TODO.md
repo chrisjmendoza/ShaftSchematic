@@ -194,14 +194,14 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [ ] Keyways drawing: render keyway indicator on taper segments (schematic symbol), using existing KW dims
 - [ ] FIBERGLASS: support fiberglassed body segments (model flag + renderer treatment TBD; decide hatch/pattern and labeling)
 
-### 3.4 PDF Footer: AFT Taper Info Block Missing (DONE)
+### 4.1 PDF Footer: AFT Taper Info Block Missing (DONE)
 
 - [x] Fix end-feature detection to be thread-shoulder aware
 - [x] Remove/neutralize redundant gating (hasAftTaper vs detector mismatch)
 - [x] Preserve taper RATE formatting
 - [x] Add JVM tests via `buildFooterEndColumns()` seam
 
-### 3.5 Threads: “Count in OAL” Toggle (Create + Edit) (DONE)
+### 4.2 Threads: “Count in OAL” Toggle (Create + Edit) (DONE)
 
 - [x] Wire UI + dialog + ViewModel (`excludeFromOAL`)
 - [x] Confirm OAL shifting uses threads only
@@ -209,9 +209,9 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 
 ---
 
-## 4. Tech Debt & Structural Cleanups
+## 5. Tech Debt & Structural Cleanups
 
-### 4.1 ShaftScreen.kt Refactor Plan
+### 5.1 ShaftScreen.kt Refactor Plan
 
 **Goal:** Reduce file size, isolate responsibilities, eliminate recursion issues.
 
@@ -223,13 +223,13 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [ ] Ensure controller owns all VM-side intents so composables stay stateless
 - [ ] Keep `ShaftScreen.kt` as a coordinator only
 
-### 4.2 Dialog Cleanup
+### 5.2 Dialog Cleanup
 
 - [ ] Standardize confirm/cancel patterns
 - [ ] Standardize commit-on-blur across all fields
 - [ ] Remove leftover legacy length-editing utilities
 
-### 4.3 Build Tooling & Version Catalog Hygiene
+### 5.3 Build Tooling & Version Catalog Hygiene
 
 - [ ] Keep Gradle wrapper, AGP, and libs.versions.toml in sync
 - [ ] Do not revert Android Studio–initiated catalog updates unless breaking
@@ -237,9 +237,9 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 
 ---
 
-## 5. Testing Burndown
+## 6. Testing Burndown
 
-### 5.1 Unit
+### 6.1 Unit
 
 - [x] SnapEngine
 - [x] `freeToEndMm()`
@@ -248,7 +248,7 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [x] `computeOalWindow` shifts measurement origin for excluded end threads
 - [x] PDF footer end-feature detection for AFT/FWD taper blocks
 
-### 5.2 Instrumentation
+### 6.2 Instrumentation
 
 - [ ] Commit-on-blur correctness
 - [ ] Blocking-dialog behavior
@@ -257,7 +257,7 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 
 ---
 
-## 6. Short-Term Backlog (v0.5.x After Snapping)
+## 7. Short-Term Backlog (v0.5.x After Snapping)
 
 _Not in the current sprint, but next in line._
 
@@ -272,7 +272,7 @@ _Not in the current sprint, but next in line._
 
 ---
 
-## 7. PDF Export Contract (Explicit)
+## 8. PDF Export Contract (Explicit)
 
 - PDF pages must always paint a white background explicitly
 - PDF rendering must not depend on app theme or system dark mode
@@ -283,7 +283,7 @@ _Not in the current sprint, but next in line._
 - Single source of truth for footer end-feature presence is `detectEndFeatures()`
 - Keep `buildFooterEndColumns()` internal + unit-tested; avoid regressions to draw-only logic
 
-### 7.1 Next PDF Priority: Legibility (After Footer Fix)
+### 8.1 Next PDF Priority: Legibility (After Footer Fix)
 
 - [x] Center dimension labels over measured spans (midpoint-centered; bounded vertical bump only, no horizontal shifting)
 - [ ] Arrowheads inside/outside based on fit
@@ -293,7 +293,7 @@ _Deferred until after layout stability:_ fraction display + tolerance settings
 
 ---
 
-## 8. Explicit Non-Goals (Do NOT Implement Yet)
+## 9. Explicit Non-Goals (Do NOT Implement Yet)
 
 - Multi-page PDF or foldouts
 - DXF export
@@ -306,7 +306,7 @@ _Deferred until after layout stability:_ fraction display + tolerance settings
 
 ---
 
-## 9. Future Ideas (v0.6.x+ / nice-to-have)
+## 10. Future Ideas (v0.6.x+ / nice-to-have)
 
 _These are explicitly out-of-scope for current work, but worth keeping on the radar._
 
