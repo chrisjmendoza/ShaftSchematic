@@ -2,7 +2,6 @@ package com.android.shaftschematic.ui.viewmodel
 
 import android.app.Application
 import android.content.Context
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
@@ -21,24 +20,25 @@ import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.parseToMm
 import com.android.shaftschematic.util.VerboseLog
-import kotlinx.coroutines.flow.MutableStateFlow
+import android.util.Log
+import com.android.shaftschematic.data.AutosaveManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
-import kotlin.collections.removeFirst
-import kotlin.compareTo
 import kotlin.math.max
-import kotlin.text.clear
-import kotlin.text.compareTo
-import kotlin.text.get
 
 // Internal payload used by Undo/Redo for deletes.
 // Not part of the public API; safe to change as the undo feature evolves.
@@ -113,8 +113,30 @@ private const val MAX_DELETE_HISTORY = 10
  * • Save/Load uses a versioned JSON envelope to remain backward compatible.
  * • Public API favored by the UI: index-based add/update/remove and newest-first UI order.
  */
-class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
+class ShaftViewModel(application: Application) : AndroidViewModel(application) {
+    // Autosave restore state
+    private val _didRestoreAutosave = MutableStateFlow(false)
+    val didRestoreAutosave: StateFlow<Boolean> = _didRestoreAutosave.asStateFlow()
+    fun consumeDidRestoreAutosave() { _didRestoreAutosave.value = false }
+
+    // Draft availability state
+    private val _hasDraft = MutableStateFlow(false)
+    val hasDraft: StateFlow<Boolean> = _hasDraft.asStateFlow()
+
+    /**
+     * Discard the current draft: clears autosave, resets VM to blank doc, and updates draft flags.
+     */
+    fun discardDraft() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                AutosaveManager.clear(getApplication())
+            }
+            _hasDraft.value = false
+            _didRestoreAutosave.value = false
+            newDocument()
+        }
+    }
     // ────────────────────────────────────────────────────────────────────────────
     // Reactive state (observed by Compose)
     // ────────────────────────────────────────────────────────────────────────────
@@ -277,10 +299,62 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ────────────────────────────────────────────────────────────────────────────
-    // Settings persistence (default unit + show grid)
+    // Autosave and SettingsStore integration
     // ────────────────────────────────────────────────────────────────────────────
-
     init {
+        // --- AUTOSAVE RESTORE + OBSERVER ---
+        viewModelScope.launch {
+            val restored = withContext(Dispatchers.IO) {
+                AutosaveManager.restore(getApplication())
+            }
+            if (restored != null) {
+                _hasDraft.value = true
+                _didRestoreAutosave.value = true
+            }
+            if (restored != null && isSessionDefault()) {
+                try {
+                    restoreSnapshot(restored)
+                } catch (_: Exception) {}
+            }
+        }
+        viewModelScope.launch {
+        @Suppress("UNCHECKED_CAST")
+        // Flow.combine overload for >5 flows returns Array<Any?>
+        combine(
+            spec, unit, shaftPosition, customer, vessel, jobNumber, notes
+        ) { values: Array<Any?> ->
+            check(values.size == 7) { "Autosave combine expected 7 values, got ${values.size}" }
+
+            val s = values[0] as ShaftSpec
+            val u = values[1] as UnitSystem
+            val pos = values[2] as ShaftPosition
+            val cust = values[3] as String
+            val ves = values[4] as String
+            val job = values[5] as String
+            val n = values[6] as String
+
+            AutosaveManager.SessionSnapshot(
+                shaftSpec = s,
+                unitSystem = u,
+                shaftPosition = pos,
+                customer = cust,
+                vessel = ves,
+                jobNumber = job,
+                notes = n
+            )
+        }
+                .debounce(1500)
+                .collectLatest { snapshot ->
+                    try {
+                        AutosaveManager.autosave(getApplication(), snapshot)
+                    } catch (_: CancellationException) {
+                        // ignore
+                    } catch (_: Exception) {
+                        // ignore
+                    }
+                }
+        }
+        // --- SETTINGSSTORE FLOWS AND MIGRATIONS ---
         // One-time migration: internal saved shafts were historically `*.json`.
         // Keep them visible/openable, but prefer `*.shaft` going forward.
         viewModelScope.launch {
@@ -470,6 +544,35 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 _unlockedAchievementIds.value = persisted
             }
         }
+    }
+
+    // --- Autosave helpers: must be class members, not inside init ---
+    private fun isSessionDefault(): Boolean {
+        val s = _spec.value
+        val specEmpty =
+            s.overallLengthMm == 0f &&
+            s.bodies.isEmpty() &&
+            s.tapers.isEmpty() &&
+            s.threads.isEmpty() &&
+            s.liners.isEmpty()
+
+        return specEmpty &&
+            _unit.value == UnitSystem.MILLIMETERS &&
+            _shaftPosition.value == ShaftPosition.OTHER &&
+            _customer.value.isBlank() &&
+            _vessel.value.isBlank() &&
+            _jobNumber.value.isBlank() &&
+            _notes.value.isBlank()
+    }
+
+    private fun restoreSnapshot(snapshot: AutosaveManager.SessionSnapshot) {
+        _spec.value = snapshot.shaftSpec
+        _unit.value = snapshot.unitSystem
+        _shaftPosition.value = snapshot.shaftPosition
+        _customer.value = snapshot.customer
+        _vessel.value = snapshot.vessel
+        _jobNumber.value = snapshot.jobNumber
+        _notes.value = snapshot.notes
     }
 
     /** Sets the UI unit (preview/labels only). Model remains canonical mm. */

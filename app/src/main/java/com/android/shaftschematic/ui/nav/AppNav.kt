@@ -56,16 +56,14 @@ fun AppNav(vm: ShaftViewModel) {
             val scope = rememberCoroutineScope()
             val snackbarHostState = remember { SnackbarHostState() }
             val unit by vm.unit.collectAsState()
+            val hasDraft by vm.hasDraft.collectAsState(initial = false)
 
             Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { pad ->
                 Box(Modifier.padding(pad)) {
                     StartScreen(
                         onNew = {
-                            // Seed a blank doc and go to editor (unchanged behavior)
-                            vm.importJson("""{"version":1,"spec":{}}""")
-                            nav.navigate("editor")
+                            vm.newDocument()
                         },
-                        // OPEN = internal storage browser
                         onOpen = { nav.navigate("openLocal") },
                         onSettings = { nav.navigate("settings") },
                         onSendFeedback = {
@@ -81,8 +79,12 @@ fun AppNav(vm: ShaftViewModel) {
                             } catch (_: ActivityNotFoundException) {
                                 scope.launch { snackbarHostState.showSnackbar("No email app found.") }
                             }
-                        }
+                        },
+                        hasDraft = hasDraft,
+                        onContinueDraft = { nav.navigate("editor") },
+                        onDiscardDraft = { vm.discardDraft() }
                     )
+                        // No auto-navigation or didRestoreAutosave logic needed
                 }
             }
         }
