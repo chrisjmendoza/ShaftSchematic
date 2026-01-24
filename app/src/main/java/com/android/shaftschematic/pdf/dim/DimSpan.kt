@@ -1,6 +1,7 @@
 package com.android.shaftschematic.pdf.dim
 
 import com.android.shaftschematic.geom.DeterministicTierAssigner
+import kotlin.math.abs
 import kotlin.math.roundToLong
 
 private const val DEDUPE_EPS_MM: Double = 1e-3
@@ -31,17 +32,33 @@ data class RailSpan(val rail: Int, val span: DimSpan)
  * - Endpoints touching are allowed.
  */
 class RailPlanner {
-    fun assignAll(spans: List<DimSpan>): List<RailSpan> {
+    /**
+     * Assign rails for spans. When [tierOriginMm] is provided, tiering uses distance from
+     * that origin (AFT=0, FWD=OAL) while keeping the original span coordinates for drawing.
+     */
+    fun assignAll(spans: List<DimSpan>, tierOriginMm: Double? = null): List<RailSpan> {
         val unique = dedupeExactSpans(spans)
         val tiered = DeterministicTierAssigner.assign(
             spans = unique,
-            startMm = { minOf(it.x1Mm, it.x2Mm) },
-            endMm = { maxOf(it.x1Mm, it.x2Mm) },
+            startMm = { span ->
+                val a = tieringCoord(span.x1Mm, tierOriginMm)
+                val b = tieringCoord(span.x2Mm, tierOriginMm)
+                minOf(a, b)
+            },
+            endMm = { span ->
+                val a = tieringCoord(span.x1Mm, tierOriginMm)
+                val b = tieringCoord(span.x2Mm, tierOriginMm)
+                maxOf(a, b)
+            },
             kind = { it.kind.toGeomKind() },
         )
 
         return tiered.map { RailSpan(rail = it.tier, span = it.item) }
     }
+}
+
+private fun tieringCoord(xMm: Double, tierOriginMm: Double?): Double {
+    return if (tierOriginMm == null) xMm else abs(xMm - tierOriginMm)
 }
 
 private fun dedupeExactSpans(spans: List<DimSpan>): List<DimSpan> {

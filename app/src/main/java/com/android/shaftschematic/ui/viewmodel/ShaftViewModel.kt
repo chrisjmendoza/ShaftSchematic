@@ -323,6 +323,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 try {
                     restoreSnapshot(restored)
                 } catch (_: Exception) {}
+            } else if (restored != null) {
+                VerboseLog.d(VerboseLog.Category.IO, "Autosave") {
+                    "autosave restore skipped (session already initialized)"
+                }
             }
         }
         viewModelScope.launch {
@@ -429,6 +433,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             SettingsStore.pdfTieringModeFlow(getApplication()).collectLatest { persisted ->
                 _pdfTieringMode.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(tieringMode = persisted) }
             }
         }
 
@@ -570,7 +575,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             s.liners.isEmpty()
 
         return specEmpty &&
-            _unit.value == UnitSystem.MILLIMETERS &&
             _shaftPosition.value == ShaftPosition.OTHER &&
             _customer.value.isBlank() &&
             _vessel.value.isBlank() &&
@@ -616,6 +620,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setPdfTieringMode(mode: PdfTieringMode, persist: Boolean = true) {
         _pdfTieringMode.value = mode
+        SettingsStore.updatePdfPrefs { it.copy(tieringMode = mode) }
         if (persist) {
             viewModelScope.launch { SettingsStore.setPdfTieringMode(getApplication(), mode) }
         }

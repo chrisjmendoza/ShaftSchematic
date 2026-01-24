@@ -171,16 +171,23 @@ fun composeShaftPdf(
             color = 0xFF000000.toInt()
         }
 
-        // Use tieringMode for deterministic anchor selection
-        val linerDims = mapToLinerDimsForPdf(spec, pdfPrefs.tieringMode)
+        // Measurement reference (AFT/FWD/AUTO) is separate from tier origin.
+        val measureFromMode = pdfPrefs.tieringMode
+        val linerDims = mapToLinerDimsForPdf(spec, measureFromMode)
         val win  = computeOalWindow(spec)
         val pageX: (Double) -> Float = { dimMm ->
             (geomRect.left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
         }
         val sets = computeSetPositionsInMeasureSpace(win)
-        val spans = buildLinerSpans(linerDims, sets, unit) + buildTaperLengthSpans(spec, win, unit)
+        val spans = buildLinerSpans(
+            liners = linerDims,
+            sets = sets,
+            unit = unit,
+            measureFrom = measureFromMode
+        ) + buildTaperLengthSpans(spec, win, unit)
         val planner = RailPlanner()
-        val assignments = planner.assignAll(spans)
+        val tierOriginMm = tierOriginMmFor(pdfPrefs.tieringMode, win.oalMm)
+        val assignments = planner.assignAll(spans, tierOriginMm)
 
         val maxRail = assignments.maxOfOrNull { it.rail } ?: 0
         val extraClearRails = (pdfPrefs.oalSpacingFactor.coerceIn(1.0f, 6.0f) - 1.0f) * 0.5f
@@ -544,6 +551,7 @@ private fun drawLinerDimensionsPdf(
     spec: ShaftSpec,
     liners: List<LinerDim>,
     unit: UnitSystem,
+    tieringMode: PdfTieringMode,
     pageX: (Double) -> Float,
     topY: Float,
     baseY: Float,
@@ -558,9 +566,15 @@ private fun drawLinerDimensionsPdf(
     // Spans are in measurement space (rebased so AFT SET = 0). Convert to physical axis for rendering.
     val pageXMeasure: (Double) -> Float = { dimMm -> pageX(dimMm + win.measureStartMm) }
 
-    val spans = buildLinerSpans(liners, sets, unit) + buildTaperLengthSpans(spec, win, unit)
+    val spans = buildLinerSpans(
+        liners = liners,
+        sets = sets,
+        unit = unit,
+        measureFrom = tieringMode
+    ) + buildTaperLengthSpans(spec, win, unit)
     val planner = RailPlanner()
-    val assignments = planner.assignAll(spans)
+    val tierOriginMm = tierOriginMmFor(tieringMode, win.oalMm)
+    val assignments = planner.assignAll(spans, tierOriginMm)
 
     val renderer = PdfDimensionRenderer(
         pageX = pageXMeasure,
@@ -617,7 +631,7 @@ internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschema
  * Anchor is inferred by proximity to SETs; swap to explicit anchors if your model stores them.
  */
 
-private fun mapToLinerDimsForPdf(spec: ShaftSpec, tieringMode: PdfTieringMode): List<LinerDim> {
+private fun mapToLinerDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode): List<LinerDim> {
     val win  = computeOalWindow(spec)
     val sets = computeSetPositionsInMeasureSpace(win)
 
@@ -631,11 +645,13 @@ private fun mapToLinerDimsForPdf(spec: ShaftSpec, tieringMode: PdfTieringMode): 
         val distAft = (aftEdge - sets.aftSETxMm).coerceAtLeast(0.0)      // AFT SET → AFT edge
         val distFwd = (sets.fwdSETxMm - fwdEdge).coerceAtLeast(0.0)      // FWD SET → FWD edge
 
-        val anchor = when (tieringMode) {
+        val forcedAnchor = when (measureFrom) {
             PdfTieringMode.AFT -> LinerAnchor.AFT_SET
             PdfTieringMode.FWD -> LinerAnchor.FWD_SET
-            PdfTieringMode.AUTO -> if (distFwd < distAft) LinerAnchor.FWD_SET else LinerAnchor.AFT_SET
+            PdfTieringMode.AUTO -> null
         }
+        // Forced AFT/FWD overrides any per-component anchoring; AUTO keeps existing behavior.
+        val anchor = forcedAnchor ?: if (distFwd < distAft) LinerAnchor.FWD_SET else LinerAnchor.AFT_SET
         val offset = when (anchor) {
             LinerAnchor.AFT_SET -> distAft
             LinerAnchor.FWD_SET -> distFwd
@@ -647,6 +663,18 @@ private fun mapToLinerDimsForPdf(spec: ShaftSpec, tieringMode: PdfTieringMode): 
             lengthMm = length
         )
     }
+}
+
+/**
+ * Resolve a single tier origin for the layout pass.
+ * - AFT → 0
+ * - FWD → OAL
+ * - AUTO → null (preserve existing left-to-right tiering)
+ */
+private fun tierOriginMmFor(mode: PdfTieringMode, oalMm: Double): Double? = when (mode) {
+    PdfTieringMode.AFT -> 0.0
+    PdfTieringMode.FWD -> oalMm
+    PdfTieringMode.AUTO -> null
 }
 
 private fun drawZigZagBreak(
