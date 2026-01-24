@@ -36,6 +36,17 @@ Tasks are grouped by sequencing and dependency rather than category.
 - [x] PDF default filename uses same naming convention (job/customer/vessel + optional side)
 - [x] SAF JSON default filename updated to match naming convention (future-proof; UI may not expose this yet)
 
+### Tiering & Measurement System Stabilization (PDF + Preview)
+
+- [x] Separate tier origin (rail stacking) from measurement reference (numeric baseline)
+- [x] Enforce single global measurement reference for forced AFT/FWD modes
+- [x] Preserve AUTO behavior for per-component anchor proximity
+- [x] Ensure PDF numeric labels compute as |boundary − reference| in forced modes
+- [x] Stabilize unit handling so tiering/measurement changes never affect units
+- [x] Fix Settings → ViewModel → PDF export wiring for tiering mode (pdfPrefs sync)
+- [x] Remove autosave restore gating on default unit (inches vs mm)
+- [x] Add autosave restore skip logging for diagnostics
+
 ---
 
 ## 1. Sprint Priority: Snapping + Add-At-Position Pipeline
@@ -110,7 +121,7 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 ---
 
-### 1.4 HIGH: Add keyway support to Body components
+### HIGH 1.4 Add keyway support to Body components
 
 Keyways are hosted features (not standalone components).
 
@@ -169,7 +180,7 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [x] Clamp negative to zero (**applies to model helper** `freeToEndMm()`; UI badge may use signed value for oversize warning)
 - [ ] Use `safeSpec` if `overallLengthMm=0` (preview mode)
 
-### 3.2 Taper-Rate Restoration
+### HIGH 3.2 Taper-Rate Restoration
 
 - [ ] Add taper-rate input handling
 - [ ] Support formats: `1:12`, `3/4`, decimals, bare int
@@ -235,6 +246,12 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [ ] Do not revert Android Studio–initiated catalog updates unless breaking
 - [ ] When tooling updates occur, isolate into chore(build) commit where possible
 
+### 5.x LOW — Post-Tiering Cleanup (Deferred)
+
+- [ ] Audit tiering-related helpers for dead or redundant code (read-only until v0.5.x)
+- [ ] Add optional debug overlay showing tier origin and measurement reference (preview only)
+- [ ] Add internal documentation note describing tier origin vs measurement reference
+
 ---
 
 ## 6. Testing Burndown
@@ -282,6 +299,8 @@ _Not in the current sprint, but next in line._
 
 - Single source of truth for footer end-feature presence is `detectEndFeatures()`
 - Keep `buildFooterEndColumns()` internal + unit-tested; avoid regressions to draw-only logic
+
+Tiering Guardrail: Tier origin (rail stacking), measurement reference (numeric baseline), and units are independent concerns. Any future changes to one must not affect the others. See commit history for the tiering/measurement stabilization baseline.
 
 ### 8.1 Next PDF Priority: Legibility (After Footer Fix)
 
