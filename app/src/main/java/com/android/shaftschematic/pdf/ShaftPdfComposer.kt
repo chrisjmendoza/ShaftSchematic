@@ -12,6 +12,7 @@ import com.android.shaftschematic.pdf.dim.*
 import com.android.shaftschematic.pdf.notes.*
 import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.buildBodyTitleById
@@ -159,6 +160,7 @@ fun composeShaftPdf(
         val baseY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
 
         // Fit-to-band safety for dimensional rails (OAL always visible)
+        val topSafePad = 6f
         var railGap = LANE_GAP_PT + 6f
         val minRailGap = 10f
         var dimTextSize = TEXT_PT - 2f
@@ -169,7 +171,8 @@ fun composeShaftPdf(
             color = 0xFF000000.toInt()
         }
 
-        val linerDims = mapToLinerDimsForPdf(spec)
+        // Use tieringMode for deterministic anchor selection
+        val linerDims = mapToLinerDimsForPdf(spec, pdfPrefs.tieringMode)
         val win  = computeOalWindow(spec)
         val pageX: (Double) -> Float = { dimMm ->
             (geomRect.left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
@@ -181,25 +184,22 @@ fun composeShaftPdf(
 
         val maxRail = assignments.maxOfOrNull { it.rail } ?: 0
         val extraClearRails = (pdfPrefs.oalSpacingFactor.coerceIn(1.0f, 6.0f) - 1.0f) * 0.5f
+        // (already declared above)
+        fun computeTopY(gap: Float): Float = baseY - OVERALL_EXTRA_PT - gap * (maxRail + 1f + extraClearRails)
 
-        var topY: Float
-        var loopCount = 0
-        while (true) {
-            topY = baseY - OVERALL_EXTRA_PT - railGap * (maxRail + 1.0f + extraClearRails).toFloat()
-            if (topY >= geomRect.top + 6f || loopCount >= 10) break
+        var topY = computeTopY(railGap)
+        repeat(10) {
+            if (topY >= geomRect.top + topSafePad) return@repeat
             if (railGap > minRailGap) {
                 railGap = maxOf(railGap - 2f, minRailGap)
             } else if (dimTextSize > minDimTextSize) {
                 dimTextSize = maxOf(dimTextSize - 1f, minDimTextSize)
                 dimText.textSize = dimTextSize
-            } else {
-                break
             }
-            loopCount++
+            topY = computeTopY(railGap)
         }
         // Final clamp after loop
-        topY = baseY - OVERALL_EXTRA_PT - railGap * (maxRail + 1.0f + extraClearRails).toFloat()
-        if (topY < geomRect.top + 6f) topY = geomRect.top + 6f
+        topY = max(computeTopY(railGap), geomRect.top + topSafePad)
 
         val renderer = PdfDimensionRenderer(
             pageX = pageX,
@@ -254,7 +254,7 @@ fun composeShaftPdf(
     )
 
     val infoTop = cy + halfHeightPx + INFO_GAP_PT
-    val infoBottom = kotlin.math.min(infoTop + FOOTER_BLOCK_PT, pageH - PAGE_MARGIN_PT)
+    val infoBottom = min(infoTop + FOOTER_BLOCK_PT, pageH - PAGE_MARGIN_PT)
     val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
 
     drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg)
@@ -591,7 +591,7 @@ internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschema
             DimSpan(
                 x0,
                 x1,
-                labelTop = formatLenDim(kotlin.math.abs(x1 - x0), unit),
+                labelTop = formatLenDim(abs(x1 - x0), unit),
                 kind = SpanKind.LOCAL
             )
         )
@@ -604,7 +604,7 @@ internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschema
             DimSpan(
                 x0,
                 x1,
-                labelTop = formatLenDim(kotlin.math.abs(x1 - x0), unit),
+                labelTop = formatLenDim(abs(x1 - x0), unit),
                 kind = SpanKind.LOCAL
             )
         )
@@ -616,7 +616,8 @@ internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschema
  * Adapter from model liners to export-only LinerDim.
  * Anchor is inferred by proximity to SETs; swap to explicit anchors if your model stores them.
  */
-private fun mapToLinerDimsForPdf(spec: ShaftSpec): List<LinerDim> {
+
+private fun mapToLinerDimsForPdf(spec: ShaftSpec, tieringMode: PdfTieringMode): List<LinerDim> {
     val win  = computeOalWindow(spec)
     val sets = computeSetPositionsInMeasureSpace(win)
 
@@ -630,25 +631,21 @@ private fun mapToLinerDimsForPdf(spec: ShaftSpec): List<LinerDim> {
         val distAft = (aftEdge - sets.aftSETxMm).coerceAtLeast(0.0)      // AFT SET → AFT edge
         val distFwd = (sets.fwdSETxMm - fwdEdge).coerceAtLeast(0.0)      // FWD SET → FWD edge
 
-        val useFwd = distFwd < distAft
-
-        if (useFwd) {
-            // FWD-anchored: offset is FWD SET → FWD edge (toward AFT); length runs AFT
-            LinerDim(
-                id = ln.id,
-                anchor = LinerAnchor.FWD_SET,
-                offsetFromSetMm = distFwd,
-                lengthMm = length
-            )
-        } else {
-            // AFT-anchored: offset is AFT SET → AFT edge (forward); length runs FWD
-            LinerDim(
-                id = ln.id,
-                anchor = LinerAnchor.AFT_SET,
-                offsetFromSetMm = distAft,
-                lengthMm = length
-            )
+        val anchor = when (tieringMode) {
+            PdfTieringMode.AFT -> LinerAnchor.AFT_SET
+            PdfTieringMode.FWD -> LinerAnchor.FWD_SET
+            PdfTieringMode.AUTO -> if (distFwd < distAft) LinerAnchor.FWD_SET else LinerAnchor.AFT_SET
         }
+        val offset = when (anchor) {
+            LinerAnchor.AFT_SET -> distAft
+            LinerAnchor.FWD_SET -> distFwd
+        }
+        LinerDim(
+            id = ln.id,
+            anchor = anchor,
+            offsetFromSetMm = offset,
+            lengthMm = length
+        )
     }
 }
 
@@ -691,7 +688,7 @@ private fun drawSCurveBreak(
     val yC = (yTop + yBot) * 0.5f
     val amp = (yBot - yTop) * 0.22f  // curvature amplitude
 
-    val path = android.graphics.Path().apply {
+    val path = Path().apply {
         // upper S
         moveTo(xL, yC - amp)
         cubicTo(
@@ -1216,7 +1213,7 @@ private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = END_EPS_MM.toDoub
     val aftX = 0.0
     val fwdX = spec.overallLengthMm.toDouble()
 
-    fun near(a: Double, b: Double) = kotlin.math.abs(a - b) <= epsMm
+    fun near(a: Double, b: Double) = abs(a - b) <= epsMm
 
     // Threads
     val aftThread = spec.threads.any { th ->
@@ -1262,7 +1259,7 @@ private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = END_EPS_MM.toDoub
 private const val EPS_MM = 0.01
 
 private fun near(a: Double, b: Double, eps: Double = END_EPS_MM.toDouble()) =
-    kotlin.math.abs(a - b) <= eps
+    abs(a - b) <= eps
 
 private fun getAftEndThread(spec: ShaftSpec): Threads? =
     spec.threads

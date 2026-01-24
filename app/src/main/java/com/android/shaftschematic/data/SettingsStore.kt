@@ -1,4 +1,6 @@
+
 package com.android.shaftschematic.data
+import com.android.shaftschematic.settings.PdfTieringMode
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -50,6 +52,15 @@ object SettingsStore {
 
     // PDF export
     private val KEY_OPEN_PDF_AFTER_EXPORT = booleanPreferencesKey("open_pdf_after_export")
+    private val KEY_PDF_TIERING_MODE = stringPreferencesKey("pdf_tiering_mode")
+    fun pdfTieringModeFlow(ctx: Context): Flow<PdfTieringMode> =
+        ctx.settingsDataStore.data.map { p ->
+            runCatching { PdfTieringMode.valueOf(p[KEY_PDF_TIERING_MODE] ?: "AUTO") }.getOrDefault(PdfTieringMode.AUTO)
+        }
+
+    suspend fun setPdfTieringMode(ctx: Context, mode: PdfTieringMode) {
+        ctx.settingsDataStore.edit { it[KEY_PDF_TIERING_MODE] = mode.name }
+    }
 
     // One-time migrations
     private val KEY_MIGRATED_INTERNAL_DOCS_TO_SHAFT = booleanPreferencesKey("migrated_internal_docs_to_shaft")

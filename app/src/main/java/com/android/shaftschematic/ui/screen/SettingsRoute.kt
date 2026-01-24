@@ -1,5 +1,8 @@
-// file: app/src/main/java/com/android/shaftschematic/ui/screen/SettingsRoute.kt
+
 package com.android.shaftschematic.ui.screen
+import androidx.compose.material3.RadioButton
+import com.android.shaftschematic.settings.PdfTieringMode
+// file: app/src/main/java/com/android/shaftschematic/ui/screen/SettingsRoute.kt
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -94,6 +98,7 @@ fun SettingsRoute(
     val previewBlackWhiteOnly by vm.previewBlackWhiteOnly.collectAsState()
 
     val openPdfAfterExport by vm.openPdfAfterExport.collectAsState()
+    val pdfTieringMode by vm.pdfTieringMode.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -179,6 +184,30 @@ fun SettingsRoute(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text("Open PDF after export")
+                    }
+
+                    // --- PDF Tiering Mode ---
+                    Spacer(Modifier.height(8.dp))
+                    Text("Dimension tiering reference", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 16.dp))
+                    Text(
+                        "Controls whether dimensions reference AFT, FWD, or choose automatically.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 16.dp, bottom = 4.dp)
+                    )
+                    val tieringOptions = listOf(
+                        PdfTieringMode.AUTO to "Auto (closest end)",
+                        PdfTieringMode.AFT to "AFT (force AFT SET)",
+                        PdfTieringMode.FWD to "FWD (force FWD SET)"
+                    )
+                    tieringOptions.forEach { (mode, label) ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 24.dp)) {
+                            RadioButton(
+                                selected = pdfTieringMode == mode,
+                                onClick = { vm.setPdfTieringMode(mode) }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(label)
+                        }
                     }
 
                     ListItem(

@@ -1,4 +1,6 @@
 package com.android.shaftschematic.ui.viewmodel
+import com.android.shaftschematic.settings.PdfTieringMode
+import com.android.shaftschematic.settings.PdfPrefs
 
 import android.app.Application
 import android.content.Context
@@ -115,6 +117,9 @@ private const val MAX_DELETE_HISTORY = 10
  */
 
 class ShaftViewModel(application: Application) : AndroidViewModel(application) {
+        /** Returns the current PDF export preferences (PdfPrefs) from SettingsStore. */
+        val currentPdfPrefs: PdfPrefs
+            get() = SettingsStore.pdfPrefs
     // Autosave restore state
     private val _didRestoreAutosave = MutableStateFlow(false)
     val didRestoreAutosave: StateFlow<Boolean> = _didRestoreAutosave.asStateFlow()
@@ -155,6 +160,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _openPdfAfterExport = MutableStateFlow(false)
     val openPdfAfterExport: StateFlow<Boolean> = _openPdfAfterExport.asStateFlow()
+
+    private val _pdfTieringMode = MutableStateFlow(PdfTieringMode.AUTO)
+    val pdfTieringMode: StateFlow<PdfTieringMode> = _pdfTieringMode.asStateFlow()
 
     private val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
@@ -418,6 +426,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 _openPdfAfterExport.value = persisted
             }
         }
+        viewModelScope.launch {
+            SettingsStore.pdfTieringModeFlow(getApplication()).collectLatest { persisted ->
+                _pdfTieringMode.value = persisted
+            }
+        }
 
         viewModelScope.launch {
             SettingsStore.previewBlackWhiteOnlyFlow(getApplication()).collectLatest { persisted ->
@@ -598,6 +611,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _openPdfAfterExport.value = enabled
         if (persist) {
             viewModelScope.launch { SettingsStore.setOpenPdfAfterExport(getApplication(), enabled) }
+        }
+    }
+
+    fun setPdfTieringMode(mode: PdfTieringMode, persist: Boolean = true) {
+        _pdfTieringMode.value = mode
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPdfTieringMode(getApplication(), mode) }
         }
     }
 

@@ -7,6 +7,7 @@ import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.settings.PdfPrefs
 
 /**
  * Minimal, unambiguous wrapper for PDF export.
@@ -19,8 +20,9 @@ fun exportShaftPdf(
     unit: UnitSystem,
     appVersion: String,
     filename: String,
-    project: ProjectInfo = ProjectInfo()
+    project: ProjectInfo = ProjectInfo(),
+    pdfPrefs: com.android.shaftschematic.settings.PdfPrefs
 ) {
     // Since this file shares the same package, the top-level composeShaftPdf() is visible directly.
-    composeShaftPdf(page, spec, unit, project, appVersion, filename)
+    composeShaftPdf(page, spec, unit, project, appVersion, filename, pdfPrefs)
 }

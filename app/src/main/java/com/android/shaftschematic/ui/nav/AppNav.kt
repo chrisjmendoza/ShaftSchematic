@@ -63,6 +63,7 @@ fun AppNav(vm: ShaftViewModel) {
                     StartScreen(
                         onNew = {
                             vm.newDocument()
+                            nav.navigate("editor")
                         },
                         onOpen = { nav.navigate("openLocal") },
                         onSettings = { nav.navigate("settings") },
