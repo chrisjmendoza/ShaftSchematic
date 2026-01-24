@@ -48,6 +48,15 @@ Features:
 
 ---
 
+## 2.1 Implicit Body Spans (Derived)
+
+- Not components; they are derived gaps between components.
+- Computed from geometry and never stored in `ShaftSpec`.
+- Do not participate in snapping.
+- May be promoted to explicit Body components when editing is required.
+
+---
+
 ## 3) Feature Rules
 
 - Features are attached to a **host component**.

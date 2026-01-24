@@ -132,6 +132,9 @@ PDF export does NOT:
 - Summarize components
 - Change geometry scale non-uniformly
 
+### Tiering & Measurement Invariants (PDF)
+Tier origin controls rail stacking only. Measurement reference controls numeric baselines. Units are independent of both. These concerns must never be conflated.
+
 ---
 
 ## Component Ordering System

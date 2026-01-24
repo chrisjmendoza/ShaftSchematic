@@ -107,6 +107,15 @@ Users do not configure scale manually.
 
 ---
 
+# 6.1 Measurement & Tiering Rules
+
+- Forced AFT/FWD uses a single global reference for numeric baselines.
+- AUTO preserves per-component anchor/proximity behavior.
+- Tiering affects rail stacking only and never changes numeric values.
+- Units are passed explicitly and never derived from tiering or measurement reference.
+
+---
+
 # 7. Error Handling
 
 - If `overallLengthMm == 0`, export stops.

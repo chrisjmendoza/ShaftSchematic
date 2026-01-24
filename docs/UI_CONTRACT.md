@@ -128,6 +128,16 @@ UI must never:
 - Compute pxPerMm
 - Compute component boundaries
 
+---
+
+# 5.2 Planned Preview Tap + Implicit Bodies (Upcoming)
+
+**Planned behavior (not yet implemented):**
+- Preview taps produce raw mm coordinates.
+- ViewModel performs snapping and stores snapped positions.
+- Implicit bodies are derived and read-only (computed gaps between components).
+- Promotion to an explicit Body is required before editing.
+
  
 
 # 5.1 Preview Color Preferences (Settings)
