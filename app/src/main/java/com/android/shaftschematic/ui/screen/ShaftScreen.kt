@@ -1568,6 +1568,7 @@ private fun ComponentPagerCard(
                         )
                     } else {
                         var text by remember(ln.id, ln.label) { mutableStateOf(ln.label.orEmpty()) }
+                        var didFocus by remember(ln.id) { mutableStateOf(false) }
                         LaunchedEffect(Unit) { focusRequester.requestFocus() }
                         OutlinedTextField(
                             value = text,
@@ -1584,7 +1585,9 @@ private fun ComponentPagerCard(
                                 .fillMaxWidth()
                                 .focusRequester(focusRequester)
                                 .onFocusChanged { f ->
-                                    if (!f.isFocused) {
+                                    if (f.isFocused) {
+                                        didFocus = true
+                                    } else if (didFocus) {
                                         val trimmed = text.trim().takeIf { it.isNotEmpty() }
                                         onUpdateLinerLabel(row.index, trimmed)
                                         editingTitle = false
