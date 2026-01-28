@@ -68,4 +68,7 @@ fun ShaftSpec.maxOuterDiaMm(): Float {
  * populated when either one is present and > 0. Call this after JSON decode.
  */
 fun ShaftSpec.normalized(): ShaftSpec =
-    copy(threads = threads.map { it.normalized() })
+    copy(
+        threads = threads.map { it.normalized() },
+        liners = liners.map { it.normalized() }
+    )

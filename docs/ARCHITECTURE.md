@@ -51,6 +51,19 @@ Responsibilities:
 - Maintaining `_componentOrder` for UI ordering
 - File import/export
 
+Planned (not yet implemented):
+- Build a resolved component pipeline that derives auto bodies for UI/rendering.
+- Auto bodies are **not** persisted in `ShaftSpec` and are regenerated deterministically.
+- Auto bodies are downstream of OAL + explicit components and never overlap them.
+- Auto bodies must never define measurement references or snapping anchors.
+- Manual OAL seeds a base auto body spanning 0 → OAL; derived OAL does not.
+- Manual body components (future) promote over auto bodies in overlapping spans.
+
+Liner authored reference:
+- Liners store authored reference (AFT/FWD) as metadata.
+- Physical geometry remains canonical for layout, snapping, and export.
+- Switching authored reference must never mutate physical geometry.
+
 The ViewModel **never** performs any pixel or rendering logic.
 
 ---

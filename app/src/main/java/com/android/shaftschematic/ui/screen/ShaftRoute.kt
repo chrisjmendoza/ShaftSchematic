@@ -186,6 +186,7 @@ fun ShaftRoute(
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
+        onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
 
         onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
 

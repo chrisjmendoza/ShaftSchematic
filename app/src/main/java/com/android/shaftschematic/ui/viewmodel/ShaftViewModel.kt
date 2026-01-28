@@ -1268,7 +1268,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun addLinerAt(startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
         val id = newId()
         orderAdd(ComponentKind.LINER, id)
-        s.copy(liners = listOf(Liner(id, startMm, max(0f, lengthMm), max(0f, odMm))) + s.liners)
+        val len = max(0f, lengthMm)
+        val od = max(0f, odMm)
+        val liner = Liner(
+            id = id,
+            startFromAftMm = startMm,
+            lengthMm = len,
+            odMm = od,
+            endMmPhysical = startMm + len,
+            authoredReference = LinerAuthoredReference.AFT
+        )
+        s.copy(liners = listOf(liner) + s.liners)
     }.also {
         rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
         ensureOverall()
@@ -1279,13 +1289,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         if (index !in s.liners.indices) s else {
             val old = s.liners[index]
             val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
+            val len = max(0f, lengthMm)
+            val od = max(0f, odMm)
 
             val updatedLiners = s.liners.toMutableList().also { l ->
-                l[index] = old.copy(
-                    startFromAftMm = startMm,
-                    lengthMm = max(0f, lengthMm),
-                    odMm = max(0f, odMm)
-                )
+                l[index] = old.withPhysical(startMmPhysical = startMm, lengthMm = len, odMm = od)
             }
 
             val base = s.copy(liners = updatedLiners)
@@ -1301,6 +1309,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
         }
         ensureOverall()
+    }
+
+    fun updateLinerAuthoredReference(index: Int, reference: LinerAuthoredReference) = _spec.update { s ->
+        if (index !in s.liners.indices) s else {
+            val old = s.liners[index]
+            if (old.authoredReference == reference) return@update s
+            s.copy(
+                liners = s.liners.toMutableList().also { l ->
+                    l[index] = old.copy(authoredReference = reference)
+                }
+            )
+        }
     }
 
     fun updateLinerLabel(index: Int, label: String?) = _spec.update { s ->

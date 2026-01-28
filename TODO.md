@@ -121,7 +121,27 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 ---
 
-### HIGH 1.4 Add keyway support to Body components
+### 1.4 Resolved Components + Auto Bodies (Planned)
+
+**Goal:** Establish a derived component pipeline that generates auto bodies for UI/rendering without persisting them.
+
+**Tasks**
+
+- [ ] Implement resolved component pipeline with auto body generation for UI and rendering (no persistence).
+- [ ] Seed initial auto body when OAL is manually authored.
+- [ ] Expose AFT/FWD authored reference toggle in liner component card UI.
+- [ ] Unify Add Component UX into single entry point after authored-reference UI is complete.
+
+**Constraints**
+
+- Auto bodies must never define measurement references.
+- Auto bodies must never affect snapping anchors.
+- Auto bodies must never be persisted.
+- UI component ordering must be spatial (AFT→FWD), not insertion-based.
+
+---
+
+### HIGH 1.5 Add keyway support to Body components
 
 Keyways are hosted features (not standalone components).
 

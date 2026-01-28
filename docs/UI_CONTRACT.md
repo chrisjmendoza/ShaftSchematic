@@ -100,18 +100,27 @@ Displays: freeToEndMm (ViewModel computed)
 
 UI cannot calculate mm values.
 
+### 3.5 Liner Authored Reference (AFT/FWD)
+- Liners separate authored reference from physical geometry.
+- UI must project authored “Start” based on selected reference.
+- Switching AFT/FWD must **not** mutate physical geometry.
+- ViewModel stores reference metadata; geometry remains canonical.
+
 ---
 
 # 4. Component List (Ordering)
 
 ### 4.1 What ordering means
-The component list reflects `_componentOrder` in the ViewModel, not geometric order.
+The component list reflects **spatial order** (AFT → FWD) derived from resolved geometry.
+Insertion order must never determine display ordering.
 
 ### 4.2 Reordering
 If reordering UI added later:
 - UI emits intent: `onReorder(fromIndex, toIndex)`
 - VM updates `_componentOrder`
 - NO geometry recalculation in UI layer
+
+Note: `_componentOrder` may remain as a stable tie-breaker, but spatial order is authoritative.
 
 ---
 
@@ -137,6 +146,8 @@ UI must never:
 - ViewModel performs snapping and stores snapped positions.
 - Implicit bodies are derived and read-only (computed gaps between components).
 - Promotion to an explicit Body is required before editing.
+- When OAL is manually authored, a base auto body spans 0 → OAL immediately.
+- Derived OAL does **not** seed a base body.
 
  
 

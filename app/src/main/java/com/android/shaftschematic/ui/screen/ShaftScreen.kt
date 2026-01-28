@@ -114,6 +114,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
@@ -217,6 +218,7 @@ fun ShaftScreen(
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
+    onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
 
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
 
@@ -705,6 +707,7 @@ fun ShaftScreen(
                     onUpdateThread = snappedThreadUpdater,
                     onUpdateLiner = snappedLinerUpdater,
                     onUpdateLinerLabel = onUpdateLinerLabel,
+                    onUpdateLinerReference = onUpdateLinerReference,
 
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
 
@@ -1063,6 +1066,7 @@ private fun ComponentCarouselPager(
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
+    onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
 
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
 
@@ -1180,6 +1184,7 @@ private fun ComponentCarouselPager(
                             onUpdateTaperKeyway = onUpdateTaperKeyway,
                             onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
                             onUpdateLinerLabel = onUpdateLinerLabel,
+                            onUpdateLinerReference = onUpdateLinerReference,
                             bodyTitleById = bodyTitleById,
                             taperTitleById = taperTitleById,
                             linerTitleById = linerTitleById,
@@ -1293,6 +1298,7 @@ private fun ComponentPagerCard(
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
+    onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     bodyTitleById: Map<String, String>,
     taperTitleById: Map<String, String>,
     linerTitleById: Map<String, String>,
@@ -1553,6 +1559,12 @@ private fun ComponentPagerCard(
             val computedTitle = linerTitleById[ln.id] ?: "Liner"
             var editingTitle by rememberSaveable(ln.id) { mutableStateOf(false) }
             val focusRequester = remember { FocusRequester() }
+            val isFwdRef = ln.authoredReference == LinerAuthoredReference.FWD
+            val authoredStartMm = if (isFwdRef) {
+                spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
+            } else {
+                ln.startFromAftMm
+            }
             ComponentCard(
                 title = computedTitle,
                 titleContent = {
@@ -1607,19 +1619,53 @@ private fun ComponentPagerCard(
                 onRemoveLiner(ln.id)
                 }
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterChip(
+                        selected = !isFwdRef,
+                        onClick = { onUpdateLinerReference(row.index, LinerAuthoredReference.AFT) },
+                        label = { Text("AFT") }
+                    )
+                    FilterChip(
+                        selected = isFwdRef,
+                        onClick = { onUpdateLinerReference(row.index, LinerAuthoredReference.FWD) },
+                        label = { Text("FWD") }
+                    )
+                }
+
                 CommitNum(
-                    label = "Start (${abbr(unit)})",
-                    initialDisplay = disp(ln.startFromAftMm, unit),
-                    validator = startValidator(ln.id, ComponentKind.LINER, ln.lengthMm)
-                ) { s ->
-                    toMmOrNull(s, unit)?.let {
-                        onUpdateLiner(row.index, it, ln.lengthMm, ln.odMm)
+                    label = "Start from ${if (isFwdRef) "FWD" else "AFT"} (${abbr(unit)})",
+                    initialDisplay = disp(authoredStartMm, unit),
+                    validator = { raw ->
+                        val authoredMm = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
+                        val physicalStartMm = if (isFwdRef) {
+                            spec.overallLengthMm - authoredMm - ln.lengthMm
+                        } else {
+                            authoredMm
+                        }
+                        startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, physicalStartMm)
                     }
+                ) { s ->
+                    val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physicalStartMm = if (isFwdRef) {
+                        spec.overallLengthMm - authoredMm - ln.lengthMm
+                    } else {
+                        authoredMm
+                    }
+                    onUpdateLiner(row.index, physicalStartMm, ln.lengthMm, ln.odMm)
                 }
                 CommitNum("Length (${abbr(unit)})", disp(ln.lengthMm, unit)) { s ->
-                    toMmOrNull(s, unit)?.let {
-                        onUpdateLiner(row.index, ln.startFromAftMm, it, ln.odMm)
+                    val newLenMm = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physicalStartMm = if (isFwdRef) {
+                        val authored = spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
+                        spec.overallLengthMm - authored - newLenMm
+                    } else {
+                        ln.startFromAftMm
                     }
+                    onUpdateLiner(row.index, physicalStartMm, newLenMm, ln.odMm)
                 }
                 CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
