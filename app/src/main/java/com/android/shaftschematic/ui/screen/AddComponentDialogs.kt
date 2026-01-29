@@ -140,7 +140,8 @@ private fun pitchMmToTpi(pitchMm: Float): Float = if (pitchMm > 0f) 25.4f / pitc
 fun AddBodyDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
-    onSubmit: (startMm: Float, lengthMm: Float, diaMm: Float) -> Unit
+    onSubmit: (startMm: Float, lengthMm: Float, diaMm: Float) -> Unit,
+    onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
 
@@ -153,7 +154,7 @@ fun AddBodyDialog(
     val diaMm = toMmOrNullFromDialog(dia, unit) ?: -1f
 
     AlertDialog(
-        onDismissRequest = { /* modal; use Cancel */ },
+        onDismissRequest = onCancel,
         title = { Text("Add Body") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
@@ -168,7 +169,7 @@ fun AddBodyDialog(
             val ok = startMm >= 0f && lengthMm > 0f && diaMm > 0f
             Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, diaMm) }) { Text("Add") }
         },
-        dismissButton = { TextButton(onClick = { /* host will close dialog by setting state */ }) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
 }
 
@@ -180,7 +181,8 @@ fun AddBodyDialog(
 fun AddLinerDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
-    onSubmit: (startMm: Float, lengthMm: Float, odMm: Float) -> Unit
+    onSubmit: (startMm: Float, lengthMm: Float, odMm: Float) -> Unit,
+    onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
 
@@ -193,7 +195,7 @@ fun AddLinerDialog(
     val odMm = toMmOrNullFromDialog(od, unit) ?: -1f
 
     AlertDialog(
-        onDismissRequest = { },
+        onDismissRequest = onCancel,
         title = { Text("Add Liner") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
@@ -208,7 +210,7 @@ fun AddLinerDialog(
             val ok = startMm >= 0f && lengthMm > 0f && odMm > 0f
             Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, odMm) }) { Text("Add") }
         },
-        dismissButton = { TextButton(onClick = { }) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
 }
 
@@ -224,7 +226,8 @@ fun AddThreadDialog(
     initialLengthMm: Float,
     initialMajorDiaMm: Float,
     initialPitchMm: Float,
-    onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, tpi: Float, excludeFromOAL: Boolean) -> Unit
+    onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, tpi: Float, excludeFromOAL: Boolean) -> Unit,
+    onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
 
@@ -247,7 +250,7 @@ fun AddThreadDialog(
     val tpi = parseFractionOrDecimalOrRatio(tpiText) ?: -1f   // allow e.g., "20", "10", "32"
 
     AlertDialog(
-        onDismissRequest = { },
+        onDismissRequest = onCancel,
         title = { Text("Add Thread") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
@@ -276,7 +279,7 @@ fun AddThreadDialog(
             val ok = startMm >= 0f && lengthMm > 0f && majorMm > 0f && tpi > 0f
             Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, majorMm, tpi, !countInOal) }) { Text("Add") }
         },
-        dismissButton = { TextButton(onClick = { }) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
 }
 
@@ -289,7 +292,8 @@ fun AddThreadDialog(
 fun AddTaperDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
-    onSubmit: (startMm: Float, lengthMm: Float, setDiaMm: Float, letDiaMm: Float, rateText: String) -> Unit
+    onSubmit: (startMm: Float, lengthMm: Float, setDiaMm: Float, letDiaMm: Float, rateText: String) -> Unit,
+    onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
 
@@ -306,7 +310,7 @@ fun AddTaperDialog(
 
     // Allow commit-on-blur behavior (no live mutation outward)
     AlertDialog(
-        onDismissRequest = { },
+        onDismissRequest = onCancel,
         title = { Text("Add Taper") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
@@ -336,7 +340,7 @@ fun AddTaperDialog(
                 }
             ) { Text("Add") }
         },
-        dismissButton = { TextButton(onClick = { }) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
 }
 

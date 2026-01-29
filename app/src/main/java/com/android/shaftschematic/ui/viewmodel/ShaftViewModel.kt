@@ -16,6 +16,8 @@ import com.android.shaftschematic.model.snapForwardFromOrdered
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.util.Achievements
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorPreset
@@ -191,6 +193,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _componentArrowWidthDp = MutableStateFlow(40)
     val componentArrowWidthDp: StateFlow<Int> = _componentArrowWidthDp.asStateFlow()
 
+    private val _resolvedComponents = MutableStateFlow<List<ResolvedComponent>>(emptyList())
+    val resolvedComponents: StateFlow<List<ResolvedComponent>> = _resolvedComponents.asStateFlow()
+
     private val _devOptionsEnabled = MutableStateFlow(false)
     val devOptionsEnabled: StateFlow<Boolean> = _devOptionsEnabled.asStateFlow()
 
@@ -365,6 +370,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         // ignore
                     }
                 }
+        }
+
+        viewModelScope.launch {
+            combine(spec, overallIsManual) { s, isManual ->
+                resolveComponents(s, isManual)
+            }.collectLatest { resolved ->
+                _resolvedComponents.value = resolved
+            }
         }
         // --- SETTINGSSTORE FLOWS AND MIGRATIONS ---
         // One-time migration: internal saved shafts were historically `*.json`.
