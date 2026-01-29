@@ -65,9 +65,11 @@ fun resolveComponents(spec: ShaftSpec, overallIsManual: Boolean): List<ResolvedC
         overallLengthMm = if (overallIsManual) spec.overallLengthMm else 0f,
         explicitComponents = explicit
     )
-    return (explicit + autoBodies).sortedWith(
+    val merged = (explicit + autoBodies).sortedWith(
         compareBy<ResolvedComponent>({ it.startMmPhysical }, { it.typeSortKey() })
     )
+    val subtracted = subtractBodiesAgainstNonBodies(merged)
+    return normalizeBodies(subtracted)
 }
 
 fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildList {
@@ -232,4 +234,123 @@ private fun ResolvedComponent.typeSortKey(): Int = when (type) {
     ResolvedComponentType.TAPER -> 2
     ResolvedComponentType.THREAD -> 3
     ResolvedComponentType.LINER -> 4
+}
+
+private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>): List<ResolvedComponent> {
+    if (components.isEmpty()) return components
+
+    data class Span(val start: Float, val end: Float)
+    val eps = 1e-3f
+
+    val nonBodies = components.filterNot { it is ResolvedBody }
+    val bodyComponents = components.filterIsInstance<ResolvedBody>()
+
+    fun overlaps(bStart: Float, bEnd: Float, fStart: Float, fEnd: Float): Boolean =
+        bStart < fEnd - eps && bEnd > fStart + eps
+
+    val subtractedBodies = bodyComponents.flatMap { body ->
+        var fragments = listOf(Span(body.startMmPhysical, body.endMmPhysical))
+
+        nonBodies.forEach { feature ->
+            val fStart = feature.startMmPhysical
+            val fEnd = feature.endMmPhysical
+            fragments = fragments.flatMap { frag ->
+                if (!overlaps(frag.start, frag.end, fStart, fEnd)) {
+                    listOf(frag)
+                } else {
+                    buildList {
+                        if (fStart > frag.start + eps) add(Span(frag.start, fStart))
+                        if (fEnd < frag.end - eps) add(Span(fEnd, frag.end))
+                    }
+                }
+            }
+        }
+
+        fragments
+            .filter { it.end - it.start > eps }
+            .map { span ->
+                body.copy(
+                    startMmPhysical = span.start,
+                    endMmPhysical = span.end
+                )
+            }
+    }
+
+    return (nonBodies + subtractedBodies).sortedWith(
+        compareBy<ResolvedComponent>({ it.startMmPhysical }, { it.typeSortKey() })
+    )
+}
+
+private fun normalizeBodies(components: List<ResolvedComponent>): List<ResolvedComponent> {
+    if (components.isEmpty()) return components
+
+    data class BodyAccum(
+        var start: Float,
+        var end: Float,
+        var diaMm: Float,
+        var hasExplicit: Boolean,
+        var explicitId: String?,
+    ) {
+        fun toResolved(): ResolvedBody = ResolvedBody(
+            id = explicitId ?: autoBodyId(start, end),
+            type = if (hasExplicit) ResolvedComponentType.BODY else ResolvedComponentType.BODY_AUTO,
+            source = if (hasExplicit) ResolvedComponentSource.EXPLICIT else ResolvedComponentSource.AUTO,
+            startMmPhysical = start,
+            endMmPhysical = end,
+            diaMm = diaMm
+        )
+    }
+
+    val result = mutableListOf<ResolvedComponent>()
+    var current: BodyAccum? = null
+    var lastMergedDia: Float? = null
+    val eps = 1e-3f
+
+    fun startAccum(comp: ResolvedBody): BodyAccum {
+        val isExplicit = comp.source == ResolvedComponentSource.EXPLICIT
+        val dia = if (isExplicit) comp.diaMm else (lastMergedDia ?: comp.diaMm)
+        return BodyAccum(
+            start = comp.startMmPhysical,
+            end = comp.endMmPhysical,
+            diaMm = dia,
+            hasExplicit = isExplicit,
+            explicitId = if (isExplicit) comp.id else null
+        )
+    }
+
+    fun flush() {
+        current?.let {
+            result.add(it.toResolved())
+            lastMergedDia = it.diaMm
+            current = null
+        }
+    }
+
+    components.forEach { comp ->
+        when (comp) {
+            is ResolvedBody -> {
+                if (current == null) {
+                    current = startAccum(comp)
+                } else if (comp.startMmPhysical <= current!!.end + eps) {
+                    current!!.start = kotlin.math.min(current!!.start, comp.startMmPhysical)
+                    current!!.end = kotlin.math.max(current!!.end, comp.endMmPhysical)
+                    if (comp.source == ResolvedComponentSource.EXPLICIT && !current!!.hasExplicit) {
+                        current!!.hasExplicit = true
+                        current!!.explicitId = comp.id
+                        current!!.diaMm = comp.diaMm
+                    }
+                } else {
+                    flush()
+                    current = startAccum(comp)
+                }
+            }
+            else -> {
+                flush()
+                result.add(comp)
+            }
+        }
+    }
+    flush()
+
+    return result
 }

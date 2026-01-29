@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -1698,15 +1700,30 @@ private fun ComponentPagerCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(
+                        text = "Measure From:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val selectedColors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color.Black,
+                        selectedLabelColor = Color.White,
+                        containerColor = Color.Transparent,
+                        labelColor = MaterialTheme.colorScheme.onSurface
+                    )
                     FilterChip(
                         selected = !isFwdRef,
                         onClick = { onUpdateLinerReference(idx, LinerAuthoredReference.AFT) },
-                        label = { Text("AFT") }
+                        label = { Text("AFT") },
+                        colors = selectedColors,
+                        border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null
                     )
                     FilterChip(
                         selected = isFwdRef,
                         onClick = { onUpdateLinerReference(idx, LinerAuthoredReference.FWD) },
-                        label = { Text("FWD") }
+                        label = { Text("FWD") },
+                        colors = selectedColors,
+                        border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null
                     )
                 }
 
