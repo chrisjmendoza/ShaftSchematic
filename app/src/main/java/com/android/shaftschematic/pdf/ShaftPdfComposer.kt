@@ -12,6 +12,8 @@ import com.android.shaftschematic.pdf.dim.*
 import com.android.shaftschematic.pdf.notes.*
 import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.ui.resolved.ResolvedBody
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
@@ -57,6 +59,7 @@ fun composeShaftPdf(
     appVersion: String,
     filename: String,
     pdfPrefs: PdfPrefs = PdfPrefs(),
+    resolvedComponents: List<ResolvedComponent>? = null,
 ) {
     val c = page.canvas
     // PDF safety: explicitly paint a white page background so geometry/labels are visible
@@ -80,9 +83,23 @@ fun composeShaftPdf(
     // PDF-only guard: a shaft with exactly one Body and no other detail components.
     // For body-only shafts there is nothing to "make room for", so do not apply
     // any body compression/break logic.
-    val bodyOnly = isBodyOnlyShaft(spec)
-    val singleTaperOnly = isSingleTaperOnly(spec)
+    val resolvedBodies = resolvedComponents
+        ?.filterIsInstance<ResolvedBody>()
+        ?.map { b ->
+            Body(
+                id = b.id,
+                startFromAftMm = b.startMmPhysical,
+                lengthMm = b.endMmPhysical - b.startMmPhysical,
+                diaMm = b.diaMm
+            )
+        }
+
+    val bodiesForPdf = resolvedBodies ?: spec.bodies
     val hasNonBodyDetail = spec.tapers.isNotEmpty() || spec.threads.isNotEmpty() || spec.liners.isNotEmpty()
+    val bodyOnlyResolved = resolvedBodies != null && resolvedBodies.size == 1 && !hasNonBodyDetail
+
+    val bodyOnly = isBodyOnlyShaft(spec) || bodyOnlyResolved
+    val singleTaperOnly = isSingleTaperOnly(spec)
 
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = OUTLINE_PT; color = 0xFF000000.toInt()
@@ -138,23 +155,25 @@ fun composeShaftPdf(
 
     // geometry
     if (bodyOnly || singleTaperOnly) {
-        drawBodiesPlain(c, spec.bodies, cy, ::xAt, ::rPx, outline)
+        drawBodiesPlain(c, bodiesForPdf, cy, ::xAt, ::rPx, outline)
     } else {
-        drawBodiesCompressedCenterBreak(c, spec.bodies, cy, ::xAt, ::rPx, outline, geomRect)
+        drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect)
     }
     drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline)
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
 
-    drawComponentLabelsPdf(
-        canvas = c,
-        spec = spec,
-        geomRect = geomRect,
-        cy = cy,
-        halfHeightPx = halfHeightPx,
-        xAt = ::xAt,
-        textPaint = text,
-    )
+    if (pdfPrefs.showComponentTitles) {
+        drawComponentLabelsPdf(
+            canvas = c,
+            spec = spec,
+            geomRect = geomRect,
+            cy = cy,
+            halfHeightPx = halfHeightPx,
+            xAt = ::xAt,
+            textPaint = text,
+        )
+    }
 
     run {
         val baseY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT

@@ -99,6 +99,7 @@ fun SettingsRoute(
 
     val openPdfAfterExport by vm.openPdfAfterExport.collectAsState()
     val pdfTieringMode by vm.pdfTieringMode.collectAsState()
+    val pdfShowComponentTitles by vm.pdfShowComponentTitles.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -184,6 +185,15 @@ fun SettingsRoute(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text("Open PDF after export")
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = pdfShowComponentTitles,
+                            onCheckedChange = { vm.setPdfShowComponentTitles(it) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Show component titles in PDF")
                     }
 
                     // --- PDF Tiering Mode ---

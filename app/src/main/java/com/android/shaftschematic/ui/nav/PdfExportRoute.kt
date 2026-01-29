@@ -96,7 +96,8 @@ fun PdfExportRoute(
                                 project = project,
                                 appVersion = appVersionFromContext(ctx),
                                 filename = filename,
-                                pdfPrefs = vm.currentPdfPrefs
+                                pdfPrefs = vm.currentPdfPrefs,
+                                resolvedComponents = vm.resolvedComponents.value
                             )
                             null
                         } catch (t: Throwable) {

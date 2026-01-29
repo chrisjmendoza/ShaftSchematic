@@ -53,6 +53,7 @@ object SettingsStore {
     // PDF export
     private val KEY_OPEN_PDF_AFTER_EXPORT = booleanPreferencesKey("open_pdf_after_export")
     private val KEY_PDF_TIERING_MODE = stringPreferencesKey("pdf_tiering_mode")
+    private val KEY_PDF_SHOW_COMPONENT_TITLES = booleanPreferencesKey("pdf_show_component_titles")
     fun pdfTieringModeFlow(ctx: Context): Flow<PdfTieringMode> =
         ctx.settingsDataStore.data.map { p ->
             runCatching { PdfTieringMode.valueOf(p[KEY_PDF_TIERING_MODE] ?: "AUTO") }.getOrDefault(PdfTieringMode.AUTO)
@@ -60,6 +61,13 @@ object SettingsStore {
 
     suspend fun setPdfTieringMode(ctx: Context, mode: PdfTieringMode) {
         ctx.settingsDataStore.edit { it[KEY_PDF_TIERING_MODE] = mode.name }
+    }
+
+    fun pdfShowComponentTitlesFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SHOW_COMPONENT_TITLES] ?: true }
+
+    suspend fun setPdfShowComponentTitles(ctx: Context, show: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_PDF_SHOW_COMPONENT_TITLES] = show }
     }
 
     // One-time migrations

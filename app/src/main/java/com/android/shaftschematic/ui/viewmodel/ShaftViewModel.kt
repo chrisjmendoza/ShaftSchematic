@@ -166,6 +166,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _pdfTieringMode = MutableStateFlow(PdfTieringMode.AUTO)
     val pdfTieringMode: StateFlow<PdfTieringMode> = _pdfTieringMode.asStateFlow()
 
+    private val _pdfShowComponentTitles = MutableStateFlow(true)
+    val pdfShowComponentTitles: StateFlow<Boolean> = _pdfShowComponentTitles.asStateFlow()
+
     private val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
 
@@ -449,6 +452,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 SettingsStore.updatePdfPrefs { it.copy(tieringMode = persisted) }
             }
         }
+        viewModelScope.launch {
+            SettingsStore.pdfShowComponentTitlesFlow(getApplication()).collectLatest { persisted ->
+                _pdfShowComponentTitles.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(showComponentTitles = persisted) }
+            }
+        }
 
         viewModelScope.launch {
             SettingsStore.previewBlackWhiteOnlyFlow(getApplication()).collectLatest { persisted ->
@@ -636,6 +645,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         SettingsStore.updatePdfPrefs { it.copy(tieringMode = mode) }
         if (persist) {
             viewModelScope.launch { SettingsStore.setPdfTieringMode(getApplication(), mode) }
+        }
+    }
+
+    fun setPdfShowComponentTitles(show: Boolean, persist: Boolean = true) {
+        _pdfShowComponentTitles.value = show
+        SettingsStore.updatePdfPrefs { it.copy(showComponentTitles = show) }
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPdfShowComponentTitles(getApplication(), show) }
         }
     }
 
