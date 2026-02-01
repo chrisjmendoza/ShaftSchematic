@@ -687,11 +687,17 @@ fun ShaftScreen(
                     )
                 }
 
-                Button(
-                    onClick = { chooserOpen = true },
-                    modifier = Modifier.fillMaxWidth()
+                Surface(
+                    tonalElevation = 2.dp,
+                    shape = MaterialTheme.shapes.large
                 ) {
-                    Text("+ Add Component")
+                    Button(
+                        onClick = { chooserOpen = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large
+                    ) {
+                        Text("+ Add Component")
+                    }
                 }
 
                 ComponentCarouselPager(
