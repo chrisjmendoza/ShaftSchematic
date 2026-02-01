@@ -1,6 +1,7 @@
 package com.android.shaftschematic.ui.viewmodel
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.pdf.PdfExportMode
 
 import android.app.Application
 import android.content.Context
@@ -168,6 +169,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _pdfShowComponentTitles = MutableStateFlow(true)
     val pdfShowComponentTitles: StateFlow<Boolean> = _pdfShowComponentTitles.asStateFlow()
+
+    private val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
+    val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
 
     private val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
@@ -460,6 +464,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
+            SettingsStore.pdfExportModeFlow(getApplication()).collectLatest { persisted ->
+                _pdfExportMode.value = persisted
+            }
+        }
+
+        viewModelScope.launch {
             SettingsStore.previewBlackWhiteOnlyFlow(getApplication()).collectLatest { persisted ->
                 _previewBlackWhiteOnly.value = persisted
             }
@@ -653,6 +663,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         SettingsStore.updatePdfPrefs { it.copy(showComponentTitles = show) }
         if (persist) {
             viewModelScope.launch { SettingsStore.setPdfShowComponentTitles(getApplication(), show) }
+        }
+    }
+
+    fun setPdfExportMode(mode: PdfExportMode, persist: Boolean = true) {
+        _pdfExportMode.value = mode
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPdfExportMode(getApplication(), mode) }
         }
     }
 

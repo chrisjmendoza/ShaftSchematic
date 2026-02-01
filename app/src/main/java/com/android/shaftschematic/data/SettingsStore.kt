@@ -1,6 +1,7 @@
 
 package com.android.shaftschematic.data
 import com.android.shaftschematic.settings.PdfTieringMode
+import com.android.shaftschematic.pdf.PdfExportMode
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -54,6 +55,7 @@ object SettingsStore {
     private val KEY_OPEN_PDF_AFTER_EXPORT = booleanPreferencesKey("open_pdf_after_export")
     private val KEY_PDF_TIERING_MODE = stringPreferencesKey("pdf_tiering_mode")
     private val KEY_PDF_SHOW_COMPONENT_TITLES = booleanPreferencesKey("pdf_show_component_titles")
+    private val KEY_PDF_EXPORT_MODE = stringPreferencesKey("pdf_export_mode")
     fun pdfTieringModeFlow(ctx: Context): Flow<PdfTieringMode> =
         ctx.settingsDataStore.data.map { p ->
             runCatching { PdfTieringMode.valueOf(p[KEY_PDF_TIERING_MODE] ?: "AUTO") }.getOrDefault(PdfTieringMode.AUTO)
@@ -68,6 +70,16 @@ object SettingsStore {
 
     suspend fun setPdfShowComponentTitles(ctx: Context, show: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_PDF_SHOW_COMPONENT_TITLES] = show }
+    }
+
+    fun pdfExportModeFlow(ctx: Context): Flow<PdfExportMode> =
+        ctx.settingsDataStore.data.map { p ->
+            runCatching { PdfExportMode.valueOf(p[KEY_PDF_EXPORT_MODE] ?: "Standard") }
+                .getOrDefault(PdfExportMode.Standard)
+        }
+
+    suspend fun setPdfExportMode(ctx: Context, mode: PdfExportMode) {
+        ctx.settingsDataStore.edit { it[KEY_PDF_EXPORT_MODE] = mode.name }
     }
 
     // One-time migrations

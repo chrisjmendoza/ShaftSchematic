@@ -21,8 +21,9 @@ fun exportShaftPdf(
     appVersion: String,
     filename: String,
     project: ProjectInfo = ProjectInfo(),
-    pdfPrefs: com.android.shaftschematic.settings.PdfPrefs
+    pdfPrefs: com.android.shaftschematic.settings.PdfPrefs,
+    options: PdfExportOptions = PdfExportOptions()
 ) {
     // Since this file shares the same package, the top-level composeShaftPdf() is visible directly.
-    composeShaftPdf(page, spec, unit, project, appVersion, filename, pdfPrefs)
+    composeShaftPdf(page, spec, unit, project, appVersion, filename, pdfPrefs, options)
 }

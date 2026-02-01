@@ -2,6 +2,7 @@
 package com.android.shaftschematic.ui.screen
 import androidx.compose.material3.RadioButton
 import com.android.shaftschematic.settings.PdfTieringMode
+import com.android.shaftschematic.pdf.PdfExportMode
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/SettingsRoute.kt
 
 import androidx.compose.foundation.layout.Arrangement
@@ -100,6 +101,7 @@ fun SettingsRoute(
     val openPdfAfterExport by vm.openPdfAfterExport.collectAsState()
     val pdfTieringMode by vm.pdfTieringMode.collectAsState()
     val pdfShowComponentTitles by vm.pdfShowComponentTitles.collectAsState()
+    val pdfExportMode by vm.pdfExportMode.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -126,6 +128,7 @@ fun SettingsRoute(
                         when (page) {
                             SettingsPage.MAIN -> "Settings"
                             SettingsPage.PREVIEW_COLORS -> "Preview Colors"
+                            SettingsPage.PDF_EXPORT -> "PDF Export"
                         }
                     )
                 },
@@ -135,6 +138,7 @@ fun SettingsRoute(
                             when (page) {
                                 SettingsPage.MAIN -> onBack()
                                 SettingsPage.PREVIEW_COLORS -> page = SettingsPage.MAIN
+                                SettingsPage.PDF_EXPORT -> page = SettingsPage.MAIN
                             }
                         }
                     ) {
@@ -170,56 +174,16 @@ fun SettingsRoute(
                     }
 
                     HorizontalDivider()
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(checked = showGrid, onCheckedChange = { vm.setShowGrid(it) })
-                        Spacer(Modifier.width(8.dp))
-                        Text("Show Grid in Preview")
-                    }
+                    ListItem(
+                        headlineContent = { Text("PDF Export Options") },
+                        supportingContent = { Text("Template mode and PDF toggles") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { page = SettingsPage.PDF_EXPORT }
+                    )
 
                     HorizontalDivider()
-                    Text("PDF Export", style = MaterialTheme.typography.titleMedium)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = openPdfAfterExport,
-                            onCheckedChange = { vm.setOpenPdfAfterExport(it) }
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Open PDF after export")
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = pdfShowComponentTitles,
-                            onCheckedChange = { vm.setPdfShowComponentTitles(it) }
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Show component titles in PDF")
-                    }
-
-                    // --- PDF Tiering Mode ---
-                    Spacer(Modifier.height(8.dp))
-                    Text("Dimension tiering reference", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 16.dp))
-                    Text(
-                        "Controls whether dimensions reference AFT, FWD, or choose automatically.",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(start = 16.dp, bottom = 4.dp)
-                    )
-                    val tieringOptions = listOf(
-                        PdfTieringMode.AUTO to "Auto (closest end)",
-                        PdfTieringMode.AFT to "AFT (force AFT SET)",
-                        PdfTieringMode.FWD to "FWD (force FWD SET)"
-                    )
-                    tieringOptions.forEach { (mode, label) ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 24.dp)) {
-                            RadioButton(
-                                selected = pdfTieringMode == mode,
-                                onClick = { vm.setPdfTieringMode(mode) }
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(label)
-                        }
-                    }
-
+                    Text("Editor Screen", style = MaterialTheme.typography.titleMedium)
                     ListItem(
                         headlineContent = { Text("Preview Colors") },
                         supportingContent = { Text("Customize preview component colors") },
@@ -228,8 +192,11 @@ fun SettingsRoute(
                             .clickable { page = SettingsPage.PREVIEW_COLORS }
                     )
 
-                    HorizontalDivider()
-                    Text("Editor Screen", style = MaterialTheme.typography.titleMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(checked = showGrid, onCheckedChange = { vm.setShowGrid(it) })
+                        Spacer(Modifier.width(8.dp))
+                        Text("Show Grid in Preview")
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Switch(
                             checked = showComponentArrows,
@@ -372,11 +339,81 @@ fun SettingsRoute(
                     )
                 }
             }
+
+            SettingsPage.PDF_EXPORT -> {
+                val scrollState = rememberScrollState()
+                Column(
+                    modifier = Modifier
+                        .padding(pad)
+                        .verticalScroll(scrollState)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = openPdfAfterExport,
+                            onCheckedChange = { vm.setOpenPdfAfterExport(it) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Open PDF after export")
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = pdfShowComponentTitles,
+                            onCheckedChange = { vm.setPdfShowComponentTitles(it) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Show component titles in PDF")
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = pdfExportMode == PdfExportMode.Template,
+                            onCheckedChange = { enabled ->
+                                vm.setPdfExportMode(
+                                    if (enabled) PdfExportMode.Template else PdfExportMode.Standard
+                                )
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Template (shaft only)")
+                    }
+
+                    // --- PDF Tiering Mode ---
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Dimension tiering reference",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(start = 16.dp)
+                    )
+                    Text(
+                        "Controls whether dimensions reference AFT, FWD, or choose automatically.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 16.dp, bottom = 4.dp)
+                    )
+                    val tieringOptions = listOf(
+                        PdfTieringMode.AUTO to "Auto (closest end)",
+                        PdfTieringMode.AFT to "AFT (force AFT SET)",
+                        PdfTieringMode.FWD to "FWD (force FWD SET)"
+                    )
+                    tieringOptions.forEach { (mode, label) ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 24.dp)) {
+                            RadioButton(
+                                selected = pdfTieringMode == mode,
+                                onClick = { vm.setPdfTieringMode(mode) }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(label)
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
-private enum class SettingsPage { MAIN, PREVIEW_COLORS }
+private enum class SettingsPage { MAIN, PREVIEW_COLORS, PDF_EXPORT }
 
 @Composable
 private fun PreviewColorRow(

@@ -59,8 +59,18 @@ fun composeShaftPdf(
     appVersion: String,
     filename: String,
     pdfPrefs: PdfPrefs = PdfPrefs(),
+    options: PdfExportOptions = PdfExportOptions(),
     resolvedComponents: List<ResolvedComponent>? = null,
 ) {
+    val effectiveOptions = when (options.mode) {
+        PdfExportMode.Template -> options.copy(
+            showDimensions = false,
+            showLabels = false,
+            showFooter = false,
+        )
+        PdfExportMode.Standard -> options
+    }
+
     val c = page.canvas
     // PDF safety: explicitly paint a white page background so geometry/labels are visible
     // even if the viewer/app is in dark mode (some viewers treat an unpainted page as dark).
@@ -150,10 +160,27 @@ fun composeShaftPdf(
     val cy = if (minCy <= maxCy) desiredCy.coerceIn(minCy, maxCy) else (geomRect.top + geomRect.bottom) * 0.5f
     val yTopOfShaft = cy - halfHeightPx
 
+    val pageDrawableHeightPx = geomRect.height()
+    val shaftBoundsHeightPx = maxDiaMm * ptPerMm
+    val verticalOffsetPx = if (effectiveOptions.mode == PdfExportMode.Template) {
+        (pageDrawableHeightPx - shaftBoundsHeightPx) / 2f
+    } else {
+        0f
+    }
+    val shaftTranslateY = if (effectiveOptions.mode == PdfExportMode.Template) {
+        (geomRect.top + verticalOffsetPx) - yTopOfShaft
+    } else {
+        0f
+    }
+
     fun xAt(mm: Float) = (left + mm * ptPerMm).coerceIn(geomRect.left, geomRect.right)
     fun rPx(d: Float)  = (d * 0.5f) * ptPerMm
 
     // geometry
+    c.save()
+    if (shaftTranslateY != 0f) {
+        c.translate(0f, shaftTranslateY)
+    }
     if (bodyOnly || singleTaperOnly) {
         drawBodiesPlain(c, bodiesForPdf, cy, ::xAt, ::rPx, outline)
     } else {
@@ -162,8 +189,9 @@ fun composeShaftPdf(
     drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline)
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
+    c.restore()
 
-    if (pdfPrefs.showComponentTitles) {
+    if (effectiveOptions.showLabels && pdfPrefs.showComponentTitles) {
         drawComponentLabelsPdf(
             canvas = c,
             spec = spec,
@@ -175,7 +203,7 @@ fun composeShaftPdf(
         )
     }
 
-    run {
+    if (effectiveOptions.showDimensions) {
         val baseY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
 
         // Fit-to-band safety for dimensional rails (OAL always visible)
@@ -265,25 +293,27 @@ fun composeShaftPdf(
         }
     }
 
-    // footer
-    val showCompressionNote = !bodyOnly && hasCenterBreak(spec)
+    if (effectiveOptions.showFooter) {
+        // footer
+        val showCompressionNote = !bodyOnly && hasCenterBreak(spec)
 
-    val footerTapers = selectFooterTapers(spec)
-    val footerCfg = FooterConfig(
-        showAftThread = hasAftThread(spec),
-        showFwdThread = hasFwdThread(spec),
-        // Taper rendering is gated by detectEndFeatures(); this flag only controls whether
-        // taper details are enabled for the footer at all.
-        showAftTaper  = footerTapers.aft != null,
-        showFwdTaper  = footerTapers.fwd != null,
-        showCompressionNote = showCompressionNote
-    )
+        val footerTapers = selectFooterTapers(spec)
+        val footerCfg = FooterConfig(
+            showAftThread = hasAftThread(spec),
+            showFwdThread = hasFwdThread(spec),
+            // Taper rendering is gated by detectEndFeatures(); this flag only controls whether
+            // taper details are enabled for the footer at all.
+            showAftTaper  = footerTapers.aft != null,
+            showFwdTaper  = footerTapers.fwd != null,
+            showCompressionNote = showCompressionNote
+        )
 
-    val infoTop = cy + halfHeightPx + INFO_GAP_PT
-    val infoBottom = min(infoTop + FOOTER_BLOCK_PT, pageH - PAGE_MARGIN_PT)
-    val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
+        val infoTop = cy + halfHeightPx + INFO_GAP_PT
+        val infoBottom = min(infoTop + FOOTER_BLOCK_PT, pageH - PAGE_MARGIN_PT)
+        val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
 
-    drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg)
+        drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg)
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

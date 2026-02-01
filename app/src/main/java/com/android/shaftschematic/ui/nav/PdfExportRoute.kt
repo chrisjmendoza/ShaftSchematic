@@ -20,6 +20,7 @@ import androidx.navigation.NavController
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.pdf.composeShaftPdf
+import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.DocumentNaming
@@ -50,6 +51,7 @@ fun PdfExportRoute(
     var finished by rememberSaveable { mutableStateOf(false) }
 
     val openAfterExport by vm.openPdfAfterExport.collectAsState()
+    val pdfExportMode by vm.pdfExportMode.collectAsState()
 
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
@@ -97,6 +99,7 @@ fun PdfExportRoute(
                                 appVersion = appVersionFromContext(ctx),
                                 filename = filename,
                                 pdfPrefs = vm.currentPdfPrefs,
+                                options = PdfExportOptions(mode = pdfExportMode),
                                 resolvedComponents = vm.resolvedComponents.value
                             )
                             null
