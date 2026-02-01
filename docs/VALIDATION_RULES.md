@@ -189,7 +189,7 @@ Non-blocking warnings:
 - Rapid diameter changes
 - Tiny segments (e.g., < 1 mm)
 - Free-to-end space < 10 mm
-- Zero-body coverage (shaft with only linters/tapers/threads)
+- Zero-body coverage (no explicit bodies in `ShaftSpec`; auto bodies are derived and do not satisfy this warning)
 
 ---
 

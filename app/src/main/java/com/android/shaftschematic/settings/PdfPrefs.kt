@@ -18,8 +18,9 @@ data class PdfPrefs(
      * expressed as a multiple of the standard rail gap (>= 1.0).
      * Example: 2.5f = OAL sits 2.5× the normal gap above the next rail.
      */
-    val oalSpacingFactor: Float = 2.5f
-    ,val tieringMode: PdfTieringMode = PdfTieringMode.AUTO
+    val oalSpacingFactor: Float = 2.5f,
+    val tieringMode: PdfTieringMode = PdfTieringMode.AUTO,
+    val showComponentTitles: Boolean = true,
 ) {
     fun clamped(): PdfPrefs =
         copy(oalSpacingFactor = oalSpacingFactor.coerceIn(1.0f, 6.0f))

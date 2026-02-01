@@ -16,6 +16,8 @@ import com.android.shaftschematic.model.snapForwardFromOrdered
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.util.Achievements
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorPreset
@@ -164,6 +166,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _pdfTieringMode = MutableStateFlow(PdfTieringMode.AUTO)
     val pdfTieringMode: StateFlow<PdfTieringMode> = _pdfTieringMode.asStateFlow()
 
+    private val _pdfShowComponentTitles = MutableStateFlow(true)
+    val pdfShowComponentTitles: StateFlow<Boolean> = _pdfShowComponentTitles.asStateFlow()
+
     private val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
 
@@ -190,6 +195,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _componentArrowWidthDp = MutableStateFlow(40)
     val componentArrowWidthDp: StateFlow<Int> = _componentArrowWidthDp.asStateFlow()
+
+    private val _resolvedComponents = MutableStateFlow<List<ResolvedComponent>>(emptyList())
+    val resolvedComponents: StateFlow<List<ResolvedComponent>> = _resolvedComponents.asStateFlow()
 
     private val _devOptionsEnabled = MutableStateFlow(false)
     val devOptionsEnabled: StateFlow<Boolean> = _devOptionsEnabled.asStateFlow()
@@ -366,6 +374,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
         }
+
+        viewModelScope.launch {
+            combine(spec, overallIsManual) { s, isManual ->
+                resolveComponents(s, isManual)
+            }.collectLatest { resolved ->
+                _resolvedComponents.value = resolved
+            }
+        }
         // --- SETTINGSSTORE FLOWS AND MIGRATIONS ---
         // One-time migration: internal saved shafts were historically `*.json`.
         // Keep them visible/openable, but prefer `*.shaft` going forward.
@@ -434,6 +450,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfTieringModeFlow(getApplication()).collectLatest { persisted ->
                 _pdfTieringMode.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(tieringMode = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfShowComponentTitlesFlow(getApplication()).collectLatest { persisted ->
+                _pdfShowComponentTitles.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(showComponentTitles = persisted) }
             }
         }
 
@@ -623,6 +645,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         SettingsStore.updatePdfPrefs { it.copy(tieringMode = mode) }
         if (persist) {
             viewModelScope.launch { SettingsStore.setPdfTieringMode(getApplication(), mode) }
+        }
+    }
+
+    fun setPdfShowComponentTitles(show: Boolean, persist: Boolean = true) {
+        _pdfShowComponentTitles.value = show
+        SettingsStore.updatePdfPrefs { it.copy(showComponentTitles = show) }
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPdfShowComponentTitles(getApplication(), show) }
         }
     }
 
@@ -1268,7 +1298,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun addLinerAt(startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
         val id = newId()
         orderAdd(ComponentKind.LINER, id)
-        s.copy(liners = listOf(Liner(id, startMm, max(0f, lengthMm), max(0f, odMm))) + s.liners)
+        val len = max(0f, lengthMm)
+        val od = max(0f, odMm)
+        val liner = Liner(
+            id = id,
+            startFromAftMm = startMm,
+            lengthMm = len,
+            odMm = od,
+            endMmPhysical = startMm + len,
+            authoredReference = LinerAuthoredReference.AFT
+        )
+        s.copy(liners = listOf(liner) + s.liners)
     }.also {
         rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
         ensureOverall()
@@ -1279,13 +1319,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         if (index !in s.liners.indices) s else {
             val old = s.liners[index]
             val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
+            val len = max(0f, lengthMm)
+            val od = max(0f, odMm)
 
             val updatedLiners = s.liners.toMutableList().also { l ->
-                l[index] = old.copy(
-                    startFromAftMm = startMm,
-                    lengthMm = max(0f, lengthMm),
-                    odMm = max(0f, odMm)
-                )
+                l[index] = old.withPhysical(startMmPhysical = startMm, lengthMm = len, odMm = od)
             }
 
             val base = s.copy(liners = updatedLiners)
@@ -1301,6 +1339,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
         }
         ensureOverall()
+    }
+
+    fun updateLinerAuthoredReference(index: Int, reference: LinerAuthoredReference) = _spec.update { s ->
+        if (index !in s.liners.indices) s else {
+            val old = s.liners[index]
+            if (old.authoredReference == reference) return@update s
+            s.copy(
+                liners = s.liners.toMutableList().also { l ->
+                    l[index] = old.copy(authoredReference = reference)
+                }
+            )
+        }
     }
 
     fun updateLinerLabel(index: Int, label: String?) = _spec.update { s ->

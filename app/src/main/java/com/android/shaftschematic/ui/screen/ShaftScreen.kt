@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -114,6 +116,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
@@ -121,6 +124,12 @@ import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.order.ComponentKey
+import com.android.shaftschematic.ui.resolved.ResolvedBody
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
+import com.android.shaftschematic.ui.resolved.ResolvedLiner
+import com.android.shaftschematic.ui.resolved.ResolvedTaper
+import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
@@ -164,6 +173,7 @@ fun ShaftScreen(
 
     // State
     spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent> = emptyList(),
     unit: UnitSystem,
     overallIsManual: Boolean,
     unitLocked: Boolean,
@@ -217,6 +227,7 @@ fun ShaftScreen(
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
+    onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
 
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
 
@@ -454,6 +465,7 @@ fun ShaftScreen(
             PreviewCard(
                 showGrid = showGrid,
                 spec = spec,
+                resolvedComponents = resolvedComponents,
                 unit = unit,
                 overallIsManual = overallIsManual,
                 devOptionsEnabled = devOptionsEnabled,
@@ -694,17 +706,20 @@ fun ShaftScreen(
 
                 ComponentCarouselPager(
                     spec = spec,
+                    resolvedComponents = resolvedComponents,
                     unit = unit,
                     componentOrder = componentOrder,
                     showEdgeArrows = showComponentArrows,
                     edgeArrowWidthDp = componentArrowWidthDp,
                     showComponentDebugLabels = showComponentDebugLabels,
+                    onAddBody = onAddBody,
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateTaper = snappedTaperUpdater,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateThread = snappedThreadUpdater,
                     onUpdateLiner = snappedLinerUpdater,
                     onUpdateLinerLabel = onUpdateLinerLabel,
+                    onUpdateLinerReference = onUpdateLinerReference,
 
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
 
@@ -776,7 +791,8 @@ fun ShaftScreen(
                                 tpiToPitchMm(tpi),
                                 excludeFromOAL
                             )
-                        }
+                        },
+                        onCancel = { addThreadOpen = false }
                     )
                 }
             }
@@ -939,6 +955,7 @@ private fun ShaftPositionDropdown(
 private fun PreviewCard(
     showGrid: Boolean,
     spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>,
     unit: UnitSystem,
     overallIsManual: Boolean,
     devOptionsEnabled: Boolean,
@@ -966,6 +983,7 @@ private fun PreviewCard(
             // Direct render: pass grid + highlight to the renderer
             ShaftDrawing(
                 spec = spec,
+                resolvedComponents = resolvedComponents,
                 unit = unit,
                 showGrid = showGrid,
                 blackWhiteOnly = previewBlackWhiteOnly,
@@ -1033,10 +1051,8 @@ private fun PreviewOalBadge(
 /* ───────────────── Carousel implementation ───────────────── */
 
 private data class RowRef(
-    val kind: ComponentKind,
-    val index: Int,
-    val start: Float,
-    val id: String
+    val component: ResolvedComponent,
+    val explicitIndex: Int? = null
 )
 
 
@@ -1052,17 +1068,20 @@ private data class RowRef(
 @Composable
 private fun ComponentCarouselPager(
     spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>,
     unit: UnitSystem,
     componentOrder: List<ComponentKey>,
     showEdgeArrows: Boolean,
     edgeArrowWidthDp: Int,
     showComponentDebugLabels: Boolean,
+    onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
+    onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
 
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
 
@@ -1075,8 +1094,6 @@ private fun ComponentCarouselPager(
     onAddAtFwd: () -> Unit,
     onFocusedChanged: (String?) -> Unit
 ) {
-    val rows = remember(spec, componentOrder) { buildOrderedRows(spec, componentOrder) }
-
     val bodyTitleById = remember(spec.bodies) {
         buildBodyTitleById(spec)
     }
@@ -1093,16 +1110,21 @@ private fun ComponentCarouselPager(
         buildThreadTitleById(spec)
     }
 
-    // Build rows and force left→right (AFT→FWD) by actual start position in mm.
-    val rowsSorted = remember(spec, componentOrder) {
-        val base = buildOrderedRows(spec, componentOrder)
-        fun startMm(row: RowRef): Float = when (row.kind) {
-            ComponentKind.BODY   -> spec.bodies.getOrNull(row.index)?.startFromAftMm ?: Float.MAX_VALUE
-            ComponentKind.TAPER  -> spec.tapers.getOrNull(row.index)?.startFromAftMm ?: Float.MAX_VALUE
-            ComponentKind.THREAD -> spec.threads.getOrNull(row.index)?.startFromAftMm ?: Float.MAX_VALUE
-            ComponentKind.LINER  -> spec.liners.getOrNull(row.index)?.startFromAftMm ?: Float.MAX_VALUE
+    val rowsSorted = remember(spec, resolvedComponents) {
+        val bodyIdx   = spec.bodies.withIndex().associate { it.value.id to it.index }
+        val taperIdx  = spec.tapers.withIndex().associate { it.value.id to it.index }
+        val threadIdx = spec.threads.withIndex().associate { it.value.id to it.index }
+        val linerIdx  = spec.liners.withIndex().associate { it.value.id to it.index }
+
+        resolvedComponents.mapNotNull { comp ->
+            val index = when (comp) {
+                is ResolvedBody -> bodyIdx[comp.id]
+                is ResolvedTaper -> taperIdx[comp.id]
+                is ResolvedThread -> threadIdx[comp.id]
+                is ResolvedLiner -> linerIdx[comp.id]
+            }
+            RowRef(component = comp, explicitIndex = index)
         }
-        base.sortedBy { startMm(it) }
     }
 
 // Pager pages: [Add @ AFT] + rowsSorted + [Add @ FWD]
@@ -1131,7 +1153,7 @@ private fun ComponentCarouselPager(
         val p = pagerState.currentPage
         val idOrNull = when (p) {
             0, pageCount - 1 -> null
-            else -> rowsSorted[p - 1].id
+            else -> rowsSorted[p - 1].component.id
         }
         onFocusedChanged(idOrNull)
     }
@@ -1176,10 +1198,12 @@ private fun ComponentCarouselPager(
                             spec = spec, unit = unit, row = row, physicalIndex = page - 1,
                             outerPaddingHorizontal = componentCardOuterPadding,
                             showComponentDebugLabels = showComponentDebugLabels,
+                            onAddBody = onAddBody,
                             onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
                             onUpdateTaperKeyway = onUpdateTaperKeyway,
                             onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
                             onUpdateLinerLabel = onUpdateLinerLabel,
+                            onUpdateLinerReference = onUpdateLinerReference,
                             bodyTitleById = bodyTitleById,
                             taperTitleById = taperTitleById,
                             linerTitleById = linerTitleById,
@@ -1287,12 +1311,14 @@ private fun ComponentPagerCard(
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
+    onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
+    onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     bodyTitleById: Map<String, String>,
     taperTitleById: Map<String, String>,
     linerTitleById: Map<String, String>,
@@ -1314,9 +1340,58 @@ private fun ComponentPagerCard(
         }
     }
 
-    when (row.kind) {
-        ComponentKind.BODY -> {
-            val b = spec.bodies[row.index]
+    val component = row.component
+    val explicitIndex = row.explicitIndex
+
+    when (component) {
+        is ResolvedBody -> {
+            if (component.source == ResolvedComponentSource.AUTO) {
+                var startMm by remember(component.id) { mutableStateOf(component.startMmPhysical) }
+                var lengthMm by remember(component.id) { mutableStateOf(component.endMmPhysical - component.startMmPhysical) }
+                var diaMm by remember(component.id) { mutableStateOf(component.diaMm) }
+                var promoted by remember(component.id) { mutableStateOf(false) }
+
+                fun promoteIfNeeded() {
+                    if (!promoted && startMm >= 0f && lengthMm > 0f && diaMm > 0f) {
+                        promoted = true
+                        onAddBody(startMm, lengthMm, diaMm)
+                    }
+                }
+
+                ComponentCard(
+                    title = "Body (auto)",
+                    debugText = if (showComponentDebugLabels) {
+                        "id=${component.id} • startMm=${f1(component.startMmPhysical)} • endMm=${f1(component.endMmPhysical)}"
+                    } else null,
+                    outerPaddingHorizontal = outerPaddingHorizontal,
+                ) {
+                    CommitNum(
+                        label = "Start (${abbr(unit)})",
+                        initialDisplay = disp(startMm, unit)
+                    ) { s ->
+                        toMmOrNull(s, unit)?.let {
+                            startMm = it
+                            promoteIfNeeded()
+                        }
+                    }
+                    CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit)) { s ->
+                        toMmOrNull(s, unit)?.let {
+                            lengthMm = it
+                            promoteIfNeeded()
+                        }
+                    }
+                    CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit)) { s ->
+                        toMmOrNull(s, unit)?.let {
+                            diaMm = it
+                            promoteIfNeeded()
+                        }
+                    }
+                }
+                return
+            }
+
+            val idx = explicitIndex ?: return
+            val b = spec.bodies.getOrNull(idx) ?: return
             ComponentCard(
                 title = bodyTitleById[b.id] ?: "Body",
                 debugText = if (showComponentDebugLabels) {
@@ -1328,7 +1403,7 @@ private fun ComponentPagerCard(
                 onRemove = {
                 Log.d(
                     "ShaftUI",
-                    "Body delete clicked: id=${b.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                    "Body delete clicked: id=${b.id}, rowIndex=$idx, physicalIndex=$physicalIndex"
                 )
                 onRemoveBody(b.id)
                 }
@@ -1339,24 +1414,25 @@ private fun ComponentPagerCard(
                     validator = startValidator(b.id, ComponentKind.BODY, b.lengthMm)
                 ) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateBody(row.index, it, b.lengthMm, b.diaMm)
+                        onUpdateBody(idx, it, b.lengthMm, b.diaMm)
                     }
                 }
                 CommitNum("Length (${abbr(unit)})", disp(b.lengthMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateBody(row.index, b.startFromAftMm, it, b.diaMm)
+                        onUpdateBody(idx, b.startFromAftMm, it, b.diaMm)
                     }
                 }
                 CommitNum("Ø (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateBody(row.index, b.startFromAftMm, b.lengthMm, it)
+                        onUpdateBody(idx, b.startFromAftMm, b.lengthMm, it)
                     }
                 }
             }
         }
 
-        ComponentKind.TAPER -> {
-            val t = spec.tapers[row.index]
+        is ResolvedTaper -> {
+            val idx = explicitIndex ?: return
+            val t = spec.tapers.getOrNull(idx) ?: return
             val endMap = taperSetLetMapping(t, spec.overallLengthMm)
             ComponentCard(
                 title = taperTitleById[t.id] ?: "Taper",
@@ -1369,7 +1445,7 @@ private fun ComponentPagerCard(
                 onRemove = {
                 Log.d(
                     "ShaftUI",
-                    "Taper delete clicked: id=${t.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                    "Taper delete clicked: id=${t.id}, rowIndex=$idx, physicalIndex=$physicalIndex"
                 )
                 onRemoveTaper(t.id)
                 }
@@ -1380,22 +1456,22 @@ private fun ComponentPagerCard(
                     validator = startValidator(t.id, ComponentKind.TAPER, t.lengthMm)
                 ) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateTaper(row.index, it, t.lengthMm, t.startDiaMm, t.endDiaMm)
+                        onUpdateTaper(idx, it, t.lengthMm, t.startDiaMm, t.endDiaMm)
                     }
                 }
                 CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateTaper(row.index, t.startFromAftMm, it, t.startDiaMm, t.endDiaMm)
+                        onUpdateTaper(idx, t.startFromAftMm, it, t.startDiaMm, t.endDiaMm)
                     }
                 }
                 CommitNum("${endMap.leftCode} Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateTaper(row.index, t.startFromAftMm, t.lengthMm, it, t.endDiaMm)
+                        onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, it, t.endDiaMm)
                     }
                 }
                 CommitNum("${endMap.rightCode} Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateTaper(row.index, t.startFromAftMm, t.lengthMm, t.startDiaMm, it)
+                        onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, it)
                     }
                 }
 
@@ -1411,7 +1487,7 @@ private fun ComponentPagerCard(
                         fillMaxWidth = false
                     ) { s ->
                         val widthMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
-                        onUpdateTaperKeyway(row.index, widthMm, t.keywayDepthMm, t.keywayLengthMm, t.keywaySpooned)
+                        onUpdateTaperKeyway(idx, widthMm, t.keywayDepthMm, t.keywayLengthMm, t.keywaySpooned)
                     }
 
                     Text("×", style = MaterialTheme.typography.titleMedium)
@@ -1423,7 +1499,7 @@ private fun ComponentPagerCard(
                         fillMaxWidth = false
                     ) { s ->
                         val depthMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
-                        onUpdateTaperKeyway(row.index, t.keywayWidthMm, depthMm, t.keywayLengthMm, t.keywaySpooned)
+                        onUpdateTaperKeyway(idx, t.keywayWidthMm, depthMm, t.keywayLengthMm, t.keywaySpooned)
                     }
                 }
 
@@ -1432,7 +1508,7 @@ private fun ComponentPagerCard(
                     initialDisplay = dispKw(t.keywayLengthMm, unit),
                 ) { s ->
                     val lenMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
-                    onUpdateTaperKeyway(row.index, t.keywayWidthMm, t.keywayDepthMm, lenMm, t.keywaySpooned)
+                    onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, lenMm, t.keywaySpooned)
                 }
 
                 Row(
@@ -1443,7 +1519,7 @@ private fun ComponentPagerCard(
                             value = t.keywaySpooned,
                             role = androidx.compose.ui.semantics.Role.Switch,
                             onValueChange = { checked ->
-                                onUpdateTaperKeyway(row.index, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, checked)
+                                onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, checked)
                             }
                         )
                         .padding(vertical = 4.dp),
@@ -1461,8 +1537,9 @@ private fun ComponentPagerCard(
             }
         }
 
-        ComponentKind.THREAD -> {
-            val th = spec.threads[row.index]
+        is ResolvedThread -> {
+            val idx = explicitIndex ?: return
+            val th = spec.threads.getOrNull(idx) ?: return
             val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
             ComponentCard(
                 title = threadTitleById[th.id] ?: "Thread",
@@ -1475,7 +1552,7 @@ private fun ComponentPagerCard(
                 onRemove = {
                 Log.d(
                     "ShaftUI",
-                    "Thread delete clicked: id=${th.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                    "Thread delete clicked: id=${th.id}, rowIndex=$idx, physicalIndex=$physicalIndex"
                 )
                 onRemoveThread(th.id)
                 }
@@ -1520,18 +1597,18 @@ private fun ComponentPagerCard(
                     validator = startValidator(th.id, ComponentKind.THREAD, th.lengthMm)
                 ) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateThread(row.index, it, th.lengthMm, th.majorDiaMm, th.pitchMm)
+                        onUpdateThread(idx, it, th.lengthMm, th.majorDiaMm, th.pitchMm)
                     }
                 }
                 CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateThread(row.index, th.startFromAftMm, th.lengthMm, it, th.pitchMm)
+                        onUpdateThread(idx, th.startFromAftMm, th.lengthMm, it, th.pitchMm)
                     }
                 }
                 CommitNum("TPI", tpiDisplay) { s ->
                     parseFractionOrDecimal(s)?.takeIf { it > 0f }?.let { tpi ->
                         onUpdateThread(
-                            row.index,
+                            idx,
                             th.startFromAftMm,
                             th.lengthMm,
                             th.majorDiaMm,
@@ -1541,18 +1618,26 @@ private fun ComponentPagerCard(
                 }
                 CommitNum("Length (${abbr(unit)})", disp(th.lengthMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateThread(row.index, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm)
+                        onUpdateThread(idx, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm)
                     }
                 }
             }
         }
 
-        ComponentKind.LINER -> {
-            val ln = spec.liners[row.index]
+        is ResolvedLiner -> {
+            val idx = explicitIndex ?: return
+            val ln = spec.liners.getOrNull(idx) ?: return
 
             val computedTitle = linerTitleById[ln.id] ?: "Liner"
             var editingTitle by rememberSaveable(ln.id) { mutableStateOf(false) }
             val focusRequester = remember { FocusRequester() }
+            var hasFocusedOnce by remember(ln.id) { mutableStateOf(false) }
+            val isFwdRef = ln.authoredReference == LinerAuthoredReference.FWD
+            val authoredStartMm = if (isFwdRef) {
+                spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
+            } else {
+                ln.startFromAftMm
+            }
             ComponentCard(
                 title = computedTitle,
                 titleContent = {
@@ -1568,8 +1653,7 @@ private fun ComponentPagerCard(
                         )
                     } else {
                         var text by remember(ln.id, ln.label) { mutableStateOf(ln.label.orEmpty()) }
-                        var didFocus by remember(ln.id) { mutableStateOf(false) }
-                        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                        LaunchedEffect(ln.id) { focusRequester.requestFocus() }
                         OutlinedTextField(
                             value = text,
                             onValueChange = { text = it },
@@ -1578,7 +1662,7 @@ private fun ComponentPagerCard(
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = {
                                 val trimmed = text.trim().takeIf { it.isNotEmpty() }
-                                onUpdateLinerLabel(row.index, trimmed)
+                                onUpdateLinerLabel(idx, trimmed)
                                 editingTitle = false
                             }),
                             modifier = Modifier
@@ -1586,10 +1670,11 @@ private fun ComponentPagerCard(
                                 .focusRequester(focusRequester)
                                 .onFocusChanged { f ->
                                     if (f.isFocused) {
-                                        didFocus = true
-                                    } else if (didFocus) {
+                                        hasFocusedOnce = true
+                                    }
+                                    if (hasFocusedOnce && !f.isFocused) {
                                         val trimmed = text.trim().takeIf { it.isNotEmpty() }
-                                        onUpdateLinerLabel(row.index, trimmed)
+                                        onUpdateLinerLabel(idx, trimmed)
                                         editingTitle = false
                                     }
                                 }
@@ -1605,28 +1690,77 @@ private fun ComponentPagerCard(
                 onRemove = {
                 Log.d(
                     "ShaftUI",
-                    "Liner delete clicked: id=${ln.id}, rowIndex=${row.index}, physicalIndex=$physicalIndex"
+                    "Liner delete clicked: id=${ln.id}, rowIndex=$idx, physicalIndex=$physicalIndex"
                 )
                 onRemoveLiner(ln.id)
                 }
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Measure From:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val selectedColors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color.Black,
+                        selectedLabelColor = Color.White,
+                        containerColor = Color.Transparent,
+                        labelColor = MaterialTheme.colorScheme.onSurface
+                    )
+                    FilterChip(
+                        selected = !isFwdRef,
+                        onClick = { onUpdateLinerReference(idx, LinerAuthoredReference.AFT) },
+                        label = { Text("AFT") },
+                        colors = selectedColors,
+                        border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null
+                    )
+                    FilterChip(
+                        selected = isFwdRef,
+                        onClick = { onUpdateLinerReference(idx, LinerAuthoredReference.FWD) },
+                        label = { Text("FWD") },
+                        colors = selectedColors,
+                        border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null
+                    )
+                }
+
                 CommitNum(
-                    label = "Start (${abbr(unit)})",
-                    initialDisplay = disp(ln.startFromAftMm, unit),
-                    validator = startValidator(ln.id, ComponentKind.LINER, ln.lengthMm)
-                ) { s ->
-                    toMmOrNull(s, unit)?.let {
-                        onUpdateLiner(row.index, it, ln.lengthMm, ln.odMm)
+                    label = "Start from ${if (isFwdRef) "FWD" else "AFT"} (${abbr(unit)})",
+                    initialDisplay = disp(authoredStartMm, unit),
+                    validator = { raw ->
+                        val authoredMm = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
+                        val physicalStartMm = if (isFwdRef) {
+                            spec.overallLengthMm - authoredMm - ln.lengthMm
+                        } else {
+                            authoredMm
+                        }
+                        startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, physicalStartMm)
                     }
+                ) { s ->
+                    val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physicalStartMm = if (isFwdRef) {
+                        spec.overallLengthMm - authoredMm - ln.lengthMm
+                    } else {
+                        authoredMm
+                    }
+                    onUpdateLiner(idx, physicalStartMm, ln.lengthMm, ln.odMm)
                 }
                 CommitNum("Length (${abbr(unit)})", disp(ln.lengthMm, unit)) { s ->
-                    toMmOrNull(s, unit)?.let {
-                        onUpdateLiner(row.index, ln.startFromAftMm, it, ln.odMm)
+                    val newLenMm = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physicalStartMm = if (isFwdRef) {
+                        val authored = spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
+                        spec.overallLengthMm - authored - newLenMm
+                    } else {
+                        ln.startFromAftMm
                     }
+                    onUpdateLiner(idx, physicalStartMm, newLenMm, ln.odMm)
                 }
                 CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateLiner(row.index, ln.startFromAftMm, ln.lengthMm, it)
+                        onUpdateLiner(idx, ln.startFromAftMm, ln.lengthMm, it)
                     }
                 }
             }
@@ -1634,54 +1768,6 @@ private fun ComponentPagerCard(
     }
 }
 
-
-/* ───────────────── Shared builders ───────────────── */
-/* ───────────────── Ordering tiers (for stable tie-break) ───────────────── */
-
-private const val TIE_BODY   = 0
-private const val TIE_TAPER  = 1_000_000
-private const val TIE_THREAD = 2_000_000
-private const val TIE_LINER  = 3_000_000
-
-// Assembly order: honor componentOrder if provided; else merge by physical start.
-private fun buildOrderedRows(
-    spec: ShaftSpec,
-    componentOrder: List<ComponentKey>
-): List<RowRef> {
-    if (componentOrder.isNotEmpty()) {
-        // Respect VM-provided assembly order verbatim.
-        val bodyIdx   = spec.bodies.withIndex().associate { it.value.id to it.index }
-        val taperIdx  = spec.tapers.withIndex().associate { it.value.id to it.index }
-        val threadIdx = spec.threads.withIndex().associate { it.value.id to it.index }
-        val linerIdx  = spec.liners.withIndex().associate { it.value.id to it.index }
-
-
-        return buildList {
-            componentOrder.forEach { key ->
-                when (key.kind) {
-                    ComponentKind.BODY   -> bodyIdx[key.id]?.let   { i -> add(RowRef(ComponentKind.BODY,   i, spec.bodies[i].startFromAftMm,  key.id)) }
-                    ComponentKind.TAPER  -> taperIdx[key.id]?.let  { i -> add(RowRef(ComponentKind.TAPER,  i, spec.tapers[i].startFromAftMm,  key.id)) }
-                    ComponentKind.THREAD -> threadIdx[key.id]?.let { i -> add(RowRef(ComponentKind.THREAD, i, spec.threads[i].startFromAftMm, key.id)) }
-                    ComponentKind.LINER  -> linerIdx[key.id]?.let  { i -> add(RowRef(ComponentKind.LINER,  i, spec.liners[i].startFromAftMm,  key.id)) }
-                }
-            }
-        }
-    }
-
-
-    // Fallback: true assembly order by start position, stable within equal starts.
-    data class AnyRow(val kind: ComponentKind, val index: Int, val start: Float, val id: String, val tie: Int)
-
-    val merged = buildList {
-        spec.bodies.forEachIndexed  { i, b  -> add(AnyRow(ComponentKind.BODY,   i, b.startFromAftMm,  b.id, TIE_BODY   + i)) }
-        spec.tapers.forEachIndexed  { i, t  -> add(AnyRow(ComponentKind.TAPER,  i, t.startFromAftMm,  t.id, TIE_TAPER  + i)) }
-        spec.threads.forEachIndexed { i, th -> add(AnyRow(ComponentKind.THREAD, i, th.startFromAftMm, th.id, TIE_THREAD + i)) }
-        spec.liners.forEachIndexed  { i, ln -> add(AnyRow(ComponentKind.LINER,  i, ln.startFromAftMm,  ln.id, TIE_LINER  + i)) }
-    }
-        .sortedWith(compareBy<AnyRow>({ it.start }, { it.tie }))
-
-    return merged.map { RowRef(it.kind, it.index, it.start, it.id) }
-}
 
 /* ───────────────── Cards & fields ───────────────── */
 

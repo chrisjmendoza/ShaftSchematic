@@ -51,9 +51,27 @@ Features:
 ## 2.1 Implicit Body Spans (Derived)
 
 - Not components; they are derived gaps between components.
-- Computed from geometry and never stored in `ShaftSpec`.
+- Computed deterministically from resolved geometry and never stored in `ShaftSpec`.
+- Fill axial regions not occupied by explicit components.
+- Split/retreat automatically when explicit components are added.
+- Never overlap explicit components.
 - Do not participate in snapping.
+- Must never define measurement references.
+- Must never be persisted.
 - May be promoted to explicit Body components when editing is required.
+
+### Auto vs Manual Bodies (Important Distinction)
+
+- **Auto bodies** (derived):
+  - Ephemeral and read-only
+  - Generated from OAL + explicit components
+  - Removed or split as explicit components occupy their span
+- **Manual bodies** (explicit, future):
+  - Persisted components stored in `ShaftSpec`
+  - Replace auto bodies in overlapping regions
+  - Never coexist with auto bodies in the same region
+
+**Rule:** Manual body components promote over auto bodies in any overlapping span.
 
 ---
 

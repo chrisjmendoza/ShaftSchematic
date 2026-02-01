@@ -1,6 +1,8 @@
 package com.android.shaftschematic.ui.drawing.render
 
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.maxDiaMm
 import kotlin.math.max
 import kotlin.math.min
 
@@ -62,7 +64,8 @@ object ShaftLayout {
         topPx: Float,
         rightPx: Float,
         bottomPx: Float,
-        marginPx: Float = 12f
+        marginPx: Float = 12f,
+        resolvedComponents: List<ResolvedComponent>? = null
     ): Result {
         // Normalize rect
         val L = min(leftPx, rightPx)
@@ -87,12 +90,16 @@ object ShaftLayout {
         val axialSpanMm = maxXMm - minXMm
 
         // Radial span (mm) — use max diameter across all components (and at least a small minimum)
-        val maxDiaMm = listOf(
-            spec.bodies.maxOfOrNull  { it.diaMm } ?: 0f,
-            spec.tapers.maxOfOrNull  { max(it.startDiaMm, it.endDiaMm) } ?: 0f,
-            spec.liners.maxOfOrNull  { it.odMm } ?: 0f,
-            spec.threads.maxOfOrNull { it.majorDiaMm } ?: 0f
-        ).maxOrNull() ?: 0f
+        val maxDiaMm = if (!resolvedComponents.isNullOrEmpty()) {
+            resolvedComponents.maxOfOrNull { it.maxDiaMm() } ?: 0f
+        } else {
+            listOf(
+                spec.bodies.maxOfOrNull  { it.diaMm } ?: 0f,
+                spec.tapers.maxOfOrNull  { max(it.startDiaMm, it.endDiaMm) } ?: 0f,
+                spec.liners.maxOfOrNull  { it.odMm } ?: 0f,
+                spec.threads.maxOfOrNull { it.majorDiaMm } ?: 0f
+            ).maxOrNull() ?: 0f
+        }
 
         // Minimum radial span so a very thin shaft still gets some vertical presence
         val minDiaForFitMm = 10f

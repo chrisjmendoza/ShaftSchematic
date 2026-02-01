@@ -105,6 +105,7 @@ fun ShaftRoute(
     val notes           by vm.notes.collectAsState()
     val overallIsManual by vm.overallIsManual.collectAsState()
     val order           by vm.componentOrder.collectAsState()
+    val resolvedComponents by vm.resolvedComponents.collectAsState()
 
     val showComponentDebugLabels by vm.showComponentDebugLabels.collectAsState()
     val showRenderLayoutDebugOverlay by vm.showRenderLayoutDebugOverlay.collectAsState()
@@ -136,6 +137,7 @@ fun ShaftRoute(
     ShaftScreen(
         resetNonce = editorResetNonce,
         spec = spec,
+        resolvedComponents = resolvedComponents,
         unit = unit,
         unitLocked = unitLocked,
         overallIsManual = overallIsManual,
@@ -186,6 +188,7 @@ fun ShaftRoute(
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
+        onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
 
         onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
 

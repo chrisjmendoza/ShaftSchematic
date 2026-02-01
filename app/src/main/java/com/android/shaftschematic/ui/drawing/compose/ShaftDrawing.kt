@@ -40,6 +40,7 @@ import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.drawing.render.ThreadStyle
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorPreset
@@ -70,6 +71,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ShaftDrawing(
     spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent> = emptyList(),
     unit: UnitSystem,
     showGrid: Boolean,
     showLayoutDebugOverlay: Boolean = false,
@@ -203,7 +205,8 @@ fun ShaftDrawing(
                 leftPx = padX,
                 topPx = padY,
                 rightPx = size.width - padX,
-                bottomPx = size.height - padY
+                bottomPx = size.height - padY,
+                resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() }
             )
 
             val dbg = layout.dbg()
@@ -225,7 +228,8 @@ fun ShaftDrawing(
                         spec = safeSpec,
                         layout = layout,
                         opts = options,
-                        textMeasurer = textMeasurer
+                        textMeasurer = textMeasurer,
+                        components = resolvedComponents.takeIf { it.isNotEmpty() }
                     )
                 }
 
