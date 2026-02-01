@@ -1137,7 +1137,9 @@ private fun ComponentCarouselPager(
         val targetIndex = selectedComponentId?.let { id ->
             rowsSorted.indexOfFirst { it.component.id == id }
         } ?: -1
-        if (targetIndex >= 0 && targetIndex != pagerState.currentPage) {
+        if (targetIndex >= 0 &&
+            (pagerState.currentPage != targetIndex || pagerState.currentPageOffsetFraction != 0f)
+        ) {
             pagerState.animateScrollToPage(targetIndex)
         }
     }
