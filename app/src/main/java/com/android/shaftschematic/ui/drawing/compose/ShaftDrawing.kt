@@ -59,7 +59,14 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import java.util.concurrent.atomic.AtomicReference
 
-private const val DEBUG_TAP_SELECT = true
+// Developer instrumentation for preview hit-testing and selection arbitration.
+// Enable only when debugging tap-to-select behavior.
+private const val ENABLE_TAP_SELECT_DEBUG = false
+
+private fun logTapSelect(message: String) {
+    if (!ENABLE_TAP_SELECT_DEBUG) return
+    Log.d("TapSelect", message)
+}
 
 /**
  * ShaftDrawing
@@ -216,12 +223,7 @@ fun ShaftDrawing(
             detectTapGestures(
                 onTap = { pos ->
                     if (gestureMoved || gestureScaled) {
-                        if (DEBUG_TAP_SELECT) {
-                            Log.d(
-                                "TapSelect",
-                                "tap ignored: moved=$gestureMoved scaled=$gestureScaled"
-                            )
-                        }
+                        logTapSelect("tap ignored: moved=$gestureMoved scaled=$gestureScaled")
                         return@detectTapGestures
                     }
                     val layout = latestLayoutRef.get() ?: return@detectTapGestures
@@ -244,12 +246,9 @@ fun ShaftDrawing(
                     components.filterIsInstance<ResolvedLiner>().forEach { comp ->
                         if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
                     }
-                    if (DEBUG_TAP_SELECT) {
-                        Log.d(
-                            "TapSelect",
-                            "tapPx=${pos.x}, tapMm=$tappedMm, scale=${scale.value}, offsetX=${offset.value.x}, selected=$hitId"
-                        )
-                    }
+                    logTapSelect(
+                        "tapPx=${pos.x}, tapMm=$tappedMm, scale=${scale.value}, offsetX=${offset.value.x}, selected=$hitId"
+                    )
                     if (hitId != null) onTap?.invoke(hitId)
                 },
                 onDoubleTap = {
