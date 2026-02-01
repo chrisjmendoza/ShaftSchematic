@@ -220,7 +220,19 @@ fun ShaftDrawing(
                 scale(scale.value, scale.value, pivot = Offset.Zero)
             }) {
                 // Grid: beneath geometry; renderer receives showGrid=false
-                if (showGrid) drawAdaptiveShaftGrid(layout = layout, unit = unit, targetMajorPx = 90f)
+                if (showGrid) {
+                    val extraW = size.width
+                    val extraH = size.height
+                    drawAdaptiveShaftGrid(
+                        layout = layout,
+                        unit = unit,
+                        targetMajorPx = 90f,
+                        drawLeftPx = -extraW,
+                        drawTopPx = -extraH,
+                        drawRightPx = size.width + extraW,
+                        drawBottomPx = size.height + extraH
+                    )
+                }
 
                 // Geometry: renderer consumes highlight from options
                 with(ShaftRenderer) {

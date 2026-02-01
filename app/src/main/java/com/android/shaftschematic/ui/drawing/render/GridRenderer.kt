@@ -33,13 +33,17 @@ object GridRenderer {
         layout: ShaftLayout.Result,
         unit: UnitSystem,
         targetMajorPx: Float = 90f,
+        drawLeftPx: Float = layout.contentLeftPx,
+        drawTopPx: Float = layout.contentTopPx,
+        drawRightPx: Float = layout.contentRightPx,
+        drawBottomPx: Float = layout.contentBottomPx,
         colorMajor: Color = Color(0x55000000),
         colorMinor: Color = Color(0x22000000)
     ) {
-        val left = layout.contentLeftPx
-        val right = layout.contentRightPx
-        val top = layout.contentTopPx
-        val bottom = layout.contentBottomPx
+        val left = drawLeftPx
+        val right = drawRightPx
+        val top = drawTopPx
+        val bottom = drawBottomPx
         val cy = layout.centerlineYPx
         val pxPerMm = layout.pxPerMm
 
@@ -53,7 +57,7 @@ object GridRenderer {
         val minorPx = minorStepMm * pxPerMm
 
         // --- verticals anchored to x=0
-        val originXPx = left + (0f - layout.minXMm) * pxPerMm
+        val originXPx = layout.contentLeftPx + (0f - layout.minXMm) * pxPerMm
         run { // minors
             val first = floor((left - originXPx) / minorPx).toInt()
             val last = ceil((right - originXPx) / minorPx).toInt()
