@@ -35,8 +35,8 @@ fun InlineAddChooserDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = { onAddBody() },  modifier = androidx.compose.ui.Modifier.fillMaxWidth()) { Text("Body") }
                 Button(onClick = { onAddLiner() }, modifier = androidx.compose.ui.Modifier.fillMaxWidth()) { Text("Liner") }
-                Button(onClick = { onAddThread() },modifier = androidx.compose.ui.Modifier.fillMaxWidth()) { Text("Thread") }
                 Button(onClick = { onAddTaper() }, modifier = androidx.compose.ui.Modifier.fillMaxWidth()) { Text("Taper") }
+                Button(onClick = { onAddThread() },modifier = androidx.compose.ui.Modifier.fillMaxWidth()) { Text("Thread") }
             }
         },
         confirmButton = {

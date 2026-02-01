@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
@@ -47,7 +46,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Email
@@ -66,7 +64,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -259,13 +256,6 @@ fun ShaftScreen(
     onUndo: () -> Unit,
     onRedo: () -> Unit,
 
-    /**
-     * Accessibility: [fabEnabled]
-     * When true, shows a floating “Add component” button as an alternative to the
-     * carousel’s add cards. Off by default; intended for users who prefer a large,
-     * persistent affordance that sits above the IME.
-     */
-    fabEnabled: Boolean = false, // ← NEW: default off
 ) {
     key(resetNonce) {
     // UI options for preview highlight (renderer should consume these—see comment in PreviewCard)
@@ -443,13 +433,6 @@ fun ShaftScreen(
                 )
             }
         },
-        floatingActionButton = {
-            if (fabEnabled) {
-                AddComponentFab(
-                    onClick = { chooserOpen = true }
-                )
-            }
-        }
     ) { inner ->
         Column(
             modifier = Modifier
@@ -704,6 +687,13 @@ fun ShaftScreen(
                     )
                 }
 
+                Button(
+                    onClick = { chooserOpen = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("+ Add Component")
+                }
+
                 ComponentCarouselPager(
                     spec = spec,
                     resolvedComponents = resolvedComponents,
@@ -727,20 +717,6 @@ fun ShaftScreen(
                     onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread,
                     onRemoveLiner = onRemoveLiner,
-                    onTapAdd = { chooserOpen = true },
-                    onAddAtAft = {
-                        // Use your defaults but anchored AFT
-                        val d = computeAddDefaults(spec).copy(startMm = 0f) // AFT = 0
-                        chooserOpen = true
-                        // In the chooser handlers, call onAdd… with d.startMm; after add, jump to page 1:
-                        // scope.launch { pagerState.scrollToPage(1) }
-                    },
-                    onAddAtFwd = {
-                        val d = computeAddDefaults(spec) // your current behavior likely uses last end
-                        chooserOpen = true
-                        // After adding at FWD, jump to the newest page:
-                        // scope.launch { pagerState.scrollToPage(rowsSorted.size + 1) }
-                    },
                     // Focus reporting
                     onFocusedChanged = { idOrNull ->
                         focusedId = idOrNull
@@ -1089,9 +1065,6 @@ private fun ComponentCarouselPager(
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
-    onTapAdd: () -> Unit,
-    onAddAtAft: () -> Unit,
-    onAddAtFwd: () -> Unit,
     onFocusedChanged: (String?) -> Unit
 ) {
     val bodyTitleById = remember(spec.bodies) {
@@ -1127,10 +1100,10 @@ private fun ComponentCarouselPager(
         }
     }
 
-// Pager pages: [Add @ AFT] + rowsSorted + [Add @ FWD]
-    val pageCount = rowsSorted.size + 2
+    // Pager pages: component cards only
+    val pageCount = rowsSorted.size.coerceAtLeast(1)
     val pagerState = rememberPagerState(
-        initialPage = if (rowsSorted.isEmpty()) 0 else 1, // land on leftmost component when present
+        initialPage = 0,
         pageCount = { pageCount }
     )
     val scope = rememberCoroutineScope()
@@ -1143,18 +1116,14 @@ private fun ComponentCarouselPager(
     // Auto-jump to the newest card after insertion
     LaunchedEffect(rowsSorted.size) {
         if (rowsSorted.isNotEmpty()) {
-            val newPage = rowsSorted.size // page 1 = rowsSorted[0], so newest = rowsSorted.size
+            val newPage = rowsSorted.size - 1
             pagerState.scrollToPage(newPage)
         }
     }
 
     // Report focused id
     LaunchedEffect(pagerState.currentPage, rowsSorted) {
-        val p = pagerState.currentPage
-        val idOrNull = when (p) {
-            0, pageCount - 1 -> null
-            else -> rowsSorted[p - 1].component.id
-        }
+        val idOrNull = rowsSorted.getOrNull(pagerState.currentPage)?.component?.id
         onFocusedChanged(idOrNull)
     }
 
@@ -1189,31 +1158,25 @@ private fun ComponentCarouselPager(
                     .fillMaxSize()
                     .padding(horizontal = pageGutter)
             ) {
-                when (page) {
-                    0 -> AddComponentCard(label = "Add at AFT", onAdd = onAddAtAft, outerPadding = addCardOuterPadding)
-                    pageCount - 1 -> AddComponentCard(label = "Add at FWD", onAdd = onAddAtFwd, outerPadding = addCardOuterPadding)
-                    else -> {
-                        val row = rowsSorted[page - 1]
-                        ComponentPagerCard(
-                            spec = spec, unit = unit, row = row, physicalIndex = page - 1,
-                            outerPaddingHorizontal = componentCardOuterPadding,
-                            showComponentDebugLabels = showComponentDebugLabels,
-                            onAddBody = onAddBody,
-                            onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
-                            onUpdateTaperKeyway = onUpdateTaperKeyway,
-                            onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
-                            onUpdateLinerLabel = onUpdateLinerLabel,
-                            onUpdateLinerReference = onUpdateLinerReference,
-                            bodyTitleById = bodyTitleById,
-                            taperTitleById = taperTitleById,
-                            linerTitleById = linerTitleById,
-                            threadTitleById = threadTitleById,
-                            onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
-                            onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
-                            onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner
-                        )
-                    }
-                }
+                val row = rowsSorted.getOrNull(page) ?: return@Box
+                ComponentPagerCard(
+                    spec = spec, unit = unit, row = row, physicalIndex = page,
+                    outerPaddingHorizontal = componentCardOuterPadding,
+                    showComponentDebugLabels = showComponentDebugLabels,
+                    onAddBody = onAddBody,
+                    onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
+                    onUpdateTaperKeyway = onUpdateTaperKeyway,
+                    onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
+                    onUpdateLinerLabel = onUpdateLinerLabel,
+                    onUpdateLinerReference = onUpdateLinerReference,
+                    bodyTitleById = bodyTitleById,
+                    taperTitleById = taperTitleById,
+                    linerTitleById = linerTitleById,
+                    threadTitleById = threadTitleById,
+                    onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
+                    onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
+                    onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner
+                )
             }
         }
 
@@ -1260,46 +1223,6 @@ private fun EdgeNavButton(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 2.dp)
         )
-    }
-}
-
-@Composable
-private fun AddComponentCard(
-    label: String,
-    onAdd: () -> Unit,
-    enabled: Boolean = true,
-    outerPadding: Dp = 12.dp
-) {
-    val onAddClick = onAdd
-    Card(
-        onClick = onAddClick,
-        enabled = enabled,
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(outerPadding)
-            .semantics {
-                role = androidx.compose.ui.semantics.Role.Button
-                contentDescription = "Add component $label"
-            },
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-        )
-    ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("+", style = MaterialTheme.typography.displayMedium)
-                Spacer(Modifier.height(6.dp))
-                Text(label, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(10.dp))
-                Button(
-                    onClick = onAddClick,
-                    enabled = enabled,
-                    shape = RoundedCornerShape(18.dp)
-                ) { Text("Add component") }
-            }
-        }
     }
 }
 
@@ -2060,26 +1983,6 @@ private fun parseFractionOrDecimal(input: String): Float? {
     }
     return t.toFloatOrNull()
 }
-
-@Composable
-private fun AddComponentFab(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    FloatingActionButton(
-        onClick = onClick,
-        modifier = modifier
-            // keep excellent keyboard & nav safety when enabled
-            .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
-            .padding(16.dp),
-        shape = RoundedCornerShape(16.dp),
-        containerColor = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-    ) {
-        Icon(Icons.Filled.Add, contentDescription = "Add component")
-    }
-}
-
 
 /** Latest occupied end position along the shaft (mm) from all components. */
 private fun lastOccupiedEndMm(spec: ShaftSpec): Float {
