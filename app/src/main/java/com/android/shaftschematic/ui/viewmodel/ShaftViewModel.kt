@@ -203,6 +203,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _resolvedComponents = MutableStateFlow<List<ResolvedComponent>>(emptyList())
     val resolvedComponents: StateFlow<List<ResolvedComponent>> = _resolvedComponents.asStateFlow()
 
+    private val _selectedComponentId = MutableStateFlow<String?>(null)
+    val selectedComponentId: StateFlow<String?> = _selectedComponentId.asStateFlow()
+
     private val _devOptionsEnabled = MutableStateFlow(false)
     val devOptionsEnabled: StateFlow<Boolean> = _devOptionsEnabled.asStateFlow()
 
@@ -664,6 +667,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         if (persist) {
             viewModelScope.launch { SettingsStore.setPdfShowComponentTitles(getApplication(), show) }
         }
+    }
+
+    fun selectComponentById(componentId: String?) {
+        _selectedComponentId.value = componentId
     }
 
     fun setPdfExportMode(mode: PdfExportMode, persist: Boolean = true) {

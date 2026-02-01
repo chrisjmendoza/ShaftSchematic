@@ -106,6 +106,7 @@ fun ShaftRoute(
     val overallIsManual by vm.overallIsManual.collectAsState()
     val order           by vm.componentOrder.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
+    val selectedComponentId by vm.selectedComponentId.collectAsState()
 
     val showComponentDebugLabels by vm.showComponentDebugLabels.collectAsState()
     val showRenderLayoutDebugOverlay by vm.showRenderLayoutDebugOverlay.collectAsState()
@@ -155,6 +156,7 @@ fun ShaftRoute(
         showRenderOalMarkers = showRenderOalMarkers,
         showComponentArrows = showComponentArrows,
         componentArrowWidthDp = componentArrowWidthDp,
+        selectedComponentId = selectedComponentId,
 
         previewOutline = previewOutline,
         previewBodyFill = previewBodyFill,
@@ -176,6 +178,7 @@ fun ShaftRoute(
         onSetOverallLengthRaw = vm::setOverallLength,
         onSetOverallLengthMm = vm::onSetOverallLengthMm,
         onSetOverallIsManual = vm::setOverallIsManual,
+        onSelectComponentById = vm::selectComponentById,
 
         onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
         onAddTaper  = { s, l, sd, ed -> vm.addTaperAt(s, l, sd, ed) },

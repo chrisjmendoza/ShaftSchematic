@@ -33,6 +33,8 @@ object ShaftLayout {
     ) {
         /** Maps axial position in millimeters to canvas X in pixels. */
         fun xPx(mm: Float): Float = contentLeftPx + (mm - minXMm) * pxPerMm
+        /** Maps canvas X in pixels to axial position in millimeters. */
+        fun xMmFromPx(xPx: Float): Float = minXMm + (xPx - contentLeftPx) / pxPerMm
         /** Maps diameter (mm) to radius (px) using current scale. */
         fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * pxPerMm
 

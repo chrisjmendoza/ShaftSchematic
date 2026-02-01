@@ -2,6 +2,7 @@
 package com.android.shaftschematic.ui.drawing.compose
 
 import android.graphics.Paint
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
@@ -20,8 +21,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -30,6 +35,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
@@ -41,11 +47,19 @@ import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.drawing.render.ThreadStyle
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.ResolvedBody
+import com.android.shaftschematic.ui.resolved.ResolvedLiner
+import com.android.shaftschematic.ui.resolved.ResolvedTaper
+import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import java.util.concurrent.atomic.AtomicReference
+
+private const val DEBUG_TAP_SELECT = true
 
 /**
  * ShaftDrawing
@@ -86,6 +100,7 @@ fun ShaftDrawing(
     // Highlight bridge (safe defaults)
     highlightEnabled: Boolean = false,
     highlightId: Any? = null,
+    onTapComponentId: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier.fillMaxSize()
 ) {
     // Stable text measurer (expensive object)
@@ -164,10 +179,29 @@ fun ShaftDrawing(
     val scope = rememberCoroutineScope()
     val scale = remember { Animatable(1f) }
     val offset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    var gestureMoved by remember { mutableStateOf(false) }
+    var gestureScaled by remember { mutableStateOf(false) }
+
+    val latestLayoutRef = remember { AtomicReference<ShaftLayout.Result?>(null) }
+    val latestComponentsState = rememberUpdatedState(resolvedComponents)
+    val latestOnTapState = rememberUpdatedState(onTapComponentId)
 
     val gestures = Modifier
         .pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    if (event.type == PointerEventType.Press) {
+                        gestureMoved = false
+                        gestureScaled = false
+                    }
+                }
+            }
+        }
+        .pointerInput(Unit) {
             detectTransformGestures(panZoomLock = true) { centroid, pan, zoom, _ ->
+                if (pan.getDistance() > 5f) gestureMoved = true
+                if (abs(zoom - 1f) > 0.01f) gestureScaled = true
                 val old = scale.value
                 val new = (old * zoom).coerceIn(0.5f, 4.0f)
                 val z = if (old != 0f) new / old else 1f
@@ -180,6 +214,44 @@ fun ShaftDrawing(
         }
         .pointerInput(Unit) {
             detectTapGestures(
+                onTap = { pos ->
+                    if (gestureMoved || gestureScaled) {
+                        if (DEBUG_TAP_SELECT) {
+                            Log.d(
+                                "TapSelect",
+                                "tap ignored: moved=$gestureMoved scaled=$gestureScaled"
+                            )
+                        }
+                        return@detectTapGestures
+                    }
+                    val layout = latestLayoutRef.get() ?: return@detectTapGestures
+                    val s = scale.value
+                    if (s == 0f) return@detectTapGestures
+                    val localX = (pos.x - offset.value.x) / s
+                    val tappedMm = layout.xMmFromPx(localX)
+                    val components = latestComponentsState.value
+                    val onTap = latestOnTapState.value
+                    var hitId: String? = null
+                    components.filterIsInstance<ResolvedBody>().forEach { comp ->
+                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
+                    }
+                    components.filterIsInstance<ResolvedTaper>().forEach { comp ->
+                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
+                    }
+                    components.filterIsInstance<ResolvedThread>().forEach { comp ->
+                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
+                    }
+                    components.filterIsInstance<ResolvedLiner>().forEach { comp ->
+                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
+                    }
+                    if (DEBUG_TAP_SELECT) {
+                        Log.d(
+                            "TapSelect",
+                            "tapPx=${pos.x}, tapMm=$tappedMm, scale=${scale.value}, offsetX=${offset.value.x}, selected=$hitId"
+                        )
+                    }
+                    if (hitId != null) onTap?.invoke(hitId)
+                },
                 onDoubleTap = {
                     scope.launch {
                         scale.animateTo(1f, tween(140))
@@ -208,6 +280,7 @@ fun ShaftDrawing(
                 bottomPx = size.height - padY,
                 resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() }
             )
+            latestLayoutRef.set(layout)
 
             val dbg = layout.dbg()
             if (VerboseLog.isEnabled(VerboseLog.Category.RENDER) && lastLayoutDbg[0] != dbg) {

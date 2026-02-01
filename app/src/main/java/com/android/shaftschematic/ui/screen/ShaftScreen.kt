@@ -188,6 +188,7 @@ fun ShaftScreen(
     showRenderOalMarkers: Boolean,
     showComponentArrows: Boolean,
     componentArrowWidthDp: Int,
+    selectedComponentId: String?,
 
     previewOutline: PreviewColorSetting,
     previewBodyFill: PreviewColorSetting,
@@ -210,6 +211,7 @@ fun ShaftScreen(
     onSetOverallLengthRaw: (String) -> Unit,
     onSetOverallLengthMm: (Float) -> Unit,
     onSetOverallIsManual: (Boolean) -> Unit,
+    onSelectComponentById: (String?) -> Unit,
 
     // Adds (all mm)
     onAddBody: (Float, Float, Float) -> Unit,
@@ -262,7 +264,6 @@ fun ShaftScreen(
     var highlightEnabled by rememberSaveable { mutableStateOf(true) }
     var highlightId by rememberSaveable { mutableStateOf<String?>(null) }
 
-    var focusedId by rememberSaveable { mutableStateOf<String?>(null) }
 
     var addThreadOpen by rememberSaveable { mutableStateOf(false) }
     var addThreadStartMm by rememberSaveable { mutableFloatStateOf(0f) }
@@ -454,7 +455,8 @@ fun ShaftScreen(
                 devOptionsEnabled = devOptionsEnabled,
                 showOalInPreviewBox = showOalInPreviewBox,
                 highlightEnabled = highlightEnabled,
-                highlightId = focusedId,
+                highlightId = selectedComponentId,
+                onTapComponentId = { onSelectComponentById(it) },
                 showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
                 showRenderOalMarkers = showRenderOalMarkers,
                 previewOutline = previewOutline,
@@ -708,6 +710,7 @@ fun ShaftScreen(
                     showEdgeArrows = showComponentArrows,
                     edgeArrowWidthDp = componentArrowWidthDp,
                     showComponentDebugLabels = showComponentDebugLabels,
+                    selectedComponentId = selectedComponentId,
                     onAddBody = onAddBody,
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateTaper = snappedTaperUpdater,
@@ -723,10 +726,7 @@ fun ShaftScreen(
                     onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread,
                     onRemoveLiner = onRemoveLiner,
-                    // Focus reporting
-                    onFocusedChanged = { idOrNull ->
-                        focusedId = idOrNull
-                    }
+                    onSelectComponentById = onSelectComponentById
                 )
 
                 if (chooserOpen) {
@@ -945,6 +945,7 @@ private fun PreviewCard(
     // NEW: explicit preview controls
     highlightEnabled: Boolean,
     highlightId: String?,
+    onTapComponentId: ((String) -> Unit)?,
     showRenderLayoutDebugOverlay: Boolean,
     showRenderOalMarkers: Boolean,
     previewOutline: PreviewColorSetting,
@@ -977,6 +978,7 @@ private fun PreviewCard(
                 previewThreadHatch = previewThreadHatch,
                 highlightEnabled = highlightEnabled && (highlightId != null),
                 highlightId = highlightId,
+                onTapComponentId = onTapComponentId,
                 showLayoutDebugOverlay = showRenderLayoutDebugOverlay,
                 showOalMarkers = showRenderOalMarkers
             )
@@ -1056,6 +1058,7 @@ private fun ComponentCarouselPager(
     showEdgeArrows: Boolean,
     edgeArrowWidthDp: Int,
     showComponentDebugLabels: Boolean,
+    selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
@@ -1071,7 +1074,7 @@ private fun ComponentCarouselPager(
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
-    onFocusedChanged: (String?) -> Unit
+    onSelectComponentById: (String?) -> Unit
 ) {
     val bodyTitleById = remember(spec.bodies) {
         buildBodyTitleById(spec)
@@ -1119,6 +1122,9 @@ private fun ComponentCarouselPager(
     val addCardOuterPadding = if (showEdgeArrows) 6.dp else 12.dp
     val componentCardOuterPadding = if (showEdgeArrows) 4.dp else 8.dp
 
+    var pagerScrollStartedByUser by remember { mutableStateOf(false) }
+    var pagerStartPage by remember { mutableStateOf<Int?>(null) }
+
     // Auto-jump to the newest card after insertion
     LaunchedEffect(rowsSorted.size) {
         if (rowsSorted.isNotEmpty()) {
@@ -1127,11 +1133,35 @@ private fun ComponentCarouselPager(
         }
     }
 
-    // Report focused id
-    LaunchedEffect(pagerState.currentPage, rowsSorted) {
-        val idOrNull = rowsSorted.getOrNull(pagerState.currentPage)?.component?.id
-        onFocusedChanged(idOrNull)
+    LaunchedEffect(selectedComponentId, rowsSorted) {
+        val targetIndex = selectedComponentId?.let { id ->
+            rowsSorted.indexOfFirst { it.component.id == id }
+        } ?: -1
+        if (targetIndex >= 0 && targetIndex != pagerState.currentPage) {
+            pagerState.animateScrollToPage(targetIndex)
+        }
     }
+
+    LaunchedEffect(pagerState.isScrollInProgress, selectedComponentId, rowsSorted) {
+        if (pagerState.isScrollInProgress) {
+            val selectedIndex = selectedComponentId?.let { id ->
+                rowsSorted.indexOfFirst { it.component.id == id }
+            } ?: -1
+            if (selectedIndex == pagerState.currentPage) {
+                pagerScrollStartedByUser = true
+                pagerStartPage = pagerState.currentPage
+            }
+        } else if (pagerScrollStartedByUser) {
+            val endPage = pagerState.currentPage
+            if (pagerStartPage != endPage) {
+                val id = rowsSorted.getOrNull(endPage)?.component?.id
+                onSelectComponentById(id)
+            }
+            pagerScrollStartedByUser = false
+            pagerStartPage = null
+        }
+    }
+
 
     Row(
         Modifier
