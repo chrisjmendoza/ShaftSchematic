@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.android.shaftschematic.util.parseFractionOrDecimal
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -62,21 +63,20 @@ fun CommitNum(
 ) {
     val bringer = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
-    var text by remember(initialDisplay) { mutableStateOf(initialDisplay) }
 
-    OutlinedTextField(
-        value = text,
-        onValueChange = { text = it },
-        label = { Text(label) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
+    NumericInputField(
+        label = label,
+        initialText = initialDisplay,
         modifier = modifier
             .bringIntoViewRequester(bringer)
             .onFocusChanged { f ->
-                if (!f.isFocused) onCommit(text) else scope.launch {
+                if (f.isFocused) scope.launch {
                     delay(100); bringer.bringIntoView()
                 }
-            }
+            },
+        allowNegative = false,
+        allowFraction = true,
+        parseValid = { parseFractionOrDecimal(it) != null },
+        onCommit = onCommit
     )
 }

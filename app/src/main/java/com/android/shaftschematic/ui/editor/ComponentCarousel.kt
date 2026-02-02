@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.ui.input.NumericInputField
+import com.android.shaftschematic.util.parseFractionOrDecimal
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
@@ -293,16 +295,16 @@ private fun LinerFields(value: ShaftComponent.Liner, onUpdate: (ShaftComponent.L
 
 @Composable
 private fun LabeledNumberField(label: String, initial: Float, onValue: (Float) -> Unit) {
-    var text by remember { mutableStateOf(initial.toString()) }
-    OutlinedTextField(
-        value = text,
-        onValueChange = {
-            text = it
-            it.toFloatOrNull()?.let(onValue) // hook your fraction parser here if needed
-        },
-        label = { Text(label) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth()
+    NumericInputField(
+        label = label,
+        initialText = initial.toString(),
+        modifier = Modifier.fillMaxWidth(),
+        allowNegative = false,
+        allowFraction = true,
+        parseValid = { parseFractionOrDecimal(it) != null },
+        onCommit = { raw ->
+            parseFractionOrDecimal(raw)?.toFloat()?.let(onValue)
+        }
     )
 }
 

@@ -118,6 +118,7 @@ import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
+import com.android.shaftschematic.ui.input.NumericInputField
 import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.order.ComponentKey
@@ -1886,40 +1887,24 @@ private fun CommitNum(
     initialDisplay: String,
     modifier: Modifier = Modifier,
     fillMaxWidth: Boolean = true,
+    showValidationErrors: Boolean = true,
     validator: ((String) -> String?)? = null,
     onCommit: (String) -> Unit
 ) {
-    var text by remember(initialDisplay) { mutableStateOf(initialDisplay) }
-    var error by remember(initialDisplay) { mutableStateOf<String?>(null) }
-
-    fun validateNow(raw: String): String? {
-        val err = validator?.invoke(raw)
-        error = err
-        return err
-    }
-
-    OutlinedTextField(
-        value = text,
-        onValueChange = {
-            text = it
-            if (validator != null) validateNow(it)
-        },
-        label = { Text(label) },
-        isError = error != null,
-        supportingText = { error?.let { Text(it) } },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = {
-            if (validateNow(text) == null) onCommit(text)
-        }),
+    // Numeric input is filtered and reverted at the UI boundary.
+    NumericInputField(
+        label = label,
+        initialText = initialDisplay,
         modifier = Modifier
             .let { if (fillMaxWidth) it.fillMaxWidth() else it }
-            .then(modifier)
-            .onFocusChanged { f ->
-                if (!f.isFocused) {
-                    if (validateNow(text) == null) onCommit(text)
-                }
-            }
+            .then(modifier),
+        allowNegative = false,
+        allowFraction = true,
+        showValidationErrors = showValidationErrors,
+        keyboardType = KeyboardType.Decimal,
+        validator = validator,
+        parseValid = { parseFractionOrDecimal(it) != null },
+        onCommit = onCommit
     )
 }
 
