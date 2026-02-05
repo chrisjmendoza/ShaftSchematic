@@ -1,6 +1,6 @@
 # ShaftSchematic TODO
 
-**Version: v0.4.x Development Queue (Updated)**
+**Rolling Backlog (Current Sprint + Next)**
 
 This file reflects the current active sprint, aligned with all contracts as of v0.4.x.  
 Tasks are grouped by sequencing and dependency rather than category.
@@ -12,7 +12,8 @@ Tasks are grouped by sequencing and dependency rather than category.
 **Core model** → stable  
 **ShaftLayout & renderer** → contract locked  
 **One-page PDF export** → stable, theme-safe, background explicitly painted  
-**Validation rules** → formalized, ready for UI wiring  
+**Resolved components + auto bodies** → implemented + in use  
+**Validation rules** → formalized (boundary + invariant checks only); UI surfacing not implemented; no warning tier system yet  
 **Taper components** → taper-rate logic restored in docs but not fully re-implemented  
 **Carousel, selection logic** → recently repaired; refactor still pending  
 **Snapping (edit/delete auto-snap)** → implemented + unit tested; tap-to-add snapping not implemented  
@@ -35,6 +36,22 @@ Tasks are grouped by sequencing and dependency rather than category.
 - [x] Open drawing list wraps long filenames to prevent overlap
 - [x] PDF default filename uses same naming convention (job/customer/vessel + optional side)
 - [x] SAF JSON default filename updated to match naming convention (future-proof; UI may not expose this yet)
+- [x] Resolved component pipeline implemented
+- [x] Auto bodies derived deterministically
+- [x] Auto bodies not persisted in ShaftSpec
+- [x] Manual OAL seeds base auto body
+- [x] Explicit components promote over auto bodies
+- [x] Auto bodies do not define measurement refs or snap anchors
+- [x] Components empty-state card is fully tappable (button + card share handler)
+- [x] Empty-state card has proper ripple + accessibility semantics
+- [x] Empty-state visual affordance matches interaction
+- [x] End-feature detection fixed for AFT taper footer block
+- [x] Footer AFT taper block gating normalized (detector alignment)
+- [x] Footer taper RATE formatting preserved
+- [x] Footer end-feature tests added via `buildFooterEndColumns()` seam
+- [x] Threads “Count in OAL” toggle wired (create + edit)
+- [x] OAL shifting uses threads only
+- [x] `computeOalWindow` tests cover excluded end threads
 
 ### Tiering & Measurement System Stabilization (PDF + Preview)
 
@@ -51,17 +68,18 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 ## 1. Sprint Priority: Snapping + Add-At-Position Pipeline
 
-### 1.1 Snap Engine (Pure mm-space, no UI math)
+### 1.1 Snap Helpers (Pure mm-space, no UI math)
 
 **Goal:** Provide ViewModel with deterministic snapping of axial measurements.
 
 **Tasks**
 
-- [x] Create `SnapEngine.kt` in `ui/viewmodel/`
+- [x] Create `SnapUtils.kt` (snap helpers) in `ui/viewmodel/`
 - [x] Implement:
   - [x] `buildSnapAnchors(spec: ShaftSpec): List<Float>`  
         _anchors = 0, overallLengthMm, all component start/end positions_
   - [x] `snapPositionMm(rawMm, anchors, toleranceMm)`
+- [ ] Move edit-time snapping out of `ShaftScreen` into ViewModel (single source of truth)
 
 **Requirements**
 
@@ -71,7 +89,7 @@ Tasks are grouped by sequencing and dependency rather than category.
 - Source of truth for snapping (next features: tap-to-add / insert-at-position): **ViewModel**
       - UI may convert tap px→mm and pass **raw mm** to VM
       - VM performs snapping and stores `pendingAddPositionMm`
-      - UI must not decide final snapped positions
+      - UI must not decide final snapped positions (edit-time snapping still lives in `ShaftScreen`)
 - Default snap tolerance:
   - Metric UI: `toleranceMm = 1.0`
   - Imperial UI: `toleranceMm` equivalent of `0.04 in` (≈ 1.0 mm)
@@ -85,15 +103,13 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 **Tasks**
 
-- [ ] Add `onTapAtMm` lambda to `ShaftDrawing`
-- [ ] Convert tap `Offset` → mm:  
-      `(tapX - contentLeftPx) / pxPerMm + minXMm`
-- [ ] Send result → ViewModel
-- [ ] Snap using `SnapEngine` before storing
-- [ ] Add `pendingAddPositionMm: Float?` to ViewModel
+- [ ] Expose tap-mm callback from `ShaftDrawing` (separate from selection; reuse existing tap→mm conversion)
+- [ ] Send tap mm → ViewModel and store `pendingAddPositionMm`
+- [ ] Snap in ViewModel using `snapRawPositionMm`
 
 **Notes**
 
+- Tap-to-select already uses mm conversion inside `ShaftDrawing` (not exposed to VM).
 - UI must never decide geometry.
 - VM must never know pixels.
 - VM is the snapping authority: UI passes raw mm.
@@ -121,23 +137,11 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 ---
 
-### 1.4 Resolved Components + Auto Bodies (Planned)
+### 1.4 Auto Body UX Enhancements (Follow-ups)
 
-**Goal:** Establish a derived component pipeline that generates auto bodies for UI/rendering without persisting them.
-
-**Tasks**
-
-- [ ] Implement resolved component pipeline with auto body generation for UI and rendering (no persistence).
-- [ ] Seed initial auto body when OAL is manually authored.
-- [ ] Expose AFT/FWD authored reference toggle in liner component card UI.
-- [ ] Unify Add Component UX into single entry point after authored-reference UI is complete.
-
-**Constraints**
-
-- Auto bodies must never define measurement references.
-- Auto bodies must never affect snapping anchors.
-- Auto bodies must never be persisted.
-- UI component ordering must be spatial (AFT→FWD), not insertion-based.
+- [ ] Visual distinction between auto vs explicit bodies
+- [ ] UI promotion affordance
+- [ ] Add-component UX unification
 
 ---
 
@@ -167,8 +171,8 @@ Scope:
       Expected: thread begins at 0 in preview (or is rejected by validation if disallowed).
       Observed: thread may appear positioned after the body (needs diagnosis).
 
-- [ ] RULE: Threads are only allowed at shaft ends. If a thread is surrounded on both sides by
-      either Body or Liner (i.e., thread is between components), it is not allowed.
+- [ ] Enforce rule: threads allowed only at shaft ends (validation + UI messaging).
+      Rule definition belongs in COMPONENT_CONTRACT.md; TODO tracks implementation.
 
 ### 2.1 Hook Validation System Into UI
 
@@ -180,7 +184,8 @@ Scope:
 - [ ] Warning badges (yellow) in component list
 - [ ] Disable "Confirm" when violations are blocking
 - [ ] Warnings show inline but never block dialog-close
-- [ ] On export: full validation; block on red, allow on yellow
+- [ ] On export: run current validation checks and block on implemented blocking errors
+- [ ] Future: add full-spec validation pass + warning tiers (requires new subsystem)
 
 **Extra**
 
@@ -189,33 +194,22 @@ Scope:
 
 ---
 
-## 3. Recent Contract Fixes That Need Code Implementation
+## 3. Contract Follow-ups (Pending Code Work)
 
 _These are documented in ARCHITECTURE.md and TODO.md previously but not yet implemented._
 
 ### 3.1 Preview Badge: Free-to-End
 
-- [x] Compute `freeToEndMm` in mm-space only
-- [x] Replace any px- or layout-dependent logic (mm-space only, deterministic)
-- [x] Clamp negative to zero (**applies to model helper** `freeToEndMm()`; UI badge may use signed value for oversize warning)
 - [ ] Use `safeSpec` if `overallLengthMm=0` (preview mode)
 
 ### HIGH 3.2 Taper-Rate Restoration
 
-- [ ] Add taper-rate input handling
-- [ ] Support formats: `1:12`, `3/4`, decimals, bare int
-- [ ] Derive missing SET/LET when appropriate
-- [ ] **If both SET and LET are filled, taper-rate input is ignored**
-- [ ] Validate slope only when length > 0
-- [ ] Persist new field in the model
-- [ ] Ensure renderer remains unchanged (draws from diameters)
-
-### 3.3 Components Empty-State UX (DONE)
-
-- [x] Make entire empty-state card tappable (not just button)
-- [x] Card tap and button share same add-handler
-- [x] Proper ripple + accessibility semantics
-- [x] Visual affordance now matches interaction
+- [ ] Parsing formats (e.g., `1:12`, `3/4`, decimals, bare int)
+- [ ] Derivation rules (SET/LET inference + precedence)
+- [ ] UI wiring (input handling, display, and error surfacing)
+- [ ] Model persistence
+- [ ] Migration/version bump (if needed)
+- [ ] Tests (parsing, derivation, and validation coverage)
 
 ---
 
@@ -224,21 +218,6 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [ ] Liner shoulders: add aft/fwd shoulder length fields and render stepped shoulders
 - [ ] Keyways drawing: render keyway indicator on taper segments (schematic symbol), using existing KW dims
 - [ ] FIBERGLASS: support fiberglassed body segments (model flag + renderer treatment TBD; decide hatch/pattern and labeling)
-
-### 4.1 PDF Footer: AFT Taper Info Block Missing (DONE)
-
-- [x] Fix end-feature detection to be thread-shoulder aware
-- [x] Remove/neutralize redundant gating (hasAftTaper vs detector mismatch)
-- [x] Preserve taper RATE formatting
-- [x] Add JVM tests via `buildFooterEndColumns()` seam
-
-### 4.2 Threads: “Count in OAL” Toggle (Create + Edit) (DONE)
-
-- [x] Wire UI + dialog + ViewModel (`excludeFromOAL`)
-- [x] Confirm OAL shifting uses threads only
-- [x] Add JVM tests for `computeOalWindow` measurement-space shifting
-
----
 
 ## 5. Tech Debt & Structural Cleanups
 
@@ -278,7 +257,7 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 
 ### 6.1 Unit
 
-- [x] SnapEngine
+- [x] Snap helpers (`SnapUtils`)
 - [x] `freeToEndMm()`
 - [ ] Taper rate parsing + derivation
 - [x] Thread pitch ↔ TPI conversions
@@ -309,7 +288,7 @@ _Not in the current sprint, but next in line._
 
 ---
 
-## 8. PDF Export Contract (Explicit)
+## 8. PDF Export Guardrails (Do Not Regress)
 
 - PDF pages must always paint a white background explicitly
 - PDF rendering must not depend on app theme or system dark mode
@@ -319,8 +298,7 @@ _Not in the current sprint, but next in line._
 
 - Single source of truth for footer end-feature presence is `detectEndFeatures()`
 - Keep `buildFooterEndColumns()` internal + unit-tested; avoid regressions to draw-only logic
-
-Tiering Guardrail: Tier origin (rail stacking), measurement reference (numeric baseline), and units are independent concerns. Any future changes to one must not affect the others. See commit history for the tiering/measurement stabilization baseline.
+- Tier origin (rail stacking), measurement reference (numeric baseline), and units must remain independent
 
 ### 8.1 Next PDF Priority: Legibility (After Footer Fix)
 

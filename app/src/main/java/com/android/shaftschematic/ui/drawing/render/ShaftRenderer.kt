@@ -134,7 +134,7 @@ object ShaftRenderer {
                 drawRect(color = bodyFill, topLeft = topLeft, size = size)
 
                 // Highlight under-stroke
-                if (isHighlighted(hiEnabled, hiId, b.id)) {
+                if (isHighlighted(hiEnabled, hiId, b.authoredSourceId)) {
                     drawHighlightStrokeRect(
                         topLeft = topLeft,
                         size = size,
@@ -195,7 +195,7 @@ object ShaftRenderer {
                 drawPath(path, color = taperFill)
 
                 // Highlight under-stroke
-                if (isHighlighted(hiEnabled, hiId, t.id)) {
+                if (isHighlighted(hiEnabled, hiId, t.authoredSourceId)) {
                     drawHighlightStroke(
                         path = path,
                         baseStrokePx = outlineW,
@@ -268,7 +268,7 @@ object ShaftRenderer {
                 }
 
                 // Highlight under-stroke on the envelope
-                if (isHighlighted(hiEnabled, hiId, th.id)) {
+                if (isHighlighted(hiEnabled, hiId, th.authoredSourceId)) {
                     drawHighlightStrokeRect(
                         topLeft = Offset(left, top),
                         size = size,
@@ -391,7 +391,7 @@ object ShaftRenderer {
                 drawRect(color = linerFill, topLeft = topLeft, size = size)
 
                 // Highlight under-stroke
-                if (isHighlighted(hiEnabled, hiId, ln.id)) {
+                if (isHighlighted(hiEnabled, hiId, ln.authoredSourceId)) {
                     drawHighlightStrokeRect(
                         topLeft = topLeft,
                         size = size,

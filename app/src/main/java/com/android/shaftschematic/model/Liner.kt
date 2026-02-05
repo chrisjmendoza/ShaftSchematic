@@ -20,6 +20,7 @@ enum class LinerAuthoredReference { AFT, FWD }
  * @property lengthMm Axial length of the liner.
  * @property odMm Outside diameter of the liner.
  * @property authoredReference AFT or FWD reference used for authoring display.
+ * @property authoredStartFromFwdMm Start offset measured from the forward datum when authoredReference is FWD.
  */
 @Serializable
 @OptIn(ExperimentalSerializationApi::class)
@@ -33,6 +34,7 @@ data class Liner(
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
+    val authoredStartFromFwdMm: Float = 0f,
     @JsonNames("endFromAftMm", "endMmPhysical")
     val endMmPhysical: Float = 0f,
 ) : Segment {

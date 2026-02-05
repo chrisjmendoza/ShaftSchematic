@@ -29,6 +29,10 @@ data class Taper(
     val keywayDepthMm: Float = 0f,
     val keywayLengthMm: Float = 0f,
     val keywaySpooned: Boolean = false,
+    /** Authoring reference for UI input (AFT or FWD). */
+    val authoredReference: AuthoredReference = AuthoredReference.AFT,
+    /** Start offset measured from the forward datum when [authoredReference] is FWD. */
+    val authoredStartFromFwdMm: Float = 0f,
 ) : Segment
 
 /** Basic invariants for a Taper. */

@@ -11,7 +11,7 @@ No unapproved features (multi-page PDF, BOM tables, compression) appear here.
 - Complete architecture documentation
 - Implement final rendering/stroke corrections
 - Finalize taper rate logic in ViewModel
-- Establish full validation rules
+- Clarify current validation rules and boundary checks
 - Harden ShaftLayout for all edge cases
 - Deliver stable single-page PDF export
 

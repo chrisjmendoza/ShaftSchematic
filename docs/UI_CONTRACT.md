@@ -7,6 +7,8 @@ The UI is responsible for **presenting** data, not **interpreting** or **computi
 
 ---
 
+## Current Behavior (v0.4.x)
+
 # 1. Responsibilities
 
 ## UI Layer **Does**
@@ -29,12 +31,12 @@ Only the ViewModel may change the `ShaftSpec`.
 
 ---
 
-# 2. Input Fields (NumberField)
+# 2. Input Fields (NumericInputField)
 
 ### 2.1 Commit-on-Blur Rule (Mandatory)
 Numeric fields **must not** commit changes while typing.
 
-`LocalState.text` ← user types
+`LocalState.text` ← user types (filtered)
 On blur or Done:
 `parse text → float?`
 `VM.update*(parsed value)`
@@ -57,9 +59,25 @@ When value ≠ 0:
 - `"123."`
 - `".5"`
 - `""` → interpreted as 0 on commit  
-- Non-numeric → ignored and field resets to last valid text
+- Non-numeric → filtered out during typing; invalid parses revert to last valid text on blur
 
 ViewModel must handle empty/invalid numeric commits safely.
+
+### 2.4 Last-Valid + Error Feedback
+- Numeric fields maintain `lastValidText` and revert on invalid commit attempts.
+- Error indicators appear **only after blur/Done** and clear automatically once valid.
+
+### 2.5 Numeric Field Clarifications (Current Behavior)
+- Input is filtered live while typing.
+- Commit happens only after a successful parse.
+- Invalid input reverts on blur/Done.
+- Errors are field‑local and non‑modal (no blocking dialogs).
+
+See also: [Numeric input behavior](docs/implementation/ui-inputs.md).
+
+## Authority
+This document is authoritative for UI rules and boundaries.
+If other documentation conflicts with this file, this file takes precedence.
 
 ---
 
@@ -111,8 +129,8 @@ UI cannot calculate mm values.
 # 4. Component List (Ordering)
 
 ### 4.1 What ordering means
-The component list reflects **spatial order** (AFT → FWD) derived from resolved geometry.
-Insertion order must never determine display ordering.
+When provided, `componentOrder` from the ViewModel is **authoritative** and may mix types.
+If `componentOrder` is empty, the UI falls back to spatial order (AFT → FWD).
 
 ### 4.2 Reordering
 If reordering UI added later:
@@ -139,6 +157,8 @@ UI must never:
 
 ---
 
+## Planned / Future Behavior (Not Yet Implemented)
+
 # 5.2 Planned Preview Tap + Implicit Bodies (Upcoming)
 
 **Planned behavior (not yet implemented):**
@@ -162,21 +182,10 @@ Preview color preferences apply to the on-screen Preview only.
 
 ---
 
-# 6. Validation Feedback
+# 6. Validation Feedback (Current Behavior)
 
-### 6.1 Blocking Errors
-- Highlight field in red
-- Disable Save / Confirm
-- Tooltip-style explanation permitted
-
-### 6.2 Non-Blocking Warnings
-- Yellow warning icon in component list
-- User may save/export regardless
-
-### 6.3 Full-Spec Validation
-When exporting or saving, ViewModel runs full validation and sends:
-- Success event OR  
-- Error message: UI shows snackbar/dialog
+- Field-level errors may appear after commit attempts.
+- There is no modal, blocking validation pipeline in the UI today.
 
 ---
 

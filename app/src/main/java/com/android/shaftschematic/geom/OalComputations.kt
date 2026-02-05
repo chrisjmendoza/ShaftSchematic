@@ -11,6 +11,11 @@ data class ExcludedThreadLengths(
     val fwdExcludedMm: Double,
 )
 
+data class MeasurementDatums(
+    val measurementAftMm: Double,
+    val measurementForwardMm: Double,
+)
+
 private fun findAftEndThread(spec: ShaftSpec): com.android.shaftschematic.model.Threads? {
     // Coordinate-anchored selection only: an AFT end-attached thread must start at x=0 (within epsilon).
     // This avoids any list-order dependence or "first adjacent" heuristics.
@@ -75,6 +80,19 @@ fun computeOalWindow(spec: ShaftSpec): OalWindow {
     return OalWindow(
         measureStartMm = aft,
         measureEndMm = aft + effective,
+    )
+}
+
+/**
+ * Measurement datums used for authored reference resolution.
+ * - measurementAftMm: measurement-space AFT datum (can shift when AFT threads are excluded)
+ * - measurementForwardMm: measurement-space FWD datum (MFD)
+ */
+fun computeMeasurementDatums(spec: ShaftSpec): MeasurementDatums {
+    val win = computeOalWindow(spec)
+    return MeasurementDatums(
+        measurementAftMm = win.measureStartMm,
+        measurementForwardMm = win.measureEndMm
     )
 }
 

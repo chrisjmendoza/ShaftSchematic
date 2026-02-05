@@ -235,16 +235,16 @@ fun ShaftDrawing(
                     val onTap = latestOnTapState.value
                     var hitId: String? = null
                     components.filterIsInstance<ResolvedBody>().forEach { comp ->
-                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
+                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.authoredSourceId
                     }
                     components.filterIsInstance<ResolvedTaper>().forEach { comp ->
-                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
+                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.authoredSourceId
                     }
                     components.filterIsInstance<ResolvedThread>().forEach { comp ->
-                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
+                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.authoredSourceId
                     }
                     components.filterIsInstance<ResolvedLiner>().forEach { comp ->
-                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
+                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.authoredSourceId
                     }
                     logTapSelect(
                         "tapPx=${pos.x}, tapMm=$tappedMm, scale=${scale.value}, offsetX=${offset.value.x}, selected=$hitId"

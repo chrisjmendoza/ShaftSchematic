@@ -152,6 +152,13 @@ Use ⋮ → Clear All to reset the layout
 Component ordering honors a persisted/explicit component order when provided.
 Otherwise, components are ordered by their physical starting X-position.
 
+## Documentation Location
+
+All project documentation lives in the root `/docs` directory.
+
+No documentation is stored inside `app/src/main`.
+If you find Markdown files there, they are obsolete and should be removed.
+
 🧠 Persistence
 
 Unit preference persists via DataStore (default unit + grid visibility)

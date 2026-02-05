@@ -1,6 +1,10 @@
 # PDF Export Specification
 Version: v0.4.x
 
+## Authority
+This document is authoritative for PDF export behavior.
+If other documentation conflicts with this file, this file takes precedence.
+
 ## Purpose
 Defines the **single-page** PDF export process.  
 PDF output must faithfully reproduce the shaft schematic at high resolution with no geometry distortion.
@@ -25,7 +29,7 @@ No additional geometry logic is permitted.
 
 ### Standard Page
 - US Letter: 8.5" × 11"
-- Portrait orientation
+- **Landscape** orientation (792×612 pt)
 - 50–75 pt margins (configurable)
 
 ### PDF Coordinate System

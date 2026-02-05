@@ -41,7 +41,11 @@ data class Threads(
     override val lengthMm: Float = 0f,
     @JsonNames("excludeFromOAL", "excludeFromOal", "exclude_from_oal")
     val excludeFromOAL: Boolean = false,
-    val tpi: Float? = null
+    val tpi: Float? = null,
+    /** Authoring reference for UI input (AFT or FWD). */
+    val authoredReference: AuthoredReference = AuthoredReference.AFT,
+    /** Start offset measured from the forward datum when [authoredReference] is FWD. */
+    val authoredStartFromFwdMm: Float = 0f,
 ) : Segment {
 
     /**

@@ -106,6 +106,7 @@ fun ShaftRoute(
     val overallIsManual by vm.overallIsManual.collectAsState()
     val order           by vm.componentOrder.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
+    val draftComponent by vm.draftComponent.collectAsState()
     val selectedComponentId by vm.selectedComponentId.collectAsState()
 
     val showComponentDebugLabels by vm.showComponentDebugLabels.collectAsState()
@@ -139,6 +140,7 @@ fun ShaftRoute(
         resetNonce = editorResetNonce,
         spec = spec,
         resolvedComponents = resolvedComponents,
+        draftComponent = draftComponent,
         unit = unit,
         unitLocked = unitLocked,
         overallIsManual = overallIsManual,
@@ -180,10 +182,16 @@ fun ShaftRoute(
         onSetOverallIsManual = vm::setOverallIsManual,
         onSelectComponentById = vm::selectComponentById,
 
-        onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
-        onAddTaper  = { s, l, sd, ed -> vm.addTaperAt(s, l, sd, ed) },
-        onAddThread = { s, l, maj, p, ex -> vm.addThreadAt(s, l, maj, p, ex) },
-        onAddLiner  = { s, l, od     -> vm.addLinerAt(s, l, od) },
+        onBeginDraftBody   = { s, l, d      -> vm.beginDraftBody(s, l, d) },
+        onBeginDraftTaper  = { s, l, sd, ed -> vm.beginDraftTaper(s, l, sd, ed) },
+        onBeginDraftThread = { s, l, maj, p, ex -> vm.beginDraftThread(s, l, maj, p, ex) },
+        onBeginDraftLiner  = { s, l, od     -> vm.beginDraftLiner(s, l, od) },
+        onUpdateDraftBody  = { s, l, d      -> vm.updateDraftBody(s, l, d) },
+        onUpdateDraftTaper = { s, l, sd, ed -> vm.updateDraftTaper(s, l, sd, ed) },
+        onUpdateDraftThread = { s, l, maj, p, ex -> vm.updateDraftThread(s, l, maj, p, ex) },
+        onUpdateDraftLiner  = { s, l, od     -> vm.updateDraftLiner(s, l, od) },
+        onCommitDraftComponent = vm::commitDraftComponent,
+        onCancelDraftComponent = vm::cancelDraftComponent,
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateTaper  = { i, s, l, sd, ed -> vm.updateTaper(i, s, l, sd, ed) },
@@ -192,6 +200,9 @@ fun ShaftRoute(
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
+
+        onUpdateAutoBodyOverride = vm::updateAutoBodyOverride,
+        onRemoveAutoBodyOverride = vm::removeAutoBodyOverride,
 
         onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
 

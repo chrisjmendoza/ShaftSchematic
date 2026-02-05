@@ -1,6 +1,8 @@
 # ShaftSchematic Data Model
 Version: v0.4.x
 
+## Current Behavior (v0.4.x)
+
 ## Overview
 The data model defines all immutable geometric entities that compose a shaft schematic. All measurements are stored in **millimeters** (`Float`). No rendering or UI logic is present in this layer.
 
@@ -70,6 +72,8 @@ data class Taper(
 
 Keyways are features, not standalone components.
 They are currently taper-associated and cannot exist without a host.
+
+## Planned / Future Behavior (Not Yet Implemented)
 
 Note: Keyways may also be added to Body components in a future revision.
 
@@ -208,4 +212,6 @@ Ticks emphasize liner boundaries without dominating the drawing.
 4. Components must preserve UUID across edits.
 5. All validation errors occur in ViewModel, not renderer/UI.
 
-This document is the authoritative source for component behavior.
+## Authority
+This document is authoritative for the data model.
+If other documentation conflicts with this file, this file takes precedence.

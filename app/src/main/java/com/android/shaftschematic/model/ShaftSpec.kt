@@ -24,6 +24,7 @@ data class ShaftSpec(
     val tapers: List<Taper> = emptyList(),
     val threads: List<Threads> = emptyList(),
     val liners: List<Liner> = emptyList(),
+    val autoBodyOverrides: Map<String, AutoBodyOverride> = emptyMap(),
 )
 
 /**

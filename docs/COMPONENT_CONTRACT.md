@@ -6,6 +6,8 @@ It defines what constitutes a **component** versus a **feature** in ShaftSchemat
 
 ---
 
+## Current Behavior (v0.4.x)
+
 ## 1) Overview
 
 ### Component
@@ -88,6 +90,8 @@ Features:
 
 - Keyways are **features**, not components.
 - Currently supported on **Tapers** (taper-hosted).
+## Planned / Future Behavior (Not Yet Implemented)
+
 - Planned support for **Bodies** (body-hosted).
 - Keyways will **never** exist as standalone components.
 
@@ -112,3 +116,7 @@ Keyway attributes (host-owned):
   - consuming validated data
   - emitting output derived from component and feature fields
   - no re-validation and no reinterpretation of rules
+
+## Authority
+This document is authoritative for component vs feature rules.
+If other documentation conflicts with this file, this file takes precedence.

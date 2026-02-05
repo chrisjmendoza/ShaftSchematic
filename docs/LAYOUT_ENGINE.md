@@ -1,6 +1,10 @@
 # ShaftLayout Engine
 Version: v0.4.x
 
+## Authority
+This document is authoritative for layout engine behavior.
+If other documentation conflicts with this file, this file takes precedence.
+
 ## Purpose
 The layout engine converts millimeter-space geometry into pixel-space coordinates for rendering.  
 It performs *all* mm→px scaling, offsets, and coordinate normalization.
@@ -21,17 +25,19 @@ The layout engine does **not**:
 
 Note: `ShaftLayout.compute(...)` receives explicit pixel bounds (left/top/right/bottom). Styling (grid, text size, colors) is handled by `RenderOptions` in the drawing layer, not by the layout engine.
 
+See also: [PDF export](PDF_EXPORT.md) for overall label and rail behavior.
+
 ## Output
 A fully normalized `ShaftLayout.Result`, containing:
 ```
 data class Result(
-    val pxPerMm: Float,
-    val minXMm: Float,
-    val maxXMm: Float,
     val contentLeftPx: Float,
     val contentRightPx: Float,
     val contentTopPx: Float,
     val contentBottomPx: Float,
+    val pxPerMm: Float,
+    val minXMm: Float,
+    val maxXMm: Float,
     val centerlineYPx: Float
 )
 ```
@@ -53,14 +59,14 @@ Axial Coordinate (X)
 fun xPx(mm: Float): Float =
     contentLeftPx + (mm - minXMm) * pxPerMm
 Radial Coordinate (R → ±Y)
-fun rPx(radMm: Float): Float =
-    radMm * pxPerMm
+fun rPx(diaMm: Float): Float =
+    (diaMm * 0.5f) * pxPerMm
 Centerline
 centerlineYPx = contentTopPx + (drawableHeightPx / 2f)
 4. Bounding Box Calculation
 1) Compute axial bounds
 minXMm = 0f
-maxXMm = max(spec.overallLengthMm, spec.coverageEndMm())
+maxXMm = max(1f, spec.overallLengthMm)
 2) Compute radial bounds
 maxOuterDiaMm = max(
     all body diameters,
@@ -83,7 +89,7 @@ Layout does not implement “compression” or any non-uniform scale.
 PDF export must call the same layout engine.
 
 6. Error Boundaries
-If overallLengthMm = 0 → layout returns pxPerMm = 0 and renderer draws nothing.
+If overallLengthMm = 0 → layout still returns a non-zero scale and draws a minimal preview.
 
 If maxOuterDiaMm = 0 → treat diameter as 1mm to avoid divide-by-zero.
 
@@ -117,7 +123,6 @@ Renderer performs **no mm→px conversion** and **no geometry calculations** (e.
 - Tapers
 - Threads (major-diameter envelope + hatch)
 - Liners (top/bottom + tick marks)
-- Overall length dimension line + label
 
 ### Renderer Does NOT Draw:
 - Grid (ShaftDrawing handles this)
@@ -196,16 +201,7 @@ Tick stroke = dimWidth
 
 ---
 
-# 4. Overall Dimension Label
-Renderer draws a single “Overall: ###mm” label centered above the shaft.
-
-Rule:
-- UI must NEVER draw this label.
-- Renderer must draw it consistently for canvas and PDF.
-
----
-
-# 5. Rendering Invariants
+# 4. Rendering Invariants
 
 1. Renderer consumes pixel coordinates ONLY from `ShaftLayout.Result`.
 2. Renderer never converts mm directly.
@@ -215,20 +211,18 @@ Rule:
 
 ---
 
-# 6. Rendering Order (Required)
+# 5. Rendering Order (Required)
 
 1. Bodies  
 2. Tapers  
-3. Liners  
-4. Threads  
-5. Dimension line + ticks  
-6. Overall label  
+3. Threads  
+4. Liners  
 
 This order minimizes visual occlusion and matches drafting standards.
 
 ---
 
-# 7. Summary
+# 6. Summary
 ShaftRenderer is a pure rendering system isolated from business logic and layout concerns.  
 It consumes pixel-exact parameters and draws a consistent engineering schematic.
 
