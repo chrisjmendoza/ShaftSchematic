@@ -106,8 +106,11 @@ fun ShaftRoute(
     val overallIsManual by vm.overallIsManual.collectAsState()
     val order           by vm.componentOrder.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
+    val presentationComponents by vm.presentationComponents.collectAsState()
     val draftComponent by vm.draftComponent.collectAsState()
-    val selectedComponentId by vm.selectedComponentId.collectAsState()
+    val isDraftEditorOpen by vm.isDraftEditorOpen.collectAsState()
+    val selectedPresentationId by vm.selectedPresentationId.collectAsState()
+    val highlightedResolvedComponents by vm.highlightedResolvedComponents.collectAsState()
 
     val showComponentDebugLabels by vm.showComponentDebugLabels.collectAsState()
     val showRenderLayoutDebugOverlay by vm.showRenderLayoutDebugOverlay.collectAsState()
@@ -140,7 +143,10 @@ fun ShaftRoute(
         resetNonce = editorResetNonce,
         spec = spec,
         resolvedComponents = resolvedComponents,
+        presentationComponents = presentationComponents,
+        highlightedResolvedComponents = highlightedResolvedComponents,
         draftComponent = draftComponent,
+        isDraftEditorOpen = isDraftEditorOpen,
         unit = unit,
         unitLocked = unitLocked,
         overallIsManual = overallIsManual,
@@ -158,7 +164,7 @@ fun ShaftRoute(
         showRenderOalMarkers = showRenderOalMarkers,
         showComponentArrows = showComponentArrows,
         componentArrowWidthDp = componentArrowWidthDp,
-        selectedComponentId = selectedComponentId,
+        selectedPresentationId = selectedPresentationId,
 
         previewOutline = previewOutline,
         previewBodyFill = previewBodyFill,
@@ -180,7 +186,7 @@ fun ShaftRoute(
         onSetOverallLengthRaw = vm::setOverallLength,
         onSetOverallLengthMm = vm::onSetOverallLengthMm,
         onSetOverallIsManual = vm::setOverallIsManual,
-        onSelectComponentById = vm::selectComponentById,
+        onSelectPresentationById = vm::selectPresentationById,
 
         onBeginDraftBody   = { s, l, d      -> vm.beginDraftBody(s, l, d) },
         onBeginDraftTaper  = { s, l, sd, ed -> vm.beginDraftTaper(s, l, sd, ed) },
@@ -188,6 +194,7 @@ fun ShaftRoute(
         onBeginDraftLiner  = { s, l, od     -> vm.beginDraftLiner(s, l, od) },
         onUpdateDraftBody  = { s, l, d      -> vm.updateDraftBody(s, l, d) },
         onUpdateDraftTaper = { s, l, sd, ed -> vm.updateDraftTaper(s, l, sd, ed) },
+        onUpdateDraftTaperKeyway = { w, d, l, spooned -> vm.updateDraftTaperKeyway(w, d, l, spooned) },
         onUpdateDraftThread = { s, l, maj, p, ex -> vm.updateDraftThread(s, l, maj, p, ex) },
         onUpdateDraftLiner  = { s, l, od     -> vm.updateDraftLiner(s, l, od) },
         onCommitDraftComponent = vm::commitDraftComponent,

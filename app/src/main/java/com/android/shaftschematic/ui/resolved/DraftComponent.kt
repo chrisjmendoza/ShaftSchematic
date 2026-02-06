@@ -27,6 +27,10 @@ sealed class DraftComponent {
         override val lengthMm: Float,
         val startDiaMm: Float,
         val endDiaMm: Float,
+        val keywayWidthMm: Float,
+        val keywayDepthMm: Float,
+        val keywayLengthMm: Float,
+        val keywaySpooned: Boolean,
     ) : DraftComponent()
 
     data class Thread(

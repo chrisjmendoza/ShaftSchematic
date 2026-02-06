@@ -15,9 +15,11 @@ import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.computeMeasurementDatums
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.ui.presentation.PresentationComponent
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.DraftComponent
+import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
@@ -36,9 +38,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -203,11 +208,51 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _resolvedComponents = MutableStateFlow<List<ResolvedComponent>>(emptyList())
     val resolvedComponents: StateFlow<List<ResolvedComponent>> = _resolvedComponents.asStateFlow()
 
+    private val _presentationComponents = MutableStateFlow<List<PresentationComponent>>(emptyList())
+    val presentationComponents: StateFlow<List<PresentationComponent>> = _presentationComponents.asStateFlow()
+
     private val _draftComponent = MutableStateFlow<DraftComponent?>(null)
     val draftComponent: StateFlow<DraftComponent?> = _draftComponent.asStateFlow()
 
-    private val _selectedComponentId = MutableStateFlow<String?>(null)
-    val selectedComponentId: StateFlow<String?> = _selectedComponentId.asStateFlow()
+    private val _isDraftEditorOpen = MutableStateFlow(false)
+    val isDraftEditorOpen: StateFlow<Boolean> = _isDraftEditorOpen.asStateFlow()
+
+    val activeDraftType: StateFlow<ComponentKind?> = draftComponent
+        .map { draft ->
+            when (draft) {
+                is DraftComponent.Body -> ComponentKind.BODY
+                is DraftComponent.Taper -> ComponentKind.TAPER
+                is DraftComponent.Thread -> ComponentKind.THREAD
+                is DraftComponent.Liner -> ComponentKind.LINER
+                null -> null
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = null
+        )
+
+    private val _selectedPresentationId = MutableStateFlow<String?>(null)
+    val selectedPresentationId: StateFlow<String?> = _selectedPresentationId.asStateFlow()
+
+    val highlightedResolvedComponents: StateFlow<Set<String>> = combine(
+        presentationComponents,
+        selectedPresentationId
+    ) { presentations, selectedId ->
+        if (selectedId == null) return@combine emptySet()
+
+        val presentation = presentations.firstOrNull { it.id == selectedId }
+            ?: return@combine emptySet()
+
+        presentation.resolvedParts
+            .map { it.id }
+            .toSet()
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptySet()
+    )
 
     private val _devOptionsEnabled = MutableStateFlow(false)
     val devOptionsEnabled: StateFlow<Boolean> = _devOptionsEnabled.asStateFlow()
@@ -390,6 +435,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 resolveComponents(s, isManual, draft)
             }.collectLatest { resolved ->
                 _resolvedComponents.value = resolved
+            }
+        }
+
+        viewModelScope.launch {
+            combine(resolvedComponents, spec) { resolved, currentSpec ->
+                val committed = resolved.filter { it.source != ResolvedComponentSource.DRAFT }
+                PresentationComponent.fromResolved(committed, currentSpec.autoBodyOverrides)
+            }.collectLatest { presentation ->
+                _presentationComponents.value = presentation
             }
         }
         // --- SETTINGSSTORE FLOWS AND MIGRATIONS ---
@@ -672,8 +726,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun selectComponentById(componentId: String?) {
-        _selectedComponentId.value = componentId
+    fun selectPresentationById(presentationId: String?) {
+        _selectedPresentationId.value = presentationId
     }
 
     fun setPdfExportMode(mode: PdfExportMode, persist: Boolean = true) {
@@ -908,6 +962,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             lengthMm = max(0f, lengthMm),
             diaMm = max(0f, diaMm)
         )
+        _isDraftEditorOpen.value = true
     }
 
     fun beginDraftTaper(startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) {
@@ -916,8 +971,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             startMmPhysical = startMm,
             lengthMm = max(0f, lengthMm),
             startDiaMm = max(0f, startDiaMm),
-            endDiaMm = max(0f, endDiaMm)
+            endDiaMm = max(0f, endDiaMm),
+            keywayWidthMm = 0f,
+            keywayDepthMm = 0f,
+            keywayLengthMm = 0f,
+            keywaySpooned = false
         )
+        _isDraftEditorOpen.value = true
     }
 
     fun beginDraftThread(startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOal: Boolean) {
@@ -929,6 +989,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             pitchMm = max(0f, pitchMm),
             excludeFromOal = excludeFromOal
         )
+        _isDraftEditorOpen.value = true
     }
 
     fun beginDraftLiner(startMm: Float, lengthMm: Float, odMm: Float) {
@@ -938,6 +999,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             lengthMm = max(0f, lengthMm),
             odMm = max(0f, odMm)
         )
+        _isDraftEditorOpen.value = true
     }
 
     fun updateDraftBody(startMm: Float, lengthMm: Float, diaMm: Float) {
@@ -956,6 +1018,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             lengthMm = max(0f, lengthMm),
             startDiaMm = max(0f, startDiaMm),
             endDiaMm = max(0f, endDiaMm)
+        )
+    }
+
+    fun updateDraftTaperKeyway(widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) {
+        val draft = _draftComponent.value as? DraftComponent.Taper ?: return
+        _draftComponent.value = draft.copy(
+            keywayWidthMm = max(0f, widthMm),
+            keywayDepthMm = max(0f, depthMm),
+            keywayLengthMm = max(0f, lengthMm),
+            keywaySpooned = spooned
         )
     }
 
@@ -981,17 +1053,30 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     fun cancelDraftComponent() {
         _draftComponent.value = null
+        _isDraftEditorOpen.value = false
     }
 
     fun commitDraftComponent() {
         when (val draft = _draftComponent.value) {
             is DraftComponent.Body -> addBodyInternal(draft.id, draft.startMmPhysical, draft.lengthMm, draft.diaMm)
-            is DraftComponent.Taper -> addTaperInternal(draft.id, draft.startMmPhysical, draft.lengthMm, draft.startDiaMm, draft.endDiaMm)
+            is DraftComponent.Taper -> addTaperInternal(
+                draft.id,
+                draft.startMmPhysical,
+                draft.lengthMm,
+                draft.startDiaMm,
+                draft.endDiaMm,
+                draft.keywayWidthMm,
+                draft.keywayDepthMm,
+                draft.keywayLengthMm,
+                draft.keywaySpooned
+            )
             is DraftComponent.Thread -> addThreadInternal(draft.id, draft.startMmPhysical, draft.lengthMm, draft.majorDiaMm, draft.pitchMm, draft.excludeFromOal)
             is DraftComponent.Liner -> addLinerInternal(draft.id, draft.startMmPhysical, draft.lengthMm, draft.odMm)
             null -> return
         }
+        _selectedPresentationId.value = _draftComponent.value?.id
         _draftComponent.value = null
+        _isDraftEditorOpen.value = false
     }
 
     fun updateAutoBodyOverride(key: AutoBodyKey, override: AutoBodyOverride) = _spec.update { s ->
@@ -1095,7 +1180,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Tapers
-    private fun addTaperInternal(startId: String, startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) = _spec.update { s ->
+    private fun addTaperInternal(
+        startId: String,
+        startMm: Float,
+        lengthMm: Float,
+        startDiaMm: Float,
+        endDiaMm: Float,
+        keywayWidthMm: Float = 0f,
+        keywayDepthMm: Float = 0f,
+        keywayLengthMm: Float = 0f,
+        keywaySpooned: Boolean = false,
+    ) = _spec.update { s ->
         orderAdd(ComponentKind.TAPER, startId)
         s.copy(
             tapers = listOf(
@@ -1105,10 +1200,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     lengthMm = max(0f, lengthMm),
                     startDiaMm = max(0f, startDiaMm),
                     endDiaMm = max(0f, endDiaMm),
-                    keywayWidthMm = 0f,
-                    keywayDepthMm = 0f,
-                    keywayLengthMm = 0f,
-                    keywaySpooned = false,
+                    keywayWidthMm = max(0f, keywayWidthMm),
+                    keywayDepthMm = max(0f, keywayDepthMm),
+                    keywayLengthMm = max(0f, keywayLengthMm),
+                    keywaySpooned = keywaySpooned,
                 )
             ) + s.tapers
         )
