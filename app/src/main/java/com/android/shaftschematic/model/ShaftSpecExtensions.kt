@@ -2,6 +2,7 @@ package com.android.shaftschematic.model
 
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.model.resolvedStartFromAftMm
 import kotlin.math.max
 
 /**
@@ -21,15 +22,35 @@ import kotlin.math.max
  *      Returns remaining length (≥ 0) from the last occupied end to overallLengthMm.
  */
 
-/** Returns max of all component end positions in mm (≥ 0). */
-fun ShaftSpec.lastOccupiedEndMm(): Float {
+/** Components that participate in OAL calculations (threads may be excluded). */
+fun ShaftSpec.effectiveOalSegments(): List<Segment> = buildList {
+    addAll(bodies)
+    addAll(tapers)
+    addAll(liners)
+    addAll(threads.filter { !it.excludeFromOAL })
+}
+
+/** Returns max end position across OAL-participating components (mm, ≥ 0). */
+fun ShaftSpec.effectiveOalEndMm(): Float {
     var maxEnd = 0f
-    bodies.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
-    tapers.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
-    threads.forEach  { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
-    liners.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
+    effectiveOalSegments().forEach { seg ->
+        maxEnd = max(maxEnd, seg.endFromAftMm)
+    }
     return maxEnd
 }
+
+/**
+ * Returns a copy with a manual OAL fallback when none is authored.
+ * This is intended for one-time migration on load only.
+ */
+fun ShaftSpec.withManualOalFallback(): ShaftSpec {
+    if (overallLengthMm > 0f) return this
+    val fallback = effectiveOalEndMm()
+    return if (fallback > 0f) copy(overallLengthMm = fallback) else this
+}
+
+/** Returns max of all component end positions in mm (≥ 0). */
+fun ShaftSpec.lastOccupiedEndMm(): Float = effectiveOalEndMm()
 
 /**
  * Computes the physical (AFT → FWD) order of all components by startFromAftMm.
@@ -45,7 +66,8 @@ fun ShaftSpec.buildPhysicalKeyOrder(): List<ComponentKey> {
         keysWithStart += ComponentKey(t.id, ComponentKind.TAPER) to t.startFromAftMm
     }
     threads.forEach { th ->
-        keysWithStart += ComponentKey(th.id, ComponentKind.THREAD) to th.startFromAftMm
+        val startMm = th.resolvedStartFromAftMm(overallLengthMm)
+        keysWithStart += ComponentKey(th.id, ComponentKind.THREAD) to startMm
     }
     liners.forEach { ln ->
         keysWithStart += ComponentKey(ln.id, ComponentKind.LINER) to ln.startFromAftMm

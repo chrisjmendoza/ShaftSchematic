@@ -1,6 +1,8 @@
 package com.android.shaftschematic.geom
 
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.resolvedEndFromAftMm
+import com.android.shaftschematic.model.resolvedStartFromAftMm
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -16,11 +18,12 @@ data class MeasurementDatums(
     val measurementForwardMm: Double,
 )
 
-private fun findAftEndThread(spec: ShaftSpec): com.android.shaftschematic.model.Threads? {
+private fun findAftEndThread(spec: ShaftSpec, overallLengthMm: Double): com.android.shaftschematic.model.Threads? {
     // Coordinate-anchored selection only: an AFT end-attached thread must start at x=0 (within epsilon).
     // This avoids any list-order dependence or "first adjacent" heuristics.
     val candidates = spec.threads.asSequence().filter { th ->
-        abs(th.startFromAftMm.toDouble() - 0.0) <= EPS_MM
+        val start = th.resolvedStartFromAftMm(overallLengthMm.toFloat()).toDouble()
+        abs(start - 0.0) <= EPS_MM
     }
 
     return candidates
@@ -35,7 +38,7 @@ private fun findFwdEndThread(spec: ShaftSpec, overallLengthMm: Double): com.andr
     // Coordinate-anchored selection only: a FWD end-attached thread must end at x=overallLength (within epsilon).
     // This avoids any list-order dependence or "last adjacent" heuristics.
     val candidates = spec.threads.asSequence().filter { th ->
-        val end = (th.startFromAftMm + th.lengthMm).toDouble()
+        val end = th.resolvedEndFromAftMm(overallLengthMm.toFloat()).toDouble()
         abs(end - overallLengthMm) <= EPS_MM
     }
 
@@ -57,11 +60,14 @@ private fun findFwdEndThread(spec: ShaftSpec, overallLengthMm: Double): com.andr
  * - Each excluded length is clamped to 0..overallLengthMm.
  * - If no excluded end threads exist, both are 0.
  */
-fun computeExcludedThreadLengths(spec: ShaftSpec): ExcludedThreadLengths {
-    val oalRaw = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
+fun computeExcludedThreadLengths(
+    spec: ShaftSpec,
+    overallLengthMm: Double = spec.overallLengthMm.toDouble().coerceAtLeast(0.0),
+): ExcludedThreadLengths {
+    val oalRaw = overallLengthMm.coerceAtLeast(0.0)
     if (oalRaw <= 0.0) return ExcludedThreadLengths(0.0, 0.0)
 
-    val aftThread = findAftEndThread(spec)
+    val aftThread = findAftEndThread(spec, overallLengthMm = oalRaw)
     val fwdThread = findFwdEndThread(spec, overallLengthMm = oalRaw)
 
     val aft = if (aftThread?.excludeFromOAL == true) aftThread.lengthMm.toDouble().coerceIn(0.0, oalRaw) else 0.0
@@ -70,12 +76,12 @@ fun computeExcludedThreadLengths(spec: ShaftSpec): ExcludedThreadLengths {
 }
 
 fun computeOalWindow(spec: ShaftSpec): OalWindow {
-    val oalRaw = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
-    val ex = computeExcludedThreadLengths(spec)
+    val baseOal = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
+    val ex = computeExcludedThreadLengths(spec, overallLengthMm = baseOal)
 
-    val aft = ex.aftExcludedMm.coerceIn(0.0, oalRaw)
-    val fwd = ex.fwdExcludedMm.coerceIn(0.0, oalRaw)
-    val effective = max(0.0, oalRaw - aft - fwd)
+    val aft = ex.aftExcludedMm.coerceIn(0.0, baseOal)
+    val fwd = ex.fwdExcludedMm.coerceIn(0.0, baseOal)
+    val effective = max(0.0, baseOal - aft - fwd)
 
     return OalWindow(
         measureStartMm = aft,

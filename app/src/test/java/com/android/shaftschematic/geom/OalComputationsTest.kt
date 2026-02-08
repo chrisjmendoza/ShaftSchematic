@@ -259,7 +259,7 @@ class OalComputationsTest {
     }
 
     @Test
-    fun `excluded internal thread does not affect OAL window`() {
+    fun `excluded thread attaches to aft when internal and shifts OAL`() {
         val internal = Threads(
             startFromAftMm = 200f,
             lengthMm = 50f,
@@ -271,9 +271,43 @@ class OalComputationsTest {
 
         val win = computeOalWindow(spec)
 
-        assertEquals(0.0, win.measureStartMm, EPS_EXACT)
+        assertEquals(50.0, win.measureStartMm, EPS_EXACT)
+        assertEquals(950.0, win.oalMm, EPS_EXACT)
         assertEquals(1000.0, win.measureEndMm, EPS_EXACT)
-        assertEquals(1000.0, win.oalMm, EPS_EXACT)
+    }
+
+    @Test
+    fun `excluded thread uses end attachment for dimensioned OAL`() {
+        val thread = Threads(
+            startFromAftMm = 300f,
+            lengthMm = 40f,
+            majorDiaMm = 50f,
+            pitchMm = 2f,
+            excludeFromOAL = true
+        )
+        val spec = ShaftSpec(overallLengthMm = 800f, threads = listOf(thread))
+
+        val win = computeOalWindow(spec)
+
+        assertEquals(40.0, win.measureStartMm, EPS_EXACT)
+        assertEquals(760.0, win.oalMm, EPS_EXACT)
+    }
+
+    @Test
+    fun `excluded internal thread attaches to fwd when closer`() {
+        val thread = Threads(
+            startFromAftMm = 800f,
+            lengthMm = 100f,
+            majorDiaMm = 50f,
+            pitchMm = 2f,
+            excludeFromOAL = true
+        )
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(thread))
+
+        val win = computeOalWindow(spec)
+
+        assertEquals(0.0, win.measureStartMm, EPS_EXACT)
+        assertEquals(900.0, win.oalMm, EPS_EXACT)
     }
 
     @Test
@@ -320,7 +354,7 @@ class OalComputationsTest {
     }
 
     @Test
-    fun `aft end thread detection is epsilon anchored`() {
+    fun `aft end thread uses attachment inference beyond epsilon`() {
         val withinEps = Threads(
             startFromAftMm = 0.0005f,
             lengthMm = 10f,
@@ -340,11 +374,11 @@ class OalComputationsTest {
         assertEquals(withinEps.lengthMm.toDouble(), exWithin.aftExcludedMm, EPS_EXACT)
 
         val exBeyond = computeExcludedThreadLengths(ShaftSpec(overallLengthMm = 1000f, threads = listOf(beyondEps)))
-        assertEquals(0.0, exBeyond.aftExcludedMm, EPS_EXACT)
+        assertEquals(beyondEps.lengthMm.toDouble(), exBeyond.aftExcludedMm, EPS_EXACT)
     }
 
     @Test
-    fun `fwd end thread detection is epsilon anchored`() {
+    fun `fwd end thread uses attachment inference beyond epsilon`() {
         val overall = 1000f
         val withinEps = Threads(
             startFromAftMm = (overall - 10f) - 0.0005f,
@@ -365,6 +399,6 @@ class OalComputationsTest {
         assertEquals(withinEps.lengthMm.toDouble(), exWithin.fwdExcludedMm, EPS_EXACT)
 
         val exBeyond = computeExcludedThreadLengths(ShaftSpec(overallLengthMm = overall, threads = listOf(beyondEps)))
-        assertEquals(0.0, exBeyond.fwdExcludedMm, EPS_EXACT)
+        assertEquals(beyondEps.lengthMm.toDouble(), exBeyond.fwdExcludedMm, EPS_EXACT)
     }
 }

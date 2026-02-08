@@ -1,6 +1,12 @@
 package com.android.shaftschematic.ui.drawing
 
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.resolvedStartFromAftMm
+import com.android.shaftschematic.ui.resolved.ResolvedBody
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.ResolvedLiner
+import com.android.shaftschematic.ui.resolved.ResolvedTaper
+import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.ui.config.DisplayCompressionConfig as C
 import kotlin.math.max
 
@@ -42,6 +48,7 @@ data class LayoutMap(
  */
 fun buildLayoutMap(
     spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>? = null,
     pxPerMm: Float,
     canvasWidthPx: Float,
     compress: Boolean = true,
@@ -50,11 +57,27 @@ fun buildLayoutMap(
 ): LayoutMap {
     data class Raw(val start: Float, val len: Float, val kind: SpanKind)
 
-    val raws = buildList {
-        spec.bodies.forEach  { add(Raw(it.startFromAftMm, it.lengthMm, SpanKind.BODY)) }
-        spec.tapers.forEach  { add(Raw(it.startFromAftMm, it.lengthMm, SpanKind.TAPER)) }
-        spec.threads.forEach { add(Raw(it.startFromAftMm, it.lengthMm, SpanKind.THREAD)) }
-        spec.liners.forEach  { add(Raw(it.startFromAftMm, it.lengthMm, SpanKind.LINER)) }
+    val raws = if (resolvedComponents.isNullOrEmpty()) {
+        buildList {
+            spec.bodies.forEach  { add(Raw(it.startFromAftMm, it.lengthMm, SpanKind.BODY)) }
+            spec.tapers.forEach  { add(Raw(it.startFromAftMm, it.lengthMm, SpanKind.TAPER)) }
+            spec.threads.forEach {
+                val startMm = it.resolvedStartFromAftMm(spec.overallLengthMm)
+                add(Raw(startMm, it.lengthMm, SpanKind.THREAD))
+            }
+            spec.liners.forEach  { add(Raw(it.startFromAftMm, it.lengthMm, SpanKind.LINER)) }
+        }
+    } else {
+        buildList {
+            resolvedComponents.forEach { comp ->
+                when (comp) {
+                    is ResolvedBody -> add(Raw(comp.startMmPhysical, comp.lengthMm, SpanKind.BODY))
+                    is ResolvedTaper -> add(Raw(comp.startMmPhysical, comp.lengthMm, SpanKind.TAPER))
+                    is ResolvedThread -> add(Raw(comp.startMmPhysical, comp.lengthMm, SpanKind.THREAD))
+                    is ResolvedLiner -> add(Raw(comp.startMmPhysical, comp.lengthMm, SpanKind.LINER))
+                }
+            }
+        }
     }.sortedBy { it.start }
 
     val spans = mutableListOf<VisualSpan>()

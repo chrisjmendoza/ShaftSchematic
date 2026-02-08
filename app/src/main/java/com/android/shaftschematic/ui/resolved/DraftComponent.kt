@@ -1,10 +1,13 @@
 package com.android.shaftschematic.ui.resolved
 
+import com.android.shaftschematic.model.TaperOrientation
+import com.android.shaftschematic.model.ThreadAttachment
+
 /**
  * DraftComponent represents an in-progress component that exists ONLY in
  * physical shaft space (mm from AFT).
  *
- * Drafts do NOT store authored references (AFT/FWD) and must never mutate
+ * Drafts do NOT store authored position references (AFT/FWD) and must never mutate
  * ShaftSpec until committed.
  *
  * All authored reference conversion must happen BEFORE draft creation.
@@ -27,6 +30,7 @@ sealed class DraftComponent {
         override val lengthMm: Float,
         val startDiaMm: Float,
         val endDiaMm: Float,
+        val orientation: TaperOrientation,
         val keywayWidthMm: Float,
         val keywayDepthMm: Float,
         val keywayLengthMm: Float,
@@ -40,6 +44,7 @@ sealed class DraftComponent {
         val majorDiaMm: Float,
         val pitchMm: Float,
         val excludeFromOal: Boolean,
+        val endAttachment: ThreadAttachment? = null,
     ) : DraftComponent()
 
     data class Liner(

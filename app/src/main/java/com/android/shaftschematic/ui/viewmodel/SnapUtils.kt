@@ -33,7 +33,7 @@ fun buildSnapAnchors(spec: ShaftSpec): List<Float> {
     anchors += 0f
     anchors += spec.overallLengthMm
 
-    fun MutableSet<Float>.addSegmentEnds(segments: List<out Segment>) {
+    fun MutableSet<Float>.addSegmentEnds(segments: List<Segment>) {
         segments.forEach { seg ->
             add(seg.startFromAftMm)
             add(seg.endFromAftMm)

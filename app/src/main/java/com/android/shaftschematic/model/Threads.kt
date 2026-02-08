@@ -5,6 +5,10 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.JsonNames
 import java.util.UUID
+import kotlin.math.abs
+
+@Serializable
+enum class ThreadAttachment { AFT, FWD }
 
 /**
  * External thread specification on the shaft.
@@ -41,6 +45,8 @@ data class Threads(
     override val lengthMm: Float = 0f,
     @JsonNames("excludeFromOAL", "excludeFromOal", "exclude_from_oal")
     val excludeFromOAL: Boolean = false,
+    /** End attachment when [excludeFromOAL] is true (null preserves legacy start-positioned behavior). */
+    val endAttachment: ThreadAttachment? = null,
     val tpi: Float? = null,
     /** Authoring reference for UI input (AFT or FWD). */
     val authoredReference: AuthoredReference = AuthoredReference.AFT,
@@ -73,6 +79,31 @@ data class Threads(
     /** True if a usable pitch is available (either metric or imperial). */
     val hasPitch: Boolean get() = pitchMm > 0f || (tpi ?: 0f) > 0f
 }
+
+/** Resolve attachment for excluded threads, falling back to legacy coordinate placement. */
+fun Threads.resolvedAttachment(overallLengthMm: Float, epsMm: Float = 1e-3f): ThreadAttachment? {
+    if (!excludeFromOAL) return null
+    if (endAttachment != null) return endAttachment
+    val endMm = startFromAftMm + lengthMm
+    if (abs(startFromAftMm) <= epsMm) return ThreadAttachment.AFT
+    if (abs(endMm - overallLengthMm) <= epsMm) return ThreadAttachment.FWD
+    if (overallLengthMm <= epsMm) return ThreadAttachment.AFT
+    val center = startFromAftMm + lengthMm * 0.5f
+    return if (center >= overallLengthMm * 0.5f) ThreadAttachment.FWD else ThreadAttachment.AFT
+}
+
+/** Effective start position for rendering and end detection. */
+fun Threads.resolvedStartFromAftMm(overallLengthMm: Float): Float {
+    val attachment = resolvedAttachment(overallLengthMm) ?: return startFromAftMm
+    return when (attachment) {
+        ThreadAttachment.AFT -> 0f
+        ThreadAttachment.FWD -> (overallLengthMm - lengthMm).coerceAtLeast(0f)
+    }
+}
+
+/** Effective end position for rendering and end detection. */
+fun Threads.resolvedEndFromAftMm(overallLengthMm: Float): Float =
+    resolvedStartFromAftMm(overallLengthMm) + lengthMm
 
 /**
  * Quick bounds validation for this segment against an overall shaft length.

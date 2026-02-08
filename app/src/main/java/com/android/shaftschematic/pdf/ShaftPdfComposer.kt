@@ -123,6 +123,10 @@ fun composeShaftPdf(
         color = 0xFF000000.toInt()
     }
 
+    val renderPadding = computeRenderPaddingMm(spec)
+    val renderOriginMm = renderPadding.aftMm
+    val renderedLengthMm = (spec.overallLengthMm.coerceAtLeast(1f) + renderPadding.aftMm + renderPadding.fwdMm)
+
     val ptPerMm = when {
         bodyOnly || hasNonBodyDetail -> {
             // PDF schematic scaling rule:
@@ -131,12 +135,11 @@ fun composeShaftPdf(
             // - Body center-break/compression is a readability fallback, not the default.
             // For any detailed shaft (tapers/threads/liners) prefer a stable schematic height
             // (~1.0–1.5 in). Keep uniform scaling (no x/y distortion), and still respect page width.
-            computeDetailPtPerMm(spec, geomRect.width(), geomRect.height())
+            computeDetailPtPerMm(spec, geomRect.width(), geomRect.height(), renderedLengthMm)
         }
         else -> {
             // Bodies-only: classic width-fit.
-            val overallMm = max(1f, spec.overallLengthMm)
-            geomRect.width() / overallMm
+            geomRect.width() / renderedLengthMm
         }
     }
     val left = geomRect.left
@@ -173,7 +176,7 @@ fun composeShaftPdf(
         0f
     }
 
-    fun xAt(mm: Float) = (left + mm * ptPerMm).coerceIn(geomRect.left, geomRect.right)
+    fun xAt(mm: Float) = (left + (mm + renderOriginMm) * ptPerMm).coerceIn(geomRect.left, geomRect.right)
     fun rPx(d: Float)  = (d * 0.5f) * ptPerMm
 
     // geometry
@@ -187,7 +190,7 @@ fun composeShaftPdf(
         drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect)
     }
     drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline)
-    drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
+    drawThreads(c, spec, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
     c.restore()
 
@@ -396,10 +399,11 @@ private fun drawComponentLabelsPdf(
 
     val threadTitleById = buildThreadTitleById(spec)
     spec.threads
-        .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .sortedWith(compareBy({ renderThreadStartMm(spec, it) }, { it.id }))
         .forEachIndexed { i, th ->
             val label = threadTitleById[th.id] ?: "Thread #${i + 1}"
-            drawCentered(label, th.startFromAftMm, th.startFromAftMm + th.lengthMm)
+            val startMm = renderThreadStartMm(spec, th)
+            drawCentered(label, startMm, startMm + th.lengthMm)
         }
 
     val linerTitleById = buildLinerTitleById(spec)
@@ -485,9 +489,14 @@ internal fun computeBodyOnlyPtPerMm(spec: ShaftSpec, geomWidthPt: Float): Float 
     return min(byWidth, byTargetHeight)
 }
 
-internal fun computeDetailPtPerMm(spec: ShaftSpec, geomWidthPt: Float, geomHeightPt: Float): Float {
+internal fun computeDetailPtPerMm(
+    spec: ShaftSpec,
+    geomWidthPt: Float,
+    geomHeightPt: Float,
+    axialLengthMm: Float = spec.overallLengthMm,
+): Float {
     // Same target-height behavior as body-only, but also never exceed the available content height.
-    val overallMm = if (spec.overallLengthMm > 0f) spec.overallLengthMm else 1f
+    val overallMm = if (axialLengthMm > 0f) axialLengthMm else 1f
     val maxDiaMmRaw = spec.maxOuterDiaMm()
     val maxDiaMm = if (maxDiaMmRaw > 0f) maxDiaMmRaw else 1f
 
@@ -813,6 +822,7 @@ private fun drawTapers(
 
 private fun drawThreads(
     c: Canvas,
+    spec: ShaftSpec,
     threads: List<Threads>,
     cy: Float,
     xAt: (Float) -> Float,
@@ -823,7 +833,8 @@ private fun drawThreads(
 ) {
     threads.forEach { th ->
         if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
-        val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
+        val startMm = renderThreadStartMm(spec, th)
+        val x0 = xAt(startMm); val x1 = xAt(startMm + th.lengthMm)
         val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
 
         // Envelope
@@ -891,7 +902,8 @@ private fun drawDimensionsLikePreview(
         // Excluded threads still render, but their length is intentionally not
         // part of the SET-to-SET dimensioning.
         if (!th.excludeFromOAL && th.lengthMm > 0f && th.majorDiaMm > 0f) {
-            ivs += Interval(th.startFromAftMm, th.startFromAftMm + th.lengthMm)
+            val startMm = threadStartMm(spec, th)
+            ivs += Interval(startMm, startMm + th.lengthMm)
         }
     }
     spec.liners.forEach  { if (it.lengthMm > 0f && it.odMm        > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
@@ -1152,8 +1164,49 @@ private fun pickAftFwdTapers(spec: ShaftSpec): Pair<Taper?, Taper?> {
     return aft to fwd
 }
 
-private fun findAftThread(spec: ShaftSpec): Threads? = spec.threads.minByOrNull { it.startFromAftMm }
-private fun findFwdThread(spec: ShaftSpec): Threads? = spec.threads.maxByOrNull { it.startFromAftMm + it.lengthMm }
+private data class RenderPadding(
+    val aftMm: Float,
+    val fwdMm: Float,
+)
+
+private fun computeRenderPaddingMm(spec: ShaftSpec): RenderPadding {
+    var aft = 0f
+    var fwd = 0f
+    val overall = spec.overallLengthMm
+
+    spec.threads.forEach { th ->
+        if (!th.excludeFromOAL || th.lengthMm <= 0f) return@forEach
+        when (th.resolvedAttachment(overall)) {
+            ThreadAttachment.AFT -> aft = max(aft, th.lengthMm)
+            ThreadAttachment.FWD -> fwd = max(fwd, th.lengthMm)
+            null -> Unit
+        }
+    }
+
+    return RenderPadding(aftMm = aft, fwdMm = fwd)
+}
+
+private fun threadStartMm(spec: ShaftSpec, th: Threads): Float =
+    th.resolvedStartFromAftMm(spec.overallLengthMm)
+
+private fun renderThreadStartMm(spec: ShaftSpec, th: Threads): Float {
+    if (!th.excludeFromOAL) return threadStartMm(spec, th)
+    val attachment = th.resolvedAttachment(spec.overallLengthMm)
+        ?: return threadStartMm(spec, th)
+    return when (attachment) {
+        ThreadAttachment.AFT -> -th.lengthMm
+        ThreadAttachment.FWD -> spec.overallLengthMm
+    }
+}
+
+private fun threadEndMm(spec: ShaftSpec, th: Threads): Float =
+    threadStartMm(spec, th) + th.lengthMm
+
+private fun findAftThread(spec: ShaftSpec): Threads? =
+    spec.threads.minByOrNull { threadStartMm(spec, it) }
+
+private fun findFwdThread(spec: ShaftSpec): Threads? =
+    spec.threads.maxByOrNull { threadEndMm(spec, it) }
 
 private fun letSet(t: Taper): Pair<Float, Float> {
     val let = max(t.startDiaMm, t.endDiaMm)
@@ -1227,11 +1280,11 @@ private fun hasCenterBreak(spec: ShaftSpec): Boolean {
 
 /** Presence checks for end features. */
 private fun hasAftThread(spec: ShaftSpec): Boolean =
-    spec.threads.any { it.startFromAftMm <= 0.5f }    // thread touches AFT end
+    spec.threads.any { threadStartMm(spec, it) <= 0.5f }    // thread touches AFT end
 
 private fun hasFwdThread(spec: ShaftSpec): Boolean {
     val oal = spec.overallLengthMm
-    return spec.threads.any { (it.startFromAftMm + it.lengthMm) >= (oal - 0.5f) } // thread touches FWD end
+    return spec.threads.any { threadEndMm(spec, it) >= (oal - 0.5f) } // thread touches FWD end
 }
 
 private const val END_EPS_MM = 0.5f
@@ -1294,26 +1347,25 @@ private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = END_EPS_MM.toDoub
 
     // Threads
     val aftThread = spec.threads.any { th ->
-        near(th.startFromAftMm.toDouble(), aftX) && th.lengthMm > epsMm
+        near(threadStartMm(spec, th).toDouble(), aftX) && th.lengthMm > epsMm
     }
     val fwdThread = spec.threads.any { th ->
-        near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > epsMm
+        near(threadEndMm(spec, th).toDouble(), fwdX) && th.lengthMm > epsMm
     }
 
     // If an end-thread exists, its shoulder can be the effective boundary for a taper.
     // Example: AFT thread starts at X=0 and a taper starts at X=threadEnd.
     val aftThreadEndX = spec.threads
         .asSequence()
-        .filter { th -> near(th.startFromAftMm.toDouble(), aftX) && th.lengthMm > epsMm }
-        .minByOrNull { it.startFromAftMm }
-        ?.let { (it.startFromAftMm + it.lengthMm).toDouble() }
+        .filter { th -> near(threadStartMm(spec, th).toDouble(), aftX) && th.lengthMm > epsMm }
+        .minByOrNull { threadStartMm(spec, it) }
+        ?.let { threadEndMm(spec, it).toDouble() }
 
     val fwdThreadStartX = spec.threads
         .asSequence()
-        .filter { th -> near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > epsMm }
-        .maxByOrNull { it.startFromAftMm + it.lengthMm }
-        ?.startFromAftMm
-        ?.toDouble()
+        .filter { th -> near(threadEndMm(spec, th).toDouble(), fwdX) && th.lengthMm > epsMm }
+        .maxByOrNull { threadEndMm(spec, it) }
+        ?.let { threadStartMm(spec, it).toDouble() }
 
     // Tapers
     val aftTaper = spec.tapers.any { tp ->
@@ -1341,22 +1393,22 @@ private fun near(a: Double, b: Double, eps: Double = END_EPS_MM.toDouble()) =
 private fun getAftEndThread(spec: ShaftSpec): Threads? =
     spec.threads
         .asSequence()
-        .filter { th -> near(th.startFromAftMm.toDouble(), 0.0) && th.lengthMm > EPS_MM }
-        .minByOrNull { it.startFromAftMm }
+        .filter { th -> near(threadStartMm(spec, th).toDouble(), 0.0) && th.lengthMm > EPS_MM }
+        .minByOrNull { threadStartMm(spec, it) }
 
 private fun getFwdEndThread(spec: ShaftSpec): Threads? {
     val fwdX = spec.overallLengthMm.toDouble()
     return spec.threads
         .asSequence()
-        .filter { th -> near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > EPS_MM }
-        .maxByOrNull { it.startFromAftMm + it.lengthMm }
+    .filter { th -> near(threadEndMm(spec, th).toDouble(), fwdX) && th.lengthMm > EPS_MM }
+    .maxByOrNull { threadEndMm(spec, it) }
 }
 
 private fun getAftEndTaper(spec: ShaftSpec): Taper? {
     val aftThread = getAftEndThread(spec)
     val anchors = mutableListOf(0.0)
     if (aftThread != null) {
-        anchors += (aftThread.startFromAftMm + aftThread.lengthMm).toDouble()
+        anchors += threadEndMm(spec, aftThread).toDouble()
     }
 
     return spec.tapers
@@ -1372,7 +1424,7 @@ private fun getFwdEndTaper(spec: ShaftSpec): Taper? {
     val fwdThread = getFwdEndThread(spec)
     val anchors = mutableListOf(fwdX)
     if (fwdThread != null) {
-        anchors += fwdThread.startFromAftMm.toDouble()
+        anchors += threadStartMm(spec, fwdThread).toDouble()
     }
 
     return spec.tapers

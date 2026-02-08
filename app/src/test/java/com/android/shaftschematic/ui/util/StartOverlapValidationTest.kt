@@ -70,4 +70,31 @@ class StartOverlapValidationTest {
 
         assertEquals("Overlaps another component", err)
     }
+
+    @Test
+    fun `excluded thread does not block overlap checks`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            threads = listOf(
+                Threads(
+                    id = "ex",
+                    startFromAftMm = 0f,
+                    lengthMm = 100f,
+                    majorDiaMm = 60f,
+                    pitchMm = 2f,
+                    excludeFromOAL = true
+                )
+            )
+        )
+
+        val err = startOverlapErrorMm(
+            spec = spec,
+            selfId = "new",
+            selfKind = ComponentKind.THREAD,
+            selfLengthMm = 50f,
+            startMm = 0f,
+        )
+
+        assertNull(err)
+    }
 }

@@ -41,6 +41,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.effectiveOalEndMm
 import com.android.shaftschematic.ui.drawing.render.GridRenderer.drawAdaptiveShaftGrid
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
@@ -171,12 +172,7 @@ fun ShaftDrawing(
 
     // Preview-safe spec: if OAL is zero but parts exist, extend to last occupied end.
     val safeSpec = remember(spec) {
-        val lastEnd = buildList {
-            spec.bodies.maxOfOrNull { it.startFromAftMm + it.lengthMm }?.let(::add)
-            spec.tapers.maxOfOrNull { it.startFromAftMm + it.lengthMm }?.let(::add)
-            spec.liners.maxOfOrNull { it.startFromAftMm + it.lengthMm }?.let(::add)
-            spec.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm }?.let(::add)
-        }.maxOrNull() ?: 0f
+        val lastEnd = spec.effectiveOalEndMm()
         if (spec.overallLengthMm <= 0f && lastEnd > 0f) spec.copy(overallLengthMm = lastEnd) else spec
     }
 

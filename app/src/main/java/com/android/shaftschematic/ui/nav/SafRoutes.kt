@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import com.android.shaftschematic.doc.SHAFT_DOT_EXT
 import com.android.shaftschematic.doc.SHAFT_MIME
+import com.android.shaftschematic.doc.stripShaftDocExtension
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.DocumentNaming
@@ -53,7 +54,8 @@ fun OpenInternalRoute(
                 context.contentResolver.openInputStream(uri)?.use { inp ->
                     val text = inp.bufferedReader().readText()
                     VerboseLog.d(VerboseLog.Category.IO, "SafRoutes") { "open read chars=${text.length}" }
-                    vm.importJson(text)
+                    val displayName = uri.lastPathSegment?.let(::stripShaftDocExtension)
+                    vm.importJson(text, displayNameOverride = displayName)
                 }
             }
         }
@@ -79,6 +81,7 @@ fun SaveInternalRoute(
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
+    val spec by vm.spec.collectAsState()
 
     val saver = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(SHAFT_MIME)
@@ -97,13 +100,14 @@ fun SaveInternalRoute(
     }
 
     LaunchedEffect(Unit) {
+        val persisted = spec.displayName?.trim().orEmpty().ifBlank { null }
         saver.launch(
-            defaultShaftFileName(
+            (persisted ?: defaultShaftFileName(
                 jobNumber = jobNumber,
                 customer = customer,
                 vessel = vessel,
                 shaftPosition = shaftPosition
-            )
+            )) + SHAFT_DOT_EXT
         )
     }
     if (done.value) onFinished() else Text("")

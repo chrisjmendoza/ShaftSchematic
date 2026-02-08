@@ -6,6 +6,10 @@ import com.android.shaftschematic.model.AutoBodyKey
 import com.android.shaftschematic.model.AutoBodyOverride
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.ThreadAttachment
+import com.android.shaftschematic.model.resolvedStartFromAftMm
+import com.android.shaftschematic.model.TaperOrientation
+import com.android.shaftschematic.BuildConfig
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.config.AddDefaultsConfig
@@ -49,6 +53,7 @@ data class ResolvedTaper(
     override val endMmPhysical: Float,
     val startDiaMm: Float,
     val endDiaMm: Float,
+    val orientation: TaperOrientation = TaperOrientation.AFT,
 ) : ResolvedComponent()
 
 data class ResolvedThread(
@@ -61,6 +66,7 @@ data class ResolvedThread(
     val majorDiaMm: Float,
     val pitchMm: Float,
     val excludeFromOal: Boolean = false,
+    val endAttachment: ThreadAttachment? = null,
 ) : ResolvedComponent()
 
 data class ResolvedLiner(
@@ -75,22 +81,111 @@ data class ResolvedLiner(
 
 fun resolveComponents(
     spec: ShaftSpec,
-    overallIsManual: Boolean,
     draft: DraftComponent? = null,
 ): List<ResolvedComponent> {
     val explicit = resolveExplicitComponents(spec)
     val draftResolved = draft?.let { resolveDraftComponent(it) }?.let(::listOf).orEmpty()
-    val explicitAndDraft = explicit + draftResolved
+    val explicitAndDraft = (explicit + draftResolved).filter { it.source != ResolvedComponentSource.AUTO }
+    check(explicitAndDraft.none { it.source == ResolvedComponentSource.AUTO }) {
+        "Auto bodies must not enter resolveComponents()"
+    }
+    val authoritativeNonBodies = explicitAndDraft
+        .filterNot { it is ResolvedBody }
+        .associate { it.id to (it.startMmPhysical to it.endMmPhysical) }
     val autoBodies = deriveAutoBodies(
-        overallLengthMm = if (overallIsManual) spec.overallLengthMm else 0f,
-        explicitComponents = explicitAndDraft,
+        overallLengthMm = spec.overallLengthMm,
+        explicitComponents = explicit,
         overrides = spec.autoBodyOverrides
     )
     val merged = (explicitAndDraft + autoBodies).sortedWith(
         compareBy<ResolvedComponent>({ it.startMmPhysical }, { it.typeSortKey() })
     )
     val subtracted = subtractBodiesAgainstNonBodies(merged)
-    return normalizeBodies(subtracted)
+    val reanchored = reapplyExplicitPositions(subtracted, authoritativeNonBodies)
+    val resubtracted = subtractBodiesAgainstNonBodies(reanchored)
+    val normalized = normalizeBodies(resubtracted)
+    assertExcludedThreadsResolved(normalized, spec)
+    assertAuthoredTaperSpans(normalized, spec)
+    return reapplyAuthoredTaperDiameters(normalized, spec, draft)
+}
+
+private fun assertExcludedThreadsResolved(
+    components: List<ResolvedComponent>,
+    spec: ShaftSpec,
+) {
+    if (!BuildConfig.DEBUG) return
+    if (spec.threads.none { it.excludeFromOAL }) return
+
+    val resolvedExcluded = components
+        .filterIsInstance<ResolvedThread>()
+        .any { it.excludeFromOal }
+
+    require(resolvedExcluded) { "Excluded threads must still resolve as physical components" }
+}
+
+private fun assertAuthoredTaperSpans(
+    components: List<ResolvedComponent>,
+    spec: ShaftSpec,
+) {
+    if (!BuildConfig.DEBUG) return
+
+    val authoredById = spec.tapers.associate { taper ->
+        taper.id to (taper.startFromAftMm to (taper.startFromAftMm + taper.lengthMm))
+    }
+
+    components.filterIsInstance<ResolvedTaper>()
+        .filter { it.source == ResolvedComponentSource.EXPLICIT }
+        .forEach { taper ->
+            val authored = authoredById[taper.id] ?: return@forEach
+            if (taper.startMmPhysical != authored.first || taper.endMmPhysical != authored.second) {
+                throw IllegalStateException(
+                    "Resolved taper ${taper.id} span changed: " +
+                        "start=${taper.startMmPhysical} end=${taper.endMmPhysical} " +
+                        "authoredStart=${authored.first} authoredEnd=${authored.second}"
+                )
+            }
+        }
+}
+
+private fun reapplyExplicitPositions(
+    components: List<ResolvedComponent>,
+    authoritative: Map<String, Pair<Float, Float>>,
+): List<ResolvedComponent> = components.map { comp ->
+    val span = authoritative[comp.id]
+    if (span == null) return@map comp
+
+    when (comp) {
+        is ResolvedThread -> comp.copy(startMmPhysical = span.first, endMmPhysical = span.second)
+        is ResolvedLiner -> comp.copy(startMmPhysical = span.first, endMmPhysical = span.second)
+        else -> comp
+    }
+}
+
+private fun reapplyAuthoredTaperDiameters(
+    components: List<ResolvedComponent>,
+    spec: ShaftSpec,
+    draft: DraftComponent?,
+): List<ResolvedComponent> {
+    if (components.isEmpty()) return components
+    val authoredById = spec.tapers.associateBy { it.id }
+    val draftTaper = draft as? DraftComponent.Taper
+
+    return components.map { comp ->
+        if (comp is ResolvedTaper) {
+            val authored = when (comp.source) {
+                ResolvedComponentSource.DRAFT ->
+                    draftTaper?.takeIf { it.id == comp.id }?.let { it.startDiaMm to it.endDiaMm }
+                else -> authoredById[comp.id]?.let { it.startDiaMm to it.endDiaMm }
+            }
+            if (authored != null) {
+                comp.copy(startDiaMm = authored.first, endDiaMm = authored.second)
+            } else {
+                comp
+            }
+        } else {
+            comp
+        }
+    }
 }
 
 fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildList {
@@ -112,17 +207,6 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
                         key = ComponentKey(th.id, ComponentKind.THREAD),
                         lengthMm = th.lengthMm,
                         authoredStartFromFwdMm = th.authoredStartFromFwdMm
-                    )
-                )
-            }
-        }
-        spec.tapers.forEach { tp ->
-            if (tp.authoredReference == AuthoredReference.FWD && tp.authoredStartFromFwdMm <= eps) {
-                add(
-                    FwdItem(
-                        key = ComponentKey(tp.id, ComponentKind.TAPER),
-                        lengthMm = tp.lengthMm,
-                        authoredStartFromFwdMm = tp.authoredStartFromFwdMm
                     )
                 )
             }
@@ -168,15 +252,8 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
         )
     }
     spec.tapers.forEach { t ->
-        val key = ComponentKey(t.id, ComponentKind.TAPER)
-        val (start, end) = overrideFor(key) ?: run {
-            val startMm = if (t.authoredReference == AuthoredReference.FWD) {
-                mfd - t.authoredStartFromFwdMm - t.lengthMm
-            } else {
-                t.startFromAftMm
-            }
-            startMm to (startMm + t.lengthMm)
-        }
+        val start = t.startFromAftMm
+        val end = start + t.lengthMm
         add(
             ResolvedTaper(
                 id = t.id,
@@ -184,19 +261,25 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
                 startMmPhysical = start,
                 endMmPhysical = end,
                 startDiaMm = t.startDiaMm,
-                endDiaMm = t.endDiaMm
+                endDiaMm = t.endDiaMm,
+                orientation = t.orientation,
             )
         )
     }
     spec.threads.forEach { th ->
         val key = ComponentKey(th.id, ComponentKind.THREAD)
-        val (start, end) = overrideFor(key) ?: run {
-            val startMm = if (th.authoredReference == AuthoredReference.FWD) {
-                mfd - th.authoredStartFromFwdMm - th.lengthMm
-            } else {
-                th.startFromAftMm
-            }
+        val (start, end) = if (th.excludeFromOAL) {
+            val startMm = th.resolvedStartFromAftMm(spec.overallLengthMm)
             startMm to (startMm + th.lengthMm)
+        } else {
+            overrideFor(key) ?: run {
+                val startMm = if (th.authoredReference == AuthoredReference.FWD) {
+                    mfd - th.authoredStartFromFwdMm - th.lengthMm
+                } else {
+                    th.startFromAftMm
+                }
+                startMm to (startMm + th.lengthMm)
+            }
         }
         add(
             ResolvedThread(
@@ -206,7 +289,8 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
                 endMmPhysical = end,
                 majorDiaMm = th.majorDiaMm,
                 pitchMm = th.pitchMm,
-                excludeFromOal = th.excludeFromOAL
+                excludeFromOal = th.excludeFromOAL,
+                endAttachment = th.endAttachment
             )
         )
     }
@@ -252,7 +336,8 @@ private fun resolveDraftComponent(draft: DraftComponent): ResolvedComponent = wh
         startMmPhysical = draft.startMmPhysical,
         endMmPhysical = draft.startMmPhysical + draft.lengthMm,
         startDiaMm = draft.startDiaMm,
-        endDiaMm = draft.endDiaMm
+        endDiaMm = draft.endDiaMm,
+        orientation = draft.orientation,
     )
     is DraftComponent.Thread -> ResolvedThread(
         id = draft.id,
@@ -263,7 +348,8 @@ private fun resolveDraftComponent(draft: DraftComponent): ResolvedComponent = wh
         endMmPhysical = draft.startMmPhysical + draft.lengthMm,
         majorDiaMm = draft.majorDiaMm,
         pitchMm = draft.pitchMm,
-        excludeFromOal = draft.excludeFromOal
+        excludeFromOal = draft.excludeFromOal,
+        endAttachment = draft.endAttachment
     )
     is DraftComponent.Liner -> ResolvedLiner(
         id = draft.id,
@@ -286,6 +372,7 @@ fun deriveAutoBodies(
 ): List<ResolvedComponent> {
     val explicit = explicitComponents
         .filter { it.source == ResolvedComponentSource.EXPLICIT || it.source == ResolvedComponentSource.DRAFT }
+        .filterNot { it is ResolvedThread && it.excludeFromOal }
         .sortedBy { it.startMmPhysical }
 
     data class Span(val start: Float, val end: Float)
@@ -414,6 +501,7 @@ private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>):
     val eps = 1e-3f
 
     val nonBodies = components.filterNot { it is ResolvedBody }
+    val subtractors = nonBodies.filterNot { it is ResolvedThread && it.excludeFromOal }
     val bodyComponents = components.filterIsInstance<ResolvedBody>()
 
     fun overlaps(bStart: Float, bEnd: Float, fStart: Float, fEnd: Float): Boolean =
@@ -422,7 +510,7 @@ private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>):
     val subtractedBodies = bodyComponents.flatMap { body ->
         var fragments = listOf(Span(body.startMmPhysical, body.endMmPhysical))
 
-        nonBodies.forEach { feature ->
+        subtractors.forEach { feature ->
             val fStart = feature.startMmPhysical
             val fEnd = feature.endMmPhysical
             fragments = fragments.flatMap { frag ->

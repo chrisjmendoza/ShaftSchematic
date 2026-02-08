@@ -16,6 +16,7 @@ import kotlinx.serialization.Serializable
  * @property tapers Linear transitions between diameters.
  * @property threads External threaded segments.
  * @property liners Outer sleeves/liners.
+ * @property displayName Persisted document name for save/open flows.
  */
 @Serializable
 data class ShaftSpec(
@@ -25,6 +26,7 @@ data class ShaftSpec(
     val threads: List<Threads> = emptyList(),
     val liners: List<Liner> = emptyList(),
     val autoBodyOverrides: Map<String, AutoBodyOverride> = emptyMap(),
+    val displayName: String? = null,
 )
 
 /**
@@ -41,13 +43,7 @@ fun ShaftSpec.validate(): Boolean {
 }
 
 /** Farthest occupied axial end across all components (mm). */
-fun ShaftSpec.coverageEndMm(): Float {
-    val bodyEnd   = bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
-    val taperEnd  = tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
-    val linerEnd  = liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
-    val threadEnd = threads.maxOfOrNull { it.startFromAftMm + it.lengthMm } ?: 0f
-    return maxOf(bodyEnd, taperEnd, linerEnd, threadEnd)
-}
+fun ShaftSpec.coverageEndMm(): Float = effectiveOalEndMm()
 
 /** Remaining free axial distance from coverage end to [overallLengthMm] (≥ 0). */
 fun ShaftSpec.freeToEndMm(): Float =

@@ -29,6 +29,7 @@ import com.android.shaftschematic.util.parseToMm
 import com.android.shaftschematic.util.VerboseLog
 import android.util.Log
 import com.android.shaftschematic.data.AutosaveManager
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -141,6 +142,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * Discard the current draft: clears autosave, resets VM to blank doc, and updates draft flags.
      */
     fun discardDraft() {
+        @OptIn(FlowPreview::class)
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 AutosaveManager.clear(getApplication())
@@ -326,10 +328,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _shaftPosition = MutableStateFlow(ShaftPosition.OTHER)
     val shaftPosition: StateFlow<ShaftPosition> = _shaftPosition.asStateFlow()
 
-    private val _overallIsManual = MutableStateFlow(false)
-    val overallIsManual: StateFlow<Boolean> = _overallIsManual.asStateFlow()
-    fun setOverallIsManual(v: Boolean) { _overallIsManual.value = v }
-
     // Session-scoped "last used" add defaults (mm). Reset on new/open/import.
     private val _sessionAddDefaults = MutableStateFlow(SessionAddDefaults.initial())
     val sessionAddDefaults: StateFlow<SessionAddDefaults> = _sessionAddDefaults.asStateFlow()
@@ -392,6 +390,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+        @OptIn(FlowPreview::class)
         viewModelScope.launch {
         @Suppress("UNCHECKED_CAST")
         // Flow.combine overload for >5 flows returns Array<Any?>
@@ -431,10 +430,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            combine(spec, overallIsManual, draftComponent) { s, isManual, draft ->
-                resolveComponents(s, isManual, draft)
-            }.collectLatest { resolved ->
-                _resolvedComponents.value = resolved
+            spec.collectLatest { s ->
+                _resolvedComponents.value = resolveComponents(s)
             }
         }
 
@@ -675,7 +672,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun restoreSnapshot(snapshot: AutosaveManager.SessionSnapshot) {
-        _spec.value = snapshot.shaftSpec
+        _spec.value = snapshot.shaftSpec.withManualOalFallback()
         _unit.value = snapshot.unitSystem
         _shaftPosition.value = snapshot.shaftPosition
         _customer.value = snapshot.customer
@@ -972,6 +969,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             lengthMm = max(0f, lengthMm),
             startDiaMm = max(0f, startDiaMm),
             endDiaMm = max(0f, endDiaMm),
+            orientation = TaperOrientation.AFT,
             keywayWidthMm = 0f,
             keywayDepthMm = 0f,
             keywayLengthMm = 0f,
@@ -980,14 +978,29 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _isDraftEditorOpen.value = true
     }
 
-    fun beginDraftThread(startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOal: Boolean) {
+    fun beginDraftThread(
+        startMm: Float,
+        lengthMm: Float,
+        majorDiaMm: Float,
+        pitchMm: Float,
+        excludeFromOal: Boolean,
+        endAttachment: ThreadAttachment? = null
+    ) {
+        val attachment = if (excludeFromOal) endAttachment ?: ThreadAttachment.AFT else endAttachment
+        val resolvedStart = resolveThreadStartFromAttachment(
+            startMm = startMm,
+            lengthMm = lengthMm,
+            excludeFromOal = excludeFromOal,
+            endAttachment = attachment
+        )
         _draftComponent.value = DraftComponent.Thread(
             id = newId(),
-            startMmPhysical = startMm,
+            startMmPhysical = resolvedStart,
             lengthMm = max(0f, lengthMm),
             majorDiaMm = max(0f, majorDiaMm),
             pitchMm = max(0f, pitchMm),
-            excludeFromOal = excludeFromOal
+            excludeFromOal = excludeFromOal,
+            endAttachment = attachment
         )
         _isDraftEditorOpen.value = true
     }
@@ -1021,6 +1034,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    fun updateDraftTaperOrientation(orientation: TaperOrientation) {
+        val draft = _draftComponent.value as? DraftComponent.Taper ?: return
+        if (draft.orientation == orientation) return
+        _draftComponent.value = draft.copy(orientation = orientation)
+    }
+
     fun updateDraftTaperKeyway(widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) {
         val draft = _draftComponent.value as? DraftComponent.Taper ?: return
         _draftComponent.value = draft.copy(
@@ -1031,14 +1050,29 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun updateDraftThread(startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOal: Boolean) {
+    fun updateDraftThread(
+        startMm: Float,
+        lengthMm: Float,
+        majorDiaMm: Float,
+        pitchMm: Float,
+        excludeFromOal: Boolean,
+        endAttachment: ThreadAttachment?
+    ) {
         val draft = _draftComponent.value as? DraftComponent.Thread ?: return
+        val attachment = if (excludeFromOal) endAttachment ?: ThreadAttachment.AFT else endAttachment
+        val resolvedStart = resolveThreadStartFromAttachment(
+            startMm = startMm,
+            lengthMm = lengthMm,
+            excludeFromOal = excludeFromOal,
+            endAttachment = attachment
+        )
         _draftComponent.value = draft.copy(
-            startMmPhysical = startMm,
+            startMmPhysical = resolvedStart,
             lengthMm = max(0f, lengthMm),
             majorDiaMm = max(0f, majorDiaMm),
             pitchMm = max(0f, pitchMm),
-            excludeFromOal = excludeFromOal
+            excludeFromOal = excludeFromOal,
+            endAttachment = attachment
         )
     }
 
@@ -1059,18 +1093,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun commitDraftComponent() {
         when (val draft = _draftComponent.value) {
             is DraftComponent.Body -> addBodyInternal(draft.id, draft.startMmPhysical, draft.lengthMm, draft.diaMm)
-            is DraftComponent.Taper -> addTaperInternal(
+            is DraftComponent.Taper -> addTaperFromDraft(draft)
+            is DraftComponent.Thread -> addThreadInternal(
                 draft.id,
                 draft.startMmPhysical,
                 draft.lengthMm,
-                draft.startDiaMm,
-                draft.endDiaMm,
-                draft.keywayWidthMm,
-                draft.keywayDepthMm,
-                draft.keywayLengthMm,
-                draft.keywaySpooned
+                draft.majorDiaMm,
+                draft.pitchMm,
+                draft.excludeFromOal,
+                draft.endAttachment
             )
-            is DraftComponent.Thread -> addThreadInternal(draft.id, draft.startMmPhysical, draft.lengthMm, draft.majorDiaMm, draft.pitchMm, draft.excludeFromOal)
             is DraftComponent.Liner -> addLinerInternal(draft.id, draft.startMmPhysical, draft.lengthMm, draft.odMm)
             null -> return
         }
@@ -1180,6 +1212,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Tapers
+    private fun addTaperFromDraft(draft: DraftComponent.Taper) = _spec.update { s ->
+        orderAdd(ComponentKind.TAPER, draft.id)
+        s.copy(
+            tapers = listOf(draftTaperToSpec(draft)) + s.tapers
+        )
+    }.also {
+        rememberTaperDefaults(lengthMm = draft.lengthMm, setDiaMm = draft.startDiaMm, letDiaMm = draft.endDiaMm)
+        ensureOrderCoversSpec()
+    }
+
     private fun addTaperInternal(
         startId: String,
         startMm: Float,
@@ -1246,6 +1288,19 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }.also {
         if (index in _spec.value.tapers.indices) {
             rememberTaperDefaults(lengthMm = lengthMm, setDiaMm = startDiaMm, letDiaMm = endDiaMm)
+        }
+    }
+
+    fun updateTaperOrientation(index: Int, orientation: TaperOrientation) = _spec.update { s ->
+        if (index !in s.tapers.indices) s else {
+            val old = s.tapers[index]
+            if (old.orientation == orientation) return@update s
+
+            val updatedTapers = s.tapers.toMutableList().also { list ->
+                list[index] = old.copy(orientation = orientation)
+            }
+
+            s.copy(tapers = updatedTapers)
         }
     }
 
@@ -1332,8 +1387,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         lengthMm: Float,
         majorDiaMm: Float,
         pitchMm: Float,
-        excludeFromOAL: Boolean = false
-    ) = addThreadInternal(newId(), startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL)
+        excludeFromOAL: Boolean = false,
+        endAttachment: ThreadAttachment? = null
+    ) = addThreadInternal(newId(), startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL, endAttachment)
 
     private fun addThreadInternal(
         id: String,
@@ -1341,18 +1397,27 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         lengthMm: Float,
         majorDiaMm: Float,
         pitchMm: Float,
-        excludeFromOAL: Boolean
+        excludeFromOAL: Boolean,
+        endAttachment: ThreadAttachment?
     ) = _spec.update { s ->
+        val resolvedStart = resolveThreadStartFromAttachment(
+            startMm = startMm,
+            lengthMm = lengthMm,
+            excludeFromOal = excludeFromOAL,
+            endAttachment = endAttachment,
+            overallLengthMm = s.overallLengthMm
+        )
         orderAdd(ComponentKind.THREAD, id)
         s.copy(
             threads = listOf(
                 Threads(
                     id = id,
-                    startFromAftMm = startMm,
+                    startFromAftMm = resolvedStart,
                     majorDiaMm = max(0f, majorDiaMm),
                     pitchMm = max(0f, pitchMm),
                     lengthMm = max(0f, lengthMm),
-                    excludeFromOAL = excludeFromOAL
+                    excludeFromOAL = excludeFromOAL,
+                    endAttachment = endAttachment
                 )
             ) + s.threads
         )
@@ -1389,9 +1454,51 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         else s.copy(
             threads = s.threads.toMutableList().also { l ->
                 val old = l[idx]
-                l[idx] = old.copy(excludeFromOAL = excludeFromOAL)
+                val attachment = if (excludeFromOAL) {
+                    old.endAttachment ?: inferThreadAttachment(old, s.overallLengthMm)
+                } else {
+                    old.endAttachment
+                }
+                l[idx] = old.copy(excludeFromOAL = excludeFromOAL, endAttachment = attachment)
             }
         )
+    }
+
+    fun setThreadEndAttachment(id: String, attachment: ThreadAttachment) = _spec.update { s ->
+        val idx = s.threads.indexOfFirst { it.id == id }
+        if (idx == -1) s
+        else s.copy(
+            threads = s.threads.toMutableList().also { l ->
+                val old = l[idx]
+                l[idx] = old.copy(endAttachment = attachment)
+            }
+        )
+    }
+
+    private fun resolveThreadStartFromAttachment(
+        startMm: Float,
+        lengthMm: Float,
+        excludeFromOal: Boolean,
+        endAttachment: ThreadAttachment?,
+        overallLengthMm: Float = _spec.value.overallLengthMm
+    ): Float {
+        if (!excludeFromOal || endAttachment == null) return startMm
+        return when (endAttachment) {
+            ThreadAttachment.AFT -> 0f
+            ThreadAttachment.FWD -> (overallLengthMm - lengthMm).coerceAtLeast(0f)
+        }
+    }
+
+    private fun inferThreadAttachment(thread: Threads, overallLengthMm: Float): ThreadAttachment {
+        val eps = 1e-3f
+        val start = thread.startFromAftMm
+        val end = thread.startFromAftMm + thread.lengthMm
+        return when {
+            kotlin.math.abs(start) <= eps -> ThreadAttachment.AFT
+            kotlin.math.abs(end - overallLengthMm) <= eps -> ThreadAttachment.FWD
+            (start + thread.lengthMm * 0.5f) >= overallLengthMm * 0.5f -> ThreadAttachment.FWD
+            else -> ThreadAttachment.AFT
+        }
     }
 
     /** Remove a [Threads] segment by id with multi-step delete history support. */
@@ -1654,13 +1761,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * Tries envelope first, then falls back to legacy (spec-only) files.
      * Seeds/repairs UI order to reflect loaded spec.
      */
-    fun importJson(raw: String) {
+    fun importJson(raw: String, displayNameOverride: String? = null) {
         val decoded = runCatching { ShaftDocCodec.decode(raw) }.getOrElse { throw it }
 
         clearDeleteHistory()
-        _spec.value = decoded.spec
+        val overrideName = displayNameOverride?.trim().orEmpty().ifBlank { null }
+        val authoredName = decoded.spec.displayName?.trim().orEmpty().ifBlank { null }
+        val migratedSpec = decoded.spec
+            .withManualOalFallback()
+            .copy(displayName = authoredName ?: overrideName)
+        _spec.value = migratedSpec
         _draftComponent.value = null
-        seedSessionAddDefaultsFromSpec(decoded.spec)
+        seedSessionAddDefaultsFromSpec(migratedSpec)
 
         _unitLocked.value = decoded.unitLocked
         decoded.preferredUnit?.let { setUnit(it, persist = false) }
@@ -1673,7 +1785,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
         // Reset order to this document's components only
         _componentOrder.value = emptyList()
-        ensureOrderCoversSpec(decoded.spec)
+        ensureOrderCoversSpec(migratedSpec)
+    }
+
+    fun setDisplayName(name: String?) {
+        val normalized = name?.trim().orEmpty().ifBlank { null }
+        _spec.update { spec ->
+            if (spec.displayName == normalized) spec else spec.copy(displayName = normalized)
+        }
     }
 
     /**
@@ -1703,8 +1822,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _vessel.value = ""
         _shaftPosition.value = ShaftPosition.OTHER
         _notes.value = ""
-        _overallIsManual.value = false
-
         _componentOrder.value = emptyList()
         ensureOrderCoversSpec(blankSpec)
     }
@@ -1781,12 +1898,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Last occupied end among all components (mm). */
     private fun coverageEndMm(s: ShaftSpec): Float {
-        var end = 0f
-        s.bodies.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
-        s.tapers.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
-        s.threads.forEach { end = max(end, it.startFromAftMm + it.lengthMm) }
-        s.liners.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
-        return end
+        return s.effectiveOalEndMm()
     }
 
     /**
@@ -1940,4 +2052,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
         updateUndoRedoFlags()
     }
+}
+
+internal fun draftTaperToSpec(draft: DraftComponent.Taper): Taper {
+    val (leftDiaMm, rightDiaMm) = when (draft.orientation) {
+        TaperOrientation.AFT -> draft.startDiaMm to draft.endDiaMm
+        TaperOrientation.FWD -> draft.endDiaMm to draft.startDiaMm
+    }
+
+    return Taper(
+        id = draft.id,
+        startFromAftMm = draft.startMmPhysical,
+        lengthMm = draft.lengthMm,
+        startDiaMm = leftDiaMm,
+        endDiaMm = rightDiaMm,
+        orientation = draft.orientation,
+        keywayWidthMm = draft.keywayWidthMm,
+        keywayDepthMm = draft.keywayDepthMm,
+        keywayLengthMm = draft.keywayLengthMm,
+        keywaySpooned = draft.keywaySpooned,
+    )
 }

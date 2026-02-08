@@ -27,6 +27,8 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.doc.ShaftDocCodec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,7 +52,7 @@ import com.android.shaftschematic.doc.stripShaftDocExtension
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
+fun OpenLocalDocumentRoute(
     nav: NavController,
     vm: ShaftViewModel,
     onFinished: () -> Unit
@@ -147,7 +149,23 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                             val ok = withContext(Dispatchers.IO) {
                                 // Avoid overwrites.
                                 if (InternalStorage.exists(ctx, toName)) return@withContext false
-                                InternalStorage.rename(ctx, fromName, toName)
+                                val raw = InternalStorage.load(ctx, fromName)
+                                val decoded = ShaftDocCodec.decode(raw)
+                                val base = stripShaftDocExtension(toName)
+                                val updatedSpec = decoded.spec.copy(displayName = base)
+                                val updatedDoc = ShaftDocCodec.ShaftDocV1(
+                                    preferredUnit = decoded.preferredUnit ?: UnitSystem.INCHES,
+                                    unitLocked = decoded.unitLocked,
+                                    jobNumber = decoded.jobNumber,
+                                    customer = decoded.customer,
+                                    vessel = decoded.vessel,
+                                    shaftPosition = decoded.shaftPosition,
+                                    notes = decoded.notes,
+                                    spec = updatedSpec,
+                                )
+                                if (!InternalStorage.rename(ctx, fromName, toName)) return@withContext false
+                                InternalStorage.save(ctx, toName, ShaftDocCodec.encodeV1(updatedDoc))
+                                true
                             }
                             if (ok) {
                                 files = InternalStorage.list(ctx)
@@ -211,7 +229,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                     val text = withContext(Dispatchers.IO) {
                                         InternalStorage.load(ctx, name)
                                     }
-                                    vm.importJson(text)
+                                    vm.importJson(text, displayNameOverride = stripShaftDocExtension(name))
                                     onFinished()
                                 }
                             }
@@ -319,11 +337,13 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
+    val spec by vm.spec.collectAsState()
 
     var existingFiles by remember { mutableStateOf(listOf<String>()) }
     LaunchedEffect(Unit) { existingFiles = InternalStorage.list(ctx) }
 
-    var name by remember {
+    var name by remember(spec.displayName, jobNumber, customer, vessel, shaftPosition) {
+        val persisted = spec.displayName?.trim().orEmpty().ifBlank { null }
         val default = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
         val positionSuffix = shaftPosition.printableLabelOrNull()
         val suggested = DocumentNaming.suggestedBaseName(
@@ -332,7 +352,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
             vessel = vessel,
             suffix = positionSuffix
         )
-        mutableStateOf(TextFieldValue(suggested ?: "Shaft_$default"))
+        mutableStateOf(TextFieldValue(persisted ?: suggested ?: "Shaft_$default"))
     }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -353,6 +373,8 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                 TextButton(
                     onClick = {
                         scope.launch {
+                            val base = stripShaftDocExtension(file)
+                            vm.setDisplayName(base)
                             withContext(Dispatchers.IO) {
                                 InternalStorage.save(ctx, file, vm.exportJson())
                             }
@@ -446,6 +468,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                             pendingOverwrite = targetName
                         } else {
                             scope.launch {
+                                vm.setDisplayName(base)
                                 withContext(Dispatchers.IO) {
                                     InternalStorage.save(ctx, targetName, vm.exportJson())
                                 }

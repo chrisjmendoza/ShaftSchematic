@@ -2,6 +2,7 @@ package com.android.shaftschematic.util
 
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
+import com.android.shaftschematic.model.TaperOrientation
 
 private enum class TaperDirection { AFT, FWD }
 
@@ -9,9 +10,7 @@ private enum class TaperDirection { AFT, FWD }
  * Deterministic display titles for tapers.
  *
  * Rules:
- * - Direction is based on diameter trend along AFT→FWD:
- *   - startDia < endDia => "AFT Taper" (SET→LET along AFT→FWD)
- *   - startDia > endDia => "FWD Taper" (LET→SET along AFT→FWD)
+ * - Direction is based on explicit taper orientation (AFT/FWD).
  * - Numbering is shown only when more than one taper shares the same direction.
  * - Ordering is stable: sort by startMm (AFT→FWD), tie-break by stable id.
  */
@@ -19,10 +18,9 @@ fun buildTaperTitleById(spec: ShaftSpec): Map<String, String> {
     val tapers = spec.tapers
     if (tapers.isEmpty()) return emptyMap()
 
-    fun directionOf(t: Taper): TaperDirection = if (t.startDiaMm <= t.endDiaMm) {
-        TaperDirection.AFT
-    } else {
-        TaperDirection.FWD
+    fun directionOf(t: Taper): TaperDirection = when (t.orientation) {
+        TaperOrientation.AFT -> TaperDirection.AFT
+        TaperOrientation.FWD -> TaperDirection.FWD
     }
 
     val sorted = tapers.sortedWith(compareBy<Taper>({ it.startFromAftMm }, { it.id }))

@@ -1,6 +1,8 @@
 package com.android.shaftschematic.ui.drawing.render
 
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.ThreadAttachment
+import com.android.shaftschematic.model.resolvedAttachment
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import kotlin.math.max
@@ -86,9 +88,11 @@ object ShaftLayout {
         val cW = max(1f, cR - cL)
         val cH = max(1f, cB - cT)
 
-        // Axial span (mm) — left=0, right=overall
-        val minXMm = 0f
-        val maxXMm = max(1f, spec.overallLengthMm)
+        val renderPadding = renderPaddingMm(spec)
+
+        // Axial span (mm) — allow render-only padding for excluded end threads
+        val minXMm = -renderPadding.aftMm
+        val maxXMm = max(1f, spec.overallLengthMm + renderPadding.fwdMm)
         val axialSpanMm = maxXMm - minXMm
 
         // Radial span (mm) — use max diameter across all components (and at least a small minimum)
@@ -128,4 +132,26 @@ object ShaftLayout {
             centerlineYPx = centerlineY
         )
     }
+}
+
+private data class RenderPadding(
+    val aftMm: Float,
+    val fwdMm: Float,
+)
+
+private fun renderPaddingMm(spec: ShaftSpec): RenderPadding {
+    var aft = 0f
+    var fwd = 0f
+    val overall = spec.overallLengthMm
+
+    spec.threads.forEach { th ->
+        if (!th.excludeFromOAL || th.lengthMm <= 0f) return@forEach
+        when (th.resolvedAttachment(overall)) {
+            ThreadAttachment.AFT -> aft = max(aft, th.lengthMm)
+            ThreadAttachment.FWD -> fwd = max(fwd, th.lengthMm)
+            null -> Unit
+        }
+    }
+
+    return RenderPadding(aftMm = aft, fwdMm = fwd)
 }

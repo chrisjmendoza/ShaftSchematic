@@ -6,6 +6,7 @@ import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.model.ThreadAttachment
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -22,7 +23,8 @@ class MeasurementDatumTests {
                     lengthMm = 10f,
                     majorDiaMm = 30f,
                     pitchMm = 1f,
-                    excludeFromOAL = true
+                    excludeFromOAL = true,
+                    endAttachment = ThreadAttachment.FWD
                 )
             ),
             liners = listOf(
@@ -59,13 +61,14 @@ class MeasurementDatumTests {
                     pitchMm = 1f,
                     excludeFromOAL = true,
                     authoredReference = AuthoredReference.FWD,
-                    authoredStartFromFwdMm = 0f
+                    authoredStartFromFwdMm = 0f,
+                    endAttachment = ThreadAttachment.FWD
                 )
             ),
             tapers = listOf(
                 Taper(
                     id = "TP",
-                    startFromAftMm = 0f,
+                    startFromAftMm = 90f,
                     lengthMm = 20f,
                     startDiaMm = 30f,
                     endDiaMm = 20f,
@@ -98,8 +101,8 @@ class MeasurementDatumTests {
         val auto = deriveAutoBodies(130f, resolved).filterIsInstance<ResolvedBody>()
             .first { it.source == ResolvedComponentSource.AUTO && approx(it.startMmPhysical, 60f) && approx(it.endMmPhysical, 90f) }
 
-        assertEquals(120f, thread.endMmPhysical, 1e-4f)
-        assertEquals(110f, thread.startMmPhysical, 1e-4f)
+        assertEquals(130f, thread.endMmPhysical, 1e-4f)
+        assertEquals(120f, thread.startMmPhysical, 1e-4f)
         assertEquals(110f, taper.endMmPhysical, 1e-4f)
         assertEquals(90f, taper.startMmPhysical, 1e-4f)
         assertEquals(baseAuto.lengthMm + 10f, auto.lengthMm, 1e-4f)

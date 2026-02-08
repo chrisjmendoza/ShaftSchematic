@@ -36,7 +36,7 @@ fun startOverlapErrorMm(
         }
 
         CollisionGroup.THREAD -> spec.threads.any {
-            it.id != selfId && overlapsStrict(startMm, selfLengthMm, it.startFromAftMm, it.lengthMm)
+            !it.excludeFromOAL && it.id != selfId && overlapsStrict(startMm, selfLengthMm, it.startFromAftMm, it.lengthMm)
         }
     }
 

@@ -4,6 +4,7 @@ import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.withPhysical
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -23,7 +24,7 @@ class ComponentInvariantTests {
         )
         val snapshot = spec.deepCopy()
 
-        resolveComponents(spec, overallIsManual = true)
+        resolveComponents(spec)
         deriveAutoBodies(
             overallLengthMm = spec.overallLengthMm,
             explicitComponents = resolveExplicitComponents(spec)
@@ -32,7 +33,7 @@ class ComponentInvariantTests {
         val added = spec.copy(
             bodies = spec.bodies + Body(id = "B2", startFromAftMm = 80f, lengthMm = 10f, diaMm = 35f)
         )
-        resolveComponents(added, overallIsManual = true)
+        resolveComponents(added)
 
         assertEquals(snapshot, spec)
     }
@@ -55,7 +56,7 @@ class ComponentInvariantTests {
         )
         val snapshot = spec.deepCopy()
 
-        resolveComponents(spec, overallIsManual = true)
+        resolveComponents(spec)
         resolveExplicitComponents(spec)
         deriveAutoBodies(
             overallLengthMm = spec.overallLengthMm,
@@ -86,7 +87,7 @@ class ComponentInvariantTests {
         val spec = ShaftSpec(overallLengthMm = oal, bodies = listOf(body), liners = listOf(liner))
         val snapshot = spec.deepCopy()
 
-        val resolved = resolveComponents(spec, overallIsManual = true)
+        val resolved = resolveComponents(spec)
         val resolvedLiner = resolved.filterIsInstance<ResolvedLiner>().single { it.id == "L1" }
 
         assertEquals(snapshot, spec)
@@ -182,7 +183,7 @@ class ComponentInvariantTests {
             }
         )
 
-        resolveComponents(updated, overallIsManual = true)
+        resolveComponents(updated)
 
         assertEquals(snapshotSecond, updated.liners[1])
         assertEquals(snapshotSecond, spec.liners[1])
@@ -198,7 +199,7 @@ class ComponentInvariantTests {
         val added = spec.copy(
             bodies = spec.bodies + Body(id = "B2", startFromAftMm = 100f, lengthMm = 10f, diaMm = 45f)
         )
-        resolveComponents(added, overallIsManual = true)
+        resolveComponents(added)
 
         assertEquals(snapshot, spec)
         assertEquals(snapshot.bodies, spec.bodies)
@@ -206,6 +207,33 @@ class ComponentInvariantTests {
         assertEquals(snapshot.overallLengthMm, spec.overallLengthMm, 1e-4f)
         assertEquals(2, added.bodies.size)
         assertEquals(1, spec.bodies.size)
+    }
+
+    @Test
+    fun taper_diameters_preserved_adjacent_to_auto_body_and_at_shaft_end() {
+        val taper = Taper(
+            id = "T1",
+            startFromAftMm = 80f,
+            lengthMm = 20f,
+            startDiaMm = 52f,
+            endDiaMm = 34f,
+            orientation = com.android.shaftschematic.model.TaperOrientation.FWD
+        )
+        val spec = ShaftSpec(
+            overallLengthMm = 100f,
+            tapers = listOf(taper)
+        )
+
+        val resolved = resolveComponents(spec)
+        val resolvedTaper = resolved.filterIsInstance<ResolvedTaper>().single { it.id == "T1" }
+        val autoBody = resolved
+            .filterIsInstance<ResolvedBody>()
+            .firstOrNull { it.source == ResolvedComponentSource.AUTO && approx(it.startMmPhysical, 0f) }
+
+        assertNotNull("Expected leading auto body adjacent to taper", autoBody)
+        assertEquals(taper.startDiaMm, resolvedTaper.startDiaMm, 1e-4f)
+        assertEquals(taper.endDiaMm, resolvedTaper.endDiaMm, 1e-4f)
+        assertEquals(taper.orientation, resolvedTaper.orientation)
     }
 
     private fun approx(actual: Float, expected: Float, eps: Float = 1e-4f): Boolean =

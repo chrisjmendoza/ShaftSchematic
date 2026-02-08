@@ -1,7 +1,10 @@
 package com.android.shaftschematic.util
 
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.ThreadAttachment
+import com.android.shaftschematic.model.effectiveOalEndMm
 import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.model.resolvedAttachment
 import kotlin.math.max
 
 private enum class ThreadEnd { AFT, FWD }
@@ -20,18 +23,15 @@ fun buildThreadTitleById(spec: ShaftSpec): Map<String, String> {
 
     val sorted = threads.sortedWith(compareBy<Threads>({ it.startFromAftMm }, { it.id }))
 
-    fun coverageEndMm(): Float {
-        var end = 0f
-        spec.bodies.forEach { end = max(end, it.startFromAftMm + it.lengthMm) }
-        spec.tapers.forEach { end = max(end, it.startFromAftMm + it.lengthMm) }
-        spec.threads.forEach { end = max(end, it.startFromAftMm + it.lengthMm) }
-        spec.liners.forEach { end = max(end, it.startFromAftMm + it.lengthMm) }
-        return end
-    }
-
-    val denom = max(coverageEndMm(), 1f)
+    val denom = max(spec.effectiveOalEndMm(), 1f)
 
     fun endOf(th: Threads): ThreadEnd {
+        if (th.excludeFromOAL) {
+            return when (th.resolvedAttachment(spec.overallLengthMm)) {
+                ThreadAttachment.FWD -> ThreadEnd.FWD
+                else -> ThreadEnd.AFT
+            }
+        }
         val centerMm = th.startFromAftMm + (th.lengthMm / 2f)
         return if (centerMm / denom < 0.5f) ThreadEnd.AFT else ThreadEnd.FWD
     }

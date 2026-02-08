@@ -12,6 +12,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.TextMeasurer
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.ThreadAttachment
+import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.model.resolvedAttachment
+import com.android.shaftschematic.model.resolvedStartFromAftMm
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentType
@@ -249,8 +253,10 @@ object ShaftRenderer {
         // ───────── Threads ─────────
         if (resolvedThreads != null) {
             for (th in resolvedThreads) {
-                val startX   = L.xPx(th.startMmPhysical)
-                val endX     = L.xPx(th.endMmPhysical)
+                val startMm = renderThreadStartMm(spec, th)
+                val endMm = startMm + th.lengthMm
+                val startX   = L.xPx(startMm)
+                val endX     = L.xPx(endMm)
                 val left     = min(startX, endX)
                 val right    = max(startX, endX)
                 val lengthPx = right - left
@@ -312,8 +318,9 @@ object ShaftRenderer {
             }
         } else {
             for (th in spec.threads) {
-                val startX   = L.xPx(th.startFromAftMm)
-                val endX     = L.xPx(th.startFromAftMm + th.lengthMm)
+                val startMm = renderThreadStartMm(spec, th)
+                val startX   = L.xPx(startMm)
+                val endX     = L.xPx(startMm + th.lengthMm)
             val left     = min(startX, endX)
             val right    = max(startX, endX)
             val lengthPx = right - left
@@ -492,6 +499,44 @@ object ShaftRenderer {
             x += pitchPx
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Render-space helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+private fun renderThreadStartMm(spec: ShaftSpec, thread: ResolvedThread): Float {
+    if (!thread.excludeFromOal) return thread.startMmPhysical
+    val attachment = thread.endAttachment
+        ?: inferThreadAttachment(thread.startMmPhysical, thread.endMmPhysical, spec.overallLengthMm)
+        ?: return thread.startMmPhysical
+    return when (attachment) {
+        ThreadAttachment.AFT -> -thread.lengthMm
+        ThreadAttachment.FWD -> spec.overallLengthMm
+    }
+}
+
+private fun renderThreadStartMm(spec: ShaftSpec, thread: Threads): Float {
+    if (!thread.excludeFromOAL) return thread.resolvedStartFromAftMm(spec.overallLengthMm)
+    val attachment = thread.resolvedAttachment(spec.overallLengthMm)
+        ?: return thread.resolvedStartFromAftMm(spec.overallLengthMm)
+    return when (attachment) {
+        ThreadAttachment.AFT -> -thread.lengthMm
+        ThreadAttachment.FWD -> spec.overallLengthMm
+    }
+}
+
+private fun inferThreadAttachment(
+    startMm: Float,
+    endMm: Float,
+    overallLengthMm: Float,
+    epsMm: Float = 1e-3f,
+): ThreadAttachment? {
+    if (kotlin.math.abs(startMm) <= epsMm) return ThreadAttachment.AFT
+    if (kotlin.math.abs(endMm - overallLengthMm) <= epsMm) return ThreadAttachment.FWD
+    if (overallLengthMm <= epsMm) return ThreadAttachment.AFT
+    val center = startMm + (endMm - startMm) * 0.5f
+    return if (center >= overallLengthMm * 0.5f) ThreadAttachment.FWD else ThreadAttachment.AFT
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -78,6 +78,18 @@ class ShaftSpecTest {
     }
 
     @Test
+    fun `coverageEndMm ignores excluded threads`() {
+        val spec = ShaftSpec(
+            bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 80f, diaMm = 40f)),
+            threads = listOf(
+                Threads(startFromAftMm = 120f, lengthMm = 20f, majorDiaMm = 30f, pitchMm = 2f, excludeFromOAL = true)
+            )
+        )
+
+        assertEquals(80f, spec.coverageEndMm(), 0.001f)
+    }
+
+    @Test
     fun `freeToEndMm returns difference when coverage less than overall`() {
         val spec = ShaftSpec(
             overallLengthMm = 1000f,

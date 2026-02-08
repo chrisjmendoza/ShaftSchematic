@@ -17,6 +17,7 @@ import kotlin.math.max
  * @property keywayDepthMm Optional keyway depth (0 = none).
  * @property keywayLengthMm Optional keyway length (0 = none).
  * @property keywaySpooned Whether the keyway is spooned.
+ * @property orientation Explicit AFT/FWD orientation for SET/LET ordering.
  */
 @Serializable
 data class Taper(
@@ -25,6 +26,7 @@ data class Taper(
     override val lengthMm: Float = 0f,
     val startDiaMm: Float = 0f,
     val endDiaMm: Float = 0f,
+    val orientation: TaperOrientation = TaperOrientation.AFT,
     val keywayWidthMm: Float = 0f,
     val keywayDepthMm: Float = 0f,
     val keywayLengthMm: Float = 0f,
@@ -34,6 +36,8 @@ data class Taper(
     /** Start offset measured from the forward datum when [authoredReference] is FWD. */
     val authoredStartFromFwdMm: Float = 0f,
 ) : Segment
+
+enum class TaperOrientation { AFT, FWD }
 
 /** Basic invariants for a Taper. */
 fun Taper.isValid(overallLengthMm: Float): Boolean =

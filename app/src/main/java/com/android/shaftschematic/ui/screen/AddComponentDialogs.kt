@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
@@ -26,6 +27,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.model.ThreadAttachment
 import kotlin.math.max
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -226,7 +228,14 @@ fun AddThreadDialog(
     initialLengthMm: Float,
     initialMajorDiaMm: Float,
     initialPitchMm: Float,
-    onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, tpi: Float, excludeFromOAL: Boolean) -> Unit,
+    onSubmit: (
+        startMm: Float,
+        lengthMm: Float,
+        majorDiaMm: Float,
+        tpi: Float,
+        excludeFromOAL: Boolean,
+        endAttachment: ThreadAttachment?
+    ) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -243,6 +252,7 @@ fun AddThreadDialog(
     var major by remember(unit, effectiveMajorMm) { mutableStateOf(toDisplayString(max(1f, effectiveMajorMm), unit)) }
     var tpiText by remember(initialTpi) { mutableStateOf(formatTpi(initialTpi)) }
     var countInOal by remember { mutableStateOf(true) }
+    var endAttachment by remember { mutableStateOf(ThreadAttachment.AFT) }
 
     val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
     val lengthMm = toMmOrNullFromDialog(length, unit) ?: -1f
@@ -254,7 +264,27 @@ fun AddThreadDialog(
         title = { Text("Add Thread") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
-                CommitNumField("Start (${abbrFor(unit)})", start) { start = it }
+                if (countInOal) {
+                    CommitNumField("Start (${abbrFor(unit)})", start) { start = it }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val aftSelected = endAttachment == ThreadAttachment.AFT
+                        val fwdSelected = endAttachment == ThreadAttachment.FWD
+                        if (aftSelected) {
+                            Button(onClick = { endAttachment = ThreadAttachment.AFT }) { Text("AFT") }
+                        } else {
+                            OutlinedButton(onClick = { endAttachment = ThreadAttachment.AFT }) { Text("AFT") }
+                        }
+                        if (fwdSelected) {
+                            Button(onClick = { endAttachment = ThreadAttachment.FWD }) { Text("FWD") }
+                        } else {
+                            OutlinedButton(onClick = { endAttachment = ThreadAttachment.FWD }) { Text("FWD") }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Major Ø (${abbrFor(unit)})", major) { major = it }
                 Spacer(Modifier.height(8.dp))
@@ -276,8 +306,12 @@ fun AddThreadDialog(
             }
         },
         confirmButton = {
-            val ok = startMm >= 0f && lengthMm > 0f && majorMm > 0f && tpi > 0f
-            Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, majorMm, tpi, !countInOal) }) { Text("Add") }
+            val ok = (!countInOal || startMm >= 0f) && lengthMm > 0f && majorMm > 0f && tpi > 0f
+            val resolvedStart = if (countInOal) startMm else 0f
+            Button(
+                enabled = ok,
+                onClick = { onSubmit(resolvedStart, lengthMm, majorMm, tpi, !countInOal, endAttachment.takeIf { !countInOal }) }
+            ) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )

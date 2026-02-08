@@ -103,7 +103,6 @@ fun ShaftRoute(
     val jobNumber       by vm.jobNumber.collectAsState()
     val shaftPosition   by vm.shaftPosition.collectAsState()
     val notes           by vm.notes.collectAsState()
-    val overallIsManual by vm.overallIsManual.collectAsState()
     val order           by vm.componentOrder.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
     val presentationComponents by vm.presentationComponents.collectAsState()
@@ -149,7 +148,6 @@ fun ShaftRoute(
         isDraftEditorOpen = isDraftEditorOpen,
         unit = unit,
         unitLocked = unitLocked,
-        overallIsManual = overallIsManual,
         customer = customer,
         vessel = vessel,
         jobNumber = jobNumber,
@@ -185,23 +183,24 @@ fun ShaftRoute(
         onSetNotes = vm::setNotes,
         onSetOverallLengthRaw = vm::setOverallLength,
         onSetOverallLengthMm = vm::onSetOverallLengthMm,
-        onSetOverallIsManual = vm::setOverallIsManual,
         onSelectPresentationById = vm::selectPresentationById,
 
         onBeginDraftBody   = { s, l, d      -> vm.beginDraftBody(s, l, d) },
         onBeginDraftTaper  = { s, l, sd, ed -> vm.beginDraftTaper(s, l, sd, ed) },
-        onBeginDraftThread = { s, l, maj, p, ex -> vm.beginDraftThread(s, l, maj, p, ex) },
+        onBeginDraftThread = { s, l, maj, p, ex, attach -> vm.beginDraftThread(s, l, maj, p, ex, attach) },
         onBeginDraftLiner  = { s, l, od     -> vm.beginDraftLiner(s, l, od) },
         onUpdateDraftBody  = { s, l, d      -> vm.updateDraftBody(s, l, d) },
         onUpdateDraftTaper = { s, l, sd, ed -> vm.updateDraftTaper(s, l, sd, ed) },
+        onUpdateDraftTaperOrientation = vm::updateDraftTaperOrientation,
         onUpdateDraftTaperKeyway = { w, d, l, spooned -> vm.updateDraftTaperKeyway(w, d, l, spooned) },
-        onUpdateDraftThread = { s, l, maj, p, ex -> vm.updateDraftThread(s, l, maj, p, ex) },
+        onUpdateDraftThread = { s, l, maj, p, ex, attach -> vm.updateDraftThread(s, l, maj, p, ex, attach) },
         onUpdateDraftLiner  = { s, l, od     -> vm.updateDraftLiner(s, l, od) },
         onCommitDraftComponent = vm::commitDraftComponent,
         onCancelDraftComponent = vm::cancelDraftComponent,
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateTaper  = { i, s, l, sd, ed -> vm.updateTaper(i, s, l, sd, ed) },
+        onUpdateTaperOrientation = { i, orientation -> vm.updateTaperOrientation(i, orientation) },
         onUpdateTaperKeyway = { i, w, d, l, spooned -> vm.updateTaperKeyway(i, w, d, l, spooned) },
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
@@ -212,6 +211,7 @@ fun ShaftRoute(
         onRemoveAutoBodyOverride = vm::removeAutoBodyOverride,
 
         onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
+        onSetThreadEndAttachment = vm::setThreadEndAttachment,
 
         onRemoveBody   = vm::removeBody,
         onRemoveTaper  = vm::removeTaper,
