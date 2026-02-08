@@ -12,6 +12,25 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 - Starting with `1.1.1`, the changelog and the app `versionName` are kept in sync; future releases follow this convention.
 - Note: `v0.2.0` and `v0.3.0` point to the same commit (`d1a4da5`).
 
+## [Unreleased]
+
+### Added
+- End-attachment support (AFT/FWD) for excluded threads, keeping authored positions intact.
+- Render-only padding so excluded end threads draw outside the dimensioned span in preview and PDF.
+- Regression tests covering excluded-thread rendering/placement and related invariants.
+- Display-name persistence for saved shafts.
+
+### Changed
+- Resolver now keeps excluded threads in resolved output while preserving OAL math.
+- Preview thread rendering shifts excluded end threads into render space without changing OAL or authored positions.
+- Layout mapping and PDF scaling/labels honor render-only padding for consistent output.
+- Save/open workflow adjustments to keep display names stable across sessions.
+- Removed automatic OAL mode; OAL now respects explicit measurement settings only.
+
+### Fixed
+- Excluded threads missing from preview/cards in some cases.
+- Visual overlap between excluded end threads and aft/fwd tapers/bodies in the preview.
+
 ## [1.1.1] - 2026-01-08
 
 ### Added
