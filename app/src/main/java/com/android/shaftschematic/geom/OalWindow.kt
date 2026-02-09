@@ -2,7 +2,7 @@ package com.android.shaftschematic.geom
 
 /**
  * Measurement window used for PDF dimensions.
- * All measurement-space X values are rebased so x=0 is the first counted AFT surface.
+ * All measurement-space X values are rebased so x=0 is the authored AFT datum.
  */
 data class OalWindow(
     val measureStartMm: Double,

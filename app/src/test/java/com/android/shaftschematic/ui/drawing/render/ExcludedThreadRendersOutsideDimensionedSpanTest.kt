@@ -56,4 +56,46 @@ class ExcludedThreadRendersOutsideDimensionedSpanTest {
         assertTrue(threadStartX < taperStartX)
         assertTrue(threadEndX <= taperStartX + 1e-3f)
     }
+
+    @Test
+    fun `excluded fwd thread renders outside dimensioned span`() {
+        val thread = Threads(
+            id = "TH-FWD",
+            startFromAftMm = 140f,
+            lengthMm = 20f,
+            majorDiaMm = 50f,
+            pitchMm = 2f,
+            excludeFromOAL = true,
+            endAttachment = ThreadAttachment.FWD
+        )
+        val spec = ShaftSpec(
+            overallLengthMm = 200f,
+            tapers = listOf(
+                Taper(
+                    id = "TAPER-FWD",
+                    startFromAftMm = 140f,
+                    lengthMm = 60f,
+                    startDiaMm = 70f,
+                    endDiaMm = 40f
+                )
+            ),
+            threads = listOf(thread)
+        )
+
+        val layout = ShaftLayout.compute(
+            spec = spec,
+            leftPx = 0f,
+            topPx = 0f,
+            rightPx = 1000f,
+            bottomPx = 400f,
+            marginPx = 0f
+        )
+
+        val taperEndX = layout.xPx(spec.overallLengthMm)
+        val threadStartX = layout.xPx(spec.overallLengthMm)
+        val threadEndX = layout.xPx(spec.overallLengthMm + thread.lengthMm)
+
+        assertTrue(threadStartX >= taperEndX - 1e-3f)
+        assertTrue(threadEndX > taperEndX)
+    }
 }

@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -148,7 +149,6 @@ import kotlinx.coroutines.launch
  * Responsibilities
  * • Header row (unit selector + grid toggle; unit selector disables when locked)
  * • Preview drawing (white square; optional grid; fixed-height band)
- * • Free-to-End badge overlay (top-start of preview; red on oversize)
  * • Overall length input (ghost “0”; commits on blur/Done)
  * • Project fields (commit-on-blur / IME Done)
  * • Component carousel (edit & remove) — honors cross-type ID order
@@ -268,6 +268,7 @@ fun ShaftScreen(
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onExportPdf: () -> Unit,
+    onPreviewPdf: () -> Unit,
     onOpenSettings: () -> Unit,
     onSendFeedback: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
@@ -290,6 +291,7 @@ fun ShaftScreen(
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
     val topBarScope = rememberCoroutineScope()
+    var pdfMenuExpanded by remember { mutableStateOf(false) }
 
     val exportPdfEnabled = remember(spec) {
         spec.bodies.isNotEmpty() || spec.tapers.isNotEmpty() || spec.threads.isNotEmpty() || spec.liners.isNotEmpty()
@@ -373,11 +375,37 @@ fun ShaftScreen(
                                 )
                         ) {
                             IconButton(
-                                onClick = onExportPdf,
+                                onClick = { if (exportPdfEnabled) pdfMenuExpanded = true },
                                 enabled = exportPdfEnabled,
                                 modifier = Modifier.testTag("toolbar_export_pdf")
                             ) {
                                 Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF")
+                            }
+
+                            DropdownMenu(
+                                expanded = pdfMenuExpanded,
+                                onDismissRequest = { pdfMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Preview PDF") },
+                                    leadingIcon = { Icon(Icons.Outlined.Visibility, contentDescription = null) },
+                                    enabled = exportPdfEnabled,
+                                    modifier = Modifier.testTag("toolbar_preview_pdf"),
+                                    onClick = {
+                                        pdfMenuExpanded = false
+                                        onPreviewPdf()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Export PDF") },
+                                    leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, contentDescription = null) },
+                                    enabled = exportPdfEnabled,
+                                    modifier = Modifier.testTag("toolbar_export_pdf_menu"),
+                                    onClick = {
+                                        pdfMenuExpanded = false
+                                        onExportPdf()
+                                    }
+                                )
                             }
                         }
 
@@ -902,10 +930,6 @@ private fun PreviewCard(
                     )
                 }
 
-                FreeToEndBadge(
-                    spec = spec,
-                    unit = unit,
-                )
             }
         }
     }
@@ -2696,38 +2720,6 @@ private fun parseFractionOrDecimal(input: String): Float? {
 /** Latest occupied end position along the shaft (mm) from all components. */
 private fun lastOccupiedEndMm(spec: ShaftSpec): Float {
     return spec.effectiveOalEndMm()
-}
-
-/* ───────────────── Free-to-End badge ───────────────── */
-
-@Composable
-private fun FreeToEndBadge(
-    spec: ShaftSpec,
-    unit: UnitSystem,
-    modifier: Modifier = Modifier
-) {
-    val endMm = lastOccupiedEndMm(spec)
-    val freeSignedMm = spec.overallLengthMm - endMm
-    val isOversized = freeSignedMm < 0f
-
-    val bg = if (isOversized) MaterialTheme.colorScheme.errorContainer
-    else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-    val fg = if (isOversized) MaterialTheme.colorScheme.onErrorContainer
-    else MaterialTheme.colorScheme.onSurface
-
-    Surface(
-        tonalElevation = if (isOversized) 3.dp else 2.dp,
-        shape = RoundedCornerShape(8.dp),
-        color = bg,
-        modifier = modifier
-    ) {
-        Text(
-            text = "Free to end: ${formatDisplay(freeSignedMm, unit)} ${abbr(unit)}",
-            style = MaterialTheme.typography.labelSmall,
-            color = fg,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
 }
 
 private const val OAL_EPS_MM: Double = 1e-3

@@ -110,7 +110,8 @@ fun AppNav(vm: ShaftViewModel) {
                 onOpenSettings = { nav.navigate("settings") },
                 onOpenDeveloperOptions = { nav.navigate("developerOptions") },
                 // PDF EXPORT = external SAF
-                onExportPdf = { nav.navigate("exportPdf") }
+                onExportPdf = { nav.navigate("exportPdf") },
+                onPreviewPdf = { nav.navigate("previewPdf") }
             )
         }
 
@@ -160,6 +161,18 @@ fun AppNav(vm: ShaftViewModel) {
         */
         composable("exportPdf") {
             PdfExportRoute(nav = nav, vm = vm) { nav.popBackStack() }
+        }
+
+        /* ───────── In-app PDF preview (no file write) ───────── */
+        composable("previewPdf") {
+            PdfPreviewRoute(
+                vm = vm,
+                onClose = { nav.popBackStack() },
+                onExportPdf = {
+                    nav.popBackStack("previewPdf", inclusive = true)
+                    nav.navigate("exportPdf")
+                }
+            )
         }
     }
 }

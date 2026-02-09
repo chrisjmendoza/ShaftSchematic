@@ -76,22 +76,17 @@ fun computeExcludedThreadLengths(
 }
 
 fun computeOalWindow(spec: ShaftSpec): OalWindow {
+    // OAL is sacred: use the authored overall length and do not shrink for excluded threads.
     val baseOal = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
-    val ex = computeExcludedThreadLengths(spec, overallLengthMm = baseOal)
-
-    val aft = ex.aftExcludedMm.coerceIn(0.0, baseOal)
-    val fwd = ex.fwdExcludedMm.coerceIn(0.0, baseOal)
-    val effective = max(0.0, baseOal - aft - fwd)
-
     return OalWindow(
-        measureStartMm = aft,
-        measureEndMm = aft + effective,
+        measureStartMm = 0.0,
+        measureEndMm = baseOal,
     )
 }
 
 /**
  * Measurement datums used for authored reference resolution.
- * - measurementAftMm: measurement-space AFT datum (can shift when AFT threads are excluded)
+ * - measurementAftMm: measurement-space AFT datum (always 0 for authored OAL)
  * - measurementForwardMm: measurement-space FWD datum (MFD)
  */
 fun computeMeasurementDatums(spec: ShaftSpec): MeasurementDatums {

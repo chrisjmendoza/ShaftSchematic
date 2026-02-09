@@ -44,8 +44,8 @@ class MeasurementDatumTests {
         val liner = resolved.filterIsInstance<ResolvedLiner>().single { it.id == "LN" }
 
         assertEquals(0f, spec.liners[0].authoredStartFromFwdMm, 1e-4f)
-        assertEquals(100f, liner.startMmPhysical, 1e-4f)
-        assertEquals(120f, liner.endMmPhysical, 1e-4f)
+        assertEquals(110f, liner.startMmPhysical, 1e-4f)
+        assertEquals(130f, liner.endMmPhysical, 1e-4f)
     }
 
     @Test

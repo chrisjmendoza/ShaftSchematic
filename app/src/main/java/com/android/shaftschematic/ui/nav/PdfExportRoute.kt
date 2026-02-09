@@ -4,11 +4,9 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
-import android.os.Build
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,12 +21,10 @@ import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.Achievements
-import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.buildOpenPdfIntent
+import com.android.shaftschematic.util.defaultPdfFilename
+import com.android.shaftschematic.util.appVersionFromContext
 import com.android.shaftschematic.util.VerboseLog
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Route that exports the current shaft as a single-page PDF via SAF (“Create Document”).
@@ -73,7 +69,7 @@ fun PdfExportRoute(
                         val page = doc.startPage(pageInfo)
 
                         val filename = uri.lastPathSegment
-                            ?: defaultFilename(
+                            ?: defaultPdfFilename(
                                 jobNumber = jobNumber,
                                 customer = customer,
                                 vessel = vessel,
@@ -149,7 +145,7 @@ fun PdfExportRoute(
         if (!launched) {
             launched = true
             launcher.launch(
-                defaultFilename(
+                defaultPdfFilename(
                     jobNumber = jobNumber,
                     customer = customer,
                     vessel = vessel,
@@ -185,33 +181,3 @@ private fun openPdf(context: Context, uri: Uri) {
     }
 }
 
-private fun defaultFilename(
-    jobNumber: String,
-    customer: String,
-    vessel: String,
-    shaftPosition: ShaftPosition
-): String {
-    val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
-    val suggested = DocumentNaming.suggestedBaseName(
-        jobNumber = jobNumber,
-        customer = customer,
-        vessel = vessel,
-        suffix = shaftPosition.printableLabelOrNull()
-    )
-    return (suggested ?: "Shaft_$stamp") + ".pdf"
-}
-
-private fun appVersionFromContext(context: Context): String {
-    return try {
-        val pm = context.packageManager
-        val pkg = context.packageName
-        if (Build.VERSION.SDK_INT >= 33) {
-            pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0)).versionName ?: "0"
-        } else {
-            @Suppress("DEPRECATION")
-            pm.getPackageInfo(pkg, 0).versionName ?: "0"
-        }
-    } catch (_: Throwable) {
-        "0"
-    }
-}

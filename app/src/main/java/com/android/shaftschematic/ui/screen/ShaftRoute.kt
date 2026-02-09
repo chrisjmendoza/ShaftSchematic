@@ -39,6 +39,7 @@ fun ShaftRoute(
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onExportPdf: () -> Unit,
+    onPreviewPdf: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
 ) {
@@ -225,6 +226,7 @@ fun ShaftRoute(
         onOpen = onOpen,
         onSave = onSave,
         onExportPdf = onExportPdf,
+        onPreviewPdf = onPreviewPdf,
         onOpenSettings = onOpenSettings,
         onSendFeedback = onSendFeedback,
         onOpenDeveloperOptions = onOpenDeveloperOptions,

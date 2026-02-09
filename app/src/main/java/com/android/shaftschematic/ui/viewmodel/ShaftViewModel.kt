@@ -438,7 +438,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             combine(resolvedComponents, spec) { resolved, currentSpec ->
                 val committed = resolved.filter { it.source != ResolvedComponentSource.DRAFT }
-                PresentationComponent.fromResolved(committed, currentSpec.autoBodyOverrides)
+                PresentationComponent.fromResolved(committed, currentSpec.autoBodyOverrides, currentSpec.overallLengthMm)
             }.collectLatest { presentation ->
                 _presentationComponents.value = presentation
             }

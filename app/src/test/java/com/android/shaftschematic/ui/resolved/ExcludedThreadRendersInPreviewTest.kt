@@ -38,7 +38,8 @@ class ExcludedThreadRendersInPreviewTest {
 
         val presentation = PresentationComponent.fromResolved(
             resolved.filter { it.source != ResolvedComponentSource.DRAFT },
-            emptyMap()
+            emptyMap(),
+            overallLengthMm = spec.overallLengthMm
         )
 
         assertTrue(

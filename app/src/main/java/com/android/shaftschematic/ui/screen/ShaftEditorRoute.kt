@@ -26,6 +26,7 @@ fun ShaftEditorRoute(
     onOpenSettings: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
     onExportPdf: () -> Unit,
+    onPreviewPdf: () -> Unit,
 ) {
     ShaftRoute(
         vm = vm,
@@ -34,6 +35,7 @@ fun ShaftEditorRoute(
         onOpen = onOpen,
         onSave = onSave,
         onExportPdf = onExportPdf,
+        onPreviewPdf = onPreviewPdf,
         onOpenSettings = onOpenSettings,
         onOpenDeveloperOptions = onOpenDeveloperOptions,
     )

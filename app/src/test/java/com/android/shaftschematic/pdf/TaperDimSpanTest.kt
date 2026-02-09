@@ -47,7 +47,7 @@ class TaperDimSpanTest {
     }
 
     @Test
-    fun `does not clamp negative measure coordinates`() {
+    fun `excluded threads do not shift taper measure coordinates`() {
         val excludedAftThread = Threads(
             startFromAftMm = 0f,
             lengthMm = 100f,
@@ -68,8 +68,7 @@ class TaperDimSpanTest {
         )
 
         val win = computeOalWindow(spec)
-        // measureStart should be 100mm due to excluded thread
-        assertEquals(100.0, win.measureStartMm, 1e-6)
+        assertEquals(0.0, win.measureStartMm, 1e-6)
 
         val spans = buildTaperLengthSpans(spec, win, UnitSystem.MILLIMETERS)
         assertEquals(1, spans.size)
@@ -77,7 +76,7 @@ class TaperDimSpanTest {
         val s = spans.single()
         val lo = minOf(s.x1Mm, s.x2Mm)
         val hi = maxOf(s.x1Mm, s.x2Mm)
-        assertEquals(-100.0, lo, 1e-6)
-        assertEquals(100.0, hi, 1e-6)
+        assertEquals(0.0, lo, 1e-6)
+        assertEquals(200.0, hi, 1e-6)
     }
 }

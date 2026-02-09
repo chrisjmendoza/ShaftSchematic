@@ -1,7 +1,11 @@
 package com.android.shaftschematic.ui.presentation
 
 import com.android.shaftschematic.model.AutoBodyOverride
+import com.android.shaftschematic.model.ThreadAttachment
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.ResolvedComponentType
+import com.android.shaftschematic.ui.resolved.ResolvedThread
+import kotlin.math.abs
 
 /**
  * Presentation-layer wrapper for resolved components shown in UI lists and editors.
@@ -78,6 +82,7 @@ sealed class PresentationComponent {
         fun fromResolved(
             resolved: List<ResolvedComponent>,
             overrides: Map<String, AutoBodyOverride>,
+            overallLengthMm: Float,
         ): List<PresentationComponent> {
             if (resolved.isEmpty()) return emptyList()
 
@@ -188,15 +193,45 @@ sealed class PresentationComponent {
                 }
             }
 
-            return components.sortedWith(
-                compareBy<PresentationComponent>(
-                    { it.resolvedParts.minOf { part -> part.startMmPhysical } },
-                    { kindSortKey(it.kind) },
-                    { it.id }
-                )
-            )
+            return components.sortedWith(presentationComparator(overallLengthMm))
         }
     }
+}
+
+private fun presentationComparator(overallLengthMm: Float): Comparator<PresentationComponent> {
+    return compareBy<PresentationComponent>(
+        { componentBand(it, overallLengthMm) },
+        { it.resolvedParts.minOf { part -> part.startMmPhysical } },
+        { explicitBodyTieRank(it) },
+        { kindSortKey(it.kind) },
+        { it.id }
+    )
+}
+
+private fun componentBand(component: PresentationComponent, overallLengthMm: Float): Int {
+    val excludedThread = component.resolvedParts
+        .filterIsInstance<ResolvedThread>()
+        .firstOrNull { it.excludeFromOal }
+        ?: return 1
+
+    return when (resolveAttachment(excludedThread, overallLengthMm)) {
+        ThreadAttachment.AFT -> 0
+        ThreadAttachment.FWD -> 2
+    }
+}
+
+private fun resolveAttachment(thread: ResolvedThread, overallLengthMm: Float, epsMm: Float = 1e-3f): ThreadAttachment {
+    thread.endAttachment?.let { return it }
+    if (abs(thread.startMmPhysical) <= epsMm) return ThreadAttachment.AFT
+    if (abs(thread.endMmPhysical - overallLengthMm) <= epsMm) return ThreadAttachment.FWD
+    if (overallLengthMm <= epsMm) return ThreadAttachment.AFT
+    val center = thread.startMmPhysical + (thread.endMmPhysical - thread.startMmPhysical) * 0.5f
+    return if (center >= overallLengthMm * 0.5f) ThreadAttachment.FWD else ThreadAttachment.AFT
+}
+
+private fun explicitBodyTieRank(component: PresentationComponent): Int {
+    if (component.kind != PresentationComponentKind.BODY) return 0
+    return if (component.resolvedParts.any { it.type == ResolvedComponentType.BODY_AUTO }) 1 else 0
 }
 
 private fun kindSortKey(kind: PresentationComponentKind): Int = when (kind) {

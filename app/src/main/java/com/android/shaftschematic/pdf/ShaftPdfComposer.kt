@@ -5,6 +5,7 @@ package com.android.shaftschematic.pdf
 
 import android.graphics.*
 import android.graphics.pdf.PdfDocument
+import com.android.shaftschematic.geom.computeExcludedThreadLengths
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.model.*
@@ -62,6 +63,34 @@ fun composeShaftPdf(
     options: PdfExportOptions = PdfExportOptions(),
     resolvedComponents: List<ResolvedComponent>? = null,
 ) {
+    composeShaftPdfOnCanvas(
+        canvas = page.canvas,
+        pageWidthPt = page.info.pageWidth,
+        pageHeightPt = page.info.pageHeight,
+        spec = spec,
+        unit = unit,
+        project = project,
+        appVersion = appVersion,
+        filename = filename,
+        pdfPrefs = pdfPrefs,
+        options = options,
+        resolvedComponents = resolvedComponents,
+    )
+}
+
+internal fun composeShaftPdfOnCanvas(
+    canvas: Canvas,
+    pageWidthPt: Int,
+    pageHeightPt: Int,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    project: ProjectInfo,
+    appVersion: String,
+    filename: String,
+    pdfPrefs: PdfPrefs = PdfPrefs(),
+    options: PdfExportOptions = PdfExportOptions(),
+    resolvedComponents: List<ResolvedComponent>? = null,
+) {
     val effectiveOptions = when (options.mode) {
         PdfExportMode.Template -> options.copy(
             showDimensions = false,
@@ -71,15 +100,15 @@ fun composeShaftPdf(
         PdfExportMode.Standard -> options
     }
 
-    val c = page.canvas
+    val c = canvas
     // PDF safety: explicitly paint a white page background so geometry/labels are visible
     // even if the viewer/app is in dark mode (some viewers treat an unpainted page as dark).
     c.drawColor(Color.WHITE)
-    val pageW = page.info.pageWidth.toFloat()
-    val pageH = page.info.pageHeight.toFloat()
+    val pageW = pageWidthPt.toFloat()
+    val pageH = pageHeightPt.toFloat()
 
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
-        "compose start: page=${page.info.pageWidth}x${page.info.pageHeight}pt filename=$filename unit=$unit oalMm=${"%.3f".format(spec.overallLengthMm)}" +
+        "compose start: page=${pageWidthPt}x${pageHeightPt}pt filename=$filename unit=$unit oalMm=${"%.3f".format(spec.overallLengthMm)}" +
             " parts(bodies=${spec.bodies.size}, tapers=${spec.tapers.size}, threads=${spec.threads.size}, liners=${spec.liners.size})"
     }
 
@@ -224,9 +253,10 @@ fun composeShaftPdf(
         // Measurement reference (AFT/FWD/AUTO) is separate from tier origin.
         val measureFromMode = pdfPrefs.tieringMode
         val linerDims = mapToLinerDimsForPdf(spec, measureFromMode)
-        val win  = computeOalWindow(spec)
+        val win = computeDimensionWindowForPdf(spec)
+        val visualShaftOriginX = geomRect.left + (renderOriginMm * ptPerMm)
         val pageX: (Double) -> Float = { dimMm ->
-            (geomRect.left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
+            visualShaftOriginX + ((dimMm + win.measureStartMm).toFloat() * ptPerMm)
         }
         val sets = computeSetPositionsInMeasureSpace(win)
         val spans = buildLinerSpans(
@@ -236,6 +266,7 @@ fun composeShaftPdf(
             measureFrom = measureFromMode
         ) + buildTaperLengthSpans(spec, win, unit)
         val planner = RailPlanner()
+        val oalMm = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
         val tierOriginMm = tierOriginMmFor(pdfPrefs.tieringMode, win.oalMm)
         val assignments = planner.assignAll(spans, tierOriginMm)
 
@@ -273,7 +304,7 @@ fun composeShaftPdf(
         assignments.forEach { rs ->
             renderer.drawOnRail(c, rs.rail, rs.span, true)
         }
-        renderer.drawTop(c, oalSpan(win.oalMm, unit), true)
+        renderer.drawTop(c, oalSpanWithLabel(oalMm, unit, win.measureStartMm), true)
     }
 
     // --- diameter callouts (optional; leave empty until you have stations) ---
@@ -618,8 +649,9 @@ private fun drawLinerDimensionsPdf(
     textPaint: Paint,
     objectTopY: Float
 ) {
-    val win = computeOalWindow(spec)
+    val win = computeDimensionWindowForPdf(spec)
     val sets = computeSetPositionsInMeasureSpace(win)
+    val oalMm = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
 
     // Spans are in measurement space (rebased so AFT SET = 0). Convert to physical axis for rendering.
     val pageXMeasure: (Double) -> Float = { dimMm -> pageX(dimMm + win.measureStartMm) }
@@ -646,7 +678,26 @@ private fun drawLinerDimensionsPdf(
     )
 
     assignments.forEach { rs -> renderer.drawOnRail(canvas, rs.rail, rs.span, true) }
-    renderer.drawTop(canvas, oalSpan(win.oalMm, unit), true)
+    renderer.drawTop(canvas, oalSpanWithLabel(oalMm, unit, win.measureStartMm), true)
+}
+
+internal fun computeDimensionWindowForPdf(spec: ShaftSpec): com.android.shaftschematic.geom.OalWindow {
+    val baseWin = computeOalWindow(spec)
+    val oalMm = baseWin.oalMm
+    if (oalMm <= 0.0) return baseWin
+
+    val excluded = computeExcludedThreadLengths(spec, oalMm)
+    val start = excluded.aftExcludedMm.coerceIn(0.0, oalMm)
+    val end = (oalMm - excluded.fwdExcludedMm).coerceIn(0.0, oalMm)
+    return com.android.shaftschematic.geom.OalWindow(
+        measureStartMm = start,
+        measureEndMm = max(start, end)
+    )
+}
+
+private fun oalSpanWithLabel(oalMm: Double, unit: UnitSystem, measureStartMm: Double): DimSpan {
+    val label = "OAL ${formatLenDim(oalMm, unit)}"
+    return DimSpan(-measureStartMm, oalMm - measureStartMm, labelTop = label, kind = SpanKind.OAL)
 }
 
 /**
@@ -690,7 +741,7 @@ internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschema
  */
 
 private fun mapToLinerDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode): List<LinerDim> {
-    val win  = computeOalWindow(spec)
+    val win = computeDimensionWindowForPdf(spec)
     val sets = computeSetPositionsInMeasureSpace(win)
 
     return spec.liners.map { ln ->
@@ -937,11 +988,11 @@ private fun drawDimensionsLikePreview(
     // Overall one lane above the topmost component lane
     val gap = TEXT_PT + LANE_GAP_PT
     val overallY = if (lanes.isEmpty()) firstLaneY - OVERALL_EXTRA_PT else topmostLaneY - gap
-    val xa = xAt(win.measureStartMm.toFloat()); val xf = xAt(win.measureEndMm.toFloat())
+    val xa = xAt(0f); val xf = xAt(spec.overallLengthMm)
 
     drawDimWithExtensionsAvoidingOverlap(
         c, xa, xf, overallY, yTopOfShaft,
-        fmtLen(unit, win.oalMm.toFloat()),
+        fmtLen(unit, spec.overallLengthMm),
         text, dim, mutableListOf()
     )
 }
