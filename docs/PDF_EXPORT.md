@@ -152,9 +152,34 @@ AFT and FWD ends are evaluated independently and symmetrically.
 # 6.4 Dimension Rail Anchoring Rules
 
 - Dimension rails are anchored to the first and last dimension-participating components.
-- Excluded threads are rendered outside the working axis and do not extend dimension rails.
+- Excluded threads shift the measurement reference window but do not modify resolved geometry or extend dimension rails.
 - Included threads extend dimension rails normally.
 - Per-end anchoring is symmetric and independent (AFT vs FWD).
+
+# 6.7 Dimension Coordinate Space Contract
+
+## Physical Coordinate Authority
+
+- All dimension spans must be built from resolved physical component coordinates.
+- Resolved geometry is the single source of truth for dimension start/end positions.
+- PDF export must not re-derive or reinterpret component coordinates.
+
+## Measurement Reference Handling
+
+- Measurement reference adjustments (e.g., excluded-thread window shifts) must be applied exactly once.
+- Reference adjustments must not modify resolved geometry.
+- Reference adjustments must not be applied both during span construction and again during PDF render mapping.
+- OAL always anchors to the physical shaft endpoints and never uses shifted coordinates.
+
+Allowed Models (exactly one must be true in implementation):
+
+A) Spans remain in absolute physical coordinate space and reference adjustments affect numeric measurement values only.
+
+OR
+
+B) Spans are pre-normalized to the working-shaft origin and no further reference shift is applied downstream.
+
+Double-application of measurement shifts is a contract violation.
 
 # 6.5 Component Compression Rules
 
