@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.viewmodel
 
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.TaperOrientation
 import com.android.shaftschematic.ui.resolved.DraftComponent
@@ -13,6 +14,7 @@ class DraftCommitTests {
         val draft = DraftComponent.Taper(
             id = "T1",
             startMmPhysical = 42.5f,
+            startInputMm = 42.5f,
             lengthMm = 35.75f,
             startDiaMm = 48.25f,
             endDiaMm = 33.5f,
@@ -45,6 +47,7 @@ class DraftCommitTests {
         val aftDraft = DraftComponent.Taper(
             id = "AFT",
             startMmPhysical = 10f,
+            startInputMm = 10f,
             lengthMm = 40f,
             startDiaMm = setMm,
             endDiaMm = letMm,
@@ -73,6 +76,7 @@ class DraftCommitTests {
         val draft = DraftComponent.Taper(
             id = "T2",
             startMmPhysical = 5f,
+            startInputMm = 5f,
             lengthMm = 25f,
             startDiaMm = 18f,
             endDiaMm = 30f,
@@ -89,5 +93,63 @@ class DraftCommitTests {
         val readded = removed.copy(tapers = listOf(taper.copy()))
 
         assertEquals(taper, readded.tapers.single())
+    }
+
+    @Test
+    fun DraftCommit_Liner_AftStart_Preserved() {
+        val oal = 100f
+        val startInputMm = 24f
+        val lengthMm = 16f
+        val draft = DraftComponent.Liner(
+            id = "L-AFT",
+            startMmPhysical = startInputMm,
+            lengthMm = lengthMm,
+            odMm = 8f,
+            startInputMm = startInputMm,
+            measureFrom = LinerAuthoredReference.AFT
+        )
+
+        val liner = draftLinerToSpec(draft, oal)
+
+        assertEquals(LinerAuthoredReference.AFT, liner.authoredReference)
+        assertEquals(0f, liner.authoredStartFromFwdMm, 1e-4f)
+        assertEquals(startInputMm, liner.startFromAftMm, 1e-4f)
+        assertEquals(startInputMm + lengthMm, liner.endMmPhysical, 1e-4f)
+        val displayedStart = if (liner.authoredReference == LinerAuthoredReference.FWD) {
+            liner.authoredStartFromFwdMm
+        } else {
+            liner.startFromAftMm
+        }
+        assertEquals(startInputMm, displayedStart, 1e-4f)
+    }
+
+    @Test
+    fun DraftCommit_Liner_FwdStart_Preserved() {
+        val oal = 100f
+        val startInputMm = 24f
+        val lengthMm = 16f
+        val startPhysicalMm = oal - startInputMm - lengthMm
+        val endPhysicalMm = oal - startInputMm
+        val draft = DraftComponent.Liner(
+            id = "L-FWD",
+            startMmPhysical = startPhysicalMm,
+            lengthMm = lengthMm,
+            odMm = 8f,
+            startInputMm = startInputMm,
+            measureFrom = LinerAuthoredReference.FWD
+        )
+
+        val liner = draftLinerToSpec(draft, oal)
+
+        assertEquals(LinerAuthoredReference.FWD, liner.authoredReference)
+        assertEquals(startInputMm, liner.authoredStartFromFwdMm, 1e-4f)
+        assertEquals(startPhysicalMm, liner.startFromAftMm, 1e-4f)
+        assertEquals(endPhysicalMm, liner.endMmPhysical, 1e-4f)
+        val displayedStart = if (liner.authoredReference == LinerAuthoredReference.FWD) {
+            liner.authoredStartFromFwdMm
+        } else {
+            liner.startFromAftMm
+        }
+        assertEquals(startInputMm, displayedStart, 1e-4f)
     }
 }

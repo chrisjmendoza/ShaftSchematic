@@ -122,6 +122,11 @@ Users do not configure scale manually.
 - Tiering affects rail stacking only and never changes numeric values.
 - Units are passed explicitly and never derived from tiering or measurement reference.
 
+Excluded end threads:
+- Dimension spans are built in authored measurement space (AFT SET = 0) with no window shift.
+- Page-space mapping aligns dimensions to the working axis; excluded threads are rendered outside it.
+- OAL span uses the authored overall length and aligns to the same AFT SET baseline as inner spans.
+
 # 6.2 Drawing Footprint vs Dimension Footprint
 
 - All components (bodies, liners, tapers, threads) participate in rendering.
@@ -130,7 +135,7 @@ Users do not configure scale manually.
 
 # 6.3 Thread Semantics
 
-INCLUDED threads:
+INCLUDED threads:  
 - Participate in OAL.
 - Participate in dimension rails and spans.
 - Are treated as normal components for measurement.
@@ -147,7 +152,7 @@ AFT and FWD ends are evaluated independently and symmetrically.
 # 6.4 Dimension Rail Anchoring Rules
 
 - Dimension rails are anchored to the first and last dimension-participating components.
-- Excluded threads shift the visual shaft geometry but do not extend dimension rails.
+- Excluded threads are rendered outside the working axis and do not extend dimension rails.
 - Included threads extend dimension rails normally.
 - Per-end anchoring is symmetric and independent (AFT vs FWD).
 

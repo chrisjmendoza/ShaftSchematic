@@ -1,16 +1,14 @@
 package com.android.shaftschematic.ui.resolved
 
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.TaperOrientation
 import com.android.shaftschematic.model.ThreadAttachment
 
 /**
- * DraftComponent represents an in-progress component that exists ONLY in
- * physical shaft space (mm from AFT).
+ * DraftComponent represents an in-progress component that is not yet committed.
  *
- * Drafts do NOT store authored position references (AFT/FWD) and must never mutate
- * ShaftSpec until committed.
- *
- * All authored reference conversion must happen BEFORE draft creation.
+ * Drafts must preserve user-authored intent, including any AFT/FWD measure-from
+ * reference for components that support it.
  */
 sealed class DraftComponent {
     abstract val id: String
@@ -20,6 +18,7 @@ sealed class DraftComponent {
     data class Body(
         override val id: String,
         override val startMmPhysical: Float,
+        val startInputMm: Float?,
         override val lengthMm: Float,
         val diaMm: Float,
     ) : DraftComponent()
@@ -27,6 +26,7 @@ sealed class DraftComponent {
     data class Taper(
         override val id: String,
         override val startMmPhysical: Float,
+        val startInputMm: Float?,
         override val lengthMm: Float,
         val startDiaMm: Float,
         val endDiaMm: Float,
@@ -40,6 +40,7 @@ sealed class DraftComponent {
     data class Thread(
         override val id: String,
         override val startMmPhysical: Float,
+        val startInputMm: Float?,
         override val lengthMm: Float,
         val majorDiaMm: Float,
         val pitchMm: Float,
@@ -52,6 +53,8 @@ sealed class DraftComponent {
         override val startMmPhysical: Float,
         override val lengthMm: Float,
         val odMm: Float,
+        val startInputMm: Float?,
+        val measureFrom: LinerAuthoredReference,
         val label: String? = null,
     ) : DraftComponent()
 }

@@ -213,7 +213,7 @@ class ComponentInvariantTests {
     fun taper_diameters_preserved_adjacent_to_auto_body_and_at_shaft_end() {
         val taper = Taper(
             id = "T1",
-            startFromAftMm = 80f,
+            startFromAftMm = 0f,
             lengthMm = 20f,
             startDiaMm = 52f,
             endDiaMm = 34f,

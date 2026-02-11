@@ -955,7 +955,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun beginDraftBody(startMm: Float, lengthMm: Float, diaMm: Float) {
         _draftComponent.value = DraftComponent.Body(
             id = newId(),
-            startMmPhysical = startMm,
+            startMmPhysical = 0f,
+            startInputMm = null,
             lengthMm = max(0f, lengthMm),
             diaMm = max(0f, diaMm)
         )
@@ -965,7 +966,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun beginDraftTaper(startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) {
         _draftComponent.value = DraftComponent.Taper(
             id = newId(),
-            startMmPhysical = startMm,
+            startMmPhysical = 0f,
+            startInputMm = null,
             lengthMm = max(0f, lengthMm),
             startDiaMm = max(0f, startDiaMm),
             endDiaMm = max(0f, endDiaMm),
@@ -988,7 +990,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         val attachment = if (excludeFromOal) endAttachment ?: ThreadAttachment.AFT else endAttachment
         val resolvedStart = resolveThreadStartFromAttachment(
-            startMm = startMm,
+            startMm = 0f,
             lengthMm = lengthMm,
             excludeFromOal = excludeFromOal,
             endAttachment = attachment
@@ -996,6 +998,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _draftComponent.value = DraftComponent.Thread(
             id = newId(),
             startMmPhysical = resolvedStart,
+            startInputMm = null,
             lengthMm = max(0f, lengthMm),
             majorDiaMm = max(0f, majorDiaMm),
             pitchMm = max(0f, pitchMm),
@@ -1006,28 +1009,38 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun beginDraftLiner(startMm: Float, lengthMm: Float, odMm: Float) {
+        val measureFrom = LinerAuthoredReference.AFT
+        val len = max(0f, lengthMm)
         _draftComponent.value = DraftComponent.Liner(
             id = newId(),
-            startMmPhysical = startMm,
-            lengthMm = max(0f, lengthMm),
-            odMm = max(0f, odMm)
+            startMmPhysical = 0f,
+            lengthMm = len,
+            odMm = max(0f, odMm),
+            startInputMm = null,
+            measureFrom = measureFrom
         )
         _isDraftEditorOpen.value = true
     }
 
-    fun updateDraftBody(startMm: Float, lengthMm: Float, diaMm: Float) {
+    fun updateDraftBody(startInputMm: Float?, lengthMm: Float, diaMm: Float) {
         val draft = _draftComponent.value as? DraftComponent.Body ?: return
+        val nextStart = startInputMm ?: draft.startMmPhysical
+        val authoredStart = startInputMm ?: draft.startInputMm
         _draftComponent.value = draft.copy(
-            startMmPhysical = startMm,
+            startMmPhysical = nextStart,
+            startInputMm = authoredStart,
             lengthMm = max(0f, lengthMm),
             diaMm = max(0f, diaMm)
         )
     }
 
-    fun updateDraftTaper(startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) {
+    fun updateDraftTaper(startInputMm: Float?, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) {
         val draft = _draftComponent.value as? DraftComponent.Taper ?: return
+        val nextStart = startInputMm ?: draft.startMmPhysical
+        val authoredStart = startInputMm ?: draft.startInputMm
         _draftComponent.value = draft.copy(
-            startMmPhysical = startMm,
+            startMmPhysical = nextStart,
+            startInputMm = authoredStart,
             lengthMm = max(0f, lengthMm),
             startDiaMm = max(0f, startDiaMm),
             endDiaMm = max(0f, endDiaMm)
@@ -1051,7 +1064,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateDraftThread(
-        startMm: Float,
+        startInputMm: Float?,
         lengthMm: Float,
         majorDiaMm: Float,
         pitchMm: Float,
@@ -1061,13 +1074,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val draft = _draftComponent.value as? DraftComponent.Thread ?: return
         val attachment = if (excludeFromOal) endAttachment ?: ThreadAttachment.AFT else endAttachment
         val resolvedStart = resolveThreadStartFromAttachment(
-            startMm = startMm,
+            startMm = startInputMm ?: draft.startMmPhysical,
             lengthMm = lengthMm,
             excludeFromOal = excludeFromOal,
             endAttachment = attachment
         )
         _draftComponent.value = draft.copy(
             startMmPhysical = resolvedStart,
+            startInputMm = startInputMm ?: draft.startInputMm,
             lengthMm = max(0f, lengthMm),
             majorDiaMm = max(0f, majorDiaMm),
             pitchMm = max(0f, pitchMm),
@@ -1076,12 +1090,26 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun updateDraftLiner(startMm: Float, lengthMm: Float, odMm: Float) {
+    fun updateDraftLiner(startInputMm: Float?, lengthMm: Float, odMm: Float, measureFrom: LinerAuthoredReference) {
         val draft = _draftComponent.value as? DraftComponent.Liner ?: return
+        val len = max(0f, lengthMm)
+        val authoredStart = startInputMm ?: draft.startInputMm
+        val nextStart = if (startInputMm == null) {
+            draft.startMmPhysical
+        } else {
+            resolveDraftLinerStartMmPhysical(
+                startInputMm = startInputMm,
+                lengthMm = len,
+                measureFrom = measureFrom,
+                overallLengthMm = _spec.value.overallLengthMm
+            )
+        }
         _draftComponent.value = draft.copy(
-            startMmPhysical = startMm,
-            lengthMm = max(0f, lengthMm),
-            odMm = max(0f, odMm)
+            startMmPhysical = nextStart,
+            lengthMm = len,
+            odMm = max(0f, odMm),
+            startInputMm = authoredStart,
+            measureFrom = measureFrom
         )
     }
 
@@ -1103,7 +1131,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 draft.excludeFromOal,
                 draft.endAttachment
             )
-            is DraftComponent.Liner -> addLinerInternal(draft.id, draft.startMmPhysical, draft.lengthMm, draft.odMm)
+            is DraftComponent.Liner -> addLinerInternal(
+                id = draft.id,
+                startInputMm = draft.startInputMm ?: 0f,
+                lengthMm = draft.lengthMm,
+                odMm = draft.odMm,
+                measureFrom = draft.measureFrom
+            )
             null -> return
         }
         _selectedPresentationId.value = _draftComponent.value?.id
@@ -1554,19 +1588,25 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     // Liners
     fun addLinerAt(startMm: Float, lengthMm: Float, odMm: Float) =
-        addLinerInternal(newId(), startMm, lengthMm, odMm)
+        addLinerInternal(newId(), startMm, lengthMm, odMm, LinerAuthoredReference.AFT)
 
-    private fun addLinerInternal(id: String, startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
+    private fun addLinerInternal(
+        id: String,
+        startInputMm: Float,
+        lengthMm: Float,
+        odMm: Float,
+        measureFrom: LinerAuthoredReference,
+    ) = _spec.update { s ->
         orderAdd(ComponentKind.LINER, id)
         val len = max(0f, lengthMm)
         val od = max(0f, odMm)
-        val liner = Liner(
+        val liner = buildAuthoredLiner(
             id = id,
-            startFromAftMm = startMm,
+            startInputMm = startInputMm,
             lengthMm = len,
             odMm = od,
-            endMmPhysical = startMm + len,
-            authoredReference = LinerAuthoredReference.AFT
+            measureFrom = measureFrom,
+            overallLengthMm = s.overallLengthMm
         )
         s.copy(liners = listOf(liner) + s.liners)
     }.also {
@@ -1574,14 +1614,23 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         ensureOrderCoversSpec()
     }
 
+    private fun resolveDraftLinerStartMmPhysical(
+        startInputMm: Float,
+        lengthMm: Float,
+        measureFrom: LinerAuthoredReference,
+        overallLengthMm: Float,
+    ): Float = when (measureFrom) {
+        LinerAuthoredReference.AFT -> startInputMm
+        LinerAuthoredReference.FWD -> (overallLengthMm - startInputMm - lengthMm)
+    }
+
     fun updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
         if (index !in s.liners.indices) s else {
             val old = s.liners[index]
             val len = max(0f, lengthMm)
             val od = max(0f, odMm)
-            val mfd = computeMeasurementDatums(s).measurementForwardMm.toFloat()
             val authoredStartFromFwdMm = if (old.authoredReference == LinerAuthoredReference.FWD) {
-                (mfd - (startMm + len)).coerceAtLeast(0f)
+                (s.overallLengthMm - (startMm + len)).coerceAtLeast(0f)
             } else {
                 old.authoredStartFromFwdMm
             }
@@ -1604,9 +1653,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         if (index !in s.liners.indices) s else {
             val old = s.liners[index]
             if (old.authoredReference == reference) return@update s
-            val mfd = computeMeasurementDatums(s).measurementForwardMm.toFloat()
             val authoredStartFromFwdMm = if (reference == LinerAuthoredReference.FWD) {
-                (mfd - (old.startFromAftMm + old.lengthMm)).coerceAtLeast(0f)
+                (s.overallLengthMm - (old.startFromAftMm + old.lengthMm)).coerceAtLeast(0f)
             } else {
                 old.authoredStartFromFwdMm
             }
@@ -2071,5 +2119,43 @@ internal fun draftTaperToSpec(draft: DraftComponent.Taper): Taper {
         keywayDepthMm = draft.keywayDepthMm,
         keywayLengthMm = draft.keywayLengthMm,
         keywaySpooned = draft.keywaySpooned,
+    )
+}
+
+internal fun draftLinerToSpec(draft: DraftComponent.Liner, overallLengthMm: Float): Liner =
+    buildAuthoredLiner(
+        id = draft.id,
+        startInputMm = draft.startInputMm ?: 0f,
+        lengthMm = draft.lengthMm,
+        odMm = draft.odMm,
+        measureFrom = draft.measureFrom,
+        overallLengthMm = overallLengthMm
+    )
+
+internal fun buildAuthoredLiner(
+    id: String,
+    startInputMm: Float,
+    lengthMm: Float,
+    odMm: Float,
+    measureFrom: LinerAuthoredReference,
+    overallLengthMm: Float,
+): Liner {
+    val len = max(0f, lengthMm)
+    val od = max(0f, odMm)
+    val (startFromAftMm, authoredStartFromFwdMm) = when (measureFrom) {
+        LinerAuthoredReference.AFT -> startInputMm to 0f
+        LinerAuthoredReference.FWD -> {
+            val endMm = overallLengthMm - startInputMm
+            (endMm - len) to startInputMm
+        }
+    }
+    return Liner(
+        id = id,
+        startFromAftMm = startFromAftMm,
+        lengthMm = len,
+        odMm = od,
+        endMmPhysical = startFromAftMm + len,
+        authoredReference = measureFrom,
+        authoredStartFromFwdMm = authoredStartFromFwdMm
     )
 }

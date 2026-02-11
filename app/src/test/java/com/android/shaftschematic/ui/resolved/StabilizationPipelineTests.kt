@@ -65,7 +65,9 @@ class StabilizationPipelineTests {
             id = "D1",
             startMmPhysical = 80f,
             lengthMm = 15f,
-            odMm = 35f
+            odMm = 35f,
+            startInputMm = 80f,
+            measureFrom = com.android.shaftschematic.model.LinerAuthoredReference.AFT
         )
 
         resolveComponents(spec, draft = draft)
@@ -133,6 +135,100 @@ class StabilizationPipelineTests {
         assertEquals(60f, t.startMmPhysical, 1e-4f)
         assertEquals(80f, t.endMmPhysical, 1e-4f)
     }
+
+    @Test
+    fun fwd_taper_start_measured_from_forward_end() {
+        val spec = ShaftSpec(
+            overallLengthMm = 150f,
+            tapers = listOf(
+                Taper(
+                    id = "T1",
+                    startFromAftMm = 12f,
+                    lengthMm = 12f,
+                    startDiaMm = 40f,
+                    endDiaMm = 30f,
+                    orientation = TaperOrientation.FWD
+                )
+            )
+        )
+
+        val resolved = resolveComponents(spec)
+        val taper = resolved.filterIsInstance<ResolvedTaper>().single()
+
+        assertEquals(126f, taper.startMmPhysical, 1e-4f)
+        assertEquals(138f, taper.endMmPhysical, 1e-4f)
+    }
+
+    @Test
+    fun fwd_taper_100in_oal_start_at_forward_zero() {
+        val oalMm = inToMm(100.0)
+        val lengthMm = inToMm(16.0).toFloat()
+        val spec = ShaftSpec(
+            overallLengthMm = oalMm.toFloat(),
+            tapers = listOf(
+                Taper(
+                    id = "T1",
+                    startFromAftMm = 0f,
+                    lengthMm = lengthMm,
+                    startDiaMm = inToMm(6.0).toFloat(),
+                    endDiaMm = inToMm(5.0).toFloat(),
+                    orientation = TaperOrientation.FWD
+                )
+            )
+        )
+
+        val resolved = resolveComponents(spec)
+        val taper = resolved.filterIsInstance<ResolvedTaper>().single()
+
+        val expectedEnd = oalMm.toFloat()
+        val expectedStart = expectedEnd - lengthMm
+
+        assertEquals(expectedStart, taper.startMmPhysical, 1e-4f)
+        assertEquals(expectedEnd, taper.endMmPhysical, 1e-4f)
+        assertEquals(inToMm(6.0).toFloat(), taper.startDiaMm, 1e-4f)
+        assertEquals(inToMm(5.0).toFloat(), taper.endDiaMm, 1e-4f)
+    }
+
+    @Test
+    fun aft_and_fwd_taper_spans_map_to_correct_ends() {
+        val oalMm = inToMm(100.0).toFloat()
+        val lengthMm = inToMm(16.0).toFloat()
+        val startDiaMm = inToMm(6.0).toFloat()
+        val endDiaMm = inToMm(5.0).toFloat()
+
+        val aft = Taper(
+            id = "AFT",
+            startFromAftMm = 0f,
+            lengthMm = lengthMm,
+            startDiaMm = startDiaMm,
+            endDiaMm = endDiaMm,
+            orientation = TaperOrientation.AFT
+        )
+        val fwd = Taper(
+            id = "FWD",
+            startFromAftMm = 0f,
+            lengthMm = lengthMm,
+            startDiaMm = startDiaMm,
+            endDiaMm = endDiaMm,
+            orientation = TaperOrientation.FWD
+        )
+
+        val spec = ShaftSpec(overallLengthMm = oalMm, tapers = listOf(aft, fwd))
+        val resolved = resolveComponents(spec)
+        val resolvedAft = resolved.filterIsInstance<ResolvedTaper>().single { it.id == "AFT" }
+        val resolvedFwd = resolved.filterIsInstance<ResolvedTaper>().single { it.id == "FWD" }
+
+        assertEquals(0f, resolvedAft.startMmPhysical, 1e-4f)
+        assertEquals(lengthMm, resolvedAft.endMmPhysical, 1e-4f)
+        assertEquals(oalMm - lengthMm, resolvedFwd.startMmPhysical, 1e-4f)
+        assertEquals(oalMm, resolvedFwd.endMmPhysical, 1e-4f)
+        assertEquals(startDiaMm, resolvedAft.startDiaMm, 1e-4f)
+        assertEquals(endDiaMm, resolvedAft.endDiaMm, 1e-4f)
+        assertEquals(startDiaMm, resolvedFwd.startDiaMm, 1e-4f)
+        assertEquals(endDiaMm, resolvedFwd.endDiaMm, 1e-4f)
+    }
+
+    private fun inToMm(inches: Double): Double = inches * 25.4
 
     private fun approx(a: Float, b: Float, eps: Float = 1e-3f): Boolean = kotlin.math.abs(a - b) <= eps
 }

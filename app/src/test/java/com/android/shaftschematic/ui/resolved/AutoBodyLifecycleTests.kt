@@ -337,7 +337,7 @@ class AutoBodyLifecycleTests {
 
         val taper = Taper(
             id = "T1",
-            startFromAftMm = 180f,
+            startFromAftMm = 0f,
             lengthMm = 20f,
             startDiaMm = 50f,
             endDiaMm = 40f,
@@ -383,7 +383,7 @@ class AutoBodyLifecycleTests {
         val body = Body(id = "B1", startFromAftMm = 0f, lengthMm = 20f, diaMm = 50f)
         val taper = Taper(
             id = "T1",
-            startFromAftMm = 124f,
+            startFromAftMm = 12f,
             lengthMm = 12f,
             startDiaMm = 50f,
             endDiaMm = 40f,
@@ -394,7 +394,8 @@ class AutoBodyLifecycleTests {
         val resolved = resolveComponents(spec)
         val resolvedTaper = resolved.filterIsInstance<ResolvedTaper>().single { it.id == "T1" }
 
-        assertEquals(124f, resolvedTaper.startMmPhysical, 1e-4f)
+        assertEquals(112f, resolvedTaper.startMmPhysical, 1e-4f)
+        assertEquals(124f, resolvedTaper.endMmPhysical, 1e-4f)
     }
 
     @Test
@@ -402,7 +403,7 @@ class AutoBodyLifecycleTests {
         val oal = 136f
         val taper = Taper(
             id = "T1",
-            startFromAftMm = 124f,
+            startFromAftMm = 0f,
             lengthMm = 12f,
             startDiaMm = 50f,
             endDiaMm = 40f,
@@ -429,7 +430,7 @@ class AutoBodyLifecycleTests {
         val oal = 136f
         val taper = Taper(
             id = "T1",
-            startFromAftMm = 124f,
+            startFromAftMm = 0f,
             lengthMm = 12f,
             startDiaMm = 50f,
             endDiaMm = 40f,
@@ -445,10 +446,10 @@ class AutoBodyLifecycleTests {
         val undoResolved = resolveComponents(baseSpec)
         val redoAgain = resolveComponents(withBody)
 
-        assertAuthoredTaper(baseResolved, taper)
-        assertAuthoredTaper(redoResolved, taper)
-        assertAuthoredTaper(undoResolved, taper)
-        assertAuthoredTaper(redoAgain, taper)
+        assertAuthoredTaper(baseResolved, taper, oal)
+        assertAuthoredTaper(redoResolved, taper, oal)
+        assertAuthoredTaper(undoResolved, taper, oal)
+        assertAuthoredTaper(redoAgain, taper, oal)
     }
 
     @Test
@@ -502,10 +503,20 @@ class AutoBodyLifecycleTests {
         assertTrue("Auto body length must be non-negative", body.lengthMm >= 0f)
     }
 
-    private fun assertAuthoredTaper(resolved: List<ResolvedComponent>, taper: Taper) {
+    private fun assertAuthoredTaper(resolved: List<ResolvedComponent>, taper: Taper, overallLengthMm: Float) {
         val resolvedTaper = resolved.filterIsInstance<ResolvedTaper>().single { it.id == taper.id }
-        assertEquals(taper.startFromAftMm, resolvedTaper.startMmPhysical, 1e-4f)
-        assertEquals(taper.startFromAftMm + taper.lengthMm, resolvedTaper.endMmPhysical, 1e-4f)
+        val (expectedStart, expectedEnd) = when (taper.orientation) {
+            TaperOrientation.AFT -> {
+                val start = taper.startFromAftMm
+                start to (start + taper.lengthMm)
+            }
+            TaperOrientation.FWD -> {
+                val end = overallLengthMm - taper.startFromAftMm
+                (end - taper.lengthMm) to end
+            }
+        }
+        assertEquals(expectedStart, resolvedTaper.startMmPhysical, 1e-4f)
+        assertEquals(expectedEnd, resolvedTaper.endMmPhysical, 1e-4f)
         assertEquals(taper.startDiaMm, resolvedTaper.startDiaMm, 1e-4f)
         assertEquals(taper.endDiaMm, resolvedTaper.endDiaMm, 1e-4f)
     }

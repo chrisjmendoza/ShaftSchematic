@@ -97,6 +97,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -142,6 +143,7 @@ import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 
 /**
  * ShaftScreen — Editor surface
@@ -228,12 +230,12 @@ fun ShaftScreen(
         endAttachment: ThreadAttachment?
     ) -> Unit,
     onBeginDraftLiner: (Float, Float, Float) -> Unit,
-    onUpdateDraftBody: (Float, Float, Float) -> Unit,
-    onUpdateDraftTaper: (Float, Float, Float, Float) -> Unit,
+    onUpdateDraftBody: (Float?, Float, Float) -> Unit,
+    onUpdateDraftTaper: (Float?, Float, Float, Float) -> Unit,
     onUpdateDraftTaperOrientation: (TaperOrientation) -> Unit,
     onUpdateDraftTaperKeyway: (Float, Float, Float, Boolean) -> Unit,
-    onUpdateDraftThread: (Float, Float, Float, Float, Boolean, ThreadAttachment?) -> Unit,
-    onUpdateDraftLiner: (Float, Float, Float) -> Unit,
+    onUpdateDraftThread: (Float?, Float, Float, Float, Boolean, ThreadAttachment?) -> Unit,
+    onUpdateDraftLiner: (Float?, Float, Float, LinerAuthoredReference) -> Unit,
     onCommitDraftComponent: () -> Unit,
     onCancelDraftComponent: () -> Unit,
 
@@ -962,12 +964,12 @@ private fun PreviewOalBadge(
 private fun DraftEditorDialog(
     draftComponent: DraftComponent,
     unit: UnitSystem,
-    onUpdateDraftBody: (Float, Float, Float) -> Unit,
-    onUpdateDraftTaper: (Float, Float, Float, Float) -> Unit,
+    onUpdateDraftBody: (Float?, Float, Float) -> Unit,
+    onUpdateDraftTaper: (Float?, Float, Float, Float) -> Unit,
     onUpdateDraftTaperOrientation: (TaperOrientation) -> Unit,
     onUpdateDraftTaperKeyway: (Float, Float, Float, Boolean) -> Unit,
-    onUpdateDraftThread: (Float, Float, Float, Float, Boolean, ThreadAttachment?) -> Unit,
-    onUpdateDraftLiner: (Float, Float, Float) -> Unit,
+    onUpdateDraftThread: (Float?, Float, Float, Float, Boolean, ThreadAttachment?) -> Unit,
+    onUpdateDraftLiner: (Float?, Float, Float, LinerAuthoredReference) -> Unit,
     onCommitDraftComponent: () -> Unit,
     onCancelDraftComponent: () -> Unit,
 ) {
@@ -992,7 +994,7 @@ private fun DraftEditorDialog(
             ) {
                 when (draftComponent) {
                     is DraftComponent.Body -> {
-                        var startMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.startMmPhysical) }
+                        var startInputMm by remember(draftComponent.id) { mutableStateOf(draftComponent.startInputMm) }
                         var lengthMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.lengthMm) }
                         var diaMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.diaMm) }
                         val firstFieldFocus = remember(draftComponent.id) { FocusRequester() }
@@ -1001,24 +1003,25 @@ private fun DraftEditorDialog(
                         Text("Body (draft)", style = MaterialTheme.typography.titleMedium)
                         CommitNum(
                             label = "Start (${abbr(unit)})",
-                            initialDisplay = disp(startMm, unit),
+                            initialDisplay = startInputMm?.let { disp(it, unit) } ?: "",
+                            placeholder = "Start from AFT",
                             modifier = Modifier.focusRequester(firstFieldFocus)
                         ) { s ->
                             toMmOrNull(s, unit)?.let {
-                                startMm = it
-                                onUpdateDraftBody(startMm, lengthMm, diaMm)
+                                startInputMm = it
+                                onUpdateDraftBody(startInputMm, lengthMm, diaMm)
                             }
                         }
                         CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let {
                                 lengthMm = it
-                                onUpdateDraftBody(startMm, lengthMm, diaMm)
+                                onUpdateDraftBody(startInputMm, lengthMm, diaMm)
                             }
                         }
                         CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let {
                                 diaMm = it
-                                onUpdateDraftBody(startMm, lengthMm, diaMm)
+                                onUpdateDraftBody(startInputMm, lengthMm, diaMm)
                             }
                         }
                         DraftActions(
@@ -1027,7 +1030,7 @@ private fun DraftEditorDialog(
                         )
                     }
                     is DraftComponent.Taper -> {
-                        var startMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.startMmPhysical) }
+                        var startInputMm by remember(draftComponent.id) { mutableStateOf(draftComponent.startInputMm) }
                         var lengthMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.lengthMm) }
                         var startDiaMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.startDiaMm) }
                         var endDiaMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.endDiaMm) }
@@ -1050,17 +1053,18 @@ private fun DraftEditorDialog(
                         )
                         CommitNum(
                             label = "Start (${abbr(unit)})",
-                            initialDisplay = disp(startMm, unit)
+                            initialDisplay = startInputMm?.let { disp(it, unit) } ?: "",
+                            placeholder = "Start from AFT"
                         ) { s ->
                             toMmOrNull(s, unit)?.let {
-                                startMm = it
-                                onUpdateDraftTaper(startMm, lengthMm, startDiaMm, endDiaMm)
+                                startInputMm = it
+                                onUpdateDraftTaper(startInputMm, lengthMm, startDiaMm, endDiaMm)
                             }
                         }
                         CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let {
                                 lengthMm = it
-                                onUpdateDraftTaper(startMm, lengthMm, startDiaMm, endDiaMm)
+                                onUpdateDraftTaper(startInputMm, lengthMm, startDiaMm, endDiaMm)
                             }
                         }
                         CommitNum(
@@ -1070,13 +1074,13 @@ private fun DraftEditorDialog(
                         ) { s ->
                             toMmOrNull(s, unit)?.let {
                                 startDiaMm = it
-                                onUpdateDraftTaper(startMm, lengthMm, startDiaMm, endDiaMm)
+                                onUpdateDraftTaper(startInputMm, lengthMm, startDiaMm, endDiaMm)
                             }
                         }
                         CommitNum("LET Ø (${abbr(unit)})", disp(endDiaMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let {
                                 endDiaMm = it
-                                onUpdateDraftTaper(startMm, lengthMm, startDiaMm, endDiaMm)
+                                onUpdateDraftTaper(startInputMm, lengthMm, startDiaMm, endDiaMm)
                             }
                         }
                         Row(
@@ -1149,7 +1153,7 @@ private fun DraftEditorDialog(
                         )
                     }
                     is DraftComponent.Thread -> {
-                        var startMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.startMmPhysical) }
+                        var startInputMm by remember(draftComponent.id) { mutableStateOf(draftComponent.startInputMm) }
                         var lengthMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.lengthMm) }
                         var majorDiaMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.majorDiaMm) }
                         var pitchMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.pitchMm) }
@@ -1172,7 +1176,7 @@ private fun DraftEditorDialog(
                                     role = androidx.compose.ui.semantics.Role.Switch,
                                     onValueChange = { checked ->
                                         excludeFromOal = !checked
-                                        onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                                        onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                                     }
                                 )
                                 .padding(vertical = 4.dp),
@@ -1190,12 +1194,13 @@ private fun DraftEditorDialog(
                         if (includeInOal) {
                             CommitNum(
                                 label = "Start (${abbr(unit)})",
-                                initialDisplay = disp(startMm, unit),
+                                initialDisplay = startInputMm?.let { disp(it, unit) } ?: "",
+                                placeholder = "Start from AFT",
                                 modifier = Modifier.focusRequester(firstFieldFocus)
                             ) { s ->
                                 toMmOrNull(s, unit)?.let {
-                                    startMm = it
-                                    onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                                    startInputMm = it
+                                    onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                                 }
                             }
                         } else {
@@ -1203,26 +1208,26 @@ private fun DraftEditorDialog(
                                 attachment = endAttachment,
                                 onChange = {
                                     endAttachment = it
-                                    onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                                    onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                                 }
                             )
                         }
                         CommitNum("Major Ø (${abbr(unit)})", disp(majorDiaMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let {
                                 majorDiaMm = it
-                                onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                                onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                             }
                         }
                         CommitNum("TPI", tpiDisplay) { s ->
                             parseFractionOrDecimal(s)?.takeIf { it > 0f }?.let { tpi ->
                                 pitchMm = tpiToPitchMm(tpi)
-                                onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                                onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                             }
                         }
                         CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let {
                                 lengthMm = it
-                                onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                                onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                             }
                         }
                         DraftActions(
@@ -1231,33 +1236,73 @@ private fun DraftEditorDialog(
                         )
                     }
                     is DraftComponent.Liner -> {
-                        var startMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.startMmPhysical) }
+                        var startInputMm by remember(draftComponent.id) { mutableStateOf(draftComponent.startInputMm) }
                         var lengthMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.lengthMm) }
                         var odMm by remember(draftComponent.id) { mutableFloatStateOf(draftComponent.odMm) }
+                        var measureFrom by remember(draftComponent.id) { mutableStateOf(draftComponent.measureFrom) }
                         val firstFieldFocus = remember(draftComponent.id) { FocusRequester() }
                         LaunchedEffect(draftComponent.id) { firstFieldFocus.requestFocus() }
 
                         Text("Liner (draft)", style = MaterialTheme.typography.titleMedium)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Measure From:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                val isFwdRef = measureFrom == LinerAuthoredReference.FWD
+                                val selectedColors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color.Black,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = Color.Transparent,
+                                    labelColor = MaterialTheme.colorScheme.onSurface
+                                )
+                                FilterChip(
+                                    selected = !isFwdRef,
+                                    onClick = {
+                                        measureFrom = LinerAuthoredReference.AFT
+                                        onUpdateDraftLiner(startInputMm, lengthMm, odMm, measureFrom)
+                                    },
+                                    label = { Text("AFT") },
+                                    colors = selectedColors,
+                                    border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null
+                                )
+                                FilterChip(
+                                    selected = isFwdRef,
+                                    onClick = {
+                                        measureFrom = LinerAuthoredReference.FWD
+                                        onUpdateDraftLiner(startInputMm, lengthMm, odMm, measureFrom)
+                                    },
+                                    label = { Text("FWD") },
+                                    colors = selectedColors,
+                                    border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null
+                                )
+                            }
                         CommitNum(
                             label = "Start (${abbr(unit)})",
-                            initialDisplay = disp(startMm, unit),
+                            initialDisplay = startInputMm?.let { disp(it, unit) } ?: "",
+                            placeholder = "Start from ${if (measureFrom == LinerAuthoredReference.FWD) "FWD" else "AFT"}",
                             modifier = Modifier.focusRequester(firstFieldFocus)
                         ) { s ->
                             toMmOrNull(s, unit)?.let {
-                                startMm = it
-                                onUpdateDraftLiner(startMm, lengthMm, odMm)
+                                startInputMm = it
+                                onUpdateDraftLiner(startInputMm, lengthMm, odMm, measureFrom)
                             }
                         }
                         CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let {
                                 lengthMm = it
-                                onUpdateDraftLiner(startMm, lengthMm, odMm)
+                                onUpdateDraftLiner(startInputMm, lengthMm, odMm, measureFrom)
                             }
                         }
                         CommitNum("Outer Ø (${abbr(unit)})", disp(odMm, unit)) { s ->
                             toMmOrNull(s, unit)?.let {
                                 odMm = it
-                                onUpdateDraftLiner(startMm, lengthMm, odMm)
+                                onUpdateDraftLiner(startInputMm, lengthMm, odMm, measureFrom)
                             }
                         }
                         DraftActions(
@@ -1414,11 +1459,11 @@ private fun ComponentCarouselPager(
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
 
-    onUpdateDraftBody: (Float, Float, Float) -> Unit,
-    onUpdateDraftTaper: (Float, Float, Float, Float) -> Unit,
+    onUpdateDraftBody: (Float?, Float, Float) -> Unit,
+    onUpdateDraftTaper: (Float?, Float, Float, Float) -> Unit,
     onUpdateDraftTaperOrientation: (TaperOrientation) -> Unit,
-    onUpdateDraftThread: (Float, Float, Float, Float, Boolean, ThreadAttachment?) -> Unit,
-    onUpdateDraftLiner: (Float, Float, Float) -> Unit,
+    onUpdateDraftThread: (Float?, Float, Float, Float, Boolean, ThreadAttachment?) -> Unit,
+    onUpdateDraftLiner: (Float?, Float, Float, LinerAuthoredReference) -> Unit,
     onCommitDraftComponent: () -> Unit,
     onCancelDraftComponent: () -> Unit,
 
@@ -1644,11 +1689,11 @@ private fun ComponentPagerCard(
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
-    onUpdateDraftBody: (Float, Float, Float) -> Unit,
-    onUpdateDraftTaper: (Float, Float, Float, Float) -> Unit,
+    onUpdateDraftBody: (Float?, Float, Float) -> Unit,
+    onUpdateDraftTaper: (Float?, Float, Float, Float) -> Unit,
     onUpdateDraftTaperOrientation: (TaperOrientation) -> Unit,
-    onUpdateDraftThread: (Float, Float, Float, Float, Boolean, ThreadAttachment?) -> Unit,
-    onUpdateDraftLiner: (Float, Float, Float) -> Unit,
+    onUpdateDraftThread: (Float?, Float, Float, Float, Boolean, ThreadAttachment?) -> Unit,
+    onUpdateDraftLiner: (Float?, Float, Float, LinerAuthoredReference) -> Unit,
     onCommitDraftComponent: () -> Unit,
     onCancelDraftComponent: () -> Unit,
     onUpdateAutoBodyOverride: (AutoBodyKey, AutoBodyOverride) -> Unit,
@@ -1681,7 +1726,7 @@ private fun ComponentPagerCard(
     when (component) {
         is ResolvedBody -> {
             if (component.source == ResolvedComponentSource.DRAFT) {
-                var startMm by remember(component.id) { mutableStateOf(component.startMmPhysical) }
+                var startInputMm by remember(component.id) { mutableStateOf(component.authoredStartInputMm) }
                 var lengthMm by remember(component.id) { mutableStateOf(component.lengthMm) }
                 var diaMm by remember(component.id) { mutableStateOf(component.diaMm) }
 
@@ -1694,23 +1739,24 @@ private fun ComponentPagerCard(
                 ) {
                     CommitNum(
                         label = "Start (${abbr(unit)})",
-                        initialDisplay = disp(startMm, unit)
+                        initialDisplay = startInputMm?.let { disp(it, unit) } ?: "",
+                        placeholder = "Start from AFT"
                     ) { s ->
                         toMmOrNull(s, unit)?.let {
-                            startMm = it
-                            onUpdateDraftBody(startMm, lengthMm, diaMm)
+                            startInputMm = it
+                            onUpdateDraftBody(startInputMm, lengthMm, diaMm)
                         }
                     }
                     CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit)) { s ->
                         toMmOrNull(s, unit)?.let {
                             lengthMm = it
-                            onUpdateDraftBody(startMm, lengthMm, diaMm)
+                            onUpdateDraftBody(startInputMm, lengthMm, diaMm)
                         }
                     }
                     CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit)) { s ->
                         toMmOrNull(s, unit)?.let {
                             diaMm = it
-                            onUpdateDraftBody(startMm, lengthMm, diaMm)
+                            onUpdateDraftBody(startInputMm, lengthMm, diaMm)
                         }
                     }
                     DraftActions(
@@ -1882,7 +1928,7 @@ private fun ComponentPagerCard(
 
         is ResolvedTaper -> {
             if (component.source == ResolvedComponentSource.DRAFT) {
-                var startMm by remember(component.id) { mutableStateOf(component.startMmPhysical) }
+                var startInputMm by remember(component.id) { mutableStateOf(component.authoredStartInputMm) }
                 var lengthMm by remember(component.id) { mutableStateOf(component.lengthMm) }
                 var startDiaMm by remember(component.id) { mutableStateOf(component.startDiaMm) }
                 var endDiaMm by remember(component.id) { mutableStateOf(component.endDiaMm) }
@@ -1897,17 +1943,18 @@ private fun ComponentPagerCard(
                 ) {
                     CommitNum(
                         label = "Start (${abbr(unit)})",
-                        initialDisplay = disp(startMm, unit)
+                        initialDisplay = startInputMm?.let { disp(it, unit) } ?: "",
+                        placeholder = "Start from AFT"
                     ) { s ->
                         toMmOrNull(s, unit)?.let {
-                            startMm = it
-                            onUpdateDraftTaper(startMm, lengthMm, startDiaMm, endDiaMm)
+                            startInputMm = it
+                            onUpdateDraftTaper(startInputMm, lengthMm, startDiaMm, endDiaMm)
                         }
                     }
                     CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit)) { s ->
                         toMmOrNull(s, unit)?.let {
                             lengthMm = it
-                            onUpdateDraftTaper(startMm, lengthMm, startDiaMm, endDiaMm)
+                            onUpdateDraftTaper(startInputMm, lengthMm, startDiaMm, endDiaMm)
                         }
                     }
                     TaperOrientationToggle(
@@ -1920,13 +1967,13 @@ private fun ComponentPagerCard(
                     CommitNum("SET Ø (${abbr(unit)})", disp(startDiaMm, unit)) { s ->
                         toMmOrNull(s, unit)?.let {
                             startDiaMm = it
-                            onUpdateDraftTaper(startMm, lengthMm, startDiaMm, endDiaMm)
+                            onUpdateDraftTaper(startInputMm, lengthMm, startDiaMm, endDiaMm)
                         }
                     }
                     CommitNum("LET Ø (${abbr(unit)})", disp(endDiaMm, unit)) { s ->
                         toMmOrNull(s, unit)?.let {
                             endDiaMm = it
-                            onUpdateDraftTaper(startMm, lengthMm, startDiaMm, endDiaMm)
+                            onUpdateDraftTaper(startInputMm, lengthMm, startDiaMm, endDiaMm)
                         }
                     }
                     DraftActions(
@@ -2050,7 +2097,7 @@ private fun ComponentPagerCard(
 
         is ResolvedThread -> {
             if (component.source == ResolvedComponentSource.DRAFT) {
-                var startMm by remember(component.id) { mutableStateOf(component.startMmPhysical) }
+                var startInputMm by remember(component.id) { mutableStateOf(component.authoredStartInputMm) }
                 var lengthMm by remember(component.id) { mutableStateOf(component.lengthMm) }
                 var majorDiaMm by remember(component.id) { mutableStateOf(component.majorDiaMm) }
                 var pitchMm by remember(component.id) { mutableStateOf(component.pitchMm) }
@@ -2077,7 +2124,7 @@ private fun ComponentPagerCard(
                                 role = androidx.compose.ui.semantics.Role.Switch,
                                 onValueChange = { checked ->
                                     excludeFromOal = !checked
-                                    onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                                    onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                                 }
                             )
                             .padding(vertical = 4.dp),
@@ -2095,11 +2142,12 @@ private fun ComponentPagerCard(
                     if (includeInOal) {
                         CommitNum(
                             label = "Start (${abbr(unit)})",
-                            initialDisplay = disp(startMm, unit)
+                            initialDisplay = startInputMm?.let { disp(it, unit) } ?: "",
+                            placeholder = "Start from AFT"
                         ) { s ->
                             toMmOrNull(s, unit)?.let {
-                                startMm = it
-                                onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                                startInputMm = it
+                                onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                             }
                         }
                     } else {
@@ -2107,26 +2155,26 @@ private fun ComponentPagerCard(
                             attachment = endAttachment,
                             onChange = {
                                 endAttachment = it
-                                onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                                onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                             }
                         )
                     }
                     CommitNum("Major Ø (${abbr(unit)})", disp(majorDiaMm, unit)) { s ->
                         toMmOrNull(s, unit)?.let {
                             majorDiaMm = it
-                            onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                            onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                         }
                     }
                     CommitNum("TPI", tpiDisplay) { s ->
                         parseFractionOrDecimal(s)?.takeIf { it > 0f }?.let { tpi ->
                             pitchMm = tpiToPitchMm(tpi)
-                            onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                            onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                         }
                     }
                     CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit)) { s ->
                         toMmOrNull(s, unit)?.let {
                             lengthMm = it
-                            onUpdateDraftThread(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
+                            onUpdateDraftThread(startInputMm, lengthMm, majorDiaMm, pitchMm, excludeFromOal, endAttachment)
                         }
                     }
                     DraftActions(
@@ -2232,9 +2280,10 @@ private fun ComponentPagerCard(
 
         is ResolvedLiner -> {
             if (component.source == ResolvedComponentSource.DRAFT) {
-                var startMm by remember(component.id) { mutableStateOf(component.startMmPhysical) }
+                var startInputMm by remember(component.id) { mutableStateOf(component.authoredStartInputMm) }
                 var lengthMm by remember(component.id) { mutableStateOf(component.lengthMm) }
                 var odMm by remember(component.id) { mutableStateOf(component.odMm) }
+                var measureFrom by remember(component.id) { mutableStateOf(component.authoredReference) }
 
                 ComponentCard(
                     title = "Liner (draft)",
@@ -2243,25 +2292,64 @@ private fun ComponentPagerCard(
                     } else null,
                     outerPaddingHorizontal = outerPaddingHorizontal,
                 ) {
+                    val isFwdRef = measureFrom == LinerAuthoredReference.FWD
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Measure From:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val selectedColors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color.Black,
+                            selectedLabelColor = Color.White,
+                            containerColor = Color.Transparent,
+                            labelColor = MaterialTheme.colorScheme.onSurface
+                        )
+                        FilterChip(
+                            selected = !isFwdRef,
+                            onClick = {
+                                measureFrom = LinerAuthoredReference.AFT
+                                onUpdateDraftLiner(startInputMm, lengthMm, odMm, measureFrom)
+                            },
+                            label = { Text("AFT") },
+                            colors = selectedColors,
+                            border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null
+                        )
+                        FilterChip(
+                            selected = isFwdRef,
+                            onClick = {
+                                measureFrom = LinerAuthoredReference.FWD
+                                onUpdateDraftLiner(startInputMm, lengthMm, odMm, measureFrom)
+                            },
+                            label = { Text("FWD") },
+                            colors = selectedColors,
+                            border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null
+                        )
+                    }
                     CommitNum(
                         label = "Start (${abbr(unit)})",
-                        initialDisplay = disp(startMm, unit)
+                        initialDisplay = startInputMm?.let { disp(it, unit) } ?: "",
+                        placeholder = "Start from ${if (isFwdRef) "FWD" else "AFT"}"
                     ) { s ->
                         toMmOrNull(s, unit)?.let {
-                            startMm = it
-                            onUpdateDraftLiner(startMm, lengthMm, odMm)
+                            startInputMm = it
+                            onUpdateDraftLiner(startInputMm, lengthMm, odMm, measureFrom)
                         }
                     }
                     CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit)) { s ->
                         toMmOrNull(s, unit)?.let {
                             lengthMm = it
-                            onUpdateDraftLiner(startMm, lengthMm, odMm)
+                            onUpdateDraftLiner(startInputMm, lengthMm, odMm, measureFrom)
                         }
                     }
                     CommitNum("Outer Ø (${abbr(unit)})", disp(odMm, unit)) { s ->
                         toMmOrNull(s, unit)?.let {
                             odMm = it
-                            onUpdateDraftLiner(startMm, lengthMm, odMm)
+                            onUpdateDraftLiner(startInputMm, lengthMm, odMm, measureFrom)
                         }
                     }
                     DraftActions(
@@ -2280,7 +2368,7 @@ private fun ComponentPagerCard(
             var hasFocusedOnce by remember(ln.id) { mutableStateOf(false) }
             val isFwdRef = ln.authoredReference == LinerAuthoredReference.FWD
             val authoredStartMm = if (isFwdRef) {
-                spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
+                ln.authoredStartFromFwdMm
             } else {
                 ln.startFromAftMm
             }
@@ -2397,8 +2485,7 @@ private fun ComponentPagerCard(
                 CommitNum("Length (${abbr(unit)})", disp(ln.lengthMm, unit)) { s ->
                     val newLenMm = toMmOrNull(s, unit) ?: return@CommitNum
                     val physicalStartMm = if (isFwdRef) {
-                        val authored = spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
-                        spec.overallLengthMm - authored - newLenMm
+                        spec.overallLengthMm - ln.authoredStartFromFwdMm - newLenMm
                     } else {
                         ln.startFromAftMm
                     }
@@ -2516,12 +2603,20 @@ private fun DraftActions(
     onCancel: () -> Unit,
     commitEnabled: Boolean = true,
 ) {
+    val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Button(
-            onClick = onCommit,
+            onClick = {
+                focusManager.clearFocus(force = true)
+                scope.launch {
+                    yield()
+                    onCommit()
+                }
+            },
             enabled = commitEnabled,
             modifier = Modifier.weight(1f)
         ) {
@@ -2599,12 +2694,14 @@ private fun CommitNum(
     fillMaxWidth: Boolean = true,
     showValidationErrors: Boolean = true,
     validator: ((String) -> String?)? = null,
+    placeholder: String? = null,
     onCommit: (String) -> Unit
 ) {
     // Numeric input is filtered and reverted at the UI boundary.
     NumericInputField(
         label = label,
         initialText = initialDisplay,
+        placeholder = placeholder,
         modifier = Modifier
             .let { if (fillMaxWidth) it.fillMaxWidth() else it }
             .then(modifier),

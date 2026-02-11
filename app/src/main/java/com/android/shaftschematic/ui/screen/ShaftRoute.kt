@@ -195,7 +195,7 @@ fun ShaftRoute(
         onUpdateDraftTaperOrientation = vm::updateDraftTaperOrientation,
         onUpdateDraftTaperKeyway = { w, d, l, spooned -> vm.updateDraftTaperKeyway(w, d, l, spooned) },
         onUpdateDraftThread = { s, l, maj, p, ex, attach -> vm.updateDraftThread(s, l, maj, p, ex, attach) },
-        onUpdateDraftLiner  = { s, l, od     -> vm.updateDraftLiner(s, l, od) },
+        onUpdateDraftLiner  = { s, l, od, ref -> vm.updateDraftLiner(s, l, od, ref) },
         onCommitDraftComponent = vm::commitDraftComponent,
         onCancelDraftComponent = vm::cancelDraftComponent,
 

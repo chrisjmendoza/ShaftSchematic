@@ -15,6 +15,10 @@ import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.ResolvedTaper
+import com.android.shaftschematic.ui.resolved.ResolvedThread
+import com.android.shaftschematic.ui.resolved.ResolvedLiner
+import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
@@ -78,6 +82,37 @@ fun composeShaftPdf(
     )
 }
 
+internal fun buildPdfTapers(
+    spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>?,
+): List<Taper> {
+    val resolvedTapers = resolvedComponents?.filterIsInstance<ResolvedTaper>().orEmpty()
+    if (resolvedTapers.isEmpty()) return spec.tapers
+
+    val byId = spec.tapers.associateBy { it.id }
+    return resolvedTapers.map { resolved ->
+        val lengthMm = (resolved.endMmPhysical - resolved.startMmPhysical).coerceAtLeast(0f)
+        val base = byId[resolved.id]
+        if (base != null) {
+            base.copy(
+                startFromAftMm = resolved.startMmPhysical,
+                lengthMm = lengthMm,
+                startDiaMm = resolved.startDiaMm,
+                endDiaMm = resolved.endDiaMm
+            )
+        } else {
+            Taper(
+                id = resolved.id,
+                startFromAftMm = resolved.startMmPhysical,
+                lengthMm = lengthMm,
+                startDiaMm = resolved.startDiaMm,
+                endDiaMm = resolved.endDiaMm,
+                orientation = resolved.orientation
+            )
+        }
+    }
+}
+
 internal fun composeShaftPdfOnCanvas(
     canvas: Canvas,
     pageWidthPt: Int,
@@ -91,6 +126,9 @@ internal fun composeShaftPdfOnCanvas(
     options: PdfExportOptions = PdfExportOptions(),
     resolvedComponents: List<ResolvedComponent>? = null,
 ) {
+    val tapersForPdf = buildPdfTapers(spec, resolvedComponents)
+    val pdfSpec = if (tapersForPdf === spec.tapers) spec else spec.copy(tapers = tapersForPdf)
+    val dimSpec = buildDimensionSpecForPdf(pdfSpec, resolvedComponents)
     val effectiveOptions = when (options.mode) {
         PdfExportMode.Template -> options.copy(
             showDimensions = false,
@@ -108,8 +146,8 @@ internal fun composeShaftPdfOnCanvas(
     val pageH = pageHeightPt.toFloat()
 
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
-        "compose start: page=${pageWidthPt}x${pageHeightPt}pt filename=$filename unit=$unit oalMm=${"%.3f".format(spec.overallLengthMm)}" +
-            " parts(bodies=${spec.bodies.size}, tapers=${spec.tapers.size}, threads=${spec.threads.size}, liners=${spec.liners.size})"
+        "compose start: page=${pageWidthPt}x${pageHeightPt}pt filename=$filename unit=$unit oalMm=${"%.3f".format(pdfSpec.overallLengthMm)}" +
+            " parts(bodies=${pdfSpec.bodies.size}, tapers=${pdfSpec.tapers.size}, threads=${pdfSpec.threads.size}, liners=${pdfSpec.liners.size})"
     }
 
     val geomRect = RectF(
@@ -133,12 +171,12 @@ internal fun composeShaftPdfOnCanvas(
             )
         }
 
-    val bodiesForPdf = resolvedBodies ?: spec.bodies
-    val hasNonBodyDetail = spec.tapers.isNotEmpty() || spec.threads.isNotEmpty() || spec.liners.isNotEmpty()
+    val bodiesForPdf = resolvedBodies ?: pdfSpec.bodies
+    val hasNonBodyDetail = pdfSpec.tapers.isNotEmpty() || pdfSpec.threads.isNotEmpty() || pdfSpec.liners.isNotEmpty()
     val bodyOnlyResolved = resolvedBodies != null && resolvedBodies.size == 1 && !hasNonBodyDetail
 
-    val bodyOnly = isBodyOnlyShaft(spec) || bodyOnlyResolved
-    val singleTaperOnly = isSingleTaperOnly(spec)
+    val bodyOnly = isBodyOnlyShaft(pdfSpec) || bodyOnlyResolved
+    val singleTaperOnly = isSingleTaperOnly(pdfSpec)
 
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = OUTLINE_PT; color = 0xFF000000.toInt()
@@ -152,9 +190,9 @@ internal fun composeShaftPdfOnCanvas(
         color = 0xFF000000.toInt()
     }
 
-    val renderPadding = computeRenderPaddingMm(spec)
+    val renderPadding = computeRenderPaddingMm(pdfSpec)
     val renderOriginMm = renderPadding.aftMm
-    val renderedLengthMm = (spec.overallLengthMm.coerceAtLeast(1f) + renderPadding.aftMm + renderPadding.fwdMm)
+    val renderedLengthMm = (pdfSpec.overallLengthMm.coerceAtLeast(1f) + renderPadding.aftMm + renderPadding.fwdMm)
 
     val ptPerMm = when {
         bodyOnly || hasNonBodyDetail -> {
@@ -164,7 +202,7 @@ internal fun composeShaftPdfOnCanvas(
             // - Body center-break/compression is a readability fallback, not the default.
             // For any detailed shaft (tapers/threads/liners) prefer a stable schematic height
             // (~1.0–1.5 in). Keep uniform scaling (no x/y distortion), and still respect page width.
-            computeDetailPtPerMm(spec, geomRect.width(), geomRect.height(), renderedLengthMm)
+            computeDetailPtPerMm(pdfSpec, geomRect.width(), geomRect.height(), renderedLengthMm)
         }
         else -> {
             // Bodies-only: classic width-fit.
@@ -173,13 +211,13 @@ internal fun composeShaftPdfOnCanvas(
     }
     val left = geomRect.left
 
-    val winDbg = computeOalWindow(spec)
+    val winDbg = computeOalWindow(pdfSpec)
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
-        "layout: geomRect=${geomRect.width().toInt()}x${geomRect.height().toInt()}pt ptPerMm=${"%.4f".format(ptPerMm)} maxDiaMm=${"%.3f".format(spec.maxOuterDiaMm())}" +
+        "layout: geomRect=${geomRect.width().toInt()}x${geomRect.height().toInt()}pt ptPerMm=${"%.4f".format(ptPerMm)} maxDiaMm=${"%.3f".format(pdfSpec.maxOuterDiaMm())}" +
             " oalWindow(start=${"%.3f".format(winDbg.measureStartMm)}, end=${"%.3f".format(winDbg.measureEndMm)}, oal=${"%.3f".format(winDbg.oalMm)})"
     }
 
-    val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
+    val maxDiaMm = pdfSpec.maxOuterDiaMm().coerceAtLeast(1f)
     val halfHeightPx = (maxDiaMm * 0.5f) * ptPerMm
     // Place the shaft centered on the paper when possible.
     // Clamp so the shaft stays inside geomRect and the footer block can still fit below.
@@ -218,15 +256,15 @@ internal fun composeShaftPdfOnCanvas(
     } else {
         drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect)
     }
-    drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline)
-    drawThreads(c, spec, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
-    drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
+    drawTapers(c, pdfSpec.tapers, cy, ::xAt, ::rPx, outline)
+    drawThreads(c, pdfSpec, pdfSpec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
+    drawLiners(c, pdfSpec.liners, cy, ::xAt, ::rPx, outline, dim)
     c.restore()
 
     if (effectiveOptions.showLabels && pdfPrefs.showComponentTitles) {
         drawComponentLabelsPdf(
             canvas = c,
-            spec = spec,
+            spec = pdfSpec,
             geomRect = geomRect,
             cy = cy,
             halfHeightPx = halfHeightPx,
@@ -252,21 +290,19 @@ internal fun composeShaftPdfOnCanvas(
 
         // Measurement reference (AFT/FWD/AUTO) is separate from tier origin.
         val measureFromMode = pdfPrefs.tieringMode
-        val linerDims = mapToLinerDimsForPdf(spec, measureFromMode)
-        val win = computeDimensionWindowForPdf(spec)
+        val win = computeDimensionWindowForPdf(dimSpec)
         val visualShaftOriginX = geomRect.left + (renderOriginMm * ptPerMm)
         val pageX: (Double) -> Float = { dimMm ->
-            visualShaftOriginX + ((dimMm + win.measureStartMm).toFloat() * ptPerMm)
+            visualShaftOriginX + mapDimMmToPageOffsetPx(dimMm, ptPerMm)
         }
-        val sets = computeSetPositionsInMeasureSpace(win)
-        val spans = buildLinerSpans(
-            liners = linerDims,
-            sets = sets,
+        val spans = buildPdfDimensionSpans(
+            spec = dimSpec,
             unit = unit,
-            measureFrom = measureFromMode
-        ) + buildTaperLengthSpans(spec, win, unit)
+            win = win,
+            measureFromMode = measureFromMode
+        )
         val planner = RailPlanner()
-        val oalMm = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
+        val oalMm = pdfSpec.overallLengthMm.toDouble().coerceAtLeast(0.0)
         val tierOriginMm = tierOriginMmFor(pdfPrefs.tieringMode, win.oalMm)
         val assignments = planner.assignAll(spans, tierOriginMm)
 
@@ -304,7 +340,7 @@ internal fun composeShaftPdfOnCanvas(
         assignments.forEach { rs ->
             renderer.drawOnRail(c, rs.rail, rs.span, true)
         }
-        renderer.drawTop(c, oalSpanWithLabel(oalMm, unit, win.measureStartMm), true)
+        renderer.drawTop(c, buildOalSpanForPdf(oalMm, unit, win.measureStartMm), true)
     }
 
     // --- diameter callouts (optional; leave empty until you have stations) ---
@@ -329,12 +365,12 @@ internal fun composeShaftPdfOnCanvas(
 
     if (effectiveOptions.showFooter) {
         // footer
-        val showCompressionNote = !bodyOnly && hasCenterBreak(spec)
+        val showCompressionNote = !bodyOnly && hasCenterBreak(pdfSpec)
 
-        val footerTapers = selectFooterTapers(spec)
+        val footerTapers = selectFooterTapers(pdfSpec)
         val footerCfg = FooterConfig(
-            showAftThread = hasAftThread(spec),
-            showFwdThread = hasFwdThread(spec),
+            showAftThread = hasAftThread(pdfSpec),
+            showFwdThread = hasFwdThread(pdfSpec),
             // Taper rendering is gated by detectEndFeatures(); this flag only controls whether
             // taper details are enabled for the footer at all.
             showAftTaper  = footerTapers.aft != null,
@@ -346,7 +382,7 @@ internal fun composeShaftPdfOnCanvas(
         val infoBottom = min(infoTop + FOOTER_BLOCK_PT, pageH - PAGE_MARGIN_PT)
         val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
 
-        drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg)
+        drawFooter(c, infoRect, pdfSpec, unit, project, filename, appVersion, text, footerCfg)
     }
 }
 
@@ -654,7 +690,7 @@ private fun drawLinerDimensionsPdf(
     val oalMm = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
 
     // Spans are in measurement space (rebased so AFT SET = 0). Convert to physical axis for rendering.
-    val pageXMeasure: (Double) -> Float = { dimMm -> pageX(dimMm + win.measureStartMm) }
+    val pageXMeasure: (Double) -> Float = { dimMm -> pageX(dimMm) }
 
     val spans = buildLinerSpans(
         liners = liners,
@@ -678,26 +714,67 @@ private fun drawLinerDimensionsPdf(
     )
 
     assignments.forEach { rs -> renderer.drawOnRail(canvas, rs.rail, rs.span, true) }
-    renderer.drawTop(canvas, oalSpanWithLabel(oalMm, unit, win.measureStartMm), true)
+    renderer.drawTop(canvas, buildOalSpanForPdf(oalMm, unit, win.measureStartMm), true)
 }
 
 internal fun computeDimensionWindowForPdf(spec: ShaftSpec): com.android.shaftschematic.geom.OalWindow {
-    val baseWin = computeOalWindow(spec)
-    val oalMm = baseWin.oalMm
-    if (oalMm <= 0.0) return baseWin
-
-    val excluded = computeExcludedThreadLengths(spec, oalMm)
-    val start = excluded.aftExcludedMm.coerceIn(0.0, oalMm)
-    val end = (oalMm - excluded.fwdExcludedMm).coerceIn(0.0, oalMm)
-    return com.android.shaftschematic.geom.OalWindow(
-        measureStartMm = start,
-        measureEndMm = max(start, end)
-    )
+    // Excluded end threads are rendered outside the working axis; do not shift
+    // measurement space for PDF dimensions.
+    return computeOalWindow(spec)
 }
 
-private fun oalSpanWithLabel(oalMm: Double, unit: UnitSystem, measureStartMm: Double): DimSpan {
+internal fun buildPdfDimensionSpans(
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    win: com.android.shaftschematic.geom.OalWindow,
+    measureFromMode: PdfTieringMode,
+): List<DimSpan> = buildList {
+    val sets = computeSetPositionsInMeasureSpace(win)
+    val linerDims = mapToLinerDimsForPdf(spec, win, measureFromMode)
+    addAll(
+        buildLinerSpans(
+            liners = linerDims,
+            sets = sets,
+            unit = unit,
+            measureFrom = measureFromMode
+        )
+    )
+
+    addAll(buildTaperLengthSpans(spec, win, unit))
+
+    fun addLocalSpan(startMm: Double, endMm: Double) {
+        val x0 = win.toMeasureX(startMm)
+        val x1 = win.toMeasureX(endMm)
+        val len = abs(x1 - x0)
+        if (len <= 0.0) return
+        add(DimSpan(x0, x1, labelTop = formatLenDim(len, unit), kind = SpanKind.LOCAL))
+    }
+
+    spec.bodies.forEach { b ->
+        if (b.lengthMm > 0f && b.diaMm > 0f) {
+            addLocalSpan(b.startFromAftMm.toDouble(), (b.startFromAftMm + b.lengthMm).toDouble())
+        }
+    }
+    spec.tapers.forEach { t ->
+        if (t.lengthMm > 0f && (t.startDiaMm > 0f || t.endDiaMm > 0f)) {
+            addLocalSpan(t.startFromAftMm.toDouble(), (t.startFromAftMm + t.lengthMm).toDouble())
+        }
+    }
+    spec.threads.forEach { th ->
+        if (!th.excludeFromOAL && th.lengthMm > 0f && th.majorDiaMm > 0f) {
+            val startMm = threadStartMm(spec, th).toDouble()
+            addLocalSpan(startMm, startMm + th.lengthMm)
+        }
+    }
+}
+
+internal fun buildOalSpanForPdf(oalMm: Double, unit: UnitSystem, measureStartMm: Double): DimSpan {
     val label = "OAL ${formatLenDim(oalMm, unit)}"
     return DimSpan(-measureStartMm, oalMm - measureStartMm, labelTop = label, kind = SpanKind.OAL)
+}
+
+internal fun mapDimMmToPageOffsetPx(dimMm: Double, ptPerMm: Float): Float {
+    return dimMm.toFloat() * ptPerMm
 }
 
 /**
@@ -740,8 +817,11 @@ internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschema
  * Anchor is inferred by proximity to SETs; swap to explicit anchors if your model stores them.
  */
 
-private fun mapToLinerDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode): List<LinerDim> {
-    val win = computeDimensionWindowForPdf(spec)
+private fun mapToLinerDimsForPdf(
+    spec: ShaftSpec,
+    win: com.android.shaftschematic.geom.OalWindow,
+    measureFrom: PdfTieringMode,
+): List<LinerDim> {
     val sets = computeSetPositionsInMeasureSpace(win)
 
     return spec.liners.map { ln ->
@@ -772,6 +852,87 @@ private fun mapToLinerDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode): 
             lengthMm = length
         )
     }
+}
+
+internal fun buildDimensionSpecForPdf(
+    spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>?,
+): ShaftSpec {
+    if (resolvedComponents.isNullOrEmpty()) return spec
+
+    val tapers = buildPdfTapers(spec, resolvedComponents)
+
+    val bodies = resolvedComponents
+        .filterIsInstance<ResolvedBody>()
+        .filter { it.source != ResolvedComponentSource.AUTO }
+        .map { body ->
+            Body(
+                id = body.id,
+                startFromAftMm = body.startMmPhysical,
+                lengthMm = (body.endMmPhysical - body.startMmPhysical).coerceAtLeast(0f),
+                diaMm = body.diaMm
+            )
+        }
+
+    val threadsById = spec.threads.associateBy { it.id }
+    val threads = resolvedComponents
+        .filterIsInstance<ResolvedThread>()
+        .map { thread ->
+            val base = threadsById[thread.id]
+            if (base != null) {
+                base.copy(
+                    startFromAftMm = thread.startMmPhysical,
+                    lengthMm = (thread.endMmPhysical - thread.startMmPhysical).coerceAtLeast(0f),
+                    majorDiaMm = thread.majorDiaMm,
+                    pitchMm = thread.pitchMm,
+                    excludeFromOAL = thread.excludeFromOal,
+                    endAttachment = thread.endAttachment
+                )
+            } else {
+                Threads(
+                    id = thread.id,
+                    startFromAftMm = thread.startMmPhysical,
+                    lengthMm = (thread.endMmPhysical - thread.startMmPhysical).coerceAtLeast(0f),
+                    majorDiaMm = thread.majorDiaMm,
+                    pitchMm = thread.pitchMm,
+                    excludeFromOAL = thread.excludeFromOal,
+                    endAttachment = thread.endAttachment
+                )
+            }
+        }
+
+    val linersById = spec.liners.associateBy { it.id }
+    val liners = resolvedComponents
+        .filterIsInstance<ResolvedLiner>()
+        .map { liner ->
+            val base = linersById[liner.id]
+            val lengthMm = (liner.endMmPhysical - liner.startMmPhysical).coerceAtLeast(0f)
+            if (base != null) {
+                base.copy(
+                    startFromAftMm = liner.startMmPhysical,
+                    lengthMm = lengthMm,
+                    odMm = liner.odMm,
+                    authoredReference = liner.authoredReference,
+                    endMmPhysical = liner.endMmPhysical
+                )
+            } else {
+                Liner(
+                    id = liner.id,
+                    startFromAftMm = liner.startMmPhysical,
+                    lengthMm = lengthMm,
+                    odMm = liner.odMm,
+                    authoredReference = liner.authoredReference,
+                    endMmPhysical = liner.endMmPhysical
+                )
+            }
+        }
+
+    return spec.copy(
+        bodies = if (bodies.isEmpty()) spec.bodies else bodies,
+        tapers = if (tapers === spec.tapers) spec.tapers else tapers,
+        threads = if (threads.isEmpty()) spec.threads else threads,
+        liners = if (liners.isEmpty()) spec.liners else liners
+    )
 }
 
 /**

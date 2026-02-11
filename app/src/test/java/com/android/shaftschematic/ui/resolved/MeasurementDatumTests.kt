@@ -149,6 +149,54 @@ class MeasurementDatumTests {
         assertEquals(included.endMmPhysical, excluded.endMmPhysical, 1e-4f)
     }
 
+    @Test
+    fun LinerResolve_AftStart_PositionsCorrectly() {
+        val spec = ShaftSpec(
+            overallLengthMm = 200f,
+            liners = listOf(
+                Liner(
+                    id = "LN-AFT",
+                    startFromAftMm = 30f,
+                    lengthMm = 20f,
+                    odMm = 40f,
+                    authoredReference = LinerAuthoredReference.AFT,
+                    authoredStartFromFwdMm = 0f,
+                    endMmPhysical = 50f
+                )
+            )
+        )
+
+        val resolved = resolveExplicitComponents(spec)
+        val liner = resolved.filterIsInstance<ResolvedLiner>().single { it.id == "LN-AFT" }
+
+        assertEquals(30f, liner.startMmPhysical, 1e-4f)
+        assertEquals(50f, liner.endMmPhysical, 1e-4f)
+    }
+
+    @Test
+    fun LinerResolve_FwdStart_PositionsCorrectly() {
+        val spec = ShaftSpec(
+            overallLengthMm = 200f,
+            liners = listOf(
+                Liner(
+                    id = "LN-FWD",
+                    startFromAftMm = 0f,
+                    lengthMm = 20f,
+                    odMm = 40f,
+                    authoredReference = LinerAuthoredReference.FWD,
+                    authoredStartFromFwdMm = 10f,
+                    endMmPhysical = 0f
+                )
+            )
+        )
+
+        val resolved = resolveExplicitComponents(spec)
+        val liner = resolved.filterIsInstance<ResolvedLiner>().single { it.id == "LN-FWD" }
+
+        assertEquals(170f, liner.startMmPhysical, 1e-4f)
+        assertEquals(190f, liner.endMmPhysical, 1e-4f)
+    }
+
     private fun approx(actual: Float, expected: Float, eps: Float = 1e-4f): Boolean =
         kotlin.math.abs(actual - expected) <= eps
 }

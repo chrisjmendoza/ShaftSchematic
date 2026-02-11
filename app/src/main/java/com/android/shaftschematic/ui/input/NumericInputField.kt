@@ -27,6 +27,7 @@ fun NumericInputField(
     label: String,
     initialText: String,
     modifier: Modifier = Modifier,
+    placeholder: String? = null,
     allowNegative: Boolean = false,
     allowFraction: Boolean = true,
     showValidationErrors: Boolean = true,
@@ -88,6 +89,7 @@ fun NumericInputField(
             }
         },
         label = { Text(label) },
+        placeholder = placeholder?.let { { Text(it) } },
         isError = showError && errorText != null,
         supportingText = {
             if (showError && errorText != null) {

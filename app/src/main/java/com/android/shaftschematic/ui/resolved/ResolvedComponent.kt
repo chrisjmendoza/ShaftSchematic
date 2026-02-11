@@ -42,6 +42,7 @@ data class ResolvedBody(
     override val endMmPhysical: Float,
     val diaMm: Float,
     val autoBodyKey: AutoBodyKey? = null,
+    val authoredStartInputMm: Float? = null,
 ) : ResolvedComponent()
 
 data class ResolvedTaper(
@@ -54,6 +55,7 @@ data class ResolvedTaper(
     val startDiaMm: Float,
     val endDiaMm: Float,
     val orientation: TaperOrientation = TaperOrientation.AFT,
+    val authoredStartInputMm: Float? = null,
 ) : ResolvedComponent()
 
 data class ResolvedThread(
@@ -67,6 +69,7 @@ data class ResolvedThread(
     val pitchMm: Float,
     val excludeFromOal: Boolean = false,
     val endAttachment: ThreadAttachment? = null,
+    val authoredStartInputMm: Float? = null,
 ) : ResolvedComponent()
 
 data class ResolvedLiner(
@@ -77,6 +80,8 @@ data class ResolvedLiner(
     override val startMmPhysical: Float,
     override val endMmPhysical: Float,
     val odMm: Float,
+    val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
+    val authoredStartInputMm: Float? = null,
 ) : ResolvedComponent()
 
 fun resolveComponents(
@@ -130,7 +135,7 @@ private fun assertAuthoredTaperSpans(
     if (!BuildConfig.DEBUG) return
 
     val authoredById = spec.tapers.associate { taper ->
-        taper.id to (taper.startFromAftMm to (taper.startFromAftMm + taper.lengthMm))
+        taper.id to resolveTaperSpan(taper, spec.overallLengthMm)
     }
 
     components.filterIsInstance<ResolvedTaper>()
@@ -158,6 +163,20 @@ private fun reapplyExplicitPositions(
         is ResolvedThread -> comp.copy(startMmPhysical = span.first, endMmPhysical = span.second)
         is ResolvedLiner -> comp.copy(startMmPhysical = span.first, endMmPhysical = span.second)
         else -> comp
+    }
+}
+
+private fun resolveTaperSpan(
+    taper: com.android.shaftschematic.model.Taper,
+    overallLengthMm: Float,
+): Pair<Float, Float> = when (taper.orientation) {
+    TaperOrientation.AFT -> {
+        val start = taper.startFromAftMm
+        start to (start + taper.lengthMm)
+    }
+    TaperOrientation.FWD -> {
+        val end = overallLengthMm - taper.startFromAftMm
+        (end - taper.lengthMm) to end
     }
 }
 
@@ -211,17 +230,7 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
                 )
             }
         }
-        spec.liners.forEach { ln ->
-            if (ln.authoredReference == LinerAuthoredReference.FWD && ln.authoredStartFromFwdMm <= eps) {
-                add(
-                    FwdItem(
-                        key = ComponentKey(ln.id, ComponentKind.LINER),
-                        lengthMm = ln.lengthMm,
-                        authoredStartFromFwdMm = ln.authoredStartFromFwdMm
-                    )
-                )
-            }
-        }
+        // Liners are independent; do not stack or override based on forward-zero rules.
     }
 
     val fwdOverrides = mutableMapOf<ComponentKey, Pair<Float, Float>>()
@@ -252,8 +261,7 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
         )
     }
     spec.tapers.forEach { t ->
-        val start = t.startFromAftMm
-        val end = start + t.lengthMm
+        val (start, end) = resolveTaperSpan(t, spec.overallLengthMm)
         add(
             ResolvedTaper(
                 id = t.id,
@@ -295,14 +303,15 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
         )
     }
     spec.liners.forEach { ln ->
-        val key = ComponentKey(ln.id, ComponentKind.LINER)
-        val (start, end) = overrideFor(key) ?: run {
-            val startMm = if (ln.authoredReference == LinerAuthoredReference.FWD) {
-                mfd - ln.authoredStartFromFwdMm - ln.lengthMm
-            } else {
-                ln.startFromAftMm
+        val (start, end) = when (ln.authoredReference) {
+            LinerAuthoredReference.FWD -> {
+                val endMm = spec.overallLengthMm - ln.authoredStartFromFwdMm
+                (endMm - ln.lengthMm) to endMm
             }
-            startMm to (startMm + ln.lengthMm)
+            LinerAuthoredReference.AFT -> {
+                val startMm = ln.startFromAftMm
+                startMm to (startMm + ln.lengthMm)
+            }
         }
         add(
             ResolvedLiner(
@@ -310,7 +319,13 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
                 authoredSourceId = ln.id,
                 startMmPhysical = start,
                 endMmPhysical = end,
-                odMm = ln.odMm
+                odMm = ln.odMm,
+                authoredReference = ln.authoredReference,
+                authoredStartInputMm = if (ln.authoredReference == LinerAuthoredReference.FWD) {
+                    ln.authoredStartFromFwdMm
+                } else {
+                    ln.startFromAftMm
+                }
             )
         )
     }
@@ -326,7 +341,8 @@ private fun resolveDraftComponent(draft: DraftComponent): ResolvedComponent = wh
         startMmPhysical = draft.startMmPhysical,
         endMmPhysical = draft.startMmPhysical + draft.lengthMm,
         diaMm = draft.diaMm,
-        autoBodyKey = null
+        autoBodyKey = null,
+        authoredStartInputMm = draft.startInputMm
     )
     is DraftComponent.Taper -> ResolvedTaper(
         id = draft.id,
@@ -338,6 +354,7 @@ private fun resolveDraftComponent(draft: DraftComponent): ResolvedComponent = wh
         startDiaMm = draft.startDiaMm,
         endDiaMm = draft.endDiaMm,
         orientation = draft.orientation,
+        authoredStartInputMm = draft.startInputMm,
     )
     is DraftComponent.Thread -> ResolvedThread(
         id = draft.id,
@@ -349,7 +366,8 @@ private fun resolveDraftComponent(draft: DraftComponent): ResolvedComponent = wh
         majorDiaMm = draft.majorDiaMm,
         pitchMm = draft.pitchMm,
         excludeFromOal = draft.excludeFromOal,
-        endAttachment = draft.endAttachment
+        endAttachment = draft.endAttachment,
+        authoredStartInputMm = draft.startInputMm
     )
     is DraftComponent.Liner -> ResolvedLiner(
         id = draft.id,
@@ -358,7 +376,9 @@ private fun resolveDraftComponent(draft: DraftComponent): ResolvedComponent = wh
         source = ResolvedComponentSource.DRAFT,
         startMmPhysical = draft.startMmPhysical,
         endMmPhysical = draft.startMmPhysical + draft.lengthMm,
-        odMm = draft.odMm
+        odMm = draft.odMm,
+        authoredReference = draft.measureFrom,
+        authoredStartInputMm = draft.startInputMm
     )
 }
 
