@@ -103,7 +103,8 @@ fun PdfPreviewScreen(
     LaunchedEffect(spec, unit, project, options, resolvedComponents) {
         isLoading = true
         errorMessage = null
-        val pdfPrefs = vm.currentPdfPrefs  // read on main thread before IO switch
+        // Snapshot currentPdfPrefs on the main thread before switching to IO.
+        val pdfPrefsSnapshot = vm.currentPdfPrefs
         val bmp = withContext(Dispatchers.IO) {
             renderPdfPreviewBitmap(
                 context = ctx,
@@ -111,7 +112,7 @@ fun PdfPreviewScreen(
                 unit = unit,
                 project = project,
                 appVersion = appVersionName(ctx),
-                pdfPrefs = pdfPrefs,
+                pdfPrefs = pdfPrefsSnapshot,
                 options = options,
                 resolvedComponents = resolvedComponents,
             )
@@ -190,6 +191,8 @@ fun PdfPreviewScreen(
             )
         }
     ) { paddingValues ->
+        val currentError = errorMessage
+        val currentBitmap = previewBitmap
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -201,23 +204,22 @@ fun PdfPreviewScreen(
                     CircularProgressIndicator()
                 }
 
-                errorMessage != null -> {
+                currentError != null -> {
                     Text(
-                        text = errorMessage ?: "Preview unavailable.",
+                        text = currentError,
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(24.dp)
                     )
                 }
 
-                previewBitmap != null -> {
-                    val image = previewBitmap!!
+                currentBitmap != null -> {
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
                             .then(gestures)
                     ) {
-                        val imgW = image.width.toFloat()
-                        val imgH = image.height.toFloat()
+                        val imgW = currentBitmap.width.toFloat()
+                        val imgH = currentBitmap.height.toFloat()
 
                         // Fit the PDF page to the canvas at zoom=1, centered.
                         val fitScale = minOf(size.width / imgW, size.height / imgH)
@@ -231,7 +233,7 @@ fun PdfPreviewScreen(
                             scale(scale.value, scale.value, Offset.Zero)
                         }) {
                             drawImage(
-                                image = image,
+                                image = currentBitmap,
                                 dstOffset = androidx.compose.ui.unit.IntOffset(
                                     baseLeft.toInt(),
                                     baseTop.toInt()
@@ -268,7 +270,8 @@ private fun renderPdfPreviewBitmap(
     resolvedComponents: List<ResolvedComponent>,
 ): Bitmap? = runCatching {
     // Step 1 – compose the PDF into a temp file.
-    val tempFile = File(context.cacheDir, "shaft_preview_tmp.pdf")
+    // Use createTempFile so concurrent preview renders don't collide on the same path.
+    val tempFile = File.createTempFile("shaft_preview_", ".pdf", context.cacheDir)
     val doc = PdfDocument()
     try {
         // US Letter landscape: 792 × 612 points (matches PdfExportRoute).
