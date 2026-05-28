@@ -105,8 +105,8 @@ If any part is violated → **blocking**.
 - diaMm may be 0 (degenerate visual case, but allowed)
 
 Non-blocking warning:
-- Zero-length body
-- Diameter discontinuity vs neighbors
+- Zero-length body *(implemented)*
+- Diameter discontinuity vs neighbors *(planned — not yet implemented)*
 
 ---
 
@@ -134,8 +134,8 @@ TODO: Body keyway validation not yet implemented.
 - Missing both SET and LET with no taperRate → **blocking**
 
 Non-blocking warnings:
-- Extremely steep tapers
-- Large mismatch with adjacent body diameter
+- Extremely steep tapers *(planned — not yet implemented)*
+- Large mismatch with adjacent body diameter *(planned — not yet implemented)*
 
 ---
 
@@ -167,8 +167,8 @@ Required:
 - endFromAftMm ≤ overallLengthMm (blocking)
 
 Non-blocking warnings:
-- odMm < underlying shaft diameter
-- Very thin liner vs body diameter
+- odMm < underlying shaft diameter *(planned — not yet implemented)*
+- Very thin liner vs body diameter *(planned — not yet implemented)*
 
 ---
 
@@ -185,11 +185,11 @@ Non-blocking warnings:
 - Unbounded thread or liner
 
 ### 4.3 Full-Spec Non-Blocking Warnings
-- Component overlaps (machinist may intend)
-- Rapid diameter changes
-- Tiny segments (e.g., < 1 mm)
-- Free-to-end space < 10 mm
-- Zero-body coverage (no explicit bodies in `ShaftSpec`; auto bodies are derived and do not satisfy this warning)
+- Component overlaps (machinist may intend) *(implemented)*
+- Rapid diameter changes *(planned — not yet implemented)*
+- Tiny segments (e.g., < 1 mm) *(planned — not yet implemented)*
+- Free-to-end space < 10 mm *(implemented)*
+- Zero-body coverage (no explicit bodies in `ShaftSpec`; auto bodies are derived and do not satisfy this warning) *(planned — not yet implemented)*
 
 ---
 

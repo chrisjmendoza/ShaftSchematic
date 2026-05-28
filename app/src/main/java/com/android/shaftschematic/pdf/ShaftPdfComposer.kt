@@ -295,7 +295,7 @@ fun composeShaftPdf(
 
     if (effectiveOptions.showFooter) {
         // footer
-        val showCompressionNote = !bodyOnly && hasCenterBreak(spec)
+        val showCompressionNote = !bodyOnly && spec.bodies.any { b -> b.lengthMm * ptPerMm >= COMPRESS_TRIGGER_PT }
 
         val footerTapers = selectFooterTapers(spec)
         val footerCfg = FooterConfig(
@@ -939,16 +939,6 @@ private fun ShaftSpec.maxOuterDiaMm(): Float {
     return maxDia
 }
 
-/** Returns true if any body was center-broken for readability. */
-private fun hasCenterBreak(spec: ShaftSpec): Boolean {
-    // Heuristic: mark true when any body length exceeds the visual compression threshold.
-    // Replace with your actual flag if drawBodiesCompressedCenterBreak exposes it.
-    val totalBodies = spec.bodies.size
-    if (totalBodies == 0) return false
-    // Simple conservative rule: if overall length >> drawing width, assume a break occurred.
-    return spec.overallLengthMm > 3_000f && totalBodies >= 2
-}
-
 /** Presence checks for end features. */
 private fun hasAftThread(spec: ShaftSpec): Boolean =
     spec.threads.any { it.startFromAftMm <= 0.5f }    // thread touches AFT end
@@ -958,6 +948,7 @@ private fun hasFwdThread(spec: ShaftSpec): Boolean {
     return spec.threads.any { (it.startFromAftMm + it.lengthMm) >= (oal - 0.5f) } // thread touches FWD end
 }
 
+// Must stay in sync with END_EPS_MM in OalComputations.kt (same value, Double there).
 private const val END_EPS_MM = 0.5f
 
 private fun hasAftTaper(spec: ShaftSpec): Boolean =
