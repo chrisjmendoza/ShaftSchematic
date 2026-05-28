@@ -1,5 +1,5 @@
 // File: app/src/main/java/com/android/shaftschematic/pdf/ShaftPdfComposer.kt
-@file:Suppress("MemberVisibilityCanBePrivate", "unused")
+@file:Suppress("MemberVisibilityCanBePrivate")
 
 package com.android.shaftschematic.pdf
 
@@ -339,13 +339,9 @@ private const val BAND_CLEAR_PT = 12f        // breathing room above shaft befor
 private const val BASE_DIM_OFFSET_PT = 24f   // distance from shaft top to first component dim
 private const val OVERALL_EXTRA_PT = 16f     // overall lane sits above components
 private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
-private const val ARROW_PT = 6f
-private const val LABEL_PAD_PT = 6f
 
 // Component title labels (PDF only)
 private const val COMPONENT_LABEL_OFFSET_PT = 32f
-private const val EXT_OFFSET_PT = 9f         // gap from shaft to start of extension line
-private const val EXT_OVERRUN_PT = 4f        // how much extension lines rise past dim line
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
 private const val FOOTER_BLOCK_PT = 96f
 
@@ -365,62 +361,66 @@ private fun drawComponentLabelsPdf(
     }
 
     val yBottomOfShaft = cy + halfHeightPx
-    val y = (yBottomOfShaft + COMPONENT_LABEL_OFFSET_PT).coerceAtMost(geomRect.bottom - 6f)
+    val baseY    = (yBottomOfShaft + COMPONENT_LABEL_OFFSET_PT).coerceAtMost(geomRect.bottom - 6f)
+    val rowStep  = labelPaint.textSize * 1.4f
+    val padX     = 3f  // minimum horizontal gap between adjacent labels on the same row
 
-    fun drawCentered(label: String, startMm: Float, endMm: Float) {
-        val trimmed = label.trim()
-        if (trimmed.isEmpty()) return
-        val x0 = xAt(startMm)
-        val x1 = xAt(endMm)
-        val cx = (x0 + x1) * 0.5f
-        val w = labelPaint.measureText(trimmed)
-        val xText = (cx - w * 0.5f).coerceIn(geomRect.left, geomRect.right - w)
-        canvas.drawText(trimmed, xText, y, labelPaint)
+    // Collect every label as a placed x-interval + text, then assign rows.
+    data class Entry(val xLeft: Float, val xRight: Float, val text: String)
+
+    fun entry(label: String, startMm: Float, endMm: Float): Entry? {
+        val trimmed = label.trim().ifEmpty { return null }
+        val cx = (xAt(startMm) + xAt(endMm)) * 0.5f
+        val w  = labelPaint.measureText(trimmed)
+        val xL = (cx - w * 0.5f).coerceIn(geomRect.left, geomRect.right - w)
+        return Entry(xL, xL + w, trimmed)
     }
 
-    val bodyTitleById = buildBodyTitleById(spec)
-    spec.bodies
-        .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-        .forEachIndexed { i, b ->
-            val label = bodyTitleById[b.id] ?: "Body #${i + 1}"
-            drawCentered(label, b.startFromAftMm, b.startFromAftMm + b.lengthMm)
-        }
+    val entries = buildList {
+        val bodyTitleById = buildBodyTitleById(spec)
+        spec.bodies.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+            .forEachIndexed { i, b -> entry(bodyTitleById[b.id] ?: "Body #${i+1}", b.startFromAftMm, b.startFromAftMm + b.lengthMm)?.let(::add) }
 
-    val taperTitleById = buildTaperTitleById(spec)
-    spec.tapers
-        .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-        .forEachIndexed { i, t ->
-            val label = taperTitleById[t.id] ?: "Taper #${i + 1}"
-            drawCentered(label, t.startFromAftMm, t.startFromAftMm + t.lengthMm)
-        }
+        val taperTitleById = buildTaperTitleById(spec)
+        spec.tapers.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+            .forEachIndexed { i, t -> entry(taperTitleById[t.id] ?: "Taper #${i+1}", t.startFromAftMm, t.startFromAftMm + t.lengthMm)?.let(::add) }
 
-    val threadTitleById = buildThreadTitleById(spec)
-    spec.threads
-        .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-        .forEachIndexed { i, th ->
-            val label = threadTitleById[th.id] ?: "Thread #${i + 1}"
-            drawCentered(label, th.startFromAftMm, th.startFromAftMm + th.lengthMm)
-        }
+        val threadTitleById = buildThreadTitleById(spec)
+        spec.threads.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+            .forEachIndexed { i, th -> entry(threadTitleById[th.id] ?: "Thread #${i+1}", th.startFromAftMm, th.startFromAftMm + th.lengthMm)?.let(::add) }
 
-    val linerTitleById = buildLinerTitleById(spec)
-    spec.liners
-        .sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-        .forEachIndexed { i, ln ->
-            val custom = ln.label?.trim()?.takeIf { it.isNotEmpty() }
-            val computed = linerTitleById[ln.id]
-            val label = custom ?: computed ?: "Liner ${i + 1}"
-            drawCentered(label, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm)
+        val linerTitleById = buildLinerTitleById(spec)
+        spec.liners.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+            .forEachIndexed { i, ln ->
+                val label = ln.label?.trim()?.ifEmpty { null } ?: linerTitleById[ln.id] ?: "Liner ${i+1}"
+                entry(label, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm)?.let(::add)
+            }
+    }.sortedBy { it.xLeft }
+
+    // Greedy row assignment: place each label on the first row where it doesn't overlap.
+    val rowOccupied = mutableListOf<MutableList<Pair<Float, Float>>>()
+
+    for (e in entries) {
+        var row = 0
+        while (true) {
+            if (row >= rowOccupied.size) rowOccupied.add(mutableListOf())
+            val free = rowOccupied[row].none { (oL, oR) -> e.xLeft < oR + padX && e.xRight + padX > oL }
+            if (free) {
+                rowOccupied[row].add(e.xLeft to e.xRight)
+                val rowY = (baseY + row * rowStep).coerceAtMost(geomRect.bottom - 4f)
+                canvas.drawText(e.text, e.xLeft, rowY, labelPaint)
+                break
+            }
+            row++
         }
+    }
 }
 
 // Compression (paper-space heuristic; bodies only)
 private const val COMPRESS_TRIGGER_PT = 220f // if body length on paper ≥ this, show center-break
 private const val ZIGZAG_GAP_MAX_PT = 20f    // max central gap width
-private const val ZIGZAG_TEETH = 3           // 2–3 looks best; using 3 by default
 
 // Label collision avoidance
-private const val LABEL_STACK_STEP_PT = 10f  // vertical nudge per collision
-private const val LABEL_LEADER_PT = 8f       // short leader when label is nudged
 
 private fun isBodyOnlyShaft(spec: ShaftSpec): Boolean {
     if (
@@ -590,55 +590,6 @@ private fun drawBodiesCompressedCenterBreak(
 }
 
 /**
- * Draws liner-only dimensions using the current renderer contract.
- * OAL is on the top rail. Spans align with geometry via the provided pageX mapper.
- */
-private fun drawLinerDimensionsPdf(
-    canvas: Canvas,
-    spec: ShaftSpec,
-    liners: List<LinerDim>,
-    unit: UnitSystem,
-    tieringMode: PdfTieringMode,
-    pageX: (Double) -> Float,
-    topY: Float,
-    baseY: Float,
-    railDy: Float,
-    linePaint: Paint,
-    textPaint: Paint,
-    objectTopY: Float
-) {
-    val win = computeOalWindow(spec)
-    val sets = computeSetPositionsInMeasureSpace(win, spec)
-
-    // Spans are in measurement space (rebased so AFT SET = 0). Convert to physical axis for rendering.
-    val pageXMeasure: (Double) -> Float = { dimMm -> pageX(dimMm + win.measureStartMm) }
-
-    val spans = buildLinerSpans(
-        liners = liners,
-        sets = sets,
-        unit = unit,
-        measureFrom = tieringMode
-    ) + buildTaperLengthSpans(spec, win, unit)
-    val planner = RailPlanner()
-    val tierOriginMm = tierOriginMmFor(tieringMode, win.oalMm)
-    val assignments = planner.assignAll(spans, tierOriginMm)
-
-    val renderer = PdfDimensionRenderer(
-        pageX = pageXMeasure,
-        baseY = baseY,
-        railDy = railDy,
-        topRailY = topY,
-        linePaint = linePaint,
-        textPaint = textPaint,
-        objectTopY = objectTopY,
-        objectClearance = 6f
-    )
-
-    assignments.forEach { rs -> renderer.drawOnRail(canvas, rs.rail, rs.span, true) }
-    renderer.drawTop(canvas, oalSpan(sets.aftSETxMm, sets.fwdSETxMm, unit), true)
-}
-
-/**
  * Adds one LOCAL span per end-taper so taper lengths are shown on the diagram.
  *
  * Span endpoints are expressed in measurement-space (rebased by [win.measureStartMm]).
@@ -678,7 +629,7 @@ internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschema
  * Anchor is inferred by proximity to SETs; swap to explicit anchors if your model stores them.
  */
 
-private fun mapToLinerDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode): List<LinerDim> {
+internal fun mapToLinerDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode): List<LinerDim> {
     val win  = computeOalWindow(spec)
     val sets = computeSetPositionsInMeasureSpace(win, spec)
 
@@ -722,29 +673,6 @@ private fun tierOriginMmFor(mode: PdfTieringMode, oalMm: Double): Double? = when
     PdfTieringMode.AFT -> 0.0
     PdfTieringMode.FWD -> oalMm
     PdfTieringMode.AUTO -> null
-}
-
-private fun drawZigZagBreak(
-    c: Canvas,
-    yTop: Float,
-    yBot: Float,
-    xMid: Float,
-    gap: Float,
-    p: Paint,
-    teeth: Int = ZIGZAG_TEETH
-) {
-    val height = yBot - yTop
-    val zTop = yTop + 0.25f * height
-    val zBot = yBot - 0.25f * height
-    val toothW = gap / max(1, teeth)
-    var xL = xMid - 0.5f * gap
-    repeat(teeth) {
-        val xR = xL + toothW
-        // “/” then “\”
-        c.drawLine(xL, zBot, (xL + xR) * 0.5f, zTop, p)
-        c.drawLine((xL + xR) * 0.5f, zTop, xR, zBot, p)
-        xL = xR
-    }
 }
 
 /** S-curve from (x, yTop) to (x, yBot). Positive [amplitude] bulges right then left; negative mirrors. */
@@ -836,141 +764,6 @@ private fun drawLiners(
         c.drawLine(x0, top, x0, bot, dim) // thin end ticks
         c.drawLine(x1, top, x1, bot, dim)
     }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Dimensions (Preview-style; avoid label collisions per lane)
-// ──────────────────────────────────────────────────────────────────────────────
-
-private data class Interval(val startMm: Float, val endMm: Float)
-
-private fun drawDimensionsLikePreview(
-    c: Canvas,
-    spec: ShaftSpec,
-    unit: UnitSystem,
-    xAt: (Float) -> Float,
-    yTopOfShaft: Float,
-    text: Paint,
-    dim: Paint,
-) {
-    val win = computeOalWindow(spec)
-    val firstLaneY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
-
-    // Gather component intervals
-    val ivs = ArrayList<Interval>()
-    spec.bodies.forEach  { if (it.lengthMm > 0f && it.diaMm       > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
-    spec.tapers.forEach  { if (it.lengthMm > 0f && (it.startDiaMm > 0f || it.endDiaMm > 0f)) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
-    spec.threads.forEach { th ->
-        // Excluded threads still render, but their length is intentionally not
-        // part of the SET-to-SET dimensioning.
-        if (!th.excludeFromOAL && th.lengthMm > 0f && th.majorDiaMm > 0f) {
-            ivs += Interval(th.startFromAftMm, th.startFromAftMm + th.lengthMm)
-        }
-    }
-    spec.liners.forEach  { if (it.lengthMm > 0f && it.odMm        > 0f) ivs += Interval(it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
-
-    // Greedy lane packing; track smallest Y (topmost)
-    data class Lane(var endX: Float, val y: Float, val labels: MutableList<RectF> = mutableListOf())
-    val lanes = mutableListOf<Lane>()
-    val sorted = ivs.sortedWith(compareBy({ it.startMm }, { it.endMm }))
-    var topmostLaneY = firstLaneY
-
-    sorted.forEach { iv ->
-        val x0 = xAt(iv.startMm); val x1 = xAt(iv.endMm)
-        var idx = -1
-        for (i in lanes.indices) if (x0 >= lanes[i].endX) { idx = i; break }
-        if (idx == -1) {
-            lanes += Lane(x1, firstLaneY - lanes.size * (TEXT_PT + LANE_GAP_PT))
-            idx = lanes.lastIndex
-        } else {
-            lanes[idx].endX = x1
-        }
-        val lane = lanes[idx]
-        if (lane.y < topmostLaneY) topmostLaneY = lane.y
-
-        drawDimWithExtensionsAvoidingOverlap(
-            c, x0, x1, lane.y, yTopOfShaft,
-            fmtLen(unit, iv.endMm - iv.startMm),
-            text, dim, lane.labels
-        )
-    }
-
-    // Overall one lane above the topmost component lane
-    val gap = TEXT_PT + LANE_GAP_PT
-    val overallY = if (lanes.isEmpty()) firstLaneY - OVERALL_EXTRA_PT else topmostLaneY - gap
-    val xa = xAt(win.measureStartMm.toFloat()); val xf = xAt(win.measureEndMm.toFloat())
-
-    drawDimWithExtensionsAvoidingOverlap(
-        c, xa, xf, overallY, yTopOfShaft,
-        fmtLen(unit, win.oalMm.toFloat()),
-        text, dim, mutableListOf()
-    )
-}
-
-private fun drawDimWithExtensionsAvoidingOverlap(
-    c: Canvas,
-    x0: Float,
-    x1: Float,
-    yDim: Float,
-    yTopOfShaft: Float,
-    label: String,
-    text: Paint,
-    dim: Paint,
-    occupiedLabels: MutableList<RectF>
-) {
-    val extStartY = yTopOfShaft - EXT_OFFSET_PT
-    val extEndY = yDim + EXT_OVERRUN_PT
-    c.drawLine(x0, extStartY, x0, extEndY, dim)
-    c.drawLine(x1, extStartY, x1, extEndY, dim)
-
-    val mid = (x0 + x1) * 0.5f
-    val w = text.measureText(label)
-    val gap = w + LABEL_PAD_PT * 2
-    val leftEnd = mid - gap / 2f
-    val rightStart = mid + gap / 2f
-
-    // Leave a window for the label
-    c.drawLine(x0, yDim, leftEnd, yDim, dim)
-    c.drawLine(rightStart, yDim, x1, yDim, dim)
-
-    drawArrowInward(c, x0, yDim, dim)
-    drawArrowInward(c, x1, yDim, dim, left = false)
-
-    // Ideal label rect centered on the line
-    val textYCenter = yDim - (text.descent() + text.ascent()) / 2f
-    val baseRect = RectF(mid - w / 2f, textYCenter + text.ascent(), mid + w / 2f, textYCenter + text.descent())
-
-    // Stack upward until no collision with previous labels on this lane
-    var bumpedRect = RectF(baseRect)
-    var bumps = 0
-    while (occupiedLabels.any { it.intersects(bumpedRect.left, bumpedRect.top, bumpedRect.right, bumpedRect.bottom) }) {
-        bumps++
-        val dy = LABEL_STACK_STEP_PT * bumps
-        bumpedRect.set(baseRect.left, baseRect.top - dy, baseRect.right, baseRect.bottom - dy)
-    }
-
-    // If bumped, draw a tiny leader from gap center to the raised label
-    val labelCx = bumpedRect.left
-    val labelCy = (bumpedRect.top - text.ascent()) // rect→baseline
-    if (bumps > 0) {
-        val leaderY = bumpedRect.top - 2f
-        c.drawLine(mid, yDim - 2f, mid, leaderY, dim)
-        c.drawLine(mid - LABEL_LEADER_PT / 2f, leaderY, mid + LABEL_LEADER_PT / 2f, leaderY, dim)
-    }
-
-    c.drawText(label, labelCx, labelCy, text)
-    occupiedLabels += RectF(
-        labelCx,
-        labelCy + text.ascent(),
-        labelCx + w,
-        labelCy + text.descent()
-    )
-}
-
-private fun drawArrowInward(c: Canvas, x: Float, y: Float, p: Paint, left: Boolean = true) {
-    val s = if (left) 1f else -1f
-    c.drawLine(x, y, x + s * ARROW_PT, y - ARROW_PT, p)
-    c.drawLine(x, y, x + s * ARROW_PT, y + ARROW_PT, p)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1112,22 +905,6 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
 
-private fun pickAftFwdTapers(spec: ShaftSpec): Pair<Taper?, Taper?> {
-    if (spec.tapers.isEmpty()) return null to null
-    var aft: Taper? = spec.tapers.minByOrNull { it.startFromAftMm }
-    var fwd: Taper? = spec.tapers.maxByOrNull { it.startFromAftMm + it.lengthMm }
-    if (aft == fwd) {
-        val t = aft!!
-        val distAft = t.startFromAftMm
-        val distFwd = spec.overallLengthMm - (t.startFromAftMm + t.lengthMm)
-        if (distAft <= distFwd) { fwd = null } else { aft = null }
-    }
-    return aft to fwd
-}
-
-private fun findAftThread(spec: ShaftSpec): Threads? = spec.threads.minByOrNull { it.startFromAftMm }
-private fun findFwdThread(spec: ShaftSpec): Threads? = spec.threads.maxByOrNull { it.startFromAftMm + it.lengthMm }
-
 private fun letSet(t: Taper): Pair<Float, Float> {
     val let = max(t.startDiaMm, t.endDiaMm)
     val set = min(t.startDiaMm, t.endDiaMm)
@@ -1145,32 +922,6 @@ private fun fmtLen(unit: UnitSystem, mm: Float): String = when (unit.name.upperc
     "MILLIMETERS", "MM" -> String.format(Locale.US, "%.1f mm", mm)
     "INCHES", "IN" -> String.format(Locale.US, "%.3f", mm / MM_PER_IN).trimEnd('0').trimEnd('.') + " in."
     else -> String.format(Locale.US, "%.1f mm", mm)
-}
-
-private fun fmtDia(unit: UnitSystem, mm: Float): String = when (unit.name.uppercase(Locale.US)) {
-    "MILLIMETERS", "MM" -> String.format(Locale.US, "%.1f", mm)
-    "INCHES", "IN" -> String.format(Locale.US, "%.3f", mm / MM_PER_IN).trimEnd('0').trimEnd('.')
-    else -> String.format(Locale.US, "%.1f", mm)
-}
-
-private fun fmtDiaWithUnit(unit: UnitSystem, mm: Float): String = when (unit.name.uppercase(Locale.US)) {
-    "MILLIMETERS", "MM" -> String.format(Locale.US, "%.1f mm", mm)
-    "INCHES", "IN" -> String.format(Locale.US, "%.3f", mm / MM_PER_IN).trimEnd('0').trimEnd('.') + " in."
-    else -> String.format(Locale.US, "%.1f mm", mm)
-}
-
-// Threads helper – keep your house style: DIA × TPI × LEN
-private fun fmtThread(th: Threads, unit: UnitSystem): String {
-    val dia = fmtDiaWithUnit(unit, th.majorDiaMm)
-    val tpi = fmtTpi(tpiFromPitch(th.pitchMm))
-    val len = fmtLen(unit, th.lengthMm)
-    return "$dia × $tpi × $len"
-}
-
-// Taper helper – compute 1:N from (length / Δdia), then show "1:N over LEN"
-private fun fmtTaper(tp: Taper, unit: UnitSystem): String {
-    val rate = rate1toN(tp)
-    return "$rate over ${fmtLen(unit, tp.lengthMm)}"
 }
 
 private fun tpiFromPitch(pitchMm: Float): Float = if (pitchMm > 0f) MM_PER_IN / pitchMm else 0f
