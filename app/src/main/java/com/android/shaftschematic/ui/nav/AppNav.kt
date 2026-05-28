@@ -21,6 +21,7 @@ import androidx.navigation.compose.rememberNavController
 import com.android.shaftschematic.ui.screen.AchievementsRoute
 import com.android.shaftschematic.ui.screen.AboutRoute
 import com.android.shaftschematic.ui.screen.DeveloperOptionsRoute
+import com.android.shaftschematic.ui.screen.PdfPreviewScreen
 import com.android.shaftschematic.ui.screen.SettingsRoute
 import com.android.shaftschematic.ui.screen.ShaftEditorRoute
 import com.android.shaftschematic.ui.screen.StartScreen
@@ -109,8 +110,8 @@ fun AppNav(vm: ShaftViewModel) {
                 onSave = { nav.navigate("saveLocal") },
                 onOpenSettings = { nav.navigate("settings") },
                 onOpenDeveloperOptions = { nav.navigate("developerOptions") },
-                // PDF EXPORT = external SAF
-                onExportPdf = { nav.navigate("exportPdf") }
+                // PDF EXPORT = show preview first, then SAF
+                onExportPdf = { nav.navigate("pdfPreview") }
             )
         }
 
@@ -152,6 +153,18 @@ fun AppNav(vm: ShaftViewModel) {
         }
         composable("saveLocal") {
             SaveLocalDocumentRoute(nav = nav, vm = vm) { nav.popBackStack() }
+        }
+
+        /* ───────── PDF Preview ─────────
+           Shows a full-resolution raster preview of the PDF page with pinch-to-zoom.
+           The "Export PDF" action in the top bar navigates onward to the SAF route.
+        */
+        composable("pdfPreview") {
+            PdfPreviewScreen(
+                vm = vm,
+                onBack = { nav.popBackStack() },
+                onExport = { nav.navigate("exportPdf") }
+            )
         }
 
         /* ───────── External PDF export (SAF) ─────────
