@@ -8,7 +8,7 @@ import kotlin.math.max
 private const val EPS_MM = 1e-3
 
 // Tolerance for matching taper endpoints to shaft ends / thread shoulders.
-// Matches END_EPS_MM used in ShaftPdfComposer so taper detection is consistent.
+// Must stay in sync with END_EPS_MM in ShaftPdfComposer.kt (same value, Float there).
 private const val END_EPS_MM = 0.5
 
 data class ExcludedThreadLengths(

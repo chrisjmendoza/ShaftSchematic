@@ -163,9 +163,9 @@ Instrumented tests in `app/src/androidTest/` include a `ClearDataStoreRule` to i
 ### In Progress / Next Up
 
 **1.1 ✅ Snap Engine** — done  
-**1.2 Preview Tap → mm (not started)** — add `onTapAtMm` lambda to `ShaftDrawing`; convert `Offset → mm`; route through `SnapEngine`; store `pendingAddPositionMm` in ViewModel.  
+**1.2 ✅ Preview Tap → mm** — `onTapAtMm` wired through `ShaftDrawing`; tap-to-select routes through `SnapEngine`.  
 **1.3 Add-At-Position Flow (not started)** — `startAddAtPosition(positionMm)` VM intent; chooser dialog; prefilled defaults from axial gap.  
-**1.4 Resolved Component Pipeline (not started)** — auto body seeding from OAL; AFT/FWD authored reference toggle in liner card; unified Add Component entry point.  
+**1.4 Resolved Component Pipeline (partial)** — auto body seeding implemented in `ResolvedComponent.kt`; not yet fully wired into the rendering path (ShaftRenderer falls back to `spec.bodies` when `components == null`).  
 **1.5 Keyway support on Body (not started)** — data model field + editor UI (hosted feature, not standalone component).
 
 ### Roadmap Horizon
