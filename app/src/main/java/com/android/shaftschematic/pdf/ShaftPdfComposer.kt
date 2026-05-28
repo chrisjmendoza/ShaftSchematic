@@ -225,7 +225,7 @@ fun composeShaftPdf(
         val pageX: (Double) -> Float = { dimMm ->
             (geomRect.left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
         }
-        val sets = computeSetPositionsInMeasureSpace(win)
+        val sets = computeSetPositionsInMeasureSpace(win, spec)
         val spans = buildLinerSpans(
             liners = linerDims,
             sets = sets,
@@ -270,7 +270,7 @@ fun composeShaftPdf(
         assignments.forEach { rs ->
             renderer.drawOnRail(c, rs.rail, rs.span, true)
         }
-        renderer.drawTop(c, oalSpan(win.oalMm, unit), true)
+        renderer.drawTop(c, oalSpan(sets.aftSETxMm, sets.fwdSETxMm, unit), true)
     }
 
     // --- diameter callouts (optional; leave empty until you have stations) ---
@@ -415,7 +415,7 @@ private fun drawComponentLabelsPdf(
 
 // Compression (paper-space heuristic; bodies only)
 private const val COMPRESS_TRIGGER_PT = 220f // if body length on paper ≥ this, show center-break
-private const val ZIGZAG_GAP_MAX_PT = 40f    // max central gap width
+private const val ZIGZAG_GAP_MAX_PT = 20f    // max central gap width
 private const val ZIGZAG_TEETH = 3           // 2–3 looks best; using 3 by default
 
 // Label collision avoidance
@@ -566,27 +566,25 @@ private fun drawBodiesCompressedCenterBreak(
             c.drawLine(x0, top, x0, bot, outline)
             c.drawLine(x1, top, x1, bot, outline)
         } else {
-            // centered break: two stubs + zig-zag gap
+            // centered break: two stubs, each with an S-curve end instead of a straight cap
             val mid = (x0 + x1) * 0.5f
             val gap = min(ZIGZAG_GAP_MAX_PT, 0.25f * bodyLenPt)
             val half = 0.5f * gap
-            val leftEnd = (mid - half).coerceIn(geomRect.left, geomRect.right)
+            val leftEnd  = (mid - half).coerceIn(geomRect.left, geomRect.right)
             val rightBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
+            val amp = r * 0.6f
 
-            // Left stub
+            // Left stub — S-curve on right end
             c.drawLine(x0, top, leftEnd, top, outline)
             c.drawLine(x0, bot, leftEnd, bot, outline)
             c.drawLine(x0, top, x0, bot, outline)
-            c.drawLine(leftEnd, top, leftEnd, bot, capPaint)
+            drawBreakEdge(c, leftEnd, top, bot, amp, capPaint)
 
-            // Right stub
+            // Right stub — same-direction S-curve on left end (curves match so edges appear to merge)
+            drawBreakEdge(c, rightBeg, top, bot, amp, capPaint)
             c.drawLine(rightBeg, top, x1, top, outline)
             c.drawLine(rightBeg, bot, x1, bot, outline)
-            c.drawLine(rightBeg, top, rightBeg, bot, capPaint)
             c.drawLine(x1, top, x1, bot, outline)
-
-            // Zig-zag break, centered at mid within the gap
-            drawSCurveBreak(c, top, bot, mid, gap, capPaint)
         }
     }
 }
@@ -610,7 +608,7 @@ private fun drawLinerDimensionsPdf(
     objectTopY: Float
 ) {
     val win = computeOalWindow(spec)
-    val sets = computeSetPositionsInMeasureSpace(win)
+    val sets = computeSetPositionsInMeasureSpace(win, spec)
 
     // Spans are in measurement space (rebased so AFT SET = 0). Convert to physical axis for rendering.
     val pageXMeasure: (Double) -> Float = { dimMm -> pageX(dimMm + win.measureStartMm) }
@@ -637,7 +635,7 @@ private fun drawLinerDimensionsPdf(
     )
 
     assignments.forEach { rs -> renderer.drawOnRail(canvas, rs.rail, rs.span, true) }
-    renderer.drawTop(canvas, oalSpan(win.oalMm, unit), true)
+    renderer.drawTop(canvas, oalSpan(sets.aftSETxMm, sets.fwdSETxMm, unit), true)
 }
 
 /**
@@ -682,7 +680,7 @@ internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschema
 
 private fun mapToLinerDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode): List<LinerDim> {
     val win  = computeOalWindow(spec)
-    val sets = computeSetPositionsInMeasureSpace(win)
+    val sets = computeSetPositionsInMeasureSpace(win, spec)
 
     return spec.liners.map { ln ->
         // Edges in measurement space (AFT→FWD)
@@ -749,37 +747,12 @@ private fun drawZigZagBreak(
     }
 }
 
-/** Draws a smooth long-break glyph (alternative to the zig-zag break). */
-private fun drawSCurveBreak(
-    c: Canvas,
-    yTop: Float,
-    yBot: Float,
-    xMid: Float,
-    gap: Float,
-    p: Paint
-) {
-    // Two mirrored cubic Béziers to suggest a long-break.
-    val half = gap * 0.5f
-    val xL = xMid - half
-    val xR = xMid + half
-    val yC = (yTop + yBot) * 0.5f
-    val amp = (yBot - yTop) * 0.22f  // curvature amplitude
-
+/** S-curve from (x, yTop) to (x, yBot). Positive [amplitude] bulges right then left; negative mirrors. */
+private fun drawBreakEdge(c: Canvas, x: Float, yTop: Float, yBot: Float, amplitude: Float, p: Paint) {
+    val h = yBot - yTop
     val path = Path().apply {
-        // upper S
-        moveTo(xL, yC - amp)
-        cubicTo(
-            xL + half * 0.35f, yC - amp * 1.35f,
-            xR - half * 0.35f, yC + amp * 1.35f,
-            xR, yC + amp
-        )
-        // lower S (mirror back for visual weight)
-        moveTo(xL, yC + amp)
-        cubicTo(
-            xL + half * 0.35f, yC + amp * 1.35f,
-            xR - half * 0.35f, yC - amp * 1.35f,
-            xR, yC - amp
-        )
+        moveTo(x, yTop)
+        cubicTo(x + amplitude, yTop + h / 3f, x - amplitude, yBot - h / 3f, x, yBot)
     }
     c.drawPath(path, p)
 }
