@@ -367,4 +367,71 @@ class OalComputationsTest {
         val exBeyond = computeExcludedThreadLengths(ShaftSpec(overallLengthMm = overall, threads = listOf(beyondEps)))
         assertEquals(0.0, exBeyond.fwdExcludedMm, EPS_EXACT)
     }
+
+    // ─── computeSetPositionsInMeasureSpace ────────────────────────────────────
+
+    @Test
+    fun `SET positions match taper geometry when thread excluded`() {
+        // Standard marine shaft: excluded AFT thread then taper
+        val aftThreadLen = inToMm(5.0).toFloat()
+        val taperLen = inToMm(16.0).toFloat()
+        val th = Threads(startFromAftMm = 0f, lengthMm = aftThreadLen, majorDiaMm = 50f, pitchMm = 2f, excludeFromOAL = true)
+        val tp = Taper(startFromAftMm = aftThreadLen, lengthMm = taperLen, startDiaMm = 60f, endDiaMm = 100f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th), tapers = listOf(tp))
+
+        val win = computeOalWindow(spec)
+        val sets = computeSetPositionsInMeasureSpace(win, spec)
+
+        // Excluded thread shifts window so AFT SET is at measurement x=0
+        assertEquals(0.0, sets.aftSETxMm, EPS_EXACT)
+        // FWD SET defaults to window end (no FWD taper)
+        assertEquals(win.oalMm, sets.fwdSETxMm, EPS_EXACT)
+    }
+
+    @Test
+    fun `SET positions use taper start when thread is included in OAL`() {
+        // Thread included (not excluded) — SET must still be at taper start, not thread tip
+        val aftThreadLen = inToMm(5.0).toFloat()
+        val taperLen = inToMm(16.0).toFloat()
+        val th = Threads(startFromAftMm = 0f, lengthMm = aftThreadLen, majorDiaMm = 50f, pitchMm = 2f, excludeFromOAL = false)
+        val tp = Taper(startFromAftMm = aftThreadLen, lengthMm = taperLen, startDiaMm = 60f, endDiaMm = 100f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th), tapers = listOf(tp))
+
+        val win = computeOalWindow(spec)
+        // measureStartMm = 0 (thread included); measurement space == physical space
+        assertEquals(0.0, win.measureStartMm, EPS_EXACT)
+
+        val sets = computeSetPositionsInMeasureSpace(win, spec)
+
+        // AFT SET must be at taper start (= aftThreadLen in measurement space, since measureStartMm=0)
+        assertEquals(aftThreadLen.toDouble(), sets.aftSETxMm, EPS_LOOSE)
+        // FWD SET defaults to window end (no FWD taper)
+        assertEquals(win.oalMm, sets.fwdSETxMm, EPS_EXACT)
+    }
+
+    @Test
+    fun `SET positions default to window bounds when no tapers present`() {
+        val spec = ShaftSpec(overallLengthMm = 500f)
+        val win = computeOalWindow(spec)
+        val sets = computeSetPositionsInMeasureSpace(win, spec)
+
+        assertEquals(0.0, sets.aftSETxMm, EPS_EXACT)
+        assertEquals(win.oalMm, sets.fwdSETxMm, EPS_EXACT)
+    }
+
+    @Test
+    fun `SET positions negative when taper starts at same x as excluded thread`() {
+        // Overlapping case: taper at x=0, excluded thread also at x=0 (thread on taper surface)
+        val excludedThread = Threads(startFromAftMm = 0f, lengthMm = 100f, majorDiaMm = 50f, pitchMm = 2f, excludeFromOAL = true)
+        val taper = Taper(startFromAftMm = 0f, lengthMm = 200f, startDiaMm = 60f, endDiaMm = 100f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(excludedThread), tapers = listOf(taper))
+
+        val win = computeOalWindow(spec)
+        assertEquals(100.0, win.measureStartMm, EPS_EXACT)
+
+        val sets = computeSetPositionsInMeasureSpace(win, spec)
+
+        // Taper SET at physical x=0, measurement x = 0 - 100 = -100
+        assertEquals(-100.0, sets.aftSETxMm, EPS_EXACT)
+    }
 }

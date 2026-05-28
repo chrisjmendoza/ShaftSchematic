@@ -12,6 +12,24 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 - Starting with `1.1.1`, the changelog and the app `versionName` are kept in sync; future releases follow this convention.
 - Note: `v0.2.0` and `v0.3.0` point to the same commit (`d1a4da5`).
 
+## [Unreleased]
+
+### Fixed
+- **PDF OAL dimension lines now land on the actual SET (small end of taper)** instead of the thread tip when end threads are included in OAL (`excludeFromOAL = false`). `computeSetPositionsInMeasureSpace` previously hardcoded `aftSETxMm = 0.0`, which only held when threads were excluded. SET positions are now derived from actual taper geometry via `findAftEndTaperForSET` / `findFwdEndTaperForSET`. The OAL span label reflects the true SET-to-SET distance in all configurations.
+
+### Changed
+- `oalSpan(oalMm, unit)` → `oalSpan(x1Mm, x2Mm, unit)`: the OAL top-rail span now takes explicit SET endpoints rather than assuming the span starts at measurement origin.
+- `computeSetPositionsInMeasureSpace` now requires a `ShaftSpec` argument to resolve actual taper positions.
+
+### Internal
+- Added `findAftEndTaperForSET` and `findFwdEndTaperForSET` helpers in `OalComputations.kt`.
+- Added 4 unit tests in `OalComputationsTest` covering excluded/included/no-taper/overlapping SET cases.
+- Updated `OalSpanLabelTest` to the new `oalSpan` signature.
+- Added `AUDIT.md` — external consultant-style codebase review covering architecture, documentation accuracy, test gaps, and dead code.
+- Corrected `BRIEFING.md`: field names `startDiaMm`/`endDiaMm` (was `aftDiaMm`/`fwdDiaMm`), `odMm` (was `outerDiaMm`), `excludeFromOAL` (was `includeInOal`); updated OAL Window section to match.
+
+---
+
 ## [1.1.1] - 2026-01-08
 
 ### Added

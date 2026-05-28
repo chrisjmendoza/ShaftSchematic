@@ -54,6 +54,12 @@ fun buildLinerSpans(
     }
 }
 
-/** OAL span for the top rail. */
-fun oalSpan(oalMm: Double, unit: UnitSystem): DimSpan =
-    DimSpan(0.0, oalMm, labelTop = "OAL ${formatLenDim(oalMm, unit)}", kind = SpanKind.OAL)
+/**
+ * OAL span for the top rail.
+ * Spans from [x1Mm] (AFT SET) to [x2Mm] (FWD SET) in measurement space.
+ * Label shows the SET-to-SET distance so the number always matches the arrow endpoints.
+ */
+fun oalSpan(x1Mm: Double, x2Mm: Double, unit: UnitSystem): DimSpan {
+    val dist = x2Mm - x1Mm
+    return DimSpan(x1Mm, x2Mm, labelTop = "OAL ${formatLenDim(dist, unit)}", kind = SpanKind.OAL)
+}

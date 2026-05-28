@@ -225,7 +225,7 @@ fun composeShaftPdf(
         val pageX: (Double) -> Float = { dimMm ->
             (geomRect.left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
         }
-        val sets = computeSetPositionsInMeasureSpace(win)
+        val sets = computeSetPositionsInMeasureSpace(win, spec)
         val spans = buildLinerSpans(
             liners = linerDims,
             sets = sets,
@@ -270,7 +270,7 @@ fun composeShaftPdf(
         assignments.forEach { rs ->
             renderer.drawOnRail(c, rs.rail, rs.span, true)
         }
-        renderer.drawTop(c, oalSpan(win.oalMm, unit), true)
+        renderer.drawTop(c, oalSpan(sets.aftSETxMm, sets.fwdSETxMm, unit), true)
     }
 
     // --- diameter callouts (optional; leave empty until you have stations) ---
@@ -610,7 +610,7 @@ private fun drawLinerDimensionsPdf(
     objectTopY: Float
 ) {
     val win = computeOalWindow(spec)
-    val sets = computeSetPositionsInMeasureSpace(win)
+    val sets = computeSetPositionsInMeasureSpace(win, spec)
 
     // Spans are in measurement space (rebased so AFT SET = 0). Convert to physical axis for rendering.
     val pageXMeasure: (Double) -> Float = { dimMm -> pageX(dimMm + win.measureStartMm) }
@@ -637,7 +637,7 @@ private fun drawLinerDimensionsPdf(
     )
 
     assignments.forEach { rs -> renderer.drawOnRail(canvas, rs.rail, rs.span, true) }
-    renderer.drawTop(canvas, oalSpan(win.oalMm, unit), true)
+    renderer.drawTop(canvas, oalSpan(sets.aftSETxMm, sets.fwdSETxMm, unit), true)
 }
 
 /**
@@ -682,7 +682,7 @@ internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschema
 
 private fun mapToLinerDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode): List<LinerDim> {
     val win  = computeOalWindow(spec)
-    val sets = computeSetPositionsInMeasureSpace(win)
+    val sets = computeSetPositionsInMeasureSpace(win, spec)
 
     return spec.liners.map { ln ->
         // Edges in measurement space (AFT→FWD)

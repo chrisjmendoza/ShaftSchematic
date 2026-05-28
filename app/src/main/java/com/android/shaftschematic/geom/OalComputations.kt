@@ -1,10 +1,15 @@
 package com.android.shaftschematic.geom
 
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Taper
 import kotlin.math.abs
 import kotlin.math.max
 
 private const val EPS_MM = 1e-3
+
+// Tolerance for matching taper endpoints to shaft ends / thread shoulders.
+// Matches END_EPS_MM used in ShaftPdfComposer so taper detection is consistent.
+private const val END_EPS_MM = 0.5
 
 data class ExcludedThreadLengths(
     val aftExcludedMm: Double,
@@ -79,8 +84,66 @@ fun computeOalWindow(spec: ShaftSpec): OalWindow {
 }
 
 /**
- * Defaults: AFT SET = 0, FWD SET = OAL (in measurement space).
- * When explicit SET positions exist, remap here only.
+ * Returns the AFT-end taper: a taper whose AFT face is anchored to x=0 or to the
+ * shoulder of the AFT end thread (whichever applies).
  */
-fun computeSetPositionsInMeasureSpace(win: OalWindow): SetPositions =
-    SetPositions(aftSETxMm = 0.0, fwdSETxMm = win.oalMm)
+private fun findAftEndTaperForSET(spec: ShaftSpec): Taper? {
+    val aftThread = findAftEndThread(spec)
+    val anchors = buildList {
+        add(0.0)
+        if (aftThread != null) add((aftThread.startFromAftMm + aftThread.lengthMm).toDouble())
+    }
+    return spec.tapers
+        .asSequence()
+        .filter { tp -> tp.lengthMm > EPS_MM && anchors.any { a -> abs(tp.startFromAftMm.toDouble() - a) <= END_EPS_MM } }
+        .minByOrNull { it.startFromAftMm }
+}
+
+/**
+ * Returns the FWD-end taper: a taper whose FWD face is anchored to x=OAL or to the
+ * shoulder of the FWD end thread (whichever applies).
+ */
+private fun findFwdEndTaperForSET(spec: ShaftSpec): Taper? {
+    val fwdX = spec.overallLengthMm.toDouble()
+    val fwdThread = findFwdEndThread(spec, overallLengthMm = fwdX)
+    val anchors = buildList {
+        add(fwdX)
+        if (fwdThread != null) add(fwdThread.startFromAftMm.toDouble())
+    }
+    return spec.tapers
+        .asSequence()
+        .filter { tp ->
+            val endX = (tp.startFromAftMm + tp.lengthMm).toDouble()
+            tp.lengthMm > EPS_MM && anchors.any { a -> abs(endX - a) <= END_EPS_MM }
+        }
+        .maxByOrNull { it.startFromAftMm + it.lengthMm }
+}
+
+/**
+ * Computes AFT/FWD SET positions in measurement space from actual taper geometry.
+ *
+ * Measurements on the PDF drawing always originate from the SET (small end of taper),
+ * regardless of whether end threads are included or excluded from OAL. If no taper
+ * exists at a given end, the measurement boundary defaults to the window edge (0 or oalMm).
+ *
+ * The returned positions may be negative or exceed [OalWindow.oalMm] when an excluded
+ * thread shares the same physical origin as the taper (e.g. threads on the taper surface).
+ */
+fun computeSetPositionsInMeasureSpace(win: OalWindow, spec: ShaftSpec): SetPositions {
+    val aftTaper = findAftEndTaperForSET(spec)
+    val fwdTaper = findFwdEndTaperForSET(spec)
+
+    val aftSET = if (aftTaper != null) {
+        win.toMeasureX(aftTaper.startFromAftMm.toDouble())
+    } else {
+        0.0
+    }
+
+    val fwdSET = if (fwdTaper != null) {
+        win.toMeasureX((fwdTaper.startFromAftMm + fwdTaper.lengthMm).toDouble())
+    } else {
+        win.oalMm
+    }
+
+    return SetPositions(aftSETxMm = aftSET, fwdSETxMm = fwdSET)
+}

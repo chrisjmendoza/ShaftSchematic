@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch *)",
+      "Bash(./gradlew test)",
+      "Bash(./gradlew testDebugUnitTest)",
+      "Bash(./gradlew lint)"
+    ]
+  }
+}
