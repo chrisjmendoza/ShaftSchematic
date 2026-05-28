@@ -9,15 +9,13 @@ PDF output must faithfully reproduce the shaft schematic at high resolution with
 
 # 1. High-Level Process
 
-spec → ShaftLayout (PDF size) → ShaftRenderer (PDF canvas) → Title Block → Final PDF Document
+spec → ShaftLayout (PDF size) → ShaftPdfComposer (draws geometry + dimensions + footer) → Final PDF Document
 
- 
+PDF export shares:
+- Same `ShaftLayout` scaling rules as the preview
+- Same model geometry (mm) and unit formatting conventions
 
-PDF export reuses:
-- Same `ShaftLayout` rules
-- Same `ShaftRenderer` geometry routines
-
-No additional geometry logic is permitted.
+**Note:** `ShaftPdfComposer` contains its own geometry drawing functions (`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) separate from `ShaftRenderer`. This is a known divergence from the intended architecture — geometry fixes must be applied in both paths until they are unified. See AUDIT.md §4.4.
 
 ---
 
@@ -32,10 +30,9 @@ No additional geometry logic is permitted.
 - 1pt = 1/72 inch
 - (0,0) at top-left corner
 
-ShaftDrawing is NOT used for PDF; PDF uses layout + renderer only.
-
-Note: Preview color settings (presets/custom palette and Black/White Only) are preview-only.
-PDF currently uses its own fixed styling via `RenderOptions` inside the PDF composer.
+`ShaftDrawing` (the Compose composable) is NOT used for PDF export.
+Preview color settings (presets/custom palette and Black/White Only) are preview-only.
+PDF uses its own fixed black-and-white styling inside `ShaftPdfComposer`.
 
 ---
 
