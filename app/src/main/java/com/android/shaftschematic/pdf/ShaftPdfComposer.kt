@@ -749,7 +749,15 @@ private fun drawZigZagBreak(
     }
 }
 
-/** Draws a smooth long-break glyph (alternative to the zig-zag break). */
+/**
+ * Draws the standard engineering long-break glyph.
+ *
+ * Two S-shaped cubic Béziers span the full shaft height and cross each other,
+ * producing the conventional break symbol used in mechanical drafting.
+ *
+ * Each curve departs its start corner horizontally, inflects at the midpoint,
+ * and arrives at the opposite corner horizontally — creating a clean S.
+ */
 private fun drawSCurveBreak(
     c: Canvas,
     yTop: Float,
@@ -758,28 +766,17 @@ private fun drawSCurveBreak(
     gap: Float,
     p: Paint
 ) {
-    // Two mirrored cubic Béziers to suggest a long-break.
-    val half = gap * 0.5f
-    val xL = xMid - half
-    val xR = xMid + half
-    val yC = (yTop + yBot) * 0.5f
-    val amp = (yBot - yTop) * 0.22f  // curvature amplitude
+    val xL = xMid - gap * 0.5f
+    val xR = xMid + gap * 0.5f
 
     val path = Path().apply {
-        // upper S
-        moveTo(xL, yC - amp)
-        cubicTo(
-            xL + half * 0.35f, yC - amp * 1.35f,
-            xR - half * 0.35f, yC + amp * 1.35f,
-            xR, yC + amp
-        )
-        // lower S (mirror back for visual weight)
-        moveTo(xL, yC + amp)
-        cubicTo(
-            xL + half * 0.35f, yC + amp * 1.35f,
-            xR - half * 0.35f, yC - amp * 1.35f,
-            xR, yC - amp
-        )
+        // S-curve 1: top-left corner → bottom-right corner
+        moveTo(xL, yTop)
+        cubicTo(xMid, yTop, xMid, yBot, xR, yBot)
+
+        // S-curve 2: bottom-left corner → top-right corner (mirror)
+        moveTo(xL, yBot)
+        cubicTo(xMid, yBot, xMid, yTop, xR, yTop)
     }
     c.drawPath(path, p)
 }
