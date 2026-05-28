@@ -12,6 +12,12 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 - Starting with `1.1.1`, the changelog and the app `versionName` are kept in sync; future releases follow this convention.
 - Note: `v0.2.0` and `v0.3.0` point to the same commit (`d1a4da5`).
 
+## 2026-05-28
+
+- Replaced PDF body center-break symbol with standard engineering S-curve edges. Each compressed body stub now ends with an S-shaped cut line instead of a straight cap; both edges curve in the same direction so the break reads as two matching cut faces across a narrow gap.
+
+---
+
 ## 2026-05-27
 
 - Fixed PDF OAL dimension lines landing at thread tip instead of taper SET when end threads are included in OAL. `computeSetPositionsInMeasureSpace` now derives SET positions from actual taper geometry instead of hardcoding 0/OAL.

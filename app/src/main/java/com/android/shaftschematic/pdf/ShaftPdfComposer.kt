@@ -415,7 +415,7 @@ private fun drawComponentLabelsPdf(
 
 // Compression (paper-space heuristic; bodies only)
 private const val COMPRESS_TRIGGER_PT = 220f // if body length on paper ≥ this, show center-break
-private const val ZIGZAG_GAP_MAX_PT = 40f    // max central gap width
+private const val ZIGZAG_GAP_MAX_PT = 20f    // max central gap width
 private const val ZIGZAG_TEETH = 3           // 2–3 looks best; using 3 by default
 
 // Label collision avoidance
@@ -566,27 +566,25 @@ private fun drawBodiesCompressedCenterBreak(
             c.drawLine(x0, top, x0, bot, outline)
             c.drawLine(x1, top, x1, bot, outline)
         } else {
-            // centered break: two stubs + zig-zag gap
+            // centered break: two stubs, each with an S-curve end instead of a straight cap
             val mid = (x0 + x1) * 0.5f
             val gap = min(ZIGZAG_GAP_MAX_PT, 0.25f * bodyLenPt)
             val half = 0.5f * gap
-            val leftEnd = (mid - half).coerceIn(geomRect.left, geomRect.right)
+            val leftEnd  = (mid - half).coerceIn(geomRect.left, geomRect.right)
             val rightBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
+            val amp = r * 0.6f
 
-            // Left stub
+            // Left stub — S-curve on right end
             c.drawLine(x0, top, leftEnd, top, outline)
             c.drawLine(x0, bot, leftEnd, bot, outline)
             c.drawLine(x0, top, x0, bot, outline)
-            c.drawLine(leftEnd, top, leftEnd, bot, capPaint)
+            drawBreakEdge(c, leftEnd, top, bot, amp, capPaint)
 
-            // Right stub
+            // Right stub — same-direction S-curve on left end (curves match so edges appear to merge)
+            drawBreakEdge(c, rightBeg, top, bot, amp, capPaint)
             c.drawLine(rightBeg, top, x1, top, outline)
             c.drawLine(rightBeg, bot, x1, bot, outline)
-            c.drawLine(rightBeg, top, rightBeg, bot, capPaint)
             c.drawLine(x1, top, x1, bot, outline)
-
-            // Zig-zag break, centered at mid within the gap
-            drawSCurveBreak(c, top, bot, mid, gap, capPaint)
         }
     }
 }
@@ -749,34 +747,12 @@ private fun drawZigZagBreak(
     }
 }
 
-/**
- * Draws the standard engineering long-break glyph.
- *
- * Two S-shaped cubic Béziers span the full shaft height and cross each other,
- * producing the conventional break symbol used in mechanical drafting.
- *
- * Each curve departs its start corner horizontally, inflects at the midpoint,
- * and arrives at the opposite corner horizontally — creating a clean S.
- */
-private fun drawSCurveBreak(
-    c: Canvas,
-    yTop: Float,
-    yBot: Float,
-    xMid: Float,
-    gap: Float,
-    p: Paint
-) {
-    val xL = xMid - gap * 0.5f
-    val xR = xMid + gap * 0.5f
-
+/** S-curve from (x, yTop) to (x, yBot). Positive [amplitude] bulges right then left; negative mirrors. */
+private fun drawBreakEdge(c: Canvas, x: Float, yTop: Float, yBot: Float, amplitude: Float, p: Paint) {
+    val h = yBot - yTop
     val path = Path().apply {
-        // S-curve 1: top-left corner → bottom-right corner
-        moveTo(xL, yTop)
-        cubicTo(xMid, yTop, xMid, yBot, xR, yBot)
-
-        // S-curve 2: bottom-left corner → top-right corner (mirror)
-        moveTo(xL, yBot)
-        cubicTo(xMid, yBot, xMid, yTop, xR, yTop)
+        moveTo(x, yTop)
+        cubicTo(x + amplitude, yTop + h / 3f, x - amplitude, yBot - h / 3f, x, yBot)
     }
     c.drawPath(path, p)
 }
