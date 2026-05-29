@@ -29,6 +29,7 @@ data class Taper(
     val keywayDepthMm: Float = 0f,
     val keywayLengthMm: Float = 0f,
     val keywaySpooned: Boolean = false,
+    val taperRateText: String = "",
 ) : Segment
 
 /** Basic invariants for a Taper. */

@@ -40,5 +40,29 @@ fun startOverlapErrorMm(
         }
     }
 
-    return if (overlaps) "Overlaps another component" else null
+    if (overlaps) return "Overlaps another component"
+
+    // Threads must be at a shaft end (AFT or FWD). A thread is surrounded if there is
+    // a Body or Liner that ends at-or-before the thread's start AND another that starts
+    // at-or-after the thread's end. Using eps to handle floating-point adjacency.
+    if (group == CollisionGroup.THREAD) {
+        val threadEnd = startMm + selfLengthMm
+        val eps = 1e-3f
+
+        val hasAft = spec.bodies.any { b ->
+            (b.startFromAftMm + b.lengthMm) <= startMm + eps
+        } || spec.liners.any { ln ->
+            ln.id != selfId && (ln.startFromAftMm + ln.lengthMm) <= startMm + eps
+        }
+
+        val hasFwd = spec.bodies.any { b ->
+            b.startFromAftMm >= threadEnd - eps
+        } || spec.liners.any { ln ->
+            ln.id != selfId && ln.startFromAftMm >= threadEnd - eps
+        }
+
+        if (hasAft && hasFwd) return "Thread must be at a shaft end, not between components"
+    }
+
+    return null
 }

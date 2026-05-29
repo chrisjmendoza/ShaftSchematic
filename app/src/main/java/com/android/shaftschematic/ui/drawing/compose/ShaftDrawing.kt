@@ -108,6 +108,7 @@ fun ShaftDrawing(
     highlightEnabled: Boolean = false,
     highlightId: Any? = null,
     onTapComponentId: ((String) -> Unit)? = null,
+    onTapAtMm: ((Float) -> Unit)? = null,
     modifier: Modifier = Modifier.fillMaxSize()
 ) {
     // Stable text measurer (expensive object)
@@ -192,6 +193,7 @@ fun ShaftDrawing(
     val latestLayoutRef = remember { AtomicReference<ShaftLayout.Result?>(null) }
     val latestComponentsState = rememberUpdatedState(resolvedComponents)
     val latestOnTapState = rememberUpdatedState(onTapComponentId)
+    val latestOnTapAtMmState = rememberUpdatedState(onTapAtMm)
 
     val gestures = Modifier
         .pointerInput(Unit) {
@@ -249,7 +251,11 @@ fun ShaftDrawing(
                     logTapSelect(
                         "tapPx=${pos.x}, tapMm=$tappedMm, scale=${scale.value}, offsetX=${offset.value.x}, selected=$hitId"
                     )
-                    if (hitId != null) onTap?.invoke(hitId)
+                    if (hitId != null) {
+                        onTap?.invoke(hitId)
+                    } else {
+                        latestOnTapAtMmState.value?.invoke(tappedMm)
+                    }
                 },
                 onDoubleTap = {
                     scope.launch {

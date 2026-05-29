@@ -1,0 +1,48 @@
+{
+  // ── Java / Gradle project import ──────────────────────────────────────────
+  // Lets the Extension Pack for Java (vscjava) import the Gradle project and
+  // discover JVM unit tests (app/src/test/) in the Testing panel.
+  "java.import.gradle.enabled": true,
+  "java.import.gradle.wrapper.enabled": true,
+  "java.import.gradle.java.home": "${env:JAVA_HOME}",
+
+  // Exclude Android-specific source sets that the Java LS can't resolve
+  // (instrumented tests, generated R-files). JVM unit tests still work.
+  "java.project.sourcePaths": [
+    "app/src/main/java",
+    "app/src/test/java"
+  ],
+  "java.project.referencedLibraries": [
+    "${env:USERPROFILE}/.gradle/caches/modules-2/files-2.1/junit/junit/4.13.2/**/*.jar",
+    "${env:USERPROFILE}/.gradle/caches/modules-2/files-2.1/org.hamcrest/**/*.jar",
+    "app/build/tmp/kotlin-classes/debug/**",
+    "app/build/tmp/kotlin-classes/debugUnitTest/**"
+  ],
+
+  // ── Kotlin extension ──────────────────────────────────────────────────────
+  // If you have the Kotlin extension (fwcd.kotlin), point it at the
+  // Gradle wrapper so it can resolve imports.
+  "kotlin.languageServer.enabled": true,
+
+  // ── Test Runner for Java ──────────────────────────────────────────────────
+  // JUnit 4 test runner config — picked up by vscjava.vscode-java-test.
+  "java.test.config": [
+    {
+      "name": "ShaftSchematic JVM tests",
+      "workingDirectory": "${workspaceFolder}",
+      "vmArgs": [],
+      "testKind": "junit",
+      "testSuite": ["com.android.shaftschematic.*"]
+    }
+  ],
+
+  // ── Editor niceties for Kotlin ────────────────────────────────────────────
+  "files.associations": {
+    "*.kt": "kotlin",
+    "*.kts": "kotlin"
+  },
+  "[kotlin]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true
+  }
+}

@@ -140,13 +140,17 @@ private fun pitchMmToTpi(pitchMm: Float): Float = if (pitchMm > 0f) 25.4f / pitc
 fun AddBodyDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
+    initialStartMm: Float? = null,
+    initialLengthMm: Float? = null,
     onSubmit: (startMm: Float, lengthMm: Float, diaMm: Float) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
+    val effectiveStartMm = initialStartMm ?: d.startMm
+    val effectiveLengthMm = initialLengthMm ?: 100f
 
-    var start by remember(unit, d.startMm) { mutableStateOf(toDisplayString(d.startMm, unit)) }
-    var length by remember(unit) { mutableStateOf(toDisplayString(100f, unit)) }
+    var start by remember(unit, effectiveStartMm) { mutableStateOf(toDisplayString(effectiveStartMm, unit)) }
+    var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
     var dia by remember(unit, d.bodyDiaMm) { mutableStateOf(toDisplayString(max(1f, d.bodyDiaMm), unit)) }
 
     val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
@@ -181,13 +185,17 @@ fun AddBodyDialog(
 fun AddLinerDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
+    initialStartMm: Float? = null,
+    initialLengthMm: Float? = null,
     onSubmit: (startMm: Float, lengthMm: Float, odMm: Float) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
+    val effectiveStartMm = initialStartMm ?: d.startMm
+    val effectiveLengthMm = initialLengthMm ?: 100f
 
-    var start by remember(unit, d.startMm) { mutableStateOf(toDisplayString(d.startMm, unit)) }
-    var length by remember(unit) { mutableStateOf(toDisplayString(100f, unit)) }
+    var start by remember(unit, effectiveStartMm) { mutableStateOf(toDisplayString(effectiveStartMm, unit)) }
+    var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
     var od by remember(unit, d.linerOdMm) { mutableStateOf(toDisplayString(max(1f, d.linerOdMm), unit)) }
 
     val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
@@ -292,13 +300,17 @@ fun AddThreadDialog(
 fun AddTaperDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
+    initialStartMm: Float? = null,
+    initialLengthMm: Float? = null,
     onSubmit: (startMm: Float, lengthMm: Float, setDiaMm: Float, letDiaMm: Float, rateText: String) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
+    val effectiveStartMm = initialStartMm ?: d.startMm
+    val effectiveLengthMm = initialLengthMm ?: 100f
 
-    var start by remember(unit, d.startMm) { mutableStateOf(toDisplayString(d.startMm, unit)) }
-    var length by remember(unit) { mutableStateOf(toDisplayString(100f, unit)) }
+    var start by remember(unit, effectiveStartMm) { mutableStateOf(toDisplayString(effectiveStartMm, unit)) }
+    var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
     var setText by remember(unit, d.lastDiaMm) { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
     var letText by remember(unit) { mutableStateOf("") } // allow deriving via rate
     var rateText by remember { mutableStateOf("1:12") }  // legacy default; bare "1" means 1:12

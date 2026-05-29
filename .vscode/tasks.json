@@ -1,0 +1,68 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Test (JVM unit tests)",
+      "type": "shell",
+      "command": "./gradlew --no-configuration-cache :app:test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Compile (debug Kotlin)",
+      "type": "shell",
+      "command": "./gradlew --no-configuration-cache :app:compileDebugKotlin 2>&1",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": [
+        {
+          "owner": "kotlin",
+          "fileLocation": ["absolute"],
+          "pattern": {
+            "regexp": "^(.+\\.kt):(\\d+):(\\d+): (error|warning): (.+)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "severity": 4,
+            "message": 5
+          }
+        }
+      ]
+    },
+    {
+      "label": "Test (single file / run selection)",
+      "type": "shell",
+      "command": "./gradlew --no-configuration-cache :app:test --tests \"${input:testFilter}\"",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "testFilter",
+      "type": "promptString",
+      "description": "Test filter (e.g. com.android.shaftschematic.ui.viewmodel.TaperRateTest)",
+      "default": "com.android.shaftschematic.*"
+    }
+  ]
+}

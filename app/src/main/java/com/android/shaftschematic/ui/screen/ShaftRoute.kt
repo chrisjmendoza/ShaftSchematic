@@ -119,6 +119,8 @@ fun ShaftRoute(
     val canRedoDeletes by vm.canRedoDeletes.collectAsState()
 
     val sessionAddDefaults by vm.sessionAddDefaults.collectAsState()
+    val pendingAddPositionMm by vm.pendingAddPositionMm.collectAsState()
+    val pendingAddGapMm = pendingAddPositionMm?.let { vm.gapToNextAnchorMm(it) } ?: 50f
 
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
@@ -181,12 +183,12 @@ fun ShaftRoute(
         onSelectComponentById = vm::selectComponentById,
 
         onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
-        onAddTaper  = { s, l, sd, ed -> vm.addTaperAt(s, l, sd, ed) },
+        onAddTaper  = { s, l, sd, ed, rate -> vm.addTaperAt(s, l, sd, ed, rate) },
         onAddThread = { s, l, maj, p, ex -> vm.addThreadAt(s, l, maj, p, ex) },
         onAddLiner  = { s, l, od     -> vm.addLinerAt(s, l, od) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
-        onUpdateTaper  = { i, s, l, sd, ed -> vm.updateTaper(i, s, l, sd, ed) },
+        onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },
         onUpdateTaperKeyway = { i, w, d, l, spooned -> vm.updateTaperKeyway(i, w, d, l, spooned) },
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
@@ -219,5 +221,10 @@ fun ShaftRoute(
         onRedo = vm::redoLastDelete,
 
         sessionAddDefaults = sessionAddDefaults,
+
+        pendingAddPositionMm = pendingAddPositionMm,
+        pendingAddGapMm = pendingAddGapMm,
+        onTapAtRawMm = { vm.setTapAddPosition(it) },
+        onClearPendingAddPosition = vm::clearPendingAddPosition,
     )
 }
