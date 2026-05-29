@@ -4,7 +4,9 @@
       "Bash(git fetch *)",
       "Bash(./gradlew test)",
       "Bash(./gradlew testDebugUnitTest)",
-      "Bash(./gradlew lint)"
+      "Bash(./gradlew lint)",
+      "Bash(./gradlew *)",
+      "Bash(cd d:/Dev/ShaftSchematic && ./gradlew *)"
     ]
   }
 }

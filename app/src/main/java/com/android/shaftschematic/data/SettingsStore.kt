@@ -8,6 +8,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -56,6 +57,7 @@ object SettingsStore {
     private val KEY_PDF_TIERING_MODE = stringPreferencesKey("pdf_tiering_mode")
     private val KEY_PDF_SHOW_COMPONENT_TITLES = booleanPreferencesKey("pdf_show_component_titles")
     private val KEY_PDF_EXPORT_MODE = stringPreferencesKey("pdf_export_mode")
+    private val KEY_PDF_OAL_SPACING_FACTOR = floatPreferencesKey("pdf_oal_spacing_factor")
     fun pdfTieringModeFlow(ctx: Context): Flow<PdfTieringMode> =
         ctx.settingsDataStore.data.map { p ->
             runCatching { PdfTieringMode.valueOf(p[KEY_PDF_TIERING_MODE] ?: "AUTO") }.getOrDefault(PdfTieringMode.AUTO)
@@ -80,6 +82,15 @@ object SettingsStore {
 
     suspend fun setPdfExportMode(ctx: Context, mode: PdfExportMode) {
         ctx.settingsDataStore.edit { it[KEY_PDF_EXPORT_MODE] = mode.name }
+    }
+
+    fun pdfOalSpacingFactorFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p ->
+            p[KEY_PDF_OAL_SPACING_FACTOR] ?: PdfPrefs().oalSpacingFactor
+        }
+
+    suspend fun setPdfOalSpacingFactor(ctx: Context, factor: Float) {
+        ctx.settingsDataStore.edit { it[KEY_PDF_OAL_SPACING_FACTOR] = factor.coerceIn(1.0f, 6.0f) }
     }
 
     // One-time migrations
@@ -460,19 +471,16 @@ object SettingsStore {
         ctx.settingsDataStore.edit { it[KEY_PREVIEW_BW_ONLY] = enabled }
     }
 
-    // --- PDF section (new) ---
+    // --- PDF section ---
+    // In-memory mirror of persisted PDF prefs. Each field has a corresponding DataStore
+    // key; the ViewModel loads them on init via the flow functions above.
     @Volatile
-    private var _pdfPrefs: PdfPrefs = PdfPrefs() // default; load actual on init if you persist
+    private var _pdfPrefs: PdfPrefs = PdfPrefs()
 
     val pdfPrefs: PdfPrefs
         get() = _pdfPrefs
 
     fun updatePdfPrefs(transform: (PdfPrefs) -> PdfPrefs) {
         _pdfPrefs = transform(_pdfPrefs).clamped()
-        // TODO: persist _pdfPrefs via your existing persistence layer
-    }
-
-    fun setPdfOalSpacingFactor(f: Float) {
-        updatePdfPrefs { it.copy(oalSpacingFactor = f) }
     }
 }

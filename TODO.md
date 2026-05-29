@@ -85,12 +85,12 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 **Tasks**
 
-- [ ] Add `onTapAtMm` lambda to `ShaftDrawing`
-- [ ] Convert tap `Offset` → mm:  
+- [x] Add `onTapAtMm` lambda to `ShaftDrawing`
+- [x] Convert tap `Offset` → mm:  
       `(tapX - contentLeftPx) / pxPerMm + minXMm`
-- [ ] Send result → ViewModel
-- [ ] Snap using `SnapEngine` before storing
-- [ ] Add `pendingAddPositionMm: Float?` to ViewModel
+- [x] Send result → ViewModel
+- [x] Snap using `SnapEngine` before storing
+- [x] Add `pendingAddPositionMm: Float?` to ViewModel
 
 **Notes**
 
@@ -107,12 +107,12 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 **Tasks**
 
-- [ ] Add VM intent: `startAddAtPosition(positionMm)`
-- [ ] Show chooser dialog: Body / Taper / Liner / Threads
-- [ ] Prefill defaults based on axial gap to next anchor
-- [ ] Use `freeToEndMm()` for tail-placement logic
-- [ ] Body default length = distance to next anchor or 50 mm minimum (per UI contract)
-- [ ] Run validation before confirm
+- [x] Add VM intent: `setTapAddPosition(rawMm)` + `pendingAddPositionMm` state
+- [x] Show chooser dialog: Body / Taper / Liner / Threads
+- [x] Prefill defaults based on axial gap to next anchor (`gapToNextAnchorMm`, min 50mm)
+- [ ] Use `freeToEndMm()` for tail-placement logic (deferred)
+- [x] Body default length = distance to next anchor or 50 mm minimum (per UI contract)
+- [ ] Run validation before confirm (deferred to 2.1)
 
 **Constraints**
 
@@ -158,17 +158,13 @@ Scope:
 
 ### 2.x Regression Note — Thread Start/Placement & Allowed Locations
 
-- [ ] REGRESSION: Thread start set to `0` can still render/behave as if it begins after a body.
-      Repro (editor):
-      1) Add a Body starting at 0.
-      2) Add a Thread.
-      3) Edit the Thread “Start” field and enter `0`.
-      4) Observe preview placement vs. expected.
-      Expected: thread begins at 0 in preview (or is rejected by validation if disallowed).
-      Observed: thread may appear positioned after the body (needs diagnosis).
+- [x] REGRESSION: Fixed `applySnappedThreadUpdate` — only snaps start, preserves original
+      length. The root cause was that snapping both start and end independently could
+      accidentally extend a thread to the nearest anchor when the user moved it to position 0.
 
-- [ ] RULE: Threads are only allowed at shaft ends. If a thread is surrounded on both sides by
-      either Body or Liner (i.e., thread is between components), it is not allowed.
+- [x] RULE: Threads are only allowed at shaft ends. Implemented in `startOverlapErrorMm`:
+      returns error if a thread has a Body/Liner ending at-or-before its start AND another
+      Body/Liner starting at-or-after its end (surrounded on both sides).
 
 ### 2.1 Hook Validation System Into UI
 
@@ -200,15 +196,15 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 - [x] Clamp negative to zero (**applies to model helper** `freeToEndMm()`; UI badge may use signed value for oversize warning)
 - [ ] Use `safeSpec` if `overallLengthMm=0` (preview mode)
 
-### HIGH 3.2 Taper-Rate Restoration
+### HIGH 3.2 Taper-Rate Restoration (DONE)
 
-- [ ] Add taper-rate input handling
-- [ ] Support formats: `1:12`, `3/4`, decimals, bare int
-- [ ] Derive missing SET/LET when appropriate
-- [ ] **If both SET and LET are filled, taper-rate input is ignored**
-- [ ] Validate slope only when length > 0
-- [ ] Persist new field in the model
-- [ ] Ensure renderer remains unchanged (draws from diameters)
+- [x] Add taper-rate input handling (`taperRateText` field in Taper model; edit field in carousel)
+- [x] Support formats: `1:12`, `3/4`, decimals, bare int (via `parseRateText`)
+- [x] Derive missing SET/LET when appropriate (`deriveTaperDiameters`)
+- [x] **If both SET and LET are filled, taper-rate input is ignored**
+- [ ] Validate slope only when length > 0 (deferred to 2.1 validation wiring)
+- [x] Persist new field in the model (`Taper.taperRateText`; backward-compatible default `""`)
+- [x] Ensure renderer remains unchanged (draws from diameters)
 
 ### 3.3 Components Empty-State UX (DONE)
 
@@ -280,7 +276,7 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 
 - [x] SnapEngine
 - [x] `freeToEndMm()`
-- [ ] Taper rate parsing + derivation
+- [x] Taper rate parsing + derivation (`TaperRateTest.kt`)
 - [x] Thread pitch ↔ TPI conversions
 - [x] `computeOalWindow` shifts measurement origin for excluded end threads
 - [x] PDF footer end-feature detection for AFT/FWD taper blocks

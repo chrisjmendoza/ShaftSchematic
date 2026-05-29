@@ -286,6 +286,31 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _sessionAddDefaults = MutableStateFlow(SessionAddDefaults.initial())
     val sessionAddDefaults: StateFlow<SessionAddDefaults> = _sessionAddDefaults.asStateFlow()
 
+    // Tap-to-add pending position: non-null while the user has tapped empty space and
+    // has not yet confirmed or dismissed the add-at-position flow.
+    private val _pendingAddPositionMm = MutableStateFlow<Float?>(null)
+    val pendingAddPositionMm: StateFlow<Float?> = _pendingAddPositionMm.asStateFlow()
+
+    /** Called by UI when the user taps empty space in the preview. Snaps and stores the position. */
+    fun setTapAddPosition(rawMm: Float) {
+        _pendingAddPositionMm.value = snapRawPositionMm(rawMm)
+    }
+
+    /** Clear the pending tap-add intent (called when the chooser or dialog is dismissed/confirmed). */
+    fun clearPendingAddPosition() {
+        _pendingAddPositionMm.value = null
+    }
+
+    /**
+     * Distance from [positionMm] to the next snap anchor (component start/end or OAL boundary),
+     * clamped to at least [minimumMm]. Used to prefill the length field in tap-to-add dialogs.
+     */
+    fun gapToNextAnchorMm(positionMm: Float, minimumMm: Float = 50f): Float {
+        val anchors = buildSnapAnchors(_spec.value)
+        val next = anchors.filter { it > positionMm + 0.1f }.minOrNull() ?: _spec.value.overallLengthMm
+        return maxOf(next - positionMm, minimumMm)
+    }
+
     // Incrementing key used by the editor UI to reset Compose-local state (dialogs, focus, scroll, etc.)
     // without relocating that state into the ViewModel.
     private val _editorResetNonce = MutableStateFlow(0)
@@ -463,6 +488,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfShowComponentTitlesFlow(getApplication()).collectLatest { persisted ->
                 _pdfShowComponentTitles.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(showComponentTitles = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfOalSpacingFactorFlow(getApplication()).collectLatest { persisted ->
+                SettingsStore.updatePdfPrefs { it.copy(oalSpacingFactor = persisted) }
             }
         }
 
@@ -666,6 +696,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         SettingsStore.updatePdfPrefs { it.copy(showComponentTitles = show) }
         if (persist) {
             viewModelScope.launch { SettingsStore.setPdfShowComponentTitles(getApplication(), show) }
+        }
+    }
+
+    fun setPdfOalSpacingFactor(factor: Float, persist: Boolean = true) {
+        SettingsStore.updatePdfPrefs { it.copy(oalSpacingFactor = factor) }
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setPdfOalSpacingFactor(getApplication(), factor) }
         }
     }
 
@@ -1022,21 +1059,32 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Tapers
-    fun addTaperAt(startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float) = _spec.update { s ->
+    fun addTaperAt(
+        startMm: Float,
+        lengthMm: Float,
+        startDiaMm: Float,
+        endDiaMm: Float,
+        rateText: String = "",
+    ) = _spec.update { s ->
         val id = newId()
         orderAdd(ComponentKind.TAPER, id)
+        val (resolvedSet, resolvedLet) = deriveTaperDiameters(
+            setMm = startDiaMm, letMm = endDiaMm,
+            lengthMm = lengthMm, rateText = rateText
+        )
         s.copy(
             tapers = listOf(
                 Taper(
                     id = id,
                     startFromAftMm = startMm,
                     lengthMm = max(0f, lengthMm),
-                    startDiaMm = max(0f, startDiaMm),
-                    endDiaMm = max(0f, endDiaMm),
+                    startDiaMm = max(0f, resolvedSet),
+                    endDiaMm = max(0f, resolvedLet),
                     keywayWidthMm = 0f,
                     keywayDepthMm = 0f,
                     keywayLengthMm = 0f,
                     keywaySpooned = false,
+                    taperRateText = rateText,
                 )
             ) + s.tapers
         )
@@ -1051,22 +1099,30 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         startMm: Float,
         lengthMm: Float,
         startDiaMm: Float,
-        endDiaMm: Float
+        endDiaMm: Float,
+        rateText: String = "",
     ) = _spec.update { s ->
         if (index !in s.tapers.indices) s else {
             val old = s.tapers[index]
             val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
+            val effectiveRate = rateText.ifBlank { old.taperRateText }
+
+            val (resolvedSet, resolvedLet) = deriveTaperDiameters(
+                setMm = startDiaMm, letMm = endDiaMm,
+                lengthMm = lengthMm, rateText = effectiveRate
+            )
 
             val updatedTapers = s.tapers.toMutableList().also { list ->
                 list[index] = old.copy(
                     startFromAftMm = startMm,
                     lengthMm = max(0f, lengthMm),
-                    startDiaMm = max(0f, startDiaMm),
-                    endDiaMm = max(0f, endDiaMm),
+                    startDiaMm = max(0f, resolvedSet),
+                    endDiaMm = max(0f, resolvedLet),
                     keywayWidthMm = old.keywayWidthMm,
                     keywayDepthMm = old.keywayDepthMm,
                     keywayLengthMm = old.keywayLengthMm,
                     keywaySpooned = old.keywaySpooned,
+                    taperRateText = rateText.ifBlank { old.taperRateText },
                 )
             }
 
@@ -1759,6 +1815,66 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         private const val METRIC_SNAP_TOL_MM = 1.0f         // 1 mm
         private const val IMPERIAL_SNAP_TOL_IN = 0.04f      // ~0.04 in ≈ 1.016 mm
         private const val INCH_TO_MM = 25.4f
+
+        /**
+         * Derive final SET and LET diameters applying taper-rate logic:
+         * - If both SET > 0 and LET > 0: rate is ignored.
+         * - If only SET > 0: LET = SET - rate * lengthMm  (rate = diameter-per-length).
+         * - If only LET > 0: SET = LET + rate * lengthMm.
+         * - If neither > 0: returns 0f for both.
+         * - Rate is parsed from [rateText] (formats: "1:12", "3/4", "0.0833", "1"). A "1:12"
+         *   ratio is interpreted as (1 unit diameter change per 12 units length), so rate = 1/12.
+         * - If rate text is blank or unparseable the raw diameters are returned unchanged.
+         */
+        fun deriveTaperDiameters(
+            setMm: Float,
+            letMm: Float,
+            lengthMm: Float,
+            rateText: String,
+        ): Pair<Float, Float> {
+            // Both provided: rate is ignored per contract.
+            if (setMm > 0f && letMm > 0f) return setMm to letMm
+
+            val rate = parseRateText(rateText) ?: return setMm to letMm
+            if (lengthMm <= 0f) return setMm to letMm
+
+            val diaDelta = rate * lengthMm
+
+            return when {
+                setMm > 0f -> setMm to maxOf(0f, setMm - diaDelta)
+                letMm > 0f -> maxOf(0f, letMm + diaDelta) to letMm
+                else -> 0f to 0f
+            }
+        }
+
+        /**
+         * Parse a taper rate string into a dimensionless ratio (diameter change per length unit).
+         * Supports: "1:12" → 1/12, "3/4" → 0.75, "0.0833" → 0.0833, "1" → 1/12 (legacy bare int).
+         */
+        fun parseRateText(text: String): Float? {
+            val t = text.trim()
+            if (t.isEmpty()) return null
+
+            val colon = t.indexOf(':')
+            if (colon >= 0) {
+                val num = t.substring(0, colon).trim().toFloatOrNull() ?: return null
+                val den = t.substring(colon + 1).trim().toFloatOrNull() ?: return null
+                if (den == 0f) return null
+                return num / den
+            }
+
+            val slash = t.indexOf('/')
+            if (slash >= 0) {
+                val num = t.substring(0, slash).trim().toFloatOrNull() ?: return null
+                val den = t.substring(slash + 1).trim().toFloatOrNull() ?: return null
+                if (den == 0f) return null
+                return num / den
+            }
+
+            val v = t.toFloatOrNull() ?: return null
+            // Bare integer (e.g., "12") is treated as 1:N taper.
+            return if (v >= 1f) 1f / v else v
+        }
     }
 
     /** Current snap tolerance expressed in mm, based on the active UI unit system. */

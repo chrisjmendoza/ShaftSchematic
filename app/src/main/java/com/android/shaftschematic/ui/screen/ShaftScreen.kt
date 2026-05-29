@@ -214,15 +214,21 @@ fun ShaftScreen(
     onSetOverallIsManual: (Boolean) -> Unit,
     onSelectComponentById: (String?) -> Unit,
 
+    // Tap-to-add pipeline
+    pendingAddPositionMm: Float? = null,
+    pendingAddGapMm: Float = 50f,
+    onTapAtRawMm: (Float) -> Unit = {},
+    onClearPendingAddPosition: () -> Unit = {},
+
     // Adds (all mm)
     onAddBody: (Float, Float, Float) -> Unit,
-    onAddTaper: (Float, Float, Float, Float) -> Unit,
+    onAddTaper: (Float, Float, Float, Float, String) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean) -> Unit,
     onAddLiner: (Float, Float, Float) -> Unit,
 
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
-    onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
@@ -269,6 +275,13 @@ fun ShaftScreen(
     var addThreadOpen by rememberSaveable { mutableStateOf(false) }
     var addThreadStartMm by rememberSaveable { mutableFloatStateOf(0f) }
 
+    // Tap-to-add: after chooser selection, position is captured here while the add dialog is open
+    var tapAddBodyOpen by rememberSaveable { mutableStateOf(false) }
+    var tapAddLinerOpen by rememberSaveable { mutableStateOf(false) }
+    var tapAddTaperOpen by rememberSaveable { mutableStateOf(false) }
+    var tapAddStartMm by rememberSaveable { mutableFloatStateOf(0f) }
+    var tapAddGapMm by rememberSaveable { mutableFloatStateOf(50f) }
+
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
     val topBarScope = rememberCoroutineScope()
@@ -294,7 +307,7 @@ fun ShaftScreen(
     }
 
     val snappedTaperUpdater = remember(snapAnchors, onUpdateTaper) {
-        { index: Int, startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float ->
+        { index: Int, startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float, rateText: String ->
             applySnappedTaperUpdate(
                 onUpdate = onUpdateTaper,
                 index = index,
@@ -302,6 +315,7 @@ fun ShaftScreen(
                 rawEndMm = startMm + lengthMm,
                 startDiaMm = startDiaMm,
                 endDiaMm = endDiaMm,
+                rateText = rateText,
                 anchors = snapAnchors
             )
         }
@@ -458,6 +472,7 @@ fun ShaftScreen(
                 highlightEnabled = highlightEnabled,
                 highlightId = selectedComponentId,
                 onTapComponentId = { onSelectComponentById(it) },
+                onTapAtMm = onTapAtRawMm,
                 showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
                 showRenderOalMarkers = showRenderOalMarkers,
                 previewOutline = previewOutline,
@@ -748,7 +763,8 @@ fun ShaftScreen(
                                 d.startMm,
                                 sessionAddDefaults.taperLenMm,
                                 sessionAddDefaults.taperSetDiaMm,
-                                sessionAddDefaults.taperLetDiaMm
+                                sessionAddDefaults.taperLetDiaMm,
+                                ""
                             )
                         }
                     )
@@ -776,6 +792,80 @@ fun ShaftScreen(
                             )
                         },
                         onCancel = { addThreadOpen = false }
+                    )
+                }
+
+                // Tap-to-add chooser — shown when the user taps empty space in the preview.
+                // Position is already snapped by the ViewModel before we receive it.
+                val tapPosition = pendingAddPositionMm
+                if (tapPosition != null) {
+                    InlineAddChooserDialog(
+                        onDismiss = { onClearPendingAddPosition() },
+                        onAddBody = {
+                            tapAddStartMm = tapPosition
+                            tapAddGapMm = pendingAddGapMm
+                            onClearPendingAddPosition()
+                            tapAddBodyOpen = true
+                        },
+                        onAddLiner = {
+                            tapAddStartMm = tapPosition
+                            tapAddGapMm = pendingAddGapMm
+                            onClearPendingAddPosition()
+                            tapAddLinerOpen = true
+                        },
+                        onAddTaper = {
+                            tapAddStartMm = tapPosition
+                            tapAddGapMm = pendingAddGapMm
+                            onClearPendingAddPosition()
+                            tapAddTaperOpen = true
+                        },
+                        onAddThread = {
+                            addThreadStartMm = tapPosition
+                            onClearPendingAddPosition()
+                            addThreadOpen = true
+                        },
+                    )
+                }
+
+                if (tapAddBodyOpen) {
+                    AddBodyDialog(
+                        unit = unit,
+                        spec = spec,
+                        initialStartMm = tapAddStartMm,
+                        initialLengthMm = tapAddGapMm,
+                        onSubmit = { s, l, d ->
+                            tapAddBodyOpen = false
+                            onAddBody(s, l, d)
+                        },
+                        onCancel = { tapAddBodyOpen = false }
+                    )
+                }
+
+                if (tapAddLinerOpen) {
+                    AddLinerDialog(
+                        unit = unit,
+                        spec = spec,
+                        initialStartMm = tapAddStartMm,
+                        initialLengthMm = tapAddGapMm,
+                        onSubmit = { s, l, od ->
+                            tapAddLinerOpen = false
+                            onAddLiner(s, l, od)
+                        },
+                        onCancel = { tapAddLinerOpen = false }
+                    )
+                }
+
+                if (tapAddTaperOpen) {
+                    AddTaperDialog(
+                        unit = unit,
+                        spec = spec,
+                        initialStartMm = tapAddStartMm,
+                        initialLengthMm = tapAddGapMm,
+                        onSubmit = { s, l, setDia, letDia, rate ->
+                            tapAddTaperOpen = false
+                            onAddTaper(s, l, setDia, letDia, rate)
+                        },
+                        onCancel = { tapAddTaperOpen = false }
                     )
                 }
             }
@@ -947,6 +1037,7 @@ private fun PreviewCard(
     highlightEnabled: Boolean,
     highlightId: String?,
     onTapComponentId: ((String) -> Unit)?,
+    onTapAtMm: ((Float) -> Unit)? = null,
     showRenderLayoutDebugOverlay: Boolean,
     showRenderOalMarkers: Boolean,
     previewOutline: PreviewColorSetting,
@@ -980,6 +1071,7 @@ private fun PreviewCard(
                 highlightEnabled = highlightEnabled && (highlightId != null),
                 highlightId = highlightId,
                 onTapComponentId = onTapComponentId,
+                onTapAtMm = onTapAtMm,
                 showLayoutDebugOverlay = showRenderLayoutDebugOverlay,
                 showOalMarkers = showRenderOalMarkers
             )
@@ -1062,7 +1154,7 @@ private fun ComponentCarouselPager(
     selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
-    onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
@@ -1275,7 +1367,7 @@ private fun ComponentPagerCard(
     showComponentDebugLabels: Boolean,
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
-    onUpdateTaper: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
@@ -1418,23 +1510,26 @@ private fun ComponentPagerCard(
                     validator = startValidator(t.id, ComponentKind.TAPER, t.lengthMm)
                 ) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateTaper(idx, it, t.lengthMm, t.startDiaMm, t.endDiaMm)
+                        onUpdateTaper(idx, it, t.lengthMm, t.startDiaMm, t.endDiaMm, t.taperRateText)
                     }
                 }
                 CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateTaper(idx, t.startFromAftMm, it, t.startDiaMm, t.endDiaMm)
+                        onUpdateTaper(idx, t.startFromAftMm, it, t.startDiaMm, t.endDiaMm, t.taperRateText)
                     }
                 }
                 CommitNum("${endMap.leftCode} Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, it, t.endDiaMm)
+                        onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, it, t.endDiaMm, t.taperRateText)
                     }
                 }
                 CommitNum("${endMap.rightCode} Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let {
-                        onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, it)
+                        onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, it, t.taperRateText)
                     }
+                }
+                CommitNum("Rate (1:12, 3/4, or decimal)", t.taperRateText.ifBlank { "" }) { s ->
+                    onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, s.trim())
                 }
 
                 Row(
@@ -2091,18 +2186,19 @@ private fun applySnappedBodyUpdate(
 }
 
 private fun applySnappedTaperUpdate(
-    onUpdate: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdate: (Int, Float, Float, Float, Float, String) -> Unit,
     index: Int,
     rawStartMm: Float,
     rawEndMm: Float,
     startDiaMm: Float,
     endDiaMm: Float,
+    rateText: String = "",
     anchors: List<Float>,
     config: SnapConfig = SnapConfig()
 ) {
     val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
     val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
-    onUpdate(index, snappedStart, lengthMm, startDiaMm, endDiaMm)
+    onUpdate(index, snappedStart, lengthMm, startDiaMm, endDiaMm, rateText)
 }
 
 private fun applySnappedThreadUpdate(
@@ -2115,8 +2211,12 @@ private fun applySnappedThreadUpdate(
     anchors: List<Float>,
     config: SnapConfig = SnapConfig()
 ) {
-    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
-    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
+    // Only snap the start; preserve the original length. Snapping both start and end
+    // independently can silently resize the thread when the raw end happens to land
+    // near a snap anchor (e.g., a 99mm thread moved to start=0 could snap its end to
+    // the 100mm body anchor, unexpectedly extending it to 100mm).
+    val snappedStart = snapPositionMm(rawStartMm, anchors, config)
+    val lengthMm = (rawEndMm - rawStartMm).coerceAtLeast(0f)
     onUpdate(index, snappedStart, lengthMm, majorDiaMm, pitchMm)
 }
 

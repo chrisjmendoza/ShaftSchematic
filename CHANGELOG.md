@@ -12,6 +12,48 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 - Starting with `1.1.1`, the changelog and the app `versionName` are kept in sync; future releases follow this convention.
 - Note: `v0.2.0` and `v0.3.0` point to the same commit (`d1a4da5`).
 
+## 2026-05-29
+
+### feat: tap-to-add pipeline, thread validation, taper-rate restoration, pdfPrefs persistence
+
+#### Tap-to-add pipeline (TODO §1.2 + §1.3)
+
+- `ShaftDrawing` now accepts an `onTapAtMm` lambda. Taps that land on an existing component still fire `onTapComponentId`; taps on empty space fire `onTapAtMm` with the raw mm coordinate.
+- `ShaftViewModel` gains `pendingAddPositionMm: StateFlow<Float?>`, `setTapAddPosition(rawMm)` (snaps via `snapRawPositionMm` before storing), `clearPendingAddPosition()`, and `gapToNextAnchorMm(positionMm, min=50f)` (distance to next snap anchor, minimum 50 mm).
+- `ShaftRoute` wires the three new callbacks to `ShaftScreen`; `pendingAddPositionMm` and the computed gap length are passed down as parameters.
+- When `pendingAddPositionMm` is non-null `ShaftScreen` shows `InlineAddChooserDialog`. Selecting Body, Liner, or Taper opens the corresponding add dialog with the tapped position pre-filled in the Start field and the gap length pre-filled in the Length field. Thread routes through the existing `AddThreadDialog` with the tapped start.
+- `AddBodyDialog`, `AddLinerDialog`, and `AddTaperDialog` each gain optional `initialStartMm` and `initialLengthMm` overrides that take precedence over the spec-derived defaults when provided.
+
+#### Thread start/placement fixes (TODO §2.x)
+
+- **End-snap bug fixed:** `applySnappedThreadUpdate` previously snapped both the start and end positions independently. This could silently extend a thread's length when the derived end position happened to land within snap tolerance of a body boundary (e.g. a 99 mm thread moved to start=0 would snap its end to the 100 mm body anchor, becoming 100 mm). The function now snaps only the start and preserves the original length.
+- **"Threads at ends only" validation rule implemented:** `startOverlapErrorMm` returns `"Thread must be at a shaft end, not between components"` when a thread has a Body or Liner ending at-or-before its start *and* another Body or Liner starting at-or-after its end (i.e. surrounded on both sides). Adjacency is handled with a 1 mm epsilon so end-to-start touching qualifies.
+
+#### Taper-rate restoration (TODO §3.2)
+
+- `Taper` model gains a `taperRateText: String = ""` field (kotlinx.serialization `@Serializable`; backward-compatible default `""`).
+- `ShaftViewModel` companion exposes `parseRateText(text)` — parses `1:12`, `3/4`, decimals, and bare integers (bare int N interpreted as 1:N) — and `deriveTaperDiameters(setMm, letMm, lengthMm, rateText)`: if both SET and LET are > 0 the rate is ignored; if only one diameter is provided the missing one is derived from the rate and length; zero length or unparseable rate returns diameters unchanged.
+- `addTaperAt` and `updateTaper` accept an optional `rateText: String = ""` and call `deriveTaperDiameters` before storing. `updateTaper` also falls back to the taper's stored `taperRateText` when the caller passes a blank rate.
+- The taper carousel card has a new `Rate (1:12, 3/4, or decimal)` commit field; all `onUpdateTaper` call sites pass the stored `taperRateText` through.
+- `onAddTaper` / `onUpdateTaper` callbacks throughout the stack (`ShaftScreen`, `ShaftRoute`) updated from `(Float, Float, Float, Float)` to `(Float, Float, Float, Float, String)`.
+- `TaperRateTest.kt` — 9 new unit tests covering `parseRateText` (colon, slash, decimal, bare int, blank, invalid) and `deriveTaperDiameters` (both provided, derive LET, derive SET, blank rate, zero length, clamp-to-zero).
+
+#### pdfPrefs persistence (SettingsStore TODO)
+
+- Added `KEY_PDF_OAL_SPACING_FACTOR = floatPreferencesKey("pdf_oal_spacing_factor")` to `SettingsStore`.
+- `pdfOalSpacingFactorFlow(ctx)` reads the stored value (defaults to `PdfPrefs().oalSpacingFactor = 2.5f`).
+- `suspend fun setPdfOalSpacingFactor(ctx, factor)` writes the clamped value to DataStore.
+- `ShaftViewModel.init` now collects `pdfOalSpacingFactorFlow` and keeps `SettingsStore._pdfPrefs` in sync, matching the existing pattern for `tieringMode` and `showComponentTitles`.
+- `ShaftViewModel.setPdfOalSpacingFactor(factor, persist)` added for future UI callers.
+- Removed the `TODO: persist _pdfPrefs via your existing persistence layer` comment from `SettingsStore.updatePdfPrefs`; all three `PdfPrefs` fields are now fully persisted.
+
+#### VS Code test integration
+
+- `.vscode/tasks.json` — "Test (JVM unit tests)" (default test task), "Compile (debug Kotlin)" (default build task with Kotlin error problem matcher), "Test (single file)" (prompts for filter pattern).
+- `.vscode/settings.json` — configures `java.import.gradle.*`, `java.project.sourcePaths`, `java.project.referencedLibraries`, and `java.test.config` for the Extension Pack for Java test runner.
+
+---
+
 ## 2026-05-28 (audit low items)
 
 - Fixed `hasCenterBreak` footer note: replaced disconnected mm-space heuristic with the same `bodyLengthMm × ptPerMm ≥ COMPRESS_TRIGGER_PT` condition used by the actual rendering code.
