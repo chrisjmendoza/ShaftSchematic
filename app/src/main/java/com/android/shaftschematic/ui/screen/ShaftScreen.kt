@@ -1606,6 +1606,7 @@ private fun ComponentPagerCard(
                 debugText = if (showComponentDebugLabels) {
                     "id=${th.id} • startMm=${f1(th.startFromAftMm)} • endMm=${f1(th.startFromAftMm + th.lengthMm)}"
                 } else null,
+                errorMessage = startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm),
                 componentId = th.id,
                 componentKind = ComponentKind.THREAD,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -1744,6 +1745,7 @@ private fun ComponentPagerCard(
                 debugText = if (showComponentDebugLabels) {
                     "id=${ln.id} • startMm=${f1(ln.startFromAftMm)} • endMm=${f1(ln.startFromAftMm + ln.lengthMm)}"
                 } else null,
+                errorMessage = startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm),
                 componentId = ln.id,
                 componentKind = ComponentKind.LINER,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -1842,6 +1844,7 @@ private fun ComponentCard(
     title: String,
     titleContent: (@Composable () -> Unit)? = null,
     debugText: String? = null,
+    errorMessage: String? = null,
     componentId: String? = null,
     componentKind: ComponentKind? = null,
     outerPaddingHorizontal: Dp = 8.dp,
@@ -1880,6 +1883,19 @@ private fun ComponentCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                if (errorMessage != null) {
+                    androidx.compose.material3.Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = errorMessage,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
                 content()
             }

@@ -12,15 +12,20 @@ import android.os.Build
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftPosition
+import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.pdf.PdfExportOptions
+import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.DocumentNaming
@@ -49,6 +54,7 @@ fun PdfExportRoute(
     val ctx = LocalContext.current
     var launched by rememberSaveable { mutableStateOf(false) }
     var finished by rememberSaveable { mutableStateOf(false) }
+    var blockingErrorMessage by rememberSaveable { mutableStateOf<String?>(null) }
 
     val openAfterExport by vm.openPdfAfterExport.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
@@ -148,22 +154,50 @@ fun PdfExportRoute(
     LaunchedEffect(Unit) {
         if (!launched) {
             launched = true
-            launcher.launch(
-                defaultFilename(
-                    jobNumber = jobNumber,
-                    customer = customer,
-                    vessel = vessel,
-                    shaftPosition = shaftPosition
+            val error = blockingExportError(vm.spec.value)
+            if (error != null) {
+                blockingErrorMessage = error
+            } else {
+                launcher.launch(
+                    defaultFilename(
+                        jobNumber = jobNumber,
+                        customer = customer,
+                        vessel = vessel,
+                        shaftPosition = shaftPosition
+                    )
                 )
-            )
+            }
         }
+    }
+
+    blockingErrorMessage?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { finished = true },
+            title = { Text("Cannot export PDF") },
+            text = { Text(msg) },
+            confirmButton = {
+                TextButton(onClick = { finished = true }) { Text("OK") }
+            }
+        )
     }
 
     if (finished) {
         onFinished()
-    } else {
+    } else if (blockingErrorMessage == null) {
         Text("") // keep composition alive while the picker is open
     }
+}
+
+private fun blockingExportError(spec: ShaftSpec): String? {
+    spec.threads.forEach { th ->
+        startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)
+            ?.let { return it }
+    }
+    spec.liners.forEach { ln ->
+        startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm)
+            ?.let { return it }
+    }
+    return null
 }
 
 private fun openPdf(context: Context, uri: Uri) {
