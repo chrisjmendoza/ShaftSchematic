@@ -9,6 +9,18 @@ android {
     namespace = "com.android.shaftschematic"
     compileSdk = 36
 
+    signingConfigs {
+        // Shared debug keystore — committed to repo so all machines sign with the same key.
+        // Android will treat installs from any machine as updates rather than reinstalls.
+        // Debug keystore credentials are public knowledge and not sensitive.
+        create("shared") {
+            storeFile = file("../debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.android.shaftschematic"
         minSdk = 28
@@ -20,7 +32,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("shared")
+        }
         release {
+            signingConfig = signingConfigs.getByName("shared")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

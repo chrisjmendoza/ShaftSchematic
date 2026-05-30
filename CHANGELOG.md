@@ -6,6 +6,35 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-05-30 (4)
+
+### fix: shared app signing + corrected keyway schematic convention
+
+#### Signing
+- Committed `debug.keystore` to the project root so every machine that clones
+  the repo signs with the same key. Android now treats sideloaded builds from
+  any machine as app updates rather than new installs — no more uninstall/data-wipe
+  when switching computers.
+- Added `signingConfigs.shared` in `build.gradle.kts` (debug + release both use it).
+- `.gitignore` updated with `!debug.keystore` exception; release keystores remain blocked.
+
+#### Keyway rendering — full rewrite to match shop schematic convention
+- **Previous behaviour:** drew a notch cutting down from the top surface of the
+  taper, showing depth. Wrong axis and wrong convention.
+- **Correct convention** (confirmed from shop hand-drawings in `assets/`): the keyway
+  is shown as a **plan-view rectangle centred on the shaft centreline** — height
+  represents keyway **width** (W) to scale, horizontal span represents keyway
+  **length** (L) to scale. Depth is never drawn; it appears only in the PDF footer text.
+- The closed (LET) end uses a **concave semicircle** matching the mill-cutter profile.
+  For floating keyways both ends are semicircular; for open keyways the SET face is
+  already closed by the taper's end-face line.
+- Interior filled **white** so the keyway reads as a void against any taper fill colour
+  (steel grey, bronze, etc.). Fill is inset one line-width from the SET face so the
+  taper's end-face line retains its full visual weight.
+- Fix applied identically to `ShaftRenderer` (preview) and `ShaftPdfComposer` (PDF).
+
+---
+
 ## Versioning Notes
 
 - Early development used git tags (`v0.2.0`, `v0.3.1`) for milestones.
