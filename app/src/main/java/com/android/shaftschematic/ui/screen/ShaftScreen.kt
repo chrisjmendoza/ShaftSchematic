@@ -229,7 +229,7 @@ fun ShaftScreen(
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
-    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) -> Unit,
+    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -1155,7 +1155,7 @@ private fun ComponentCarouselPager(
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
-    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) -> Unit,
+    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -1371,7 +1371,7 @@ private fun ComponentPagerCard(
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
-    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) -> Unit,
+    onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -1547,7 +1547,7 @@ private fun ComponentPagerCard(
                         fillMaxWidth = false
                     ) { s ->
                         val widthMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
-                        onUpdateTaperKeyway(idx, widthMm, t.keywayDepthMm, t.keywayLengthMm, t.keywaySpooned)
+                        onUpdateTaperKeyway(idx, widthMm, t.keywayDepthMm, t.keywayLengthMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
                     }
 
                     Text("×", style = MaterialTheme.typography.titleMedium)
@@ -1559,7 +1559,7 @@ private fun ComponentPagerCard(
                         fillMaxWidth = false
                     ) { s ->
                         val depthMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
-                        onUpdateTaperKeyway(idx, t.keywayWidthMm, depthMm, t.keywayLengthMm, t.keywaySpooned)
+                        onUpdateTaperKeyway(idx, t.keywayWidthMm, depthMm, t.keywayLengthMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
                     }
                 }
 
@@ -1568,29 +1568,41 @@ private fun ComponentPagerCard(
                     initialDisplay = dispKw(t.keywayLengthMm, unit),
                 ) { s ->
                     val lenMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
-                    onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, lenMm, t.keywaySpooned)
+                    onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, lenMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
                 }
 
+                CommitNum(
+                    label = "KW Offset from SET (${abbr(unit)})",
+                    initialDisplay = dispKw(t.keywayOffsetFromSetMm, unit),
+                ) { s ->
+                    val offsetMm = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                    onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, offsetMm, t.keywaySpooned)
+                }
+
+                val isFloating = t.keywayOffsetFromSetMm > 0f
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
                         .toggleable(
                             value = t.keywaySpooned,
+                            enabled = !isFloating,
                             role = androidx.compose.ui.semantics.Role.Switch,
                             onValueChange = { checked ->
-                                onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, checked)
+                                onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, t.keywayOffsetFromSetMm, checked)
                             }
                         )
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Keyway spooned",
-                        modifier = Modifier.weight(1f)
+                        text = if (isFloating) "Keyway spooned (N/A — floating)" else "Keyway spooned",
+                        modifier = Modifier.weight(1f),
+                        color = if (isFloating) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                     )
                     androidx.compose.material3.Switch(
-                        checked = t.keywaySpooned,
+                        checked = t.keywaySpooned && !isFloating,
+                        enabled = !isFloating,
                         onCheckedChange = null
                     )
                 }

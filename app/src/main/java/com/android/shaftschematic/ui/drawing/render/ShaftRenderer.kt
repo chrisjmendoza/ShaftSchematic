@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.TextMeasurer
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Taper
+import com.android.shaftschematic.model.hasKeyway
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentType
@@ -209,6 +211,12 @@ object ShaftRenderer {
                 drawLine(outline, Offset(x0, bot0), Offset(x1, bot1), strokeWidth = outlineW)
                 drawLine(outline, Offset(x0, top0), Offset(x0, bot0), strokeWidth = outlineW)
                 drawLine(outline, Offset(x1, top1), Offset(x1, bot1), strokeWidth = outlineW)
+
+                // Keyway — look up model taper by id for keyway data
+                val modelTaper = spec.tapers.firstOrNull { it.id == t.id }
+                if (modelTaper != null && modelTaper.hasKeyway) {
+                    drawKeywayNotch(modelTaper, L, x0, x1, top0, top1, outline, outlineW, taperFill)
+                }
             }
         } else {
             for (t in spec.tapers) {
@@ -241,6 +249,10 @@ object ShaftRenderer {
             drawLine(outline, Offset(x0, bot0), Offset(x1, bot1), strokeWidth = outlineW)
             drawLine(outline, Offset(x0, top0), Offset(x0, bot0), strokeWidth = outlineW)
                 drawLine(outline, Offset(x1, top1), Offset(x1, bot1), strokeWidth = outlineW)
+
+                if (t.hasKeyway) {
+                    drawKeywayNotch(t, L, x0, x1, top0, top1, outline, outlineW, taperFill)
+                }
             }
         }
 
@@ -552,5 +564,106 @@ private fun DrawScope.drawHighlightStrokeRect(
         topLeft = topLeft,
         size = size,
         style = Stroke(width = baseStrokePx + edgeDx)
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Keyway notch drawing
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Draw a keyway notch on the top surface of a taper.
+ *
+ * The taper is already drawn. This function:
+ *  1. Fills the notch area with [taperFill] to erase the top outline inside it.
+ *  2. Redraws the top-surface line segments outside the notch.
+ *  3. Draws the notch walls (and floor) in [outline].
+ *
+ * SET is the smaller-diameter end of the taper. The keyway starts [keywayOffsetFromSetMm]
+ * from the SET face and runs toward LET for [keywayLengthMm].
+ *
+ * Open keyway  (offset == 0): no SET-side wall — the slot opens at the shaft face.
+ * Floating keyway (offset > 0): walls on both sides; the spooned flag is ignored.
+ *
+ * [x0]/[top0] are the px coordinates of the taper's AFT end (startFromAftMm side).
+ * [x1]/[top1] are the px coordinates of the taper's FWD end.
+ */
+private fun DrawScope.drawKeywayNotch(
+    t: Taper,
+    L: ShaftRenderer.Layout,
+    x0: Float, x1: Float,
+    top0: Float, top1: Float,
+    outline: Color,
+    outlineW: Float,
+    taperFill: Color,
+) {
+    val depthPx   = t.keywayDepthMm * L.pxPerMm
+    val taperLenPx = (x1 - x0)
+    if (taperLenPx == 0f || depthPx <= 0f) return
+
+    // Determine which end is SET (smaller diameter).
+    val setAtStart = t.startDiaMm <= t.endDiaMm   // SET is at x0 if start dia ≤ end dia
+    val setX   = if (setAtStart) x0 else x1
+    val letX   = if (setAtStart) x1 else x0
+
+    // Direction from SET toward LET in px (+1 = right, -1 = left).
+    val dir = if (letX > setX) 1f else -1f
+
+    val offsetPx = t.keywayOffsetFromSetMm * L.pxPerMm
+    val kwLenPx  = t.keywayLengthMm * L.pxPerMm
+
+    // Keyway SET-side and LET-side x positions.
+    val kwSetX = setX + dir * offsetPx
+    val kwLetX = kwSetX + dir * kwLenPx
+
+    val kwLeft  = min(kwSetX, kwLetX)
+    val kwRight = max(kwSetX, kwLetX)
+
+    // Interpolate the taper's top-surface y at any x position within the taper span.
+    fun topYAt(x: Float): Float {
+        val frac = if (x1 != x0) (x - x0) / (x1 - x0) else 0f
+        return top0 + frac * (top1 - top0)
+    }
+
+    val topAtKwLeft  = topYAt(kwLeft)
+    val topAtKwRight = topYAt(kwRight)
+
+    // 1. Fill the notch area to erase the top outline inside the slot.
+    val notchPath = Path().apply {
+        moveTo(kwLeft,  topAtKwLeft)
+        lineTo(kwRight, topAtKwRight)
+        lineTo(kwRight, topAtKwRight + depthPx)
+        lineTo(kwLeft,  topAtKwLeft  + depthPx)
+        close()
+    }
+    drawPath(notchPath, color = taperFill)
+
+    // 2. Redraw top-surface line segments outside the notch.
+    val taperLeft  = min(x0, x1)
+    val taperRight = max(x0, x1)
+    if (kwLeft > taperLeft + 0.5f) {
+        drawLine(outline, Offset(taperLeft, topYAt(taperLeft)), Offset(kwLeft, topAtKwLeft), strokeWidth = outlineW)
+    }
+    if (kwRight < taperRight - 0.5f) {
+        drawLine(outline, Offset(kwRight, topAtKwRight), Offset(taperRight, topYAt(taperRight)), strokeWidth = outlineW)
+    }
+
+    // 3. Draw notch walls and floor.
+    val isOpen = t.keywayOffsetFromSetMm < 0.01f
+
+    // LET-side wall (always present).
+    drawLine(outline, Offset(kwLetX, topYAt(kwLetX)), Offset(kwLetX, topYAt(kwLetX) + depthPx), strokeWidth = outlineW)
+
+    // SET-side wall (only for floating keyway; open keyways have no wall at the SET face).
+    if (!isOpen) {
+        drawLine(outline, Offset(kwSetX, topYAt(kwSetX)), Offset(kwSetX, topYAt(kwSetX) + depthPx), strokeWidth = outlineW)
+    }
+
+    // Floor (follows taper slope).
+    drawLine(
+        outline,
+        Offset(kwLeft,  topAtKwLeft  + depthPx),
+        Offset(kwRight, topAtKwRight + depthPx),
+        strokeWidth = outlineW
     )
 }
