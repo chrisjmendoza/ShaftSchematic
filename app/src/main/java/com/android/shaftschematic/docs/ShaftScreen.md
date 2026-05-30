@@ -88,6 +88,9 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.5 (2026-05-30)**
+- Fixed: selection highlight (glow) not visible on initial swipe after opening a file. `ComponentCarouselPager` now seeds selection when the component list first loads, and treats any swipe as user-initiated when no component is selected.
+
 **v0.3 (2025-10-04)**  
 - Added transparent preview option; removed forced surface background.  
 - Moved all component remove buttons to **Top-End** of `ComponentCard`.  

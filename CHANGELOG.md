@@ -12,6 +12,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 - Starting with `1.1.1`, the changelog and the app `versionName` are kept in sync; future releases follow this convention.
 - Note: `v0.2.0` and `v0.3.0` point to the same commit (`d1a4da5`).
 
+## 2026-05-30
+
+### fix: selection box not shown on initial swipe after opening a file
+
+- `ComponentCarouselPager` now seeds `selectedComponentId` immediately when components first load (via the existing `LaunchedEffect(rowsSorted.size)` that auto-scrolls to the last card), so the highlight glow appears as soon as the carousel is visible.
+- Fixed swipe detection guard: the `pagerScrollStartedByUser` flag was only set when `selectedIndex == pagerState.currentPage`, but with no selection `selectedIndex` was `-1`, so all swipes were silently ignored. The guard now also triggers when `selectedComponentId` is `null`.
+
+---
+
 ## 2026-05-29
 
 ### feat: tap-to-add pipeline, thread validation, taper-rate restoration, pdfPrefs persistence

@@ -1218,11 +1218,14 @@ private fun ComponentCarouselPager(
     var pagerScrollStartedByUser by remember { mutableStateOf(false) }
     var pagerStartPage by remember { mutableStateOf<Int?>(null) }
 
-    // Auto-jump to the newest card after insertion
+    // Auto-jump to the newest card after insertion; also seed selection on initial load
     LaunchedEffect(rowsSorted.size) {
         if (rowsSorted.isNotEmpty()) {
             val newPage = rowsSorted.size - 1
             pagerState.scrollToPage(newPage)
+            if (selectedComponentId == null) {
+                onSelectComponentById(rowsSorted.getOrNull(newPage)?.component?.id)
+            }
         }
     }
 
@@ -1242,7 +1245,7 @@ private fun ComponentCarouselPager(
             val selectedIndex = selectedComponentId?.let { id ->
                 rowsSorted.indexOfFirst { it.component.id == id }
             } ?: -1
-            if (selectedIndex == pagerState.currentPage) {
+            if (selectedComponentId == null || selectedIndex == pagerState.currentPage) {
                 pagerScrollStartedByUser = true
                 pagerStartPage = pagerState.currentPage
             }
