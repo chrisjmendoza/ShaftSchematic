@@ -187,7 +187,7 @@ fun composeShaftPdf(
     } else {
         drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect)
     }
-    drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline, ptPerMm)
+    drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline)
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
     c.restore()
@@ -697,12 +697,7 @@ private fun drawTapers(
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
     outline: Paint,
-    ptPerMm: Float,
 ) {
-    val whiteFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        color = android.graphics.Color.WHITE
-    }
     tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
         val x0 = requireFinite("taper.x0", xAt(t.startFromAftMm))
@@ -717,7 +712,7 @@ private fun drawTapers(
         c.drawLine(x1, top1, x1, bot1, outline)
 
         if (t.hasKeyway) {
-            drawKeywayNotchPdf(c, t, x0, x1, top0, top1, ptPerMm, outline, whiteFill)
+            drawKeywayNotchPdf(c, t, x0, x1, top0, top1, cy, outline)
         }
     }
 }
@@ -726,62 +721,60 @@ private fun drawKeywayNotchPdf(
     c: Canvas,
     t: Taper,
     x0: Float, x1: Float,
-    top0: Float, top1: Float,
-    ptPerMm: Float,
+    @Suppress("UNUSED_PARAMETER") top0: Float,
+    @Suppress("UNUSED_PARAMETER") top1: Float,
+    cy: Float,
     outline: Paint,
-    whiteFill: Paint,
 ) {
-    val depthPt = t.keywayDepthMm * ptPerMm
-    if (depthPt <= 0f || x1 == x0) return
+    if (x1 == x0 || t.keywayWidthMm <= 0f) return
 
     val setAtStart = t.startDiaMm <= t.endDiaMm
     val setX = if (setAtStart) x0 else x1
     val letX = if (setAtStart) x1 else x0
     val dir  = if (letX > setX) 1f else -1f
 
-    val offsetPt = t.keywayOffsetFromSetMm * ptPerMm
-    val kwLenPt  = t.keywayLengthMm * ptPerMm
+    // Scale mm → pt using the taper's own pixel span (avoids needing ptPerMm).
+    val ptPerMm = if (t.lengthMm > 0f) kotlin.math.abs(x1 - x0) / t.lengthMm else 1f
 
-    val kwSetX = setX + dir * offsetPt
-    val kwLetX = kwSetX + dir * kwLenPt
-    val kwLeft  = min(kwSetX, kwLetX)
-    val kwRight = max(kwSetX, kwLetX)
+    val halfW       = (t.keywayWidthMm * ptPerMm) / 2f
+    val kwSetX      = setX + dir * t.keywayOffsetFromSetMm * ptPerMm
+    val kwLetX      = kwSetX + dir * t.keywayLengthMm * ptPerMm
+    val isOpen      = t.keywayOffsetFromSetMm < 0.01f
 
-    fun topYAt(x: Float): Float {
-        val frac = (x - x0) / (x1 - x0)
-        return top0 + frac * (top1 - top0)
+    val letArcCx    = kwLetX - dir * halfW
+    val letArcStart = if (dir > 0) 270f else 90f
+    val letOval     = android.graphics.RectF(letArcCx - halfW, cy - halfW, letArcCx + halfW, cy + halfW)
+
+    val setArcCx    = kwSetX + dir * halfW
+    val setArcStart = if (dir > 0) 90f else 270f
+    val setOval     = android.graphics.RectF(setArcCx - halfW, cy - halfW, setArcCx + halfW, cy + halfW)
+
+    val lineNear  = if (isOpen) kwSetX else setArcCx
+    val lineFar   = letArcCx
+    val lineLeft  = min(lineNear, lineFar)
+    val lineRight = max(lineNear, lineFar)
+
+    // ── White fill (keyway is a void in the material) ──
+    // Inset from the SET face by one stroke-width so the taper end-face line keeps
+    // its full thickness where it meets the keyway fill.
+    val strokeW   = outline.strokeWidth
+    val fillNear  = if (isOpen) kwSetX + dir * strokeW else setArcCx
+    val fillLeft  = min(fillNear, letArcCx)
+    val fillRight = max(fillNear, letArcCx)
+    val whiteFill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.FILL
+        color = android.graphics.Color.WHITE
     }
+    c.drawRect(fillLeft, cy - halfW, fillRight, cy + halfW, whiteFill)
+    c.drawArc(letOval, letArcStart, 180f, false, whiteFill)
+    if (!isOpen) c.drawArc(setOval, setArcStart, 180f, false, whiteFill)
 
-    val topAtKwLeft  = topYAt(kwLeft)
-    val topAtKwRight = topYAt(kwRight)
-
-    // Erase top line inside notch with white fill.
-    val notchPath = android.graphics.Path().apply {
-        moveTo(kwLeft,  topAtKwLeft)
-        lineTo(kwRight, topAtKwRight)
-        lineTo(kwRight, topAtKwRight + depthPt)
-        lineTo(kwLeft,  topAtKwLeft  + depthPt)
-        close()
-    }
-    c.drawPath(notchPath, whiteFill)
-
-    // Redraw top-surface segments outside the notch.
-    val taperLeft  = min(x0, x1)
-    val taperRight = max(x0, x1)
-    if (kwLeft > taperLeft + 0.5f)
-        c.drawLine(taperLeft, topYAt(taperLeft), kwLeft, topAtKwLeft, outline)
-    if (kwRight < taperRight - 0.5f)
-        c.drawLine(kwRight, topAtKwRight, taperRight, topYAt(taperRight), outline)
-
-    // LET-side wall.
-    c.drawLine(kwLetX, topYAt(kwLetX), kwLetX, topYAt(kwLetX) + depthPt, outline)
-
-    // SET-side wall only for floating keyways.
-    if (t.keywayOffsetFromSetMm >= 0.01f)
-        c.drawLine(kwSetX, topYAt(kwSetX), kwSetX, topYAt(kwSetX) + depthPt, outline)
-
-    // Floor.
-    c.drawLine(kwLeft, topAtKwLeft + depthPt, kwRight, topAtKwRight + depthPt, outline)
+    // ── Outline strokes on top ──
+    c.drawLine(lineLeft, cy - halfW, lineRight, cy - halfW, outline)
+    c.drawLine(lineLeft, cy + halfW, lineRight, cy + halfW, outline)
+    c.drawArc(letOval, letArcStart, 180f, false, outline)
+    if (!isOpen) c.drawArc(setOval, setArcStart, 180f, false, outline)
+    // Open keyway: shaft face end-line already closes the SET end.
 }
 
 private fun drawThreads(

@@ -49,6 +49,9 @@ captures/
 *.jks
 *.keystore
 *.pem
+# Exception: shared debug keystore is intentionally tracked so all machines
+# sign with the same key (allows OTA updates without reinstall).
+!debug.keystore
 
 # =======================================
 # Google / Firebase config (add when used)
