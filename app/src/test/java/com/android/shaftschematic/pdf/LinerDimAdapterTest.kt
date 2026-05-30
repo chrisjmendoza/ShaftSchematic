@@ -106,6 +106,17 @@ class LinerDimAdapterTest {
     }
 
     @Test
+    fun `AUTO mode assigns AFT anchor when liner sits exactly at midpoint (tie goes to AFT)`() {
+        // Liner at 450..550mm — 450mm from AFT SET (0), 450mm from FWD SET (1000).
+        // distFwd < distAft is false (equal), so the else branch gives AFT anchor.
+        val spec = baseSpec(liner(450f, 100f))
+        val dims = mapToLinerDimsForPdf(spec, PdfTieringMode.AUTO)
+
+        assertEquals(LinerAnchor.AFT_SET, dims[0].anchor)
+        assertEquals(450.0, dims[0].offsetFromSetMm, 1e-6)
+    }
+
+    @Test
     fun `measurement space is rebased when AFT thread is excluded`() {
         // Excluded AFT thread of 100mm shifts measurement origin to x=100.
         // Liner at 300..400mm physical → 200..300mm in measure space.

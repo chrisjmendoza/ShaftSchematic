@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
@@ -25,6 +26,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.max
 
@@ -202,12 +205,16 @@ fun AddLinerDialog(
     val lengthMm = toMmOrNullFromDialog(length, unit) ?: -1f
     val odMm = toMmOrNullFromDialog(od, unit) ?: -1f
 
+    val startError = if (startMm >= 0f && lengthMm > 0f)
+        startOverlapErrorMm(spec, "", ComponentKind.LINER, lengthMm, startMm)
+    else null
+
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Add Liner") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
-                CommitNumField("Start (${abbrFor(unit)})", start) { start = it }
+                CommitNumField("Start (${abbrFor(unit)})", start, errorText = startError) { start = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Length (${abbrFor(unit)})", length) { length = it }
                 Spacer(Modifier.height(8.dp))
@@ -215,7 +222,7 @@ fun AddLinerDialog(
             }
         },
         confirmButton = {
-            val ok = startMm >= 0f && lengthMm > 0f && odMm > 0f
+            val ok = startMm >= 0f && lengthMm > 0f && odMm > 0f && startError == null
             Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, odMm) }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
@@ -257,12 +264,16 @@ fun AddThreadDialog(
     val majorMm = toMmOrNullFromDialog(major, unit) ?: -1f
     val tpi = parseFractionOrDecimalOrRatio(tpiText) ?: -1f   // allow e.g., "20", "10", "32"
 
+    val startError = if (startMm >= 0f && lengthMm > 0f)
+        startOverlapErrorMm(spec, "", ComponentKind.THREAD, lengthMm, startMm)
+    else null
+
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Add Thread") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
-                CommitNumField("Start (${abbrFor(unit)})", start) { start = it }
+                CommitNumField("Start (${abbrFor(unit)})", start, errorText = startError) { start = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Major Ø (${abbrFor(unit)})", major) { major = it }
                 Spacer(Modifier.height(8.dp))
@@ -284,7 +295,7 @@ fun AddThreadDialog(
             }
         },
         confirmButton = {
-            val ok = startMm >= 0f && lengthMm > 0f && majorMm > 0f && tpi > 0f
+            val ok = startMm >= 0f && lengthMm > 0f && majorMm > 0f && tpi > 0f && startError == null
             Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, majorMm, tpi, !countInOal) }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
@@ -364,14 +375,19 @@ fun AddTaperDialog(
 private fun CommitNumField(
     label: String,
     initial: String,
+    errorText: String? = null,
     onCommit: (String) -> Unit
 ) {
     var text by remember(initial) { mutableStateOf(initial) }
     OutlinedTextField(
         value = text,
-        onValueChange = { text = it }, // keep local while typing
+        onValueChange = { text = it },
         label = { Text(label) },
         singleLine = true,
+        isError = errorText != null,
+        supportingText = if (errorText != null) {
+            { Text(errorText, color = MaterialTheme.colorScheme.error) }
+        } else null,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
         modifier = Modifier

@@ -172,11 +172,12 @@ Scope:
 
 **Tasks**
 
-- [ ] Field-level error highlighting (red)
-- [ ] Warning badges (yellow) in component list
-- [ ] Disable "Confirm" when violations are blocking
-- [ ] Warnings show inline but never block dialog-close
-- [ ] On export: full validation; block on red, allow on yellow
+- [x] Field-level error highlighting (red) — Start field in Add dialogs shows error text
+- [x] Error badges in component carousel cards — Thread/Liner cards show error chip below title
+- [x] Disable "Add" when violations are blocking — Add dialogs gate on `startOverlapErrorMm`
+- [x] On export: full validation; block on blocking errors — `PdfExportRoute` checks before opening SAF picker
+- [ ] Warning badges (yellow) — non-blocking warnings not yet shown (planned, next sprint)
+- [ ] Warnings show inline but never block dialog-close (planned)
 
 **Extra**
 

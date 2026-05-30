@@ -5,6 +5,7 @@ package com.android.shaftschematic.pdf
 
 import android.graphics.*
 import android.graphics.pdf.PdfDocument
+import com.android.shaftschematic.geom.END_EPS_MM
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.model.*
@@ -948,22 +949,19 @@ private fun hasFwdThread(spec: ShaftSpec): Boolean {
     return spec.threads.any { (it.startFromAftMm + it.lengthMm) >= (oal - 0.5f) } // thread touches FWD end
 }
 
-// Must stay in sync with END_EPS_MM in OalComputations.kt (same value, Double there).
-private const val END_EPS_MM = 0.5f
-
 private fun hasAftTaper(spec: ShaftSpec): Boolean =
     spec.tapers.any { tp ->
         // touches AFT end if its start is near 0 OR it spans across 0
-        val start = tp.startFromAftMm
-        val end   = tp.startFromAftMm + tp.lengthMm
-        start <= END_EPS_MM || (start < 0f && end > 0f)
+        val start = tp.startFromAftMm.toDouble()
+        val end   = (tp.startFromAftMm + tp.lengthMm).toDouble()
+        start <= END_EPS_MM || (start < 0.0 && end > 0.0)
     }
 
 private fun hasFwdTaper(spec: ShaftSpec): Boolean {
-    val oal = spec.overallLengthMm
+    val oal = spec.overallLengthMm.toDouble()
     return spec.tapers.any { tp ->
-        val start = tp.startFromAftMm
-        val end   = tp.startFromAftMm + tp.lengthMm
+        val start = tp.startFromAftMm.toDouble()
+        val end   = (tp.startFromAftMm + tp.lengthMm).toDouble()
         // touches FWD end if its end is near OAL OR it spans across OAL
         abs(end - oal) <= END_EPS_MM || (start < oal && end > oal)
     }
@@ -1001,7 +999,7 @@ private data class EndFlags(
  * to be rendered in proper stacked order in the footer.
  */
 
-private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = END_EPS_MM.toDouble()): EndFlags {
+private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = END_EPS_MM): EndFlags {
     val aftX = 0.0
     val fwdX = spec.overallLengthMm.toDouble()
 
@@ -1050,7 +1048,7 @@ private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = END_EPS_MM.toDoub
 
 private const val EPS_MM = 0.01
 
-private fun near(a: Double, b: Double, eps: Double = END_EPS_MM.toDouble()) =
+private fun near(a: Double, b: Double, eps: Double = END_EPS_MM) =
     abs(a - b) <= eps
 
 private fun getAftEndThread(spec: ShaftSpec): Threads? =

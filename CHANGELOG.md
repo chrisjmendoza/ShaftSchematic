@@ -12,6 +12,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 - Starting with `1.1.1`, the changelog and the app `versionName` are kept in sync; future releases follow this convention.
 - Note: `v0.2.0` and `v0.3.0` point to the same commit (`d1a4da5`).
 
+## 2026-05-30 (2)
+
+### feat: validation UI hookup — blocking errors surface in dialogs, cards, and export
+
+#### Add dialogs (Liner + Thread)
+- `CommitNumField` inside Add dialogs now accepts an `errorText` parameter and shows it in red below the Start field using `OutlinedTextField`'s `isError`/`supportingText`.
+- `AddLinerDialog` and `AddThreadDialog` compute `startOverlapErrorMm` live as fields change. The **Add button is disabled** when a blocking start error exists (overlap, negative start, thread-between-components). The error message appears immediately on the start field so the user knows why.
+
+#### Carousel component cards
+- `ComponentCard` gains an `errorMessage: String?` parameter. When non-null, a Material 3 error-container chip is rendered below the card title.
+- Thread and Liner cards pass their current `startOverlapErrorMm` result to this slot, so cards with placement errors show a visible red badge at all times.
+
+#### PDF export gate
+- `PdfExportRoute` now calls `blockingExportError(spec)` before launching the SAF file picker. If any thread or liner has a blocking validation error the picker is never opened; instead an `AlertDialog` displays the error message and returns the user to the editor on dismiss.
+
+---
+
 ## 2026-05-30
 
 ### fix: selection box not shown on initial swipe after opening a file
