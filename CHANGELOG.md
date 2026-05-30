@@ -6,6 +6,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-05-30 (5)
+
+### fix: selection highlight — single thin ring instead of double box
+
+- Removed the inner white "edge" ring from the two-ring highlight system.
+  Only the outer cyan glow ring is drawn now, giving a single clean selection
+  box that doesn't compete visually with component lines (keyways, threads, etc.).
+- Reduced `highlightGlowExtraPx` from 8 → 2 px so the ring is noticeably
+  thinner while still clearly marking the selected component.
+
+---
+
 ## 2026-05-30 (4)
 
 ### fix: shared app signing + corrected keyway schematic convention

@@ -127,9 +127,9 @@ data class RenderOptions(
     /** Opacity for the edge ring. */
     val highlightEdgeAlpha: Float = 1.0f,
     /** Extra stroke width (px) added to the glow beyond the base outline width. */
-    val highlightGlowExtraPx: Float = 8f,
+    val highlightGlowExtraPx: Float = 2f,
     /** Extra stroke width (px) added to the edge beyond the base outline width. */
-    val highlightEdgeExtraPx: Float = 4f
+    val highlightEdgeExtraPx: Float = 2f
 )
 
 enum class ReferenceEnd { AFT, FWD }

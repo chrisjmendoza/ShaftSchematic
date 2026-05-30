@@ -528,17 +528,12 @@ private fun DrawScope.drawHighlightStroke(
     edgeDx: Float,
     edgeAlpha: Float,
 ) {
-    // Soft colored glow
+    // Single selection ring — outer glow only. The inner white edge ring was removed
+    // because it created a distracting double-box appearance.
     drawPath(
         path = path,
         color = glowColor.copy(alpha = glowAlpha),
         style = Stroke(width = baseStrokePx + glowDx, cap = StrokeCap.Butt, join = StrokeJoin.Round)
-    )
-    // Crisp edge
-    drawPath(
-        path = path,
-        color = edgeColor.copy(alpha = edgeAlpha),
-        style = Stroke(width = baseStrokePx + edgeDx, cap = StrokeCap.Butt, join = StrokeJoin.Round)
     )
 }
 
@@ -553,17 +548,12 @@ private fun DrawScope.drawHighlightStrokeRect(
     edgeDx: Float,
     edgeAlpha: Float,
 ) {
+    // Single selection ring — outer glow only.
     drawRect(
         color = glowColor.copy(alpha = glowAlpha),
         topLeft = topLeft,
         size = size,
         style = Stroke(width = baseStrokePx + glowDx)
-    )
-    drawRect(
-        color = edgeColor.copy(alpha = edgeAlpha),
-        topLeft = topLeft,
-        size = size,
-        style = Stroke(width = baseStrokePx + edgeDx)
     )
 }
 
