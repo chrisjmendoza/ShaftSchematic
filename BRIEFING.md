@@ -113,7 +113,7 @@ All axial positions are measured **AFT → FWD**. `ShaftSpec.validate()` checks 
 `io/InternalStorage.kt` — manages the app-private `.shaft` file list; handles save, load, delete, overwrite confirmation. Filenames follow the convention: `{vessel/job}_{position}_{date}` (position suffix is optional, falls back to generated name).
 
 ### PDF Export
-`pdf/ShaftPdfComposer.kt` — renders to `PdfDocument` using the same `ShaftLayout` + `ShaftRenderer` as the screen preview. Includes: component labels, major/minor grid, centerline rules, dimension tiers, footer (shaft position, taper KW data). Auto-open after export is configurable.
+`pdf/ShaftPdfComposer.kt` — renders to `PdfDocument` using `ShaftLayout` for geometry, but draws with its **own Canvas drawing functions** (bodies, tapers, threads, liners), not `ShaftRenderer`. The two rendering paths share the same model and layout math but use separate drawing code — a fix in `ShaftRenderer` does not automatically propagate to the PDF. Includes: component labels (with row-based collision avoidance), major/minor grid, centerline rules, dimension tiers, footer (shaft position, taper KW data). Auto-open after export is configurable.
 
 ---
 

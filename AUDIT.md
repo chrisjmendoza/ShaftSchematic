@@ -2,7 +2,8 @@
 **Date:** 2026-05-27  
 **Auditor:** Claude (external consultant pass)  
 **Branch audited:** `fix/pdf-dimension-measurements`  
-**App version:** 1.1.1 (v0.4.x series)
+**App version:** 1.1.1 (v0.4.x series)  
+**Resolution status updated:** 2026-05-30
 
 ---
 
@@ -11,6 +12,8 @@
 ShaftSchematic is a well-structured Android app with a clear domain model and good separation of concerns. The MVVM pipeline (`ShaftSpec → ViewModel → ShaftLayout → ShaftRenderer → ShaftDrawing`) is sound and consistently applied. The core geometry and PDF export machinery are solid.
 
 The primary issues found are: a significant accumulation of dead code in `ShaftPdfComposer.kt` that the `@Suppress("unused")` annotation is hiding, material inaccuracies in `BRIEFING.md` that will mislead future developers, missing test coverage for several non-trivial PDF adapter functions, and one visible user-facing rendering defect (component label collision in PDFs).
+
+> **All items from this audit have been resolved as of 2026-05-30.** See the resolution notes in the summary table below.
 
 ---
 
@@ -178,17 +181,17 @@ BRIEFING.md line 166 marks "1.2 Preview Tap → mm (not started)" but the recent
 
 ## 8. Summary Table
 
-| # | Severity | Area | Issue |
-|---|---|---|---|
-| 1 | HIGH | PDF Rendering | Component labels collide in PDFs — all drawn at same Y |
-| 2 | MEDIUM | ShaftPdfComposer | ~250 lines of dead code suppressed by `@Suppress("unused")` |
-| 3 | MEDIUM | BRIEFING.md | `includeInOal` should be `excludeFromOAL` (inverted); `aftDiaMm`/`fwdDiaMm` should be `startDiaMm`/`endDiaMm`; `outerDiaMm` should be `odMm` |
-| 4 | MEDIUM | BRIEFING.md + PDF_EXPORT.md | PDF does not use ShaftRenderer; has its own duplicate drawing code |
-| 5 | MEDIUM | Tests | `mapToLinerDimsForPdf`, `buildTaperLengthSpans`, and liner AUTO-anchor edge cases lack unit tests |
-| 6 | LOW | ShaftPdfComposer | `hasCenterBreak` footer heuristic disconnected from actual rendering trigger |
-| 7 | LOW | VALIDATION_RULES.md | Several documented warnings appear unimplemented |
-| 8 | LOW | BRIEFING.md | Sprint status stale (tap selection in progress) |
-| 9 | LOW | OalComputations + ShaftPdfComposer | `END_EPS_MM` defined twice; could diverge |
+| # | Severity | Area | Issue | Status |
+|---|---|---|---|---|
+| 1 | HIGH | PDF Rendering | Component labels collide in PDFs — all drawn at same Y | ✅ Fixed — greedy row assignment in `drawComponentLabelsPdf` |
+| 2 | MEDIUM | ShaftPdfComposer | ~250 lines of dead code suppressed by `@Suppress("unused")` | ✅ Fixed — dead functions removed, suppress annotation narrowed |
+| 3 | MEDIUM | BRIEFING.md | `includeInOal` / `aftDiaMm` / `outerDiaMm` field name errors | ✅ Fixed — corrected to `excludeFromOAL`, `startDiaMm`/`endDiaMm`, `odMm` |
+| 4 | MEDIUM | BRIEFING.md + PDF_EXPORT.md | PDF does not use ShaftRenderer; has its own duplicate drawing code | ✅ Fixed — BRIEFING.md updated to describe dual-path reality |
+| 5 | MEDIUM | Tests | `mapToLinerDimsForPdf`, `buildTaperLengthSpans`, liner AUTO-anchor edge cases | ✅ Fixed — `LinerDimAdapterTest` (9 cases) + `TaperDimSpanTest` (2 cases) added |
+| 6 | LOW | ShaftPdfComposer | `hasCenterBreak` footer heuristic disconnected from rendering trigger | ✅ Fixed — footer now uses same `COMPRESS_TRIGGER_PT` constant as renderer |
+| 7 | LOW | VALIDATION_RULES.md | Several documented warnings appear unimplemented | ⏳ Deferred — validation UI hookup is TODO §2.1 |
+| 8 | LOW | BRIEFING.md | Sprint status stale | ✅ Fixed — sprint section updated |
+| 9 | LOW | OalComputations + ShaftPdfComposer | `END_EPS_MM` defined twice; could diverge | ✅ Fixed — constant made `internal` in OalComputations; ShaftPdfComposer imports it |
 
 ---
 
