@@ -12,6 +12,33 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 - Starting with `1.1.1`, the changelog and the app `versionName` are kept in sync; future releases follow this convention.
 - Note: `v0.2.0` and `v0.3.0` point to the same commit (`d1a4da5`).
 
+## 2026-05-30 (3)
+
+### feat: keyway drawing on taper — open and floating keyway styles
+
+#### Model
+- `Taper` gains `keywayOffsetFromSetMm: Float = 0f` (backward-compatible; default 0 = open keyway at SET face).
+- `hasKeyway` extension property: true when width, depth, and length are all non-zero.
+- `isValid` now enforces `offset >= 0` and `offset + length <= taperLength`.
+
+#### Two keyway styles
+- **Open keyway** (`offset = 0`, 95% case): slot starts at the SET face, open-ended there, wall only at the LET side. The Spoon toggle applies here.
+- **Floating keyway** (`offset > 0`, 5% case): slot is inset from the SET face, walls on both sides. Spoon toggle is disabled and grayed in the UI.
+
+#### Rendering
+- `ShaftRenderer` draws the keyway notch on the taper's top surface in the preview: fills the notch area with the taper fill color (erasing the top outline inside the slot), redraws the top line in the two segments outside the slot, then draws walls and floor in the outline color.
+- `ShaftPdfComposer` draws the same notch on the PDF canvas using a white fill to erase the top line inside the slot, with the same wall/floor logic.
+- The notch floor follows the taper slope (drawn as a diagonal line matching the top surface angle).
+
+#### UI
+- Carousel taper card gains **"KW Offset from SET"** field between Length and the Spoon toggle.
+- Spoon toggle is automatically disabled when offset > 0 (floating keyway has no open face to spoon).
+
+#### Tests
+- `TaperKeywayTest`: 11 cases covering `hasKeyway`, offset validation, boundary conditions, and backward-compat default.
+
+---
+
 ## 2026-05-30 (2)
 
 ### feat: validation UI hookup — blocking errors surface in dialogs, cards, and export

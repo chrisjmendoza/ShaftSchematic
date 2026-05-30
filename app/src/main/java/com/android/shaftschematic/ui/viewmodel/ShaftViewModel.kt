@@ -1141,7 +1141,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         ensureOverall()
     }
 
-    fun updateTaperKeyway(index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, spooned: Boolean) = _spec.update { s ->
+    fun updateTaperKeyway(
+        index: Int,
+        widthMm: Float,
+        depthMm: Float,
+        lengthMm: Float,
+        offsetFromSetMm: Float,
+        spooned: Boolean,
+    ) = _spec.update { s ->
         if (index !in s.tapers.indices) s else {
             val old = s.tapers[index]
             val updatedTapers = s.tapers.toMutableList().also { list ->
@@ -1149,6 +1156,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     keywayWidthMm = max(0f, widthMm),
                     keywayDepthMm = max(0f, depthMm),
                     keywayLengthMm = max(0f, lengthMm),
+                    keywayOffsetFromSetMm = max(0f, offsetFromSetMm),
                     keywaySpooned = spooned,
                 )
             }

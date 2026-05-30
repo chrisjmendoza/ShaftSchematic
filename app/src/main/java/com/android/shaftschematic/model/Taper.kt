@@ -16,7 +16,11 @@ import kotlin.math.max
  * @property keywayWidthMm Optional keyway width (0 = none).
  * @property keywayDepthMm Optional keyway depth (0 = none).
  * @property keywayLengthMm Optional keyway length (0 = none).
- * @property keywaySpooned Whether the keyway is spooned.
+ * @property keywayOffsetFromSetMm Axial distance from SET face to the start of the keyway slot.
+ *   0 = open keyway (starts at SET face, open-ended there).
+ *   > 0 = floating keyway (inset from SET, rounded at both ends).
+ * @property keywaySpooned Whether the open-keyway entry at the SET face has a spooned lead-in.
+ *   Ignored when [keywayOffsetFromSetMm] > 0 (floating keyways have no open face).
  */
 @Serializable
 data class Taper(
@@ -28,6 +32,7 @@ data class Taper(
     val keywayWidthMm: Float = 0f,
     val keywayDepthMm: Float = 0f,
     val keywayLengthMm: Float = 0f,
+    val keywayOffsetFromSetMm: Float = 0f,
     val keywaySpooned: Boolean = false,
     val taperRateText: String = "",
 ) : Segment
@@ -39,7 +44,12 @@ fun Taper.isValid(overallLengthMm: Float): Boolean =
         endDiaMm >= 0f &&
         keywayWidthMm >= 0f &&
         keywayDepthMm >= 0f &&
-        keywayLengthMm >= 0f
+        keywayLengthMm >= 0f &&
+        keywayOffsetFromSetMm >= 0f &&
+        (keywayOffsetFromSetMm + keywayLengthMm) <= lengthMm
+
+/** True if this taper has a keyway defined (all three dimensions non-zero). */
+val Taper.hasKeyway: Boolean get() = keywayWidthMm > 0f && keywayDepthMm > 0f && keywayLengthMm > 0f
 
 /** Maximum diameter across the taper span. */
 val Taper.maxDiaMm: Float get() = max(startDiaMm, endDiaMm)

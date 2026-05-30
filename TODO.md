@@ -141,7 +141,13 @@ Tasks are grouped by sequencing and dependency rather than category.
 
 ---
 
-### HIGH 1.5 Add keyway support to Body components
+### DONE 1.5 Keyway drawing on Taper components ✅
+
+Implemented: open keyway (starts at SET face) and floating keyway (inset, both ends walled).
+Rendered in both preview (ShaftRenderer) and PDF (ShaftPdfComposer).
+Model field: `keywayOffsetFromSetMm`. UI: carousel field + spoon toggle auto-disabled for floating.
+
+### HIGH 1.6 Add keyway support to Body components
 
 Keyways are hosted features (not standalone components).
 
