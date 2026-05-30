@@ -132,7 +132,11 @@ import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.util.buildThreadTitleById
+import com.android.shaftschematic.ui.util.bodyWarningMessage
+import com.android.shaftschematic.ui.util.linerWarningMessage
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
+import com.android.shaftschematic.ui.util.taperWarningMessage
+import com.android.shaftschematic.ui.util.threadWarningMessage
 import com.android.shaftschematic.ui.viewmodel.SnapConfig
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
@@ -1454,6 +1458,7 @@ private fun ComponentPagerCard(
                 debugText = if (showComponentDebugLabels) {
                     "id=${b.id} • startMm=${f1(b.startFromAftMm)} • endMm=${f1(b.startFromAftMm + b.lengthMm)}"
                 } else null,
+                warningMessage = bodyWarningMessage(b),
                 componentId = b.id,
                 componentKind = ComponentKind.BODY,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -1496,6 +1501,7 @@ private fun ComponentPagerCard(
                 debugText = if (showComponentDebugLabels) {
                     "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}"
                 } else null,
+                warningMessage = taperWarningMessage(t),
                 componentId = t.id,
                 componentKind = ComponentKind.TAPER,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -1619,6 +1625,7 @@ private fun ComponentPagerCard(
                     "id=${th.id} • startMm=${f1(th.startFromAftMm)} • endMm=${f1(th.startFromAftMm + th.lengthMm)}"
                 } else null,
                 errorMessage = startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm),
+                warningMessage = threadWarningMessage(th),
                 componentId = th.id,
                 componentKind = ComponentKind.THREAD,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -1758,6 +1765,7 @@ private fun ComponentPagerCard(
                     "id=${ln.id} • startMm=${f1(ln.startFromAftMm)} • endMm=${f1(ln.startFromAftMm + ln.lengthMm)}"
                 } else null,
                 errorMessage = startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm),
+                warningMessage = linerWarningMessage(ln),
                 componentId = ln.id,
                 componentKind = ComponentKind.LINER,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -1857,6 +1865,7 @@ private fun ComponentCard(
     titleContent: (@Composable () -> Unit)? = null,
     debugText: String? = null,
     errorMessage: String? = null,
+    warningMessage: String? = null,
     componentId: String? = null,
     componentKind: ComponentKind? = null,
     outerPaddingHorizontal: Dp = 8.dp,
@@ -1905,6 +1914,19 @@ private fun ComponentCard(
                             text = errorMessage,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+                if (warningMessage != null) {
+                    androidx.compose.material3.Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text(
+                            text = warningMessage,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
@@ -2154,11 +2176,18 @@ private fun FreeToEndBadge(
     val endMm = lastOccupiedEndMm(spec)
     val freeSignedMm = spec.overallLengthMm - endMm
     val isOversized = freeSignedMm < 0f
+    val isSnug = !isOversized && freeSignedMm < 10f
 
-    val bg = if (isOversized) MaterialTheme.colorScheme.errorContainer
-    else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-    val fg = if (isOversized) MaterialTheme.colorScheme.onErrorContainer
-    else MaterialTheme.colorScheme.onSurface
+    val bg = when {
+        isOversized -> MaterialTheme.colorScheme.errorContainer
+        isSnug      -> MaterialTheme.colorScheme.tertiaryContainer
+        else        -> MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+    }
+    val fg = when {
+        isOversized -> MaterialTheme.colorScheme.onErrorContainer
+        isSnug      -> MaterialTheme.colorScheme.onTertiaryContainer
+        else        -> MaterialTheme.colorScheme.onSurface
+    }
 
     Surface(
         tonalElevation = if (isOversized) 3.dp else 2.dp,

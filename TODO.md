@@ -182,8 +182,9 @@ Scope:
 - [x] Error badges in component carousel cards — Thread/Liner cards show error chip below title
 - [x] Disable "Add" when violations are blocking — Add dialogs gate on `startOverlapErrorMm`
 - [x] On export: full validation; block on blocking errors — `PdfExportRoute` checks before opening SAF picker
-- [ ] Warning badges (yellow) — non-blocking warnings not yet shown (planned, next sprint)
-- [ ] Warnings show inline but never block dialog-close (planned)
+- [x] Warning badges (yellow) — `ComponentWarnings.kt` computes per-component warnings; yellow `tertiaryContainer` chip shown in carousel cards
+- [x] Warnings show inline but never block dialog-close
+- [x] FreeToEndBadge shows yellow (tertiaryContainer) for 0–10 mm clearance, red when negative
 
 **Extra**
 
@@ -225,7 +226,7 @@ _These are documented in ARCHITECTURE.md and TODO.md previously but not yet impl
 ## 4. Rendering / Component Enhancements (Backlog)
 
 - [ ] Liner shoulders: add aft/fwd shoulder length fields and render stepped shoulders
-- [ ] Keyways drawing: render keyway indicator on taper segments (schematic symbol), using existing KW dims
+- [x] Keyways drawing: rendered on taper segments — plan-view rectangle centered on shaft centreline, mill-cutter arc at LET end, white fill, schematic convention confirmed from shop assets
 - [ ] FIBERGLASS: support fiberglassed body segments (model flag + renderer treatment TBD; decide hatch/pattern and labeling)
 
 ### 4.1 PDF Footer: AFT Taper Info Block Missing (DONE)

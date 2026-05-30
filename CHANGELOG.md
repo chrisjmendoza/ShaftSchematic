@@ -6,6 +6,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-05-30 (6)
+
+### feat: yellow warning badges — non-blocking validation now visible in UI
+
+- **`ComponentWarnings.kt`** — new utility with per-component warning functions:
+  - Any component with `0 < lengthMm < 1 mm` → "Very short segment (< 1 mm)"
+  - Thread with `pitchMm == 0` → "Zero pitch — thread renders flat"
+- **`ComponentCard`** gains a `warningMessage: String?` slot rendered as a yellow
+  `tertiaryContainer` chip below the title, distinct from the red error chip.
+  Body, Taper, Thread, and Liner cards all pass their computed warning.
+- **`FreeToEndBadge`** now has three states: normal → yellow (0–10 mm clearance) → red (negative/oversized). Previously only normal and red.
+- Stale `TODO.md` entries for keyway drawing marked complete.
+
+---
+
 ## 2026-05-30 (5)
 
 ### fix: selection highlight — single thin ring instead of double box
