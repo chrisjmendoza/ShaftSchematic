@@ -188,7 +188,7 @@ fun PdfExportRoute(
     }
 }
 
-private fun blockingExportError(spec: ShaftSpec): String? {
+internal fun blockingExportError(spec: ShaftSpec): String? {
     spec.threads.forEach { th ->
         startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)
             ?.let { return it }
