@@ -90,6 +90,76 @@ Updated TODO.md, BRIEFING.md, and ROADMAP.md to reflect current state:
 
 ---
 
+## 2026-05-30 (8) — fix: sidebar UX, toolbar hamburger, runout PDF layout
+
+### Sidebar
+- **Hamburger button** replaces the Home icon in the top toolbar. Tapping it opens the sidebar overlay — no persistent rail taking up horizontal space.
+- **Home button removed from toolbar** — it now lives only inside the sidebar (not duplicated).
+- **Thin handle tab removed** — the sidebar is opened exclusively via the toolbar button.
+- `navigationBarsPadding()` added inside the sidebar panel so Settings is never hidden under the system navigation bar.
+- `statusBarsPadding()` was already present, keeping the title clear of the status bar.
+
+### Runout PDF — complete layout rewrite
+- **Bubble collision eliminated**: Bubbles are no longer placed directly below their station's axial position. Instead a fan-spread algorithm distributes bubble X positions evenly across the page width, guaranteeing no circles overlap.
+- **Monotonic assignment**: Even-indexed stations → row 0 (shorter leaders), odd-indexed → row 1 (longer leaders). Because the mapping is monotonic (station order = bubble order), leader lines cannot cross each other — they fan out cleanly, exactly matching the hand-drawn reference.
+- **Leaders touch the shaft**: Each leader now starts from the shaft's ACTUAL outer surface at the station's axial position (interpolated through tapers), not from a fixed maximum-diameter y.
+- **Shaft centred vertically**: The shaft profile is now sized from its real maximum outer diameter and centred in the upper portion of the page, with the bubble area and TIR line filling the lower portion.
+
+### TIR direction label (RunoutRoute)
+- Label text corrected to "Looking AFT" / "Looking FORWARD" with an explanation that this determines clock-position reference (3 o'clock looking aft ≠ 3 o'clock looking forward).
+
+---
+
+## 2026-05-30 (7) — feat: runout drawing + wear document + sidebar nav
+
+### Navigation
+- New collapsible **sidebar icon rail** in `ShaftEditorRoute` (always visible, 52 dp collapsed).
+  Three tabs: **Schematic** (always enabled), **Runout Sheet** and **Wear Document** (enabled
+  once the shaft has ≥1 component and a non-zero OAL). Tab state survives configuration changes.
+  Files: `EditorTab.kt`, `EditorSidebar.kt`, `ShaftEditorRoute.kt`.
+
+### Data model
+- `RunoutConfig` — new serializable data class persisted in every `.shaft` file:
+  - `componentOverrides: Map<String, Int>` — per-component bubble count overrides.
+  - `tirDirection: TirDirection` — AFT / FORWARD / UNSET; printed on the runout sheet.
+- `TirDirection` enum in `settings/RunoutConfig.kt`.
+- `ShaftDocCodec.ShaftDocV1` gains `runout_config` field (default = empty → backward-compat).
+- `ShaftViewModel` gains `_runoutConfig` StateFlow, `setRunoutBubbleCount()`, `setTirDirection()`.
+  Config is saved in `exportJson()`, restored in `importJson()`, reset in `newDocument()`.
+
+### Runout PDF (`pdf/RunoutPdfComposer.kt`)
+Page: landscape US Letter. Regions top→bottom:
+1. **Header strip** — Customer, Vessel, Job#, Date, STBD/PORT, OAL in a single compact line.
+2. **OAL span line** — Single arrow-to-arrow dimension, SET to SET only.
+3. **Shaft profile** — Bodies (with compression breaks), tapers (with keyway indicators),
+   liners. No dimension tiers, no component labels.
+4. **Bubble area** — Each component's stations drawn as circles with diagonal leader lines.
+   - Tapers: N stations (default 2) inset `RUNOUT_EDGE_INSET_MM` (25.4 mm / 1 inch) from
+     each edge — readings on the edge face are unreliable.
+   - Liners: same inset convention.
+   - Bodies: N stations (default 3) evenly distributed, no inset.
+   - Within each component, stations alternate row 0 (short leader) and row 1 (long leader)
+     to avoid horizontal overlap between adjacent circles.
+   - Small filled square at the top of each circle = keyway-at-top reference marker.
+5. **TIR line** — "TIR's taken looking: ___" with optional direction label.
+
+### Wear document PDF (`pdf/WearPdfComposer.kt`)
+Same shaft profile + compact header, no bubbles. Dye-pen PASS/FAIL checkboxes + notes fill-in
+line at the bottom. For hand-annotating damage, pitting, and inspection results in the field.
+
+### Carousel changes (`ComponentCarousel.kt`)
+- `RunoutStationControl` composable added to Body, Taper, and Liner cards. Shows
+  "Runout stations: N [−] [+]" using the effective count (override or default).
+- `ComponentCarouselPager` and `ComponentPagerCard` gain `runoutConfig` and
+  `onSetRunoutBubbleCount` params (both defaulted — backward-compat).
+
+### Screen routing
+- `RunoutRoute.kt` — TIR direction selector + Export button; writes runout PDF via SAF.
+- `WearRoute.kt` — Export button; writes wear document PDF via SAF.
+- `ShaftRoute.kt` — wires `runoutConfig` and `onSetRunoutBubbleCount` from ViewModel.
+
+---
+
 ## Versioning Notes
 
 - Early development used git tags (`v0.2.0`, `v0.3.1`) for milestones.
