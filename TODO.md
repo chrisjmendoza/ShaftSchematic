@@ -25,7 +25,7 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 | Shared signing config | ✅ debug.keystore committed; all machines update-install |
 | Internal save/open | ✅ Working |
 | Autosave / draft restore | ✅ Working |
-| ShaftScreen.kt | ⚠️ Oversized — refactor next sprint |
+| ShaftScreen.kt | ✅ Carousel extracted to `ComponentCarousel.kt` (2322 → 1434 lines) |
 | Resolved component pipeline | 🔲 Partial — not fully wired into rendering |
 | Insert-Between workflow | 🔲 Not implemented |
 | Liner shoulders | 🔲 Not implemented |
@@ -33,22 +33,14 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 
 ---
 
-## 1. Active Sprint — ShaftScreen.kt Refactor
+## 1. Active Sprint — Refactor Complete (Carousel Phase)
 
-**Goal:** Reduce the file from ~2000+ lines to a thin coordinator. Isolate responsibilities so features are easier to add without merge conflicts.
+- [x] **Carousel extraction** — `ComponentCarouselPager`, `EdgeNavButton`, `ComponentPagerCard`, `ComponentCard` moved to `ui/screen/ComponentCarousel.kt`. Carousel-private helpers (`CommitNum`, `dispKw`, `fmtTrim`, `pitchMmToTpi`) moved with them. Shared helpers (`abbr`, `disp`, `formatDisplay`, `toMmOrNull`, `parseFractionOrDecimal`, `tpiToPitchMm`) made `internal` so both files can reach them. ShaftScreen.kt: 2322 → 1434 lines.
 
-**Plan:**
+**Remaining refactor work (lower priority — defer until ShaftScreen grows again):**
 
-- [ ] Extract component carousel into `ui/editor/ComponentCarousel.kt` (a production implementation — the file exists but is not the wired one; ShaftScreen.kt contains the real carousel)
-- [ ] Extract preview card region into `ui/drawing/ShaftPreviewPanel.kt`
-- [ ] Move all ViewModel → UI event wiring into `ui/screen/ShaftScreenController.kt`
-- [ ] Keep `ShaftScreen.kt` as a layout coordinator only (no business logic, no field composables)
-- [ ] Ensure all composables are stateless (state lives in ViewModel or is passed explicitly)
-
-**Constraints:**
-- No behaviour changes — this is a pure structural refactor
-- All existing tests must pass throughout
-- Each extraction is its own commit so regressions are easy to bisect
+- [ ] Extract preview panel into `ShaftPreviewPanel.kt`
+- [ ] Extract ViewModel event wiring into `ShaftScreenController.kt`
 
 ---
 

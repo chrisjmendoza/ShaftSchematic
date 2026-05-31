@@ -62,6 +62,25 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-05-30 — Carousel extraction refactor
+
+Extracted the component carousel out of `ShaftScreen.kt` into `ui/screen/ComponentCarousel.kt`.
+
+**Moved to `ComponentCarousel.kt` (~740 lines):**
+- `ComponentCarouselPager` — pager, selection seeding, swipe detection, LaunchedEffects
+- `EdgeNavButton` — left/right arrow buttons
+- `ComponentPagerCard` — per-component editor content (Body, Taper, Thread, Liner)
+- `ComponentCard` — shared card chrome (title, error/warning chips, delete button)
+- Carousel-private helpers: `CommitNum`, `dispKw`, `fmtTrim`, `pitchMmToTpi`, `CAROUSEL_HEIGHT`
+
+**Stayed in `ShaftScreen.kt` (1434 lines, down from 2322):**
+- All screen-level composables (header, preview, OAL badge, dialogs, FAB)
+- Shared display helpers promoted from `private` to `internal`: `abbr`, `disp`, `formatDisplay`, `toMmOrNull`, `parseFractionOrDecimal`, `tpiToPitchMm`
+
+No behaviour changes. All unit tests pass.
+
+---
+
 ## 2026-05-30 — Doc refresh
 
 Updated TODO.md, BRIEFING.md, and ROADMAP.md to reflect current state:
