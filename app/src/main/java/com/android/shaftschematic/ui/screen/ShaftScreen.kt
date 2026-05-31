@@ -1,14 +1,9 @@
 package com.android.shaftschematic.ui.screen
 
 import android.util.Log
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,8 +28,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -290,12 +283,12 @@ fun ShaftScreen(
     val scroll = rememberScrollState()
     val topBarScope = rememberCoroutineScope()
 
-    val exportPdfEnabled = remember(spec) {
+    val exportPdfEnabled = remember(spec.bodies, spec.tapers, spec.threads, spec.liners) {
         spec.bodies.isNotEmpty() || spec.tapers.isNotEmpty() || spec.threads.isNotEmpty() || spec.liners.isNotEmpty()
     }
     val exportPdfDisabledMessage = "Please add at least 1 component before export is active."
 
-    val snapAnchors = remember(spec) { buildSnapAnchors(spec) }
+    val snapAnchors = remember(spec.overallLengthMm, spec.bodies, spec.tapers, spec.threads, spec.liners) { buildSnapAnchors(spec) }
 
     val snappedBodyUpdater = remember(snapAnchors, onUpdateBody) {
         { index: Int, startMm: Float, lengthMm: Float, diaMm: Float ->
@@ -513,7 +506,7 @@ fun ShaftScreen(
                 var hasLenFocus by remember { mutableStateOf(false) }
                 var lenTextOnFocus by remember { mutableStateOf<String?>(null) }
 
-                val effectiveOalDisplayMm = remember(spec) { computeOalWindow(spec).oalMm.toFloat() }
+                val effectiveOalDisplayMm = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec).oalMm.toFloat() }
                 val displayMm = if (overallIsManual) spec.overallLengthMm else effectiveOalDisplayMm
                 var lengthText by remember(unit, displayMm, overallIsManual) {
                     mutableStateOf(formatDisplay(displayMm, unit))
@@ -636,7 +629,7 @@ fun ShaftScreen(
                 }
 
                 // Read-only: computed OAL in measurement space (less excluded end threads)
-                val win = remember(spec) { computeOalWindow(spec) }
+                val win = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec) }
                 val physicalOalMm = spec.overallLengthMm.toDouble()
                 val effectiveOalWindowMm = win.oalMm
                 val excluded = kotlin.math.abs(effectiveOalWindowMm - physicalOalMm) > OAL_EPS_MM
@@ -1110,7 +1103,7 @@ private fun PreviewOalBadge(
     overallIsManual: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val effectiveOalMm = remember(spec) { computeOalWindow(spec).oalMm.toFloat() }
+    val effectiveOalMm = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec).oalMm.toFloat() }
     val displayOalMm = if (overallIsManual) spec.overallLengthMm else effectiveOalMm
 
     Surface(
@@ -1129,7 +1122,7 @@ private fun PreviewOalBadge(
 }
 
 
-/* ───────────────── Carousel implementation ───────────────── */
+/* ───────────────── Shared composables & helpers ───────────────── */
 
 
 @Composable

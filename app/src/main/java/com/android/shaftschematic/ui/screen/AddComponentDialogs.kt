@@ -70,65 +70,13 @@ private fun rememberAddDialogDefaults(spec: ShaftSpec): AddDialogDefaults {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- * Utilities (dialog-local; names differ from other files to avoid confusion)
+ * Dialog-local utilities
  * ──────────────────────────────────────────────────────────────────────────── */
-
-private fun abbrFor(unit: UnitSystem) = if (unit == UnitSystem.MILLIMETERS) "mm" else "in"
 
 private fun toDisplayString(mm: Float, unit: UnitSystem, d: Int = 3): String {
     val v = if (unit == UnitSystem.MILLIMETERS) mm else mm / 25.4f
     val s = "%.${d}f".format(v).trimEnd('0').trimEnd('.')
     return if (s.isEmpty()) "0" else s
-}
-
-/** Decimal/fraction/ratio parser. Accepts "12", "3/4", "1.25", "1:12". Returns numeric value. */
-private fun parseFractionOrDecimalOrRatio(input: String): Float? {
-    var t = input.replace(",", "").trim()
-    if (t.isEmpty()) return null
-
-    // Tolerate unit-ish suffixes like "in", "mm", or quotes.
-    run {
-        val allowed = "0123456789./:+- "
-        var end = t.length - 1
-        while (end >= 0 && !allowed.contains(t[end])) end--
-        t = if (end >= 0) t.substring(0, end + 1).trim() else ""
-        t = t.replace(Regex("\\s+"), " ")
-        if (t.isEmpty()) return null
-    }
-
-    // Mixed fraction: W N/D
-    val parts = t.split(' ').filter { it.isNotBlank() }
-    if (parts.size == 2 && parts[1].contains('/')) {
-        val whole = parts[0].toFloatOrNull() ?: return null
-        val slash = parts[1].indexOf('/')
-        val a = parts[1].substring(0, slash).trim().toFloatOrNull() ?: return null
-        val b = parts[1].substring(slash + 1).trim().toFloatOrNull() ?: return null
-        if (b == 0f) return null
-        val frac = a / b
-        return if (whole < 0f) whole - frac else whole + frac
-    }
-
-    val colon = t.indexOf(':')
-    if (colon >= 0) {
-        val a = t.substring(0, colon).trim().toFloatOrNull() ?: return null
-        val b = t.substring(colon + 1).trim().toFloatOrNull() ?: return null
-        if (b == 0f) return null
-        return a / b
-    }
-    val slash = t.indexOf('/')
-    if (slash >= 0) {
-        val a = t.substring(0, slash).trim().toFloatOrNull() ?: return null
-        val b = t.substring(slash + 1).trim().toFloatOrNull() ?: return null
-        if (b == 0f) return null
-        return a / b
-    }
-    return t.toFloatOrNull()
-}
-
-/** Convert display text → millimeters, accepting decimals or simple fractions. */
-private fun toMmOrNullFromDialog(text: String, unit: UnitSystem): Float? {
-    val v = parseFractionOrDecimalOrRatio(text) ?: return null
-    return if (unit == UnitSystem.MILLIMETERS) v else v * 25.4f
 }
 
 
@@ -153,20 +101,20 @@ fun AddBodyDialog(
     var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
     var dia by remember(unit, d.bodyDiaMm) { mutableStateOf(toDisplayString(max(1f, d.bodyDiaMm), unit)) }
 
-    val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
-    val lengthMm = toMmOrNullFromDialog(length, unit) ?: -1f
-    val diaMm = toMmOrNullFromDialog(dia, unit) ?: -1f
+    val startMm = toMmOrNull(start, unit) ?: -1f
+    val lengthMm = toMmOrNull(length, unit) ?: -1f
+    val diaMm = toMmOrNull(dia, unit) ?: -1f
 
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Add Body") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
-                CommitNumField("Start (${abbrFor(unit)})", start) { start = it }
+                CommitNumField("Start (${abbr(unit)})", start) { start = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Length (${abbrFor(unit)})", length) { length = it }
+                CommitNumField("Length (${abbr(unit)})", length) { length = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Diameter (${abbrFor(unit)})", dia) { dia = it }
+                CommitNumField("Diameter (${abbr(unit)})", dia) { dia = it }
             }
         },
         confirmButton = {
@@ -198,9 +146,9 @@ fun AddLinerDialog(
     var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
     var od by remember(unit, d.linerOdMm) { mutableStateOf(toDisplayString(max(1f, d.linerOdMm), unit)) }
 
-    val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
-    val lengthMm = toMmOrNullFromDialog(length, unit) ?: -1f
-    val odMm = toMmOrNullFromDialog(od, unit) ?: -1f
+    val startMm = toMmOrNull(start, unit) ?: -1f
+    val lengthMm = toMmOrNull(length, unit) ?: -1f
+    val odMm = toMmOrNull(od, unit) ?: -1f
 
     val startError = if (startMm >= 0f && lengthMm > 0f)
         startOverlapErrorMm(spec, "", ComponentKind.LINER, lengthMm, startMm)
@@ -211,11 +159,11 @@ fun AddLinerDialog(
         title = { Text("Add Liner") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
-                CommitNumField("Start (${abbrFor(unit)})", start, errorText = startError) { start = it }
+                CommitNumField("Start (${abbr(unit)})", start, errorText = startError) { start = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Length (${abbrFor(unit)})", length) { length = it }
+                CommitNumField("Length (${abbr(unit)})", length) { length = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Outer Ø (${abbrFor(unit)})", od) { od = it }
+                CommitNumField("Outer Ø (${abbr(unit)})", od) { od = it }
             }
         },
         confirmButton = {
@@ -256,10 +204,10 @@ fun AddThreadDialog(
     var tpiText by remember(initialTpi) { mutableStateOf(formatTpi(initialTpi)) }
     var countInOal by remember { mutableStateOf(true) }
 
-    val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
-    val lengthMm = toMmOrNullFromDialog(length, unit) ?: -1f
-    val majorMm = toMmOrNullFromDialog(major, unit) ?: -1f
-    val tpi = parseFractionOrDecimalOrRatio(tpiText) ?: -1f   // allow e.g., "20", "10", "32"
+    val startMm = toMmOrNull(start, unit) ?: -1f
+    val lengthMm = toMmOrNull(length, unit) ?: -1f
+    val majorMm = toMmOrNull(major, unit) ?: -1f
+    val tpi = parseFractionOrDecimal(tpiText) ?: -1f   // allow e.g., "20", "10", "32"
 
     val startError = if (startMm >= 0f && lengthMm > 0f)
         startOverlapErrorMm(spec, "", ComponentKind.THREAD, lengthMm, startMm)
@@ -270,13 +218,13 @@ fun AddThreadDialog(
         title = { Text("Add Thread") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
-                CommitNumField("Start (${abbrFor(unit)})", start, errorText = startError) { start = it }
+                CommitNumField("Start (${abbr(unit)})", start, errorText = startError) { start = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Major Ø (${abbrFor(unit)})", major) { major = it }
+                CommitNumField("Major Ø (${abbr(unit)})", major) { major = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("TPI", tpiText) { tpiText = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Length (${abbrFor(unit)})", length) { length = it }
+                CommitNumField("Length (${abbr(unit)})", length) { length = it }
                 Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -323,10 +271,10 @@ fun AddTaperDialog(
     var letText by remember(unit) { mutableStateOf("") } // allow deriving via rate
     var rateText by remember { mutableStateOf("1:12") }  // legacy default; bare "1" means 1:12
 
-    val startMm = toMmOrNullFromDialog(start, unit) ?: -1f
-    val lengthMm = toMmOrNullFromDialog(length, unit) ?: -1f
-    val setMm = toMmOrNullFromDialog(setText, unit) ?: -1f   // -1 means "not provided"
-    val letMm = toMmOrNullFromDialog(letText, unit) ?: -1f
+    val startMm = toMmOrNull(start, unit) ?: -1f
+    val lengthMm = toMmOrNull(length, unit) ?: -1f
+    val setMm = toMmOrNull(setText, unit) ?: -1f   // -1 means "not provided"
+    val letMm = toMmOrNull(letText, unit) ?: -1f
 
     // Allow commit-on-blur behavior (no live mutation outward)
     AlertDialog(
@@ -334,13 +282,13 @@ fun AddTaperDialog(
         title = { Text("Add Taper") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
-                CommitNumField("Start (${abbrFor(unit)})", start) { start = it }
+                CommitNumField("Start (${abbr(unit)})", start) { start = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Length (${abbrFor(unit)})", length) { length = it }
+                CommitNumField("Length (${abbr(unit)})", length) { length = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("S.E.T. Ø (${abbrFor(unit)})", setText) { setText = it }
+                CommitNumField("S.E.T. Ø (${abbr(unit)})", setText) { setText = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("L.E.T. Ø (${abbrFor(unit)})", letText) { letText = it }
+                CommitNumField("L.E.T. Ø (${abbr(unit)})", letText) { letText = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Taper Rate (1:12, 3/4, 1)", rateText) { rateText = it }
             }
