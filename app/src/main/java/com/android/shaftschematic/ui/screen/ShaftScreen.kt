@@ -45,7 +45,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.ManageHistory
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
@@ -135,6 +135,7 @@ import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
 import com.android.shaftschematic.ui.viewmodel.snapPositionMm
 import com.android.shaftschematic.util.LengthFormat
+import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
 import kotlinx.coroutines.launch
@@ -240,11 +241,19 @@ fun ShaftScreen(
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
 
+    // Runout sheet configuration (passed to carousel for bubble count controls)
+    runoutConfig: RunoutConfig = RunoutConfig(),
+    onSetRunoutBubbleCount: (componentId: String, count: Int) -> Unit = { _, _ -> },
+
     // Other
     snackbarHostState: SnackbarHostState,
 
     // Navigation / actions (routing is owned by the Route layer)
-    onNavigateHome: () -> Unit,
+    /**
+     * Opens the sidebar navigation drawer. The Home button has been moved into the sidebar,
+     * so the toolbar's left icon is now a hamburger/menu button that calls this.
+     */
+    onOpenSidebar: () -> Unit,
     onNew: () -> Unit,
     onOpen: () -> Unit,
     onSave: () -> Unit,
@@ -374,11 +383,13 @@ fun ShaftScreen(
                     title = { },
                     windowInsets = WindowInsets(0, 0, 0, 0),
                     navigationIcon = {
+                        // Hamburger opens the sidebar nav drawer.
+                        // Home lives inside the sidebar — not duplicated here.
                         IconButton(
-                            onClick = onNavigateHome,
-                            modifier = Modifier.testTag("toolbar_home")
+                            onClick = onOpenSidebar,
+                            modifier = Modifier.testTag("toolbar_menu")
                         ) {
-                            Icon(Icons.Filled.Home, contentDescription = "Home")
+                            Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
                         }
                     },
                     actions = {
@@ -724,6 +735,7 @@ fun ShaftScreen(
                     edgeArrowWidthDp = componentArrowWidthDp,
                     showComponentDebugLabels = showComponentDebugLabels,
                     selectedComponentId = selectedComponentId,
+                    runoutConfig = runoutConfig,
                     onAddBody = onAddBody,
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateTaper = snappedTaperUpdater,
@@ -739,7 +751,8 @@ fun ShaftScreen(
                     onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread,
                     onRemoveLiner = onRemoveLiner,
-                    onSelectComponentById = onSelectComponentById
+                    onSelectComponentById = onSelectComponentById,
+                    onSetRunoutBubbleCount = onSetRunoutBubbleCount,
                 )
 
                 if (chooserOpen) {

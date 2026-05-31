@@ -7,7 +7,7 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 
 ---
 
-## 0. Current System State
+## 0. Current System State (updated 2026-05-30)
 
 | Area | Status |
 |---|---|
@@ -26,6 +26,9 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 | Internal save/open | ✅ Working |
 | Autosave / draft restore | ✅ Working |
 | ShaftScreen.kt | ✅ Carousel extracted to `ComponentCarousel.kt` (2322 → 1434 lines) |
+| Sidebar nav (3 tabs) | ✅ EditorSidebar + EditorTab + ShaftEditorRoute updated |
+| Runout drawing | 🔲 In branch feat/runout-drawing — awaiting test & review |
+| Wear document | 🔲 In branch feat/runout-drawing — awaiting test & review |
 | Resolved component pipeline | 🔲 Partial — not fully wired into rendering |
 | Insert-Between workflow | 🔲 Not implemented |
 | Liner shoulders | 🔲 Not implemented |

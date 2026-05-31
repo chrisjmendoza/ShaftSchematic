@@ -717,7 +717,7 @@ private fun drawTapers(
     }
 }
 
-private fun drawKeywayNotchPdf(
+internal fun drawKeywayNotchPdf(
     c: Canvas,
     t: Taper,
     x0: Float, x1: Float,

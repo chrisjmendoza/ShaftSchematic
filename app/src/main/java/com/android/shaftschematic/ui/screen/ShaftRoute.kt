@@ -41,6 +41,8 @@ fun ShaftRoute(
     onExportPdf: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
+    /** Opens the sidebar nav drawer — wired to the toolbar hamburger button. */
+    onOpenSidebar: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -121,6 +123,7 @@ fun ShaftRoute(
     val sessionAddDefaults by vm.sessionAddDefaults.collectAsState()
     val pendingAddPositionMm by vm.pendingAddPositionMm.collectAsState()
     val pendingAddGapMm = pendingAddPositionMm?.let { vm.gapToNextAnchorMm(it) } ?: 50f
+    val runoutConfig by vm.runoutConfig.collectAsState()
 
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
@@ -202,9 +205,12 @@ fun ShaftRoute(
         onRemoveThread = vm::removeThread,
         onRemoveLiner  = vm::removeLiner,
 
+        runoutConfig = runoutConfig,
+        onSetRunoutBubbleCount = { id, count -> vm.setRunoutBubbleCount(id, count) },
+
         snackbarHostState = snackbarHostState,
 
-        onNavigateHome = onNavigateHome,
+        onOpenSidebar = onOpenSidebar,
         onNew = onNew,
         onOpen = onOpen,
         onSave = onSave,

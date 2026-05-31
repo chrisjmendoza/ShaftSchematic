@@ -1,6 +1,8 @@
 package com.android.shaftschematic.ui.viewmodel
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.pdf.PdfExportMode
 
 import android.app.Application
@@ -285,6 +287,35 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // Session-scoped "last used" add defaults (mm). Reset on new/open/import.
     private val _sessionAddDefaults = MutableStateFlow(SessionAddDefaults.initial())
     val sessionAddDefaults: StateFlow<SessionAddDefaults> = _sessionAddDefaults.asStateFlow()
+
+    // ── Runout sheet configuration ────────────────────────────────────────────
+    // Persisted alongside the spec in the .shaft file so bubble count overrides
+    // and TIR direction travel with the job.
+
+    private val _runoutConfig = MutableStateFlow(RunoutConfig())
+    val runoutConfig: StateFlow<RunoutConfig> = _runoutConfig.asStateFlow()
+
+    /**
+     * Override the number of runout bubbles for a specific component.
+     * Pass `count = null` to remove the override and revert to the computed default.
+     * Minimum effective count is 1 for components that normally show bubbles.
+     */
+    fun setRunoutBubbleCount(componentId: String, count: Int?) {
+        _runoutConfig.update { cfg ->
+            val overrides = cfg.componentOverrides.toMutableMap()
+            if (count == null) {
+                overrides.remove(componentId)
+            } else {
+                overrides[componentId] = count.coerceAtLeast(1)
+            }
+            cfg.copy(componentOverrides = overrides)
+        }
+    }
+
+    /** Set the TIR direction label printed at the bottom of the runout sheet. */
+    fun setTirDirection(direction: TirDirection) {
+        _runoutConfig.update { it.copy(tirDirection = direction) }
+    }
 
     // Tap-to-add pending position: non-null while the user has tapped empty space and
     // has not yet confirmed or dismissed the add-at-position flow.
@@ -1583,7 +1614,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Export the current state as a JSON string (mm spec + unit metadata). */
+    /** Export the current state as a JSON string (mm spec + unit metadata + runout config). */
     fun exportJson(): String = ShaftDocCodec.encodeV1(
         ShaftDocCodec.ShaftDocV1(
             preferredUnit = _unit.value,
@@ -1593,7 +1624,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             vessel = _vessel.value,
             shaftPosition = _shaftPosition.value,
             notes = _notes.value,
-            spec = _spec.value
+            spec = _spec.value,
+            runoutConfig = _runoutConfig.value,
         )
     )
 
@@ -1617,6 +1649,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _vessel.value = decoded.vessel
         _shaftPosition.value = decoded.shaftPosition
         _notes.value = decoded.notes
+        _runoutConfig.value = decoded.runoutConfig
 
         // Reset order to this document's components only
         _componentOrder.value = emptyList()
@@ -1647,6 +1680,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _customer.value = ""
         _vessel.value = ""
         _shaftPosition.value = ShaftPosition.OTHER
+        _runoutConfig.value = RunoutConfig()
         _notes.value = ""
         _overallIsManual.value = false
 
