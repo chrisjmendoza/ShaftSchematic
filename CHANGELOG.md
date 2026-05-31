@@ -62,6 +62,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-05-30 — Doc refresh
+
+Updated TODO.md, BRIEFING.md, and ROADMAP.md to reflect current state:
+- TODO restructured around v0.5.x sprint (ShaftScreen refactor as §1). All completed v0.4.x work collapsed. Stale entries removed. Body keyway formally shelved.
+- BRIEFING.md: status table updated with validation, keyways, and signing; architecture invariant corrected (dual rendering paths); component model table updated with keyway fields; active sprint section rewritten.
+- ROADMAP.md: v0.4.x marked complete; v0.5.x deliverables documented; v1.0 definition of done updated.
+
+---
+
 ## Versioning Notes
 
 - Early development used git tags (`v0.2.0`, `v0.3.1`) for milestones.

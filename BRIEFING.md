@@ -1,8 +1,9 @@
 # ShaftSchematic — Project Briefing
 
 **Generated:** 2026-05-03  
+**Last updated:** 2026-05-30  
 **Current Version:** 1.1.1  
-**Series:** v0.4.x development queue active
+**Series:** v0.5.x — ShaftScreen refactor + component expansion
 
 ---
 
@@ -32,7 +33,12 @@ The core feature set is **shipped and working**:
 | SAF open/export | ✅ Working |
 | Component carousel + editor UI | ✅ Working |
 | Snapping engine (`SnapEngine`) | ✅ Implemented & unit-tested |
+| Tap-to-add pipeline | ✅ Working |
 | OAL window / excluded thread logic | ✅ Implemented & unit-tested |
+| Validation — blocking errors (dialogs, badges, export gate) | ✅ Wired |
+| Validation — non-blocking warnings (yellow badges, free-to-end) | ✅ Wired |
+| Taper keyway drawing (open + floating, plan-view convention) | ✅ Working |
+| Shared signing config (single keystore across machines) | ✅ Configured |
 | Autosave / draft restore on launch | ✅ Working |
 | Settings screen (units, grid, PDF prefs) | ✅ Working |
 | Developer Options screen | ✅ Working |
@@ -56,8 +62,8 @@ User Input → ShaftViewModel → ShaftSpec (mm)
 - All model geometry stored in **millimeters only**. Inches are only rendered at UI display edges.
 - `ShaftViewModel` extends `AndroidViewModel` (needs `Application` for DataStore). Always instantiated via `ShaftViewModelFactory`.
 - `ShaftLayout` fits both axes: `pxPerMm = min(width/oal, height/maxOD)`.
-- `ShaftRenderer` is the single source of truth for geometry drawing (both preview and PDF use it).
-- No geometry logic lives in Compose composables or in the PDF composer directly.
+- `ShaftRenderer` (preview) and `ShaftPdfComposer` (PDF) are **separate drawing paths** sharing the same model and layout math but using separate Canvas drawing code. A fix in one does not propagate to the other automatically.
+- No geometry logic lives in Compose composables.
 
 **Package layout:**
 ```
@@ -87,9 +93,9 @@ A `ShaftSpec` is the root aggregate:
 | Component | Description |
 |---|---|
 | `Body` | Constant-diameter cylinder. Fields: `diaMm`, `startFromAftMm`, `lengthMm`. |
-| `Taper` | Linear diameter transition. Stores both `startDiaMm` / `endDiaMm` + `lengthMm`. |
-| `Threads` | Threaded segment. Stores `majorDiaMm`, pitch (`pitchMm` + `tpi`), `excludeFromOAL` flag. |
-| `Liner` | Outer sleeve. Stores `odMm`, anchor reference (`LinerAnchor`), authored direction. |
+| `Taper` | Linear diameter transition. Fields: `startDiaMm` / `endDiaMm`, `lengthMm`, `taperRateText`. Keyway hosted: `keywayWidthMm`, `keywayDepthMm`, `keywayLengthMm`, `keywayOffsetFromSetMm`, `keywaySpooned`. |
+| `Threads` | Threaded segment. Fields: `majorDiaMm`, pitch (`pitchMm` + `tpi`), `excludeFromOAL`. |
+| `Liner` | Outer sleeve. Fields: `odMm`, anchor reference (`LinerAnchor`), authored direction. |
 
 All axial positions are measured **AFT → FWD**. `ShaftSpec.validate()` checks non-negative values and segment bounds; it does not test for overlaps (by design — overlaps are valid for liners over bodies).
 
@@ -158,24 +164,30 @@ Instrumented tests in `app/src/androidTest/` include a `ClearDataStoreRule` to i
 
 ---
 
-## Active Sprint: v0.4.x
+## Active Sprint: v0.5.x
 
-### In Progress / Next Up
+### Completed in v0.4.x / v0.5.x so far
 
-**1.1 ✅ Snap Engine** — done  
-**1.2 ✅ Preview Tap → mm** — `onTapAtMm` wired through `ShaftDrawing`; tap-to-select routes through `SnapEngine`.  
-**1.3 Add-At-Position Flow (not started)** — `startAddAtPosition(positionMm)` VM intent; chooser dialog; prefilled defaults from axial gap.  
-**1.4 Resolved Component Pipeline (partial)** — auto body seeding implemented in `ResolvedComponent.kt`; not yet fully wired into the rendering path (ShaftRenderer falls back to `spec.bodies` when `components == null`).  
-**1.5 Keyway support on Body (not started)** — data model field + editor UI (hosted feature, not standalone component).
+- ✅ Snap engine, tap-to-add pipeline, OAL exclusion
+- ✅ Taper rate input + derivation (all formats)
+- ✅ Taper keyway drawing — open and floating, plan-view schematic convention
+- ✅ Validation fully wired — blocking errors (red) + non-blocking warnings (yellow) in carousel, Add dialogs, and export gate
+- ✅ Selection box fix — seeded on file load, swipe works before first tap, single thin ring
+- ✅ Shared signing config — single debug.keystore across all machines
+- ✅ PDF label collision avoidance, `END_EPS_MM` deduplication, BRIEFING accuracy
+
+### Current Focus
+
+**ShaftScreen.kt refactor** — extract carousel, preview panel, and event wiring into separate files. Pure structural change, no behavior impact.
 
 ### Roadmap Horizon
 
 | Series | Focus |
 |---|---|
-| v0.5.x | Keyway (taper-hosted), Shoulder/Relief component, Coupling component |
-| v0.6.x | Component presets, reference geometry overlays, machining heuristic warnings |
+| v0.5.x | ShaftScreen refactor, liner shoulders, taper validation wiring |
+| v0.6.x | Component presets, machining heuristic warnings, undo/redo |
 | v0.7.x | Optional cloud save, DXF export (if approved) |
-| v1.0 | All component types, full single-page PDF, complete test coverage, complete docs |
+| v1.0 | All component types, complete test coverage, complete docs |
 
 ---
 
