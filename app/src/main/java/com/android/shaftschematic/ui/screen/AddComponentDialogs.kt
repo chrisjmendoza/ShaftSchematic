@@ -131,9 +131,6 @@ private fun toMmOrNullFromDialog(text: String, unit: UnitSystem): Float? {
     return if (unit == UnitSystem.MILLIMETERS) v else v * 25.4f
 }
 
-/** TPI conversion helpers (Thread dialog returns TPI; caller converts to pitch mm). */
-private fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) 25.4f / tpi else 0f
-private fun pitchMmToTpi(pitchMm: Float): Float = if (pitchMm > 0f) 25.4f / pitchMm else 0f
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Body — Start, Length, Diameter (unit-aware)
