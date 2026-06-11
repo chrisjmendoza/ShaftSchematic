@@ -1,9 +1,9 @@
 # ShaftSchematic — Project Briefing
 
 **Generated:** 2026-05-03  
-**Last updated:** 2026-05-30  
+**Last updated:** 2026-06-11  
 **Current Version:** 1.1.1  
-**Series:** v0.5.x — ShaftScreen refactor + component expansion
+**Series:** v0.5.x — runout/wear docs, line thickness, OAL fix
 
 ---
 
@@ -40,7 +40,11 @@ The core feature set is **shipped and working**:
 | Taper keyway drawing (open + floating, plan-view convention) | ✅ Working |
 | Shared signing config (single keystore across machines) | ✅ Configured |
 | Autosave / draft restore on launch | ✅ Working |
-| Settings screen (units, grid, PDF prefs) | ✅ Working |
+| Settings screen (units, grid, PDF prefs, line thickness) | ✅ Working |
+| Line thickness control (50%–200%, persisted) | ✅ Shipped |
+| Runout drawing (inline preview, fan-spread bubbles, TIR label) | ✅ Shipped |
+| Wear document (profile + PASS/FAIL checkboxes) | ✅ Shipped |
+| OAL include-thread toggle (PDF dimension) | ✅ Fixed |
 | Developer Options screen | ✅ Working |
 | Achievements screen | ✅ Stub present |
 | Portrait orientation lock | ✅ Enforced |
@@ -175,10 +179,15 @@ Instrumented tests in `app/src/androidTest/` include a `ClearDataStoreRule` to i
 - ✅ Selection box fix — seeded on file load, swipe works before first tap, single thin ring
 - ✅ Shared signing config — single debug.keystore across all machines
 - ✅ PDF label collision avoidance, `END_EPS_MM` deduplication, BRIEFING accuracy
+- ✅ ShaftScreen carousel extracted to `ComponentCarousel.kt`; sidebar nav (3 tabs)
+- ✅ Runout drawing — inline shaft preview, scrollable layout, fan-spread bubble placement, TIR label
+- ✅ Wear document — shaft profile + PASS/FAIL dye-pen checkboxes
+- ✅ Line thickness control — Settings slider 50%–200%, DataStore-persisted, preview + PDF
+- ✅ OAL include-thread fix — PDF OAL dimension correctly spans shaft ends when thread is marked included
 
 ### Current Focus
 
-**ShaftScreen.kt refactor** — extract carousel, preview panel, and event wiring into separate files. Pure structural change, no behavior impact.
+**Validation & rendering backlog** — taper field validation wiring, liner shoulders, fiberglass body support. Carousel extraction is complete; remaining ShaftScreen refactor (preview panel, event wiring) is deferred until the screen grows again.
 
 ### Roadmap Horizon
 

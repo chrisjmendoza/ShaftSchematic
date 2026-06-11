@@ -27,16 +27,22 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 
 **In progress / next up:**
 
-- [ ] **ShaftScreen.kt refactor** — extract carousel, preview panel, and event wiring into separate files. No behaviour change. Needed before the next round of feature additions.
 - [ ] **Taper validation wiring** — rate derivation errors shown inline on fields; slope validation when `lengthMm > 0`
 - [ ] **Liner shoulders** — aft/fwd shoulder length fields; stepped shoulder rendering in preview and PDF
 - [ ] **Fiberglass body support** — model flag, dark fill/hatch, label annotation
+- [ ] **Preview panel + event wiring extraction** — remaining ShaftScreen refactor work (lower priority)
 
 **Delivered in v0.5.x so far:**
 - Taper keyway drawing (open + floating) — plan-view schematic convention, mill-cutter arc, white fill
 - Shared signing config — single debug.keystore, all machines update-install without data wipe
 - Selection highlight — single thin ring, seeded on file load
 - Warning badge system — yellow per-component chips, 3-state free-to-end badge
+- ShaftScreen.kt carousel extracted to `ComponentCarousel.kt`
+- Sidebar nav (3 tabs: Schematic / Runout Sheet / Wear Document)
+- Runout drawing — inline shaft preview, scrollable layout, fan-spread bubble placement, TIR direction label
+- Wear document — shaft profile + header + dye-pen PASS/FAIL checkboxes
+- Line thickness control — Settings slider 50%–200%, DataStore-persisted, applies to preview and PDF strokes
+- OAL include-thread fix — PDF OAL dimension spans shaft ends (not SET-to-SET) when end thread is marked included
 
 ---
 

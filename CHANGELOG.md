@@ -6,6 +6,35 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-06-11
+
+### feat: runout screen v2 — inline preview + layout overhaul
+
+- **`RunoutRoute.kt`** — complete rewrite: `RunoutComponentEntry` data class, inline shaft preview via `ShaftRenderer`/`ShaftLayout`, scrollable column layout, sidebar nav integration, `resolvedComponents` support.
+- **`ComponentCarousel.kt`** — removed bubble-count stepper controls (95 lines). Bubble counts are managed through the runout config; per-component stepping in the carousel was redundant.
+- **`ShaftRoute.kt` / `ShaftScreen.kt`** — removed `runoutConfig` and `onSetRunoutBubbleCount` threading that was coupling the main screen to runout state. `ComponentCarousel` retains defaulted params for backward compatibility.
+
+---
+
+### feat: line thickness control
+
+- **`SettingsRoute.kt`** — `LineThicknessControl` composable: slider (50%–200%) + typeable `%` field with on-blur clamping. 100% = new default thin weight; 200% = original thick weight.
+- **`SettingsStore.kt`** — `KEY_LINE_THICKNESS_SCALE` DataStore key; `lineThicknessScaleFlow()` / `setLineThicknessScale()`.
+- **`ShaftViewModel.kt`** — `lineThicknessScale: StateFlow<Float>`, collected from DataStore on init, exposed for UI and PDF export.
+- **`ShaftPdfComposer.kt`** — `OUTLINE_PT_BASE = 1.25 pt`, `DIM_PT_BASE = 0.8 pt` (100% defaults). `composeShaftPdf()` gains `lineThicknessScale` param; scale applied to both paint objects.
+- **`ShaftDrawing.kt`** — `outlineWidthPx = 2f * lineThicknessScale.coerceIn(0.5f, 2.0f)`.
+- **`PdfExportRoute.kt` / `PdfPreviewScreen.kt`** — pass `lineThicknessScale` through to the composer.
+
+---
+
+### fix: OAL dimension respects include-thread toggle
+
+The PDF OAL dimension arrow previously always measured **SET to SET** regardless of whether end threads were marked as included in OAL. Root cause: when `excludeFromOAL = false` the coordinate origin shifts by `threadLength`, so both SET endpoints moved by the same delta and the rendered distance was unchanged.
+
+Fix in `ShaftPdfComposer.kt`: detects any end thread with `!excludeFromOAL` anchored to position 0 (AFT) or `overallLengthMm` (FWD), and substitutes the physical shaft end coordinate (`0.0` or `win.oalMm`) for the SET coordinate in the `oalSpan()` call. Component dimension rails continue to reference SET positions.
+
+---
+
 ## 2026-05-30 (6)
 
 ### feat: yellow warning badges — non-blocking validation now visible in UI

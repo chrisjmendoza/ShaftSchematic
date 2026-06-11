@@ -69,18 +69,11 @@ fun computeExcludedThreadLengths(spec: ShaftSpec): ExcludedThreadLengths {
     return ExcludedThreadLengths(aftExcludedMm = aft, fwdExcludedMm = fwd)
 }
 
+// The OAL window always spans the full user input. Excluding a thread from OAL changes how the
+// OAL bracket is drawn (SET-to-SET vs shaft-end-to-shaft-end) but never mutates the number.
 fun computeOalWindow(spec: ShaftSpec): OalWindow {
     val oalRaw = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
-    val ex = computeExcludedThreadLengths(spec)
-
-    val aft = ex.aftExcludedMm.coerceIn(0.0, oalRaw)
-    val fwd = ex.fwdExcludedMm.coerceIn(0.0, oalRaw)
-    val effective = max(0.0, oalRaw - aft - fwd)
-
-    return OalWindow(
-        measureStartMm = aft,
-        measureEndMm = aft + effective,
-    )
+    return OalWindow(measureStartMm = 0.0, measureEndMm = oalRaw)
 }
 
 /**

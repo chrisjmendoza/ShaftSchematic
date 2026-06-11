@@ -16,7 +16,7 @@ Responsibilities
 - Commit APIs accept raw text (e.g., `onSetOverallLengthRaw`), parse, convert, clamp, and update.  
 - Expose derived values (e.g., `freeToEndMm`) from the model.  
 - Load/save specs via `ShaftRepository`.
-- Hold persisted display settings: `lineThicknessScale` (0.5–1.0, applied to preview and PDF stroke widths).
+- Hold persisted display settings: `lineThicknessScale` (0.5–2.0, applied to preview and PDF stroke widths; 1.0 = default thin weight, 2.0 = original thick weight).
 
 Do Nots
 - Do not format values for display (UI edge only).  

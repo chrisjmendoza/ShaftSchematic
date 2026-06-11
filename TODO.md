@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**  
-**Last updated: 2026-05-30**
+**Last updated: 2026-06-11**
 
 Tasks are ordered by priority. Completed series are collapsed to a single summary line to keep this readable.
 
@@ -27,8 +27,10 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 | Autosave / draft restore | ✅ Working |
 | ShaftScreen.kt | ✅ Carousel extracted to `ComponentCarousel.kt` (2322 → 1434 lines) |
 | Sidebar nav (3 tabs) | ✅ EditorSidebar + EditorTab + ShaftEditorRoute updated |
-| Runout drawing | 🔲 In branch feat/runout-drawing — awaiting test & review |
-| Wear document | 🔲 In branch feat/runout-drawing — awaiting test & review |
+| Runout drawing | ✅ RunoutPdfComposer, inline shaft preview, scrollable layout, fan-spread bubble layout |
+| Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes |
+| Line thickness control | ✅ Slider 50%–200% in Settings, DataStore-persisted, affects preview + PDF |
+| OAL include-thread toggle | ✅ PDF OAL span now extends to shaft ends when thread marked included |
 | Resolved component pipeline | 🔲 Partial — not fully wired into rendering |
 | Insert-Between workflow | 🔲 Not implemented |
 | Liner shoulders | 🔲 Not implemented |
