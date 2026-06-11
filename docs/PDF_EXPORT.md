@@ -105,9 +105,12 @@ At 1.0 the output matches the current default thin weight. At 2.0 it matches the
 
 # 5.2 OAL Dimension Span
 
-The OAL arrow always spans `[0.0, win.oalMm]` = the full shaft from AFT end to FWD end. The label always equals the user's input (`spec.overallLengthMm`). The `excludeFromOAL` flag on end threads does not alter the OAL bracket or value.
+The OAL label always equals `spec.overallLengthMm` — the user's typed value. The bracket **position** changes based on `excludeFromOAL`:
 
-All component dimension rails (liner offsets, taper lengths) reference SET positions — the physical taper start/end positions in shaft space.
+- **Excluded**: bracket spans AFT SET → FWD SET (threads outside the bracket).
+- **Included**: bracket spans shaft AFT end → FWD SET (thread grouped inside the bracket).
+
+The label is passed as an explicit `labelMm` override to `oalSpan()` so it is always the typed OAL regardless of bracket width. Component dimension rails always reference SET positions.
 
 ---
 

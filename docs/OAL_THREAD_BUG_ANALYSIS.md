@@ -127,10 +127,20 @@ This is a near-revert of the measure-space compression added today; the `exclude
 
 **Docs to update:** `docs/OverallLength.md` §"PDF OAL Dimension Span" (v1.1) currently specifies the SET-to-SET shrink behavior — it must be rewritten to the immutable-OAL rule.
 
-### One open decision (changes the exact fix)
-The directive says an **included** thread is "added to the OAL dimensional line." Today the geometry places end threads *inside* `[0, overallLengthMm]` (a FWD thread *ends at* `overallLengthMm`). So "included" can't visibly add length unless threads are modeled as extending *beyond* the input. Which is intended?
+### Resolution — option (C) confirmed by domain owner
 
-- **(C) Label-locked:** OAL label always = input; include/exclude only changes whether the bracket visually encloses the thread region. (Matches "number never mutates" most literally; the fix above is sufficient.)
-- **(B) Additive:** input is the base length *excluding* end threads; an *included* thread makes the OAL read `input + threadLen` (and is positioned beyond the input). Larger change — affects thread placement geometry, not just the window.
+The open decision was resolved by the engineer who specified the feature:
 
-The reported complaint (excluding shrank the number) is fixed identically under both. The difference only matters for what *including* should do.
+> "Threads are rarely included in OAL dimensions because they don't need to be a specific length — it's the liners and tapers that have to be exact. Some customers need threads in the total length so shafts can be swapped as spares. The toggle is so they can be part of the OAL dimensional line group or not. They still get drawn either way. I've never seen anything measured from the end of a thread."
+
+**Implemented behaviour (option C):**
+
+- `spec.overallLengthMm` is the shaft length. It is the OAL label. It never changes.
+- **Excluded** (`excludeFromOAL = true`): OAL bracket spans **AFT SET → FWD SET**. Thread is drawn but sits outside the bracket.
+- **Included** (`excludeFromOAL = false`): OAL bracket spans **shaft AFT end → FWD SET**, visually grouping the thread inside the arrow.
+- All component dimensions (liners, taper lengths) always reference SET positions — nothing is ever measured from a thread end.
+
+**Key files:**
+- `geom/OalComputations.kt` — `computeOalWindow` always returns `(0.0, overallLengthMm)`. No subtraction.
+- `pdf/dim/LinerSpanBuilder.kt` — `oalSpan()` gains explicit `labelMm` param (defaults to bracket width). Caller passes `spec.overallLengthMm` so label is always the typed OAL.
+- `pdf/ShaftPdfComposer.kt` — bracket endpoints: `0.0`/`win.oalMm` when thread included, `sets.aftSETxMm`/`sets.fwdSETxMm` when excluded. Label always = `spec.overallLengthMm`.

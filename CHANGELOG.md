@@ -6,6 +6,24 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-06-11 (2)
+
+### fix: OAL bracket moves with include/exclude; label is always the typed value
+
+The `excludeFromOAL` toggle on end threads now correctly controls **bracket position only** — the OAL label is always `spec.overallLengthMm`, the value the user typed.
+
+- **Excluded**: bracket spans AFT SET → FWD SET. Thread is drawn outside the bracket.
+- **Included**: bracket spans shaft AFT end → FWD SET, grouping the thread inside the arrow.
+- Label never changes in either case. Component measurements always reference SET.
+
+Domain rationale: threads don't need to be a specific length on a new shaft; liners and tapers do. The toggle exists for customers (e.g. Coast Guard) who specify exact total lengths so shafts are interchangeable spares. Nothing is ever dimensioned from a thread end.
+
+**`pdf/dim/LinerSpanBuilder.kt`** — `oalSpan()` gains an explicit `labelMm` param (default = bracket width) so the label can be decoupled from the bracket span.  
+**`pdf/ShaftPdfComposer.kt`** — bracket endpoints driven by include/exclude; `labelMm = spec.overallLengthMm` always.  
+**`geom/OalComputations.kt`** — `computeOalWindow` always returns `(0.0, overallLengthMm)`; `computeExcludedThreadLengths` retained for future SET-to-SET annotation work.
+
+---
+
 ## 2026-06-11
 
 ### feat: runout screen v2 — inline preview + layout overhaul
