@@ -440,7 +440,7 @@ private fun LineThicknessControl(
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("Line Thickness", style = MaterialTheme.typography.titleSmall)
         Text(
-            "Applies to preview and PDF output. Range: 50% – 100%.",
+            "Applies to preview and PDF output. 100% = default thin weight; 200% = original thick weight.",
             style = MaterialTheme.typography.bodySmall,
         )
         Row(
@@ -454,23 +454,23 @@ private fun LineThicknessControl(
                     onScaleChange(v)
                     fieldText = (v * 100).roundToInt().toString()
                 },
-                valueRange = 0.5f..1.0f,
+                valueRange = 0.5f..2.0f,
                 modifier = Modifier.weight(1f),
             )
-            Text("100%", style = MaterialTheme.typography.bodySmall)
+            Text("200%", style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(
                 value = fieldText,
                 onValueChange = { raw ->
                     fieldText = raw
                     val parsed = raw.trim().trimEnd('%').toIntOrNull()
-                    if (parsed != null) onScaleChange(parsed.coerceIn(50, 100) / 100f)
+                    if (parsed != null) onScaleChange(parsed.coerceIn(50, 200) / 100f)
                 },
                 modifier = Modifier
                     .width(72.dp)
                     .onFocusChanged { focus ->
                         if (!focus.isFocused) {
                             val parsed = fieldText.trim().trimEnd('%').toIntOrNull()
-                            val clamped = parsed?.coerceIn(50, 100) ?: (scale * 100).roundToInt()
+                            val clamped = parsed?.coerceIn(50, 200) ?: (scale * 100).roundToInt()
                             onScaleChange(clamped / 100f)
                             fieldText = clamped.toString()
                         }
@@ -480,7 +480,7 @@ private fun LineThicknessControl(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 keyboardActions = KeyboardActions(onDone = {
                     val parsed = fieldText.trim().trimEnd('%').toIntOrNull()
-                    val clamped = parsed?.coerceIn(50, 100) ?: (scale * 100).roundToInt()
+                    val clamped = parsed?.coerceIn(50, 200) ?: (scale * 100).roundToInt()
                     onScaleChange(clamped / 100f)
                     fieldText = clamped.toString()
                 }),

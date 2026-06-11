@@ -100,7 +100,7 @@ object SettingsStore {
         ctx.settingsDataStore.data.map { p -> p[KEY_LINE_THICKNESS_SCALE] ?: 1.0f }
 
     suspend fun setLineThicknessScale(ctx: Context, scale: Float) {
-        ctx.settingsDataStore.edit { it[KEY_LINE_THICKNESS_SCALE] = scale.coerceIn(0.5f, 1.0f) }
+        ctx.settingsDataStore.edit { it[KEY_LINE_THICKNESS_SCALE] = scale.coerceIn(0.5f, 2.0f) }
     }
 
     // One-time migrations

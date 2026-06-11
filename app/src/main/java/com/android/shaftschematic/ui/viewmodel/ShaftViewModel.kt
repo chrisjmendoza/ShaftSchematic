@@ -765,7 +765,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setLineThicknessScale(scale: Float, persist: Boolean = true) {
-        _lineThicknessScale.value = scale.coerceIn(0.5f, 1.0f)
+        _lineThicknessScale.value = scale.coerceIn(0.5f, 2.0f)
         if (persist) {
             viewModelScope.launch { SettingsStore.setLineThicknessScale(getApplication(), scale) }
         }

@@ -113,7 +113,7 @@ fun composeShaftPdf(
     val bodyOnly = isBodyOnlyShaft(spec) || bodyOnlyResolved
     val singleTaperOnly = isSingleTaperOnly(spec)
 
-    val scale = lineThicknessScale.coerceIn(0.5f, 1.0f)
+    val scale = lineThicknessScale.coerceIn(0.5f, 2.0f)
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = OUTLINE_PT_BASE * scale; color = 0xFF000000.toInt()
     }
@@ -330,8 +330,8 @@ private const val MM_PER_IN = 25.4f
 private const val BODY_ONLY_TARGET_HEIGHT_PT = 1.25f * 72f
 
 // Strokes / text
-private const val OUTLINE_PT_BASE = 2.5f
-private const val DIM_PT_BASE = 1.6f
+private const val OUTLINE_PT_BASE = 1.25f  // 100% default; slider goes to 200% (original 2.5pt)
+private const val DIM_PT_BASE = 0.8f       // 100% default; slider goes to 200% (original 1.6pt)
 private const val TEXT_PT = 12f
 
 // Layout

@@ -147,7 +147,7 @@ fun ShaftDrawing(
         paddingPx = 16,
         textSizePx = 22f,
         outlineColor = outlineColor.toArgb(),
-        outlineWidthPx = 2f * lineThicknessScale.coerceIn(0.5f, 1.0f),
+        outlineWidthPx = 2f * lineThicknessScale.coerceIn(0.5f, 2.0f),
         bodyFillColor = bodyFill.copy(alpha = fillAlpha(previewBodyFill.preset, fallback = 0.10f)).toArgb(),
         linerFillColor = linerFill.copy(alpha = fillAlpha(previewLinerFill.preset, fallback = 0.16f)).toArgb(),
         taperFillColor = taperFill.copy(alpha = fillAlpha(previewTaperFill.preset, fallback = 0.14f)).toArgb(),
