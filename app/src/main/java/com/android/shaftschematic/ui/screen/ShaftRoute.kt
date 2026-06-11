@@ -89,6 +89,7 @@ fun ShaftRoute(
     val unitLocked      by vm.unitLocked.collectAsState()
     val showGrid        by vm.showGrid.collectAsState()
     val previewBlackWhiteOnly by vm.previewBlackWhiteOnly.collectAsState()
+    val lineThicknessScale by vm.lineThicknessScale.collectAsState()
     val previewOutline by vm.previewOutlineSetting.collectAsState()
     val previewBodyFill by vm.previewBodyFillSetting.collectAsState()
     val previewTaperFill by vm.previewTaperFillSetting.collectAsState()
@@ -123,7 +124,6 @@ fun ShaftRoute(
     val sessionAddDefaults by vm.sessionAddDefaults.collectAsState()
     val pendingAddPositionMm by vm.pendingAddPositionMm.collectAsState()
     val pendingAddGapMm = pendingAddPositionMm?.let { vm.gapToNextAnchorMm(it) } ?: 50f
-    val runoutConfig by vm.runoutConfig.collectAsState()
 
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
@@ -170,6 +170,7 @@ fun ShaftRoute(
         previewThreadFill = previewThreadFill,
         previewThreadHatch = previewThreadHatch,
         previewBlackWhiteOnly = previewBlackWhiteOnly,
+        lineThicknessScale = lineThicknessScale,
         componentOrder = order,
 
         // model updates (unchanged)
@@ -204,9 +205,6 @@ fun ShaftRoute(
         onRemoveTaper  = vm::removeTaper,
         onRemoveThread = vm::removeThread,
         onRemoveLiner  = vm::removeLiner,
-
-        runoutConfig = runoutConfig,
-        onSetRunoutBubbleCount = { id, count -> vm.setRunoutBubbleCount(id, count) },
 
         snackbarHostState = snackbarHostState,
 

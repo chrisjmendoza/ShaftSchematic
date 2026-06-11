@@ -58,6 +58,9 @@ object SettingsStore {
     private val KEY_PDF_SHOW_COMPONENT_TITLES = booleanPreferencesKey("pdf_show_component_titles")
     private val KEY_PDF_EXPORT_MODE = stringPreferencesKey("pdf_export_mode")
     private val KEY_PDF_OAL_SPACING_FACTOR = floatPreferencesKey("pdf_oal_spacing_factor")
+
+    // Drawing line thickness (applies to both preview and PDF)
+    private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
     fun pdfTieringModeFlow(ctx: Context): Flow<PdfTieringMode> =
         ctx.settingsDataStore.data.map { p ->
             runCatching { PdfTieringMode.valueOf(p[KEY_PDF_TIERING_MODE] ?: "AUTO") }.getOrDefault(PdfTieringMode.AUTO)
@@ -91,6 +94,13 @@ object SettingsStore {
 
     suspend fun setPdfOalSpacingFactor(ctx: Context, factor: Float) {
         ctx.settingsDataStore.edit { it[KEY_PDF_OAL_SPACING_FACTOR] = factor.coerceIn(1.0f, 6.0f) }
+    }
+
+    fun lineThicknessScaleFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_LINE_THICKNESS_SCALE] ?: 1.0f }
+
+    suspend fun setLineThicknessScale(ctx: Context, scale: Float) {
+        ctx.settingsDataStore.edit { it[KEY_LINE_THICKNESS_SCALE] = scale.coerceIn(0.5f, 1.0f) }
     }
 
     // One-time migrations

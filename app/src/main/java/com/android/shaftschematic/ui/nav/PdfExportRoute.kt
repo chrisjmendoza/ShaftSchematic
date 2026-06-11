@@ -106,7 +106,8 @@ fun PdfExportRoute(
                                 filename = filename,
                                 pdfPrefs = vm.currentPdfPrefs,
                                 options = PdfExportOptions(mode = pdfExportMode),
-                                resolvedComponents = vm.resolvedComponents.value
+                                resolvedComponents = vm.resolvedComponents.value,
+                                lineThicknessScale = vm.lineThicknessScale.value
                             )
                             null
                         } catch (t: Throwable) {

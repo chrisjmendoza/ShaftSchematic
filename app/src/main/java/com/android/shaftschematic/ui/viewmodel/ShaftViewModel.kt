@@ -178,6 +178,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
 
+    private val _lineThicknessScale = MutableStateFlow(1.0f)
+    val lineThicknessScale: StateFlow<Float> = _lineThicknessScale.asStateFlow()
+
     private val _previewOutlineSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.STEEL, customRole = PreviewColorRole.MONOCHROME))
     val previewOutlineSetting: StateFlow<PreviewColorSetting> = _previewOutlineSetting.asStateFlow()
 
@@ -540,6 +543,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
+            SettingsStore.lineThicknessScaleFlow(getApplication()).collectLatest { persisted ->
+                _lineThicknessScale.value = persisted
+            }
+        }
+
+        viewModelScope.launch {
             SettingsStore.previewOutlineSettingFlow(getApplication()).collectLatest { persisted ->
                 _previewOutlineSetting.value = persisted
             }
@@ -752,6 +761,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _previewBlackWhiteOnly.value = enabled
         if (persist) {
             viewModelScope.launch { SettingsStore.setPreviewBlackWhiteOnly(getApplication(), enabled) }
+        }
+    }
+
+    fun setLineThicknessScale(scale: Float, persist: Boolean = true) {
+        _lineThicknessScale.value = scale.coerceIn(0.5f, 1.0f)
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setLineThicknessScale(getApplication(), scale) }
         }
     }
 

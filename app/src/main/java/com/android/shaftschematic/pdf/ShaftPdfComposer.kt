@@ -62,6 +62,7 @@ fun composeShaftPdf(
     pdfPrefs: PdfPrefs = PdfPrefs(),
     options: PdfExportOptions = PdfExportOptions(),
     resolvedComponents: List<ResolvedComponent>? = null,
+    lineThicknessScale: Float = 1.0f,
 ) {
     val effectiveOptions = when (options.mode) {
         PdfExportMode.Template -> options.copy(
@@ -112,11 +113,12 @@ fun composeShaftPdf(
     val bodyOnly = isBodyOnlyShaft(spec) || bodyOnlyResolved
     val singleTaperOnly = isSingleTaperOnly(spec)
 
+    val scale = lineThicknessScale.coerceIn(0.5f, 1.0f)
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeWidth = OUTLINE_PT; color = 0xFF000000.toInt()
+        style = Paint.Style.STROKE; strokeWidth = OUTLINE_PT_BASE * scale; color = 0xFF000000.toInt()
     }
     val dim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeWidth = DIM_PT; color = 0xFF000000.toInt()
+        style = Paint.Style.STROKE; strokeWidth = DIM_PT_BASE * scale; color = 0xFF000000.toInt()
     }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; textSize = TEXT_PT
@@ -328,8 +330,8 @@ private const val MM_PER_IN = 25.4f
 private const val BODY_ONLY_TARGET_HEIGHT_PT = 1.25f * 72f
 
 // Strokes / text
-private const val OUTLINE_PT = 2.5f
-private const val DIM_PT = 1.6f
+private const val OUTLINE_PT_BASE = 2.5f
+private const val DIM_PT_BASE = 1.6f
 private const val TEXT_PT = 12f
 
 // Layout

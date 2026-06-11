@@ -135,7 +135,6 @@ import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
 import com.android.shaftschematic.ui.viewmodel.snapPositionMm
 import com.android.shaftschematic.util.LengthFormat
-import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
 import kotlinx.coroutines.launch
@@ -196,6 +195,7 @@ fun ShaftScreen(
     previewThreadFill: PreviewColorSetting,
     previewThreadHatch: PreviewColorSetting,
     previewBlackWhiteOnly: Boolean,
+    lineThicknessScale: Float = 1.0f,
 
     sessionAddDefaults: SessionAddDefaults,
 
@@ -240,10 +240,6 @@ fun ShaftScreen(
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
-
-    // Runout sheet configuration (passed to carousel for bubble count controls)
-    runoutConfig: RunoutConfig = RunoutConfig(),
-    onSetRunoutBubbleCount: (componentId: String, count: Int) -> Unit = { _, _ -> },
 
     // Other
     snackbarHostState: SnackbarHostState,
@@ -490,6 +486,7 @@ fun ShaftScreen(
                 previewThreadFill = previewThreadFill,
                 previewThreadHatch = previewThreadHatch,
                 previewBlackWhiteOnly = previewBlackWhiteOnly,
+                lineThicknessScale = lineThicknessScale,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = 200.dp)
@@ -735,7 +732,6 @@ fun ShaftScreen(
                     edgeArrowWidthDp = componentArrowWidthDp,
                     showComponentDebugLabels = showComponentDebugLabels,
                     selectedComponentId = selectedComponentId,
-                    runoutConfig = runoutConfig,
                     onAddBody = onAddBody,
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateTaper = snappedTaperUpdater,
@@ -752,7 +748,6 @@ fun ShaftScreen(
                     onRemoveThread = onRemoveThread,
                     onRemoveLiner = onRemoveLiner,
                     onSelectComponentById = onSelectComponentById,
-                    onSetRunoutBubbleCount = onSetRunoutBubbleCount,
                 )
 
                 if (chooserOpen) {
@@ -1057,6 +1052,7 @@ private fun PreviewCard(
     previewThreadFill: PreviewColorSetting,
     previewThreadHatch: PreviewColorSetting,
     previewBlackWhiteOnly: Boolean,
+    lineThicknessScale: Float = 1.0f,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -1078,6 +1074,7 @@ private fun PreviewCard(
                 previewLinerFill = previewLinerFill,
                 previewThreadFill = previewThreadFill,
                 previewThreadHatch = previewThreadHatch,
+                lineThicknessScale = lineThicknessScale,
                 highlightEnabled = highlightEnabled && (highlightId != null),
                 highlightId = highlightId,
                 onTapComponentId = onTapComponentId,

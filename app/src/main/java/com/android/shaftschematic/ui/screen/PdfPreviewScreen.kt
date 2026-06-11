@@ -85,6 +85,7 @@ fun PdfPreviewScreen(
     val spec by vm.spec.collectAsState()
     val unit by vm.unit.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
+    val lineThicknessScale by vm.lineThicknessScale.collectAsState()
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
     val jobNumber by vm.jobNumber.collectAsState()
@@ -100,11 +101,12 @@ fun PdfPreviewScreen(
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(spec, unit, project, options, resolvedComponents) {
+    LaunchedEffect(spec, unit, project, options, resolvedComponents, lineThicknessScale) {
         isLoading = true
         errorMessage = null
-        // Snapshot currentPdfPrefs on the main thread before switching to IO.
+        // Snapshot on the main thread before switching to IO.
         val pdfPrefsSnapshot = vm.currentPdfPrefs
+        val thicknessScaleSnapshot = lineThicknessScale
         val bmp = withContext(Dispatchers.IO) {
             renderPdfPreviewBitmap(
                 context = ctx,
@@ -115,6 +117,7 @@ fun PdfPreviewScreen(
                 pdfPrefs = pdfPrefsSnapshot,
                 options = options,
                 resolvedComponents = resolvedComponents,
+                lineThicknessScale = thicknessScaleSnapshot,
             )
         }
         if (bmp != null) {
@@ -268,6 +271,7 @@ private fun renderPdfPreviewBitmap(
     pdfPrefs: PdfPrefs,
     options: PdfExportOptions,
     resolvedComponents: List<ResolvedComponent>,
+    lineThicknessScale: Float = 1.0f,
 ): Bitmap? = runCatching {
     // Step 1 – compose the PDF into a temp file.
     // Use createTempFile so concurrent preview renders don't collide on the same path.
@@ -287,6 +291,7 @@ private fun renderPdfPreviewBitmap(
             pdfPrefs = pdfPrefs,
             options = options,
             resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
+            lineThicknessScale = lineThicknessScale,
         )
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
