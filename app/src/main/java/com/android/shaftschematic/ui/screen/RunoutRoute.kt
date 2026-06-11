@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -25,13 +26,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,59 +55,65 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.pdf.composeRunoutPdf
+import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
+import com.android.shaftschematic.ui.drawing.render.RenderOptions
+import com.android.shaftschematic.ui.drawing.render.ShaftLayout
+import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
+import com.android.shaftschematic.ui.drawing.render.ThreadStyle
+import com.android.shaftschematic.ui.util.buildBodyTitleById
+import com.android.shaftschematic.ui.util.buildLinerTitleById
+import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/**
- * RunoutRoute
- *
- * Screen for the Runout Sheet document tab.
- *
- * ## Layout
- * - Brief description of the document's purpose.
- * - **TIR orientation** selector: "Looking AFT" or "Looking FORWARD".
- *   This controls the clock-position reference used when reading the dial indicator —
- *   e.g. "high at 3 o'clock looking aft" has the opposite physical meaning from
- *   "high at 3 o'clock looking forward". Printed at the bottom of the runout sheet.
- * - **Preview PDF** button — renders the PDF in memory and displays it full-screen
- *   so you can verify the layout before committing to an export.
- * - **Export PDF** button — opens the SAF file picker to save the file.
- *
- * ## Phase 2
- * This screen will host TIR value entry (typing readings into each bubble) and the
- * high-spot direction line selector once that feature is implemented.
- */
+private data class RunoutComponentEntry(
+    val id: String,
+    val label: String,
+    val defaultCount: Int,
+    val startMm: Float,
+)
+
+@OptIn(ExperimentalTextApi::class)
 @Composable
 fun RunoutRoute(
     vm: ShaftViewModel,
     onExportRunout: () -> Unit = {},
+    onOpenSidebar: () -> Unit = {},
 ) {
-    val spec          by vm.spec.collectAsState()
-    val runoutConfig  by vm.runoutConfig.collectAsState()
-    val unit          by vm.unit.collectAsState()
-    val customer      by vm.customer.collectAsState()
-    val vessel        by vm.vessel.collectAsState()
-    val jobNumber     by vm.jobNumber.collectAsState()
-    val shaftPosition by vm.shaftPosition.collectAsState()
-    val openAfterExport by vm.openPdfAfterExport.collectAsState()
+    val spec               by vm.spec.collectAsState()
+    val runoutConfig       by vm.runoutConfig.collectAsState()
+    val resolvedComponents by vm.resolvedComponents.collectAsState()
+    val unit               by vm.unit.collectAsState()
+    val customer           by vm.customer.collectAsState()
+    val vessel             by vm.vessel.collectAsState()
+    val jobNumber          by vm.jobNumber.collectAsState()
+    val shaftPosition      by vm.shaftPosition.collectAsState()
+    val openAfterExport    by vm.openPdfAfterExport.collectAsState()
 
     val ctx = LocalContext.current
-    var showPreview by rememberSaveable { mutableStateOf(false) }
-    var previewBitmap by rememberSaveable { mutableStateOf<ImageBitmap?>(null) }
+    var showPreview    by rememberSaveable { mutableStateOf(false) }
+    var previewBitmap  by rememberSaveable { mutableStateOf<ImageBitmap?>(null) }
     var previewLoading by rememberSaveable { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
@@ -133,7 +144,6 @@ fun RunoutRoute(
         }
     }
 
-    // Render preview bitmap when the preview overlay is requested
     LaunchedEffect(showPreview, spec, runoutConfig, unit) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
@@ -149,62 +159,178 @@ fun RunoutRoute(
         previewLoading = false
     }
 
-    // ── Main UI ─────────────────────────────────────────────────────────────
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text("Runout Sheet", style = MaterialTheme.typography.headlineSmall)
+    // Capture theme colors before the Canvas block (DrawScope is not composable)
+    val outlineArgb    = MaterialTheme.colorScheme.onSurface.toArgb()
+    val bodyFillArgb   = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f).toArgb()
+    val linerFillArgb  = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f).toArgb()
+    val hatchArgb      = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f).toArgb()
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+    val previewShape   = MaterialTheme.shapes.medium
+    val textMeasurer   = rememberTextMeasurer()
 
-        Text(
-            text = "A blank measurement form with reading stations marked at each component. " +
-                "Print it, bring it to the ship, and record TIR readings by hand.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+    val previewOpts = remember(outlineArgb, bodyFillArgb, linerFillArgb, hatchArgb) {
+        RenderOptions(
+            showGrid         = false,
+            outlineColor     = outlineArgb,
+            outlineWidthPx   = 1.5f,
+            bodyFillColor    = bodyFillArgb,
+            taperFillColor   = bodyFillArgb,
+            linerFillColor   = linerFillArgb,
+            threadFillColor  = 0x00000000,
+            threadHatchColor = hatchArgb,
+            threadStyle      = ThreadStyle.HATCH,
+            threadUseHatchColor = true,
+            threadStrokePx   = 0f,
         )
+    }
 
-        // ── TIR orientation selector ─────────────────────────────────────────
-        Text("TIR orientation", style = MaterialTheme.typography.titleSmall)
-        Text(
-            text = "Specifies the direction you face when reading the indicator. " +
-                "This sets the clock-position reference — 3 o'clock looking aft is the opposite " +
-                "physical location from 3 o'clock looking forward.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TirButton(label = "Looking AFT",     selected = runoutConfig.tirDirection == TirDirection.AFT,
-                onClick = { vm.setTirDirection(TirDirection.AFT) })
-            TirButton(label = "Looking FORWARD", selected = runoutConfig.tirDirection == TirDirection.FORWARD,
-                onClick = { vm.setTirDirection(TirDirection.FORWARD) })
-            TirButton(label = "Not set",         selected = runoutConfig.tirDirection == TirDirection.UNSET,
-                onClick = { vm.setTirDirection(TirDirection.UNSET) })
+    // Bodies, tapers, liners in axial order for the station count selector
+    val entries: List<RunoutComponentEntry> = remember(spec) {
+        val bodyTitles  = buildBodyTitleById(spec)
+        val taperTitles = buildTaperTitleById(spec)
+        val linerTitles = buildLinerTitleById(spec)
+        buildList {
+            spec.bodies.forEach { b ->
+                add(RunoutComponentEntry(b.id, bodyTitles[b.id] ?: "Body",  RunoutConfig.BODY_DEFAULT_COUNT,  b.startFromAftMm))
+            }
+            spec.tapers.forEach { t ->
+                add(RunoutComponentEntry(t.id, taperTitles[t.id] ?: "Taper", RunoutConfig.TAPER_DEFAULT_COUNT, t.startFromAftMm))
+            }
+            spec.liners.forEach { ln ->
+                add(RunoutComponentEntry(ln.id, linerTitles[ln.id] ?: "Liner", RunoutConfig.LINER_DEFAULT_COUNT, ln.startFromAftMm))
+            }
+        }.sortedBy { it.startMm }
+    }
+
+    // Zoom state for the shaft preview (hoisted so it survives spec updates)
+    var previewScale  by remember { mutableFloatStateOf(1f) }
+    var previewOffset by remember { mutableStateOf(Offset.Zero) }
+    val previewTransformState = rememberTransformableState { zoomChange, panChange, _ ->
+        previewScale  = (previewScale * zoomChange).coerceIn(0.5f, 5f)
+        previewOffset += panChange
+    }
+
+    // ── Screen ────────────────────────────────────────────────────────────────
+    Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+
+        // ── Toolbar ──────────────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onOpenSidebar) {
+                Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+            }
+            Text(
+                text = "Runout Sheet",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(start = 4.dp),
+            )
         }
 
-        Spacer(Modifier.height(4.dp))
+        HorizontalDivider()
 
-        // ── Preview button ───────────────────────────────────────────────────
-        OutlinedButton(
-            onClick = { showPreview = true },
-            modifier = Modifier.fillMaxWidth(),
+        // ── Scrollable content ────────────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Icon(Icons.Outlined.Preview, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Preview Runout Sheet")
-        }
 
-        // ── Export button ────────────────────────────────────────────────────
-        Button(
-            onClick = { launcher.launch(buildRunoutFilename(customer, vessel, jobNumber)) },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Export Runout Sheet PDF")
+            // ── Live shaft + bubble preview (pinch-to-zoom) ──────────────────
+            if (spec.overallLengthMm > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(previewShape)
+                        .background(surfaceVariant)
+                        .transformable(state = previewTransformState),
+                ) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer(
+                                scaleX       = previewScale,
+                                scaleY       = previewScale,
+                                translationX = previewOffset.x,
+                                translationY = previewOffset.y,
+                            ),
+                    ) {
+                        // Reserve vertical space for bubbles so shaft+bubbles are centred
+                        val marginPx  = 12.dp.toPx()
+                        val circleR   = 6.dp.toPx()
+                        val leaderGap = 5.dp.toPx()
+                        val bubblesH  = leaderGap + circleR * 2f
+                        val layout = ShaftLayout.compute(
+                            spec               = spec,
+                            leftPx             = 0f,
+                            topPx              = 0f,
+                            rightPx            = size.width,
+                            bottomPx           = size.height - bubblesH,
+                            marginPx           = marginPx,
+                            resolvedComponents = resolvedComponents,
+                        )
+                        with(ShaftRenderer) {
+                            draw(spec, layout, previewOpts, textMeasurer, resolvedComponents)
+                        }
+                        drawRunoutMarkers(spec, runoutConfig, layout, size.height)
+                    }
+                }
+            }
+
+            // ── TIR orientation selector ──────────────────────────────────────
+            Text("TIR orientation", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TirButton("Looking AFT",     runoutConfig.tirDirection == TirDirection.AFT)     { vm.setTirDirection(TirDirection.AFT) }
+                TirButton("Looking FORWARD", runoutConfig.tirDirection == TirDirection.FORWARD) { vm.setTirDirection(TirDirection.FORWARD) }
+                TirButton("Not set",         runoutConfig.tirDirection == TirDirection.UNSET)   { vm.setTirDirection(TirDirection.UNSET) }
+            }
+
+            // ── Measurement station selector ──────────────────────────────────
+            if (entries.isNotEmpty()) {
+                Text("Measurement stations", style = MaterialTheme.typography.titleSmall)
+                entries.forEach { entry ->
+                    val currentCount = runoutConfig.componentOverrides[entry.id] ?: entry.defaultCount
+                    RunoutStationRow(
+                        label        = entry.label,
+                        currentCount = currentCount,
+                        onDecrement  = { vm.setRunoutBubbleCount(entry.id, currentCount - 1) },
+                        onIncrement  = { vm.setRunoutBubbleCount(entry.id, currentCount + 1) },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            // ── Preview button ────────────────────────────────────────────────
+            OutlinedButton(
+                onClick = { showPreview = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Outlined.Preview, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Preview Runout Sheet")
+            }
+
+            // ── Export button ─────────────────────────────────────────────────
+            Button(
+                onClick = { launcher.launch(buildRunoutFilename(customer, vessel, jobNumber)) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Export Runout Sheet PDF")
+            }
         }
     }
 
-    // ── Full-screen preview overlay ──────────────────────────────────────────
+    // ── Full-screen preview overlay ───────────────────────────────────────────
     if (showPreview) {
         PdfPreviewOverlay(
             bitmap = previewBitmap,
@@ -219,11 +345,124 @@ fun RunoutRoute(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Local composables
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun RunoutStationRow(
+    label: String,
+    currentCount: Int,
+    onDecrement: () -> Unit,
+    onIncrement: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Stations:",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 4.dp),
+            )
+            IconButton(onClick = onDecrement, enabled = currentCount > 1) {
+                Text("−", style = MaterialTheme.typography.titleMedium)
+            }
+            Text(
+                text = "$currentCount",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+            IconButton(onClick = onIncrement) {
+                Text("+", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    }
+}
+
 @Composable
 private fun TirButton(label: String, selected: Boolean, onClick: () -> Unit) {
     if (selected) Button(onClick = onClick) { Text(label) }
     else TextButton(onClick = onClick) { Text(label) }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canvas helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+private fun DrawScope.drawRunoutMarkers(
+    spec: ShaftSpec,
+    config: RunoutConfig,
+    layout: ShaftLayout.Result,
+    canvasH: Float,
+) {
+    val circleR     = 6.dp.toPx()
+    val leaderGap   = 5.dp.toPx()
+    val strokeW     = 1.2.dp.toPx()
+    val markerColor = Color.Black.copy(alpha = 0.70f)
+
+    fun stationsMm(startMm: Float, lengthMm: Float, count: Int, useInset: Boolean): List<Float> {
+        if (count <= 0 || lengthMm <= 0f) return emptyList()
+        if (count == 1) return listOf(startMm + lengthMm * 0.5f)
+        return if (!useInset) {
+            List(count) { i -> startMm + (i + 0.5f) * lengthMm / count }
+        } else {
+            val inset = RunoutConfig.RUNOUT_EDGE_INSET_MM.coerceAtMost(lengthMm * 0.35f)
+            val span  = (lengthMm - 2f * inset).coerceAtLeast(0f)
+            List(count) { i -> startMm + inset + if (count > 1) i * span / (count - 1) else 0f }
+        }
+    }
+
+    fun odMmAt(stMm: Float): Float {
+        var od = 10f
+        spec.bodies.forEach { b ->
+            if (stMm >= b.startFromAftMm - 0.1f && stMm <= b.startFromAftMm + b.lengthMm + 0.1f)
+                od = maxOf(od, b.diaMm)
+        }
+        spec.tapers.forEach { t ->
+            val end = t.startFromAftMm + t.lengthMm
+            if (stMm >= t.startFromAftMm - 0.1f && stMm <= end + 0.1f) {
+                val frac = ((stMm - t.startFromAftMm) / t.lengthMm).coerceIn(0f, 1f)
+                od = maxOf(od, t.startDiaMm + (t.endDiaMm - t.startDiaMm) * frac)
+            }
+        }
+        spec.liners.forEach { ln ->
+            if (stMm >= ln.startFromAftMm - 0.1f && stMm <= ln.startFromAftMm + ln.lengthMm + 0.1f)
+                od = maxOf(od, ln.odMm)
+        }
+        return od
+    }
+
+    fun drawMarkers(startMm: Float, lengthMm: Float, id: String, defaultCount: Int, useInset: Boolean) {
+        val count = config.componentOverrides[id] ?: defaultCount
+        stationsMm(startMm, lengthMm, count, useInset).forEach { stMm ->
+            val x            = layout.xPx(stMm).coerceIn(circleR, size.width - circleR)
+            val shaftBottomY = layout.centerlineYPx + layout.rPx(odMmAt(stMm))
+            val circleCy     = shaftBottomY + leaderGap + circleR
+            if (circleCy + circleR > canvasH) return@forEach
+            drawLine(markerColor, Offset(x, shaftBottomY), Offset(x, circleCy - circleR), strokeWidth = strokeW)
+            drawCircle(markerColor, radius = circleR, center = Offset(x, circleCy), style = Stroke(width = strokeW))
+        }
+    }
+
+    spec.bodies.forEach { b  -> drawMarkers(b.startFromAftMm,  b.lengthMm,  b.id,  RunoutConfig.BODY_DEFAULT_COUNT,  false) }
+    spec.tapers.forEach { t  -> drawMarkers(t.startFromAftMm,  t.lengthMm,  t.id,  RunoutConfig.TAPER_DEFAULT_COUNT, true)  }
+    spec.liners.forEach { ln -> drawMarkers(ln.startFromAftMm, ln.lengthMm, ln.id, RunoutConfig.LINER_DEFAULT_COUNT, true)  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Private helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 private fun buildRunoutFilename(customer: String, vessel: String, jobNumber: String): String {
     val parts = listOf(customer, vessel, jobNumber).filter { it.isNotBlank() }
@@ -239,14 +478,10 @@ private fun openRunoutPdf(context: Context, uri: Uri) {
     catch (_: ActivityNotFoundException) {}
 }
 
-/**
- * Renders the runout PDF to a [Bitmap] using PdfDocument + PdfRenderer.
- * Must be called on a background thread (Dispatchers.IO).
- */
 private fun renderRunoutBitmap(
     context: Context,
-    spec: com.android.shaftschematic.model.ShaftSpec,
-    config: com.android.shaftschematic.settings.RunoutConfig,
+    spec: ShaftSpec,
+    config: RunoutConfig,
     project: ProjectInfo,
     unit: com.android.shaftschematic.util.UnitSystem,
 ): Bitmap? = runCatching {
@@ -340,7 +575,6 @@ internal fun PdfPreviewOverlay(
                 when {
                     loading -> CircularProgressIndicator(color = Color.White)
                     bitmap != null -> {
-                        // Zoom / pan state — reset when bitmap changes
                         val scaleState  = remember(bitmap) { mutableFloatStateOf(1f) }
                         val offsetState = remember(bitmap) { mutableStateOf(Offset.Zero) }
                         val scale  by scaleState

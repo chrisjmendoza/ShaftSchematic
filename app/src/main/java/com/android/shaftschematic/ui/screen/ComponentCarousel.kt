@@ -76,7 +76,6 @@ import com.android.shaftschematic.ui.util.linerWarningMessage
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.taperWarningMessage
 import com.android.shaftschematic.ui.util.threadWarningMessage
-import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
@@ -113,8 +112,6 @@ internal fun ComponentCarouselPager(
     edgeArrowWidthDp: Int,
     showComponentDebugLabels: Boolean,
     selectedComponentId: String?,
-    /** Current runout configuration — used to show bubble count controls in each card. */
-    runoutConfig: RunoutConfig = RunoutConfig(),
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -129,8 +126,6 @@ internal fun ComponentCarouselPager(
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
     onSelectComponentById: (String?) -> Unit,
-    /** Called when the user changes the runout bubble count for a component. */
-    onSetRunoutBubbleCount: (componentId: String, count: Int) -> Unit = { _, _ -> },
 ) {
     val bodyTitleById   = remember(spec.bodies)                    { buildBodyTitleById(spec) }
     val taperTitleById  = remember(spec.tapers)                    { buildTaperTitleById(spec) }
@@ -231,7 +226,6 @@ internal fun ComponentCarouselPager(
                     spec = spec, unit = unit, row = row, physicalIndex = page,
                     outerPaddingHorizontal = componentCardPadding,
                     showComponentDebugLabels = showComponentDebugLabels,
-                    runoutConfig = runoutConfig,
                     onAddBody = onAddBody,
                     onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
@@ -243,7 +237,6 @@ internal fun ComponentCarouselPager(
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
                     onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner,
-                    onSetRunoutBubbleCount = onSetRunoutBubbleCount,
                 )
             }
         }
@@ -300,8 +293,6 @@ internal fun ComponentPagerCard(
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
-    /** Runout config — drives the bubble count control shown at the bottom of each card. */
-    runoutConfig: RunoutConfig = RunoutConfig(),
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -319,7 +310,6 @@ internal fun ComponentPagerCard(
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
-    onSetRunoutBubbleCount: (componentId: String, count: Int) -> Unit = { _, _ -> },
 ) {
     fun f1(mm: Float): String = "%.1f".format(mm)
 
@@ -389,12 +379,6 @@ internal fun ComponentPagerCard(
                 CommitNum("Ø (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, b.lengthMm, it) }
                 }
-                RunoutStationControl(
-                    componentId = b.id,
-                    defaultCount = RunoutConfig.BODY_DEFAULT_COUNT,
-                    runoutConfig = runoutConfig,
-                    onSetCount = { onSetRunoutBubbleCount(b.id, it) },
-                )
             }
         }
 
@@ -474,12 +458,6 @@ internal fun ComponentPagerCard(
                         onCheckedChange = null
                     )
                 }
-                RunoutStationControl(
-                    componentId = t.id,
-                    defaultCount = RunoutConfig.TAPER_DEFAULT_COUNT,
-                    runoutConfig = runoutConfig,
-                    onSetCount = { onSetRunoutBubbleCount(t.id, it) },
-                )
             }
         }
 
@@ -642,12 +620,6 @@ internal fun ComponentPagerCard(
                 CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateLiner(idx, ln.startFromAftMm, ln.lengthMm, it) }
                 }
-                RunoutStationControl(
-                    componentId = ln.id,
-                    defaultCount = RunoutConfig.LINER_DEFAULT_COUNT,
-                    runoutConfig = runoutConfig,
-                    onSetCount = { onSetRunoutBubbleCount(ln.id, it) },
-                )
             }
         }
     }
@@ -766,70 +738,3 @@ private fun dispKw(mm: Float, unit: UnitSystem): String = when (unit) {
 private fun Float.fmtTrim(d: Int) = "%.${d}f".format(this).trimEnd('0').trimEnd('.')
 
 internal fun pitchMmToTpi(pitchMm: Float): Float = if (pitchMm > 0f) 25.4f / pitchMm else 0f
-
-// ─────────────────────────────────────────────────────────────────────────────
-// RunoutStationControl — per-component bubble count adjuster
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * A compact +/- control shown at the bottom of each component card (except threads).
- *
- * Shows "Runout stations: N  [−] [+]" using the component's effective count — either
- * the user override from [runoutConfig] or the [defaultCount] for this component type.
- *
- * The control is intentionally subtle (secondary text style) so it doesn't compete with
- * the primary measurement fields. Users who never touch it see sensible defaults; users
- * who need more stations can increment without leaving the editor.
- *
- * @param componentId   The ID of the component whose bubble count is being adjusted.
- * @param defaultCount  The count used when no override is present in [runoutConfig].
- * @param runoutConfig  Current runout preferences — checked for an existing override.
- * @param onSetCount    Called with the new count when +/- is tapped. Minimum is 1.
- */
-@Composable
-private fun RunoutStationControl(
-    componentId: String,
-    defaultCount: Int,
-    runoutConfig: RunoutConfig,
-    onSetCount: (Int) -> Unit,
-) {
-    val currentCount = runoutConfig.componentOverrides[componentId] ?: defaultCount
-
-    androidx.compose.material3.HorizontalDivider(
-        modifier = Modifier.padding(vertical = 4.dp),
-        color = MaterialTheme.colorScheme.outlineVariant,
-    )
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = "Runout stations:",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            androidx.compose.material3.IconButton(
-                onClick = { if (currentCount > 1) onSetCount(currentCount - 1) },
-                enabled = currentCount > 1,
-            ) {
-                Text("−", style = MaterialTheme.typography.titleMedium)
-            }
-            Text(
-                text = "$currentCount",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
-            androidx.compose.material3.IconButton(
-                onClick = { onSetCount(currentCount + 1) },
-            ) {
-                Text("+", style = MaterialTheme.typography.titleMedium)
-            }
-        }
-    }
-}

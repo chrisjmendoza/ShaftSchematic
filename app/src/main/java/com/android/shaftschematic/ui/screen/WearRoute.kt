@@ -68,6 +68,7 @@ import java.io.File
 fun WearRoute(
     vm: ShaftViewModel,
     onExportWear: () -> Unit = {},
+    onOpenSidebar: () -> Unit = {},
 ) {
     val spec          by vm.spec.collectAsState()
     val unit          by vm.unit.collectAsState()
