@@ -273,7 +273,13 @@ fun composeShaftPdf(
         assignments.forEach { rs ->
             renderer.drawOnRail(c, rs.rail, rs.span, true)
         }
-        renderer.drawTop(c, oalSpan(sets.aftSETxMm, sets.fwdSETxMm, unit), true)
+        val oalAft = if (spec.threads.any { t ->
+            abs(t.startFromAftMm.toDouble()) <= END_EPS_MM && !t.excludeFromOAL
+        }) 0.0 else sets.aftSETxMm
+        val oalFwd = if (spec.threads.any { t ->
+            abs((t.startFromAftMm + t.lengthMm).toDouble() - spec.overallLengthMm.toDouble()) <= END_EPS_MM && !t.excludeFromOAL
+        }) win.oalMm else sets.fwdSETxMm
+        renderer.drawTop(c, oalSpan(oalAft, oalFwd, unit), true)
     }
 
     // --- diameter callouts (optional; leave empty until you have stations) ---
