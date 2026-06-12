@@ -969,7 +969,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Set shaft overall length (mm). Clamped to ≥ 0. */
     fun onSetOverallLengthMm(valueMm: Float) {
-        _spec.update { it.copy(overallLengthMm = max(0f, valueMm)) }
+        _spec.update { it.copy(overallLengthMm = max(0f, valueMm)).syncExcludedThreadPositions() }
     }
 
     /** Parses text in current UI units and forwards to [onSetOverallLengthMm]. */
@@ -986,7 +986,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         if (_overallIsManual.value) return@update s
         val end = coverageEndMm(s)
         val minOverall = end + max(0f, minFreeMm)
-        if (s.overallLengthMm < minOverall) s.copy(overallLengthMm = minOverall) else s
+        val grown = if (s.overallLengthMm < minOverall) s.copy(overallLengthMm = minOverall) else s
+        grown.syncExcludedThreadPositions()
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -1322,12 +1323,20 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun updateThread(index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
         if (index !in s.threads.indices) s else {
             val old = s.threads[index]
-            val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
+            val newLength = max(0f, lengthMm)
+
+            // For excluded threads the start position is always derived from isAftEnd + OAL,
+            // never from a user-authored startMm. Re-sync after updating length.
+            val effectiveStart = if (old.excludeFromOAL) {
+                if (old.isAftEnd) 0f else (s.overallLengthMm - newLength).coerceAtLeast(0f)
+            } else startMm
+
+            val startChanged = old.startFromAftMm != effectiveStart || old.lengthMm != newLength
 
             val updatedThreads = s.threads.toMutableList().also { l ->
                 l[index] = old.copy(
-                    startFromAftMm = startMm,
-                    lengthMm = max(0f, lengthMm),
+                    startFromAftMm = effectiveStart,
+                    lengthMm = newLength,
                     majorDiaMm = max(0f, majorDiaMm),
                     pitchMm = max(0f, pitchMm)
                 )
@@ -1335,7 +1344,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
             val base = s.copy(threads = updatedThreads)
 
-            if (_autoSnap.value && startChanged) {
+            if (_autoSnap.value && startChanged && !old.excludeFromOAL) {
                 base.snapForwardFrom(ComponentKey(old.id, ComponentKind.THREAD))
             } else {
                 base
@@ -1356,8 +1365,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 val old = l[idx]
                 l[idx] = old.copy(excludeFromOAL = excludeFromOAL)
             }
-        )
+        ).syncExcludedThreadPositions()
     }.also { ensureOverall() }
+
+    fun setThreadEndPosition(id: String, isAft: Boolean) = _spec.update { s ->
+        val idx = s.threads.indexOfFirst { it.id == id }
+        if (idx == -1) s
+        else s.copy(
+            threads = s.threads.toMutableList().also { l ->
+                l[idx] = l[idx].copy(isAftEnd = isAft)
+            }
+        ).syncExcludedThreadPositions()
+    }
 
     /** Remove a [Threads] segment by id with multi-step delete history support. */
     fun removeThread(id: String) {

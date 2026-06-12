@@ -121,6 +121,7 @@ internal fun ComponentCarouselPager(
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+    onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
     onRemoveBody: (String) -> Unit,
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
@@ -235,6 +236,7 @@ internal fun ComponentCarouselPager(
                     bodyTitleById = bodyTitleById, taperTitleById = taperTitleById,
                     linerTitleById = linerTitleById, threadTitleById = threadTitleById,
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
+                    onSetThreadEndPosition = onSetThreadEndPosition,
                     onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner,
                 )
@@ -306,6 +308,7 @@ internal fun ComponentPagerCard(
     linerTitleById: Map<String, String>,
     threadTitleById: Map<String, String>,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+    onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
     onRemoveBody: (String) -> Unit,
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
@@ -469,7 +472,7 @@ internal fun ComponentPagerCard(
             ComponentCard(
                 title = threadTitleById[th.id] ?: "Thread",
                 debugText = if (showComponentDebugLabels) "id=${th.id} • startMm=${f1(th.startFromAftMm)} • endMm=${f1(th.startFromAftMm + th.lengthMm)}" else null,
-                errorMessage = startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm),
+                errorMessage = if (th.excludeFromOAL) null else startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm),
                 warningMessage = threadWarningMessage(th),
                 componentId = th.id, componentKind = ComponentKind.THREAD,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -492,15 +495,31 @@ internal fun ComponentPagerCard(
                     androidx.compose.material3.Switch(checked = includeInOal, onCheckedChange = null)
                 }
                 if (!includeInOal) {
-                    Text(
-                        "OAL will be shown as length excluding this thread.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-                CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit), validator = startValidator(th.id, ComponentKind.THREAD, th.lengthMm)) { s ->
-                    toMmOrNull(s, unit)?.let { onUpdateThread(idx, it, th.lengthMm, th.majorDiaMm, th.pitchMm) }
+                    // AFT / FWD end selector — replaces the start input for excluded threads
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Thread end:", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val chipColors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+                            containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
+                        )
+                        FilterChip(selected = th.isAftEnd,
+                            onClick = { onSetThreadEndPosition(th.id, true) },
+                            label = { Text("AFT") }, colors = chipColors,
+                            border = if (th.isAftEnd) BorderStroke(1.dp, Color.Black) else null)
+                        FilterChip(selected = !th.isAftEnd,
+                            onClick = { onSetThreadEndPosition(th.id, false) },
+                            label = { Text("FWD") }, colors = chipColors,
+                            border = if (!th.isAftEnd) BorderStroke(1.dp, Color.Black) else null)
+                    }
+                } else {
+                    CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit), validator = startValidator(th.id, ComponentKind.THREAD, th.lengthMm)) { s ->
+                        toMmOrNull(s, unit)?.let { onUpdateThread(idx, it, th.lengthMm, th.majorDiaMm, th.pitchMm) }
+                    }
                 }
                 CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, th.lengthMm, it, th.pitchMm) }

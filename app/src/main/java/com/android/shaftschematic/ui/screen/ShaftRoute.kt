@@ -200,6 +200,7 @@ fun ShaftRoute(
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
 
         onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
+        onSetThreadEndPosition = vm::setThreadEndPosition,
 
         onRemoveBody   = vm::removeBody,
         onRemoveTaper  = vm::removeTaper,

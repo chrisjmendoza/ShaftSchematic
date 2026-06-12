@@ -234,6 +234,7 @@ fun ShaftScreen(
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
 
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+    onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
 
     // Removes by stable id
     onRemoveBody: (String) -> Unit,
@@ -742,6 +743,7 @@ fun ShaftScreen(
                     onUpdateLinerReference = onUpdateLinerReference,
 
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
+                    onSetThreadEndPosition = onSetThreadEndPosition,
 
                     onRemoveBody = onRemoveBody,
                     onRemoveTaper = onRemoveTaper,

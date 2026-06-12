@@ -53,6 +53,26 @@ fun ShaftSpec.coverageEndMm(): Float {
 fun ShaftSpec.freeToEndMm(): Float =
     (overallLengthMm - coverageEndMm()).coerceAtLeast(0f)
 
+/**
+ * Returns a copy where every excluded thread's [Threads.startFromAftMm] is snapped to the
+ * shaft end declared by [Threads.isAftEnd]:
+ *  - AFT end → startFromAftMm = 0
+ *  - FWD end → startFromAftMm = overallLengthMm − lengthMm (clamped ≥ 0)
+ *
+ * Called whenever OAL or the excluded-thread topology changes.
+ */
+fun ShaftSpec.syncExcludedThreadPositions(): ShaftSpec {
+    val oal = overallLengthMm
+    val synced = threads.map { th ->
+        if (!th.excludeFromOAL) th
+        else {
+            val newStart = if (th.isAftEnd) 0f else (oal - th.lengthMm).coerceAtLeast(0f)
+            if (th.startFromAftMm == newStart) th else th.copy(startFromAftMm = newStart)
+        }
+    }
+    return if (synced == threads) this else copy(threads = synced)
+}
+
 /** Maximum outer diameter observed across all components (mm). */
 fun ShaftSpec.maxOuterDiaMm(): Float {
     var maxDia = 0f
