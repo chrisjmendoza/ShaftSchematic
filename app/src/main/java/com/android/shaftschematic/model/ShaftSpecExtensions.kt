@@ -26,7 +26,8 @@ fun ShaftSpec.lastOccupiedEndMm(): Float {
     var maxEnd = 0f
     bodies.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
     tapers.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
-    threads.forEach  { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
+    threads.filter { !it.excludeFromOAL }
+           .forEach { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
     liners.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
     return maxEnd
 }
@@ -44,7 +45,7 @@ fun ShaftSpec.buildPhysicalKeyOrder(): List<ComponentKey> {
     tapers.forEach { t ->
         keysWithStart += ComponentKey(t.id, ComponentKind.TAPER) to t.startFromAftMm
     }
-    threads.forEach { th ->
+    threads.filter { !it.excludeFromOAL }.forEach { th ->
         keysWithStart += ComponentKey(th.id, ComponentKind.THREAD) to th.startFromAftMm
     }
     liners.forEach { ln ->

@@ -44,7 +44,8 @@ fun ShaftSpec.coverageEndMm(): Float {
     val bodyEnd   = bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
     val taperEnd  = tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
     val linerEnd  = liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
-    val threadEnd = threads.maxOfOrNull { it.startFromAftMm + it.lengthMm } ?: 0f
+    val threadEnd = threads.filter { !it.excludeFromOAL }
+                          .maxOfOrNull { it.startFromAftMm + it.lengthMm } ?: 0f
     return maxOf(bodyEnd, taperEnd, linerEnd, threadEnd)
 }
 

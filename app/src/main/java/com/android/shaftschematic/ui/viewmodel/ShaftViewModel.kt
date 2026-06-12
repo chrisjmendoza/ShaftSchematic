@@ -1779,7 +1779,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         var end = 0f
         s.bodies.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
         s.tapers.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
-        s.threads.forEach { end = max(end, it.startFromAftMm + it.lengthMm) }
+        s.threads.filter { !it.excludeFromOAL }
+                 .forEach { end = max(end, it.startFromAftMm + it.lengthMm) }
         s.liners.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
         return end
     }
