@@ -42,7 +42,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Runout drawing — inline shaft preview, scrollable layout, fan-spread bubble placement, TIR direction label
 - Wear document — shaft profile + header + dye-pen PASS/FAIL checkboxes
 - Line thickness control — Settings slider 50%–200%, DataStore-persisted, applies to preview and PDF strokes
-- OAL include-thread fix — PDF OAL dimension spans shaft ends (not SET-to-SET) when end thread is marked included
+- OAL include-thread fix — bracket spans SET-to-SET (excluded) or shaft-end-to-SET (included); label always equals typed OAL
 
 ---
 
