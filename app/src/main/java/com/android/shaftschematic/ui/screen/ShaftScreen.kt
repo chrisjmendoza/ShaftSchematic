@@ -109,6 +109,7 @@ import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.lastOccupiedEndMm
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.input.NumericInputField
@@ -1275,14 +1276,7 @@ internal fun parseFractionOrDecimal(input: String): Float? {
 }
 
 /** Latest occupied end position along the shaft (mm) from all components. */
-private fun lastOccupiedEndMm(spec: ShaftSpec): Float {
-    var end = 0f
-    spec.bodies.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.tapers.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.threads.forEach { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.liners.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    return end
-}
+private fun lastOccupiedEndMm(spec: ShaftSpec): Float = spec.lastOccupiedEndMm()
 
 /* ───────────────── Free-to-End badge ───────────────── */
 
