@@ -1,21 +1,32 @@
-# RunoutSheet
+# RunoutSheet & WearDocument
 
 **Files:**
-- `ui/screen/RunoutRoute.kt` — screen UI, station config controls, canvas preview
-- `pdf/RunoutPdfComposer.kt` — letter-landscape PDF generation
+- `ui/screen/RunoutRoute.kt` — runout station config, canvas preview, PDF preview overlay
+- `ui/screen/WearRoute.kt` — wear inspection document tab
+- `pdf/RunoutPdfComposer.kt` — letter-landscape runout PDF generation
+- `pdf/WearPdfComposer.kt` — letter-landscape wear document PDF generation
 
 ---
 
 ## Responsibilities
 
+### RunoutRoute
 - Let the user set TIR orientation (Looking AFT / Looking FORWARD / Not set).
 - Let the user override the station count per component (bodies, tapers, liners).
 - Render a live canvas preview of the shaft with runout bubbles.
 - Export a hand-fill-in PDF runout sheet via SAF.
+- Preview the PDF in-app via `PdfPreviewOverlay` with a Tune options sheet.
+
+### WearRoute
+- Display a brief explanation of the blank-outline field form.
+- Preview the wear document PDF in-app via `PdfPreviewOverlay` with a Tune options sheet.
+- Export a blank shaft outline PDF via SAF for field damage and dye-pen inspection marking.
+
+Both tabs share the same layout pattern: outer `Column` with `systemBarsPadding()`, a toolbar `Row` (hamburger + title), `HorizontalDivider`, then a vertically-scrollable inner `Column`.
 
 ---
 
-## Bubble Placement Algorithm
+## Bubble Placement Algorithm (RunoutRoute only)
 
 Both the canvas preview and the PDF use the same three-pass algorithm:
 
@@ -42,13 +53,97 @@ Each bubble's leader line is drawn **diagonally** from `(stationX, shaftBottomY)
 
 ---
 
+## OAL Dimension Alignment
+
+Both `RunoutPdfComposer` and `WearPdfComposer` derive the horizontal draw span from the **SET-to-SET** extent, not `overallLengthMm`:
+
+```
+aftSetMm  = computeSetPositionsInMeasureSpace(oalWindow, spec).aftSETxMm
+fwdSetMm  = computeSetPositionsInMeasureSpace(oalWindow, spec).fwdSETxMm
+drawSpanMm = fwdSetMm − aftSetMm
+ptPerMm    = contentWidth / drawSpanMm
+xAt(mm)    = contentLeft + (mm − aftSetMm) × ptPerMm
+```
+
+**Why:** Thread components at the aft/fwd ends are NOT drawn in the shaft profile (the profile only draws bodies, tapers, and liners). If the span were based on `overallLengthMm`, the OAL arrows would extend into un-drawn whitespace. Basing the span on the SET faces keeps the arrow tips coincident with the visible shaft ends.
+
+The OAL label shows the SET-to-SET distance, which is the physically meaningful dimension for a machinist.
+
+---
+
+## PDF Appearance Options
+
+Both composers accept:
+
+```kotlin
+fun composeRunoutPdf(
+    page: PdfDocument.Page, spec: ShaftSpec, config: RunoutConfig,
+    project: ProjectInfo, unit: UnitSystem,
+    pdfPrefs: PdfPrefs = PdfPrefs(),
+    lineThicknessScale: Float = 1.0f,
+)
+
+fun composeWearPdf(
+    page: PdfDocument.Page, spec: ShaftSpec,
+    project: ProjectInfo, unit: UnitSystem,
+    pdfPrefs: PdfPrefs = PdfPrefs(),
+    lineThicknessScale: Float = 1.0f,
+)
+```
+
+| Parameter | Effect |
+|---|---|
+| `lineThicknessScale` (0.5–2.0) | Scales `strokeWidth` on all `OUTLINE_PT` and `DIM_PT` paints |
+| `pdfPrefs.shadedBodies` | Draws a light-grey (`Color.argb(40,0,0,0)`) fill rect before each body outline |
+| `pdfPrefs.shadedTapers` | Draws a light-grey trapezoid path before each taper outline |
+| `pdfPrefs.shadedLiners` | Draws a light-grey fill rect before each liner outline |
+
+Fills are drawn before outlines so the outline strokes are always visible on top.
+
+---
+
+## PdfPreviewOverlay
+
+`PdfPreviewOverlay` is an in-place full-screen composable (not a nav destination) used by both RunoutRoute and WearRoute. It shares the file with RunoutRoute.
+
+```
+PdfPreviewOverlay(
+    bitmap, loading, title, onClose, onExport,
+    optionsSheet: (@Composable () -> Unit)? = null,
+)
+```
+
+When `optionsSheet` is non-null, a **Tune** icon appears in the overlay toolbar. Tapping it opens a `ModalBottomSheet` (skips partial expansion) containing the composable.
+
+Both routes pass `RunoutWearOptionsSheet` as the lambda:
+
+| Control | Bound to |
+|---|---|
+| Line thickness (Slider 50–200%) | `vm.setLineThicknessScale()` |
+| Shade Bodies (Checkbox) | `vm.setPdfShadedBodies()` |
+| Shade Tapers (Checkbox) | `vm.setPdfShadedTapers()` |
+| Shade Liners (Checkbox) | `vm.setPdfShadedLiners()` |
+
+All four values are included in the `LaunchedEffect` key list so changing any option immediately re-renders the preview bitmap.
+
+---
+
+## Back-Press Handling
+
+Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` before the `if (showPreview)` block. This intercepts the system back gesture while the overlay is visible, dismissing the overlay instead of propagating to the NavController.
+
+---
+
 ## Contracts & Invariants
 
 - Model dimensions are canonical **mm**; all px/pt conversion happens inside the composer/preview.
-- Thread components produce no runout stations.
+- Thread components produce no runout stations and are not drawn in the shaft profile.
 - The PDF page is U.S. Letter landscape (792 × 612 pt).
 - Canvas preview and PDF use the same spreading and level-assignment logic so they look identical.
 - Keyway reference marker (small filled square at 12-o'clock) appears on every bubble in the PDF.
+- OAL arrows bracket the SET-to-SET span, not the full `overallLengthMm`.
+- The preview bitmap is rendered at 2× raster scale for sharpness on high-density displays.
+- Temp PDF files used for preview rendering are deleted after rasterisation.
 
 ---
 
@@ -57,3 +152,4 @@ Each bubble's leader line is drawn **diagonally** from `(stationX, shaftBottomY)
 - User-selectable keyway reference angle.
 - Multiple orientation diagrams on one sheet (e.g., Looking AFT + Looking FWD side-by-side).
 - Printable measurement table rows below each bubble.
+- Phase 2 wear: digital damage annotation — tap zones, severity rating, dye-pen pass/fail toggle.

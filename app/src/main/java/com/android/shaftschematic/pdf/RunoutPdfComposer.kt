@@ -9,6 +9,7 @@ import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.util.UnitSystem
@@ -72,6 +73,8 @@ fun composeRunoutPdf(
     config: RunoutConfig,
     project: ProjectInfo,
     unit: UnitSystem,
+    pdfPrefs: PdfPrefs = PdfPrefs(),
+    lineThicknessScale: Float = 1.0f,
 ) {
     val c = page.canvas
     c.drawColor(Color.WHITE)
@@ -80,16 +83,24 @@ fun composeRunoutPdf(
     val pageH = page.info.pageHeight.toFloat()
 
     // ── Paints ──────────────────────────────────────────────────────────────
+    val thicknessScale = lineThicknessScale.coerceIn(0.5f, 2.0f)
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = OUTLINE_PT
+        strokeWidth = OUTLINE_PT * thicknessScale
         color = Color.BLACK
     }
-    val dim = Paint(outline).apply { strokeWidth = DIM_PT }
+    val dim = Paint(outline).apply { strokeWidth = DIM_PT * thicknessScale }
     val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.BLACK
     }
+    fun shadeFill() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.argb(40, 0, 0, 0)
+    }
+    val bodyFill : Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
+    val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
+    val linerFill: Paint? = if (pdfPrefs.shadedLiners) shadeFill() else null
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         textSize = TEXT_PT
@@ -110,13 +121,17 @@ fun composeRunoutPdf(
     val headerBottom = headerTop + headerHeight
 
     // ── Compute shaft scale ───────────────────────────────────────────────────
-    // The runout sheet spans the OAL measurement window (AFT SET → FWD SET).
+    // The runout sheet spans the SET-to-SET measurement window (AFT SET face → FWD SET face).
+    // Thread components outside this window are not drawn on the runout profile.
     val oalWindow      = computeOalWindow(spec)
-    val drawSpanMm     = oalWindow.oalMm.toFloat().coerceAtLeast(1f)
+    val setPositions   = computeSetPositionsInMeasureSpace(oalWindow, spec)
+    val aftSetMm       = setPositions.aftSETxMm.toFloat()
+    val fwdSetMm       = setPositions.fwdSETxMm.toFloat()
+    val drawSpanMm     = (fwdSetMm - aftSetMm).coerceAtLeast(1f)
     val ptPerMm        = contentW / drawSpanMm
-    val measureStartMm = oalWindow.measureStartMm.toFloat()
+    val measureStartMm = aftSetMm   // contentLeft ↔ AFT SET face, contentRight ↔ FWD SET face
 
-    /** Convert physical shaft mm → page-x points. */
+    /** Convert physical shaft mm → page-x points. Anchored at the AFT SET face. */
     fun xAt(mm: Float): Float = contentLeft + (mm - measureStartMm) * ptPerMm
 
     /** Convert a diameter mm → radius in points. */
@@ -173,15 +188,16 @@ fun composeRunoutPdf(
 
     // ── Draw header ───────────────────────────────────────────────────────────
     drawRunoutHeader(c, text, contentLeft, contentRight,
-        headerTop, headerHeight, spec, project, unit, oalWindow.oalMm.toFloat())
+        headerTop, headerHeight, spec, project, unit, drawSpanMm)
 
     // ── Draw OAL span line — sits just above the shaft top, like the schematic ─
     val oalLineY = shaftCy - shaftHalfPt - OAL_LINE_SPACE_PT
     drawOalSpanLine(c, dim, text, contentLeft, contentRight,
-        oalLineY, spec, unit, oalWindow.oalMm.toFloat())
+        oalLineY, spec, unit, drawSpanMm)
 
     // ── Draw shaft profile ────────────────────────────────────────────────────
-    drawShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx)
+    drawShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx,
+        bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill)
 
     // ── Compute placed stations (with guaranteed collision-free bubble positions) ──
     val placedStations = computePlacedStations(
@@ -489,7 +505,38 @@ private fun drawShaftProfile(
     geomRect: RectF,
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
+    bodyFill: Paint? = null,
+    taperFill: Paint? = null,
+    linerFill: Paint? = null,
 ) {
+    // ── Shade fills first (drawn under all outlines) ──────────────────────
+    bodyFill?.let { f ->
+        spec.bodies.forEach { b ->
+            if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
+            val r = rPx(b.diaMm)
+            c.drawRect(xAt(b.startFromAftMm), cy - r, xAt(b.startFromAftMm + b.lengthMm), cy + r, f)
+        }
+    }
+    taperFill?.let { f ->
+        spec.tapers.forEach { t ->
+            if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
+            val path = android.graphics.Path().apply {
+                moveTo(xAt(t.startFromAftMm), cy - rPx(t.startDiaMm))
+                lineTo(xAt(t.startFromAftMm + t.lengthMm), cy - rPx(t.endDiaMm))
+                lineTo(xAt(t.startFromAftMm + t.lengthMm), cy + rPx(t.endDiaMm))
+                lineTo(xAt(t.startFromAftMm), cy + rPx(t.startDiaMm))
+                close()
+            }
+            c.drawPath(path, f)
+        }
+    }
+    linerFill?.let { f ->
+        spec.liners.forEach { ln ->
+            if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
+            val r = rPx(ln.odMm)
+            c.drawRect(xAt(ln.startFromAftMm), cy - r, xAt(ln.startFromAftMm + ln.lengthMm), cy + r, f)
+        }
+    }
     // Bodies — with compression breaks for long sections
     drawBodiesForRunout(c, spec.bodies, cy, xAt, rPx, outline, geomRect)
     // Tapers

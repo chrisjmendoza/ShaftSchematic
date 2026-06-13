@@ -28,22 +28,29 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -72,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.pdf.composeRunoutPdf
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
@@ -86,6 +94,7 @@ import com.android.shaftschematic.util.buildOpenPdfIntent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.roundToInt
 
 private data class RunoutComponentEntry(
     val id: String,
@@ -110,6 +119,10 @@ fun RunoutRoute(
     val jobNumber          by vm.jobNumber.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
+    val lineThicknessScale by vm.lineThicknessScale.collectAsState()
+    val pdfShadedBodies    by vm.pdfShadedBodies.collectAsState()
+    val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
+    val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
 
     val ctx = LocalContext.current
     var showPreview    by rememberSaveable { mutableStateOf(false) }
@@ -144,15 +157,20 @@ fun RunoutRoute(
         }
     }
 
-    LaunchedEffect(showPreview, spec, runoutConfig, unit) {
+    LaunchedEffect(showPreview, spec, runoutConfig, unit,
+                   lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
+        val prefsSnapshot  = vm.currentPdfPrefs
+        val thicknessSnapshot = lineThicknessScale
         val bmp = withContext(Dispatchers.IO) {
             renderRunoutBitmap(
                 context = ctx, spec = spec, config = runoutConfig,
                 project = ProjectInfo(customer = customer, vessel = vessel,
                     jobNumber = jobNumber, side = shaftPosition),
                 unit = unit,
+                pdfPrefs = prefsSnapshot,
+                lineThicknessScale = thicknessSnapshot,
             )
         }
         previewBitmap = bmp?.asImageBitmap()
@@ -331,6 +349,7 @@ fun RunoutRoute(
     }
 
     // ── Full-screen preview overlay ───────────────────────────────────────────
+    BackHandler(enabled = showPreview) { showPreview = false }
     if (showPreview) {
         PdfPreviewOverlay(
             bitmap = previewBitmap,
@@ -340,6 +359,15 @@ fun RunoutRoute(
             onExport = {
                 showPreview = false
                 launcher.launch(buildRunoutFilename(customer, vessel, jobNumber))
+            },
+            optionsSheet = {
+                RunoutWearOptionsSheet(
+                    lineThicknessScale = lineThicknessScale,
+                    pdfShadedBodies = pdfShadedBodies,
+                    pdfShadedTapers = pdfShadedTapers,
+                    pdfShadedLiners = pdfShadedLiners,
+                    vm = vm,
+                )
             },
         )
     }
@@ -517,13 +545,16 @@ private fun renderRunoutBitmap(
     config: RunoutConfig,
     project: ProjectInfo,
     unit: com.android.shaftschematic.util.UnitSystem,
+    pdfPrefs: PdfPrefs = PdfPrefs(),
+    lineThicknessScale: Float = 1.0f,
 ): Bitmap? = runCatching {
     val tempFile = File.createTempFile("runout_preview_", ".pdf", context.cacheDir)
     val doc = PdfDocument()
     try {
         val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
         val page = doc.startPage(pageInfo)
-        composeRunoutPdf(page = page, spec = spec, config = config, project = project, unit = unit)
+        composeRunoutPdf(page = page, spec = spec, config = config, project = project, unit = unit,
+            pdfPrefs = pdfPrefs, lineThicknessScale = lineThicknessScale)
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
     } finally {
@@ -554,12 +585,15 @@ private fun renderRunoutBitmap(
  * The "Export" button in the top bar lets the user proceed to the SAF file picker
  * after verifying the layout looks correct.
  *
- * @param bitmap   The rendered PDF page (null while rendering or on error).
- * @param loading  Whether the bitmap is still being generated.
- * @param title    Title shown in the top bar of the overlay.
- * @param onClose  Called when the user taps × or navigates back.
- * @param onExport Called when the user taps the Export button.
+ * @param bitmap        The rendered PDF page (null while rendering or on error).
+ * @param loading       Whether the bitmap is still being generated.
+ * @param title         Title shown in the top bar of the overlay.
+ * @param onClose       Called when the user taps × or navigates back.
+ * @param onExport      Called when the user taps the Export button.
+ * @param optionsSheet  Optional composable content shown in a bottom sheet when the user
+ *                      taps the Tune icon. When null, no Tune icon is shown.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PdfPreviewOverlay(
     bitmap: ImageBitmap?,
@@ -567,7 +601,11 @@ internal fun PdfPreviewOverlay(
     title: String,
     onClose: () -> Unit,
     onExport: () -> Unit,
+    optionsSheet: (@Composable () -> Unit)? = null,
 ) {
+    var showOptions by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color.Black,
@@ -593,6 +631,12 @@ internal fun PdfPreviewOverlay(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f).padding(start = 4.dp),
                 )
+                if (optionsSheet != null) {
+                    IconButton(onClick = { showOptions = true }) {
+                        Icon(Icons.Filled.Tune, contentDescription = "PDF options",
+                            tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
                 FilledTonalButton(onClick = onExport, modifier = Modifier.padding(end = 8.dp)) {
                     Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
@@ -641,5 +685,79 @@ internal fun PdfPreviewOverlay(
                 }
             }
         }
+    }
+
+    if (showOptions && optionsSheet != null) {
+        ModalBottomSheet(
+            onDismissRequest = { showOptions = false },
+            sheetState = sheetState,
+        ) {
+            optionsSheet()
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared PDF options sheet (Runout + Wear)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+internal fun RunoutWearOptionsSheet(
+    lineThicknessScale: Float,
+    pdfShadedBodies: Boolean,
+    pdfShadedTapers: Boolean,
+    pdfShadedLiners: Boolean,
+    vm: ShaftViewModel,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+    ) {
+        Text("PDF Options", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(12.dp))
+
+        // ── Line thickness ───────────────────────────────────────────────────
+        Text(
+            "Line thickness  ${(lineThicknessScale * 100).roundToInt()}%",
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("50%", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = lineThicknessScale,
+                onValueChange = { vm.setLineThicknessScale(it) },
+                valueRange = 0.5f..2.0f,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+            )
+            Text("200%", style = MaterialTheme.typography.bodySmall)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Shade in PDF ─────────────────────────────────────────────────────
+        Text("Shade in PDF", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pdfShadedBodies, onCheckedChange = { vm.setPdfShadedBodies(it) })
+            Spacer(Modifier.width(8.dp))
+            Text("Bodies", style = MaterialTheme.typography.bodyLarge)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pdfShadedTapers, onCheckedChange = { vm.setPdfShadedTapers(it) })
+            Spacer(Modifier.width(8.dp))
+            Text("Tapers", style = MaterialTheme.typography.bodyLarge)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pdfShadedLiners, onCheckedChange = { vm.setPdfShadedLiners(it) })
+            Spacer(Modifier.width(8.dp))
+            Text("Liners", style = MaterialTheme.typography.bodyLarge)
+        }
+
+        Spacer(Modifier.height(24.dp))
     }
 }

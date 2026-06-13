@@ -19,7 +19,7 @@ Included docs:
 - TextFilters.md
 - Navigation.md
 - Model_Conventions.md
-- RunoutSheet.md
+- RunoutSheet.md — runout + wear tabs, OAL alignment, PDF appearance options, back-press handling
 - PdfExportRoute.md
 - PdfPreviewScreen.md
 

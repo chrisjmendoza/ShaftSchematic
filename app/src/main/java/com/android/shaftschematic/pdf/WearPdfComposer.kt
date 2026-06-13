@@ -8,6 +8,8 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.UnitSystem
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -55,6 +57,8 @@ fun composeWearPdf(
     spec: ShaftSpec,
     project: ProjectInfo,
     unit: UnitSystem,
+    pdfPrefs: PdfPrefs = PdfPrefs(),
+    lineThicknessScale: Float = 1.0f,
 ) {
     val c = page.canvas
     c.drawColor(Color.WHITE)
@@ -63,15 +67,23 @@ fun composeWearPdf(
     val pageH = page.info.pageHeight.toFloat()
 
     // ── Paints ──────────────────────────────────────────────────────────────
+    val thicknessScale = lineThicknessScale.coerceIn(0.5f, 2.0f)
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeWidth = WEAR_OUTLINE_PT; color = Color.BLACK
+        style = Paint.Style.STROKE; strokeWidth = WEAR_OUTLINE_PT * thicknessScale; color = Color.BLACK
     }
-    val dim = Paint(outline).apply { strokeWidth = WEAR_DIM_PT }
+    val dim = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * thicknessScale }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; textSize = WEAR_TEXT_PT
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         color = Color.BLACK
     }
+    fun shadeFill() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.argb(40, 0, 0, 0)
+    }
+    val bodyFill : Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
+    val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
+    val linerFill: Paint? = if (pdfPrefs.shadedLiners) shadeFill() else null
 
     // ── Page geometry ─────────────────────────────────────────────────────
     val margin       = WEAR_MARGIN_PT
@@ -92,22 +104,27 @@ fun composeWearPdf(
     val notesY = min(shaftBottom + 48f, contentBot - 16f)
 
     // ── Compute scale ────────────────────────────────────────────────────
-    val oalWindow   = computeOalWindow(spec)
-    val drawSpanMm  = oalWindow.oalMm.toFloat().coerceAtLeast(1f)
-    val ptPerMm     = contentW / drawSpanMm
-    val measureStartMm = oalWindow.measureStartMm.toFloat()
+    // Scale to the SET-to-SET span so the drawn shaft profile fills the page width.
+    val oalWindow      = computeOalWindow(spec)
+    val setPositions   = computeSetPositionsInMeasureSpace(oalWindow, spec)
+    val aftSetMm       = setPositions.aftSETxMm.toFloat()
+    val fwdSetMm       = setPositions.fwdSETxMm.toFloat()
+    val drawSpanMm     = (fwdSetMm - aftSetMm).coerceAtLeast(1f)
+    val ptPerMm        = contentW / drawSpanMm
+    val measureStartMm = aftSetMm
 
     fun xAt(mm: Float): Float = contentLeft + (mm - measureStartMm) * ptPerMm
     fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * ptPerMm
 
     // ── Header ───────────────────────────────────────────────────────────
-    drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, unit, oalWindow.oalMm.toFloat())
+    drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, unit, drawSpanMm)
 
     // ── OAL line ──────────────────────────────────────────────────────────
-    drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, unit, oalWindow.oalMm.toFloat())
+    drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, unit, drawSpanMm)
 
     // ── Shaft profile ─────────────────────────────────────────────────────
-    drawWearShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx)
+    drawWearShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx,
+        bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill)
 
     // ── Notes / dye-pen area ──────────────────────────────────────────────
     drawWearNotesArea(c, text, contentLeft, contentRight, notesY)
@@ -181,7 +198,38 @@ private fun drawWearShaftProfile(
     geomRect: RectF,
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
+    bodyFill: Paint? = null,
+    taperFill: Paint? = null,
+    linerFill: Paint? = null,
 ) {
+    // ── Shade fills first (drawn under all outlines) ──────────────────────
+    bodyFill?.let { f ->
+        spec.bodies.forEach { b ->
+            if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
+            val r = rPx(b.diaMm)
+            c.drawRect(xAt(b.startFromAftMm), cy - r, xAt(b.startFromAftMm + b.lengthMm), cy + r, f)
+        }
+    }
+    taperFill?.let { f ->
+        spec.tapers.forEach { t ->
+            if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
+            val path = android.graphics.Path().apply {
+                moveTo(xAt(t.startFromAftMm), cy - rPx(t.startDiaMm))
+                lineTo(xAt(t.startFromAftMm + t.lengthMm), cy - rPx(t.endDiaMm))
+                lineTo(xAt(t.startFromAftMm + t.lengthMm), cy + rPx(t.endDiaMm))
+                lineTo(xAt(t.startFromAftMm), cy + rPx(t.startDiaMm))
+                close()
+            }
+            c.drawPath(path, f)
+        }
+    }
+    linerFill?.let { f ->
+        spec.liners.forEach { ln ->
+            if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
+            val r = rPx(ln.odMm)
+            c.drawRect(xAt(ln.startFromAftMm), cy - r, xAt(ln.startFromAftMm + ln.lengthMm), cy + r, f)
+        }
+    }
     // Bodies with compression breaks
     val capPaint = Paint(outline)
     spec.bodies.forEach { b ->
