@@ -356,6 +356,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                             withContext(Dispatchers.IO) {
                                 InternalStorage.save(ctx, file, vm.exportJson())
                             }
+                            vm.markDocumentSaved()
                             vm.unlockAchievement(Achievements.Id.FIRST_SAVE)
                             pendingOverwrite = null
                             onFinished()
@@ -449,6 +450,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                 withContext(Dispatchers.IO) {
                                     InternalStorage.save(ctx, targetName, vm.exportJson())
                                 }
+                                vm.markDocumentSaved()
                                 vm.unlockAchievement(Achievements.Id.FIRST_SAVE)
                                 onFinished()
                             }

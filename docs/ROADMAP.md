@@ -1,6 +1,6 @@
 # ShaftSchematic Roadmap
 Version: v0.5.x  
-Last updated: 2026-05-30
+Last updated: 2026-06-12
 
 This roadmap defines the grounded, realistic, and approved feature trajectory for ShaftSchematic.
 
@@ -43,6 +43,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Wear document — shaft profile + header + dye-pen PASS/FAIL checkboxes
 - Line thickness control — Settings slider 50%–200%, DataStore-persisted, applies to preview and PDF strokes
 - OAL include-thread fix — bracket spans SET-to-SET (excluded) or shaft-end-to-SET (included); label always equals typed OAL
+- Unsaved-changes guard — "Save / Discard / Cancel" dialog when New or Open is triggered with unsaved work; dirty state tracks spec + metadata fields against last save or load
 
 ---
 

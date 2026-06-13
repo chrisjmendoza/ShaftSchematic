@@ -148,6 +148,33 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     // ────────────────────────────────────────────────────────────────────────────
+    // Unsaved-changes tracking
+    // ────────────────────────────────────────────────────────────────────────────
+
+    private var _savedSpec: ShaftSpec = ShaftSpec()
+    private var _savedJobNumber: String = ""
+    private var _savedCustomer: String = ""
+    private var _savedVessel: String = ""
+    private var _savedNotes: String = ""
+
+    fun markDocumentSaved() {
+        _savedSpec = _spec.value
+        _savedJobNumber = _jobNumber.value
+        _savedCustomer = _customer.value
+        _savedVessel = _vessel.value
+        _savedNotes = _notes.value
+    }
+
+    fun hasUnsavedWork(): Boolean {
+        if (isSessionDefault()) return false
+        return _spec.value != _savedSpec ||
+               _jobNumber.value != _savedJobNumber ||
+               _customer.value != _savedCustomer ||
+               _vessel.value != _savedVessel ||
+               _notes.value != _savedNotes
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
     // Reactive state (observed by Compose)
     // ────────────────────────────────────────────────────────────────────────────
 
@@ -1689,6 +1716,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Reset order to this document's components only
         _componentOrder.value = emptyList()
         ensureOrderCoversSpec(decoded.spec)
+        markDocumentSaved()
     }
 
     /**
@@ -1721,6 +1749,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
         _componentOrder.value = emptyList()
         ensureOrderCoversSpec(blankSpec)
+        markDocumentSaved()
     }
 
     private fun resetSessionAddDefaults() {
