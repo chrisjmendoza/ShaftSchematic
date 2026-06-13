@@ -278,7 +278,9 @@ private fun computePlacedStations(
 
     val bubbleD = BUBBLE_RADIUS_PT * 2f
     val slot    = bubbleD + BUBBLE_MIN_GAP_PT
-    val result  = mutableListOf<PlacedStation>()
+
+    data class RawStation(val stationXPt: Float, val shaftBottomYPt: Float, val bubbleXPt: Float)
+    val rawList = mutableListOf<RawStation>()
 
     for (entry in entries) {
         val count = config.componentOverrides[entry.id]
@@ -308,25 +310,37 @@ private fun computePlacedStations(
         val groupLeft = compMidX - totalW * 0.5f   // may extend outside the component edges
 
         stationsMm.forEachIndexed { localIdx, mm ->
-            val row       = localIdx % 2
-            val leaderLen = if (row == 0) SHORT_LEADER_PT else LONG_LEADER_PT
-            val stationX  = contentLeft + (mm - measureStartMm) * ptPerMm
-            val outerR    = shaftOuterRPxAt(mm)
-
-            // Bubble X is evenly spaced within the group, left-to-right matching station order
-            val bubbleX = groupLeft + localIdx * slot + BUBBLE_RADIUS_PT
-
-            result.add(PlacedStation(
-                stationXPt      = stationX,
-                shaftBottomYPt  = shaftCy + outerR,
-                bubbleXPt       = bubbleX.coerceIn(contentLeft + BUBBLE_RADIUS_PT,
-                                                    contentRight - BUBBLE_RADIUS_PT),
-                bubbleCenterYPt = shaftCy + outerR + leaderLen + BUBBLE_RADIUS_PT,
-            ))
+            val stationX = contentLeft + (mm - measureStartMm) * ptPerMm
+            val outerR   = shaftOuterRPxAt(mm)
+            val bubbleX  = (groupLeft + localIdx * slot + BUBBLE_RADIUS_PT)
+                .coerceIn(contentLeft + BUBBLE_RADIUS_PT, contentRight - BUBBLE_RADIUS_PT)
+            rawList.add(RawStation(stationX, shaftCy + outerR, bubbleX))
         }
     }
 
-    return result
+    // Global greedy level assignment: sort by bubble X, assign the lowest level where
+    // this bubble doesn't horizontally overlap any already-placed bubble at that level.
+    val levels = IntArray(rawList.size)
+    val levelRightEdge = mutableListOf<Float>()
+    for (origIdx in rawList.indices.sortedBy { rawList[it].bubbleXPt }) {
+        val bLeft = rawList[origIdx].bubbleXPt - BUBBLE_RADIUS_PT
+        val level = levelRightEdge.indexOfFirst { it + BUBBLE_MIN_GAP_PT <= bLeft }
+            .takeIf { it >= 0 } ?: levelRightEdge.size
+        while (levelRightEdge.size <= level) levelRightEdge.add(Float.NEGATIVE_INFINITY)
+        levelRightEdge[level] = rawList[origIdx].bubbleXPt + BUBBLE_RADIUS_PT
+        levels[origIdx] = level
+    }
+
+    val levelStep = LONG_LEADER_PT - SHORT_LEADER_PT
+    return rawList.mapIndexed { idx, raw ->
+        val leaderLen = SHORT_LEADER_PT + levels[idx] * levelStep
+        PlacedStation(
+            stationXPt      = raw.stationXPt,
+            shaftBottomYPt  = raw.shaftBottomYPt,
+            bubbleXPt       = raw.bubbleXPt,
+            bubbleCenterYPt = raw.shaftBottomYPt + leaderLen + BUBBLE_RADIUS_PT,
+        )
+    }
 }
 
 /**

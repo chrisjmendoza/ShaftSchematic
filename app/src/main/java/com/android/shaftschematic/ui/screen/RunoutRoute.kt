@@ -443,21 +443,54 @@ private fun DrawScope.drawRunoutMarkers(
         return od
     }
 
-    fun drawMarkers(startMm: Float, lengthMm: Float, id: String, defaultCount: Int, useInset: Boolean) {
+    val slot = circleR * 2f + leaderGap  // horizontal slot per bubble (diameter + min gap)
+
+    // Pass 1: collect all markers globally with separate station X (shaft tap) and bubble X (spread).
+    // Bubbles within each component are centred on the component's canvas midpoint — identical to
+    // the PDF layout — so leader lines fan diagonally and never overlap their own bubble.
+    data class Marker(val stationX: Float, val shaftBottomY: Float, val bubbleX: Float)
+    val allMarkers = mutableListOf<Marker>()
+
+    fun collectMarkers(startMm: Float, lengthMm: Float, id: String, defaultCount: Int, useInset: Boolean) {
         val count = config.componentOverrides[id] ?: defaultCount
-        stationsMm(startMm, lengthMm, count, useInset).forEach { stMm ->
-            val x            = layout.xPx(stMm).coerceIn(circleR, size.width - circleR)
+        if (count <= 0) return
+        val compLeft  = layout.xPx(startMm)
+        val compRight = layout.xPx(startMm + lengthMm)
+        val compMidX  = (compLeft + compRight) * 0.5f
+        val totalW    = count * slot - leaderGap
+        val groupLeft = compMidX - totalW * 0.5f
+        stationsMm(startMm, lengthMm, count, useInset).forEachIndexed { localIdx, stMm ->
+            val stationX     = layout.xPx(stMm).coerceIn(circleR, size.width - circleR)
             val shaftBottomY = layout.centerlineYPx + layout.rPx(odMmAt(stMm))
-            val circleCy     = shaftBottomY + leaderGap + circleR
-            if (circleCy + circleR > canvasH) return@forEach
-            drawLine(markerColor, Offset(x, shaftBottomY), Offset(x, circleCy - circleR), strokeWidth = strokeW)
-            drawCircle(markerColor, radius = circleR, center = Offset(x, circleCy), style = Stroke(width = strokeW))
+            val bubbleX      = (groupLeft + localIdx * slot + circleR).coerceIn(circleR, size.width - circleR)
+            allMarkers.add(Marker(stationX, shaftBottomY, bubbleX))
         }
     }
 
-    spec.bodies.forEach { b  -> drawMarkers(b.startFromAftMm,  b.lengthMm,  b.id,  RunoutConfig.BODY_DEFAULT_COUNT,  false) }
-    spec.tapers.forEach { t  -> drawMarkers(t.startFromAftMm,  t.lengthMm,  t.id,  RunoutConfig.TAPER_DEFAULT_COUNT, true)  }
-    spec.liners.forEach { ln -> drawMarkers(ln.startFromAftMm, ln.lengthMm, ln.id, RunoutConfig.LINER_DEFAULT_COUNT, true)  }
+    spec.bodies.forEach { b  -> collectMarkers(b.startFromAftMm,  b.lengthMm,  b.id,  RunoutConfig.BODY_DEFAULT_COUNT,  false) }
+    spec.tapers.forEach { t  -> collectMarkers(t.startFromAftMm,  t.lengthMm,  t.id,  RunoutConfig.TAPER_DEFAULT_COUNT, true)  }
+    spec.liners.forEach { ln -> collectMarkers(ln.startFromAftMm, ln.lengthMm, ln.id, RunoutConfig.LINER_DEFAULT_COUNT, true)  }
+
+    // Pass 2: greedy global level assignment sorted by bubble X
+    val levels = IntArray(allMarkers.size)
+    val levelRightEdge = mutableListOf<Float>()
+    val levelStep = circleR * 2f + leaderGap
+    for (origIdx in allMarkers.indices.sortedBy { allMarkers[it].bubbleX }) {
+        val bLeft = allMarkers[origIdx].bubbleX - circleR
+        val level = levelRightEdge.indexOfFirst { it + leaderGap <= bLeft }
+            .takeIf { it >= 0 } ?: levelRightEdge.size
+        while (levelRightEdge.size <= level) levelRightEdge.add(Float.NEGATIVE_INFINITY)
+        levelRightEdge[level] = allMarkers[origIdx].bubbleX + circleR
+        levels[origIdx] = level
+    }
+
+    // Pass 3: draw diagonal leader from shaft tap point to bubble top, then the bubble.
+    allMarkers.forEachIndexed { idx, marker ->
+        val circleCy = marker.shaftBottomY + leaderGap + circleR + levels[idx] * levelStep
+        if (circleCy + circleR > canvasH) return@forEachIndexed
+        drawLine(markerColor, Offset(marker.stationX, marker.shaftBottomY), Offset(marker.bubbleX, circleCy - circleR), strokeWidth = strokeW)
+        drawCircle(markerColor, radius = circleR, center = Offset(marker.bubbleX, circleCy), style = Stroke(width = strokeW))
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
