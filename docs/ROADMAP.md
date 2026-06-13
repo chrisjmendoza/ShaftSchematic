@@ -44,6 +44,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Line thickness control — Settings slider 50%–200%, DataStore-persisted, applies to preview and PDF strokes
 - OAL include-thread fix — bracket spans SET-to-SET (excluded) or shaft-end-to-SET (included); label always equals typed OAL
 - Unsaved-changes guard — "Save / Discard / Cancel" dialog when New or Open is triggered with unsaved work; dirty state tracks spec + metadata fields against last save or load
+- Component collision detection — global overlap scan across all non-excluded components; both colliding parties show red error chip; PDF export and preview blocked until collisions are resolved
 
 ---
 

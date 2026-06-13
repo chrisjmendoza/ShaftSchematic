@@ -80,6 +80,74 @@ fun ShaftSpec.findRightNeighbor(anchor: ComponentKey): ComponentKey? {
     return if (idx >= 0 && idx + 1 < ordered.size) ordered[idx + 1] else null
 }
 
+/**
+ * Returns the IDs of all components involved in at least one axial overlap.
+ *
+ * Checked pairs:
+ *  Body–Taper, Taper–Taper, Taper–Thread, Taper–Liner,
+ *  Thread–Thread, Thread–Liner, Liner–Liner.
+ *
+ * Intentionally NOT checked:
+ *  Body–Body    (cascade snap prevents these),
+ *  Body–Thread  (threads at shaft ends over a body section is normal),
+ *  Body–Liner   (liners sit over bodies by design).
+ *
+ * Excluded threads ([Threads.excludeFromOAL] = true) are skipped.
+ */
+fun ShaftSpec.collidingIds(): Set<String> {
+    val eps = 1e-3f
+
+    fun overlaps(aStart: Float, aLen: Float, bStart: Float, bLen: Float): Boolean {
+        val aEnd = aStart + aLen
+        val bEnd = bStart + bLen
+        return (aStart < bEnd - eps) && (aEnd > bStart + eps)
+    }
+
+    val result = mutableSetOf<String>()
+    val activeThreads = threads.filter { !it.excludeFromOAL }
+
+    for (b in bodies) for (t in tapers) {
+        if (overlaps(b.startFromAftMm, b.lengthMm, t.startFromAftMm, t.lengthMm)) {
+            result += b.id; result += t.id
+        }
+    }
+    for (i in tapers.indices) for (j in i + 1 until tapers.size) {
+        val a = tapers[i]; val b = tapers[j]
+        if (overlaps(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {
+            result += a.id; result += b.id
+        }
+    }
+    for (t in tapers) for (th in activeThreads) {
+        if (overlaps(t.startFromAftMm, t.lengthMm, th.startFromAftMm, th.lengthMm)) {
+            result += t.id; result += th.id
+        }
+    }
+    for (t in tapers) for (ln in liners) {
+        if (overlaps(t.startFromAftMm, t.lengthMm, ln.startFromAftMm, ln.lengthMm)) {
+            result += t.id; result += ln.id
+        }
+    }
+    for (i in activeThreads.indices) for (j in i + 1 until activeThreads.size) {
+        val a = activeThreads[i]; val b = activeThreads[j]
+        if (overlaps(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {
+            result += a.id; result += b.id
+        }
+    }
+    for (th in activeThreads) for (ln in liners) {
+        if (overlaps(th.startFromAftMm, th.lengthMm, ln.startFromAftMm, ln.lengthMm)) {
+            result += th.id; result += ln.id
+        }
+    }
+    for (i in liners.indices) for (j in i + 1 until liners.size) {
+        val a = liners[i]; val b = liners[j]
+        if (overlaps(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {
+            result += a.id; result += b.id
+        }
+    }
+
+    return result
+}
+
 /** Shift every component's start position by [delta] millimeters (clamped at 0). */
 fun ShaftSpec.shiftAllBy(delta: Float): ShaftSpec {
     if (delta == 0f) return this

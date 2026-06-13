@@ -109,6 +109,7 @@ import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.model.lastOccupiedEndMm
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
@@ -290,10 +291,14 @@ fun ShaftScreen(
     val scroll = rememberScrollState()
     val topBarScope = rememberCoroutineScope()
 
-    val exportPdfEnabled = remember(spec.bodies, spec.tapers, spec.threads, spec.liners) {
-        spec.bodies.isNotEmpty() || spec.tapers.isNotEmpty() || spec.threads.isNotEmpty() || spec.liners.isNotEmpty()
-    }
-    val exportPdfDisabledMessage = "Please add at least 1 component before export is active."
+    val collidingComponentIds = remember(spec) { spec.collidingIds() }
+    val exportPdfEnabled = (spec.bodies.isNotEmpty() || spec.tapers.isNotEmpty() ||
+        spec.threads.isNotEmpty() || spec.liners.isNotEmpty()) &&
+        collidingComponentIds.isEmpty()
+    val exportPdfDisabledMessage = if (collidingComponentIds.isNotEmpty())
+        "Fix component collisions before exporting."
+    else
+        "Please add at least 1 component before export is active."
 
     val snapAnchors = remember(spec.overallLengthMm, spec.bodies, spec.tapers, spec.threads, spec.liners) { buildSnapAnchors(spec) }
 
@@ -751,6 +756,7 @@ fun ShaftScreen(
                     onRemoveThread = onRemoveThread,
                     onRemoveLiner = onRemoveLiner,
                     onSelectComponentById = onSelectComponentById,
+                    collidingComponentIds = collidingComponentIds,
                 )
 
                 if (chooserOpen) {

@@ -127,6 +127,7 @@ internal fun ComponentCarouselPager(
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
     onSelectComponentById: (String?) -> Unit,
+    collidingComponentIds: Set<String> = emptySet(),
 ) {
     val bodyTitleById   = remember(spec.bodies)                    { buildBodyTitleById(spec) }
     val taperTitleById  = remember(spec.tapers)                    { buildTaperTitleById(spec) }
@@ -239,6 +240,7 @@ internal fun ComponentCarouselPager(
                     onSetThreadEndPosition = onSetThreadEndPosition,
                     onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner,
+                    collidingComponentIds = collidingComponentIds,
                 )
             }
         }
@@ -313,6 +315,7 @@ internal fun ComponentPagerCard(
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
+    collidingComponentIds: Set<String> = emptySet(),
 ) {
     fun f1(mm: Float): String = "%.1f".format(mm)
 
@@ -365,6 +368,7 @@ internal fun ComponentPagerCard(
             ComponentCard(
                 title = bodyTitleById[b.id] ?: "Body",
                 debugText = if (showComponentDebugLabels) "id=${b.id} • startMm=${f1(b.startFromAftMm)} • endMm=${f1(b.startFromAftMm + b.lengthMm)}" else null,
+                errorMessage = if (b.id in collidingComponentIds) "Overlaps another component" else null,
                 warningMessage = bodyWarningMessage(b),
                 componentId = b.id, componentKind = ComponentKind.BODY,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -393,6 +397,7 @@ internal fun ComponentPagerCard(
             ComponentCard(
                 title = taperTitleById[t.id] ?: "Taper",
                 debugText = if (showComponentDebugLabels) "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}" else null,
+                errorMessage = if (t.id in collidingComponentIds) "Overlaps another component" else null,
                 warningMessage = taperWarningMessage(t),
                 componentId = t.id, componentKind = ComponentKind.TAPER,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -472,7 +477,10 @@ internal fun ComponentPagerCard(
             ComponentCard(
                 title = threadTitleById[th.id] ?: "Thread",
                 debugText = if (showComponentDebugLabels) "id=${th.id} • startMm=${f1(th.startFromAftMm)} • endMm=${f1(th.startFromAftMm + th.lengthMm)}" else null,
-                errorMessage = if (th.excludeFromOAL) null else startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm),
+                errorMessage = if (th.excludeFromOAL) null else (
+                    startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)
+                        ?: if (th.id in collidingComponentIds) "Overlaps another component" else null
+                ),
                 warningMessage = threadWarningMessage(th),
                 componentId = th.id, componentKind = ComponentKind.THREAD,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -585,7 +593,8 @@ internal fun ComponentPagerCard(
                     }
                 },
                 debugText = if (showComponentDebugLabels) "id=${ln.id} • startMm=${f1(ln.startFromAftMm)} • endMm=${f1(ln.startFromAftMm + ln.lengthMm)}" else null,
-                errorMessage = startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm),
+                errorMessage = startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm)
+                    ?: if (ln.id in collidingComponentIds) "Overlaps another component" else null,
                 warningMessage = linerWarningMessage(ln),
                 componentId = ln.id, componentKind = ComponentKind.LINER,
                 outerPaddingHorizontal = outerPaddingHorizontal,
