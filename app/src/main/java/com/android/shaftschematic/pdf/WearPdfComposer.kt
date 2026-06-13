@@ -94,16 +94,15 @@ fun composeWearPdf(
     val contentBot   = pageH - margin
 
     val headerBottom = contentTop + WEAR_HEADER_HEIGHT_PT
-    val oalLineY     = headerBottom + WEAR_OAL_GAP_PT
 
     // Notes anchored near the page bottom
-    val notesY       = contentBot - WEAR_NOTES_BOTTOM_OFFSET_PT
+    val notesY = contentBot - WEAR_NOTES_BOTTOM_OFFSET_PT
 
-    // Shaft fills and is centred in the space between the OAL line and the notes row
-    val shaftAreaTop = oalLineY + WEAR_OAL_SPACE_PT
-    val shaftAreaBot = notesY - WEAR_NOTES_GAP_PT
-    val shaftCy      = (shaftAreaTop + shaftAreaBot) * 0.5f
-    val geomRect     = RectF(contentLeft, shaftAreaTop, contentRight, shaftAreaBot)
+    // Shaft centred in the space between header and notes
+    val midTop   = headerBottom + WEAR_HEADER_GAP_PT
+    val midBot   = notesY - WEAR_NOTES_GAP_PT
+    val shaftCy  = (midTop + midBot) * 0.5f
+    val geomRect = RectF(contentLeft, midTop, contentRight, midBot)
 
     // ── Compute scale ────────────────────────────────────────────────────
     // Scale to the SET-to-SET span so the drawn shaft profile fills the page width.
@@ -118,11 +117,18 @@ fun composeWearPdf(
     fun xAt(mm: Float): Float = contentLeft + (mm - measureStartMm) * ptPerMm
     fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * ptPerMm
 
+    // OAL dimension line sits just above the shaft's top outline.
+    // Computed after scale so we can use the actual drawn shaft radius.
+    val maxDiaMm       = (spec.bodies.maxOfOrNull { it.diaMm } ?: 50f).coerceAtLeast(20f)
+    val shaftTopApprox = shaftCy - rPx(maxDiaMm)
+    val oalLineY       = (shaftTopApprox - WEAR_OAL_ABOVE_SHAFT_PT)
+        .coerceAtLeast(midTop + WEAR_TEXT_PT + 6f)
+
     // ── Header ───────────────────────────────────────────────────────────
     drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, unit, drawSpanMm)
 
-    // ── OAL line ──────────────────────────────────────────────────────────
-    drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, unit, drawSpanMm)
+    // ── OAL line (with witness lines, anchored near shaft) ────────────────
+    drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox, unit, drawSpanMm)
 
     // ── Shaft profile ─────────────────────────────────────────────────────
     drawWearShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx,
@@ -181,19 +187,30 @@ private fun drawWearHeader(
 
 private fun drawWearOalLine(
     c: Canvas, dim: Paint, text: Paint,
-    x0: Float, x1: Float, y: Float,
+    x0: Float, x1: Float,
+    oalLineY: Float, shaftTopY: Float,
     unit: UnitSystem, oalMm: Float,
 ) {
-    val arrowLen = 8f
-    c.drawLine(x0, y, x1, y, dim)
-    c.drawLine(x0, y, x0 + arrowLen, y - arrowLen * 0.5f, dim)
-    c.drawLine(x0, y, x0 + arrowLen, y + arrowLen * 0.5f, dim)
-    c.drawLine(x1, y, x1 - arrowLen, y - arrowLen * 0.5f, dim)
-    c.drawLine(x1, y, x1 - arrowLen, y + arrowLen * 0.5f, dim)
+    val arrowLen    = 8f
+    val witnessGap  = 3f   // gap between shaft edge and witness line start
+    val witnessExt  = 5f   // how far the witness line extends past the dimension line
+
+    // Witness (extension) lines from shaft top up to past the dimension line
+    c.drawLine(x0, shaftTopY - witnessGap, x0, oalLineY - witnessExt, dim)
+    c.drawLine(x1, shaftTopY - witnessGap, x1, oalLineY - witnessExt, dim)
+
+    // Dimension line with arrowheads
+    c.drawLine(x0, oalLineY, x1, oalLineY, dim)
+    c.drawLine(x0, oalLineY, x0 + arrowLen, oalLineY - arrowLen * 0.4f, dim)
+    c.drawLine(x0, oalLineY, x0 + arrowLen, oalLineY + arrowLen * 0.4f, dim)
+    c.drawLine(x1, oalLineY, x1 - arrowLen, oalLineY - arrowLen * 0.4f, dim)
+    c.drawLine(x1, oalLineY, x1 - arrowLen, oalLineY + arrowLen * 0.4f, dim)
+
+    // Label centred above the dimension line
     val label = if (unit == UnitSystem.INCHES) "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
     else "OAL: ${"%.2f".format(oalMm)} mm"
     val lw = text.measureText(label)
-    c.drawText(label, (x0 + x1) * 0.5f - lw * 0.5f, y - 4f, text)
+    c.drawText(label, (x0 + x1) * 0.5f - lw * 0.5f, oalLineY - 4f, text)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -340,11 +357,11 @@ private const val WEAR_DIM_PT     = 1.2f
 private const val WEAR_TEXT_PT    = 10f
 private const val WEAR_MARGIN_PT  = 36f
 
-private const val WEAR_HEADER_HEIGHT_PT      = 32f   // 2 lines of 10pt text + gap + rule
-private const val WEAR_OAL_GAP_PT            = 12f
-private const val WEAR_OAL_SPACE_PT          = 20f
-private const val WEAR_NOTES_BOTTOM_OFFSET_PT = 24f  // baseline distance above contentBot
-private const val WEAR_NOTES_GAP_PT           = 28f  // gap between shaft area and notes row
+private const val WEAR_HEADER_HEIGHT_PT       = 36f   // 2-line header block height
+private const val WEAR_HEADER_GAP_PT          = 16f   // gap from header rule to drawing area
+private const val WEAR_OAL_ABOVE_SHAFT_PT     = 16f   // gap from shaft top edge to OAL line
+private const val WEAR_NOTES_BOTTOM_OFFSET_PT = 24f   // notes baseline above contentBot
+private const val WEAR_NOTES_GAP_PT           = 28f   // gap from drawing area bottom to notes
 
 private const val COMPRESS_TRIGGER_PT = 220f
 private const val ZIGZAG_GAP_MAX_PT   = 20f
