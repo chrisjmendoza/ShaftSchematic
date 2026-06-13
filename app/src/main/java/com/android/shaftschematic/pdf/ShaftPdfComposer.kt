@@ -184,14 +184,19 @@ fun composeShaftPdf(
     if (shaftTranslateY != 0f) {
         c.translate(0f, shaftTranslateY)
     }
+    fun shadeFill() = Paint().apply { style = Paint.Style.FILL; color = Color.argb(40, 0, 0, 0) }
+    val bodyFill:  Paint? = if (pdfPrefs.shadedBodies)  shadeFill() else null
+    val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
+    val linerFill: Paint? = if (pdfPrefs.shadedLiners)  shadeFill() else null
+
     if (bodyOnly || singleTaperOnly) {
-        drawBodiesPlain(c, bodiesForPdf, cy, ::xAt, ::rPx, outline)
+        drawBodiesPlain(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, bodyFill)
     } else {
-        drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect)
+        drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect, bodyFill)
     }
-    drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline)
+    drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill)
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
-    drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
+    drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill)
     c.restore()
 
     if (effectiveOptions.showLabels && pdfPrefs.showComponentTitles) {
@@ -530,6 +535,7 @@ private fun drawBodiesPlain(
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
     outline: Paint,
+    fill: Paint? = null,
 ) {
     bodies.forEach { b ->
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
@@ -539,6 +545,7 @@ private fun drawBodiesPlain(
         val top = cy - r
         val bot = cy + r
 
+        if (fill != null) c.drawRect(x0, top, x1, bot, fill)
         c.drawLine(x0, top, x1, top, outline)
         c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, outline)
@@ -557,7 +564,8 @@ private fun drawBodiesCompressedCenterBreak(
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
     outline: Paint,
-    geomRect: RectF
+    geomRect: RectF,
+    fill: Paint? = null,
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
     bodies.forEach { b ->
@@ -570,6 +578,7 @@ private fun drawBodiesCompressedCenterBreak(
 
         if (!compress) {
             // classic rectangle body
+            if (fill != null) c.drawRect(x0, top, x1, bot, fill)
             c.drawLine(x0, top, x1, top, outline)
             c.drawLine(x0, bot, x1, bot, outline)
             c.drawLine(x0, top, x0, bot, outline)
@@ -584,12 +593,14 @@ private fun drawBodiesCompressedCenterBreak(
             val amp = r * 0.6f
 
             // Left stub — S-curve on right end
+            if (fill != null) c.drawRect(x0, top, leftEnd, bot, fill)
             c.drawLine(x0, top, leftEnd, top, outline)
             c.drawLine(x0, bot, leftEnd, bot, outline)
             c.drawLine(x0, top, x0, bot, outline)
             drawBreakEdge(c, leftEnd, top, bot, amp, capPaint)
 
             // Right stub — same-direction S-curve on left end (curves match so edges appear to merge)
+            if (fill != null) c.drawRect(rightBeg, top, x1, bot, fill)
             drawBreakEdge(c, rightBeg, top, bot, amp, capPaint)
             c.drawLine(rightBeg, top, x1, top, outline)
             c.drawLine(rightBeg, bot, x1, bot, outline)
@@ -705,6 +716,7 @@ private fun drawTapers(
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
     outline: Paint,
+    fill: Paint? = null,
 ) {
     tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
@@ -714,6 +726,13 @@ private fun drawTapers(
         val r1 = requireFinite("taper.r1", rPx(t.endDiaMm))
         val top0 = requireFinite("taper.top0", cy - r0); val bot0 = requireFinite("taper.bot0", cy + r0)
         val top1 = requireFinite("taper.top1", cy - r1); val bot1 = requireFinite("taper.bot1", cy + r1)
+
+        if (fill != null) {
+            val path = Path().apply {
+                moveTo(x0, top0); lineTo(x1, top1); lineTo(x1, bot1); lineTo(x0, bot0); close()
+            }
+            c.drawPath(path, fill)
+        }
         c.drawLine(x0, top0, x1, top1, outline)
         c.drawLine(x0, bot0, x1, bot1, outline)
         c.drawLine(x0, top0, x0, bot0, outline)
@@ -827,11 +846,13 @@ private fun drawLiners(
     rPx: (Float) -> Float,
     outline: Paint,
     dim: Paint,
+    fill: Paint? = null,
 ) {
     liners.forEach { ln ->
         if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
         val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
         val r = rPx(ln.odMm); val top = cy - r; val bot = cy + r
+        if (fill != null) c.drawRect(x0, top, x1, bot, fill)
         c.drawLine(x0, top, x1, top, outline)
         c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, dim) // thin end ticks

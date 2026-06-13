@@ -199,6 +199,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _pdfShowComponentTitles = MutableStateFlow(true)
     val pdfShowComponentTitles: StateFlow<Boolean> = _pdfShowComponentTitles.asStateFlow()
 
+    private val _pdfShadedBodies = MutableStateFlow(false)
+    val pdfShadedBodies: StateFlow<Boolean> = _pdfShadedBodies.asStateFlow()
+    private val _pdfShadedTapers = MutableStateFlow(false)
+    val pdfShadedTapers: StateFlow<Boolean> = _pdfShadedTapers.asStateFlow()
+    private val _pdfShadedLiners = MutableStateFlow(false)
+    val pdfShadedLiners: StateFlow<Boolean> = _pdfShadedLiners.asStateFlow()
+
     private val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
 
@@ -552,6 +559,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
+            SettingsStore.pdfShadedBodiesFlow(getApplication()).collectLatest { persisted ->
+                _pdfShadedBodies.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(shadedBodies = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfShadedTapersFlow(getApplication()).collectLatest { persisted ->
+                _pdfShadedTapers.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(shadedTapers = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfShadedLinersFlow(getApplication()).collectLatest { persisted ->
+                _pdfShadedLiners.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(shadedLiners = persisted) }
+            }
+        }
+        viewModelScope.launch {
             SettingsStore.pdfOalSpacingFactorFlow(getApplication()).collectLatest { persisted ->
                 SettingsStore.updatePdfPrefs { it.copy(oalSpacingFactor = persisted) }
             }
@@ -764,6 +789,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         if (persist) {
             viewModelScope.launch { SettingsStore.setPdfShowComponentTitles(getApplication(), show) }
         }
+    }
+
+    fun setPdfShadedBodies(v: Boolean, persist: Boolean = true) {
+        _pdfShadedBodies.value = v
+        SettingsStore.updatePdfPrefs { it.copy(shadedBodies = v) }
+        if (persist) viewModelScope.launch { SettingsStore.setPdfShadedBodies(getApplication(), v) }
+    }
+
+    fun setPdfShadedTapers(v: Boolean, persist: Boolean = true) {
+        _pdfShadedTapers.value = v
+        SettingsStore.updatePdfPrefs { it.copy(shadedTapers = v) }
+        if (persist) viewModelScope.launch { SettingsStore.setPdfShadedTapers(getApplication(), v) }
+    }
+
+    fun setPdfShadedLiners(v: Boolean, persist: Boolean = true) {
+        _pdfShadedLiners.value = v
+        SettingsStore.updatePdfPrefs { it.copy(shadedLiners = v) }
+        if (persist) viewModelScope.launch { SettingsStore.setPdfShadedLiners(getApplication(), v) }
     }
 
     fun setPdfOalSpacingFactor(factor: Float, persist: Boolean = true) {

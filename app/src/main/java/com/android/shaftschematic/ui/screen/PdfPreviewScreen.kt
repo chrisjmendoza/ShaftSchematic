@@ -1,7 +1,9 @@
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/PdfPreviewScreen.kt
 package com.android.shaftschematic.ui.screen
 
+import android.app.Activity
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
@@ -16,19 +18,35 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
+import com.android.shaftschematic.settings.PdfTieringMode
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -58,6 +76,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import android.content.pm.PackageManager
+import kotlin.math.roundToInt
 
 /**
  * PdfPreviewScreen
@@ -82,6 +101,15 @@ fun PdfPreviewScreen(
 ) {
     val ctx = LocalContext.current
 
+    // Unlock rotation for this screen only; restore portrait when leaving.
+    val activity = ctx as? Activity
+    DisposableEffect(Unit) {
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        onDispose {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+    }
+
     val spec by vm.spec.collectAsState()
     val unit by vm.unit.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
@@ -91,6 +119,11 @@ fun PdfPreviewScreen(
     val jobNumber by vm.jobNumber.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
+    val pdfShowComponentTitles by vm.pdfShowComponentTitles.collectAsState()
+    val pdfTieringMode by vm.pdfTieringMode.collectAsState()
+    val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
+    val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
+    val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
 
     val project = remember(customer, vessel, shaftPosition, jobNumber) {
         ProjectInfo(customer = customer, vessel = vessel, side = shaftPosition, jobNumber = jobNumber)
@@ -100,8 +133,12 @@ fun PdfPreviewScreen(
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showOptions by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    LaunchedEffect(spec, unit, project, options, resolvedComponents, lineThicknessScale) {
+    LaunchedEffect(spec, unit, project, options, resolvedComponents, lineThicknessScale,
+                   pdfShowComponentTitles, pdfTieringMode,
+                   pdfShadedBodies, pdfShadedTapers, pdfShadedLiners) {
         isLoading = true
         errorMessage = null
         // Snapshot on the main thread before switching to IO.
@@ -171,6 +208,9 @@ fun PdfPreviewScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showOptions = true }) {
+                        Icon(Icons.Filled.Tune, contentDescription = "PDF options")
+                    }
                     IconButton(
                         onClick = {
                             scope.launch {
@@ -250,6 +290,23 @@ fun PdfPreviewScreen(
                     }
                 }
             }
+        }
+    }
+
+    if (showOptions) {
+        ModalBottomSheet(
+            onDismissRequest = { showOptions = false },
+            sheetState = sheetState,
+        ) {
+            PdfOptionsSheet(
+                vm = vm,
+                pdfShowComponentTitles = pdfShowComponentTitles,
+                pdfTieringMode = pdfTieringMode,
+                lineThicknessScale = lineThicknessScale,
+                pdfShadedBodies = pdfShadedBodies,
+                pdfShadedTapers = pdfShadedTapers,
+                pdfShadedLiners = pdfShadedLiners,
+            )
         }
     }
 }
@@ -334,3 +391,104 @@ private fun appVersionName(context: Context): String = runCatching {
         pm.getPackageInfo(pkg, 0).versionName ?: "0"
     }
 }.getOrDefault("0")
+
+@Composable
+private fun PdfOptionsSheet(
+    vm: ShaftViewModel,
+    pdfShowComponentTitles: Boolean,
+    pdfTieringMode: PdfTieringMode,
+    lineThicknessScale: Float,
+    pdfShadedBodies: Boolean,
+    pdfShadedTapers: Boolean,
+    pdfShadedLiners: Boolean,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+    ) {
+        Text("PDF Options", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(12.dp))
+
+        // ── Labels ───────────────────────────────────────────────────────────
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(
+                checked = pdfShowComponentTitles,
+                onCheckedChange = { vm.setPdfShowComponentTitles(it) },
+            )
+            Spacer(Modifier.width(12.dp))
+            Text("Component labels", style = MaterialTheme.typography.bodyLarge)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Line thickness ───────────────────────────────────────────────────
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Line thickness  ${(lineThicknessScale * 100).roundToInt()}%",
+                style = MaterialTheme.typography.titleSmall,
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("50%", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = lineThicknessScale,
+                onValueChange = { vm.setLineThicknessScale(it) },
+                valueRange = 0.5f..2.0f,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+            )
+            Text("200%", style = MaterialTheme.typography.bodySmall)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Measurement reference ────────────────────────────────────────────
+        Text("Measurement reference", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        listOf(
+            PdfTieringMode.AUTO to "Auto (closest end)",
+            PdfTieringMode.AFT  to "AFT",
+            PdfTieringMode.FWD  to "FWD",
+        ).forEach { (mode, label) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(
+                    selected = pdfTieringMode == mode,
+                    onClick = { vm.setPdfTieringMode(mode) },
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(label, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Shade in PDF ─────────────────────────────────────────────────────
+        Text("Shade in PDF", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pdfShadedBodies, onCheckedChange = { vm.setPdfShadedBodies(it) })
+            Spacer(Modifier.width(8.dp))
+            Text("Bodies", style = MaterialTheme.typography.bodyLarge)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pdfShadedTapers, onCheckedChange = { vm.setPdfShadedTapers(it) })
+            Spacer(Modifier.width(8.dp))
+            Text("Tapers", style = MaterialTheme.typography.bodyLarge)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pdfShadedLiners, onCheckedChange = { vm.setPdfShadedLiners(it) })
+            Spacer(Modifier.width(8.dp))
+            Text("Liners", style = MaterialTheme.typography.bodyLarge)
+        }
+
+        Spacer(Modifier.height(24.dp))
+    }
+}

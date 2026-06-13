@@ -31,6 +31,19 @@
 - IO guarded by `runCatching`; streams closed in `finally`.
 - UI layer may show snackbar/toast on failure.
 
+## PdfPrefs — appearance knobs passed to every export
+
+| Field | Default | Effect |
+|---|---|---|
+| `showComponentTitles` | `true` | Draw component label rows below the shaft |
+| `tieringMode` | `AUTO` | Which end dimensions are anchored to (AFT / FWD / Auto) |
+| `shadedBodies` | `false` | Fill body sections with light grey |
+| `shadedTapers` | `false` | Fill taper trapezoids with light grey |
+| `shadedLiners` | `false` | Fill liner sections with light grey |
+| `oalSpacingFactor` | `2.5` | Extra gap above OAL rail (1.0–6.0) |
+
+All `PdfPrefs` fields are also accessible in the PDF preview screen's Tune sheet without navigating to Settings. See `PdfPreviewScreen.md`.
+
 ## Future Options
 - Page size/orientation settings.
 - Title-block controls and dimension toggles.

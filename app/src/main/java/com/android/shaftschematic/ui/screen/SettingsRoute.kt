@@ -37,6 +37,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -108,6 +109,9 @@ fun SettingsRoute(
     val openPdfAfterExport by vm.openPdfAfterExport.collectAsState()
     val pdfTieringMode by vm.pdfTieringMode.collectAsState()
     val pdfShowComponentTitles by vm.pdfShowComponentTitles.collectAsState()
+    val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
+    val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
+    val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
 
@@ -379,6 +383,27 @@ fun SettingsRoute(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text("Show component titles in PDF")
+                    }
+
+                    Text(
+                        "Shade in PDF",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = pdfShadedBodies, onCheckedChange = { vm.setPdfShadedBodies(it) })
+                        Spacer(Modifier.width(8.dp))
+                        Text("Bodies")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = pdfShadedTapers, onCheckedChange = { vm.setPdfShadedTapers(it) })
+                        Spacer(Modifier.width(8.dp))
+                        Text("Tapers")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = pdfShadedLiners, onCheckedChange = { vm.setPdfShadedLiners(it) })
+                        Spacer(Modifier.width(8.dp))
+                        Text("Liners")
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
