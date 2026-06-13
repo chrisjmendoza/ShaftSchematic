@@ -178,27 +178,28 @@ fun RunoutRoute(
     }
 
     // Capture theme colors before the Canvas block (DrawScope is not composable)
-    val outlineArgb    = MaterialTheme.colorScheme.onSurface.toArgb()
-    val bodyFillArgb   = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f).toArgb()
-    val linerFillArgb  = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f).toArgb()
-    val hatchArgb      = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f).toArgb()
-    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
-    val previewShape   = MaterialTheme.shapes.medium
-    val textMeasurer   = rememberTextMeasurer()
+    val outlineArgb   = MaterialTheme.colorScheme.onSurface.toArgb()
+    val bodyFillArgb  = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f).toArgb()
+    val linerFillArgb = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f).toArgb()
+    val hatchArgb     = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f).toArgb()
+    val previewShape  = MaterialTheme.shapes.medium
+    val textMeasurer  = rememberTextMeasurer()
 
-    val previewOpts = remember(outlineArgb, bodyFillArgb, linerFillArgb, hatchArgb) {
+    val transparentArgb = Color.Transparent.toArgb()
+    val previewOpts = remember(outlineArgb, bodyFillArgb, linerFillArgb, hatchArgb,
+                               pdfShadedBodies, pdfShadedTapers, pdfShadedLiners) {
         RenderOptions(
-            showGrid         = false,
-            outlineColor     = outlineArgb,
-            outlineWidthPx   = 1.5f,
-            bodyFillColor    = bodyFillArgb,
-            taperFillColor   = bodyFillArgb,
-            linerFillColor   = linerFillArgb,
-            threadFillColor  = 0x00000000,
-            threadHatchColor = hatchArgb,
-            threadStyle      = ThreadStyle.HATCH,
+            showGrid            = false,
+            outlineColor        = outlineArgb,
+            outlineWidthPx      = 1.5f,
+            bodyFillColor       = if (pdfShadedBodies) bodyFillArgb  else transparentArgb,
+            taperFillColor      = if (pdfShadedTapers) bodyFillArgb  else transparentArgb,
+            linerFillColor      = if (pdfShadedLiners) linerFillArgb else transparentArgb,
+            threadFillColor     = 0x00000000,
+            threadHatchColor    = hatchArgb,
+            threadStyle         = ThreadStyle.HATCH,
             threadUseHatchColor = true,
-            threadStrokePx   = 0f,
+            threadStrokePx      = 0f,
         )
     }
 
@@ -267,7 +268,7 @@ fun RunoutRoute(
                         .fillMaxWidth()
                         .height(200.dp)
                         .clip(previewShape)
-                        .background(surfaceVariant)
+                        .background(Color.White)
                         .transformable(state = previewTransformState),
                 ) {
                     Canvas(

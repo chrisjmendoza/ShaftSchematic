@@ -197,7 +197,7 @@ fun composeRunoutPdf(
 
     // ── Draw shaft profile ────────────────────────────────────────────────────
     drawShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx,
-        bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill)
+        bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
 
     // ── Compute placed stations (with guaranteed collision-free bubble positions) ──
     val placedStations = computePlacedStations(
@@ -508,6 +508,7 @@ private fun drawShaftProfile(
     bodyFill: Paint? = null,
     taperFill: Paint? = null,
     linerFill: Paint? = null,
+    ptPerMm: Float = 1f,
 ) {
     // ── Shade fills first (drawn under all outlines) ──────────────────────
     bodyFill?.let { f ->
@@ -551,6 +552,24 @@ private fun drawShaftProfile(
         c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, dimPaint)
         c.drawLine(x1, top, x1, bot, dimPaint)
+    }
+    // Threads — envelope outline + diagonal hatch to identify the threaded zone
+    val hatchPaint = Paint(outline).apply { strokeWidth = DIM_PT * 0.6f; alpha = 160 }
+    spec.threads.forEach { th ->
+        if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
+        val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
+        val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
+        val pitchPt = ((th.pitchMm.takeIf { it > 0f } ?: 2.5f) * ptPerMm).coerceIn(4f, 18f)
+        val saved = c.save()
+        c.clipRect(x0, top, x1, bot)
+        var hx = x0 - (bot - top)
+        while (hx <= x1) {
+            c.drawLine(hx, bot, hx + (bot - top), top, hatchPaint)
+            hx += pitchPt
+        }
+        c.restoreToCount(saved)
+        c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
+        c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
     }
 }
 
