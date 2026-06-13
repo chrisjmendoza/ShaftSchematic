@@ -96,12 +96,14 @@ fun composeWearPdf(
     val headerBottom = contentTop + WEAR_HEADER_HEIGHT_PT
     val oalLineY     = headerBottom + WEAR_OAL_GAP_PT
 
-    // Shaft draws large — give it more vertical real-estate than the runout sheet
-    val shaftCy   = oalLineY + WEAR_OAL_SPACE_PT + WEAR_SHAFT_HALF_HEIGHT_PT
-    val shaftBottom = shaftCy + WEAR_SHAFT_HALF_HEIGHT_PT
-    val geomRect  = RectF(contentLeft, contentTop, contentRight, contentBot)
+    // Notes anchored near the page bottom
+    val notesY       = contentBot - WEAR_NOTES_BOTTOM_OFFSET_PT
 
-    val notesY = min(shaftBottom + 48f, contentBot - 16f)
+    // Shaft fills and is centred in the space between the OAL line and the notes row
+    val shaftAreaTop = oalLineY + WEAR_OAL_SPACE_PT
+    val shaftAreaBot = notesY - WEAR_NOTES_GAP_PT
+    val shaftCy      = (shaftAreaTop + shaftAreaBot) * 0.5f
+    val geomRect     = RectF(contentLeft, shaftAreaTop, contentRight, shaftAreaBot)
 
     // ── Compute scale ────────────────────────────────────────────────────
     // Scale to the SET-to-SET span so the drawn shaft profile fills the page width.
@@ -144,7 +146,7 @@ private fun drawWearHeader(
     unit: UnitSystem,
     oalMm: Float,
 ) {
-    val y = top + text.textSize + 2f
+    val ts = text.textSize
     val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     val oalDisplay = if (unit == UnitSystem.INCHES) {
         "${"%.4f".format(oalMm / 25.4f)} in"
@@ -152,13 +154,21 @@ private fun drawWearHeader(
         "${"%.2f".format(oalMm)} mm"
     }
     val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
-    val header = buildString {
+
+    val line1 = buildString {
         if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
         if (project.vessel.isNotBlank())   append("Vessel: ${project.vessel}   ")
         if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
-        append("Date: $date$side   OAL: $oalDisplay   — WEAR / INSPECTION RECORD")
+        append("Date: $date$side")
     }
-    c.drawText(header, left, y, text)
+    val line2 = "OAL: $oalDisplay  —  WEAR / INSPECTION RECORD"
+
+    fun centeredX(str: String): Float =
+        ((left + right - text.measureText(str)) * 0.5f).coerceAtLeast(left)
+
+    c.drawText(line1, centeredX(line1), top + ts, text)
+    c.drawText(line2, centeredX(line2), top + ts + ts * 1.4f, text)
+
     val ruleY = top + WEAR_HEADER_HEIGHT_PT
     c.drawLine(left, ruleY, right, ruleY, Paint(text).apply {
         style = Paint.Style.STROKE; strokeWidth = 0.5f
@@ -330,12 +340,11 @@ private const val WEAR_DIM_PT     = 1.2f
 private const val WEAR_TEXT_PT    = 10f
 private const val WEAR_MARGIN_PT  = 36f
 
-private const val WEAR_HEADER_HEIGHT_PT = 22f
-private const val WEAR_OAL_GAP_PT       = 8f
-private const val WEAR_OAL_SPACE_PT     = 18f
-
-// Shaft draws taller on the wear doc (more room to annotate by hand)
-private const val WEAR_SHAFT_HALF_HEIGHT_PT = 60f
+private const val WEAR_HEADER_HEIGHT_PT      = 32f   // 2 lines of 10pt text + gap + rule
+private const val WEAR_OAL_GAP_PT            = 12f
+private const val WEAR_OAL_SPACE_PT          = 20f
+private const val WEAR_NOTES_BOTTOM_OFFSET_PT = 24f  // baseline distance above contentBot
+private const val WEAR_NOTES_GAP_PT           = 28f  // gap between shaft area and notes row
 
 private const val COMPRESS_TRIGGER_PT = 220f
 private const val ZIGZAG_GAP_MAX_PT   = 20f

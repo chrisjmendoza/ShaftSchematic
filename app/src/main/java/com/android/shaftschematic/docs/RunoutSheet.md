@@ -71,6 +71,54 @@ The OAL label shows the SET-to-SET distance, which is the physically meaningful 
 
 ---
 
+## Wear Document Page Layout
+
+`WearPdfComposer` targets U.S. Letter landscape (792 × 612 pt) with 36 pt margins (720 × 540 pt content area).
+
+```
+┌── header line 1: Customer / Vessel / Job # / Date / Side  (centred) ──────┐
+│── header line 2: OAL / "WEAR / INSPECTION RECORD"         (centred) ──────│
+├────────────────────────────────────────────────────────────────────────────┤
+│   ←──────────── OAL dimension line (SET to SET) ────────────────────→     │
+│                                                                             │
+│                                                                             │
+│          [shaft profile — centred vertically, blank for hand annotation]   │
+│                                                                             │
+│                                                                             │
+│   Dye pen inspection:  PASS □   FAIL □     Notes: ____________________    │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Y positions on a 612 pt page (36 pt margin):**
+
+| Element | Y (pt) |
+|---|---|
+| Header line 1 baseline | 46 |
+| Header line 2 baseline | 60 |
+| Header separator rule | 68 |
+| OAL dimension line | 80 |
+| Shaft area top | 100 |
+| **Shaft centre** | **≈ 312** (page centre = 306) |
+| Shaft area bottom | 524 |
+| Notes / checkboxes | 552 |
+
+**Key layout decisions:**
+- Header is split across two centred lines so long job-info strings don't overflow the 720 pt content width.
+- Shaft centre is computed as `(shaftAreaTop + shaftAreaBot) / 2` — it tracks the available space dynamically rather than using a fixed offset from the OAL line.
+- Notes row is anchored a fixed distance above `contentBot`, not floated just below the shaft — this prevents the notes from clustering near the top when the shaft profile is narrow.
+
+**Layout constants (`WearPdfComposer.kt`):**
+
+| Constant | Value | Role |
+|---|---|---|
+| `WEAR_HEADER_HEIGHT_PT` | 32 | Two-line header block height (rule sits at this offset from `contentTop`) |
+| `WEAR_OAL_GAP_PT` | 12 | Gap between header rule and OAL line |
+| `WEAR_OAL_SPACE_PT` | 20 | Gap between OAL line and top of shaft drawing area |
+| `WEAR_NOTES_BOTTOM_OFFSET_PT` | 24 | Distance of notes baseline above `contentBot` |
+| `WEAR_NOTES_GAP_PT` | 28 | Gap between bottom of shaft drawing area and notes baseline |
+
+---
+
 ## PDF Appearance Options
 
 Both composers accept:
