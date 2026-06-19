@@ -1116,9 +1116,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val specBefore = _spec.value
         val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Body? = null
-        var snapFromKey: ComponentKey? = null
-        var snapFromOrigin = false
-        val removedKey = ComponentKey(id, ComponentKind.BODY)
 
         _spec.update { s ->
             val idx = s.bodies.indexOfFirst { it.id == id }
@@ -1129,11 +1126,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
-            }
-
-            if (_autoSnap.value) {
-                snapFromKey = s.findLeftNeighbor(removedKey)
-                snapFromOrigin = snapFromKey == null
             }
 
             val body = s.bodies[idx]
@@ -1162,15 +1154,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
-
-            if (_autoSnap.value) {
-                when {
-                    snapFromKey != null ->
-                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
-                    snapFromOrigin ->
-                        _spec.update { spec -> spec.snapFromOrigin() }
-                }
-            }
 
             ensureOverall()
             updateUndoRedoFlags()
@@ -1297,15 +1280,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 
+    fun updateTaperAuthoredReference(index: Int, reference: LinerAuthoredReference) = _spec.update { s ->
+        if (index !in s.tapers.indices) s else {
+            val old = s.tapers[index]
+            if (old.authoredReference == reference) return@update s
+            s.copy(
+                tapers = s.tapers.toMutableList().also { l ->
+                    l[index] = old.copy(authoredReference = reference)
+                }
+            )
+        }
+    }
+
     /** Remove a [Taper] by id with multi-step delete history support. */
     fun removeTaper(id: String) {
         Log.d("ShaftViewModel", "removeTaper invoked for id=$id")
         val specBefore = _spec.value
         val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Taper? = null
-        var snapFromKey: ComponentKey? = null
-        var snapFromOrigin = false
-        val removedKey = ComponentKey(id, ComponentKind.TAPER)
 
         _spec.update { s ->
             val idx = s.tapers.indexOfFirst { it.id == id }
@@ -1316,11 +1308,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
-            }
-
-            if (_autoSnap.value) {
-                snapFromKey = s.findLeftNeighbor(removedKey)
-                snapFromOrigin = snapFromKey == null
             }
 
             val taper = s.tapers[idx]
@@ -1349,15 +1336,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
-
-            if (_autoSnap.value) {
-                when {
-                    snapFromKey != null ->
-                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
-                    snapFromOrigin ->
-                        _spec.update { spec -> spec.snapFromOrigin() }
-                }
-            }
 
             ensureOverall()
             updateUndoRedoFlags()
@@ -1478,9 +1456,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val specBefore = _spec.value
         val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Thread? = null
-        var snapFromKey: ComponentKey? = null
-        var snapFromOrigin = false
-        val removedKey = ComponentKey(id, ComponentKind.THREAD)
 
         _spec.update { s ->
             val idx = s.threads.indexOfFirst { it.id == id }
@@ -1491,11 +1466,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
-            }
-
-            if (_autoSnap.value) {
-                snapFromKey = s.findLeftNeighbor(removedKey)
-                snapFromOrigin = snapFromKey == null
             }
 
             val thread = s.threads[idx]
@@ -1530,15 +1500,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
-
-            if (_autoSnap.value) {
-                when {
-                    snapFromKey != null ->
-                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
-                    snapFromOrigin ->
-                        _spec.update { spec -> spec.snapFromOrigin() }
-                }
-            }
 
             // Maintain coverage + flags and show snackbar
             ensureOverall()
@@ -1636,9 +1597,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val specBefore = _spec.value
         val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Liner? = null
-        var snapFromKey: ComponentKey? = null
-        var snapFromOrigin = false
-        val removedKey = ComponentKey(id, ComponentKind.LINER)
 
         _spec.update { s ->
             val idx = s.liners.indexOfFirst { it.id == id }
@@ -1649,11 +1607,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
-            }
-
-            if (_autoSnap.value) {
-                snapFromKey = s.findLeftNeighbor(removedKey)
-                snapFromOrigin = snapFromKey == null
             }
 
             val liner = s.liners[idx]
@@ -1683,15 +1636,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
-
-            if (_autoSnap.value) {
-                when {
-                    snapFromKey != null ->
-                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
-                    snapFromOrigin ->
-                        _spec.update { spec -> spec.snapFromOrigin() }
-                }
-            }
 
             ensureOverall()
             updateUndoRedoFlags()

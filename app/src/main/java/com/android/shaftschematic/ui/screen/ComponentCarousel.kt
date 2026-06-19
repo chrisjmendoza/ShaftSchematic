@@ -116,6 +116,7 @@ internal fun ComponentCarouselPager(
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
+    onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -232,6 +233,7 @@ internal fun ComponentCarouselPager(
                     onAddBody = onAddBody,
                     onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
+                    onUpdateTaperReference = onUpdateTaperReference,
                     onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
@@ -302,6 +304,7 @@ internal fun ComponentPagerCard(
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
+    onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -395,6 +398,12 @@ internal fun ComponentPagerCard(
             val idx    = explicitIndex ?: return
             val t      = spec.tapers.getOrNull(idx) ?: return
             val endMap = taperSetLetMapping(t, spec.overallLengthMm)
+            val isFwdRef = t.authoredReference == LinerAuthoredReference.FWD
+            val authoredStartMm = if (isFwdRef) {
+                spec.overallLengthMm - t.startFromAftMm - t.lengthMm
+            } else {
+                t.startFromAftMm
+            }
             ComponentCard(
                 title = taperTitleById[t.id] ?: "Taper",
                 debugText = if (showComponentDebugLabels) "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}" else null,
@@ -407,8 +416,37 @@ internal fun ComponentPagerCard(
                     onRemoveTaper(t.id)
                 }
             ) {
-                CommitNum("Start (${abbr(unit)})", disp(t.startFromAftMm, unit), validator = startValidator(t.id, ComponentKind.TAPER, t.lengthMm)) { s ->
-                    toMmOrNull(s, unit)?.let { onUpdateTaper(idx, it, t.lengthMm, t.startDiaMm, t.endDiaMm, t.taperRateText) }
+                // AFT / FWD reference toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val selectedColors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+                        containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
+                    )
+                    FilterChip(selected = !isFwdRef, onClick = { onUpdateTaperReference(idx, LinerAuthoredReference.AFT) },
+                        label = { Text("AFT") }, colors = selectedColors,
+                        border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                    FilterChip(selected = isFwdRef, onClick = { onUpdateTaperReference(idx, LinerAuthoredReference.FWD) },
+                        label = { Text("FWD") }, colors = selectedColors,
+                        border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                }
+
+                CommitNum(
+                    label = "Start from ${if (isFwdRef) "FWD" else "AFT"} (${abbr(unit)})",
+                    initialDisplay = disp(authoredStartMm, unit),
+                    validator = { raw ->
+                        val authoredMm = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
+                        val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
+                        startOverlapErrorMm(spec, t.id, ComponentKind.TAPER, t.lengthMm, physStart)
+                    }
+                ) { s ->
+                    val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
+                    onUpdateTaper(idx, physStart, t.lengthMm, t.startDiaMm, t.endDiaMm, t.taperRateText)
                 }
                 CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateTaper(idx, t.startFromAftMm, it, t.startDiaMm, t.endDiaMm, t.taperRateText) }

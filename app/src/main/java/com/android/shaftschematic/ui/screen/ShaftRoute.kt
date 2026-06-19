@@ -195,6 +195,7 @@ fun ShaftRoute(
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },
         onUpdateTaperKeyway = { i, w, d, l, offset, spooned -> vm.updateTaperKeyway(i, w, d, l, offset, spooned) },
+        onUpdateTaperReference = { i, ref -> vm.updateTaperAuthoredReference(i, ref) },
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },

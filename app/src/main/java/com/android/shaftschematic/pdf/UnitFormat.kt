@@ -13,7 +13,7 @@ fun formatDim(mm: Double, unit: Any?): String {
     return when {
         name.contains("INCH") -> {
             // Use 4 decimals for inches so common fractions (1/16, 1/32) round exactly.
-            String.format(Locale.US, "%.4f in", mm / 25.4)
+            String.format(Locale.US, "%.4f\"", mm / 25.4)
         }
         else -> {
             // Millimeters stay at 3 decimals – more than enough for typical shaft work.
@@ -32,7 +32,7 @@ fun formatDim(mm: Double, unit: Any?): String {
 fun formatLenDim(mm: Double, unit: Any?): String {
     val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
     return when {
-        name.contains("INCH") -> LengthFormat.formatInchesSmart(mm / 25.4) + " in"
+        name.contains("INCH") -> LengthFormat.formatInchesSmart(mm / 25.4) + "\""
         else -> String.format(Locale.US, "%.3f mm", mm)
     }
 }
@@ -46,7 +46,7 @@ fun formatLenDim(mm: Double, unit: Any?): String {
 fun formatLenWithUnit(mm: Double, unit: Any?): String {
     val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
     return when {
-        name.contains("INCH") -> LengthFormat.formatInchesSmart(mm / 25.4) + " in"
+        name.contains("INCH") -> LengthFormat.formatInchesSmart(mm / 25.4) + "\""
         else -> {
             val s = String.format(Locale.US, "%.1f", mm).trimEnd('0').trimEnd('.')
             "$s mm"
@@ -65,7 +65,7 @@ fun formatDiaWithUnit(mm: Double, unit: Any?): String {
     return when {
         name.contains("INCH") -> {
             val s = String.format(Locale.US, "%.3f", mm / 25.4).trimEnd('0').trimEnd('.')
-            "$s in"
+            "$s\""
         }
         else -> {
             val s = String.format(Locale.US, "%.1f", mm).trimEnd('0').trimEnd('.')

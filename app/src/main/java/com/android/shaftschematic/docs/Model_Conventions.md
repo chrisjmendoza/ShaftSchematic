@@ -18,8 +18,9 @@ Invariants
 - `FWD` → user gave a FWD-face start; the UI computes the AFT start as `OAL − startFwd − length`.
 - The field is UI-only metadata; the model always stores the canonical AFT start after conversion.
 
-`TaperDirection` in Add dialog
-- The `Taper` model has no direction field; direction is implied by diameter (start < end = increasing = AFT taper).
+`LinerAuthoredReference` on `Taper`
+- `Taper.authoredReference` mirrors `Liner.authoredReference` — same semantics: AFT (default) or FWD.
+- The carousel edit card uses this to label and convert the Start input; the canonical `startFromAftMm` is always stored AFT-face.
 - When a user selects "FWD" in `AddTaperDialog`, SET and LET are swapped before submission so the model's `startDiaMm/endDiaMm` pair is always stored AFT → FWD.
 
 Responsibilities

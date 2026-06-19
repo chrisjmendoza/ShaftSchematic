@@ -142,7 +142,13 @@ fun composeShaftPdf(
             geomRect.width() / overallMm
         }
     }
-    val left = geomRect.left
+    // Excluded AFT threads have startFromAftMm = -lengthMm (negative). Shift the origin
+    // rightward so they have room to draw to the left of the shaft body.
+    val contentMinMm = minOf(0f,
+        spec.threads.filter { it.excludeFromOAL && it.isAftEnd }
+            .minOfOrNull { it.startFromAftMm } ?: 0f
+    )
+    val left = geomRect.left + (-contentMinMm * ptPerMm).coerceAtLeast(0f)
 
     val winDbg = computeOalWindow(spec)
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
@@ -176,7 +182,7 @@ fun composeShaftPdf(
         0f
     }
 
-    fun xAt(mm: Float) = (left + mm * ptPerMm).coerceIn(geomRect.left, geomRect.right)
+    fun xAt(mm: Float) = left + mm * ptPerMm
     fun rPx(d: Float)  = (d * 0.5f) * ptPerMm
 
     // geometry
@@ -231,7 +237,7 @@ fun composeShaftPdf(
         val linerDims = mapToLinerDimsForPdf(spec, measureFromMode)
         val win  = computeOalWindow(spec)
         val pageX: (Double) -> Float = { dimMm ->
-            (geomRect.left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
+            (left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
         }
         val sets = computeSetPositionsInMeasureSpace(win, spec)
         val spans = buildLinerSpans(
@@ -297,7 +303,7 @@ fun composeShaftPdf(
                 color = 0xFF000000.toInt()
             }
             val leader = DiameterLeaderRenderer(
-                pageX = { mm -> (geomRect.left + (mm.toFloat() * ptPerMm)) },
+                pageX = { mm -> (left + (mm.toFloat() * ptPerMm)) },
                 shaftTopY = yTopOfShaft,
                 shaftBottomY = cy + (maxDiaMm * 0.5f) * ptPerMm,
                 linePaint = dim,
@@ -875,20 +881,16 @@ private fun drawFooter(
     text: Paint,
     cfg: FooterConfig
 ) {
-    val gutter = 16f
-    val innerW = rect.width() - gutter * 2
-    val colW = innerW / 3f
-
-    val leftX = rect.left
-    val midX = leftX + colW + gutter
-    val rightX = midX + colW + gutter
-
     val top = rect.top + 6f
     val lh = text.textSize * 1.35f
 
     val cols = buildFooterEndColumns(spec, unit, cfg)
 
-    // AFT (left)
+    val leftX  = rect.left
+    val midX   = rect.left + rect.width() * 0.40f
+    val rightX = rect.left + rect.width() * 0.72f
+
+    // AFT (left) — left-aligned at left margin
     run {
         var y = top
         cols.aftLines.forEach { line ->
@@ -897,17 +899,16 @@ private fun drawFooter(
         }
     }
 
-    // Middle (Work order)
+    // Middle (Work order) — left-aligned at 1/3 mark
     run {
         var y = top
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         c.drawText("Customer: ${project.customer}", midX, y, text); y += lh
-        c.drawText("Vessel: ${project.vessel}",   midX, y, text); y += lh
-        c.drawText("Job #: ${project.jobNumber}", midX, y, text); y += lh
-        c.drawText("Date: $date", midX, y, text); y += lh
+        c.drawText("Vessel: ${project.vessel}",     midX, y, text); y += lh
+        c.drawText("Job #: ${project.jobNumber}",   midX, y, text); y += lh
+        c.drawText("Date: $date",                   midX, y, text); y += lh
 
         project.side.printableLabelOrNull()?.let { pos ->
-            // A little breathing room under Date; position stands out.
             y += lh * 0.35f
             val posPaint = Paint(text).apply {
                 textSize = text.textSize * 1.20f
@@ -915,10 +916,9 @@ private fun drawFooter(
             }
             c.drawText(pos, midX, y, posPaint)
         }
-        // c.drawText("Not to scale: long bodies compressed for readability.", midX, y, text)
     }
 
-    // FWD (right)
+    // FWD (right) — left-aligned at 2/3 mark
     run {
         var y = top
         cols.fwdLines.forEach { line ->
@@ -947,7 +947,7 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
         taperSides.aft?.let { tp ->
             val (let, set) = letSet(tp)
             aft += "AFT Taper"
-            aft += "Rate: ${rate1toN(tp)}"
+            aft += "Rate: ${tp.taperRateText.trim().ifEmpty { rate1toN(tp) }}"
             aft += "L.E.T.: ${formatDiaWithUnit(let.toDouble(), unit)}"
             aft += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
             aft += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
@@ -972,7 +972,7 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
         taperSides.fwd?.let { tp ->
             val (let, set) = letSet(tp)
             fwd += "FWD Taper"
-            fwd += "Rate: ${rate1toN(tp)}"
+            fwd += "Rate: ${tp.taperRateText.trim().ifEmpty { rate1toN(tp) }}"
             fwd += "L.E.T.: ${formatDiaWithUnit(let.toDouble(), unit)}"
             fwd += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
             fwd += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
@@ -1014,7 +1014,7 @@ private fun rate1toN(t: Taper): String {
 
 private fun fmtLen(unit: UnitSystem, mm: Float): String = when (unit.name.uppercase(Locale.US)) {
     "MILLIMETERS", "MM" -> String.format(Locale.US, "%.1f mm", mm)
-    "INCHES", "IN" -> String.format(Locale.US, "%.3f", mm / MM_PER_IN).trimEnd('0').trimEnd('.') + " in."
+    "INCHES", "IN" -> String.format(Locale.US, "%.3f", mm / MM_PER_IN).trimEnd('0').trimEnd('.') + "\""
     else -> String.format(Locale.US, "%.1f mm", mm)
 }
 
@@ -1098,12 +1098,15 @@ private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = END_EPS_MM): EndF
 
     fun near(a: Double, b: Double) = abs(a - b) <= epsMm
 
-    // Threads
+    // Threads — also match excluded threads (their startFromAftMm is negative or ≥ OAL,
+    // but they physically live at the shaft ends).
     val aftThread = spec.threads.any { th ->
-        near(th.startFromAftMm.toDouble(), aftX) && th.lengthMm > epsMm
+        th.lengthMm > epsMm &&
+            (near(th.startFromAftMm.toDouble(), aftX) || (th.excludeFromOAL && th.isAftEnd))
     }
     val fwdThread = spec.threads.any { th ->
-        near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > epsMm
+        th.lengthMm > epsMm &&
+            (near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) || (th.excludeFromOAL && !th.isAftEnd))
     }
 
     // If an end-thread exists, its shoulder can be the effective boundary for a taper.
@@ -1139,22 +1142,26 @@ private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = END_EPS_MM): EndF
     return EndFlags(aftThread, fwdThread, aftTaper, fwdTaper)
 }
 
-private const val EPS_MM = 0.01
-
 private fun near(a: Double, b: Double, eps: Double = END_EPS_MM) =
     abs(a - b) <= eps
 
 private fun getAftEndThread(spec: ShaftSpec): Threads? =
     spec.threads
         .asSequence()
-        .filter { th -> near(th.startFromAftMm.toDouble(), 0.0) && th.lengthMm > EPS_MM }
+        .filter { th ->
+            th.lengthMm > END_EPS_MM &&
+                (near(th.startFromAftMm.toDouble(), 0.0) || (th.excludeFromOAL && th.isAftEnd))
+        }
         .minByOrNull { it.startFromAftMm }
 
 private fun getFwdEndThread(spec: ShaftSpec): Threads? {
     val fwdX = spec.overallLengthMm.toDouble()
     return spec.threads
         .asSequence()
-        .filter { th -> near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > EPS_MM }
+        .filter { th ->
+            th.lengthMm > END_EPS_MM &&
+                (near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) || (th.excludeFromOAL && !th.isAftEnd))
+        }
         .maxByOrNull { it.startFromAftMm + it.lengthMm }
 }
 
@@ -1168,7 +1175,7 @@ private fun getAftEndTaper(spec: ShaftSpec): Taper? {
     return spec.tapers
         .asSequence()
         .filter { tp ->
-            tp.lengthMm > EPS_MM && anchors.any { a -> near(tp.startFromAftMm.toDouble(), a) }
+            tp.lengthMm > END_EPS_MM && anchors.any { a -> near(tp.startFromAftMm.toDouble(), a) }
         }
         .minByOrNull { it.startFromAftMm }
 }
@@ -1185,7 +1192,7 @@ private fun getFwdEndTaper(spec: ShaftSpec): Taper? {
         .asSequence()
         .filter { tp ->
             val endX = (tp.startFromAftMm + tp.lengthMm).toDouble()
-            tp.lengthMm > EPS_MM && anchors.any { a -> near(endX, a) }
+            tp.lengthMm > END_EPS_MM && anchors.any { a -> near(endX, a) }
         }
         .maxByOrNull { it.startFromAftMm + it.lengthMm }
 }

@@ -230,6 +230,7 @@ fun ShaftScreen(
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
+    onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -671,7 +672,7 @@ fun ShaftScreen(
                 }
 
                 // Project info (optional)
-                ExpandableSection("Project Information", initiallyExpanded = false) {
+                ExpandableSection("Project Information", initiallyExpanded = true) {
                     CommitTextField("Job Number", jobNumber, onSetJobNumber, Modifier.fillMaxWidth())
                     CommitTextField("Customer", customer, onSetCustomer, Modifier.fillMaxWidth())
                     CommitTextField("Vessel", vessel, onSetVessel, Modifier.fillMaxWidth())
@@ -743,6 +744,7 @@ fun ShaftScreen(
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateTaper = snappedTaperUpdater,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
+                    onUpdateTaperReference = onUpdateTaperReference,
                     onUpdateThread = snappedThreadUpdater,
                     onUpdateLiner = snappedLinerUpdater,
                     onUpdateLinerLabel = onUpdateLinerLabel,

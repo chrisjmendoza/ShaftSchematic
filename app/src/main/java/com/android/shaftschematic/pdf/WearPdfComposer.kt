@@ -155,7 +155,7 @@ private fun drawWearHeader(
     val ts = text.textSize
     val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     val oalDisplay = if (unit == UnitSystem.INCHES) {
-        "${"%.4f".format(oalMm / 25.4f)} in"
+        "${"%.4f".format(oalMm / 25.4f)}\""
     } else {
         "${"%.2f".format(oalMm)} mm"
     }
