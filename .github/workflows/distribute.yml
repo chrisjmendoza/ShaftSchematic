@@ -40,6 +40,6 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json firebase appdistribution:distribute \
             app/build/outputs/apk/debug/app-debug.apk \
             --app "${{ secrets.FIREBASE_APP_ID }}" \
-            --groups "testers" \
+            --testers "chrisjmendoza@gmail.com" \
             --release-notes "Branch: ${{ github.ref_name }} | ${{ github.event.head_commit.message }}"
           rm /tmp/sa.json
