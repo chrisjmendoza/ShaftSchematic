@@ -888,7 +888,7 @@ private fun drawFooter(
 
     val leftX  = rect.left
     val midX   = rect.left + rect.width() * 0.40f
-    val rightX = rect.left + rect.width() * 0.72f
+    val rightX = rect.left + rect.width() * 0.76f
 
     // AFT (left) — left-aligned at left margin
     run {

@@ -135,6 +135,24 @@ Values were lost when tapping "Add" while a text field was still focused (the on
 
 ---
 
+### fix: excluded thread flashes at shaft face during carousel swipe
+
+In manual OAL mode, `updateThread()` wrote `effectiveStart = 0f` for AFT excluded threads as a temporary value, expecting `ensureOverall()` → `syncExcludedThreadPositions()` to correct it. `ensureOverall()` exits early in manual mode without calling sync, so the `0f` position persisted — placing the thread at the shaft AFT face and causing it to visually overlap the adjacent taper for a single frame. The trigger: `NumericInputField.onFocusChanged` fires a commit when the carousel's `HorizontalPager` clears focus from the excluded-thread card while the user swipes to the adjacent taper card.
+
+Fix: `updateThread()` now derives the correct position (`−lengthMm` for AFT, `overallLengthMm` for FWD) directly inside the `_spec.update {}` call, using the same formula as `syncExcludedThreadPositions()`. The position is always correct regardless of OAL mode, with no transient wrong state.
+
+**`ui/viewmodel/ShaftViewModel.kt`** — `updateThread()` `effectiveStart` for excluded threads.
+
+---
+
+### fix: PDF footer FWD column nudged to 76% of content width
+
+The FWD footer column was at 72% of the content area width; adjusted to 76% for a more balanced three-column layout with the AFT block anchored at the left margin and center block at 40%.
+
+**`pdf/ShaftPdfComposer.kt`** — `rightX = rect.left + rect.width() * 0.76f` in `drawFooter()`.
+
+---
+
 ## 2026-06-18
 
 ### feat: taper/liner direction toggle; excluded thread rendering; add-time collision warnings

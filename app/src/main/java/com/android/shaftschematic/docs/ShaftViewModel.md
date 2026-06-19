@@ -37,6 +37,11 @@ Future Enhancements
 
 Change Log
 ----------
+**v0.3 (2026-06-19)**
+- `updateTaperAuthoredReference()` added — persists the user's AFT/FWD carousel reference toggle on `Taper.authoredReference`.
+- `updateThread()` — `effectiveStart` for excluded threads now uses `−lengthMm` (AFT) / `overallLengthMm` (FWD) directly inside `_spec.update {}`, matching `syncExcludedThreadPositions()`. Eliminates a transient `0f` position that caused the thread to flash at the shaft face when the carousel committed on blur in manual OAL mode.
+- Auto-snap removed from `removeBody()`, `removeTaper()`, `removeThread()`, `removeLiner()`.
+
 **v0.2 (2026-06-18)**
 - `addLinerAt` now accepts an optional `reference: LinerAuthoredReference` parameter (default `AFT`). Passed through from `AddLinerDialog` via `ShaftScreen` → `ShaftRoute` → ViewModel.
 

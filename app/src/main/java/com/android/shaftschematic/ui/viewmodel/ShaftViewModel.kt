@@ -1398,9 +1398,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val newLength = max(0f, lengthMm)
 
             // For excluded threads the start position is always derived from isAftEnd + OAL,
-            // never from a user-authored startMm. Re-sync after updating length.
+            // never from a user-authored startMm. Use the same formula as syncExcludedThreadPositions()
+            // so the position is correct inside this single _spec.update call, avoiding a transient
+            // wrong position when manual OAL mode prevents ensureOverall() from re-syncing.
             val effectiveStart = if (old.excludeFromOAL) {
-                if (old.isAftEnd) 0f else (s.overallLengthMm - newLength).coerceAtLeast(0f)
+                if (old.isAftEnd) -newLength else s.overallLengthMm
             } else startMm
 
             val startChanged = old.startFromAftMm != effectiveStart || old.lengthMm != newLength
