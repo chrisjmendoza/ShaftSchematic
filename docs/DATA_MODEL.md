@@ -44,6 +44,13 @@ val Segment.endFromAftMm: Float get() = startFromAftMm + lengthMm
 fun Segment.isWithin(overallLengthMm: Float) =
     endFromAftMm <= overallLengthMm + 1e-3f && startFromAftMm >= 0f
 Components
+
+### Component Priority
+
+**Sacred components** (Taper, Threads, Liner) have positional priority. Their authored positions define the shaft geometry. Default start-position calculations for new components are based only on where these end.
+
+**Bodies are fillers**: they describe raw shaft material in gaps between sacred components. Bodies are excluded from collision detection and from new-component default-start calculations. They do not drive shaft layout; sacred components do.
+
 Body
 @Serializable
 data class Body(

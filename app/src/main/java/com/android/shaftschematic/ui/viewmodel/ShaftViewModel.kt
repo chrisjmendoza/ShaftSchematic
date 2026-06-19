@@ -1065,14 +1065,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ────────────────────────────────────────────────────────────────────────────
 
     // Bodies
-    fun addBodyAt(startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
+    fun addBodyAt(startMm: Float, lengthMm: Float, diaMm: Float) {
         val id = newId()
-        orderAdd(ComponentKind.BODY, id)
-        s.copy(bodies = listOf(Body(id, startMm, max(0f, lengthMm), max(0f, diaMm))) + s.bodies)
-    }.also {
+        _spec.update { s ->
+            orderAdd(ComponentKind.BODY, id)
+            s.copy(bodies = listOf(Body(id, startMm, max(0f, lengthMm), max(0f, diaMm))) + s.bodies)
+        }
         rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
         ensureOverall()
         ensureOrderCoversSpec()
+        _selectedComponentId.value = id
     }
 
     fun updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
@@ -1183,33 +1185,35 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         startDiaMm: Float,
         endDiaMm: Float,
         rateText: String = "",
-    ) = _spec.update { s ->
+    ) {
         val id = newId()
-        orderAdd(ComponentKind.TAPER, id)
-        val (resolvedSet, resolvedLet) = deriveTaperDiameters(
-            setMm = startDiaMm, letMm = endDiaMm,
-            lengthMm = lengthMm, rateText = rateText
-        )
-        s.copy(
-            tapers = listOf(
-                Taper(
-                    id = id,
-                    startFromAftMm = startMm,
-                    lengthMm = max(0f, lengthMm),
-                    startDiaMm = max(0f, resolvedSet),
-                    endDiaMm = max(0f, resolvedLet),
-                    keywayWidthMm = 0f,
-                    keywayDepthMm = 0f,
-                    keywayLengthMm = 0f,
-                    keywaySpooned = false,
-                    taperRateText = rateText,
-                )
-            ) + s.tapers
-        )
-    }.also {
+        _spec.update { s ->
+            orderAdd(ComponentKind.TAPER, id)
+            val (resolvedSet, resolvedLet) = deriveTaperDiameters(
+                setMm = startDiaMm, letMm = endDiaMm,
+                lengthMm = lengthMm, rateText = rateText
+            )
+            s.copy(
+                tapers = listOf(
+                    Taper(
+                        id = id,
+                        startFromAftMm = startMm,
+                        lengthMm = max(0f, lengthMm),
+                        startDiaMm = max(0f, resolvedSet),
+                        endDiaMm = max(0f, resolvedLet),
+                        keywayWidthMm = 0f,
+                        keywayDepthMm = 0f,
+                        keywayLengthMm = 0f,
+                        keywaySpooned = false,
+                        taperRateText = rateText,
+                    )
+                ) + s.tapers
+            )
+        }
         rememberTaperDefaults(lengthMm = lengthMm, setDiaMm = startDiaMm, letDiaMm = endDiaMm)
         ensureOverall()
         ensureOrderCoversSpec()
+        _selectedComponentId.value = id
     }
 
     fun updateTaper(
@@ -1369,25 +1373,27 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         majorDiaMm: Float,
         pitchMm: Float,
         excludeFromOAL: Boolean = false
-    ) = _spec.update { s ->
+    ) {
         val id = newId()
-        orderAdd(ComponentKind.THREAD, id)
-        s.copy(
-            threads = listOf(
-                Threads(
-                    id = id,
-                    startFromAftMm = startMm,
-                    majorDiaMm = max(0f, majorDiaMm),
-                    pitchMm = max(0f, pitchMm),
-                    lengthMm = max(0f, lengthMm),
-                    excludeFromOAL = excludeFromOAL
-                )
-            ) + s.threads
-        )
-    }.also {
+        _spec.update { s ->
+            orderAdd(ComponentKind.THREAD, id)
+            s.copy(
+                threads = listOf(
+                    Threads(
+                        id = id,
+                        startFromAftMm = startMm,
+                        majorDiaMm = max(0f, majorDiaMm),
+                        pitchMm = max(0f, pitchMm),
+                        lengthMm = max(0f, lengthMm),
+                        excludeFromOAL = excludeFromOAL
+                    )
+                ) + s.threads
+            )
+        }
         rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
         ensureOverall()
         ensureOrderCoversSpec()
+        _selectedComponentId.value = id
     }
 
     fun updateThread(index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
@@ -1524,24 +1530,26 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         lengthMm: Float,
         odMm: Float,
         reference: LinerAuthoredReference = LinerAuthoredReference.AFT,
-    ) = _spec.update { s ->
+    ) {
         val id = newId()
-        orderAdd(ComponentKind.LINER, id)
-        val len = max(0f, lengthMm)
-        val od = max(0f, odMm)
-        val liner = Liner(
-            id = id,
-            startFromAftMm = startMm,
-            lengthMm = len,
-            odMm = od,
-            endMmPhysical = startMm + len,
-            authoredReference = reference
-        )
-        s.copy(liners = listOf(liner) + s.liners)
-    }.also {
+        _spec.update { s ->
+            orderAdd(ComponentKind.LINER, id)
+            val len = max(0f, lengthMm)
+            val od = max(0f, odMm)
+            val liner = Liner(
+                id = id,
+                startFromAftMm = startMm,
+                lengthMm = len,
+                odMm = od,
+                endMmPhysical = startMm + len,
+                authoredReference = reference
+            )
+            s.copy(liners = listOf(liner) + s.liners)
+        }
         rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
         ensureOverall()
         ensureOrderCoversSpec()
+        _selectedComponentId.value = id
     }
 
     fun updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->

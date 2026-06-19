@@ -56,11 +56,11 @@ private data class AddDialogDefaults(
 @Composable
 private fun rememberAddDialogDefaults(spec: ShaftSpec): AddDialogDefaults {
     val startMm = remember(spec) {
+        // Bodies are fillers; excluded threads sit outside the shaft envelope.
         listOfNotNull(
-            spec.bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
             spec.tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
             spec.liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
-            spec.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm },
+            spec.threads.filter { !it.excludeFromOAL }.maxOfOrNull { it.startFromAftMm + it.lengthMm },
         ).maxOrNull() ?: 0f
     }
     val lastDia = remember(spec) {

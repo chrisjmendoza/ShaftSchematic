@@ -84,11 +84,12 @@ fun ShaftSpec.findRightNeighbor(anchor: ComponentKey): ComponentKey? {
  * Returns the IDs of all components involved in at least one axial overlap.
  *
  * Checked pairs:
- *  Body–Taper, Taper–Taper, Taper–Thread, Taper–Liner,
+ *  Taper–Taper, Taper–Thread, Taper–Liner,
  *  Thread–Thread, Thread–Liner, Liner–Liner.
  *
  * Intentionally NOT checked:
  *  Body–Body    (cascade snap prevents these),
+ *  Body–Taper   (bodies are fillers; tapers are sacred and get priority),
  *  Body–Thread  (threads at shaft ends over a body section is normal),
  *  Body–Liner   (liners sit over bodies by design).
  *
@@ -106,11 +107,6 @@ fun ShaftSpec.collidingIds(): Set<String> {
     val result = mutableSetOf<String>()
     val activeThreads = threads.filter { !it.excludeFromOAL }
 
-    for (b in bodies) for (t in tapers) {
-        if (overlaps(b.startFromAftMm, b.lengthMm, t.startFromAftMm, t.lengthMm)) {
-            result += b.id; result += t.id
-        }
-    }
     for (i in tapers.indices) for (j in i + 1 until tapers.size) {
         val a = tapers[i]; val b = tapers[j]
         if (overlaps(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {

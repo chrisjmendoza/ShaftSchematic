@@ -75,6 +75,28 @@ All Add/Edit dialogs follow the same conventions:
   - Update succeeds, and  
   - ViewModel applies new spec
 
+### 3.1.1 Add Entry Points
+
+There are two paths to open an add dialog:
+
+1. **Tap-to-add** (tap on canvas gap): sets `tapAddStartMm` and `tapAddGapMm` from the tapped position, then opens the appropriate `tapAdd*Open` dialog state.
+2. **FAB chooser** (`InlineAddChooserDialog`): computes default start via `computeAddDefaults()` (see §3.1.2), sets the same state vars, then opens the same dialogs.
+
+Both paths go through the full dialog — there is **no quick-add bypass** that skips user input.
+
+### 3.1.2 Default Start Position (`computeAddDefaults`)
+
+The default start for a new component is the **furthest FWD end** among sacred components only:
+- All tapers
+- All liners
+- Threads with `excludeFromOAL = false`
+
+Bodies are fillers and are **excluded** from this calculation. Excluded threads sit outside the shaft envelope and are **excluded**. This ensures new components always default to the next logical open slot in the shaft, not past the end.
+
+### 3.1.3 Auto-Selection After Add
+
+When any `add*At` function completes in the ViewModel, `selectedComponentId` is set to the newly added component's ID. The carousel auto-scrolls to and highlights the new component.
+
 ### 3.2 Taper Dialog
 Real-time fields:
 - length

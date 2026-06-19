@@ -764,8 +764,18 @@ fun ShaftScreen(
 
                     InlineAddChooserDialog(
                         onDismiss = { chooserOpen = false },
-                        onAddBody = { chooserOpen = false; onAddBody(d.startMm, sessionAddDefaults.bodyLenMm, sessionAddDefaults.bodyDiaMm) },
-                        onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, sessionAddDefaults.linerLenMm, sessionAddDefaults.linerOdMm, LinerAuthoredReference.AFT) },
+                        onAddBody = {
+                            chooserOpen = false
+                            tapAddStartMm = d.startMm
+                            tapAddGapMm = sessionAddDefaults.bodyLenMm
+                            tapAddBodyOpen = true
+                        },
+                        onAddLiner = {
+                            chooserOpen = false
+                            tapAddStartMm = d.startMm
+                            tapAddGapMm = sessionAddDefaults.linerLenMm
+                            tapAddLinerOpen = true
+                        },
                         onAddThread = {
                             chooserOpen = false
                             addThreadStartMm = d.startMm
@@ -773,13 +783,9 @@ fun ShaftScreen(
                         },
                         onAddTaper = {
                             chooserOpen = false
-                            onAddTaper(
-                                d.startMm,
-                                sessionAddDefaults.taperLenMm,
-                                sessionAddDefaults.taperSetDiaMm,
-                                sessionAddDefaults.taperLetDiaMm,
-                                ""
-                            )
+                            tapAddStartMm = d.startMm
+                            tapAddGapMm = sessionAddDefaults.taperLenMm
+                            tapAddTaperOpen = true
                         }
                     )
                 }
@@ -1333,16 +1339,16 @@ internal fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) 25.4f / tpi else 0f
 /** Defaults for new components (mm). */
 private data class AddDefaults(val startMm: Float, val lastDiaMm: Float)
 private fun computeAddDefaults(spec: ShaftSpec): AddDefaults {
+    // Bodies are fillers; excluded threads sit outside the shaft envelope.
+    // Only sacred components (tapers, non-excluded threads, liners) drive the default start position.
     var end = 0f
-    spec.bodies.forEach  { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
     spec.tapers.forEach  { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.threads.forEach { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
+    spec.threads.filter { !it.excludeFromOAL }.forEach { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
     spec.liners.forEach  { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
 
     var dia = 50f
-    spec.bodies.firstOrNull  { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.diaMm }
     spec.liners.firstOrNull  { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.odMm }
-    spec.threads.firstOrNull { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.majorDiaMm }
+    spec.threads.filter { !it.excludeFromOAL }.firstOrNull { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.majorDiaMm }
     spec.tapers.firstOrNull  { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.endDiaMm }
     if (dia == 50f && spec.bodies.isNotEmpty()) dia = spec.bodies.first().diaMm
 

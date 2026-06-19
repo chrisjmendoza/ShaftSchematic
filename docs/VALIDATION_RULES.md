@@ -197,14 +197,28 @@ Non-blocking warnings:
 
 Overlaps **never** block validation.
 
-Allowed with warnings:
+### 5.1 Body Overlaps — Not Checked
+
+Bodies are **fillers**: they describe shaft material between sacred components (tapers, threads, liners). Bodies always overlap the components around them by design and are excluded from all collision detection.
+
+Not checked (silently allowed):
 - Body ↔ Taper
 - Body ↔ Liner
-- Body ↔ Threads
-- Taper ↔ Thread  
-- Thread ↔ Liner (rare but permissible)
+- Body ↔ Thread
 
-Reasoning: marine machining workflows often use stacked geometry, nested regions, or overlapping descriptive elements.
+### 5.2 Sacred-Component Overlaps — Warning Shown
+
+The following pairs are checked by `collidingIds()`. A non-blocking warning ("Overlaps another component") is shown in the carousel card when detected:
+- Taper ↔ Taper
+- Taper ↔ Thread (non-excluded only)
+- Taper ↔ Liner
+- Thread ↔ Thread (non-excluded only)
+- Thread ↔ Liner
+- Liner ↔ Liner
+
+Excluded threads (`excludeFromOAL = true`) are skipped in all collision checks — they sit outside the shaft envelope and their position is always derived.
+
+Reasoning: marine machining workflows often use stacked geometry and nested regions; overlaps are flagged as warnings only, never blocking.
 
 ---
 
