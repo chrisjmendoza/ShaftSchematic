@@ -8,13 +8,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -207,8 +210,8 @@ fun AddLinerDialog(
                 ) {
                     Text("Measure From:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    FilterChip(selected = !isFwd, onClick = { isFwd = false }, label = { Text("AFT") })
-                    FilterChip(selected = isFwd,  onClick = { isFwd = true  }, label = { Text("FWD") })
+                    DirectionChip("AFT", selected = !isFwd) { isFwd = false }
+                    DirectionChip("FWD", selected =  isFwd) { isFwd = true  }
                 }
                 CommitNumField(
                     label = "Start from ${if (isFwd) "FWD" else "AFT"} (${abbr(unit)})",
@@ -418,8 +421,8 @@ fun AddTaperDialog(
                 ) {
                     Text("Direction:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    FilterChip(selected = !isFwd, onClick = { isFwd = false }, label = { Text("AFT") })
-                    FilterChip(selected = isFwd,  onClick = { isFwd = true  }, label = { Text("FWD") })
+                    DirectionChip("AFT", selected = !isFwd) { isFwd = false }
+                    DirectionChip("FWD", selected =  isFwd) { isFwd = true  }
                 }
                 CommitNumField(
                     "Start from ${if (isFwd) "FWD" else "AFT"} (${abbr(unit)})",
@@ -458,6 +461,28 @@ fun AddTaperDialog(
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Direction toggle chip (AFT / FWD)
+ * Selected = 2dp primary border + tinted fill. Unselected = no border.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+@Composable
+private fun DirectionChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                 else BorderStroke(0.dp, Color.Transparent),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+                             else MaterialTheme.colorScheme.surface,
+            contentColor   = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                             else MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+    }
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
