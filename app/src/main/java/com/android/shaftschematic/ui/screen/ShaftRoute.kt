@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
@@ -189,7 +190,7 @@ fun ShaftRoute(
         onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
         onAddTaper  = { s, l, sd, ed, rate -> vm.addTaperAt(s, l, sd, ed, rate) },
         onAddThread = { s, l, maj, p, ex -> vm.addThreadAt(s, l, maj, p, ex) },
-        onAddLiner  = { s, l, od     -> vm.addLinerAt(s, l, od) },
+        onAddLiner  = { s, l, od, ref -> vm.addLinerAt(s, l, od, ref) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },

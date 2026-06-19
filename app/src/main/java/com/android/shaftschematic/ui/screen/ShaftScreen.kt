@@ -224,7 +224,7 @@ fun ShaftScreen(
     onAddBody: (Float, Float, Float) -> Unit,
     onAddTaper: (Float, Float, Float, Float, String) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean) -> Unit,
-    onAddLiner: (Float, Float, Float) -> Unit,
+    onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
 
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
@@ -765,7 +765,7 @@ fun ShaftScreen(
                     InlineAddChooserDialog(
                         onDismiss = { chooserOpen = false },
                         onAddBody = { chooserOpen = false; onAddBody(d.startMm, sessionAddDefaults.bodyLenMm, sessionAddDefaults.bodyDiaMm) },
-                        onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, sessionAddDefaults.linerLenMm, sessionAddDefaults.linerOdMm) },
+                        onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, sessionAddDefaults.linerLenMm, sessionAddDefaults.linerOdMm, LinerAuthoredReference.AFT) },
                         onAddThread = {
                             chooserOpen = false
                             addThreadStartMm = d.startMm
@@ -788,6 +788,7 @@ fun ShaftScreen(
                     AddThreadDialog(
                         unit = unit,
                         spec = spec,
+                        overallIsManual = overallIsManual,
                         initialStartMm = addThreadStartMm,
                         initialLengthMm = sessionAddDefaults.threadLenMm,
                         initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
@@ -859,11 +860,12 @@ fun ShaftScreen(
                     AddLinerDialog(
                         unit = unit,
                         spec = spec,
+                        overallIsManual = overallIsManual,
                         initialStartMm = tapAddStartMm,
                         initialLengthMm = tapAddGapMm,
-                        onSubmit = { s, l, od ->
+                        onSubmit = { s, l, od, ref ->
                             tapAddLinerOpen = false
-                            onAddLiner(s, l, od)
+                            onAddLiner(s, l, od, ref)
                         },
                         onCancel = { tapAddLinerOpen = false }
                     )
@@ -873,6 +875,7 @@ fun ShaftScreen(
                     AddTaperDialog(
                         unit = unit,
                         spec = spec,
+                        overallIsManual = overallIsManual,
                         initialStartMm = tapAddStartMm,
                         initialLengthMm = tapAddGapMm,
                         onSubmit = { s, l, setDia, letDia, rate ->

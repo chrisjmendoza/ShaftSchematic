@@ -1519,7 +1519,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Liners
-    fun addLinerAt(startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
+    fun addLinerAt(
+        startMm: Float,
+        lengthMm: Float,
+        odMm: Float,
+        reference: LinerAuthoredReference = LinerAuthoredReference.AFT,
+    ) = _spec.update { s ->
         val id = newId()
         orderAdd(ComponentKind.LINER, id)
         val len = max(0f, lengthMm)
@@ -1530,7 +1535,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             lengthMm = len,
             odMm = od,
             endMmPhysical = startMm + len,
-            authoredReference = LinerAuthoredReference.AFT
+            authoredReference = reference
         )
         s.copy(liners = listOf(liner) + s.liners)
     }.also {

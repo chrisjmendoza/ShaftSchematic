@@ -162,14 +162,15 @@ internal fun ComponentCarouselPager(
     var pagerScrollStartedByUser by remember { mutableStateOf(false) }
     var pagerStartPage           by remember { mutableStateOf<Int?>(null) }
 
-    // Auto-jump to newest card after insertion; seed selection on initial load.
+    // Seed selection and scroll on initial load only (nothing selected yet).
+    // When components are added to an already-populated carousel we don't auto-jump —
+    // the selection-following effect below handles repositioning without the fighting
+    // scrollToPage / animateScrollToPage conflict that caused visible jumping.
     LaunchedEffect(rowsSorted.size) {
-        if (rowsSorted.isNotEmpty()) {
+        if (rowsSorted.isNotEmpty() && selectedComponentId == null) {
             val newPage = rowsSorted.size - 1
             pagerState.scrollToPage(newPage)
-            if (selectedComponentId == null) {
-                onSelectComponentById(rowsSorted.getOrNull(newPage)?.component?.id)
-            }
+            onSelectComponentById(rowsSorted.getOrNull(newPage)?.component?.id)
         }
     }
 

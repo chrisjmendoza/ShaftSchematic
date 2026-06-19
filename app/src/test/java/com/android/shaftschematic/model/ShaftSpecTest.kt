@@ -193,10 +193,48 @@ class ShaftSpecTest {
                 Threads(pitchMm = 0f, tpi = 8f)
             )
         )
-        
+
         val normalized = spec.normalized()
-        
+
         assertEquals(10f, normalized.threads[0].tpi ?: 0f, 0.01f)
         assertEquals(3.175f, normalized.threads[1].pitchMm, 0.001f) // 25.4 / 8
+    }
+
+    // ── syncExcludedThreadPositions ──────────────────────────────────────────
+
+    @Test
+    fun `syncExcludedThreadPositions places AFT excluded thread at negative start`() {
+        val thread = Threads(startFromAftMm = 0f, lengthMm = 100f, majorDiaMm = 60f, pitchMm = 2f,
+                             excludeFromOAL = true, isAftEnd = true)
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(thread))
+        val synced = spec.syncExcludedThreadPositions()
+        assertEquals(-100f, synced.threads[0].startFromAftMm, 0.001f)
+    }
+
+    @Test
+    fun `syncExcludedThreadPositions places FWD excluded thread at OAL`() {
+        val thread = Threads(startFromAftMm = 0f, lengthMm = 75f, majorDiaMm = 60f, pitchMm = 2f,
+                             excludeFromOAL = true, isAftEnd = false)
+        val spec = ShaftSpec(overallLengthMm = 800f, threads = listOf(thread))
+        val synced = spec.syncExcludedThreadPositions()
+        assertEquals(800f, synced.threads[0].startFromAftMm, 0.001f)
+    }
+
+    @Test
+    fun `syncExcludedThreadPositions does not move included threads`() {
+        val thread = Threads(startFromAftMm = 200f, lengthMm = 100f, majorDiaMm = 60f, pitchMm = 2f,
+                             excludeFromOAL = false)
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(thread))
+        val synced = spec.syncExcludedThreadPositions()
+        assertEquals(200f, synced.threads[0].startFromAftMm, 0.001f)
+    }
+
+    @Test
+    fun `syncExcludedThreadPositions returns same instance when already in place`() {
+        val thread = Threads(startFromAftMm = -100f, lengthMm = 100f, majorDiaMm = 60f, pitchMm = 2f,
+                             excludeFromOAL = true, isAftEnd = true)
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(thread))
+        val synced = spec.syncExcludedThreadPositions()
+        assertSame(spec, synced)
     }
 }

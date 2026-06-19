@@ -86,9 +86,18 @@ object ShaftLayout {
         val cW = max(1f, cR - cL)
         val cH = max(1f, cB - cT)
 
-        // Axial span (mm) — left=0, right=overall
-        val minXMm = 0f
-        val maxXMm = max(1f, spec.overallLengthMm)
+        // Axial span (mm).
+        // Excluded threads render outside 0..OAL (AFT threads have negative startFromAftMm,
+        // FWD threads start at OAL).  Expand the window to include them so they are visible
+        // in both the preview and the PDF without clipping.
+        val excludedAftMin = spec.threads
+            .filter { it.excludeFromOAL && it.isAftEnd }
+            .minOfOrNull { it.startFromAftMm } ?: 0f
+        val excludedFwdMax = spec.threads
+            .filter { it.excludeFromOAL && !it.isAftEnd }
+            .maxOfOrNull { it.startFromAftMm + it.lengthMm } ?: spec.overallLengthMm
+        val minXMm = min(0f, excludedAftMin)
+        val maxXMm = max(max(1f, spec.overallLengthMm), excludedFwdMax)
         val axialSpanMm = maxXMm - minXMm
 
         // Radial span (mm) — use max diameter across all components (and at least a small minimum)

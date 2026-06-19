@@ -20,9 +20,11 @@ This table categorizes every validation rule by:
 
 | Condition | Applies To | Severity | Behavior |
 |----------|------------|----------|----------|
-| startFromAft < 0 | All components | Blocking | Reject update |
+| startFromAft < 0 | All except excluded threads | Blocking | Reject update |
+| startFromAft < 0 (excluded thread) | Threads with excludeFromOAL=true | Allowed | AFT end sits at −lengthMm |
+| endFromAftMm > overallLengthMm (excluded thread) | Threads with excludeFromOAL=true | Allowed | FWD end sits at OAL |
 | lengthMm < 0 | All | Blocking | Reject |
-| endFromAftMm > overallLengthMm | All | Blocking | Reject |
+| endFromAftMm > overallLengthMm | All except excluded threads | Blocking | Reject |
 | Negative diameters | Body/Taper/Threads/Liner | Blocking | Reject |
 | Zero-length component | All | Warning | Allow |
 | Missing taper SET+LET+taperRate | Taper | Blocking | Reject |
@@ -122,7 +124,9 @@ Reject if conversion invalid.
 
 # 4. Overlap Logic (Fast Rules)
 
-Overlaps **never** block.
+Overlaps **never block**; some surface a pre-submit warning at add-time.
+
+## 4.1 Edit-time (existing components)
 
 | Overlap Case | Valid? | Severity |
 |---------------|--------|----------|
@@ -132,9 +136,20 @@ Overlaps **never** block.
 | Taper ↔ Threads | Yes | Warning |
 | Threads ↔ Liner | Yes | Warning |
 
-Reason: machinists often overlay descriptive geometry.
+Reason: machinists often overlay descriptive geometry. Renderer draws in a fixed order; overlaps are visual, not structural errors.
 
-Renderer draws components in a fixed order; overlaps are visual, not structural errors.
+## 4.2 Add-time (new component pre-submit — `collectAddWarnings`)
+
+When the user taps **Add** in any add dialog (Taper, Liner, Thread), `collectAddWarnings()` runs before the component is committed. If collisions or bounds violations are found, a confirmation dialog is shown ("Add Anyway?" / "Cancel"). The add is never silently blocked.
+
+| Check | Condition | Applies When |
+|-------|-----------|--------------|
+| Bounds | `start < 0` or `end > OAL` | OAL is manual (not auto) |
+| Taper collision | Overlaps any existing Taper | Always |
+| Thread collision | Overlaps any existing non-excluded Thread | Always |
+| Liner collision | Overlaps any existing Liner | Always |
+| Body collision | — | **Never** (bodies auto-split) |
+| Excluded thread | — | **Skipped** (lives outside shaft span by design) |
 
 ---
 
