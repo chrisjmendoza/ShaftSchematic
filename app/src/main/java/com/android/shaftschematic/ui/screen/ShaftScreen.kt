@@ -222,7 +222,7 @@ fun ShaftScreen(
 
     // Adds (all mm)
     onAddBody: (Float, Float, Float) -> Unit,
-    onAddTaper: (Float, Float, Float, Float, String) -> Unit,
+    onAddTaper: (Float, Float, Float, Float, String, Float, Float, Float, Float, Boolean) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean) -> Unit,
     onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
 
@@ -884,9 +884,9 @@ fun ShaftScreen(
                         overallIsManual = overallIsManual,
                         initialStartMm = tapAddStartMm,
                         initialLengthMm = tapAddGapMm,
-                        onSubmit = { s, l, setDia, letDia, rate ->
+                        onSubmit = { s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned ->
                             tapAddTaperOpen = false
-                            onAddTaper(s, l, setDia, letDia, rate)
+                            onAddTaper(s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned)
                         },
                         onCancel = { tapAddTaperOpen = false }
                     )

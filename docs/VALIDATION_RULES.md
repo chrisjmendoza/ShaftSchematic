@@ -197,14 +197,15 @@ Non-blocking warnings:
 
 Overlaps **never** block validation.
 
-### 5.1 Body Overlaps — Not Checked
+### 5.1 Body Overlaps — Not Stored, Not Checked
 
-Bodies are **fillers**: they describe shaft material between sacred components (tapers, threads, liners). Bodies always overlap the components around them by design and are excluded from all collision detection.
+Bodies **never overlap sacred components in the stored spec**. When a sacred component is placed the engine automatically splits any overlapping body into fragments on either side (see DATA_MODEL.md §Component Priority). When a sacred component is deleted adjacent body fragments merge back.
 
-Not checked (silently allowed):
+Because the split/merge is handled proactively at add/delete time, the following pairs are never in an overlapping state in the spec at rest and are excluded from all collision detection:
+
 - Body ↔ Taper
 - Body ↔ Liner
-- Body ↔ Thread
+- Body ↔ Thread (in-shaft only; excluded threads live outside the envelope)
 
 ### 5.2 Sacred-Component Overlaps — Warning Shown
 
@@ -226,8 +227,10 @@ Reasoning: marine machining workflows often use stacked geometry and nested regi
 
 Before exporting:
 1. ViewModel runs full validation.
-2. If **any blocking error** exists → cancel export.
+2. If **any blocking error** exists → cancel export, show dialog with reason.
 3. If only warnings remain → export continues.
+
+`blockingExportError()` in `PdfExportRoute` checks component positions for out-of-bounds starts. **Excluded threads** (`excludeFromOAL = true`) are skipped in this check — they have negative or OAL+ `startFromAftMm` by design and are not part of the shaft envelope.
 
 PDF export does not interpret warnings; UI handles presentation.
 

@@ -190,7 +190,8 @@ fun PdfExportRoute(
 }
 
 internal fun blockingExportError(spec: ShaftSpec): String? {
-    spec.threads.forEach { th ->
+    // Excluded threads sit outside the shaft envelope (negative or OAL+ start); skip them.
+    spec.threads.filter { !it.excludeFromOAL }.forEach { th ->
         startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)
             ?.let { return it }
     }

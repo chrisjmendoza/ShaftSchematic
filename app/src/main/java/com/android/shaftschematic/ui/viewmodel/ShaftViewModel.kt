@@ -1185,15 +1185,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         startDiaMm: Float,
         endDiaMm: Float,
         rateText: String = "",
+        keywayWidthMm: Float = 0f,
+        keywayDepthMm: Float = 0f,
+        keywayLengthMm: Float = 0f,
+        keywayOffsetFromSetMm: Float = 0f,
+        keywaySpooned: Boolean = false,
     ) {
         val id = newId()
         _spec.update { s ->
+            val split = s.splitBodiesAround(startMm, startMm + lengthMm) { newId() }
+            split.removedIds.forEach { orderRemove(it) }
+            split.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+
             orderAdd(ComponentKind.TAPER, id)
             val (resolvedSet, resolvedLet) = deriveTaperDiameters(
                 setMm = startDiaMm, letMm = endDiaMm,
                 lengthMm = lengthMm, rateText = rateText
             )
-            s.copy(
+            split.spec.copy(
                 tapers = listOf(
                     Taper(
                         id = id,
@@ -1201,13 +1210,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         lengthMm = max(0f, lengthMm),
                         startDiaMm = max(0f, resolvedSet),
                         endDiaMm = max(0f, resolvedLet),
-                        keywayWidthMm = 0f,
-                        keywayDepthMm = 0f,
-                        keywayLengthMm = 0f,
-                        keywaySpooned = false,
+                        keywayWidthMm = max(0f, keywayWidthMm),
+                        keywayDepthMm = max(0f, keywayDepthMm),
+                        keywayLengthMm = max(0f, keywayLengthMm),
+                        keywayOffsetFromSetMm = max(0f, keywayOffsetFromSetMm),
+                        keywaySpooned = keywaySpooned,
                         taperRateText = rateText,
                     )
-                ) + s.tapers
+                ) + split.spec.tapers
             )
         }
         rememberTaperDefaults(lengthMm = lengthMm, setDiaMm = startDiaMm, letDiaMm = endDiaMm)
@@ -1324,9 +1334,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 beforeOrder = orderBefore
             )
 
-            s.copy(
-                tapers = s.tapers.toMutableList().apply { removeAt(idx) }
-            )
+            val afterRemoval = s.copy(tapers = s.tapers.toMutableList().apply { removeAt(idx) })
+            val merge = afterRemoval.mergeBodiesAround(taper.startFromAftMm, taper.startFromAftMm + taper.lengthMm) { newId() }
+            merge.removedIds.forEach { orderRemove(it) }
+            merge.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+            merge.spec
         }
 
         deleted?.let { snapshot ->
@@ -1376,8 +1388,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         val id = newId()
         _spec.update { s ->
+            // Excluded threads live outside the shaft envelope; they don't split in-shaft bodies.
+            val split = if (!excludeFromOAL) s.splitBodiesAround(startMm, startMm + lengthMm) { newId() }
+                        else BodySplitResult(s, emptyList(), emptyList())
+            split.removedIds.forEach { orderRemove(it) }
+            split.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+
             orderAdd(ComponentKind.THREAD, id)
-            s.copy(
+            split.spec.copy(
                 threads = listOf(
                     Threads(
                         id = id,
@@ -1387,7 +1405,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         lengthMm = max(0f, lengthMm),
                         excludeFromOAL = excludeFromOAL
                     )
-                ) + s.threads
+                ) + split.spec.threads
             )
         }
         rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
@@ -1492,9 +1510,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 beforeOrder = orderBefore
             )
 
-            s.copy(
-                threads = s.threads.toMutableList().apply { removeAt(idx) }
-            )
+            val afterRemoval = s.copy(threads = s.threads.toMutableList().apply { removeAt(idx) })
+            // Only merge bodies around in-shaft threads; excluded threads live outside the envelope.
+            val merge = if (!thread.excludeFromOAL)
+                afterRemoval.mergeBodiesAround(thread.startFromAftMm, thread.startFromAftMm + thread.lengthMm) { newId() }
+            else BodySplitResult(afterRemoval, emptyList(), emptyList())
+            merge.removedIds.forEach { orderRemove(it) }
+            merge.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+            merge.spec
         }
 
         deleted?.let { snapshot ->
@@ -1533,8 +1556,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         val id = newId()
         _spec.update { s ->
-            orderAdd(ComponentKind.LINER, id)
             val len = max(0f, lengthMm)
+            val split = s.splitBodiesAround(startMm, startMm + len) { newId() }
+            split.removedIds.forEach { orderRemove(it) }
+            split.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+
+            orderAdd(ComponentKind.LINER, id)
             val od = max(0f, odMm)
             val liner = Liner(
                 id = id,
@@ -1544,7 +1571,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 endMmPhysical = startMm + len,
                 authoredReference = reference
             )
-            s.copy(liners = listOf(liner) + s.liners)
+            split.spec.copy(liners = listOf(liner) + split.spec.liners)
         }
         rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
         ensureOverall()
@@ -1641,9 +1668,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 beforeOrder = orderBefore
             )
 
-            s.copy(
-                liners = s.liners.toMutableList().apply { removeAt(idx) }
-            )
+            val afterRemoval = s.copy(liners = s.liners.toMutableList().apply { removeAt(idx) })
+            val merge = afterRemoval.mergeBodiesAround(liner.startFromAftMm, liner.startFromAftMm + liner.lengthMm) { newId() }
+            merge.removedIds.forEach { orderRemove(it) }
+            merge.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+            merge.spec
         }
 
         deleted?.let { snapshot ->

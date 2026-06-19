@@ -9,16 +9,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -352,7 +357,9 @@ fun AddTaperDialog(
     overallIsManual: Boolean = false,
     initialStartMm: Float? = null,
     initialLengthMm: Float? = null,
-    onSubmit: (startMm: Float, lengthMm: Float, setDiaMm: Float, letDiaMm: Float, rateText: String) -> Unit,
+    onSubmit: (startMm: Float, lengthMm: Float, setDiaMm: Float, letDiaMm: Float, rateText: String,
+               keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
+               keywayOffsetFromSetMm: Float, keywaySpooned: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -367,10 +374,17 @@ fun AddTaperDialog(
     var startAft by remember(unit, defaultAftStartMm) { mutableStateOf(toDisplayString(defaultAftStartMm, unit)) }
     var startFwd by remember(unit) { mutableStateOf("0") }
 
-    var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
-    var setText by remember(unit, d.lastDiaMm) { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
-    var letText by remember(unit) { mutableStateOf("") } // allow deriving via rate
-    var rateText by remember { mutableStateOf("1:12") }  // legacy default; bare "1" means 1:12
+    var length  by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
+    var setText by remember(unit, d.lastDiaMm)       { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
+    var letText by remember(unit) { mutableStateOf("") }  // allow deriving via rate
+    var rateText by remember { mutableStateOf("1:12") }   // legacy default; bare "1" means 1:12
+
+    // Keyway — all optional (blank = 0)
+    var kwWidth   by remember { mutableStateOf("") }
+    var kwDepth   by remember { mutableStateOf("") }
+    var kwLength  by remember { mutableStateOf("") }
+    var kwOffset  by remember { mutableStateOf("") }
+    var kwSpooned by remember { mutableStateOf(false) }
 
     val startEntered = toMmOrNull(if (isFwd) startFwd else startAft, unit) ?: -1f
     val lengthMm = toMmOrNull(length, unit) ?: -1f
@@ -408,11 +422,16 @@ fun AddTaperDialog(
         )
     }
 
+    val keywayOffsetMm = toMmOrNull(kwOffset, unit) ?: 0f
+    val isFloating = keywayOffsetMm > 0f
+
+    val scroll = rememberScrollState()
+
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Add Taper") },
         text = {
-            Column(Modifier.padding(top = 4.dp)) {
+            Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
                 // Direction selector
                 Row(
                     Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -440,6 +459,39 @@ fun AddTaperDialog(
                 CommitNumField("L.E.T. Ø (${abbr(unit)})", letText) { letText = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Taper Rate (1:12, 3/4, 1)", rateText) { rateText = it }
+                Spacer(Modifier.height(12.dp))
+                Text("Keyway (optional)", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(4.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    CommitNumField("KW W (${abbr(unit)})", kwWidth,
+                        modifier = Modifier.weight(1f)) { kwWidth = it }
+                    Text("×", style = MaterialTheme.typography.titleMedium)
+                    CommitNumField("KW D (${abbr(unit)})", kwDepth,
+                        modifier = Modifier.weight(1f)) { kwDepth = it }
+                }
+                Spacer(Modifier.height(8.dp))
+                CommitNumField("KW L (${abbr(unit)})", kwLength) { kwLength = it }
+                Spacer(Modifier.height(8.dp))
+                CommitNumField("KW Offset from SET (${abbr(unit)})", kwOffset) { kwOffset = it }
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        if (isFloating) "Keyway spooned (N/A — floating)" else "Keyway spooned",
+                        modifier = Modifier.weight(1f),
+                        color = if (isFloating) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = kwSpooned && !isFloating,
+                        enabled = !isFloating,
+                        onCheckedChange = { if (!isFloating) kwSpooned = it }
+                    )
+                }
             }
         },
         confirmButton = {
@@ -453,7 +505,14 @@ fun AddTaperDialog(
                                   else        (if (setMm > 0f) setMm else -1f)
                     val endDia   = if (isFwd) (if (setMm > 0f) setMm else -1f)
                                   else        (if (letMm > 0f) letMm else -1f)
-                    val action = { onSubmit(physStartMm, lengthMm, startDia, endDia, rateText) }
+                    val kwW = toMmOrNull(kwWidth,  unit) ?: 0f
+                    val kwD = toMmOrNull(kwDepth,  unit) ?: 0f
+                    val kwL = toMmOrNull(kwLength, unit) ?: 0f
+                    val kwO = toMmOrNull(kwOffset, unit) ?: 0f
+                    val action = {
+                        onSubmit(physStartMm, lengthMm, startDia, endDia, rateText,
+                                 kwW, kwD, kwL, kwO, kwSpooned && !isFloating)
+                    }
                     val warnings = collectAddWarnings(spec, physStartMm, lengthMm, overallIsManual)
                     if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
                 }
@@ -494,12 +553,22 @@ private fun CommitNumField(
     label: String,
     initial: String,
     errorText: String? = null,
+    modifier: Modifier = Modifier,
     onCommit: (String) -> Unit
 ) {
-    var text by remember(initial) { mutableStateOf(initial) }
+    // text is the live value; initial only resets it when the parent externally
+    // changes it (e.g., unit toggle). Using LaunchedEffect instead of remember(initial)
+    // avoids a cursor-to-end jump on every keystroke echo-back.
+    var text by remember { mutableStateOf(initial) }
+    LaunchedEffect(initial) {
+        if (text != initial) text = initial
+    }
     OutlinedTextField(
         value = text,
-        onValueChange = { text = it },
+        onValueChange = { newText ->
+            text = newText
+            onCommit(newText)   // commit on every keystroke so Add always has the current value
+        },
         label = { Text(label) },
         singleLine = true,
         isError = errorText != null,
@@ -508,7 +577,7 @@ private fun CommitNumField(
         } else null,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { f -> if (!f.isFocused) onCommit(text) }
     )
