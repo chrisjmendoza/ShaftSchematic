@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-06-19
 
+### fix: updating a component no longer repositions other components
+
+`updateBody`, `updateTaper`, `updateLiner`, and `updateThread` were calling `snapForwardFrom()` whenever the updated component's start or length changed, silently cascading position changes to every downstream component in the chain. This violated the fundamental invariant that component inputs are user-authored and must not be mutated by anything other than an explicit user action on that component.
+
+The auto-snap block, `_autoSnap` state, and `setAutoSnap()` have been removed from all update paths. `snapChainFrom()` / `snapChainFromId()` remain as explicitly-invoked operations.
+
+**`ui/viewmodel/ShaftViewModel.kt`** — removed `snapForwardFrom` cascade and `_autoSnap` flag from all four `updateX()` functions.  
+**`test/ui/viewmodel/ShaftViewModelUpdateTest.kt`** — 9 new tests covering liner, body, taper, thread, and mixed-spec update isolation.
+
+---
+
 ### fix: PDF dimension unit suffix changed from " in" to `"`
 
 All inch-unit dimension labels now use the standard `"` suffix instead of ` in` (e.g., `4.997"` not `4.997 in`). Applies to diameters, lengths, and OAL labels across the shaft, runout, and wear PDF composers.

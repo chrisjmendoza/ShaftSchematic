@@ -298,10 +298,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _unlockedAchievementIds = MutableStateFlow<Set<String>>(emptySet())
     val unlockedAchievementIds: StateFlow<Set<String>> = _unlockedAchievementIds.asStateFlow()
 
-    // Auto-snap keeps components end-to-end in physical order when geometry changes.
-    private val _autoSnap = MutableStateFlow(true)
-    val autoSnap: StateFlow<Boolean> = _autoSnap.asStateFlow()
-
     private val _customer = MutableStateFlow("")
     val customer: StateFlow<String> = _customer.asStateFlow()
 
@@ -1006,12 +1002,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         unlockAchievement(definition.id)
     }
 
-    /** Enables or disables auto-snapping of components after edits/deletes. */
-    fun setAutoSnap(enabled: Boolean) {
-        _autoSnap.value = enabled
-        // Persistence can be wired into SettingsStore later if desired.
-    }
-
     /** Explicitly snap forward from the given anchor key, end-to-end along the chain. */
     fun snapChainFrom(anchor: ComponentKey) {
         _spec.update { base -> base.snapForwardFrom(anchor) }
@@ -1080,23 +1070,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
         if (index !in s.bodies.indices) s else {
             val old = s.bodies[index]
-            val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
-
-            val updatedBodies = s.bodies.toMutableList().also { list ->
-                list[index] = old.copy(
-                    startFromAftMm = startMm,
-                    lengthMm = max(0f, lengthMm),
-                    diaMm = max(0f, diaMm)
-                )
-            }
-
-            val base = s.copy(bodies = updatedBodies)
-
-            if (_autoSnap.value && startChanged) {
-                base.snapForwardFrom(ComponentKey(old.id, ComponentKind.BODY))
-            } else {
-                base
-            }
+            s.copy(
+                bodies = s.bodies.toMutableList().also { list ->
+                    list[index] = old.copy(
+                        startFromAftMm = startMm,
+                        lengthMm = max(0f, lengthMm),
+                        diaMm = max(0f, diaMm)
+                    )
+                }
+            )
         }
     }.also {
         if (index in _spec.value.bodies.indices) {
@@ -1219,7 +1201,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     ) = _spec.update { s ->
         if (index !in s.tapers.indices) s else {
             val old = s.tapers[index]
-            val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
             val effectiveRate = rateText.ifBlank { old.taperRateText }
 
             val (resolvedSet, resolvedLet) = deriveTaperDiameters(
@@ -1227,27 +1208,21 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 lengthMm = lengthMm, rateText = effectiveRate
             )
 
-            val updatedTapers = s.tapers.toMutableList().also { list ->
-                list[index] = old.copy(
-                    startFromAftMm = startMm,
-                    lengthMm = max(0f, lengthMm),
-                    startDiaMm = max(0f, resolvedSet),
-                    endDiaMm = max(0f, resolvedLet),
-                    keywayWidthMm = old.keywayWidthMm,
-                    keywayDepthMm = old.keywayDepthMm,
-                    keywayLengthMm = old.keywayLengthMm,
-                    keywaySpooned = old.keywaySpooned,
-                    taperRateText = rateText.ifBlank { old.taperRateText },
-                )
-            }
-
-            val base = s.copy(tapers = updatedTapers)
-
-            if (_autoSnap.value && startChanged) {
-                base.snapForwardFrom(ComponentKey(old.id, ComponentKind.TAPER))
-            } else {
-                base
-            }
+            s.copy(
+                tapers = s.tapers.toMutableList().also { list ->
+                    list[index] = old.copy(
+                        startFromAftMm = startMm,
+                        lengthMm = max(0f, lengthMm),
+                        startDiaMm = max(0f, resolvedSet),
+                        endDiaMm = max(0f, resolvedLet),
+                        keywayWidthMm = old.keywayWidthMm,
+                        keywayDepthMm = old.keywayDepthMm,
+                        keywayLengthMm = old.keywayLengthMm,
+                        keywaySpooned = old.keywaySpooned,
+                        taperRateText = rateText.ifBlank { old.taperRateText },
+                    )
+                }
+            )
         }
     }.also {
         if (index in _spec.value.tapers.indices) {
@@ -1405,24 +1380,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 if (old.isAftEnd) -newLength else s.overallLengthMm
             } else startMm
 
-            val startChanged = old.startFromAftMm != effectiveStart || old.lengthMm != newLength
-
-            val updatedThreads = s.threads.toMutableList().also { l ->
-                l[index] = old.copy(
-                    startFromAftMm = effectiveStart,
-                    lengthMm = newLength,
-                    majorDiaMm = max(0f, majorDiaMm),
-                    pitchMm = max(0f, pitchMm)
-                )
-            }
-
-            val base = s.copy(threads = updatedThreads)
-
-            if (_autoSnap.value && startChanged && !old.excludeFromOAL) {
-                base.snapForwardFrom(ComponentKey(old.id, ComponentKind.THREAD))
-            } else {
-                base
-            }
+            s.copy(
+                threads = s.threads.toMutableList().also { l ->
+                    l[index] = old.copy(
+                        startFromAftMm = effectiveStart,
+                        lengthMm = newLength,
+                        majorDiaMm = max(0f, majorDiaMm),
+                        pitchMm = max(0f, pitchMm)
+                    )
+                }
+            )
         }
     }.also {
         if (index in _spec.value.threads.indices) {
@@ -1545,21 +1512,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
         if (index !in s.liners.indices) s else {
             val old = s.liners[index]
-            val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
             val len = max(0f, lengthMm)
             val od = max(0f, odMm)
-
-            val updatedLiners = s.liners.toMutableList().also { l ->
-                l[index] = old.withPhysical(startMmPhysical = startMm, lengthMm = len, odMm = od)
-            }
-
-            val base = s.copy(liners = updatedLiners)
-
-            if (_autoSnap.value && startChanged) {
-                base.snapForwardFrom(ComponentKey(old.id, ComponentKind.LINER))
-            } else {
-                base
-            }
+            s.copy(
+                liners = s.liners.toMutableList().also { l ->
+                    l[index] = old.withPhysical(startMmPhysical = startMm, lengthMm = len, odMm = od)
+                }
+            )
         }
     }.also {
         if (index in _spec.value.liners.indices) {
@@ -1646,11 +1605,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ────────────────────────────────────────────────────────────────────────────
-    // Axial snapping — keep components end-to-end in physical order
+    // Explicit snap helpers — never called automatically; only on user request
     // ────────────────────────────────────────────────────────────────────────────
-
-    // Snapping logic now lives in the model layer (ShaftSpecExtensions.snapForwardFrom).
-    // ViewModel only decides *when* to snap (autoSnap flag) and which component is the anchor.
 
     private fun newId(): String = UUID.randomUUID().toString()
 

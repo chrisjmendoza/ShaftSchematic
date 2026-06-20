@@ -4,7 +4,7 @@ ShaftViewModel Contract
 Layer: UI → ViewModel  
 Purpose: Owns editable ShaftSpec state, unit selection, grid toggle, and routes all commits from the UI to the model/persistence.
 
-Version: v0.2 (2026-06-18)
+Version: v0.4 (2026-06-19)
 
 Invariants
 - All stored geometry is **canonical millimeters (mm)**.  
@@ -37,6 +37,10 @@ Future Enhancements
 
 Change Log
 ----------
+**v0.4 (2026-06-19)**
+- `updateBody()`, `updateTaper()`, `updateLiner()`, `updateThread()` — removed `snapForwardFrom()` cascade. Editing a component now mutates only that component; other components' positions are completely untouched.
+- Removed `_autoSnap` StateFlow, `autoSnap` property, and `setAutoSnap()`. Snap is now purely explicit via `snapChainFrom()` / `snapChainFromId()`.
+
 **v0.3 (2026-06-19)**
 - `updateTaperAuthoredReference()` added — persists the user's AFT/FWD carousel reference toggle on `Taper.authoredReference`.
 - `updateThread()` — `effectiveStart` for excluded threads now uses `−lengthMm` (AFT) / `overallLengthMm` (FWD) directly inside `_spec.update {}`, matching `syncExcludedThreadPositions()`. Eliminates a transient `0f` position that caused the thread to flash at the shaft face when the carousel committed on blur in manual OAL mode.
