@@ -34,12 +34,14 @@ jobs:
       - name: Upload to Firebase App Distribution
         env:
           FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          RELEASE_NOTES: "Branch: ${{ github.ref_name }} | ${{ github.event.head_commit.message }}"
         run: |
           npm install -g firebase-tools
           echo "$FIREBASE_SA_JSON" > /tmp/sa.json
           GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json firebase appdistribution:distribute \
             app/build/outputs/apk/debug/app-debug.apk \
-            --app "${{ secrets.FIREBASE_APP_ID }}" \
+            --app "$FIREBASE_APP_ID" \
             --testers "chrisjmendoza@gmail.com" \
-            --release-notes "Branch: ${{ github.ref_name }} | ${{ github.event.head_commit.message }}"
+            --release-notes "$RELEASE_NOTES"
           rm /tmp/sa.json
