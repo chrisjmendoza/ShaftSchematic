@@ -5,6 +5,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val gitSha: String = try {
+    providers.exec {
+        commandLine("git", "rev-parse", "--short", "HEAD")
+    }.standardOutput.asText.get().trim()
+} catch (_: Exception) { "unknown" }
+
 android {
     namespace = "com.android.shaftschematic"
     compileSdk = 36
@@ -25,8 +31,9 @@ android {
         applicationId = "com.android.shaftschematic"
         minSdk = 28
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.1"
+        versionCode = 3
+        versionName = "1.2.0"
+        buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -54,6 +61,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     // No composeOptions with Kotlin 2.x
 

@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import kotlin.math.roundToInt
+import com.android.shaftschematic.BuildConfig
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.util.PreviewColorPreset
@@ -274,6 +275,13 @@ fun SettingsRoute(
                     HorizontalDivider()
                     ListItem(
                         headlineContent = { Text("About ShaftSchematic") },
+                        supportingContent = {
+                            Text(
+                                "v${BuildConfig.VERSION_NAME} (${BuildConfig.GIT_SHA})",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable(onClick = onOpenAbout)
