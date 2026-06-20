@@ -8,21 +8,30 @@ import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -33,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -40,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.pdf.composeWearPdf
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import kotlinx.coroutines.Dispatchers
@@ -68,14 +79,19 @@ import java.io.File
 fun WearRoute(
     vm: ShaftViewModel,
     onExportWear: () -> Unit = {},
+    onOpenSidebar: () -> Unit = {},
 ) {
-    val spec          by vm.spec.collectAsState()
-    val unit          by vm.unit.collectAsState()
-    val customer      by vm.customer.collectAsState()
-    val vessel        by vm.vessel.collectAsState()
-    val jobNumber     by vm.jobNumber.collectAsState()
-    val shaftPosition by vm.shaftPosition.collectAsState()
-    val openAfterExport by vm.openPdfAfterExport.collectAsState()
+    val spec               by vm.spec.collectAsState()
+    val unit               by vm.unit.collectAsState()
+    val customer           by vm.customer.collectAsState()
+    val vessel             by vm.vessel.collectAsState()
+    val jobNumber          by vm.jobNumber.collectAsState()
+    val shaftPosition      by vm.shaftPosition.collectAsState()
+    val openAfterExport    by vm.openPdfAfterExport.collectAsState()
+    val lineThicknessScale by vm.lineThicknessScale.collectAsState()
+    val pdfShadedBodies    by vm.pdfShadedBodies.collectAsState()
+    val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
+    val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
 
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
@@ -110,15 +126,20 @@ fun WearRoute(
         }
     }
 
-    LaunchedEffect(showPreview, spec, unit) {
+    LaunchedEffect(showPreview, spec, unit,
+                   lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
+        val prefsSnapshot     = vm.currentPdfPrefs
+        val thicknessSnapshot = lineThicknessScale
         val bmp = withContext(Dispatchers.IO) {
             renderWearBitmap(
                 context = ctx, spec = spec,
                 project = ProjectInfo(customer = customer, vessel = vessel,
                     jobNumber = jobNumber, side = shaftPosition),
                 unit = unit,
+                pdfPrefs = prefsSnapshot,
+                lineThicknessScale = thicknessSnapshot,
             )
         }
         previewBitmap = bmp?.asImageBitmap()
@@ -126,47 +147,73 @@ fun WearRoute(
     }
 
     // ── Main UI ─────────────────────────────────────────────────────────────
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text("Wear / Inspection Record", style = MaterialTheme.typography.headlineSmall)
+    Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
 
-        Text(
-            text = "Prints a blank shaft outline for field use. Mark damage, pitting, and " +
-                "dye-penetrant inspection results directly on the printed form.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        Text(
-            text = "Phase 2 will add digital damage annotation — tap zones, severity rating, " +
-                "and dye-pen pass/fail toggle directly in the app.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        Spacer(Modifier.height(4.dp))
-
-        OutlinedButton(
-            onClick = { showPreview = true },
-            modifier = Modifier.fillMaxWidth(),
+        // ── Toolbar ──────────────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Outlined.Preview, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Preview Wear Document")
+            IconButton(onClick = onOpenSidebar) {
+                Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+            }
+            Text(
+                text = "Wear Document",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(start = 4.dp),
+            )
         }
 
-        Button(
-            onClick = { launcher.launch(buildWearFilename(customer, vessel, jobNumber)) },
-            modifier = Modifier.fillMaxWidth(),
+        HorizontalDivider()
+
+        // ── Scrollable content ────────────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Export Wear Document PDF")
+            Text(
+                text = "Prints a blank shaft outline for field use. Mark damage, pitting, and " +
+                    "dye-penetrant inspection results directly on the printed form.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Text(
+                text = "Phase 2 will add digital damage annotation — tap zones, severity rating, " +
+                    "and dye-pen pass/fail toggle directly in the app.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            OutlinedButton(
+                onClick = { showPreview = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Outlined.Preview, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Preview Wear Document")
+            }
+
+            Button(
+                onClick = { launcher.launch(buildWearFilename(customer, vessel, jobNumber)) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Export Wear Document PDF")
+            }
         }
     }
 
+    BackHandler(enabled = showPreview) { showPreview = false }
     if (showPreview) {
         PdfPreviewOverlay(
             bitmap = previewBitmap,
@@ -176,6 +223,15 @@ fun WearRoute(
             onExport = {
                 showPreview = false
                 launcher.launch(buildWearFilename(customer, vessel, jobNumber))
+            },
+            optionsSheet = {
+                RunoutWearOptionsSheet(
+                    lineThicknessScale = lineThicknessScale,
+                    pdfShadedBodies = pdfShadedBodies,
+                    pdfShadedTapers = pdfShadedTapers,
+                    pdfShadedLiners = pdfShadedLiners,
+                    vm = vm,
+                )
             },
         )
     }
@@ -200,13 +256,16 @@ private fun renderWearBitmap(
     spec: com.android.shaftschematic.model.ShaftSpec,
     project: ProjectInfo,
     unit: com.android.shaftschematic.util.UnitSystem,
+    pdfPrefs: PdfPrefs = PdfPrefs(),
+    lineThicknessScale: Float = 1.0f,
 ): Bitmap? = runCatching {
     val tempFile = File.createTempFile("wear_preview_", ".pdf", context.cacheDir)
     val doc = PdfDocument()
     try {
         val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
         val page = doc.startPage(pageInfo)
-        composeWearPdf(page = page, spec = spec, project = project, unit = unit)
+        composeWearPdf(page = page, spec = spec, project = project, unit = unit,
+            pdfPrefs = pdfPrefs, lineThicknessScale = lineThicknessScale)
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
     } finally {

@@ -62,6 +62,7 @@ fun composeShaftPdf(
     pdfPrefs: PdfPrefs = PdfPrefs(),
     options: PdfExportOptions = PdfExportOptions(),
     resolvedComponents: List<ResolvedComponent>? = null,
+    lineThicknessScale: Float = 1.0f,
 ) {
     val effectiveOptions = when (options.mode) {
         PdfExportMode.Template -> options.copy(
@@ -112,11 +113,12 @@ fun composeShaftPdf(
     val bodyOnly = isBodyOnlyShaft(spec) || bodyOnlyResolved
     val singleTaperOnly = isSingleTaperOnly(spec)
 
+    val scale = lineThicknessScale.coerceIn(0.5f, 2.0f)
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeWidth = OUTLINE_PT; color = 0xFF000000.toInt()
+        style = Paint.Style.STROKE; strokeWidth = OUTLINE_PT_BASE * scale; color = 0xFF000000.toInt()
     }
     val dim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeWidth = DIM_PT; color = 0xFF000000.toInt()
+        style = Paint.Style.STROKE; strokeWidth = DIM_PT_BASE * scale; color = 0xFF000000.toInt()
     }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; textSize = TEXT_PT
@@ -140,7 +142,13 @@ fun composeShaftPdf(
             geomRect.width() / overallMm
         }
     }
-    val left = geomRect.left
+    // Excluded AFT threads have startFromAftMm = -lengthMm (negative). Shift the origin
+    // rightward so they have room to draw to the left of the shaft body.
+    val contentMinMm = minOf(0f,
+        spec.threads.filter { it.excludeFromOAL && it.isAftEnd }
+            .minOfOrNull { it.startFromAftMm } ?: 0f
+    )
+    val left = geomRect.left + (-contentMinMm * ptPerMm).coerceAtLeast(0f)
 
     val winDbg = computeOalWindow(spec)
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
@@ -174,7 +182,7 @@ fun composeShaftPdf(
         0f
     }
 
-    fun xAt(mm: Float) = (left + mm * ptPerMm).coerceIn(geomRect.left, geomRect.right)
+    fun xAt(mm: Float) = left + mm * ptPerMm
     fun rPx(d: Float)  = (d * 0.5f) * ptPerMm
 
     // geometry
@@ -182,14 +190,19 @@ fun composeShaftPdf(
     if (shaftTranslateY != 0f) {
         c.translate(0f, shaftTranslateY)
     }
+    fun shadeFill() = Paint().apply { style = Paint.Style.FILL; color = Color.argb(40, 0, 0, 0) }
+    val bodyFill:  Paint? = if (pdfPrefs.shadedBodies)  shadeFill() else null
+    val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
+    val linerFill: Paint? = if (pdfPrefs.shadedLiners)  shadeFill() else null
+
     if (bodyOnly || singleTaperOnly) {
-        drawBodiesPlain(c, bodiesForPdf, cy, ::xAt, ::rPx, outline)
+        drawBodiesPlain(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, bodyFill)
     } else {
-        drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect)
+        drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect, bodyFill)
     }
-    drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline)
+    drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill)
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
-    drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim)
+    drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill)
     c.restore()
 
     if (effectiveOptions.showLabels && pdfPrefs.showComponentTitles) {
@@ -224,7 +237,7 @@ fun composeShaftPdf(
         val linerDims = mapToLinerDimsForPdf(spec, measureFromMode)
         val win  = computeOalWindow(spec)
         val pageX: (Double) -> Float = { dimMm ->
-            (geomRect.left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
+            (left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
         }
         val sets = computeSetPositionsInMeasureSpace(win, spec)
         val spans = buildLinerSpans(
@@ -271,7 +284,13 @@ fun composeShaftPdf(
         assignments.forEach { rs ->
             renderer.drawOnRail(c, rs.rail, rs.span, true)
         }
-        renderer.drawTop(c, oalSpan(sets.aftSETxMm, sets.fwdSETxMm, unit), true)
+        val oalAft = if (spec.threads.any { t ->
+            abs(t.startFromAftMm.toDouble()) <= END_EPS_MM && !t.excludeFromOAL
+        }) 0.0 else sets.aftSETxMm
+        val oalFwd = if (spec.threads.any { t ->
+            abs((t.startFromAftMm + t.lengthMm).toDouble() - spec.overallLengthMm.toDouble()) <= END_EPS_MM && !t.excludeFromOAL
+        }) win.oalMm else sets.fwdSETxMm
+        renderer.drawTop(c, oalSpan(oalAft, oalFwd, unit, labelMm = spec.overallLengthMm.toDouble()), true)
     }
 
     // --- diameter callouts (optional; leave empty until you have stations) ---
@@ -284,7 +303,7 @@ fun composeShaftPdf(
                 color = 0xFF000000.toInt()
             }
             val leader = DiameterLeaderRenderer(
-                pageX = { mm -> (geomRect.left + (mm.toFloat() * ptPerMm)) },
+                pageX = { mm -> (left + (mm.toFloat() * ptPerMm)) },
                 shaftTopY = yTopOfShaft,
                 shaftBottomY = cy + (maxDiaMm * 0.5f) * ptPerMm,
                 linePaint = dim,
@@ -328,8 +347,8 @@ private const val MM_PER_IN = 25.4f
 private const val BODY_ONLY_TARGET_HEIGHT_PT = 1.25f * 72f
 
 // Strokes / text
-private const val OUTLINE_PT = 2.5f
-private const val DIM_PT = 1.6f
+private const val OUTLINE_PT_BASE = 1.25f  // 100% default; slider goes to 200% (original 2.5pt)
+private const val DIM_PT_BASE = 0.8f       // 100% default; slider goes to 200% (original 1.6pt)
 private const val TEXT_PT = 12f
 
 // Layout
@@ -522,6 +541,7 @@ private fun drawBodiesPlain(
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
     outline: Paint,
+    fill: Paint? = null,
 ) {
     bodies.forEach { b ->
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
@@ -531,6 +551,7 @@ private fun drawBodiesPlain(
         val top = cy - r
         val bot = cy + r
 
+        if (fill != null) c.drawRect(x0, top, x1, bot, fill)
         c.drawLine(x0, top, x1, top, outline)
         c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, outline)
@@ -549,7 +570,8 @@ private fun drawBodiesCompressedCenterBreak(
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
     outline: Paint,
-    geomRect: RectF
+    geomRect: RectF,
+    fill: Paint? = null,
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
     bodies.forEach { b ->
@@ -562,6 +584,7 @@ private fun drawBodiesCompressedCenterBreak(
 
         if (!compress) {
             // classic rectangle body
+            if (fill != null) c.drawRect(x0, top, x1, bot, fill)
             c.drawLine(x0, top, x1, top, outline)
             c.drawLine(x0, bot, x1, bot, outline)
             c.drawLine(x0, top, x0, bot, outline)
@@ -576,12 +599,14 @@ private fun drawBodiesCompressedCenterBreak(
             val amp = r * 0.6f
 
             // Left stub — S-curve on right end
+            if (fill != null) c.drawRect(x0, top, leftEnd, bot, fill)
             c.drawLine(x0, top, leftEnd, top, outline)
             c.drawLine(x0, bot, leftEnd, bot, outline)
             c.drawLine(x0, top, x0, bot, outline)
             drawBreakEdge(c, leftEnd, top, bot, amp, capPaint)
 
             // Right stub — same-direction S-curve on left end (curves match so edges appear to merge)
+            if (fill != null) c.drawRect(rightBeg, top, x1, bot, fill)
             drawBreakEdge(c, rightBeg, top, bot, amp, capPaint)
             c.drawLine(rightBeg, top, x1, top, outline)
             c.drawLine(rightBeg, bot, x1, bot, outline)
@@ -697,6 +722,7 @@ private fun drawTapers(
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
     outline: Paint,
+    fill: Paint? = null,
 ) {
     tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
@@ -706,6 +732,13 @@ private fun drawTapers(
         val r1 = requireFinite("taper.r1", rPx(t.endDiaMm))
         val top0 = requireFinite("taper.top0", cy - r0); val bot0 = requireFinite("taper.bot0", cy + r0)
         val top1 = requireFinite("taper.top1", cy - r1); val bot1 = requireFinite("taper.bot1", cy + r1)
+
+        if (fill != null) {
+            val path = Path().apply {
+                moveTo(x0, top0); lineTo(x1, top1); lineTo(x1, bot1); lineTo(x0, bot0); close()
+            }
+            c.drawPath(path, fill)
+        }
         c.drawLine(x0, top0, x1, top1, outline)
         c.drawLine(x0, bot0, x1, bot1, outline)
         c.drawLine(x0, top0, x0, bot0, outline)
@@ -819,11 +852,13 @@ private fun drawLiners(
     rPx: (Float) -> Float,
     outline: Paint,
     dim: Paint,
+    fill: Paint? = null,
 ) {
     liners.forEach { ln ->
         if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
         val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
         val r = rPx(ln.odMm); val top = cy - r; val bot = cy + r
+        if (fill != null) c.drawRect(x0, top, x1, bot, fill)
         c.drawLine(x0, top, x1, top, outline)
         c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, dim) // thin end ticks
@@ -846,20 +881,16 @@ private fun drawFooter(
     text: Paint,
     cfg: FooterConfig
 ) {
-    val gutter = 16f
-    val innerW = rect.width() - gutter * 2
-    val colW = innerW / 3f
-
-    val leftX = rect.left
-    val midX = leftX + colW + gutter
-    val rightX = midX + colW + gutter
-
     val top = rect.top + 6f
     val lh = text.textSize * 1.35f
 
     val cols = buildFooterEndColumns(spec, unit, cfg)
 
-    // AFT (left)
+    val leftX  = rect.left
+    val midX   = rect.left + rect.width() * 0.40f
+    val rightX = rect.left + rect.width() * 0.76f
+
+    // AFT (left) — left-aligned at left margin
     run {
         var y = top
         cols.aftLines.forEach { line ->
@@ -868,17 +899,16 @@ private fun drawFooter(
         }
     }
 
-    // Middle (Work order)
+    // Middle (Work order) — left-aligned at 1/3 mark
     run {
         var y = top
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         c.drawText("Customer: ${project.customer}", midX, y, text); y += lh
-        c.drawText("Vessel: ${project.vessel}",   midX, y, text); y += lh
-        c.drawText("Job #: ${project.jobNumber}", midX, y, text); y += lh
-        c.drawText("Date: $date", midX, y, text); y += lh
+        c.drawText("Vessel: ${project.vessel}",     midX, y, text); y += lh
+        c.drawText("Job #: ${project.jobNumber}",   midX, y, text); y += lh
+        c.drawText("Date: $date",                   midX, y, text); y += lh
 
         project.side.printableLabelOrNull()?.let { pos ->
-            // A little breathing room under Date; position stands out.
             y += lh * 0.35f
             val posPaint = Paint(text).apply {
                 textSize = text.textSize * 1.20f
@@ -886,10 +916,9 @@ private fun drawFooter(
             }
             c.drawText(pos, midX, y, posPaint)
         }
-        // c.drawText("Not to scale: long bodies compressed for readability.", midX, y, text)
     }
 
-    // FWD (right)
+    // FWD (right) — left-aligned at 2/3 mark
     run {
         var y = top
         cols.fwdLines.forEach { line ->
@@ -918,7 +947,7 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
         taperSides.aft?.let { tp ->
             val (let, set) = letSet(tp)
             aft += "AFT Taper"
-            aft += "Rate: ${rate1toN(tp)}"
+            aft += "Rate: ${tp.taperRateText.trim().ifEmpty { rate1toN(tp) }}"
             aft += "L.E.T.: ${formatDiaWithUnit(let.toDouble(), unit)}"
             aft += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
             aft += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
@@ -943,7 +972,7 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
         taperSides.fwd?.let { tp ->
             val (let, set) = letSet(tp)
             fwd += "FWD Taper"
-            fwd += "Rate: ${rate1toN(tp)}"
+            fwd += "Rate: ${tp.taperRateText.trim().ifEmpty { rate1toN(tp) }}"
             fwd += "L.E.T.: ${formatDiaWithUnit(let.toDouble(), unit)}"
             fwd += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
             fwd += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
@@ -985,7 +1014,7 @@ private fun rate1toN(t: Taper): String {
 
 private fun fmtLen(unit: UnitSystem, mm: Float): String = when (unit.name.uppercase(Locale.US)) {
     "MILLIMETERS", "MM" -> String.format(Locale.US, "%.1f mm", mm)
-    "INCHES", "IN" -> String.format(Locale.US, "%.3f", mm / MM_PER_IN).trimEnd('0').trimEnd('.') + " in."
+    "INCHES", "IN" -> String.format(Locale.US, "%.3f", mm / MM_PER_IN).trimEnd('0').trimEnd('.') + "\""
     else -> String.format(Locale.US, "%.1f mm", mm)
 }
 
@@ -1069,12 +1098,15 @@ private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = END_EPS_MM): EndF
 
     fun near(a: Double, b: Double) = abs(a - b) <= epsMm
 
-    // Threads
+    // Threads — also match excluded threads (their startFromAftMm is negative or ≥ OAL,
+    // but they physically live at the shaft ends).
     val aftThread = spec.threads.any { th ->
-        near(th.startFromAftMm.toDouble(), aftX) && th.lengthMm > epsMm
+        th.lengthMm > epsMm &&
+            (near(th.startFromAftMm.toDouble(), aftX) || (th.excludeFromOAL && th.isAftEnd))
     }
     val fwdThread = spec.threads.any { th ->
-        near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > epsMm
+        th.lengthMm > epsMm &&
+            (near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) || (th.excludeFromOAL && !th.isAftEnd))
     }
 
     // If an end-thread exists, its shoulder can be the effective boundary for a taper.
@@ -1110,22 +1142,26 @@ private fun detectEndFeatures(spec: ShaftSpec, epsMm: Double = END_EPS_MM): EndF
     return EndFlags(aftThread, fwdThread, aftTaper, fwdTaper)
 }
 
-private const val EPS_MM = 0.01
-
 private fun near(a: Double, b: Double, eps: Double = END_EPS_MM) =
     abs(a - b) <= eps
 
 private fun getAftEndThread(spec: ShaftSpec): Threads? =
     spec.threads
         .asSequence()
-        .filter { th -> near(th.startFromAftMm.toDouble(), 0.0) && th.lengthMm > EPS_MM }
+        .filter { th ->
+            th.lengthMm > END_EPS_MM &&
+                (near(th.startFromAftMm.toDouble(), 0.0) || (th.excludeFromOAL && th.isAftEnd))
+        }
         .minByOrNull { it.startFromAftMm }
 
 private fun getFwdEndThread(spec: ShaftSpec): Threads? {
     val fwdX = spec.overallLengthMm.toDouble()
     return spec.threads
         .asSequence()
-        .filter { th -> near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) && th.lengthMm > EPS_MM }
+        .filter { th ->
+            th.lengthMm > END_EPS_MM &&
+                (near((th.startFromAftMm + th.lengthMm).toDouble(), fwdX) || (th.excludeFromOAL && !th.isAftEnd))
+        }
         .maxByOrNull { it.startFromAftMm + it.lengthMm }
 }
 
@@ -1139,7 +1175,7 @@ private fun getAftEndTaper(spec: ShaftSpec): Taper? {
     return spec.tapers
         .asSequence()
         .filter { tp ->
-            tp.lengthMm > EPS_MM && anchors.any { a -> near(tp.startFromAftMm.toDouble(), a) }
+            tp.lengthMm > END_EPS_MM && anchors.any { a -> near(tp.startFromAftMm.toDouble(), a) }
         }
         .minByOrNull { it.startFromAftMm }
 }
@@ -1156,7 +1192,7 @@ private fun getFwdEndTaper(spec: ShaftSpec): Taper? {
         .asSequence()
         .filter { tp ->
             val endX = (tp.startFromAftMm + tp.lengthMm).toDouble()
-            tp.lengthMm > EPS_MM && anchors.any { a -> near(endX, a) }
+            tp.lengthMm > END_EPS_MM && anchors.any { a -> near(endX, a) }
         }
         .maxByOrNull { it.startFromAftMm + it.lengthMm }
 }

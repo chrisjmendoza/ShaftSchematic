@@ -4,7 +4,7 @@ ShaftViewModel Contract
 Layer: UI → ViewModel  
 Purpose: Owns editable ShaftSpec state, unit selection, grid toggle, and routes all commits from the UI to the model/persistence.
 
-Version: v0.1 (2025-10-04)
+Version: v0.4 (2026-06-19)
 
 Invariants
 - All stored geometry is **canonical millimeters (mm)**.  
@@ -16,6 +16,10 @@ Responsibilities
 - Commit APIs accept raw text (e.g., `onSetOverallLengthRaw`), parse, convert, clamp, and update.  
 - Expose derived values (e.g., `freeToEndMm`) from the model.  
 - Load/save specs via `ShaftRepository`.
+- Hold persisted display settings: `lineThicknessScale` (0.5–2.0, applied to preview and PDF stroke widths; 1.0 = default thin weight, 2.0 = original thick weight).
+
+Add APIs
+- `addLinerAt(startMm, lengthMm, odMm, reference: LinerAuthoredReference = AFT)` — the `reference` parameter records which end the user measured from; stored on `Liner.authoredReference` for the carousel edit card to display correctly. The default is `AFT` for the quick-add path which does not ask for a reference.
 
 Do Nots
 - Do not format values for display (UI edge only).  
@@ -28,6 +32,22 @@ Notes
 - Emit minimal updates to avoid recomposition thrash.
 
 Future Enhancements
-- Undo/redo stack.  
 - Debounced autosave.  
 - Multi-spec project lists.
+
+Change Log
+----------
+**v0.4 (2026-06-19)**
+- `updateBody()`, `updateTaper()`, `updateLiner()`, `updateThread()` — removed `snapForwardFrom()` cascade. Editing a component now mutates only that component; other components' positions are completely untouched.
+- Removed `_autoSnap` StateFlow, `autoSnap` property, and `setAutoSnap()`. Snap is now purely explicit via `snapChainFrom()` / `snapChainFromId()`.
+
+**v0.3 (2026-06-19)**
+- `updateTaperAuthoredReference()` added — persists the user's AFT/FWD carousel reference toggle on `Taper.authoredReference`.
+- `updateThread()` — `effectiveStart` for excluded threads now uses `−lengthMm` (AFT) / `overallLengthMm` (FWD) directly inside `_spec.update {}`, matching `syncExcludedThreadPositions()`. Eliminates a transient `0f` position that caused the thread to flash at the shaft face when the carousel committed on blur in manual OAL mode.
+- Auto-snap removed from `removeBody()`, `removeTaper()`, `removeThread()`, `removeLiner()`.
+
+**v0.2 (2026-06-18)**
+- `addLinerAt` now accepts an optional `reference: LinerAuthoredReference` parameter (default `AFT`). Passed through from `AddLinerDialog` via `ShaftScreen` → `ShaftRoute` → ViewModel.
+
+**v0.1 (2025-10-04)**
+- Initial contract document.

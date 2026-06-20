@@ -6,6 +6,242 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-06-19
+
+### fix: updating a component no longer repositions other components
+
+`updateBody`, `updateTaper`, `updateLiner`, and `updateThread` were calling `snapForwardFrom()` whenever the updated component's start or length changed, silently cascading position changes to every downstream component in the chain. This violated the fundamental invariant that component inputs are user-authored and must not be mutated by anything other than an explicit user action on that component.
+
+The auto-snap block, `_autoSnap` state, and `setAutoSnap()` have been removed from all update paths. `snapChainFrom()` / `snapChainFromId()` remain as explicitly-invoked operations.
+
+**`ui/viewmodel/ShaftViewModel.kt`** — removed `snapForwardFrom` cascade and `_autoSnap` flag from all four `updateX()` functions.  
+**`test/ui/viewmodel/ShaftViewModelUpdateTest.kt`** — 9 new tests covering liner, body, taper, thread, and mixed-spec update isolation.
+
+---
+
+### fix: PDF dimension unit suffix changed from " in" to `"`
+
+All inch-unit dimension labels now use the standard `"` suffix instead of ` in` (e.g., `4.997"` not `4.997 in`). Applies to diameters, lengths, and OAL labels across the shaft, runout, and wear PDF composers.
+
+**`pdf/UnitFormat.kt`** — `formatDim()`, `formatLenDim()`, `formatLenWithUnit()`, `formatDiaWithUnit()`.  
+**`pdf/RunoutPdfComposer.kt`**, **`pdf/WearPdfComposer.kt`** — OAL display line.
+
+---
+
+### fix: common inch fractions render as Unicode symbols in PDF dimensions
+
+`LengthFormat.formatInchesSmart()` now substitutes common fractions with Unicode characters (½ ¼ ¾ ⅛ ⅜ ⅝ ⅞) so dimension text reads like hand-drawn notation rather than `3/4` or `7/8`.
+
+**`util/LengthFormat.kt`** — `unicodeFractions` map applied in `formatInchesSmart()`.
+
+---
+
+### feat: taper AFT/FWD reference toggle in carousel edit card
+
+The taper carousel card now shows a "Measure From: AFT / FWD" chip row (matching the liner card). Selecting FWD lets the user enter the start distance from the FWD end; the model always stores the canonical `startFromAftMm`. `Taper.authoredReference` (new field, default AFT) persists the user's choice so the field label and value are correct on re-open.
+
+**`model/Taper.kt`** — added `authoredReference: LinerAuthoredReference` field.  
+**`ui/screen/ComponentCarousel.kt`** — AFT/FWD toggle + start field adapts label and converts value.  
+**`ui/screen/ShaftRoute.kt`** — wires `onUpdateTaperReference` callback.  
+**`ui/viewmodel/ShaftViewModel.kt`** — `updateTaperAuthoredReference()`.  
+**`docs/Model_Conventions.md`** — updated.
+
+---
+
+### fix: auto-snap removed from all component delete paths
+
+The snap-forward-on-delete behavior (shifting subsequent components left after a deletion) has been removed from `removeBody()`, `removeTaper()`, `removeThread()`, and `removeLiner()`. Body split/merge (added earlier) makes positional snap on delete incorrect — merged bodies already fill the freed span.
+
+**`ui/viewmodel/ShaftViewModel.kt`** — removed `snapFromKey` / `snapFromOrigin` logic from all four remove functions.
+
+---
+
+### fix: PDF footer columns positioned at even thirds, all left-aligned
+
+The three footer columns (AFT, project info, FWD) were computed with an asymmetric gutter formula that bunched the center and right blocks toward the left half of the page. Replaced with clean thirds: `colW = rect.width() / 3`, anchor each column at `rect.left + n × colW`. All columns remain left-aligned.
+
+**`pdf/ShaftPdfComposer.kt`** — simplified column layout in `drawFooter()`.
+
+---
+
+### fix: PDF footer shows authored taper rate text instead of computed 1:N ratio
+
+The `Rate:` line in the AFT/FWD taper footer blocks was always re-derived via `rate1toN()` (e.g. `1:16`), ignoring the `taperRateText` field the user typed (e.g. `3/4"/FT`). The authored string is now used when non-empty; `rate1toN()` is the fallback.
+
+**`pdf/ShaftPdfComposer.kt`** — `buildFooterEndColumns()` uses `tp.taperRateText.trim().ifEmpty { rate1toN(tp) }` for both AFT and FWD taper rate lines.
+
+---
+
+### fix: consolidate conflicting EPS constants in PDF composer
+
+`ShaftPdfComposer.kt` had two proximity tolerances with overlapping scope: `END_EPS_MM = 0.5` (imported from `geom/OalComputations.kt`) and a private `EPS_MM = 0.01`. The 50× discrepancy meant that `detectEndFeatures()` and `getAftEndThread()` / `getFwdEndThread()` / `getAftEndTaper()` / `getFwdEndTaper()` used different thresholds for what counts as "at the shaft end", potentially causing mismatches between which features show up in the footer. Removed `EPS_MM`; all proximity checks now use `END_EPS_MM`.
+
+**`pdf/ShaftPdfComposer.kt`** — removed `private const val EPS_MM`; replaced four usages with `END_EPS_MM`.
+
+---
+
+### fix: Project Information section expanded by default
+
+Customer, Vessel, and Job # were hidden behind a collapsed section on every new drawing, adding friction at job-start. The section now opens expanded.
+
+**`ui/screen/ShaftScreen.kt`** — `ExpandableSection("Project Information", initiallyExpanded = true)`.
+
+---
+
+### feat: body auto-split on add, auto-merge on delete
+
+Adding any taper, liner, or thread now splits any overlapping body into two independent fragments (each keeping the parent's `diaMm` and a new UUID). Deleting a taper/liner/thread merges the flanking body fragments back into one body (merged diameter = max of the two). Single-side boundary case: the lone adjacent body expands to fill the freed span rather than merging.
+
+**`model/ShaftSpecExtensions.kt`** — new `splitBodyAt()` and `mergeAdjacentBodies()` functions.  
+**`ui/viewmodel/ShaftViewModel.kt`** — all `add*At()` / `delete*()` paths call split/merge; included in the undo snapshot.
+
+---
+
+### feat: full keyway inputs in Add Taper dialog
+
+`AddTaperDialog` gains KW Width, KW Depth, KW Length, KW Offset, and Spooned toggle fields, mirroring the carousel edit card. Previously these were only editable after adding.
+
+**`ui/screen/AddComponentDialogs.kt`**
+
+---
+
+### fix: add dialogs always open; bodies and excluded threads excluded from default-start
+
+The FAB chooser previously quick-added bodies, liners, and tapers without showing a dialog. All paths now open the full dialog. `computeAddDefaults()` no longer counts bodies or excluded threads when finding the next open slot — they were pushing new component start positions past the shaft end. Body–taper pairs removed from `collidingIds()` (bodies are fillers; taper overlap is intentional). All `add*At()` methods now auto-select the newly created component.
+
+**`ui/screen/ShaftScreen.kt`**, **`ui/viewmodel/ShaftViewModel.kt`**, **`model/ShaftSpecExtensions.kt`**  
+**`docs/DATA_MODEL.md`**, **`docs/UI_CONTRACT.md`**, **`docs/VALIDATION_RULES.md`** updated.
+
+---
+
+### fix: direction chip selected state uses border, not fill
+
+`DirectionChip` (AFT/FWD toggle in Add Taper and Add Liner dialogs) replaced `FilterChip` with a custom `OutlinedButton`: selected state shows a 2dp primary-color border + tinted container; unselected has no border. Previously the outlined border on the unselected chip made it visually appear to be the active choice.
+
+**`ui/screen/AddComponentDialogs.kt`**
+
+---
+
+### fix: PDF dimension arrows default inward; arrow size reduced
+
+Arrow tips were flipping outward by an overly strict threshold. `canFitInwardArrows` loosened from `spacing × 1.5` to `spacing × 1.0` so arrows now default inward (engineering convention) and flip outward only when truly cramped. Arrow size reduced from 7 → 5 pt to match hand-sketch reference drawings.
+
+**`pdf/render/PdfDimensionRenderer.kt`**
+
+---
+
+### fix: PDF export no longer rejects excluded threads as out-of-bounds
+
+`blockingExportError()` was triggering "start must be ≥ 0" on excluded threads, which deliberately have `startFromAftMm = −lengthMm`. Excluded threads are now skipped in that check.
+
+**`ui/nav/PdfExportRoute.kt`**
+
+---
+
+### fix: `CommitNumField` commits on every keystroke; external resets don't jump cursor
+
+Values were lost when tapping "Add" while a text field was still focused (the on-blur commit hadn't fired yet). `CommitNumField` now commits on every keystroke. `LaunchedEffect(initial)` handles external value resets without moving the cursor mid-type.
+
+**`ui/screen/AddComponentDialogs.kt`**
+
+---
+
+### fix: excluded thread flashes at shaft face during carousel swipe
+
+In manual OAL mode, `updateThread()` wrote `effectiveStart = 0f` for AFT excluded threads as a temporary value, expecting `ensureOverall()` → `syncExcludedThreadPositions()` to correct it. `ensureOverall()` exits early in manual mode without calling sync, so the `0f` position persisted — placing the thread at the shaft AFT face and causing it to visually overlap the adjacent taper for a single frame. The trigger: `NumericInputField.onFocusChanged` fires a commit when the carousel's `HorizontalPager` clears focus from the excluded-thread card while the user swipes to the adjacent taper card.
+
+Fix: `updateThread()` now derives the correct position (`−lengthMm` for AFT, `overallLengthMm` for FWD) directly inside the `_spec.update {}` call, using the same formula as `syncExcludedThreadPositions()`. The position is always correct regardless of OAL mode, with no transient wrong state.
+
+**`ui/viewmodel/ShaftViewModel.kt`** — `updateThread()` `effectiveStart` for excluded threads.
+
+---
+
+### fix: PDF footer FWD column nudged to 76% of content width
+
+The FWD footer column was at 72% of the content area width; adjusted to 76% for a more balanced three-column layout with the AFT block anchored at the left margin and center block at 40%.
+
+**`pdf/ShaftPdfComposer.kt`** — `rightX = rect.left + rect.width() * 0.76f` in `drawFooter()`.
+
+---
+
+## 2026-06-18
+
+### feat: taper/liner direction toggle; excluded thread rendering; add-time collision warnings
+
+**Direction toggles in add dialogs**
+- `AddTaperDialog` — AFT/FWD chip controls which end is the SET. SET/LET labels on the diameter fields swap accordingly; model stores diameters in AFT→FWD order regardless.
+- `AddLinerDialog` — "Measure From" AFT/FWD chip writes `LinerAuthoredReference` through `ShaftRoute` → `ShaftViewModel.addLinerAt()` so the carousel card reflects the chosen reference on first render.
+
+**Excluded thread rendering**
+- `syncExcludedThreadPositions`: AFT excluded threads placed at `startFromAftMm = −lengthMm`, FWD at `OAL`, sitting flush with the shaft face without overlapping tapers.
+- `ShaftLayout.compute`: `minXMm` / `maxXMm` now expand to include excluded threads outside `0..OAL` so they render in both the preview and PDF without clipping.
+
+**Add-time collision warnings**
+- New `collectAddWarnings()`: pre-submit overlap check in Taper, Liner, and Thread add dialogs. Warns on cross-type overlaps and shaft bounds when OAL is manual. Bodies and excluded threads are skipped. Warning confirmation dialog offers "Add Anyway / Cancel" — nothing is silently blocked.
+
+**Carousel auto-scroll fix**
+- `ComponentCarousel`: size-based auto-scroll `LaunchedEffect` is now conditional on no existing selection, preventing it from overriding the user's swipe after adding a component.
+
+**Tests** — `CollisionWarningsTest` (13 cases), `ShaftSpecTest` +`syncExcludedThreadPositions` (4 cases), `ShaftLayoutTest` +excluded-thread coordinate expansion (4 cases). All passing.
+
+**`model/ShaftSpec.kt`**, **`ui/drawing/render/ShaftLayout.kt`**, **`ui/screen/AddComponentDialogs.kt`**, **`ui/screen/ComponentCarousel.kt`**, **`ui/screen/ShaftRoute.kt`**, **`ui/screen/ShaftScreen.kt`**, **`ui/util/CollisionWarnings.kt`** (new), **`ui/viewmodel/ShaftViewModel.kt`**  
+**Docs**: `ShaftLayout v0.4`, `Model_Conventions v0.2`, `ShaftViewModel v0.2`, `ShaftScreen v0.7`, `VALIDATION_APPENDIX`.
+
+---
+
+### ci: Firebase App Distribution workflow
+
+Added GitHub Actions workflow for distributing debug APKs to testers via Firebase App Distribution on every push to `main`. Uses service-account auth via the Firebase CLI.
+
+---
+
+## 2026-06-11
+
+### fix: OAL bracket moves with include/exclude; label is always the typed value
+
+The `excludeFromOAL` toggle on end threads now correctly controls **bracket position only** — the OAL label is always `spec.overallLengthMm`, the value the user typed.
+
+- **Excluded**: bracket spans AFT SET → FWD SET. Thread is drawn outside the bracket.
+- **Included**: bracket spans shaft AFT end → FWD SET, grouping the thread inside the arrow.
+- Label never changes in either case. Component measurements always reference SET.
+
+Domain rationale: threads don't need to be a specific length on a new shaft; liners and tapers do. The toggle exists for customers (e.g. Coast Guard) who specify exact total lengths so shafts are interchangeable spares. Nothing is ever dimensioned from a thread end.
+
+**`pdf/dim/LinerSpanBuilder.kt`** — `oalSpan()` gains an explicit `labelMm` param (default = bracket width) so the label can be decoupled from the bracket span.  
+**`pdf/ShaftPdfComposer.kt`** — bracket endpoints driven by include/exclude; `labelMm = spec.overallLengthMm` always.  
+**`geom/OalComputations.kt`** — `computeOalWindow` always returns `(0.0, overallLengthMm)`; `computeExcludedThreadLengths` retained for future SET-to-SET annotation work.
+
+---
+
+## 2026-06-11
+
+### feat: runout screen v2 — inline preview + layout overhaul
+
+- **`RunoutRoute.kt`** — complete rewrite: `RunoutComponentEntry` data class, inline shaft preview via `ShaftRenderer`/`ShaftLayout`, scrollable column layout, sidebar nav integration, `resolvedComponents` support.
+- **`ComponentCarousel.kt`** — removed bubble-count stepper controls (95 lines). Bubble counts are managed through the runout config; per-component stepping in the carousel was redundant.
+- **`ShaftRoute.kt` / `ShaftScreen.kt`** — removed `runoutConfig` and `onSetRunoutBubbleCount` threading that was coupling the main screen to runout state. `ComponentCarousel` retains defaulted params for backward compatibility.
+
+---
+
+### feat: line thickness control
+
+- **`SettingsRoute.kt`** — `LineThicknessControl` composable: slider (50%–200%) + typeable `%` field with on-blur clamping. 100% = new default thin weight; 200% = original thick weight.
+- **`SettingsStore.kt`** — `KEY_LINE_THICKNESS_SCALE` DataStore key; `lineThicknessScaleFlow()` / `setLineThicknessScale()`.
+- **`ShaftViewModel.kt`** — `lineThicknessScale: StateFlow<Float>`, collected from DataStore on init, exposed for UI and PDF export.
+- **`ShaftPdfComposer.kt`** — `OUTLINE_PT_BASE = 1.25 pt`, `DIM_PT_BASE = 0.8 pt` (100% defaults). `composeShaftPdf()` gains `lineThicknessScale` param; scale applied to both paint objects.
+- **`ShaftDrawing.kt`** — `outlineWidthPx = 2f * lineThicknessScale.coerceIn(0.5f, 2.0f)`.
+- **`PdfExportRoute.kt` / `PdfPreviewScreen.kt`** — pass `lineThicknessScale` through to the composer.
+
+---
+
+### fix: OAL dimension respects include-thread toggle
+
+The PDF OAL dimension arrow previously always measured **SET to SET** regardless of whether end threads were marked as included in OAL. Root cause: when `excludeFromOAL = false` the coordinate origin shifts by `threadLength`, so both SET endpoints moved by the same delta and the rendered distance was unchanged.
+
+Fix in `ShaftPdfComposer.kt`: detects any end thread with `!excludeFromOAL` anchored to position 0 (AFT) or `overallLengthMm` (FWD), and substitutes the physical shaft end coordinate (`0.0` or `win.oalMm`) for the SET coordinate in the `oalSpan()` call. Component dimension rails continue to reference SET positions.
+
+---
+
 ## 2026-05-30 (6)
 
 ### feat: yellow warning badges — non-blocking validation now visible in UI

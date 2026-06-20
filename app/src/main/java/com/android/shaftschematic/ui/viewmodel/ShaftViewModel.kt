@@ -148,6 +148,33 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     // ────────────────────────────────────────────────────────────────────────────
+    // Unsaved-changes tracking
+    // ────────────────────────────────────────────────────────────────────────────
+
+    private var _savedSpec: ShaftSpec = ShaftSpec()
+    private var _savedJobNumber: String = ""
+    private var _savedCustomer: String = ""
+    private var _savedVessel: String = ""
+    private var _savedNotes: String = ""
+
+    fun markDocumentSaved() {
+        _savedSpec = _spec.value
+        _savedJobNumber = _jobNumber.value
+        _savedCustomer = _customer.value
+        _savedVessel = _vessel.value
+        _savedNotes = _notes.value
+    }
+
+    fun hasUnsavedWork(): Boolean {
+        if (isSessionDefault()) return false
+        return _spec.value != _savedSpec ||
+               _jobNumber.value != _savedJobNumber ||
+               _customer.value != _savedCustomer ||
+               _vessel.value != _savedVessel ||
+               _notes.value != _savedNotes
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
     // Reactive state (observed by Compose)
     // ────────────────────────────────────────────────────────────────────────────
 
@@ -172,11 +199,21 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _pdfShowComponentTitles = MutableStateFlow(true)
     val pdfShowComponentTitles: StateFlow<Boolean> = _pdfShowComponentTitles.asStateFlow()
 
+    private val _pdfShadedBodies = MutableStateFlow(false)
+    val pdfShadedBodies: StateFlow<Boolean> = _pdfShadedBodies.asStateFlow()
+    private val _pdfShadedTapers = MutableStateFlow(false)
+    val pdfShadedTapers: StateFlow<Boolean> = _pdfShadedTapers.asStateFlow()
+    private val _pdfShadedLiners = MutableStateFlow(false)
+    val pdfShadedLiners: StateFlow<Boolean> = _pdfShadedLiners.asStateFlow()
+
     private val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
 
     private val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
+
+    private val _lineThicknessScale = MutableStateFlow(1.0f)
+    val lineThicknessScale: StateFlow<Float> = _lineThicknessScale.asStateFlow()
 
     private val _previewOutlineSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.STEEL, customRole = PreviewColorRole.MONOCHROME))
     val previewOutlineSetting: StateFlow<PreviewColorSetting> = _previewOutlineSetting.asStateFlow()
@@ -260,10 +297,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _unlockedAchievementIds = MutableStateFlow<Set<String>>(emptySet())
     val unlockedAchievementIds: StateFlow<Set<String>> = _unlockedAchievementIds.asStateFlow()
-
-    // Auto-snap keeps components end-to-end in physical order when geometry changes.
-    private val _autoSnap = MutableStateFlow(true)
-    val autoSnap: StateFlow<Boolean> = _autoSnap.asStateFlow()
 
     private val _customer = MutableStateFlow("")
     val customer: StateFlow<String> = _customer.asStateFlow()
@@ -522,6 +555,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
+            SettingsStore.pdfShadedBodiesFlow(getApplication()).collectLatest { persisted ->
+                _pdfShadedBodies.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(shadedBodies = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfShadedTapersFlow(getApplication()).collectLatest { persisted ->
+                _pdfShadedTapers.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(shadedTapers = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfShadedLinersFlow(getApplication()).collectLatest { persisted ->
+                _pdfShadedLiners.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(shadedLiners = persisted) }
+            }
+        }
+        viewModelScope.launch {
             SettingsStore.pdfOalSpacingFactorFlow(getApplication()).collectLatest { persisted ->
                 SettingsStore.updatePdfPrefs { it.copy(oalSpacingFactor = persisted) }
             }
@@ -536,6 +587,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             SettingsStore.previewBlackWhiteOnlyFlow(getApplication()).collectLatest { persisted ->
                 _previewBlackWhiteOnly.value = persisted
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.lineThicknessScaleFlow(getApplication()).collectLatest { persisted ->
+                _lineThicknessScale.value = persisted
             }
         }
 
@@ -730,6 +787,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setPdfShadedBodies(v: Boolean, persist: Boolean = true) {
+        _pdfShadedBodies.value = v
+        SettingsStore.updatePdfPrefs { it.copy(shadedBodies = v) }
+        if (persist) viewModelScope.launch { SettingsStore.setPdfShadedBodies(getApplication(), v) }
+    }
+
+    fun setPdfShadedTapers(v: Boolean, persist: Boolean = true) {
+        _pdfShadedTapers.value = v
+        SettingsStore.updatePdfPrefs { it.copy(shadedTapers = v) }
+        if (persist) viewModelScope.launch { SettingsStore.setPdfShadedTapers(getApplication(), v) }
+    }
+
+    fun setPdfShadedLiners(v: Boolean, persist: Boolean = true) {
+        _pdfShadedLiners.value = v
+        SettingsStore.updatePdfPrefs { it.copy(shadedLiners = v) }
+        if (persist) viewModelScope.launch { SettingsStore.setPdfShadedLiners(getApplication(), v) }
+    }
+
     fun setPdfOalSpacingFactor(factor: Float, persist: Boolean = true) {
         SettingsStore.updatePdfPrefs { it.copy(oalSpacingFactor = factor) }
         if (persist) {
@@ -752,6 +827,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _previewBlackWhiteOnly.value = enabled
         if (persist) {
             viewModelScope.launch { SettingsStore.setPreviewBlackWhiteOnly(getApplication(), enabled) }
+        }
+    }
+
+    fun setLineThicknessScale(scale: Float, persist: Boolean = true) {
+        _lineThicknessScale.value = scale.coerceIn(0.5f, 2.0f)
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setLineThicknessScale(getApplication(), scale) }
         }
     }
 
@@ -920,12 +1002,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         unlockAchievement(definition.id)
     }
 
-    /** Enables or disables auto-snapping of components after edits/deletes. */
-    fun setAutoSnap(enabled: Boolean) {
-        _autoSnap.value = enabled
-        // Persistence can be wired into SettingsStore later if desired.
-    }
-
     /** Explicitly snap forward from the given anchor key, end-to-end along the chain. */
     fun snapChainFrom(anchor: ComponentKey) {
         _spec.update { base -> base.snapForwardFrom(anchor) }
@@ -953,7 +1029,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Set shaft overall length (mm). Clamped to ≥ 0. */
     fun onSetOverallLengthMm(valueMm: Float) {
-        _spec.update { it.copy(overallLengthMm = max(0f, valueMm)) }
+        _spec.update { it.copy(overallLengthMm = max(0f, valueMm)).syncExcludedThreadPositions() }
     }
 
     /** Parses text in current UI units and forwards to [onSetOverallLengthMm]. */
@@ -970,7 +1046,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         if (_overallIsManual.value) return@update s
         val end = coverageEndMm(s)
         val minOverall = end + max(0f, minFreeMm)
-        if (s.overallLengthMm < minOverall) s.copy(overallLengthMm = minOverall) else s
+        val grown = if (s.overallLengthMm < minOverall) s.copy(overallLengthMm = minOverall) else s
+        grown.syncExcludedThreadPositions()
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -978,36 +1055,30 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ────────────────────────────────────────────────────────────────────────────
 
     // Bodies
-    fun addBodyAt(startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
+    fun addBodyAt(startMm: Float, lengthMm: Float, diaMm: Float) {
         val id = newId()
-        orderAdd(ComponentKind.BODY, id)
-        s.copy(bodies = listOf(Body(id, startMm, max(0f, lengthMm), max(0f, diaMm))) + s.bodies)
-    }.also {
+        _spec.update { s ->
+            orderAdd(ComponentKind.BODY, id)
+            s.copy(bodies = listOf(Body(id, startMm, max(0f, lengthMm), max(0f, diaMm))) + s.bodies)
+        }
         rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
         ensureOverall()
         ensureOrderCoversSpec()
+        _selectedComponentId.value = id
     }
 
     fun updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
         if (index !in s.bodies.indices) s else {
             val old = s.bodies[index]
-            val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
-
-            val updatedBodies = s.bodies.toMutableList().also { list ->
-                list[index] = old.copy(
-                    startFromAftMm = startMm,
-                    lengthMm = max(0f, lengthMm),
-                    diaMm = max(0f, diaMm)
-                )
-            }
-
-            val base = s.copy(bodies = updatedBodies)
-
-            if (_autoSnap.value && startChanged) {
-                base.snapForwardFrom(ComponentKey(old.id, ComponentKind.BODY))
-            } else {
-                base
-            }
+            s.copy(
+                bodies = s.bodies.toMutableList().also { list ->
+                    list[index] = old.copy(
+                        startFromAftMm = startMm,
+                        lengthMm = max(0f, lengthMm),
+                        diaMm = max(0f, diaMm)
+                    )
+                }
+            )
         }
     }.also {
         if (index in _spec.value.bodies.indices) {
@@ -1027,9 +1098,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val specBefore = _spec.value
         val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Body? = null
-        var snapFromKey: ComponentKey? = null
-        var snapFromOrigin = false
-        val removedKey = ComponentKey(id, ComponentKind.BODY)
 
         _spec.update { s ->
             val idx = s.bodies.indexOfFirst { it.id == id }
@@ -1040,11 +1108,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
-            }
-
-            if (_autoSnap.value) {
-                snapFromKey = s.findLeftNeighbor(removedKey)
-                snapFromOrigin = snapFromKey == null
             }
 
             val body = s.bodies[idx]
@@ -1074,15 +1137,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
             redoHistory.clear()
 
-            if (_autoSnap.value) {
-                when {
-                    snapFromKey != null ->
-                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
-                    snapFromOrigin ->
-                        _spec.update { spec -> spec.snapFromOrigin() }
-                }
-            }
-
             ensureOverall()
             updateUndoRedoFlags()
             emitDeletedSnack(snapshot.kind)
@@ -1096,33 +1150,45 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         startDiaMm: Float,
         endDiaMm: Float,
         rateText: String = "",
-    ) = _spec.update { s ->
+        keywayWidthMm: Float = 0f,
+        keywayDepthMm: Float = 0f,
+        keywayLengthMm: Float = 0f,
+        keywayOffsetFromSetMm: Float = 0f,
+        keywaySpooned: Boolean = false,
+    ) {
         val id = newId()
-        orderAdd(ComponentKind.TAPER, id)
-        val (resolvedSet, resolvedLet) = deriveTaperDiameters(
-            setMm = startDiaMm, letMm = endDiaMm,
-            lengthMm = lengthMm, rateText = rateText
-        )
-        s.copy(
-            tapers = listOf(
-                Taper(
-                    id = id,
-                    startFromAftMm = startMm,
-                    lengthMm = max(0f, lengthMm),
-                    startDiaMm = max(0f, resolvedSet),
-                    endDiaMm = max(0f, resolvedLet),
-                    keywayWidthMm = 0f,
-                    keywayDepthMm = 0f,
-                    keywayLengthMm = 0f,
-                    keywaySpooned = false,
-                    taperRateText = rateText,
-                )
-            ) + s.tapers
-        )
-    }.also {
+        _spec.update { s ->
+            val split = s.splitBodiesAround(startMm, startMm + lengthMm) { newId() }
+            split.removedIds.forEach { orderRemove(it) }
+            split.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+
+            orderAdd(ComponentKind.TAPER, id)
+            val (resolvedSet, resolvedLet) = deriveTaperDiameters(
+                setMm = startDiaMm, letMm = endDiaMm,
+                lengthMm = lengthMm, rateText = rateText
+            )
+            split.spec.copy(
+                tapers = listOf(
+                    Taper(
+                        id = id,
+                        startFromAftMm = startMm,
+                        lengthMm = max(0f, lengthMm),
+                        startDiaMm = max(0f, resolvedSet),
+                        endDiaMm = max(0f, resolvedLet),
+                        keywayWidthMm = max(0f, keywayWidthMm),
+                        keywayDepthMm = max(0f, keywayDepthMm),
+                        keywayLengthMm = max(0f, keywayLengthMm),
+                        keywayOffsetFromSetMm = max(0f, keywayOffsetFromSetMm),
+                        keywaySpooned = keywaySpooned,
+                        taperRateText = rateText,
+                    )
+                ) + split.spec.tapers
+            )
+        }
         rememberTaperDefaults(lengthMm = lengthMm, setDiaMm = startDiaMm, letDiaMm = endDiaMm)
         ensureOverall()
         ensureOrderCoversSpec()
+        _selectedComponentId.value = id
     }
 
     fun updateTaper(
@@ -1135,7 +1201,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     ) = _spec.update { s ->
         if (index !in s.tapers.indices) s else {
             val old = s.tapers[index]
-            val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
             val effectiveRate = rateText.ifBlank { old.taperRateText }
 
             val (resolvedSet, resolvedLet) = deriveTaperDiameters(
@@ -1143,27 +1208,21 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 lengthMm = lengthMm, rateText = effectiveRate
             )
 
-            val updatedTapers = s.tapers.toMutableList().also { list ->
-                list[index] = old.copy(
-                    startFromAftMm = startMm,
-                    lengthMm = max(0f, lengthMm),
-                    startDiaMm = max(0f, resolvedSet),
-                    endDiaMm = max(0f, resolvedLet),
-                    keywayWidthMm = old.keywayWidthMm,
-                    keywayDepthMm = old.keywayDepthMm,
-                    keywayLengthMm = old.keywayLengthMm,
-                    keywaySpooned = old.keywaySpooned,
-                    taperRateText = rateText.ifBlank { old.taperRateText },
-                )
-            }
-
-            val base = s.copy(tapers = updatedTapers)
-
-            if (_autoSnap.value && startChanged) {
-                base.snapForwardFrom(ComponentKey(old.id, ComponentKind.TAPER))
-            } else {
-                base
-            }
+            s.copy(
+                tapers = s.tapers.toMutableList().also { list ->
+                    list[index] = old.copy(
+                        startFromAftMm = startMm,
+                        lengthMm = max(0f, lengthMm),
+                        startDiaMm = max(0f, resolvedSet),
+                        endDiaMm = max(0f, resolvedLet),
+                        keywayWidthMm = old.keywayWidthMm,
+                        keywayDepthMm = old.keywayDepthMm,
+                        keywayLengthMm = old.keywayLengthMm,
+                        keywaySpooned = old.keywaySpooned,
+                        taperRateText = rateText.ifBlank { old.taperRateText },
+                    )
+                }
+            )
         }
     }.also {
         if (index in _spec.value.tapers.indices) {
@@ -1196,15 +1255,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 
+    fun updateTaperAuthoredReference(index: Int, reference: LinerAuthoredReference) = _spec.update { s ->
+        if (index !in s.tapers.indices) s else {
+            val old = s.tapers[index]
+            if (old.authoredReference == reference) return@update s
+            s.copy(
+                tapers = s.tapers.toMutableList().also { l ->
+                    l[index] = old.copy(authoredReference = reference)
+                }
+            )
+        }
+    }
+
     /** Remove a [Taper] by id with multi-step delete history support. */
     fun removeTaper(id: String) {
         Log.d("ShaftViewModel", "removeTaper invoked for id=$id")
         val specBefore = _spec.value
         val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Taper? = null
-        var snapFromKey: ComponentKey? = null
-        var snapFromOrigin = false
-        val removedKey = ComponentKey(id, ComponentKind.TAPER)
 
         _spec.update { s ->
             val idx = s.tapers.indexOfFirst { it.id == id }
@@ -1215,11 +1283,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
-            }
-
-            if (_autoSnap.value) {
-                snapFromKey = s.findLeftNeighbor(removedKey)
-                snapFromOrigin = snapFromKey == null
             }
 
             val taper = s.tapers[idx]
@@ -1233,9 +1296,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 beforeOrder = orderBefore
             )
 
-            s.copy(
-                tapers = s.tapers.toMutableList().apply { removeAt(idx) }
-            )
+            val afterRemoval = s.copy(tapers = s.tapers.toMutableList().apply { removeAt(idx) })
+            val merge = afterRemoval.mergeBodiesAround(taper.startFromAftMm, taper.startFromAftMm + taper.lengthMm) { newId() }
+            merge.removedIds.forEach { orderRemove(it) }
+            merge.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+            merge.spec
         }
 
         deleted?.let { snapshot ->
@@ -1246,15 +1311,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 deleteHistory.removeFirst()
             }
             redoHistory.clear()
-
-            if (_autoSnap.value) {
-                when {
-                    snapFromKey != null ->
-                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
-                    snapFromOrigin ->
-                        _spec.update { spec -> spec.snapFromOrigin() }
-                }
-            }
 
             ensureOverall()
             updateUndoRedoFlags()
@@ -1282,48 +1338,58 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         majorDiaMm: Float,
         pitchMm: Float,
         excludeFromOAL: Boolean = false
-    ) = _spec.update { s ->
+    ) {
         val id = newId()
-        orderAdd(ComponentKind.THREAD, id)
-        s.copy(
-            threads = listOf(
-                Threads(
-                    id = id,
-                    startFromAftMm = startMm,
-                    majorDiaMm = max(0f, majorDiaMm),
-                    pitchMm = max(0f, pitchMm),
-                    lengthMm = max(0f, lengthMm),
-                    excludeFromOAL = excludeFromOAL
-                )
-            ) + s.threads
-        )
-    }.also {
+        _spec.update { s ->
+            // Excluded threads live outside the shaft envelope; they don't split in-shaft bodies.
+            val split = if (!excludeFromOAL) s.splitBodiesAround(startMm, startMm + lengthMm) { newId() }
+                        else BodySplitResult(s, emptyList(), emptyList())
+            split.removedIds.forEach { orderRemove(it) }
+            split.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+
+            orderAdd(ComponentKind.THREAD, id)
+            split.spec.copy(
+                threads = listOf(
+                    Threads(
+                        id = id,
+                        startFromAftMm = startMm,
+                        majorDiaMm = max(0f, majorDiaMm),
+                        pitchMm = max(0f, pitchMm),
+                        lengthMm = max(0f, lengthMm),
+                        excludeFromOAL = excludeFromOAL
+                    )
+                ) + split.spec.threads
+            )
+        }
         rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
         ensureOverall()
         ensureOrderCoversSpec()
+        _selectedComponentId.value = id
     }
 
     fun updateThread(index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
         if (index !in s.threads.indices) s else {
             val old = s.threads[index]
-            val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
+            val newLength = max(0f, lengthMm)
 
-            val updatedThreads = s.threads.toMutableList().also { l ->
-                l[index] = old.copy(
-                    startFromAftMm = startMm,
-                    lengthMm = max(0f, lengthMm),
-                    majorDiaMm = max(0f, majorDiaMm),
-                    pitchMm = max(0f, pitchMm)
-                )
-            }
+            // For excluded threads the start position is always derived from isAftEnd + OAL,
+            // never from a user-authored startMm. Use the same formula as syncExcludedThreadPositions()
+            // so the position is correct inside this single _spec.update call, avoiding a transient
+            // wrong position when manual OAL mode prevents ensureOverall() from re-syncing.
+            val effectiveStart = if (old.excludeFromOAL) {
+                if (old.isAftEnd) -newLength else s.overallLengthMm
+            } else startMm
 
-            val base = s.copy(threads = updatedThreads)
-
-            if (_autoSnap.value && startChanged) {
-                base.snapForwardFrom(ComponentKey(old.id, ComponentKind.THREAD))
-            } else {
-                base
-            }
+            s.copy(
+                threads = s.threads.toMutableList().also { l ->
+                    l[index] = old.copy(
+                        startFromAftMm = effectiveStart,
+                        lengthMm = newLength,
+                        majorDiaMm = max(0f, majorDiaMm),
+                        pitchMm = max(0f, pitchMm)
+                    )
+                }
+            )
         }
     }.also {
         if (index in _spec.value.threads.indices) {
@@ -1340,8 +1406,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 val old = l[idx]
                 l[idx] = old.copy(excludeFromOAL = excludeFromOAL)
             }
-        )
+        ).syncExcludedThreadPositions()
     }.also { ensureOverall() }
+
+    fun setThreadEndPosition(id: String, isAft: Boolean) = _spec.update { s ->
+        val idx = s.threads.indexOfFirst { it.id == id }
+        if (idx == -1) s
+        else s.copy(
+            threads = s.threads.toMutableList().also { l ->
+                l[idx] = l[idx].copy(isAftEnd = isAft)
+            }
+        ).syncExcludedThreadPositions()
+    }
 
     /** Remove a [Threads] segment by id with multi-step delete history support. */
     fun removeThread(id: String) {
@@ -1349,9 +1425,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val specBefore = _spec.value
         val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Thread? = null
-        var snapFromKey: ComponentKey? = null
-        var snapFromOrigin = false
-        val removedKey = ComponentKey(id, ComponentKind.THREAD)
 
         _spec.update { s ->
             val idx = s.threads.indexOfFirst { it.id == id }
@@ -1362,11 +1435,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
-            }
-
-            if (_autoSnap.value) {
-                snapFromKey = s.findLeftNeighbor(removedKey)
-                snapFromOrigin = snapFromKey == null
             }
 
             val thread = s.threads[idx]
@@ -1381,9 +1449,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 beforeOrder = orderBefore
             )
 
-            s.copy(
-                threads = s.threads.toMutableList().apply { removeAt(idx) }
-            )
+            val afterRemoval = s.copy(threads = s.threads.toMutableList().apply { removeAt(idx) })
+            // Only merge bodies around in-shaft threads; excluded threads live outside the envelope.
+            val merge = if (!thread.excludeFromOAL)
+                afterRemoval.mergeBodiesAround(thread.startFromAftMm, thread.startFromAftMm + thread.lengthMm) { newId() }
+            else BodySplitResult(afterRemoval, emptyList(), emptyList())
+            merge.removedIds.forEach { orderRemove(it) }
+            merge.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+            merge.spec
         }
 
         deleted?.let { snapshot ->
@@ -1397,15 +1470,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
             redoHistory.clear()
 
-            if (_autoSnap.value) {
-                when {
-                    snapFromKey != null ->
-                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
-                    snapFromOrigin ->
-                        _spec.update { spec -> spec.snapFromOrigin() }
-                }
-            }
-
             // Maintain coverage + flags and show snackbar
             ensureOverall()
             updateUndoRedoFlags()
@@ -1414,44 +1478,47 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Liners
-    fun addLinerAt(startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
+    fun addLinerAt(
+        startMm: Float,
+        lengthMm: Float,
+        odMm: Float,
+        reference: LinerAuthoredReference = LinerAuthoredReference.AFT,
+    ) {
         val id = newId()
-        orderAdd(ComponentKind.LINER, id)
-        val len = max(0f, lengthMm)
-        val od = max(0f, odMm)
-        val liner = Liner(
-            id = id,
-            startFromAftMm = startMm,
-            lengthMm = len,
-            odMm = od,
-            endMmPhysical = startMm + len,
-            authoredReference = LinerAuthoredReference.AFT
-        )
-        s.copy(liners = listOf(liner) + s.liners)
-    }.also {
+        _spec.update { s ->
+            val len = max(0f, lengthMm)
+            val split = s.splitBodiesAround(startMm, startMm + len) { newId() }
+            split.removedIds.forEach { orderRemove(it) }
+            split.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+
+            orderAdd(ComponentKind.LINER, id)
+            val od = max(0f, odMm)
+            val liner = Liner(
+                id = id,
+                startFromAftMm = startMm,
+                lengthMm = len,
+                odMm = od,
+                endMmPhysical = startMm + len,
+                authoredReference = reference
+            )
+            split.spec.copy(liners = listOf(liner) + split.spec.liners)
+        }
         rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
         ensureOverall()
         ensureOrderCoversSpec()
+        _selectedComponentId.value = id
     }
 
     fun updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
         if (index !in s.liners.indices) s else {
             val old = s.liners[index]
-            val startChanged = old.startFromAftMm != startMm || old.lengthMm != lengthMm
             val len = max(0f, lengthMm)
             val od = max(0f, odMm)
-
-            val updatedLiners = s.liners.toMutableList().also { l ->
-                l[index] = old.withPhysical(startMmPhysical = startMm, lengthMm = len, odMm = od)
-            }
-
-            val base = s.copy(liners = updatedLiners)
-
-            if (_autoSnap.value && startChanged) {
-                base.snapForwardFrom(ComponentKey(old.id, ComponentKind.LINER))
-            } else {
-                base
-            }
+            s.copy(
+                liners = s.liners.toMutableList().also { l ->
+                    l[index] = old.withPhysical(startMmPhysical = startMm, lengthMm = len, odMm = od)
+                }
+            )
         }
     }.also {
         if (index in _spec.value.liners.indices) {
@@ -1491,9 +1558,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val specBefore = _spec.value
         val orderBefore = _componentOrder.value
         var deleted: LastDeleted.Liner? = null
-        var snapFromKey: ComponentKey? = null
-        var snapFromOrigin = false
-        val removedKey = ComponentKey(id, ComponentKind.LINER)
 
         _spec.update { s ->
             val idx = s.liners.indexOfFirst { it.id == id }
@@ -1504,11 +1568,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
-            }
-
-            if (_autoSnap.value) {
-                snapFromKey = s.findLeftNeighbor(removedKey)
-                snapFromOrigin = snapFromKey == null
             }
 
             val liner = s.liners[idx]
@@ -1523,9 +1582,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 beforeOrder = orderBefore
             )
 
-            s.copy(
-                liners = s.liners.toMutableList().apply { removeAt(idx) }
-            )
+            val afterRemoval = s.copy(liners = s.liners.toMutableList().apply { removeAt(idx) })
+            val merge = afterRemoval.mergeBodiesAround(liner.startFromAftMm, liner.startFromAftMm + liner.lengthMm) { newId() }
+            merge.removedIds.forEach { orderRemove(it) }
+            merge.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
+            merge.spec
         }
 
         deleted?.let { snapshot ->
@@ -1537,15 +1598,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
             redoHistory.clear()
 
-            if (_autoSnap.value) {
-                when {
-                    snapFromKey != null ->
-                        _spec.update { spec -> spec.snapForwardFrom(snapFromKey!!) }
-                    snapFromOrigin ->
-                        _spec.update { spec -> spec.snapFromOrigin() }
-                }
-            }
-
             ensureOverall()
             updateUndoRedoFlags()
             emitDeletedSnack(snapshot.kind)
@@ -1553,11 +1605,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ────────────────────────────────────────────────────────────────────────────
-    // Axial snapping — keep components end-to-end in physical order
+    // Explicit snap helpers — never called automatically; only on user request
     // ────────────────────────────────────────────────────────────────────────────
-
-    // Snapping logic now lives in the model layer (ShaftSpecExtensions.snapForwardFrom).
-    // ViewModel only decides *when* to snap (autoSnap flag) and which component is the anchor.
 
     private fun newId(): String = UUID.randomUUID().toString()
 
@@ -1654,6 +1703,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Reset order to this document's components only
         _componentOrder.value = emptyList()
         ensureOrderCoversSpec(decoded.spec)
+        markDocumentSaved()
     }
 
     /**
@@ -1686,6 +1736,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
         _componentOrder.value = emptyList()
         ensureOrderCoversSpec(blankSpec)
+        markDocumentSaved()
     }
 
     private fun resetSessionAddDefaults() {
@@ -1763,7 +1814,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         var end = 0f
         s.bodies.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
         s.tapers.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
-        s.threads.forEach { end = max(end, it.startFromAftMm + it.lengthMm) }
+        s.threads.filter { !it.excludeFromOAL }
+                 .forEach { end = max(end, it.startFromAftMm + it.lengthMm) }
         s.liners.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
         return end
     }

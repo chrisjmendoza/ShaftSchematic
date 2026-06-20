@@ -56,10 +56,10 @@ fun buildLinerSpans(
 
 /**
  * OAL span for the top rail.
- * Spans from [x1Mm] (AFT SET) to [x2Mm] (FWD SET) in measurement space.
- * Label shows the SET-to-SET distance so the number always matches the arrow endpoints.
+ * [x1Mm]..[x2Mm] sets the bracket position (moves with include/exclude).
+ * [labelMm] is the value printed on the label — always the user's typed OAL input,
+ * regardless of bracket width.
  */
-fun oalSpan(x1Mm: Double, x2Mm: Double, unit: UnitSystem): DimSpan {
-    val dist = x2Mm - x1Mm
-    return DimSpan(x1Mm, x2Mm, labelTop = "OAL ${formatLenDim(dist, unit)}", kind = SpanKind.OAL)
+fun oalSpan(x1Mm: Double, x2Mm: Double, unit: UnitSystem, labelMm: Double = x2Mm - x1Mm): DimSpan {
+    return DimSpan(x1Mm, x2Mm, labelTop = "OAL ${formatLenDim(labelMm, unit)}", kind = SpanKind.OAL)
 }

@@ -2,6 +2,7 @@ package com.android.shaftschematic.model
 
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
+import kotlin.math.abs
 import kotlin.math.max
 
 /**
@@ -26,7 +27,8 @@ fun ShaftSpec.lastOccupiedEndMm(): Float {
     var maxEnd = 0f
     bodies.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
     tapers.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
-    threads.forEach  { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
+    threads.filter { !it.excludeFromOAL }
+           .forEach { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
     liners.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
     return maxEnd
 }
@@ -44,7 +46,7 @@ fun ShaftSpec.buildPhysicalKeyOrder(): List<ComponentKey> {
     tapers.forEach { t ->
         keysWithStart += ComponentKey(t.id, ComponentKind.TAPER) to t.startFromAftMm
     }
-    threads.forEach { th ->
+    threads.filter { !it.excludeFromOAL }.forEach { th ->
         keysWithStart += ComponentKey(th.id, ComponentKind.THREAD) to th.startFromAftMm
     }
     liners.forEach { ln ->
@@ -77,6 +79,70 @@ fun ShaftSpec.findRightNeighbor(anchor: ComponentKey): ComponentKey? {
     val ordered = buildPhysicalKeyOrder()
     val idx = ordered.indexOf(anchor)
     return if (idx >= 0 && idx + 1 < ordered.size) ordered[idx + 1] else null
+}
+
+/**
+ * Returns the IDs of all components involved in at least one axial overlap.
+ *
+ * Checked pairs:
+ *  Taper–Taper, Taper–Thread, Taper–Liner,
+ *  Thread–Thread, Thread–Liner, Liner–Liner.
+ *
+ * Intentionally NOT checked:
+ *  Body–Body    (cascade snap prevents these),
+ *  Body–Taper   (bodies are fillers; tapers are sacred and get priority),
+ *  Body–Thread  (threads at shaft ends over a body section is normal),
+ *  Body–Liner   (liners sit over bodies by design).
+ *
+ * Excluded threads ([Threads.excludeFromOAL] = true) are skipped.
+ */
+fun ShaftSpec.collidingIds(): Set<String> {
+    val eps = 1e-3f
+
+    fun overlaps(aStart: Float, aLen: Float, bStart: Float, bLen: Float): Boolean {
+        val aEnd = aStart + aLen
+        val bEnd = bStart + bLen
+        return (aStart < bEnd - eps) && (aEnd > bStart + eps)
+    }
+
+    val result = mutableSetOf<String>()
+    val activeThreads = threads.filter { !it.excludeFromOAL }
+
+    for (i in tapers.indices) for (j in i + 1 until tapers.size) {
+        val a = tapers[i]; val b = tapers[j]
+        if (overlaps(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {
+            result += a.id; result += b.id
+        }
+    }
+    for (t in tapers) for (th in activeThreads) {
+        if (overlaps(t.startFromAftMm, t.lengthMm, th.startFromAftMm, th.lengthMm)) {
+            result += t.id; result += th.id
+        }
+    }
+    for (t in tapers) for (ln in liners) {
+        if (overlaps(t.startFromAftMm, t.lengthMm, ln.startFromAftMm, ln.lengthMm)) {
+            result += t.id; result += ln.id
+        }
+    }
+    for (i in activeThreads.indices) for (j in i + 1 until activeThreads.size) {
+        val a = activeThreads[i]; val b = activeThreads[j]
+        if (overlaps(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {
+            result += a.id; result += b.id
+        }
+    }
+    for (th in activeThreads) for (ln in liners) {
+        if (overlaps(th.startFromAftMm, th.lengthMm, ln.startFromAftMm, ln.lengthMm)) {
+            result += th.id; result += ln.id
+        }
+    }
+    for (i in liners.indices) for (j in i + 1 until liners.size) {
+        val a = liners[i]; val b = liners[j]
+        if (overlaps(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {
+            result += a.id; result += b.id
+        }
+    }
+
+    return result
 }
 
 /** Shift every component's start position by [delta] millimeters (clamped at 0). */
@@ -217,4 +283,119 @@ fun ShaftSpec.snapForwardFromOrdered(
     }
 
     return working
+}
+
+// ---- Body split / merge --------------------------------------------------------
+
+/**
+ * Carries the spec mutated by a split or merge, plus the IDs that were removed from
+ * and added to the bodies list so the ViewModel can keep [_componentOrder] in sync.
+ */
+data class BodySplitResult(
+    val spec: ShaftSpec,
+    val removedIds: List<String>,
+    val addedIds: List<String>,
+)
+
+/**
+ * Splits any body whose axial span overlaps [compStart, compEnd] into up to two
+ * fragments, one on each side of the component.  Call this before inserting a new
+ * taper / liner / thread so the carousel reflects independent body sections.
+ *
+ * [genId] is called once per new fragment to produce a unique ID (typically
+ * `UUID.randomUUID().toString()`).  Fragments inherit the parent's [Body.diaMm].
+ */
+fun ShaftSpec.splitBodiesAround(
+    compStart: Float,
+    compEnd: Float,
+    genId: () -> String,
+): BodySplitResult {
+    val eps = 1e-3f
+    val removedIds = mutableListOf<String>()
+    val addedIds   = mutableListOf<String>()
+    val newBodies  = mutableListOf<Body>()
+
+    for (body in bodies) {
+        val bodyStart = body.startFromAftMm
+        val bodyEnd   = bodyStart + body.lengthMm
+        val overlaps  = compStart < bodyEnd - eps && compEnd > bodyStart + eps
+        if (!overlaps) {
+            newBodies += body
+            continue
+        }
+        removedIds += body.id
+        // Left fragment: from body start up to where the component begins
+        if (compStart > bodyStart + eps) {
+            val id = genId()
+            addedIds  += id
+            newBodies += Body(id = id, startFromAftMm = bodyStart, lengthMm = compStart - bodyStart, diaMm = body.diaMm)
+        }
+        // Right fragment: from where the component ends to body end
+        if (compEnd < bodyEnd - eps) {
+            val id = genId()
+            addedIds  += id
+            newBodies += Body(id = id, startFromAftMm = compEnd, lengthMm = bodyEnd - compEnd, diaMm = body.diaMm)
+        }
+    }
+
+    return BodySplitResult(copy(bodies = newBodies), removedIds, addedIds)
+}
+
+/**
+ * After a component spanning [compStart, compEnd] has been removed, look for body
+ * fragments that were created by splitting around it and merge them back into one.
+ *
+ * Merge conditions (both must hold):
+ *  - Body A whose right edge is within [MERGE_EPS] of [compStart]
+ *  - Body B whose left  edge is within [MERGE_EPS] of [compEnd]
+ *
+ * The merged body spans A.start → B.end with diameter = max(A.diaMm, B.diaMm).
+ * If only one side is found (component was at a shaft boundary), that body expands
+ * to fill the freed span.
+ */
+fun ShaftSpec.mergeBodiesAround(
+    compStart: Float,
+    compEnd: Float,
+    genId: () -> String,
+): BodySplitResult {
+    val eps = 0.5f   // looser than split-eps to absorb float drift across add/remove cycles
+
+    val bodyA = bodies.firstOrNull { b -> abs(b.startFromAftMm + b.lengthMm - compStart) < eps }
+    val bodyB = bodies.firstOrNull { b -> abs(b.startFromAftMm - compEnd)                < eps }
+
+    if (bodyA == null && bodyB == null) return BodySplitResult(this, emptyList(), emptyList())
+
+    val removedIds = mutableListOf<String>()
+    val addedIds   = mutableListOf<String>()
+    val newBodies  = bodies.toMutableList()
+
+    if (bodyA != null && bodyB != null) {
+        newBodies -= bodyA
+        newBodies -= bodyB
+        removedIds += listOf(bodyA.id, bodyB.id)
+        val id = genId()
+        addedIds += id
+        newBodies += Body(
+            id             = id,
+            startFromAftMm = bodyA.startFromAftMm,
+            lengthMm       = (bodyB.startFromAftMm + bodyB.lengthMm) - bodyA.startFromAftMm,
+            diaMm          = maxOf(bodyA.diaMm, bodyB.diaMm),
+        )
+    } else if (bodyA != null) {
+        // Component was at the FWD end; expand A to fill the freed span
+        newBodies -= bodyA
+        removedIds += bodyA.id
+        val id = genId()
+        addedIds += id
+        newBodies += bodyA.copy(id = id, lengthMm = compEnd - bodyA.startFromAftMm)
+    } else if (bodyB != null) {
+        // Component was at the AFT end; expand B back to fill the freed span
+        newBodies -= bodyB
+        removedIds += bodyB.id
+        val id = genId()
+        addedIds += id
+        newBodies += bodyB.copy(id = id, startFromAftMm = compStart, lengthMm = bodyB.startFromAftMm + bodyB.lengthMm - compStart)
+    }
+
+    return BodySplitResult(copy(bodies = newBodies), removedIds, addedIds)
 }

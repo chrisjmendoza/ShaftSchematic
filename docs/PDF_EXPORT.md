@@ -1,5 +1,5 @@
 # PDF Export Specification
-Version: v0.4.x
+Version: v0.5.x
 
 ## Purpose
 Defines the **single-page** PDF export process.  
@@ -89,6 +89,28 @@ else → "Scale to Fit"
  
 
 Users do not configure scale manually.
+
+---
+
+# 5.1 Line Thickness Scale
+
+`composeShaftPdf()` accepts a `lineThicknessScale: Float` parameter (range 0.5–2.0, default 1.0). It is applied to two base stroke widths:
+
+- `OUTLINE_PT_BASE = 1.25 pt` × scale → body/taper/thread/liner outline strokes
+- `DIM_PT_BASE = 0.8 pt` × scale → dimension tick and arrow strokes
+
+At 1.0 the output matches the current default thin weight. At 2.0 it matches the original pre-rebased thick weight. The scale is persisted in DataStore and passed from `PdfExportRoute` and `PdfPreviewScreen`.
+
+---
+
+# 5.2 OAL Dimension Span
+
+The OAL label always equals `spec.overallLengthMm` — the user's typed value. The bracket **position** changes based on `excludeFromOAL`:
+
+- **Excluded**: bracket spans AFT SET → FWD SET (threads outside the bracket).
+- **Included**: bracket spans shaft AFT end → FWD SET (thread grouped inside the bracket).
+
+The label is passed as an explicit `labelMm` override to `oalSpan()` so it is always the typed OAL regardless of bracket width. Component dimension rails always reference SET positions.
 
 ---
 

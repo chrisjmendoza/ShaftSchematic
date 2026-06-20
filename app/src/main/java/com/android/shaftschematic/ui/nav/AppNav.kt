@@ -5,14 +5,19 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
@@ -93,6 +98,29 @@ fun AppNav(vm: ShaftViewModel) {
 
         /* ───────── Editor ───────── */
         composable("editor") {
+            var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+            if (pendingAction != null) {
+                AlertDialog(
+                    onDismissRequest = { pendingAction = null },
+                    title = { Text("Unsaved changes") },
+                    text = { Text("You have unsaved changes. Save before continuing?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            pendingAction = null
+                            nav.navigate("saveLocal")
+                        }) { Text("Save") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            val action = pendingAction
+                            pendingAction = null
+                            action?.invoke()
+                        }) { Text("Discard") }
+                    }
+                )
+            }
+
             ShaftEditorRoute(
                 vm = vm,
                 onNavigateHome = {
@@ -102,11 +130,14 @@ fun AppNav(vm: ShaftViewModel) {
                     }
                 },
                 onNew = {
-                    vm.newDocument()
-                    // Stay on editor; state resets via VM
+                    if (vm.hasUnsavedWork()) pendingAction = { vm.newDocument() }
+                    else vm.newDocument()
                 },
                 // OPEN/SAVE = internal storage
-                onOpen = { nav.navigate("openLocal") },
+                onOpen = {
+                    if (vm.hasUnsavedWork()) pendingAction = { nav.navigate("openLocal") }
+                    else nav.navigate("openLocal")
+                },
                 onSave = { nav.navigate("saveLocal") },
                 onOpenSettings = { nav.navigate("settings") },
                 onOpenDeveloperOptions = { nav.navigate("developerOptions") },

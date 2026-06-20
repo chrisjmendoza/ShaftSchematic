@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
@@ -89,6 +90,7 @@ fun ShaftRoute(
     val unitLocked      by vm.unitLocked.collectAsState()
     val showGrid        by vm.showGrid.collectAsState()
     val previewBlackWhiteOnly by vm.previewBlackWhiteOnly.collectAsState()
+    val lineThicknessScale by vm.lineThicknessScale.collectAsState()
     val previewOutline by vm.previewOutlineSetting.collectAsState()
     val previewBodyFill by vm.previewBodyFillSetting.collectAsState()
     val previewTaperFill by vm.previewTaperFillSetting.collectAsState()
@@ -123,7 +125,6 @@ fun ShaftRoute(
     val sessionAddDefaults by vm.sessionAddDefaults.collectAsState()
     val pendingAddPositionMm by vm.pendingAddPositionMm.collectAsState()
     val pendingAddGapMm = pendingAddPositionMm?.let { vm.gapToNextAnchorMm(it) } ?: 50f
-    val runoutConfig by vm.runoutConfig.collectAsState()
 
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
@@ -170,6 +171,7 @@ fun ShaftRoute(
         previewThreadFill = previewThreadFill,
         previewThreadHatch = previewThreadHatch,
         previewBlackWhiteOnly = previewBlackWhiteOnly,
+        lineThicknessScale = lineThicknessScale,
         componentOrder = order,
 
         // model updates (unchanged)
@@ -186,27 +188,26 @@ fun ShaftRoute(
         onSelectComponentById = vm::selectComponentById,
 
         onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
-        onAddTaper  = { s, l, sd, ed, rate -> vm.addTaperAt(s, l, sd, ed, rate) },
+        onAddTaper  = { s, l, sd, ed, rate, kwW, kwD, kwL, kwO, kwS -> vm.addTaperAt(s, l, sd, ed, rate, kwW, kwD, kwL, kwO, kwS) },
         onAddThread = { s, l, maj, p, ex -> vm.addThreadAt(s, l, maj, p, ex) },
-        onAddLiner  = { s, l, od     -> vm.addLinerAt(s, l, od) },
+        onAddLiner  = { s, l, od, ref -> vm.addLinerAt(s, l, od, ref) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },
         onUpdateTaperKeyway = { i, w, d, l, offset, spooned -> vm.updateTaperKeyway(i, w, d, l, offset, spooned) },
+        onUpdateTaperReference = { i, ref -> vm.updateTaperAuthoredReference(i, ref) },
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
 
         onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
+        onSetThreadEndPosition = vm::setThreadEndPosition,
 
         onRemoveBody   = vm::removeBody,
         onRemoveTaper  = vm::removeTaper,
         onRemoveThread = vm::removeThread,
         onRemoveLiner  = vm::removeLiner,
-
-        runoutConfig = runoutConfig,
-        onSetRunoutBubbleCount = { id, count -> vm.setRunoutBubbleCount(id, count) },
 
         snackbarHostState = snackbarHostState,
 

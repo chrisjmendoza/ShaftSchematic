@@ -22,6 +22,19 @@ Defines how the **Overall Length** field behaves, how it interacts with componen
 
 ---
 
+## PDF OAL Dimension Span
+
+The OAL label always shows the user's typed value (`spec.overallLengthMm`). It never changes when threads are included or excluded. Only the **bracket position** moves:
+
+- **Excluded** (`excludeFromOAL = true`): bracket spans **AFT SET → FWD SET**. The threads are drawn outside the bracket.
+- **Included** (`excludeFromOAL = false`): bracket spans **shaft AFT end (0.0) → FWD SET**, visually grouping the AFT thread inside the OAL arrow.
+
+Symmetrically for FWD end threads. Label is passed explicitly to `oalSpan(..., labelMm = spec.overallLengthMm)` so it is always the typed OAL regardless of bracket width.
+
+Component dimension rails (liners, taper lengths) always reference SET positions and are unaffected by this toggle.
+
+---
+
 ## Computation
 
 ### Last occupied end (mm)

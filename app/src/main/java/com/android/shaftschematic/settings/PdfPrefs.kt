@@ -21,6 +21,9 @@ data class PdfPrefs(
     val oalSpacingFactor: Float = 2.5f,
     val tieringMode: PdfTieringMode = PdfTieringMode.AUTO,
     val showComponentTitles: Boolean = true,
+    val shadedBodies: Boolean = false,
+    val shadedTapers: Boolean = false,
+    val shadedLiners: Boolean = false,
 ) {
     fun clamped(): PdfPrefs =
         copy(oalSpacingFactor = oalSpacingFactor.coerceIn(1.0f, 6.0f))

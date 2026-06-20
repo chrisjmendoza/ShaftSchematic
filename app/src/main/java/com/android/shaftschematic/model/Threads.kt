@@ -24,7 +24,10 @@ import java.util.UUID
  * @property pitchMm Thread pitch (distance per turn) in **mm/turn**. May be 0 in legacy files.
  * @property lengthMm Axial length of the threaded section.
  * @property excludeFromOAL If true, this thread is **excluded** from overall-length calculations
- *                          (but still renders in the preview/PDF).
+ *                          (but still renders in the preview/PDF). Position is fixed at the shaft
+ *                          end determined by [isAftEnd].
+ * @property isAftEnd When [excludeFromOAL] is true: true = thread sits at the AFT end (start = 0),
+ *                    false = FWD end (start = OAL − length). Ignored when included in OAL.
  * @property tpi Optional threads-per-inch (imperial). Preferred when set; see [normalized].
  *
  * Invariants:
@@ -41,6 +44,7 @@ data class Threads(
     override val lengthMm: Float = 0f,
     @JsonNames("excludeFromOAL", "excludeFromOal", "exclude_from_oal")
     val excludeFromOAL: Boolean = false,
+    val isAftEnd: Boolean = true,
     val tpi: Float? = null
 ) : Segment {
 

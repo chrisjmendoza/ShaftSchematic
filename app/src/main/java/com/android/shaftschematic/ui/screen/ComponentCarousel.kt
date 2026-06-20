@@ -76,7 +76,6 @@ import com.android.shaftschematic.ui.util.linerWarningMessage
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.taperWarningMessage
 import com.android.shaftschematic.ui.util.threadWarningMessage
-import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
@@ -113,24 +112,23 @@ internal fun ComponentCarouselPager(
     edgeArrowWidthDp: Int,
     showComponentDebugLabels: Boolean,
     selectedComponentId: String?,
-    /** Current runout configuration — used to show bubble count controls in each card. */
-    runoutConfig: RunoutConfig = RunoutConfig(),
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
+    onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+    onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
     onRemoveBody: (String) -> Unit,
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
     onSelectComponentById: (String?) -> Unit,
-    /** Called when the user changes the runout bubble count for a component. */
-    onSetRunoutBubbleCount: (componentId: String, count: Int) -> Unit = { _, _ -> },
+    collidingComponentIds: Set<String> = emptySet(),
 ) {
     val bodyTitleById   = remember(spec.bodies)                    { buildBodyTitleById(spec) }
     val taperTitleById  = remember(spec.tapers)                    { buildTaperTitleById(spec) }
@@ -165,14 +163,15 @@ internal fun ComponentCarouselPager(
     var pagerScrollStartedByUser by remember { mutableStateOf(false) }
     var pagerStartPage           by remember { mutableStateOf<Int?>(null) }
 
-    // Auto-jump to newest card after insertion; seed selection on initial load.
+    // Seed selection and scroll on initial load only (nothing selected yet).
+    // When components are added to an already-populated carousel we don't auto-jump —
+    // the selection-following effect below handles repositioning without the fighting
+    // scrollToPage / animateScrollToPage conflict that caused visible jumping.
     LaunchedEffect(rowsSorted.size) {
-        if (rowsSorted.isNotEmpty()) {
+        if (rowsSorted.isNotEmpty() && selectedComponentId == null) {
             val newPage = rowsSorted.size - 1
             pagerState.scrollToPage(newPage)
-            if (selectedComponentId == null) {
-                onSelectComponentById(rowsSorted.getOrNull(newPage)?.component?.id)
-            }
+            onSelectComponentById(rowsSorted.getOrNull(newPage)?.component?.id)
         }
     }
 
@@ -231,19 +230,20 @@ internal fun ComponentCarouselPager(
                     spec = spec, unit = unit, row = row, physicalIndex = page,
                     outerPaddingHorizontal = componentCardPadding,
                     showComponentDebugLabels = showComponentDebugLabels,
-                    runoutConfig = runoutConfig,
                     onAddBody = onAddBody,
                     onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
+                    onUpdateTaperReference = onUpdateTaperReference,
                     onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
                     bodyTitleById = bodyTitleById, taperTitleById = taperTitleById,
                     linerTitleById = linerTitleById, threadTitleById = threadTitleById,
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
+                    onSetThreadEndPosition = onSetThreadEndPosition,
                     onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner,
-                    onSetRunoutBubbleCount = onSetRunoutBubbleCount,
+                    collidingComponentIds = collidingComponentIds,
                 )
             }
         }
@@ -300,12 +300,11 @@ internal fun ComponentPagerCard(
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
-    /** Runout config — drives the bubble count control shown at the bottom of each card. */
-    runoutConfig: RunoutConfig = RunoutConfig(),
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
+    onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -315,11 +314,12 @@ internal fun ComponentPagerCard(
     linerTitleById: Map<String, String>,
     threadTitleById: Map<String, String>,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+    onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
     onRemoveBody: (String) -> Unit,
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
-    onSetRunoutBubbleCount: (componentId: String, count: Int) -> Unit = { _, _ -> },
+    collidingComponentIds: Set<String> = emptySet(),
 ) {
     fun f1(mm: Float): String = "%.1f".format(mm)
 
@@ -372,6 +372,7 @@ internal fun ComponentPagerCard(
             ComponentCard(
                 title = bodyTitleById[b.id] ?: "Body",
                 debugText = if (showComponentDebugLabels) "id=${b.id} • startMm=${f1(b.startFromAftMm)} • endMm=${f1(b.startFromAftMm + b.lengthMm)}" else null,
+                errorMessage = if (b.id in collidingComponentIds) "Overlaps another component" else null,
                 warningMessage = bodyWarningMessage(b),
                 componentId = b.id, componentKind = ComponentKind.BODY,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -389,12 +390,6 @@ internal fun ComponentPagerCard(
                 CommitNum("Ø (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, b.lengthMm, it) }
                 }
-                RunoutStationControl(
-                    componentId = b.id,
-                    defaultCount = RunoutConfig.BODY_DEFAULT_COUNT,
-                    runoutConfig = runoutConfig,
-                    onSetCount = { onSetRunoutBubbleCount(b.id, it) },
-                )
             }
         }
 
@@ -403,9 +398,16 @@ internal fun ComponentPagerCard(
             val idx    = explicitIndex ?: return
             val t      = spec.tapers.getOrNull(idx) ?: return
             val endMap = taperSetLetMapping(t, spec.overallLengthMm)
+            val isFwdRef = t.authoredReference == LinerAuthoredReference.FWD
+            val authoredStartMm = if (isFwdRef) {
+                spec.overallLengthMm - t.startFromAftMm - t.lengthMm
+            } else {
+                t.startFromAftMm
+            }
             ComponentCard(
                 title = taperTitleById[t.id] ?: "Taper",
                 debugText = if (showComponentDebugLabels) "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}" else null,
+                errorMessage = if (t.id in collidingComponentIds) "Overlaps another component" else null,
                 warningMessage = taperWarningMessage(t),
                 componentId = t.id, componentKind = ComponentKind.TAPER,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -414,8 +416,37 @@ internal fun ComponentPagerCard(
                     onRemoveTaper(t.id)
                 }
             ) {
-                CommitNum("Start (${abbr(unit)})", disp(t.startFromAftMm, unit), validator = startValidator(t.id, ComponentKind.TAPER, t.lengthMm)) { s ->
-                    toMmOrNull(s, unit)?.let { onUpdateTaper(idx, it, t.lengthMm, t.startDiaMm, t.endDiaMm, t.taperRateText) }
+                // AFT / FWD reference toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val selectedColors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+                        containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
+                    )
+                    FilterChip(selected = !isFwdRef, onClick = { onUpdateTaperReference(idx, LinerAuthoredReference.AFT) },
+                        label = { Text("AFT") }, colors = selectedColors,
+                        border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                    FilterChip(selected = isFwdRef, onClick = { onUpdateTaperReference(idx, LinerAuthoredReference.FWD) },
+                        label = { Text("FWD") }, colors = selectedColors,
+                        border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                }
+
+                CommitNum(
+                    label = "Start from ${if (isFwdRef) "FWD" else "AFT"} (${abbr(unit)})",
+                    initialDisplay = disp(authoredStartMm, unit),
+                    validator = { raw ->
+                        val authoredMm = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
+                        val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
+                        startOverlapErrorMm(spec, t.id, ComponentKind.TAPER, t.lengthMm, physStart)
+                    }
+                ) { s ->
+                    val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
+                    onUpdateTaper(idx, physStart, t.lengthMm, t.startDiaMm, t.endDiaMm, t.taperRateText)
                 }
                 CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateTaper(idx, t.startFromAftMm, it, t.startDiaMm, t.endDiaMm, t.taperRateText) }
@@ -474,12 +505,6 @@ internal fun ComponentPagerCard(
                         onCheckedChange = null
                     )
                 }
-                RunoutStationControl(
-                    componentId = t.id,
-                    defaultCount = RunoutConfig.TAPER_DEFAULT_COUNT,
-                    runoutConfig = runoutConfig,
-                    onSetCount = { onSetRunoutBubbleCount(t.id, it) },
-                )
             }
         }
 
@@ -491,7 +516,10 @@ internal fun ComponentPagerCard(
             ComponentCard(
                 title = threadTitleById[th.id] ?: "Thread",
                 debugText = if (showComponentDebugLabels) "id=${th.id} • startMm=${f1(th.startFromAftMm)} • endMm=${f1(th.startFromAftMm + th.lengthMm)}" else null,
-                errorMessage = startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm),
+                errorMessage = if (th.excludeFromOAL) null else (
+                    startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)
+                        ?: if (th.id in collidingComponentIds) "Overlaps another component" else null
+                ),
                 warningMessage = threadWarningMessage(th),
                 componentId = th.id, componentKind = ComponentKind.THREAD,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -514,15 +542,31 @@ internal fun ComponentPagerCard(
                     androidx.compose.material3.Switch(checked = includeInOal, onCheckedChange = null)
                 }
                 if (!includeInOal) {
-                    Text(
-                        "OAL will be shown as length excluding this thread.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-                CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit), validator = startValidator(th.id, ComponentKind.THREAD, th.lengthMm)) { s ->
-                    toMmOrNull(s, unit)?.let { onUpdateThread(idx, it, th.lengthMm, th.majorDiaMm, th.pitchMm) }
+                    // AFT / FWD end selector — replaces the start input for excluded threads
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Thread end:", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val chipColors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+                            containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
+                        )
+                        FilterChip(selected = th.isAftEnd,
+                            onClick = { onSetThreadEndPosition(th.id, true) },
+                            label = { Text("AFT") }, colors = chipColors,
+                            border = if (th.isAftEnd) BorderStroke(1.dp, Color.Black) else null)
+                        FilterChip(selected = !th.isAftEnd,
+                            onClick = { onSetThreadEndPosition(th.id, false) },
+                            label = { Text("FWD") }, colors = chipColors,
+                            border = if (!th.isAftEnd) BorderStroke(1.dp, Color.Black) else null)
+                    }
+                } else {
+                    CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit), validator = startValidator(th.id, ComponentKind.THREAD, th.lengthMm)) { s ->
+                        toMmOrNull(s, unit)?.let { onUpdateThread(idx, it, th.lengthMm, th.majorDiaMm, th.pitchMm) }
+                    }
                 }
                 CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, th.lengthMm, it, th.pitchMm) }
@@ -588,7 +632,8 @@ internal fun ComponentPagerCard(
                     }
                 },
                 debugText = if (showComponentDebugLabels) "id=${ln.id} • startMm=${f1(ln.startFromAftMm)} • endMm=${f1(ln.startFromAftMm + ln.lengthMm)}" else null,
-                errorMessage = startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm),
+                errorMessage = startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm)
+                    ?: if (ln.id in collidingComponentIds) "Overlaps another component" else null,
                 warningMessage = linerWarningMessage(ln),
                 componentId = ln.id, componentKind = ComponentKind.LINER,
                 outerPaddingHorizontal = outerPaddingHorizontal,
@@ -642,12 +687,6 @@ internal fun ComponentPagerCard(
                 CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateLiner(idx, ln.startFromAftMm, ln.lengthMm, it) }
                 }
-                RunoutStationControl(
-                    componentId = ln.id,
-                    defaultCount = RunoutConfig.LINER_DEFAULT_COUNT,
-                    runoutConfig = runoutConfig,
-                    onSetCount = { onSetRunoutBubbleCount(ln.id, it) },
-                )
             }
         }
     }
@@ -766,70 +805,3 @@ private fun dispKw(mm: Float, unit: UnitSystem): String = when (unit) {
 private fun Float.fmtTrim(d: Int) = "%.${d}f".format(this).trimEnd('0').trimEnd('.')
 
 internal fun pitchMmToTpi(pitchMm: Float): Float = if (pitchMm > 0f) 25.4f / pitchMm else 0f
-
-// ─────────────────────────────────────────────────────────────────────────────
-// RunoutStationControl — per-component bubble count adjuster
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * A compact +/- control shown at the bottom of each component card (except threads).
- *
- * Shows "Runout stations: N  [−] [+]" using the component's effective count — either
- * the user override from [runoutConfig] or the [defaultCount] for this component type.
- *
- * The control is intentionally subtle (secondary text style) so it doesn't compete with
- * the primary measurement fields. Users who never touch it see sensible defaults; users
- * who need more stations can increment without leaving the editor.
- *
- * @param componentId   The ID of the component whose bubble count is being adjusted.
- * @param defaultCount  The count used when no override is present in [runoutConfig].
- * @param runoutConfig  Current runout preferences — checked for an existing override.
- * @param onSetCount    Called with the new count when +/- is tapped. Minimum is 1.
- */
-@Composable
-private fun RunoutStationControl(
-    componentId: String,
-    defaultCount: Int,
-    runoutConfig: RunoutConfig,
-    onSetCount: (Int) -> Unit,
-) {
-    val currentCount = runoutConfig.componentOverrides[componentId] ?: defaultCount
-
-    androidx.compose.material3.HorizontalDivider(
-        modifier = Modifier.padding(vertical = 4.dp),
-        color = MaterialTheme.colorScheme.outlineVariant,
-    )
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = "Runout stations:",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            androidx.compose.material3.IconButton(
-                onClick = { if (currentCount > 1) onSetCount(currentCount - 1) },
-                enabled = currentCount > 1,
-            ) {
-                Text("−", style = MaterialTheme.typography.titleMedium)
-            }
-            Text(
-                text = "$currentCount",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
-            androidx.compose.material3.IconButton(
-                onClick = { onSetCount(currentCount + 1) },
-            ) {
-                Text("+", style = MaterialTheme.typography.titleMedium)
-            }
-        }
-    }
-}

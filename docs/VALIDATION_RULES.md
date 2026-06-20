@@ -197,14 +197,29 @@ Non-blocking warnings:
 
 Overlaps **never** block validation.
 
-Allowed with warnings:
+### 5.1 Body Overlaps — Not Stored, Not Checked
+
+Bodies **never overlap sacred components in the stored spec**. When a sacred component is placed the engine automatically splits any overlapping body into fragments on either side (see DATA_MODEL.md §Component Priority). When a sacred component is deleted adjacent body fragments merge back.
+
+Because the split/merge is handled proactively at add/delete time, the following pairs are never in an overlapping state in the spec at rest and are excluded from all collision detection:
+
 - Body ↔ Taper
 - Body ↔ Liner
-- Body ↔ Threads
-- Taper ↔ Thread  
-- Thread ↔ Liner (rare but permissible)
+- Body ↔ Thread (in-shaft only; excluded threads live outside the envelope)
 
-Reasoning: marine machining workflows often use stacked geometry, nested regions, or overlapping descriptive elements.
+### 5.2 Sacred-Component Overlaps — Warning Shown
+
+The following pairs are checked by `collidingIds()`. A non-blocking warning ("Overlaps another component") is shown in the carousel card when detected:
+- Taper ↔ Taper
+- Taper ↔ Thread (non-excluded only)
+- Taper ↔ Liner
+- Thread ↔ Thread (non-excluded only)
+- Thread ↔ Liner
+- Liner ↔ Liner
+
+Excluded threads (`excludeFromOAL = true`) are skipped in all collision checks — they sit outside the shaft envelope and their position is always derived.
+
+Reasoning: marine machining workflows often use stacked geometry and nested regions; overlaps are flagged as warnings only, never blocking.
 
 ---
 
@@ -212,8 +227,10 @@ Reasoning: marine machining workflows often use stacked geometry, nested regions
 
 Before exporting:
 1. ViewModel runs full validation.
-2. If **any blocking error** exists → cancel export.
+2. If **any blocking error** exists → cancel export, show dialog with reason.
 3. If only warnings remain → export continues.
+
+`blockingExportError()` in `PdfExportRoute` checks component positions for out-of-bounds starts. **Excluded threads** (`excludeFromOAL = true`) are skipped in this check — they have negative or OAL+ `startFromAftMm` by design and are not part of the shaft envelope.
 
 PDF export does not interpret warnings; UI handles presentation.
 

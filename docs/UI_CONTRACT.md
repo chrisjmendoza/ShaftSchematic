@@ -31,19 +31,20 @@ Only the ViewModel may change the `ShaftSpec`.
 
 # 2. Input Fields (NumberField)
 
-### 2.1 Commit-on-Blur Rule (Mandatory)
-Numeric fields **must not** commit changes while typing.
+### 2.1 Commit Timing
 
-`LocalState.text` ← user types
-On blur or Done:
-`parse text → float?`
-`VM.update*(parsed value)`
+Two commit strategies are used depending on context:
 
- 
+**Add dialog fields (`CommitNumField`)** — commit on **every keystroke** (and again on blur for safety).
+This is mandatory because the user may tap the "Add" / "Submit" button while a field is still focused, before a blur event fires. Committing on keystroke ensures the value is always captured regardless of focus order.
+- `LaunchedEffect(initial)` detects external resets (e.g., dialog re-open) without causing cursor-jump on normal typing.
+- `onFocusChanged` also commits on blur as a belt-and-suspenders safety net.
 
-Benefits:
-- No jitter from immediate recomposition
-- User can type partial numbers without errors
+**Carousel edit fields** — commit on **blur / Done** only.
+- Avoids recomposition jitter during typing.
+- User can type partial numbers freely.
+
+In both cases `parse text → float?` and `VM.update*(parsed)` are called only with valid values; invalid input reverts to the last committed text.
 
 ### 2.2 Tap-to-Clear(0)
 When the committed value is exactly `0f`, tapping the field clears it.
@@ -74,6 +75,43 @@ All Add/Edit dialogs follow the same conventions:
 - Dialog closes only when:
   - Update succeeds, and  
   - ViewModel applies new spec
+
+### 3.1.1 Add Entry Points
+
+There are two paths to open an add dialog:
+
+1. **Tap-to-add** (tap on canvas gap): sets `tapAddStartMm` and `tapAddGapMm` from the tapped position, then opens the appropriate `tapAdd*Open` dialog state.
+2. **FAB chooser** (`InlineAddChooserDialog`): computes default start via `computeAddDefaults()` (see §3.1.2), sets the same state vars, then opens the same dialogs.
+
+Both paths go through the full dialog — there is **no quick-add bypass** that skips user input.
+
+### 3.1.2 Default Start Position (`computeAddDefaults`)
+
+The default start for a new component is the **furthest FWD end** among sacred components only:
+- All tapers
+- All liners
+- Threads with `excludeFromOAL = false`
+
+Bodies are fillers and are **excluded** from this calculation. Excluded threads sit outside the shaft envelope and are **excluded**. This ensures new components always default to the next logical open slot in the shaft, not past the end.
+
+### 3.1.3 Auto-Selection After Add
+
+When any `add*At` function completes in the ViewModel, `selectedComponentId` is set to the newly added component's ID. The carousel auto-scrolls to and highlights the new component.
+
+### 3.1.4 Body Split/Merge and the Carousel
+
+Bodies are independent spec entities. The carousel shows **one card per body** in the spec — there is no deduplication. When a sacred component is placed over a body the engine produces two body fragments (each with a unique ID); the carousel shows both as separate cards so the user can edit each section's diameter independently.
+
+When a sacred component is deleted the engine merges adjacent body fragments back into one card. The merged diameter is `max(left.diaMm, right.diaMm)`; the user can adjust it afterward.
+
+### 3.1.5 Direction Chip (AFT / FWD Toggle)
+
+Add dialogs that expose a direction toggle (Liner, Taper) use a custom `DirectionChip` composable:
+
+- **Selected state**: 2 dp primary-color border, `primaryContainer` background.
+- **Unselected state**: no border, `surface` background.
+
+The border (not fill) is the selection indicator. An outlined unselected chip would visually compete with the selected chip; the borderless unselected state keeps the hierarchy clear.
 
 ### 3.2 Taper Dialog
 Real-time fields:

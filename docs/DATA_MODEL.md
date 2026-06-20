@@ -44,6 +44,24 @@ val Segment.endFromAftMm: Float get() = startFromAftMm + lengthMm
 fun Segment.isWithin(overallLengthMm: Float) =
     endFromAftMm <= overallLengthMm + 1e-3f && startFromAftMm >= 0f
 Components
+
+### Component Priority
+
+**Sacred components** (Taper, Threads, Liner) have positional priority. Their authored positions define the shaft geometry. Default start-position calculations for new components are based only on where these end.
+
+**Bodies describe raw shaft material** between sacred components. They are excluded from collision detection and from new-component default-start calculations.
+
+#### Body Split / Merge (automatic)
+
+Bodies are **independent spec entities** — each has its own UUID, position, length, and `diaMm`. The engine manages split/merge automatically:
+
+- **On add** (taper / liner / in-shaft thread): any body whose span overlaps the new component is removed and replaced with up to two fragment bodies — one on each side of the new component. Each fragment gets a new UUID and inherits the parent's `diaMm`.
+- **On delete**: the engine searches for a body whose right edge aligns with the deleted component's start (within 0.5 mm) and a body whose left edge aligns with its end. If both are found they merge into one body spanning the entire region; the merged diameter is `max(leftDiaMm, rightDiaMm)`. If only one side exists (component was at a shaft boundary), that body expands to fill the freed span.
+
+The user can adjust the merged body's diameter manually after a merge.
+
+Each physical body section is its own carousel card (independent selection, independent edit).
+
 Body
 @Serializable
 data class Body(

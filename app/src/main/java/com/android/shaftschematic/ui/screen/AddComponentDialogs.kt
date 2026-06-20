@@ -8,25 +8,37 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.ui.util.collectAddWarnings
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.max
@@ -52,11 +64,11 @@ private data class AddDialogDefaults(
 @Composable
 private fun rememberAddDialogDefaults(spec: ShaftSpec): AddDialogDefaults {
     val startMm = remember(spec) {
+        // Bodies are fillers; excluded threads sit outside the shaft envelope.
         listOfNotNull(
-            spec.bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
             spec.tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
             spec.liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
-            spec.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm },
+            spec.threads.filter { !it.excludeFromOAL }.maxOfOrNull { it.startFromAftMm + it.lengthMm },
         ).maxOrNull() ?: 0f
     }
     val lastDia = remember(spec) {
@@ -133,33 +145,84 @@ fun AddBodyDialog(
 fun AddLinerDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
+    overallIsManual: Boolean = false,
     initialStartMm: Float? = null,
     initialLengthMm: Float? = null,
-    onSubmit: (startMm: Float, lengthMm: Float, odMm: Float) -> Unit,
+    onSubmit: (startMm: Float, lengthMm: Float, odMm: Float, reference: LinerAuthoredReference) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
-    val effectiveStartMm = initialStartMm ?: d.startMm
     val effectiveLengthMm = initialLengthMm ?: 100f
 
-    var start by remember(unit, effectiveStartMm) { mutableStateOf(toDisplayString(effectiveStartMm, unit)) }
+    var isFwd by remember { mutableStateOf(false) }
+
+    // Independent start strings so toggling direction doesn't overwrite user input.
+    val defaultAftStartMm = initialStartMm ?: d.startMm
+    var startAft by remember(unit, defaultAftStartMm) { mutableStateOf(toDisplayString(defaultAftStartMm, unit)) }
+    var startFwd by remember(unit) { mutableStateOf("0") }
+
     var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
     var od by remember(unit, d.linerOdMm) { mutableStateOf(toDisplayString(max(1f, d.linerOdMm), unit)) }
 
-    val startMm = toMmOrNull(start, unit) ?: -1f
+    val startEntered = toMmOrNull(if (isFwd) startFwd else startAft, unit) ?: -1f
     val lengthMm = toMmOrNull(length, unit) ?: -1f
     val odMm = toMmOrNull(od, unit) ?: -1f
 
-    val startError = if (startMm >= 0f && lengthMm > 0f)
-        startOverlapErrorMm(spec, "", ComponentKind.LINER, lengthMm, startMm)
+    // Physical start from AFT.
+    val physStartMm = if (isFwd) {
+        if (startEntered >= 0f && lengthMm > 0f)
+            (spec.overallLengthMm - startEntered - lengthMm).coerceAtLeast(0f)
+        else -1f
+    } else {
+        startEntered
+    }
+
+    val startError = if (physStartMm >= 0f && lengthMm > 0f)
+        startOverlapErrorMm(spec, "", ComponentKind.LINER, lengthMm, physStartMm)
     else null
+
+    // Pre-submit collision / bounds warning state.
+    var warningLines by remember { mutableStateOf(emptyList<String>()) }
+    var warningAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    if (warningAction != null) {
+        AlertDialog(
+            onDismissRequest = { warningAction = null },
+            title = { Text("Add Anyway?") },
+            text = {
+                Column {
+                    warningLines.forEach { Text("• $it") }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { warningAction?.invoke(); warningAction = null }) { Text("Add Anyway") }
+            },
+            dismissButton = {
+                TextButton(onClick = { warningAction = null }) { Text("Cancel") }
+            }
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Add Liner") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
-                CommitNumField("Start (${abbr(unit)})", start, errorText = startError) { start = it }
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Measure From:", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    DirectionChip("AFT", selected = !isFwd) { isFwd = false }
+                    DirectionChip("FWD", selected =  isFwd) { isFwd = true  }
+                }
+                CommitNumField(
+                    label = "Start from ${if (isFwd) "FWD" else "AFT"} (${abbr(unit)})",
+                    initial = if (isFwd) startFwd else startAft,
+                    errorText = startError
+                ) { if (isFwd) startFwd = it else startAft = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Length (${abbr(unit)})", length) { length = it }
                 Spacer(Modifier.height(8.dp))
@@ -167,8 +230,13 @@ fun AddLinerDialog(
             }
         },
         confirmButton = {
-            val ok = startMm >= 0f && lengthMm > 0f && odMm > 0f && startError == null
-            Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, odMm) }) { Text("Add") }
+            val ok = physStartMm >= 0f && lengthMm > 0f && odMm > 0f && startError == null
+            Button(enabled = ok, onClick = {
+                val ref = if (isFwd) LinerAuthoredReference.FWD else LinerAuthoredReference.AFT
+                val action = { onSubmit(physStartMm, lengthMm, odMm, ref) }
+                val warnings = collectAddWarnings(spec, physStartMm, lengthMm, overallIsManual)
+                if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
+            }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
@@ -182,6 +250,7 @@ fun AddLinerDialog(
 fun AddThreadDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
+    overallIsManual: Boolean = false,
     initialStartMm: Float,
     initialLengthMm: Float,
     initialMajorDiaMm: Float,
@@ -213,6 +282,28 @@ fun AddThreadDialog(
         startOverlapErrorMm(spec, "", ComponentKind.THREAD, lengthMm, startMm)
     else null
 
+    // Pre-submit collision / bounds warning state.
+    var warningLines by remember { mutableStateOf(emptyList<String>()) }
+    var warningAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    if (warningAction != null) {
+        AlertDialog(
+            onDismissRequest = { warningAction = null },
+            title = { Text("Add Anyway?") },
+            text = {
+                Column {
+                    warningLines.forEach { Text("• $it") }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { warningAction?.invoke(); warningAction = null }) { Text("Add Anyway") }
+            },
+            dismissButton = {
+                TextButton(onClick = { warningAction = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Add Thread") },
@@ -241,7 +332,14 @@ fun AddThreadDialog(
         },
         confirmButton = {
             val ok = startMm >= 0f && lengthMm > 0f && majorMm > 0f && tpi > 0f && startError == null
-            Button(enabled = ok, onClick = { onSubmit(startMm, lengthMm, majorMm, tpi, !countInOal) }) { Text("Add") }
+            Button(enabled = ok, onClick = {
+                val excludeFromOAL = !countInOal
+                val action = { onSubmit(startMm, lengthMm, majorMm, tpi, excludeFromOAL) }
+                // Excluded threads don't live on the shaft span, so skip collision for them.
+                val warnings = if (excludeFromOAL) emptyList()
+                               else collectAddWarnings(spec, startMm, lengthMm, overallIsManual)
+                if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
+            }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
@@ -256,60 +354,194 @@ fun AddThreadDialog(
 fun AddTaperDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
+    overallIsManual: Boolean = false,
     initialStartMm: Float? = null,
     initialLengthMm: Float? = null,
-    onSubmit: (startMm: Float, lengthMm: Float, setDiaMm: Float, letDiaMm: Float, rateText: String) -> Unit,
+    onSubmit: (startMm: Float, lengthMm: Float, setDiaMm: Float, letDiaMm: Float, rateText: String,
+               keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
+               keywayOffsetFromSetMm: Float, keywaySpooned: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
-    val effectiveStartMm = initialStartMm ?: d.startMm
+
+    val defaultAftStartMm = initialStartMm ?: d.startMm
     val effectiveLengthMm = initialLengthMm ?: 100f
 
-    var start by remember(unit, effectiveStartMm) { mutableStateOf(toDisplayString(effectiveStartMm, unit)) }
-    var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
-    var setText by remember(unit, d.lastDiaMm) { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
-    var letText by remember(unit) { mutableStateOf("") } // allow deriving via rate
-    var rateText by remember { mutableStateOf("1:12") }  // legacy default; bare "1" means 1:12
+    // True = measuring from the FWD shaft face; false = from the AFT face.
+    var isFwd by remember { mutableStateOf(false) }
 
-    val startMm = toMmOrNull(start, unit) ?: -1f
+    // Keep independent start strings per direction so toggling doesn't clobber user input.
+    var startAft by remember(unit, defaultAftStartMm) { mutableStateOf(toDisplayString(defaultAftStartMm, unit)) }
+    var startFwd by remember(unit) { mutableStateOf("0") }
+
+    var length  by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
+    var setText by remember(unit, d.lastDiaMm)       { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
+    var letText by remember(unit) { mutableStateOf("") }  // allow deriving via rate
+    var rateText by remember { mutableStateOf("1:12") }   // legacy default; bare "1" means 1:12
+
+    // Keyway — all optional (blank = 0)
+    var kwWidth   by remember { mutableStateOf("") }
+    var kwDepth   by remember { mutableStateOf("") }
+    var kwLength  by remember { mutableStateOf("") }
+    var kwOffset  by remember { mutableStateOf("") }
+    var kwSpooned by remember { mutableStateOf(false) }
+
+    val startEntered = toMmOrNull(if (isFwd) startFwd else startAft, unit) ?: -1f
     val lengthMm = toMmOrNull(length, unit) ?: -1f
     val setMm = toMmOrNull(setText, unit) ?: -1f   // -1 means "not provided"
     val letMm = toMmOrNull(letText, unit) ?: -1f
 
-    // Allow commit-on-blur behavior (no live mutation outward)
+    // Resolve physical AFT-origin start from the entered value.
+    val physStartMm = if (isFwd) {
+        if (startEntered >= 0f && lengthMm > 0f)
+            (spec.overallLengthMm - startEntered - lengthMm).coerceAtLeast(0f)
+        else -1f
+    } else {
+        startEntered
+    }
+
+    // Pre-submit collision / bounds warning state.
+    var warningLines by remember { mutableStateOf(emptyList<String>()) }
+    var warningAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    if (warningAction != null) {
+        AlertDialog(
+            onDismissRequest = { warningAction = null },
+            title = { Text("Add Anyway?") },
+            text = {
+                Column {
+                    warningLines.forEach { Text("• $it") }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { warningAction?.invoke(); warningAction = null }) { Text("Add Anyway") }
+            },
+            dismissButton = {
+                TextButton(onClick = { warningAction = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    val keywayOffsetMm = toMmOrNull(kwOffset, unit) ?: 0f
+    val isFloating = keywayOffsetMm > 0f
+
+    val scroll = rememberScrollState()
+
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Add Taper") },
         text = {
-            Column(Modifier.padding(top = 4.dp)) {
-                CommitNumField("Start (${abbr(unit)})", start) { start = it }
+            Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
+                // Direction selector
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Direction:", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    DirectionChip("AFT", selected = !isFwd) { isFwd = false }
+                    DirectionChip("FWD", selected =  isFwd) { isFwd = true  }
+                }
+                CommitNumField(
+                    "Start from ${if (isFwd) "FWD" else "AFT"} (${abbr(unit)})",
+                    if (isFwd) startFwd else startAft
+                ) { if (isFwd) startFwd = it else startAft = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Length (${abbr(unit)})", length) { length = it }
                 Spacer(Modifier.height(8.dp))
+                // SET is always Small End; LET is always Large End.
+                // For AFT taper: SET is at the AFT (start) face.
+                // For FWD taper: SET is at the FWD (end) face — the model stores AFT→FWD diameters,
+                // so the submit handler swaps them.
                 CommitNumField("S.E.T. Ø (${abbr(unit)})", setText) { setText = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("L.E.T. Ø (${abbr(unit)})", letText) { letText = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Taper Rate (1:12, 3/4, 1)", rateText) { rateText = it }
+                Spacer(Modifier.height(12.dp))
+                Text("Keyway (optional)", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(4.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    CommitNumField("KW W (${abbr(unit)})", kwWidth,
+                        modifier = Modifier.weight(1f)) { kwWidth = it }
+                    Text("×", style = MaterialTheme.typography.titleMedium)
+                    CommitNumField("KW D (${abbr(unit)})", kwDepth,
+                        modifier = Modifier.weight(1f)) { kwDepth = it }
+                }
+                Spacer(Modifier.height(8.dp))
+                CommitNumField("KW L (${abbr(unit)})", kwLength) { kwLength = it }
+                Spacer(Modifier.height(8.dp))
+                CommitNumField("KW Offset from SET (${abbr(unit)})", kwOffset) { kwOffset = it }
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        if (isFloating) "Keyway spooned (N/A — floating)" else "Keyway spooned",
+                        modifier = Modifier.weight(1f),
+                        color = if (isFloating) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = kwSpooned && !isFloating,
+                        enabled = !isFloating,
+                        onCheckedChange = { if (!isFloating) kwSpooned = it }
+                    )
+                }
             }
         },
         confirmButton = {
-            val ok = startMm >= 0f && lengthMm > 0f && (setMm > 0f || letMm > 0f)
+            val ok = physStartMm >= 0f && lengthMm > 0f && (setMm > 0f || letMm > 0f)
             Button(
                 enabled = ok,
                 onClick = {
-                    onSubmit(
-                        startMm,
-                        lengthMm,
-                        if (setMm > 0f) setMm else -1f,
-                        if (letMm > 0f) letMm else -1f,
-                        rateText
-                    )
+                    // For FWD taper the model stores diameters AFT→FWD, so LET is at the AFT
+                    // (start) end and SET is at the FWD (end) end — swap them on submit.
+                    val startDia = if (isFwd) (if (letMm > 0f) letMm else -1f)
+                                  else        (if (setMm > 0f) setMm else -1f)
+                    val endDia   = if (isFwd) (if (setMm > 0f) setMm else -1f)
+                                  else        (if (letMm > 0f) letMm else -1f)
+                    val kwW = toMmOrNull(kwWidth,  unit) ?: 0f
+                    val kwD = toMmOrNull(kwDepth,  unit) ?: 0f
+                    val kwL = toMmOrNull(kwLength, unit) ?: 0f
+                    val kwO = toMmOrNull(kwOffset, unit) ?: 0f
+                    val action = {
+                        onSubmit(physStartMm, lengthMm, startDia, endDia, rateText,
+                                 kwW, kwD, kwL, kwO, kwSpooned && !isFloating)
+                    }
+                    val warnings = collectAddWarnings(spec, physStartMm, lengthMm, overallIsManual)
+                    if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
                 }
             ) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Direction toggle chip (AFT / FWD)
+ * Selected = 2dp primary border + tinted fill. Unselected = no border.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+@Composable
+private fun DirectionChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                 else BorderStroke(0.dp, Color.Transparent),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+                             else MaterialTheme.colorScheme.surface,
+            contentColor   = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                             else MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+    }
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -321,12 +553,22 @@ private fun CommitNumField(
     label: String,
     initial: String,
     errorText: String? = null,
+    modifier: Modifier = Modifier,
     onCommit: (String) -> Unit
 ) {
-    var text by remember(initial) { mutableStateOf(initial) }
+    // text is the live value; initial only resets it when the parent externally
+    // changes it (e.g., unit toggle). Using LaunchedEffect instead of remember(initial)
+    // avoids a cursor-to-end jump on every keystroke echo-back.
+    var text by remember { mutableStateOf(initial) }
+    LaunchedEffect(initial) {
+        if (text != initial) text = initial
+    }
     OutlinedTextField(
         value = text,
-        onValueChange = { text = it },
+        onValueChange = { newText ->
+            text = newText
+            onCommit(newText)   // commit on every keystroke so Add always has the current value
+        },
         label = { Text(label) },
         singleLine = true,
         isError = errorText != null,
@@ -335,7 +577,7 @@ private fun CommitNumField(
         } else null,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { f -> if (!f.isFocused) onCommit(text) }
     )

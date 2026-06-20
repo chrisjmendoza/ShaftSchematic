@@ -24,7 +24,7 @@ class PdfDimensionRenderer(
     private val objectClearance: Float = 6f,
     private val textAboveDy: Float = 12f,
     private val textBelowDy: Float = 14f,
-    private val arrowSize: Float = 7f,      // arrowhead half-size
+    private val arrowSize: Float = 5f,      // arrowhead half-size
     private val textPad: Float = 6f,        // left/right text padding inside a span
     private val minGap: Float = 8f,         // reserved for future use; do not shift horizontally
     private val lineAdvance: Float = 10f    // reserved for future use; do not shift horizontally
@@ -135,8 +135,8 @@ class PdfDimensionRenderer(
         val rightWindow = cx + w * 0.5f + pad
         val leftRoom = leftWindow - xa
         val rightRoom = xb - rightWindow
-        // need at least arrowSize margin on each side
-        return leftRoom >= s * 1.5f && rightRoom >= s * 1.5f
+        // need at least arrowSize margin on each side; 1.0× is enough for the arrowhead itself
+        return leftRoom >= s && rightRoom >= s
     }
 
     private fun drawArrow(canvas: Canvas, xAt: Float, y: Float, inward: Boolean, isLeftEnd: Boolean) {

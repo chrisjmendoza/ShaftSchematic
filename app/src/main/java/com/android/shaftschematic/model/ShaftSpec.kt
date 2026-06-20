@@ -44,13 +44,38 @@ fun ShaftSpec.coverageEndMm(): Float {
     val bodyEnd   = bodies.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
     val taperEnd  = tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
     val linerEnd  = liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm } ?: 0f
-    val threadEnd = threads.maxOfOrNull { it.startFromAftMm + it.lengthMm } ?: 0f
+    val threadEnd = threads.filter { !it.excludeFromOAL }
+                          .maxOfOrNull { it.startFromAftMm + it.lengthMm } ?: 0f
     return maxOf(bodyEnd, taperEnd, linerEnd, threadEnd)
 }
 
 /** Remaining free axial distance from coverage end to [overallLengthMm] (≥ 0). */
 fun ShaftSpec.freeToEndMm(): Float =
     (overallLengthMm - coverageEndMm()).coerceAtLeast(0f)
+
+/**
+ * Returns a copy where every excluded thread's [Threads.startFromAftMm] is placed
+ * immediately outside the shaft span so it renders adjacent to — but never overlapping —
+ * any shaft feature:
+ *  - AFT end → startFromAftMm = −lengthMm   (thread ends flush with the AFT face at 0)
+ *  - FWD end → startFromAftMm = overallLengthMm  (thread starts flush with the FWD face)
+ *
+ * [ShaftLayout] expands its coordinate window to accommodate these negative / over-OAL
+ * positions, so both the preview and PDF show the threads outside the dimensioned span.
+ *
+ * Called whenever OAL or the excluded-thread topology changes.
+ */
+fun ShaftSpec.syncExcludedThreadPositions(): ShaftSpec {
+    val oal = overallLengthMm
+    val synced = threads.map { th ->
+        if (!th.excludeFromOAL) th
+        else {
+            val newStart = if (th.isAftEnd) -th.lengthMm else oal
+            if (th.startFromAftMm == newStart) th else th.copy(startFromAftMm = newStart)
+        }
+    }
+    return if (synced == threads) this else copy(threads = synced)
+}
 
 /** Maximum outer diameter observed across all components (mm). */
 fun ShaftSpec.maxOuterDiaMm(): Float {

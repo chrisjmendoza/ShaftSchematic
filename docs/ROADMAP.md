@@ -1,6 +1,6 @@
 # ShaftSchematic Roadmap
 Version: v0.5.x  
-Last updated: 2026-05-30
+Last updated: 2026-06-12
 
 This roadmap defines the grounded, realistic, and approved feature trajectory for ShaftSchematic.
 
@@ -27,16 +27,24 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 
 **In progress / next up:**
 
-- [ ] **ShaftScreen.kt refactor** — extract carousel, preview panel, and event wiring into separate files. No behaviour change. Needed before the next round of feature additions.
 - [ ] **Taper validation wiring** — rate derivation errors shown inline on fields; slope validation when `lengthMm > 0`
 - [ ] **Liner shoulders** — aft/fwd shoulder length fields; stepped shoulder rendering in preview and PDF
 - [ ] **Fiberglass body support** — model flag, dark fill/hatch, label annotation
+- [ ] **Preview panel + event wiring extraction** — remaining ShaftScreen refactor work (lower priority)
 
 **Delivered in v0.5.x so far:**
 - Taper keyway drawing (open + floating) — plan-view schematic convention, mill-cutter arc, white fill
 - Shared signing config — single debug.keystore, all machines update-install without data wipe
 - Selection highlight — single thin ring, seeded on file load
 - Warning badge system — yellow per-component chips, 3-state free-to-end badge
+- ShaftScreen.kt carousel extracted to `ComponentCarousel.kt`
+- Sidebar nav (3 tabs: Schematic / Runout Sheet / Wear Document)
+- Runout drawing — inline shaft preview, scrollable layout, fan-spread bubble placement, TIR direction label
+- Wear document — shaft profile + header + dye-pen PASS/FAIL checkboxes
+- Line thickness control — Settings slider 50%–200%, DataStore-persisted, applies to preview and PDF strokes
+- OAL include-thread fix — bracket spans SET-to-SET (excluded) or shaft-end-to-SET (included); label always equals typed OAL
+- Unsaved-changes guard — "Save / Discard / Cancel" dialog when New or Open is triggered with unsaved work; dirty state tracks spec + metadata fields against last save or load
+- Component collision detection — global overlap scan across all non-excluded components; both colliding parties show red error chip; PDF export and preview blocked until collisions are resolved
 
 ---
 

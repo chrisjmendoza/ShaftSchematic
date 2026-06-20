@@ -58,6 +58,12 @@ object SettingsStore {
     private val KEY_PDF_SHOW_COMPONENT_TITLES = booleanPreferencesKey("pdf_show_component_titles")
     private val KEY_PDF_EXPORT_MODE = stringPreferencesKey("pdf_export_mode")
     private val KEY_PDF_OAL_SPACING_FACTOR = floatPreferencesKey("pdf_oal_spacing_factor")
+    private val KEY_PDF_SHADED_BODIES  = booleanPreferencesKey("pdf_shaded_bodies")
+    private val KEY_PDF_SHADED_TAPERS  = booleanPreferencesKey("pdf_shaded_tapers")
+    private val KEY_PDF_SHADED_LINERS  = booleanPreferencesKey("pdf_shaded_liners")
+
+    // Drawing line thickness (applies to both preview and PDF)
+    private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
     fun pdfTieringModeFlow(ctx: Context): Flow<PdfTieringMode> =
         ctx.settingsDataStore.data.map { p ->
             runCatching { PdfTieringMode.valueOf(p[KEY_PDF_TIERING_MODE] ?: "AUTO") }.getOrDefault(PdfTieringMode.AUTO)
@@ -72,6 +78,24 @@ object SettingsStore {
 
     suspend fun setPdfShowComponentTitles(ctx: Context, show: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_PDF_SHOW_COMPONENT_TITLES] = show }
+    }
+
+    fun pdfShadedBodiesFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SHADED_BODIES] ?: false }
+    suspend fun setPdfShadedBodies(ctx: Context, v: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_PDF_SHADED_BODIES] = v }
+    }
+
+    fun pdfShadedTapersFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SHADED_TAPERS] ?: false }
+    suspend fun setPdfShadedTapers(ctx: Context, v: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_PDF_SHADED_TAPERS] = v }
+    }
+
+    fun pdfShadedLinersFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SHADED_LINERS] ?: false }
+    suspend fun setPdfShadedLiners(ctx: Context, v: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_PDF_SHADED_LINERS] = v }
     }
 
     fun pdfExportModeFlow(ctx: Context): Flow<PdfExportMode> =
@@ -91,6 +115,13 @@ object SettingsStore {
 
     suspend fun setPdfOalSpacingFactor(ctx: Context, factor: Float) {
         ctx.settingsDataStore.edit { it[KEY_PDF_OAL_SPACING_FACTOR] = factor.coerceIn(1.0f, 6.0f) }
+    }
+
+    fun lineThicknessScaleFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_LINE_THICKNESS_SCALE] ?: 1.0f }
+
+    suspend fun setLineThicknessScale(ctx: Context, scale: Float) {
+        ctx.settingsDataStore.edit { it[KEY_LINE_THICKNESS_SCALE] = scale.coerceIn(0.5f, 2.0f) }
     }
 
     // One-time migrations

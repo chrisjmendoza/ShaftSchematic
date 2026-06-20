@@ -117,6 +117,71 @@ class ShaftSpecSnapExtensionsTest {
     }
 
     @Test
+    fun excludedThread_isTransparent_to_buildPhysicalKeyOrder() {
+        val body = Body(id = "B", startFromAftMm = 0f, lengthMm = 300f, diaMm = 50f)
+        val excluded = Threads(
+            id = "T",
+            startFromAftMm = 0f,
+            lengthMm = 50f,
+            majorDiaMm = 45f,
+            pitchMm = 2f,
+            excludeFromOAL = true
+        )
+        val spec = ShaftSpec(
+            overallLengthMm = 400f,
+            bodies = listOf(body),
+            threads = listOf(excluded)
+        )
+        val ordered = spec.buildPhysicalKeyOrder()
+        assertEquals(1, ordered.size)
+        assertEquals(ComponentKey("B", ComponentKind.BODY), ordered[0])
+    }
+
+    @Test
+    fun excludedThread_doesNotCascadeIntoNeighbors_on_resize() {
+        val excluded = Threads(
+            id = "T",
+            startFromAftMm = 0f,
+            lengthMm = 50f,
+            majorDiaMm = 45f,
+            pitchMm = 2f,
+            excludeFromOAL = true
+        )
+        val body = Body(id = "B", startFromAftMm = 0f, lengthMm = 300f, diaMm = 50f)
+        val spec = ShaftSpec(
+            overallLengthMm = 400f,
+            bodies = listOf(body),
+            threads = listOf(excluded)
+        )
+        // snapForwardFrom an excluded thread key should be a no-op (not in physical order)
+        val after = spec.snapForwardFrom(ComponentKey("T", ComponentKind.THREAD))
+        assertEquals(0f, after.bodies[0].startFromAftMm, 0.001f)
+        assertEquals(300f, after.bodies[0].lengthMm, 0.001f)
+    }
+
+    @Test
+    fun includedThread_remainsInPhysicalKeyOrder() {
+        val body = Body(id = "B", startFromAftMm = 0f, lengthMm = 300f, diaMm = 50f)
+        val included = Threads(
+            id = "T",
+            startFromAftMm = 300f,
+            lengthMm = 50f,
+            majorDiaMm = 45f,
+            pitchMm = 2f,
+            excludeFromOAL = false
+        )
+        val spec = ShaftSpec(
+            overallLengthMm = 400f,
+            bodies = listOf(body),
+            threads = listOf(included)
+        )
+        val ordered = spec.buildPhysicalKeyOrder()
+        assertEquals(2, ordered.size)
+        assertEquals(ComponentKey("B", ComponentKind.BODY), ordered[0])
+        assertEquals(ComponentKey("T", ComponentKind.THREAD), ordered[1])
+    }
+
+    @Test
     fun buildPhysicalKeyOrder_ordersByStartThenKind() {
         val body = Body(
             id = "B",

@@ -8,6 +8,8 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.UnitSystem
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -55,6 +57,8 @@ fun composeWearPdf(
     spec: ShaftSpec,
     project: ProjectInfo,
     unit: UnitSystem,
+    pdfPrefs: PdfPrefs = PdfPrefs(),
+    lineThicknessScale: Float = 1.0f,
 ) {
     val c = page.canvas
     c.drawColor(Color.WHITE)
@@ -63,15 +67,23 @@ fun composeWearPdf(
     val pageH = page.info.pageHeight.toFloat()
 
     // ── Paints ──────────────────────────────────────────────────────────────
+    val thicknessScale = lineThicknessScale.coerceIn(0.5f, 2.0f)
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; strokeWidth = WEAR_OUTLINE_PT; color = Color.BLACK
+        style = Paint.Style.STROKE; strokeWidth = WEAR_OUTLINE_PT * thicknessScale; color = Color.BLACK
     }
-    val dim = Paint(outline).apply { strokeWidth = WEAR_DIM_PT }
+    val dim = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * thicknessScale }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; textSize = WEAR_TEXT_PT
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         color = Color.BLACK
     }
+    fun shadeFill() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.argb(40, 0, 0, 0)
+    }
+    val bodyFill : Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
+    val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
+    val linerFill: Paint? = if (pdfPrefs.shadedLiners) shadeFill() else null
 
     // ── Page geometry ─────────────────────────────────────────────────────
     val margin       = WEAR_MARGIN_PT
@@ -82,32 +94,45 @@ fun composeWearPdf(
     val contentBot   = pageH - margin
 
     val headerBottom = contentTop + WEAR_HEADER_HEIGHT_PT
-    val oalLineY     = headerBottom + WEAR_OAL_GAP_PT
 
-    // Shaft draws large — give it more vertical real-estate than the runout sheet
-    val shaftCy   = oalLineY + WEAR_OAL_SPACE_PT + WEAR_SHAFT_HALF_HEIGHT_PT
-    val shaftBottom = shaftCy + WEAR_SHAFT_HALF_HEIGHT_PT
-    val geomRect  = RectF(contentLeft, contentTop, contentRight, contentBot)
+    // Notes anchored near the page bottom
+    val notesY = contentBot - WEAR_NOTES_BOTTOM_OFFSET_PT
 
-    val notesY = min(shaftBottom + 48f, contentBot - 16f)
+    // Shaft centred in the space between header and notes
+    val midTop   = headerBottom + WEAR_HEADER_GAP_PT
+    val midBot   = notesY - WEAR_NOTES_GAP_PT
+    val shaftCy  = (midTop + midBot) * 0.5f
+    val geomRect = RectF(contentLeft, midTop, contentRight, midBot)
 
     // ── Compute scale ────────────────────────────────────────────────────
-    val oalWindow   = computeOalWindow(spec)
-    val drawSpanMm  = oalWindow.oalMm.toFloat().coerceAtLeast(1f)
-    val ptPerMm     = contentW / drawSpanMm
-    val measureStartMm = oalWindow.measureStartMm.toFloat()
+    // Scale to the SET-to-SET span so the drawn shaft profile fills the page width.
+    val oalWindow      = computeOalWindow(spec)
+    val setPositions   = computeSetPositionsInMeasureSpace(oalWindow, spec)
+    val aftSetMm       = setPositions.aftSETxMm.toFloat()
+    val fwdSetMm       = setPositions.fwdSETxMm.toFloat()
+    val drawSpanMm     = (fwdSetMm - aftSetMm).coerceAtLeast(1f)
+    val ptPerMm        = contentW / drawSpanMm
+    val measureStartMm = aftSetMm
 
     fun xAt(mm: Float): Float = contentLeft + (mm - measureStartMm) * ptPerMm
     fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * ptPerMm
 
-    // ── Header ───────────────────────────────────────────────────────────
-    drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, unit, oalWindow.oalMm.toFloat())
+    // OAL dimension line sits just above the shaft's top outline.
+    // Computed after scale so we can use the actual drawn shaft radius.
+    val maxDiaMm       = (spec.bodies.maxOfOrNull { it.diaMm } ?: 50f).coerceAtLeast(20f)
+    val shaftTopApprox = shaftCy - rPx(maxDiaMm)
+    val oalLineY       = (shaftTopApprox - WEAR_OAL_ABOVE_SHAFT_PT)
+        .coerceAtLeast(midTop + WEAR_TEXT_PT + 6f)
 
-    // ── OAL line ──────────────────────────────────────────────────────────
-    drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, unit, oalWindow.oalMm.toFloat())
+    // ── Header ───────────────────────────────────────────────────────────
+    drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, unit, drawSpanMm)
+
+    // ── OAL line (with witness lines, anchored near shaft) ────────────────
+    drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox, unit, drawSpanMm)
 
     // ── Shaft profile ─────────────────────────────────────────────────────
-    drawWearShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx)
+    drawWearShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx,
+        bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
 
     // ── Notes / dye-pen area ──────────────────────────────────────────────
     drawWearNotesArea(c, text, contentLeft, contentRight, notesY)
@@ -127,21 +152,29 @@ private fun drawWearHeader(
     unit: UnitSystem,
     oalMm: Float,
 ) {
-    val y = top + text.textSize + 2f
+    val ts = text.textSize
     val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     val oalDisplay = if (unit == UnitSystem.INCHES) {
-        "${"%.4f".format(oalMm / 25.4f)} in"
+        "${"%.4f".format(oalMm / 25.4f)}\""
     } else {
         "${"%.2f".format(oalMm)} mm"
     }
     val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
-    val header = buildString {
+
+    val line1 = buildString {
         if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
         if (project.vessel.isNotBlank())   append("Vessel: ${project.vessel}   ")
         if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
-        append("Date: $date$side   OAL: $oalDisplay   — WEAR / INSPECTION RECORD")
+        append("Date: $date$side")
     }
-    c.drawText(header, left, y, text)
+    val line2 = "OAL: $oalDisplay  —  WEAR / INSPECTION RECORD"
+
+    fun centeredX(str: String): Float =
+        ((left + right - text.measureText(str)) * 0.5f).coerceAtLeast(left)
+
+    c.drawText(line1, centeredX(line1), top + ts, text)
+    c.drawText(line2, centeredX(line2), top + ts + ts * 1.4f, text)
+
     val ruleY = top + WEAR_HEADER_HEIGHT_PT
     c.drawLine(left, ruleY, right, ruleY, Paint(text).apply {
         style = Paint.Style.STROKE; strokeWidth = 0.5f
@@ -154,19 +187,30 @@ private fun drawWearHeader(
 
 private fun drawWearOalLine(
     c: Canvas, dim: Paint, text: Paint,
-    x0: Float, x1: Float, y: Float,
+    x0: Float, x1: Float,
+    oalLineY: Float, shaftTopY: Float,
     unit: UnitSystem, oalMm: Float,
 ) {
-    val arrowLen = 8f
-    c.drawLine(x0, y, x1, y, dim)
-    c.drawLine(x0, y, x0 + arrowLen, y - arrowLen * 0.5f, dim)
-    c.drawLine(x0, y, x0 + arrowLen, y + arrowLen * 0.5f, dim)
-    c.drawLine(x1, y, x1 - arrowLen, y - arrowLen * 0.5f, dim)
-    c.drawLine(x1, y, x1 - arrowLen, y + arrowLen * 0.5f, dim)
+    val arrowLen    = 8f
+    val witnessGap  = 3f   // gap between shaft edge and witness line start
+    val witnessExt  = 5f   // how far the witness line extends past the dimension line
+
+    // Witness (extension) lines from shaft top up to past the dimension line
+    c.drawLine(x0, shaftTopY - witnessGap, x0, oalLineY - witnessExt, dim)
+    c.drawLine(x1, shaftTopY - witnessGap, x1, oalLineY - witnessExt, dim)
+
+    // Dimension line with arrowheads
+    c.drawLine(x0, oalLineY, x1, oalLineY, dim)
+    c.drawLine(x0, oalLineY, x0 + arrowLen, oalLineY - arrowLen * 0.4f, dim)
+    c.drawLine(x0, oalLineY, x0 + arrowLen, oalLineY + arrowLen * 0.4f, dim)
+    c.drawLine(x1, oalLineY, x1 - arrowLen, oalLineY - arrowLen * 0.4f, dim)
+    c.drawLine(x1, oalLineY, x1 - arrowLen, oalLineY + arrowLen * 0.4f, dim)
+
+    // Label centred above the dimension line
     val label = if (unit == UnitSystem.INCHES) "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
     else "OAL: ${"%.2f".format(oalMm)} mm"
     val lw = text.measureText(label)
-    c.drawText(label, (x0 + x1) * 0.5f - lw * 0.5f, y - 4f, text)
+    c.drawText(label, (x0 + x1) * 0.5f - lw * 0.5f, oalLineY - 4f, text)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -181,7 +225,39 @@ private fun drawWearShaftProfile(
     geomRect: RectF,
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
+    bodyFill: Paint? = null,
+    taperFill: Paint? = null,
+    linerFill: Paint? = null,
+    ptPerMm: Float = 1f,
 ) {
+    // ── Shade fills first (drawn under all outlines) ──────────────────────
+    bodyFill?.let { f ->
+        spec.bodies.forEach { b ->
+            if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
+            val r = rPx(b.diaMm)
+            c.drawRect(xAt(b.startFromAftMm), cy - r, xAt(b.startFromAftMm + b.lengthMm), cy + r, f)
+        }
+    }
+    taperFill?.let { f ->
+        spec.tapers.forEach { t ->
+            if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
+            val path = android.graphics.Path().apply {
+                moveTo(xAt(t.startFromAftMm), cy - rPx(t.startDiaMm))
+                lineTo(xAt(t.startFromAftMm + t.lengthMm), cy - rPx(t.endDiaMm))
+                lineTo(xAt(t.startFromAftMm + t.lengthMm), cy + rPx(t.endDiaMm))
+                lineTo(xAt(t.startFromAftMm), cy + rPx(t.startDiaMm))
+                close()
+            }
+            c.drawPath(path, f)
+        }
+    }
+    linerFill?.let { f ->
+        spec.liners.forEach { ln ->
+            if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
+            val r = rPx(ln.odMm)
+            c.drawRect(xAt(ln.startFromAftMm), cy - r, xAt(ln.startFromAftMm + ln.lengthMm), cy + r, f)
+        }
+    }
     // Bodies with compression breaks
     val capPaint = Paint(outline)
     spec.bodies.forEach { b ->
@@ -222,6 +298,24 @@ private fun drawWearShaftProfile(
         val r = rPx(ln.odMm); val top = cy - r; val bot = cy + r
         c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, dimPaint); c.drawLine(x1, top, x1, bot, dimPaint)
+    }
+    // Threads — outline envelope + diagonal hatch so the machinist knows the zone is threaded
+    val hatchPaint = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.6f; alpha = 160 }
+    spec.threads.forEach { th ->
+        if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
+        val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
+        val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
+        val pitchPt = ((th.pitchMm.takeIf { it > 0f } ?: 2.5f) * ptPerMm).coerceIn(4f, 18f)
+        val saved = c.save()
+        c.clipRect(x0, top, x1, bot)
+        var hx = x0 - (bot - top)
+        while (hx <= x1) {
+            c.drawLine(hx, bot, hx + (bot - top), top, hatchPaint)
+            hx += pitchPt
+        }
+        c.restoreToCount(saved)
+        c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
+        c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
     }
 }
 
@@ -282,12 +376,11 @@ private const val WEAR_DIM_PT     = 1.2f
 private const val WEAR_TEXT_PT    = 10f
 private const val WEAR_MARGIN_PT  = 36f
 
-private const val WEAR_HEADER_HEIGHT_PT = 22f
-private const val WEAR_OAL_GAP_PT       = 8f
-private const val WEAR_OAL_SPACE_PT     = 18f
-
-// Shaft draws taller on the wear doc (more room to annotate by hand)
-private const val WEAR_SHAFT_HALF_HEIGHT_PT = 60f
+private const val WEAR_HEADER_HEIGHT_PT       = 36f   // 2-line header block height
+private const val WEAR_HEADER_GAP_PT          = 16f   // gap from header rule to drawing area
+private const val WEAR_OAL_ABOVE_SHAFT_PT     = 16f   // gap from shaft top edge to OAL line
+private const val WEAR_NOTES_BOTTOM_OFFSET_PT = 24f   // notes baseline above contentBot
+private const val WEAR_NOTES_GAP_PT           = 28f   // gap from drawing area bottom to notes
 
 private const val COMPRESS_TRIGGER_PT = 220f
 private const val ZIGZAG_GAP_MAX_PT   = 20f

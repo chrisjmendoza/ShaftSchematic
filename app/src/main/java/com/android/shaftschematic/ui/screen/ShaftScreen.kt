@@ -109,6 +109,8 @@ import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.collidingIds
+import com.android.shaftschematic.model.lastOccupiedEndMm
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.input.NumericInputField
@@ -135,7 +137,6 @@ import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
 import com.android.shaftschematic.ui.viewmodel.snapPositionMm
 import com.android.shaftschematic.util.LengthFormat
-import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
 import kotlinx.coroutines.launch
@@ -196,6 +197,7 @@ fun ShaftScreen(
     previewThreadFill: PreviewColorSetting,
     previewThreadHatch: PreviewColorSetting,
     previewBlackWhiteOnly: Boolean,
+    lineThicknessScale: Float = 1.0f,
 
     sessionAddDefaults: SessionAddDefaults,
 
@@ -220,30 +222,28 @@ fun ShaftScreen(
 
     // Adds (all mm)
     onAddBody: (Float, Float, Float) -> Unit,
-    onAddTaper: (Float, Float, Float, Float, String) -> Unit,
+    onAddTaper: (Float, Float, Float, Float, String, Float, Float, Float, Float, Boolean) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean) -> Unit,
-    onAddLiner: (Float, Float, Float) -> Unit,
+    onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
 
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
+    onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
 
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+    onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
 
     // Removes by stable id
     onRemoveBody: (String) -> Unit,
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
-
-    // Runout sheet configuration (passed to carousel for bubble count controls)
-    runoutConfig: RunoutConfig = RunoutConfig(),
-    onSetRunoutBubbleCount: (componentId: String, count: Int) -> Unit = { _, _ -> },
 
     // Other
     snackbarHostState: SnackbarHostState,
@@ -292,10 +292,14 @@ fun ShaftScreen(
     val scroll = rememberScrollState()
     val topBarScope = rememberCoroutineScope()
 
-    val exportPdfEnabled = remember(spec.bodies, spec.tapers, spec.threads, spec.liners) {
-        spec.bodies.isNotEmpty() || spec.tapers.isNotEmpty() || spec.threads.isNotEmpty() || spec.liners.isNotEmpty()
-    }
-    val exportPdfDisabledMessage = "Please add at least 1 component before export is active."
+    val collidingComponentIds = remember(spec) { spec.collidingIds() }
+    val exportPdfEnabled = (spec.bodies.isNotEmpty() || spec.tapers.isNotEmpty() ||
+        spec.threads.isNotEmpty() || spec.liners.isNotEmpty()) &&
+        collidingComponentIds.isEmpty()
+    val exportPdfDisabledMessage = if (collidingComponentIds.isNotEmpty())
+        "Fix component collisions before exporting."
+    else
+        "Please add at least 1 component before export is active."
 
     val snapAnchors = remember(spec.overallLengthMm, spec.bodies, spec.tapers, spec.threads, spec.liners) { buildSnapAnchors(spec) }
 
@@ -490,6 +494,7 @@ fun ShaftScreen(
                 previewThreadFill = previewThreadFill,
                 previewThreadHatch = previewThreadHatch,
                 previewBlackWhiteOnly = previewBlackWhiteOnly,
+                lineThicknessScale = lineThicknessScale,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = 200.dp)
@@ -667,7 +672,7 @@ fun ShaftScreen(
                 }
 
                 // Project info (optional)
-                ExpandableSection("Project Information", initiallyExpanded = false) {
+                ExpandableSection("Project Information", initiallyExpanded = true) {
                     CommitTextField("Job Number", jobNumber, onSetJobNumber, Modifier.fillMaxWidth())
                     CommitTextField("Customer", customer, onSetCustomer, Modifier.fillMaxWidth())
                     CommitTextField("Vessel", vessel, onSetVessel, Modifier.fillMaxWidth())
@@ -735,24 +740,25 @@ fun ShaftScreen(
                     edgeArrowWidthDp = componentArrowWidthDp,
                     showComponentDebugLabels = showComponentDebugLabels,
                     selectedComponentId = selectedComponentId,
-                    runoutConfig = runoutConfig,
                     onAddBody = onAddBody,
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateTaper = snappedTaperUpdater,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
+                    onUpdateTaperReference = onUpdateTaperReference,
                     onUpdateThread = snappedThreadUpdater,
                     onUpdateLiner = snappedLinerUpdater,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
 
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
+                    onSetThreadEndPosition = onSetThreadEndPosition,
 
                     onRemoveBody = onRemoveBody,
                     onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread,
                     onRemoveLiner = onRemoveLiner,
                     onSelectComponentById = onSelectComponentById,
-                    onSetRunoutBubbleCount = onSetRunoutBubbleCount,
+                    collidingComponentIds = collidingComponentIds,
                 )
 
                 if (chooserOpen) {
@@ -760,8 +766,18 @@ fun ShaftScreen(
 
                     InlineAddChooserDialog(
                         onDismiss = { chooserOpen = false },
-                        onAddBody = { chooserOpen = false; onAddBody(d.startMm, sessionAddDefaults.bodyLenMm, sessionAddDefaults.bodyDiaMm) },
-                        onAddLiner = { chooserOpen = false; onAddLiner(d.startMm, sessionAddDefaults.linerLenMm, sessionAddDefaults.linerOdMm) },
+                        onAddBody = {
+                            chooserOpen = false
+                            tapAddStartMm = d.startMm
+                            tapAddGapMm = sessionAddDefaults.bodyLenMm
+                            tapAddBodyOpen = true
+                        },
+                        onAddLiner = {
+                            chooserOpen = false
+                            tapAddStartMm = d.startMm
+                            tapAddGapMm = sessionAddDefaults.linerLenMm
+                            tapAddLinerOpen = true
+                        },
                         onAddThread = {
                             chooserOpen = false
                             addThreadStartMm = d.startMm
@@ -769,13 +785,9 @@ fun ShaftScreen(
                         },
                         onAddTaper = {
                             chooserOpen = false
-                            onAddTaper(
-                                d.startMm,
-                                sessionAddDefaults.taperLenMm,
-                                sessionAddDefaults.taperSetDiaMm,
-                                sessionAddDefaults.taperLetDiaMm,
-                                ""
-                            )
+                            tapAddStartMm = d.startMm
+                            tapAddGapMm = sessionAddDefaults.taperLenMm
+                            tapAddTaperOpen = true
                         }
                     )
                 }
@@ -784,6 +796,7 @@ fun ShaftScreen(
                     AddThreadDialog(
                         unit = unit,
                         spec = spec,
+                        overallIsManual = overallIsManual,
                         initialStartMm = addThreadStartMm,
                         initialLengthMm = sessionAddDefaults.threadLenMm,
                         initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
@@ -855,11 +868,12 @@ fun ShaftScreen(
                     AddLinerDialog(
                         unit = unit,
                         spec = spec,
+                        overallIsManual = overallIsManual,
                         initialStartMm = tapAddStartMm,
                         initialLengthMm = tapAddGapMm,
-                        onSubmit = { s, l, od ->
+                        onSubmit = { s, l, od, ref ->
                             tapAddLinerOpen = false
-                            onAddLiner(s, l, od)
+                            onAddLiner(s, l, od, ref)
                         },
                         onCancel = { tapAddLinerOpen = false }
                     )
@@ -869,11 +883,12 @@ fun ShaftScreen(
                     AddTaperDialog(
                         unit = unit,
                         spec = spec,
+                        overallIsManual = overallIsManual,
                         initialStartMm = tapAddStartMm,
                         initialLengthMm = tapAddGapMm,
-                        onSubmit = { s, l, setDia, letDia, rate ->
+                        onSubmit = { s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned ->
                             tapAddTaperOpen = false
-                            onAddTaper(s, l, setDia, letDia, rate)
+                            onAddTaper(s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned)
                         },
                         onCancel = { tapAddTaperOpen = false }
                     )
@@ -1057,6 +1072,7 @@ private fun PreviewCard(
     previewThreadFill: PreviewColorSetting,
     previewThreadHatch: PreviewColorSetting,
     previewBlackWhiteOnly: Boolean,
+    lineThicknessScale: Float = 1.0f,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -1078,6 +1094,7 @@ private fun PreviewCard(
                 previewLinerFill = previewLinerFill,
                 previewThreadFill = previewThreadFill,
                 previewThreadHatch = previewThreadHatch,
+                lineThicknessScale = lineThicknessScale,
                 highlightEnabled = highlightEnabled && (highlightId != null),
                 highlightId = highlightId,
                 onTapComponentId = onTapComponentId,
@@ -1276,14 +1293,7 @@ internal fun parseFractionOrDecimal(input: String): Float? {
 }
 
 /** Latest occupied end position along the shaft (mm) from all components. */
-private fun lastOccupiedEndMm(spec: ShaftSpec): Float {
-    var end = 0f
-    spec.bodies.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.tapers.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.threads.forEach { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.liners.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    return end
-}
+private fun lastOccupiedEndMm(spec: ShaftSpec): Float = spec.lastOccupiedEndMm()
 
 /* ───────────────── Free-to-End badge ───────────────── */
 
@@ -1331,16 +1341,16 @@ internal fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) 25.4f / tpi else 0f
 /** Defaults for new components (mm). */
 private data class AddDefaults(val startMm: Float, val lastDiaMm: Float)
 private fun computeAddDefaults(spec: ShaftSpec): AddDefaults {
+    // Bodies are fillers; excluded threads sit outside the shaft envelope.
+    // Only sacred components (tapers, non-excluded threads, liners) drive the default start position.
     var end = 0f
-    spec.bodies.forEach  { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
     spec.tapers.forEach  { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.threads.forEach { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
+    spec.threads.filter { !it.excludeFromOAL }.forEach { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
     spec.liners.forEach  { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
 
     var dia = 50f
-    spec.bodies.firstOrNull  { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.diaMm }
     spec.liners.firstOrNull  { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.odMm }
-    spec.threads.firstOrNull { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.majorDiaMm }
+    spec.threads.filter { !it.excludeFromOAL }.firstOrNull { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.majorDiaMm }
     spec.tapers.firstOrNull  { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.endDiaMm }
     if (dia == 50f && spec.bodies.isNotEmpty()) dia = spec.bodies.first().diaMm
 

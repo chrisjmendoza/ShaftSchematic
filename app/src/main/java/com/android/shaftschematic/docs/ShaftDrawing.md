@@ -23,6 +23,7 @@ Responsibilities
   - Preview colors (presets + Custom palette)
   - Black/White Only override (forces black outlines and disables fills)
   - Highlight selection (glow + edge under-stroke)
+  - Line thickness scale (`lineThicknessScale`, 0.5–2.0) — multiplies `outlineWidthPx`; 1.0 = default thin weight, 2.0 = original thick weight
 - Manage text measurement via rememberTextMeasurer to avoid allocations.
 - Ensure preview always shows something:
   - If spec.overallLengthMm == 0, extend length to last occupied component end.

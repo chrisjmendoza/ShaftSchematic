@@ -180,4 +180,46 @@ class ShaftLayoutTest {
         assertTrue(debug.contains("content="))
         assertTrue(debug.contains("spanMm="))
     }
+
+    // ── excluded-thread coordinate expansion ─────────────────────────────────
+
+    @Test
+    fun `minXMm is negative when AFT excluded thread exists`() {
+        val thread = Threads(
+            startFromAftMm = -114f, lengthMm = 114f, majorDiaMm = 95f, pitchMm = 6f,
+            excludeFromOAL = true, isAftEnd = true
+        )
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(thread))
+        val result = ShaftLayout.compute(spec, 0f, 0f, 1000f, 600f, 0f)
+        assertEquals(-114f, result.minXMm, 0.001f)
+    }
+
+    @Test
+    fun `maxXMm exceeds OAL when FWD excluded thread exists`() {
+        val thread = Threads(
+            startFromAftMm = 1000f, lengthMm = 114f, majorDiaMm = 95f, pitchMm = 6f,
+            excludeFromOAL = true, isAftEnd = false
+        )
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(thread))
+        val result = ShaftLayout.compute(spec, 0f, 0f, 1000f, 600f, 0f)
+        assertEquals(1114f, result.maxXMm, 0.001f)
+    }
+
+    @Test
+    fun `minXMm is 0 when no excluded threads present`() {
+        val spec = ShaftSpec(overallLengthMm = 1000f)
+        val result = ShaftLayout.compute(spec, 0f, 0f, 1000f, 600f, 0f)
+        assertEquals(0f, result.minXMm, 0.001f)
+    }
+
+    @Test
+    fun `included threads do not affect minXMm`() {
+        val thread = Threads(
+            startFromAftMm = 0f, lengthMm = 114f, majorDiaMm = 95f, pitchMm = 6f,
+            excludeFromOAL = false
+        )
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(thread))
+        val result = ShaftLayout.compute(spec, 0f, 0f, 1000f, 600f, 0f)
+        assertEquals(0f, result.minXMm, 0.001f)
+    }
 }

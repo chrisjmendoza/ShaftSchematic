@@ -35,6 +35,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Slider
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -48,8 +51,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import kotlin.math.roundToInt
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.util.PreviewColorPreset
@@ -101,7 +109,11 @@ fun SettingsRoute(
     val openPdfAfterExport by vm.openPdfAfterExport.collectAsState()
     val pdfTieringMode by vm.pdfTieringMode.collectAsState()
     val pdfShowComponentTitles by vm.pdfShowComponentTitles.collectAsState()
+    val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
+    val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
+    val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
+    val lineThicknessScale by vm.lineThicknessScale.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -184,6 +196,12 @@ fun SettingsRoute(
 
                     HorizontalDivider()
                     Text("Editor Screen", style = MaterialTheme.typography.titleMedium)
+
+                    LineThicknessControl(
+                        scale = lineThicknessScale,
+                        onScaleChange = { vm.setLineThicknessScale(it) }
+                    )
+
                     ListItem(
                         headlineContent = { Text("Preview Colors") },
                         supportingContent = { Text("Customize preview component colors") },
@@ -367,6 +385,27 @@ fun SettingsRoute(
                         Text("Show component titles in PDF")
                     }
 
+                    Text(
+                        "Shade in PDF",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = pdfShadedBodies, onCheckedChange = { vm.setPdfShadedBodies(it) })
+                        Spacer(Modifier.width(8.dp))
+                        Text("Bodies")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = pdfShadedTapers, onCheckedChange = { vm.setPdfShadedTapers(it) })
+                        Spacer(Modifier.width(8.dp))
+                        Text("Tapers")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = pdfShadedLiners, onCheckedChange = { vm.setPdfShadedLiners(it) })
+                        Spacer(Modifier.width(8.dp))
+                        Text("Liners")
+                    }
+
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Switch(
                             checked = pdfExportMode == PdfExportMode.Template,
@@ -414,6 +453,66 @@ fun SettingsRoute(
 }
 
 private enum class SettingsPage { MAIN, PREVIEW_COLORS, PDF_EXPORT }
+
+@Composable
+private fun LineThicknessControl(
+    scale: Float,
+    onScaleChange: (Float) -> Unit,
+) {
+    // Local text field state — synced from scale when it changes externally
+    var fieldText by remember(scale) { mutableStateOf((scale * 100).roundToInt().toString()) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Line Thickness", style = MaterialTheme.typography.titleSmall)
+        Text(
+            "Applies to preview and PDF output. 100% = default thin weight; 200% = original thick weight.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("50%", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = scale,
+                onValueChange = { v ->
+                    onScaleChange(v)
+                    fieldText = (v * 100).roundToInt().toString()
+                },
+                valueRange = 0.5f..2.0f,
+                modifier = Modifier.weight(1f),
+            )
+            Text("200%", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(
+                value = fieldText,
+                onValueChange = { raw ->
+                    fieldText = raw
+                    val parsed = raw.trim().trimEnd('%').toIntOrNull()
+                    if (parsed != null) onScaleChange(parsed.coerceIn(50, 200) / 100f)
+                },
+                modifier = Modifier
+                    .width(72.dp)
+                    .onFocusChanged { focus ->
+                        if (!focus.isFocused) {
+                            val parsed = fieldText.trim().trimEnd('%').toIntOrNull()
+                            val clamped = parsed?.coerceIn(50, 200) ?: (scale * 100).roundToInt()
+                            onScaleChange(clamped / 100f)
+                            fieldText = clamped.toString()
+                        }
+                    },
+                suffix = { Text("%") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardActions = KeyboardActions(onDone = {
+                    val parsed = fieldText.trim().trimEnd('%').toIntOrNull()
+                    val clamped = parsed?.coerceIn(50, 200) ?: (scale * 100).roundToInt()
+                    onScaleChange(clamped / 100f)
+                    fieldText = clamped.toString()
+                }),
+            )
+        }
+    }
+}
 
 @Composable
 private fun PreviewColorRow(

@@ -35,6 +35,7 @@ data class Taper(
     val keywayOffsetFromSetMm: Float = 0f,
     val keywaySpooned: Boolean = false,
     val taperRateText: String = "",
+    val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
 ) : Segment
 
 /** Basic invariants for a Taper. */

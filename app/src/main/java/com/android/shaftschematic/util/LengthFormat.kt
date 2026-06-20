@@ -13,6 +13,11 @@ object LengthFormat {
         val decimalPlaces: Int = 3
     )
 
+    private val unicodeFractions = mapOf(
+        "1/2" to "½", "1/4" to "¼", "3/4" to "¾",
+        "1/8" to "⅛", "3/8" to "⅜", "5/8" to "⅝", "7/8" to "⅞",
+    )
+
     fun formatInchesSmart(inches: Double, opts: InchFormatOptions = InchFormatOptions()): String {
         if (abs(inches) < 1e-9) return "0." + "0".repeat(opts.decimalPlaces)
 
@@ -39,11 +44,8 @@ object LengthFormat {
             val nn = n / g
             val dd = den / g
 
-            return if (w == 0) {
-                "$sign$nn/$dd"
-            } else {
-                "$sign$w $nn/$dd"
-            }
+            val frac = unicodeFractions["$nn/$dd"] ?: "$nn/$dd"
+            return if (w == 0) "$sign$frac" else "$sign$w $frac"
         }
 
         return sign + formatDecimal(a, opts.decimalPlaces)
