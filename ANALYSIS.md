@@ -334,3 +334,5 @@ Bodies are "Body 1", "Body 2", etc. Tapers are "Taper 1", etc. Only Liners have 
 | 18 | UI/UX | Component names can't be customized (except liners) | Low | |
 | 19 | UI/UX | "Highlight selection" toggle in editor surface | Low | |
 | 20 | UI/UX | Double header region wastes vertical space | Low | |
+| 21 | Engineering | FWD-ref tapers/liners drift on OAL change | High | ✅ Fixed 2026-06-22 — `withNewOal()` in ShaftSpecExtensions.kt; both OAL mutation paths updated |
+| 22 | PDF | Excluded AFT thread shift overflows shaft FWD edge past right margin | High | ✅ Fixed 2026-06-22 — ptPerMm now derived from total content span (OAL + excluded thread tails); layout always fits within geomRect |

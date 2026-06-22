@@ -1029,7 +1029,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Set shaft overall length (mm). Clamped to ≥ 0. */
     fun onSetOverallLengthMm(valueMm: Float) {
-        _spec.update { it.copy(overallLengthMm = max(0f, valueMm)).syncExcludedThreadPositions() }
+        _spec.update { it.withNewOal(valueMm) }
     }
 
     /** Parses text in current UI units and forwards to [onSetOverallLengthMm]. */
@@ -1046,8 +1046,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         if (_overallIsManual.value) return@update s
         val end = coverageEndMm(s)
         val minOverall = end + max(0f, minFreeMm)
-        val grown = if (s.overallLengthMm < minOverall) s.copy(overallLengthMm = minOverall) else s
-        grown.syncExcludedThreadPositions()
+        if (s.overallLengthMm < minOverall) s.withNewOal(minOverall) else s
     }
 
     // ────────────────────────────────────────────────────────────────────────────
