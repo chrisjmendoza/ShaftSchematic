@@ -8,6 +8,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-06-22
 
+### chore: auto-derive versionCode and versionName from git commit count
+
+`versionCode` was a manually-maintained integer (`3`); `versionName` was a static `"1.2.0"`. Firebase App Distribution was labelling every upload as a duplicate because neither changed between builds.
+
+Both are now derived from `git rev-list --count HEAD` at build time. The current count (244) becomes the patch digit:
+- `versionCode = gitCount` (e.g., 244, 245, …)
+- `versionName = "1.2.$gitCount"` (e.g., `1.2.244`, `1.2.245`, …)
+
+Every commit automatically produces a uniquely-identified build with no manual editing. The major.minor (`1.2`) is still bumped manually when a breaking change or significant feature milestone warrants it.
+
+**`app/build.gradle.kts`** — added `gitCount` exec block; replaced hardcoded `versionCode`/`versionName`.
+
+---
+
 ### feat: Project Information moved to modal bottom sheet
 
 Customer, Vessel, Job #, Shaft Position, and Notes were in a collapsible section inside the editor scroll area, consuming vertical space needed by the component carousel. They now live in a `ModalBottomSheet` opened from a new toolbar clipboard icon (Assignment). The scroll area is now entirely dedicated to components.
