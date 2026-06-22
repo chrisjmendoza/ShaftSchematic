@@ -6,6 +6,55 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-06-22
+
+### feat: Project Information moved to modal bottom sheet
+
+Customer, Vessel, Job #, Shaft Position, and Notes were in a collapsible section inside the editor scroll area, consuming vertical space needed by the component carousel. They now live in a `ModalBottomSheet` opened from a new toolbar clipboard icon (Assignment). The scroll area is now entirely dedicated to components.
+
+**`ui/screen/ShaftScreen.kt`** — removed `ExpandableSection("Project Information")` from scroll area; added `IconButton` (Assignment icon) to `TopAppBar`; added `ProjectInfoBottomSheet` composable with `rememberModalBottomSheetState(skipPartiallyExpanded = true)`.
+
+---
+
+### fix: FWD-reference taper length edit now keeps the FWD end anchored
+
+Editing the length of a FWD-referenced taper was passing `startFromAftMm` through unchanged, so the FWD end drifted inward as the taper grew. The length commit handler now recomputes `physStart = OAL − authoredFromFwd − newLen` so the FWD face stays fixed and the AFT start slides.
+
+**`ui/screen/ComponentCarousel.kt`** — `CommitNum("Length")` handler for tapers.
+
+---
+
+### fix: FWD-ref tapers and liners now stay anchored when OAL changes
+
+`onSetOverallLengthMm()` and `ensureOverall()` were calling `.copy(overallLengthMm = …).syncExcludedThreadPositions()`. FWD-referenced tapers and liners have their start position stored physically from the AFT face, so a raw OAL change left them in place — drifting relative to the FWD face they were authored from.
+
+New `ShaftSpec.withNewOal(newOal: Float)` recomputes `startFromAftMm` for every FWD-referenced taper and liner (`newStart = newOal − authoredFromFwd − length`) before calling `syncExcludedThreadPositions()`. Both OAL mutation paths now use it.
+
+**`model/ShaftSpecExtensions.kt`** — added `withNewOal()`.  
+**`ui/viewmodel/ShaftViewModel.kt`** — `onSetOverallLengthMm()` and `ensureOverall()` use `withNewOal()`.
+
+---
+
+### fix: excluded end thread shift no longer pushes shaft FWD edge past right margin
+
+`ptPerMm` was computed from `overallLengthMm` alone, then the excluded-AFT-thread origin shift (`left += threadLen × ptPerMm`) consumed page width that wasn't accounted for in the scale. For the Siberian Sea shaft (OAL 147⅞", 4.5" prop thread), the FWD taper was drawing ~16pt past the right margin.
+
+The fix computes the full content span — `contentMinMm` (excluded AFT thread tails, negative) through `contentMaxMm` (excluded FWD thread tails, past OAL) — before deriving `ptPerMm`. The shaft body's portion of that span is passed as `effectiveGeomWidthPt` to `computeDetailPtPerMm`, ensuring all content lands within `geomRect` regardless of thread count or length.
+
+**`pdf/ShaftPdfComposer.kt`** — `contentMinMm`, `contentMaxMm`, `contentSpanMm`, `effectiveGeomWidthPt` computed before `ptPerMm`; bodies-only branch also updated.
+
+---
+
+### test: WithNewOalTest, PdfLayoutBoundsTest, BodySplitMergeTest
+
+**`test/model/WithNewOalTest.kt`** — 17 tests: AFT components unchanged, FWD reanchors on grow/shrink, FWD flush with shaft face, mixed AFT+FWD spec, liner reanchoring and `endMmPhysical` consistency, excluded thread sync, OAL clamp, idempotency, old-copy regression.
+
+**`test/pdf/PdfLayoutBoundsTest.kt`** — 9 tests: no-thread baseline, excluded AFT overflow regression (Siberian Sea), excluded FWD overflow, both ends, short shaft, very short/wide shaft (diameter-bound), variable AFT thread lengths.
+
+**`test/model/BodySplitMergeTest.kt`** — 19 tests: mid-split, AFT/FWD edge inserts, full-consume, non-overlap, touching endpoints, multiple bodies, merge flanking/single-side/float-drift-tolerance, round-trips at center/AFT end/FWD end.
+
+---
+
 ## 2026-06-19
 
 ### fix: updating a component no longer repositions other components
