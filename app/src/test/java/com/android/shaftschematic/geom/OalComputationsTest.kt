@@ -88,6 +88,17 @@ class OalComputationsTest {
     }
 
     @Test
+    fun `window always spans full input when fwd thread excluded`() {
+        val spec = makeSpec(overallIn = 96.0, fwdThreadIn = 6.5, excludeFwd = true)
+
+        val win = computeOalWindow(spec)
+
+        assertEquals(0.0, win.measureStartMm, EPS_EXACT)
+        assertEquals(spec.overallLengthMm.toDouble(), win.oalMm, EPS_LOOSE)
+        assertEquals(spec.overallLengthMm.toDouble(), win.measureEndMm, EPS_LOOSE)
+    }
+
+    @Test
     fun `window unchanged when threads are included in OAL`() {
         val spec = makeSpec(overallIn = 96.0, aftThreadIn = 5.0, excludeAft = false)
 

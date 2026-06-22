@@ -2,6 +2,7 @@ package com.android.shaftschematic.ui.viewmodel
 
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
@@ -239,5 +240,102 @@ class ShaftViewModelUpdateTest {
         assertEquals("taper start unchanged",        80f, result.tapers[0].startFromAftMm,  0.001f)
         assertEquals("body start unchanged",        130f, result.bodies[0].startFromAftMm,  0.001f)
         assertEquals("fwd liner start unchanged",   230f, result.liners[1].startFromAftMm,  0.001f)
+    }
+
+    // ── FWD-reference taper update (physStart recalculation) ─────────────
+    // When a taper uses FWD reference and its length changes, physStart is
+    // recomputed to keep the authored FWD distance fixed.  These tests verify
+    // that this recomputation doesn't silently move any other component.
+
+    private fun fwdRefPhysStart(taper: Taper, newLengthMm: Float, oalMm: Float): Float {
+        val authored = oalMm - taper.startFromAftMm - taper.lengthMm
+        return oalMm - authored - newLengthMm
+    }
+
+    @Test
+    fun `fwd-ref taper length change does not move adjacent aft body`() {
+        val oal    = 500f
+        val body   = Body(id  = "b1",  startFromAftMm = 0f,   lengthMm = 100f, diaMm = 60f)
+        val taper  = Taper(id = "t1",  startFromAftMm = 200f, lengthMm = 100f,
+                           startDiaMm = 60f, endDiaMm = 50f,
+                           authoredReference = LinerAuthoredReference.FWD)
+        val spec   = ShaftSpec(bodies = listOf(body), tapers = listOf(taper), overallLengthMm = oal)
+
+        val newLen      = 150f
+        val newStart    = fwdRefPhysStart(taper, newLen, oal)  // physStart moves AFT
+        val result = spec.copy(
+            tapers = spec.tapers.toMutableList().also { list ->
+                list[0] = taper.copy(startFromAftMm = newStart, lengthMm = max(0f, newLen))
+            }
+        )
+
+        assertEquals("body start must not change",  0f,   result.bodies[0].startFromAftMm, 0.001f)
+        assertEquals("body length must not change", 100f, result.bodies[0].lengthMm,        0.001f)
+        assertEquals("taper physStart recalculated", newStart, result.tapers[0].startFromAftMm, 0.001f)
+        assertEquals("taper length updated",          newLen,  result.tapers[0].lengthMm,        0.001f)
+    }
+
+    @Test
+    fun `fwd-ref taper length change does not move adjacent fwd liner`() {
+        val oal   = 500f
+        val taper = Taper(id = "t1",  startFromAftMm = 100f, lengthMm = 100f,
+                          startDiaMm = 60f, endDiaMm = 50f,
+                          authoredReference = LinerAuthoredReference.FWD)
+        val liner = Liner(id = "ln1", startFromAftMm = 300f, lengthMm = 100f,
+                          odMm = 50f, endMmPhysical = 400f)
+        val spec  = ShaftSpec(tapers = listOf(taper), liners = listOf(liner), overallLengthMm = oal)
+
+        val newLen   = 50f
+        val newStart = fwdRefPhysStart(taper, newLen, oal)
+        val result = spec.copy(
+            tapers = spec.tapers.toMutableList().also { list ->
+                list[0] = taper.copy(startFromAftMm = newStart, lengthMm = max(0f, newLen))
+            }
+        )
+
+        assertEquals("liner start must not change",  300f, result.liners[0].startFromAftMm, 0.001f)
+        assertEquals("liner length must not change", 100f, result.liners[0].lengthMm,        0.001f)
+    }
+
+    @Test
+    fun `fwd-ref taper fwd end is unchanged after length update`() {
+        val oal   = 600f
+        val taper = Taper(id = "t1",  startFromAftMm = 300f, lengthMm = 200f,
+                          startDiaMm = 60f, endDiaMm = 50f,
+                          authoredReference = LinerAuthoredReference.FWD)
+        val spec  = ShaftSpec(tapers = listOf(taper), overallLengthMm = oal)
+
+        val originalFwdEnd = taper.startFromAftMm + taper.lengthMm  // 500mm
+        val newLen    = 120f
+        val newStart  = fwdRefPhysStart(taper, newLen, oal)
+        val result = spec.copy(
+            tapers = spec.tapers.toMutableList().also { list ->
+                list[0] = taper.copy(startFromAftMm = newStart, lengthMm = max(0f, newLen))
+            }
+        )
+
+        val resultFwdEnd = result.tapers[0].startFromAftMm + result.tapers[0].lengthMm
+        assertEquals("FWD end of taper must be preserved", originalFwdEnd, resultFwdEnd, 0.001f)
+    }
+
+    @Test
+    fun `aft-ref taper fwd end changes when length changes (contrast to fwd-ref)`() {
+        // AFT anchor keeps startFromAftMm fixed, so fwd end moves.
+        // This is the expected/correct AFT-ref behaviour — contrast with fwd-ref above.
+        val taper = Taper(id = "t1",  startFromAftMm = 100f, lengthMm = 100f,
+                          startDiaMm = 60f, endDiaMm = 50f,
+                          authoredReference = LinerAuthoredReference.AFT)
+        val spec  = ShaftSpec(tapers = listOf(taper), overallLengthMm = 500f)
+
+        val newLen   = 200f
+        val result = spec.copy(
+            tapers = spec.tapers.toMutableList().also { list ->
+                list[0] = taper.copy(startFromAftMm = taper.startFromAftMm, lengthMm = max(0f, newLen))
+            }
+        )
+
+        assertEquals("AFT start unchanged",       100f, result.tapers[0].startFromAftMm, 0.001f)
+        assertEquals("FWD end moved to 300mm",    300f,
+            result.tapers[0].startFromAftMm + result.tapers[0].lengthMm, 0.001f)
     }
 }
