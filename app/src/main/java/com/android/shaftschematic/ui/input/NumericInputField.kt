@@ -11,8 +11,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import com.android.shaftschematic.util.filterNumericInput
 
 /**
@@ -38,7 +40,7 @@ fun NumericInputField(
     onCommit: (String) -> Unit
 ) {
     val initialIsValid = remember(initialText) { parseValid(initialText) }
-    var text by remember(initialText) { mutableStateOf(initialText) }
+    var text by remember(initialText) { mutableStateOf(TextFieldValue(initialText)) }
     var lastValidText by remember(initialText) {
         mutableStateOf(if (initialIsValid) initialText else "")
     }
@@ -60,13 +62,13 @@ fun NumericInputField(
     }
 
     fun commitOrRevert() {
-        val ok = validate(text, updateError = true)
+        val ok = validate(text.text, updateError = true)
         if (ok) {
             showError = false
-            onCommit(text)
+            onCommit(text.text)
         } else {
             if (showValidationErrors) showError = true
-            text = lastValidText
+            text = TextFieldValue(lastValidText)
         }
     }
 
@@ -74,11 +76,11 @@ fun NumericInputField(
         value = text,
         onValueChange = { raw ->
             val filtered = filterNumericInput(
-                raw = raw,
+                raw = raw.text,
                 allowNegative = allowNegative,
                 allowFraction = allowFraction
             )
-            text = filtered
+            text = if (filtered == raw.text) raw else raw.copy(text = filtered)
 
             if (parseValid(filtered)) {
                 lastValidText = filtered
@@ -99,6 +101,9 @@ fun NumericInputField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { commitOrRevert() }),
         modifier = modifier.onFocusChanged { f ->
+            if (f.isFocused) {
+                text = text.copy(selection = TextRange(0, text.text.length))
+            }
             if (!f.isFocused) commitOrRevert()
         }
     )

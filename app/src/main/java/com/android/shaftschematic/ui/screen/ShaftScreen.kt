@@ -590,6 +590,8 @@ fun ShaftScreen(
                                     // Capture initial text so tapping the field in Auto doesn't
                                     // accidentally flip us into Manual when the user didn't edit.
                                     lenTextOnFocus = lengthText
+                                    // Clear "0" so the user can type without a leading zero.
+                                    if (lengthText.trim() == "0") lengthText = ""
                                 }
 
                                 if (wasFocused && !f.isFocused) {
@@ -749,7 +751,11 @@ fun ShaftScreen(
                         onAddBody = {
                             chooserOpen = false
                             tapAddStartMm = d.startMm
-                            tapAddGapMm = sessionAddDefaults.bodyLenMm
+                            tapAddGapMm = if (overallIsManual && spec.overallLengthMm > d.startMm) {
+                                spec.overallLengthMm - d.startMm
+                            } else {
+                                sessionAddDefaults.bodyLenMm
+                            }
                             tapAddBodyOpen = true
                         },
                         onAddLiner = {

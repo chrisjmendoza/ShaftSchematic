@@ -8,6 +8,24 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-06-23
 
+### fix: numeric fields select-all on focus; zero clears in OAL field
+
+Two input UX fixes:
+
+- **Numeric input fields** (Start, Length, Ø, and all other `NumericInputField` instances) now select all text when focused. Typing immediately replaces the existing value without needing to manually clear it first. Implemented by switching `NumericInputField` from `String` to `TextFieldValue` state with a `TextRange(0, length)` selection on focus gain.
+- **OAL field** now clears to empty when focused and the current value is "0" (new drawing default), preventing a leading zero from being prepended to the user's input.
+
+**`ui/input/NumericInputField.kt`** — `String` state replaced with `TextFieldValue`; select-all on focus; `OutlinedTextField` switched to `TextFieldValue` overload.  
+**`ui/screen/ShaftScreen.kt`** — OAL field `onFocusChanged`: clear text when value is `"0"` on focus gain.
+
+### fix: Add Body defaults to remaining OAL length in manual mode
+
+When the user taps `+ Add Component → Body` while in Manual OAL mode, the `AddBodyDialog` now pre-fills the Length field with the remaining shaft space (`OAL − startMm`) instead of the session default. This means a first body on a manually-sized shaft fills the full shaft length by default — avoiding the confusing state where the dialog opened with 16" on a 158" shaft.
+
+In auto mode the session default is used unchanged.
+
+**`ui/screen/ShaftScreen.kt`** — `chooserOpen` → `onAddBody` lambda: `tapAddGapMm` set to `spec.overallLengthMm - d.startMm` when `overallIsManual`.
+
 ### fix: Free-to-End badge hidden when only bodies are present
 
 The Free-to-End badge in Manual OAL mode was showing a large "free" value even when the shaft was visually fully covered — e.g. "Free to end: 148.125 in" on a 158.125" shaft with a single 10" body. This was confusing because the auto-body system always generates a trailing virtual body from the last real component to the OAL, so the shaft appears completely filled in the preview.
