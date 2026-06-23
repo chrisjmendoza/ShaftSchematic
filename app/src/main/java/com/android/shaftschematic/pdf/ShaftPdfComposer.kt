@@ -304,9 +304,9 @@ fun composeShaftPdf(
         renderer.drawTop(c, oalSpan(oalAft, oalFwd, unit, labelMm = spec.overallLengthMm.toDouble()), true)
     }
 
-    // --- diameter callouts (optional; leave empty until you have stations) ---
+    // --- body Ø callouts: one leader per unique body OD ---
     run {
-        val calls: List<DiaCallout> = emptyList()
+        val calls = buildBodyOdCallouts(bodiesForPdf)
         if (calls.isNotEmpty()) {
             val leaderText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
@@ -919,6 +919,16 @@ private fun drawFooter(
         c.drawText("Job #: ${project.jobNumber}",   midX, y, text); y += lh
         c.drawText("Date: $date",                   midX, y, text); y += lh
 
+        val uniqueODs = spec.bodies
+            .filter { it.diaMm > 0f }
+            .map { it.diaMm }
+            .distinct()
+            .sorted()
+        if (uniqueODs.isNotEmpty()) {
+            val label = uniqueODs.joinToString(", ") { "Ø ${formatDiaWithUnit(it.toDouble(), unit)}" }
+            c.drawText("Body: $label", midX, y, text); y += lh
+        }
+
         project.side.printableLabelOrNull()?.let { pos ->
             y += lh * 0.35f
             val posPaint = Paint(text).apply {
@@ -1009,6 +1019,24 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One [DiaCallout] per unique body OD, anchored at the center of the longest
+ * body with that diameter.  Multiple ODs alternate ABOVE/BELOW to prevent overlap.
+ */
+internal fun buildBodyOdCallouts(bodies: List<Body>): List<DiaCallout> =
+    bodies
+        .filter { it.diaMm > 0f }
+        .groupBy { it.diaMm }
+        .entries
+        .sortedByDescending { it.key }
+        .mapIndexed { idx, (diaMm, group) ->
+            val anchor = group.maxByOrNull { it.lengthMm } ?: return@mapIndexed null
+            val centerMm = (anchor.startFromAftMm + anchor.lengthMm * 0.5).toDouble()
+            val side = if (idx % 2 == 0) LeaderSide.ABOVE else LeaderSide.BELOW
+            DiaCallout(xMm = centerMm, valueMm = diaMm.toDouble(), side = side)
+        }
+        .filterNotNull()
 
 private fun letSet(t: Taper): Pair<Float, Float> {
     val let = max(t.startDiaMm, t.endDiaMm)

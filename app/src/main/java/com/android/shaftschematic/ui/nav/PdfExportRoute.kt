@@ -27,6 +27,7 @@ import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.unlockAchievement
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.buildOpenPdfIntent

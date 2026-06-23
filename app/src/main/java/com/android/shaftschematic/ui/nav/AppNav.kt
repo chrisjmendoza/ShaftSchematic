@@ -12,6 +12,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,9 +31,12 @@ import com.android.shaftschematic.ui.screen.PdfPreviewScreen
 import com.android.shaftschematic.ui.screen.SettingsRoute
 import com.android.shaftschematic.ui.screen.ShaftEditorRoute
 import com.android.shaftschematic.ui.screen.StartScreen
+import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.FeedbackIntentFactory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * AppNav
@@ -63,6 +67,11 @@ fun AppNav(vm: ShaftViewModel) {
             val snackbarHostState = remember { SnackbarHostState() }
             val unit by vm.unit.collectAsState()
             val hasDraft by vm.hasDraft.collectAsState(initial = false)
+            var recentFiles by remember { mutableStateOf(listOf<Pair<String, Long>>()) }
+
+            LaunchedEffect(Unit) {
+                recentFiles = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
+            }
 
             Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { pad ->
                 Box(Modifier.padding(pad)) {
@@ -89,9 +98,21 @@ fun AppNav(vm: ShaftViewModel) {
                         },
                         hasDraft = hasDraft,
                         onContinueDraft = { nav.navigate("editor") },
-                        onDiscardDraft = { vm.discardDraft() }
+                        onDiscardDraft = { vm.discardDraft() },
+                        recentFiles = recentFiles,
+                        onOpenRecent = { filename ->
+                            scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) { InternalStorage.load(ctx, filename) }
+                                }.onSuccess { text ->
+                                    vm.importJson(text)
+                                    nav.navigate("editor")
+                                }.onFailure {
+                                    snackbarHostState.showSnackbar("Could not open file.")
+                                }
+                            }
+                        }
                     )
-                        // No auto-navigation or didRestoreAutosave logic needed
                 }
             }
         }

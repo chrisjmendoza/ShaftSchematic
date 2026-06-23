@@ -7,7 +7,7 @@ class LengthFormatTest {
 
     @Test
     fun `formatInchesSmart uses mixed fractions to 1_16`() {
-        assertEquals("1 3/4", LengthFormat.formatInchesSmart(1.75))
+        assertEquals("1 ¾", LengthFormat.formatInchesSmart(1.75))
         assertEquals("1/16", LengthFormat.formatInchesSmart(0.0625))
         assertEquals("2", LengthFormat.formatInchesSmart(2.0))
     }

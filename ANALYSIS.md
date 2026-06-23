@@ -315,15 +315,15 @@ Bodies are "Body 1", "Body 2", etc. Tapers are "Taper 1", etc. Only Liners have 
 | # | Area | Issue | Priority | Status |
 |---|------|--------|----------|--------|
 | 1 | Machinist | Taper rate shows 1:N instead of shop-standard format | High | ✅ Fixed 2026-06-19 |
-| 2 | Machinist | Body OD not shown on drawing (callouts stubbed out) | High | |
-| 3 | UI/UX | Portrait-only orientation limits preview width | High | |
-| 4 | Machinist | Footer missing body OD block | Medium | |
-| 5 | Machinist | No intermediate feature-to-feature dimensions | Medium | |
-| 6 | Dev | ViewModel is 2134 lines, 40+ flows, needs splitting | Medium | |
+| 2 | Machinist | Body OD not shown on drawing (callouts stubbed out) | High | ✅ Fixed 2026-06-22 — `buildBodyOdCallouts()` populates leaders from body list; alternates ABOVE/BELOW for multiple ODs |
+| 3 | UI/UX | Portrait-only orientation limits preview width | High | Deferred — phone layout doesn't support landscape well; tablet layout TBD |
+| 4 | Machinist | Footer missing body OD block | Medium | ✅ Fixed 2026-06-22 — unique body ODs now listed in center footer column as "Body: Ø X.XXX" |
+| 5 | Machinist | No intermediate feature-to-feature dimensions | N/A | Removed — by design; all measurements are from SET + component length |
+| 6 | Dev | ViewModel is 2134 lines, 40+ flows, needs splitting | Medium | ✅ Fixed 2026-06-23 — settings setters (237 lines) extracted to `ShaftViewModelSettings.kt` as extension functions; 32 private backing fields promoted to `internal` |
 | 7 | UI/UX | Project Information collapsed by default | Medium | ✅ Fixed 2026-06-22 — moved to modal bottom sheet via toolbar Assignment icon |
-| 8 | UI/UX | Undo is two taps; no snackbar UNDO action | Medium | |
-| 9 | UI/UX | No recent documents on start screen | Medium | |
-| 10 | Engineering | Float precision in inch→mm conversion | Medium | |
+| 8 | UI/UX | Undo is two taps; no snackbar UNDO action | Medium | ✅ Already implemented — snackbar with UNDO action fires on every delete via `UiEvent.ShowDeletedSnack`; HistoryMenu provides additional redo access |
+| 9 | UI/UX | No recent documents on start screen | Medium | ✅ Fixed 2026-06-22 — up to 5 most-recently-modified files shown on start screen; tap to open directly |
+| 10 | Engineering | Float precision in inch→mm conversion | Medium | ✅ Fixed 2026-06-22 — `toMmOrNull`, `formatDisplay`, `tpiToPitchMm` now use Double arithmetic via `MM_PER_IN` constant |
 | 11 | Engineering | Two conflicting EPS constants in PDF composer | Medium | ✅ Fixed 2026-06-19 |
 | 12 | Dev | `composed {}` is deprecated | Low | |
 | 13 | Dev | `-Xlambdas=class` flag likely unnecessary | Low | |

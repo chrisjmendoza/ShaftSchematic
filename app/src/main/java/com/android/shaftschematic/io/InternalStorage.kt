@@ -56,6 +56,19 @@ object InternalStorage {
 
     fun list(ctx: Context): List<String> = list(dir(ctx))
 
+    internal fun listWithMetadata(dir: File): List<Pair<String, Long>> =
+        dir.listFiles()
+            ?.filter { it.isFile }
+            ?.filter { f ->
+                val ext = f.extension.lowercase()
+                ext == SHAFT_EXT || isLegacyExtension(ext)
+            }
+            ?.map { Pair(it.name, it.lastModified()) }
+            ?.sortedByDescending { it.second }
+            ?: emptyList()
+
+    fun listWithMetadata(ctx: Context): List<Pair<String, Long>> = listWithMetadata(dir(ctx))
+
     fun exists(ctx: Context, name: String): Boolean = File(dir(ctx), name).exists()
 
     /**

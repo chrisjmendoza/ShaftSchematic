@@ -110,6 +110,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.model.LinerAuthoredReference
+import com.android.shaftschematic.model.MM_PER_IN
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
@@ -1286,7 +1287,7 @@ internal fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String
     val v = if (unit == UnitSystem.MILLIMETERS) {
         valueMm
     } else {
-        valueMm / 25.4f
+        (valueMm.toDouble() / MM_PER_IN).toFloat()
     }
 
     return "%.${decimals}f"
@@ -1304,7 +1305,7 @@ internal fun disp(mm: Float, unit: UnitSystem, d: Int = 3): String =
 internal fun toMmOrNull(text: String, unit: UnitSystem): Float? {
     val t = text.trim(); if (t.isEmpty()) return null
     val num = parseFractionOrDecimal(t) ?: return null
-    return if (unit == UnitSystem.MILLIMETERS) num else num * 25.4f
+    return if (unit == UnitSystem.MILLIMETERS) num else (num.toDouble() * MM_PER_IN).toFloat()
 }
 
 
@@ -1395,7 +1396,7 @@ private fun FreeToEndBadge(
 
 private const val OAL_EPS_MM: Double = 1e-3
 
-internal fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) 25.4f / tpi else 0f
+internal fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) (MM_PER_IN / tpi.toDouble()).toFloat() else 0f
 
 /** Defaults for new components (mm). */
 private data class AddDefaults(val startMm: Float, val lastDiaMm: Float)

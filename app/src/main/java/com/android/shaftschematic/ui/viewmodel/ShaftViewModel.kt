@@ -190,53 +190,53 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _showGrid = MutableStateFlow(false)
     val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
 
-    private val _openPdfAfterExport = MutableStateFlow(false)
+    internal val _openPdfAfterExport = MutableStateFlow(false)
     val openPdfAfterExport: StateFlow<Boolean> = _openPdfAfterExport.asStateFlow()
 
-    private val _pdfTieringMode = MutableStateFlow(PdfTieringMode.AUTO)
+    internal val _pdfTieringMode = MutableStateFlow(PdfTieringMode.AUTO)
     val pdfTieringMode: StateFlow<PdfTieringMode> = _pdfTieringMode.asStateFlow()
 
-    private val _pdfShowComponentTitles = MutableStateFlow(true)
+    internal val _pdfShowComponentTitles = MutableStateFlow(true)
     val pdfShowComponentTitles: StateFlow<Boolean> = _pdfShowComponentTitles.asStateFlow()
 
-    private val _pdfShadedBodies = MutableStateFlow(false)
+    internal val _pdfShadedBodies = MutableStateFlow(false)
     val pdfShadedBodies: StateFlow<Boolean> = _pdfShadedBodies.asStateFlow()
-    private val _pdfShadedTapers = MutableStateFlow(false)
+    internal val _pdfShadedTapers = MutableStateFlow(false)
     val pdfShadedTapers: StateFlow<Boolean> = _pdfShadedTapers.asStateFlow()
-    private val _pdfShadedLiners = MutableStateFlow(false)
+    internal val _pdfShadedLiners = MutableStateFlow(false)
     val pdfShadedLiners: StateFlow<Boolean> = _pdfShadedLiners.asStateFlow()
 
-    private val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
+    internal val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
 
-    private val _previewBlackWhiteOnly = MutableStateFlow(false)
+    internal val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
 
-    private val _lineThicknessScale = MutableStateFlow(1.0f)
+    internal val _lineThicknessScale = MutableStateFlow(1.0f)
     val lineThicknessScale: StateFlow<Float> = _lineThicknessScale.asStateFlow()
 
-    private val _previewOutlineSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.STEEL, customRole = PreviewColorRole.MONOCHROME))
+    internal val _previewOutlineSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.STEEL, customRole = PreviewColorRole.MONOCHROME))
     val previewOutlineSetting: StateFlow<PreviewColorSetting> = _previewOutlineSetting.asStateFlow()
 
-    private val _previewBodyFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT))
+    internal val _previewBodyFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT))
     val previewBodyFillSetting: StateFlow<PreviewColorSetting> = _previewBodyFillSetting.asStateFlow()
 
-    private val _previewTaperFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.STEEL, customRole = PreviewColorRole.MONOCHROME))
+    internal val _previewTaperFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.STEEL, customRole = PreviewColorRole.MONOCHROME))
     val previewTaperFillSetting: StateFlow<PreviewColorSetting> = _previewTaperFillSetting.asStateFlow()
 
-    private val _previewLinerFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.BRONZE, customRole = PreviewColorRole.TERTIARY))
+    internal val _previewLinerFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.BRONZE, customRole = PreviewColorRole.TERTIARY))
     val previewLinerFillSetting: StateFlow<PreviewColorSetting> = _previewLinerFillSetting.asStateFlow()
 
-    private val _previewThreadFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT))
+    internal val _previewThreadFillSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT))
     val previewThreadFillSetting: StateFlow<PreviewColorSetting> = _previewThreadFillSetting.asStateFlow()
 
-    private val _previewThreadHatchSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.STEEL, customRole = PreviewColorRole.MONOCHROME))
+    internal val _previewThreadHatchSetting = MutableStateFlow(PreviewColorSetting(preset = PreviewColorPreset.STEEL, customRole = PreviewColorRole.MONOCHROME))
     val previewThreadHatchSetting: StateFlow<PreviewColorSetting> = _previewThreadHatchSetting.asStateFlow()
 
-    private val _showComponentArrows = MutableStateFlow(false)
+    internal val _showComponentArrows = MutableStateFlow(false)
     val showComponentArrows: StateFlow<Boolean> = _showComponentArrows.asStateFlow()
 
-    private val _componentArrowWidthDp = MutableStateFlow(40)
+    internal val _componentArrowWidthDp = MutableStateFlow(40)
     val componentArrowWidthDp: StateFlow<Int> = _componentArrowWidthDp.asStateFlow()
 
     private val _resolvedComponents = MutableStateFlow<List<ResolvedComponent>>(emptyList())
@@ -245,57 +245,46 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedComponentId = MutableStateFlow<String?>(null)
     val selectedComponentId: StateFlow<String?> = _selectedComponentId.asStateFlow()
 
-    private val _devOptionsEnabled = MutableStateFlow(false)
+    internal val _devOptionsEnabled = MutableStateFlow(false)
     val devOptionsEnabled: StateFlow<Boolean> = _devOptionsEnabled.asStateFlow()
 
-    private val _showOalDebugLabel = MutableStateFlow(false)
+    internal val _showOalDebugLabel = MutableStateFlow(false)
     val showOalDebugLabel: StateFlow<Boolean> = _showOalDebugLabel.asStateFlow()
 
-    private val _showOalHelperLine = MutableStateFlow(false)
+    internal val _showOalHelperLine = MutableStateFlow(false)
     val showOalHelperLine: StateFlow<Boolean> = _showOalHelperLine.asStateFlow()
 
-    private val _showOalInPreviewBox = MutableStateFlow(false)
+    internal val _showOalInPreviewBox = MutableStateFlow(false)
     val showOalInPreviewBox: StateFlow<Boolean> = _showOalInPreviewBox.asStateFlow()
 
-    private val _showComponentDebugLabels = MutableStateFlow(false)
+    internal val _showComponentDebugLabels = MutableStateFlow(false)
     val showComponentDebugLabels: StateFlow<Boolean> = _showComponentDebugLabels.asStateFlow()
 
-    private val _showRenderLayoutDebugOverlay = MutableStateFlow(false)
+    internal val _showRenderLayoutDebugOverlay = MutableStateFlow(false)
     val showRenderLayoutDebugOverlay: StateFlow<Boolean> = _showRenderLayoutDebugOverlay.asStateFlow()
 
-    private val _showRenderOalMarkers = MutableStateFlow(false)
+    internal val _showRenderOalMarkers = MutableStateFlow(false)
     val showRenderOalMarkers: StateFlow<Boolean> = _showRenderOalMarkers.asStateFlow()
 
-    private val _verboseLoggingEnabled = MutableStateFlow(false)
+    internal val _verboseLoggingEnabled = MutableStateFlow(false)
     val verboseLoggingEnabled: StateFlow<Boolean> = _verboseLoggingEnabled.asStateFlow()
 
-    private val _verboseLoggingRender = MutableStateFlow(false)
+    internal val _verboseLoggingRender = MutableStateFlow(false)
     val verboseLoggingRender: StateFlow<Boolean> = _verboseLoggingRender.asStateFlow()
 
-    private val _verboseLoggingOal = MutableStateFlow(false)
+    internal val _verboseLoggingOal = MutableStateFlow(false)
     val verboseLoggingOal: StateFlow<Boolean> = _verboseLoggingOal.asStateFlow()
 
-    private val _verboseLoggingPdf = MutableStateFlow(false)
+    internal val _verboseLoggingPdf = MutableStateFlow(false)
     val verboseLoggingPdf: StateFlow<Boolean> = _verboseLoggingPdf.asStateFlow()
 
-    private val _verboseLoggingIo = MutableStateFlow(false)
+    internal val _verboseLoggingIo = MutableStateFlow(false)
     val verboseLoggingIo: StateFlow<Boolean> = _verboseLoggingIo.asStateFlow()
 
-    private fun syncVerboseLogConfig() {
-        VerboseLog.configure(
-            devOptionsEnabled = _devOptionsEnabled.value,
-            verboseEnabled = _verboseLoggingEnabled.value,
-            renderEnabled = _verboseLoggingRender.value,
-            oalEnabled = _verboseLoggingOal.value,
-            pdfEnabled = _verboseLoggingPdf.value,
-            ioEnabled = _verboseLoggingIo.value,
-        )
-    }
-
-    private val _achievementsEnabled = MutableStateFlow(false)
+    internal val _achievementsEnabled = MutableStateFlow(false)
     val achievementsEnabled: StateFlow<Boolean> = _achievementsEnabled.asStateFlow()
 
-    private val _unlockedAchievementIds = MutableStateFlow<Set<String>>(emptySet())
+    internal val _unlockedAchievementIds = MutableStateFlow<Set<String>>(emptySet())
     val unlockedAchievementIds: StateFlow<Set<String>> = _unlockedAchievementIds.asStateFlow()
 
     private val _customer = MutableStateFlow("")
@@ -764,242 +753,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setOpenPdfAfterExport(enabled: Boolean, persist: Boolean = true) {
-        _openPdfAfterExport.value = enabled
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setOpenPdfAfterExport(getApplication(), enabled) }
-        }
-    }
-
-    fun setPdfTieringMode(mode: PdfTieringMode, persist: Boolean = true) {
-        _pdfTieringMode.value = mode
-        SettingsStore.updatePdfPrefs { it.copy(tieringMode = mode) }
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setPdfTieringMode(getApplication(), mode) }
-        }
-    }
-
-    fun setPdfShowComponentTitles(show: Boolean, persist: Boolean = true) {
-        _pdfShowComponentTitles.value = show
-        SettingsStore.updatePdfPrefs { it.copy(showComponentTitles = show) }
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setPdfShowComponentTitles(getApplication(), show) }
-        }
-    }
-
-    fun setPdfShadedBodies(v: Boolean, persist: Boolean = true) {
-        _pdfShadedBodies.value = v
-        SettingsStore.updatePdfPrefs { it.copy(shadedBodies = v) }
-        if (persist) viewModelScope.launch { SettingsStore.setPdfShadedBodies(getApplication(), v) }
-    }
-
-    fun setPdfShadedTapers(v: Boolean, persist: Boolean = true) {
-        _pdfShadedTapers.value = v
-        SettingsStore.updatePdfPrefs { it.copy(shadedTapers = v) }
-        if (persist) viewModelScope.launch { SettingsStore.setPdfShadedTapers(getApplication(), v) }
-    }
-
-    fun setPdfShadedLiners(v: Boolean, persist: Boolean = true) {
-        _pdfShadedLiners.value = v
-        SettingsStore.updatePdfPrefs { it.copy(shadedLiners = v) }
-        if (persist) viewModelScope.launch { SettingsStore.setPdfShadedLiners(getApplication(), v) }
-    }
-
-    fun setPdfOalSpacingFactor(factor: Float, persist: Boolean = true) {
-        SettingsStore.updatePdfPrefs { it.copy(oalSpacingFactor = factor) }
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setPdfOalSpacingFactor(getApplication(), factor) }
-        }
-    }
-
     fun selectComponentById(componentId: String?) {
         _selectedComponentId.value = componentId
-    }
-
-    fun setPdfExportMode(mode: PdfExportMode, persist: Boolean = true) {
-        _pdfExportMode.value = mode
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setPdfExportMode(getApplication(), mode) }
-        }
-    }
-
-    fun setPreviewBlackWhiteOnly(enabled: Boolean, persist: Boolean = true) {
-        _previewBlackWhiteOnly.value = enabled
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setPreviewBlackWhiteOnly(getApplication(), enabled) }
-        }
-    }
-
-    fun setLineThicknessScale(scale: Float, persist: Boolean = true) {
-        _lineThicknessScale.value = scale.coerceIn(0.5f, 2.0f)
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setLineThicknessScale(getApplication(), scale) }
-        }
-    }
-
-    fun setPreviewOutlineSetting(setting: PreviewColorSetting, persist: Boolean = true) {
-        _previewOutlineSetting.value = setting
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setPreviewOutlineSetting(getApplication(), setting) }
-        }
-    }
-
-    fun setPreviewBodyFillSetting(setting: PreviewColorSetting, persist: Boolean = true) {
-        _previewBodyFillSetting.value = setting
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setPreviewBodyFillSetting(getApplication(), setting) }
-        }
-    }
-
-    fun setPreviewTaperFillSetting(setting: PreviewColorSetting, persist: Boolean = true) {
-        _previewTaperFillSetting.value = setting
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setPreviewTaperFillSetting(getApplication(), setting) }
-        }
-    }
-
-    fun setPreviewLinerFillSetting(setting: PreviewColorSetting, persist: Boolean = true) {
-        _previewLinerFillSetting.value = setting
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setPreviewLinerFillSetting(getApplication(), setting) }
-        }
-    }
-
-    fun setPreviewThreadFillSetting(setting: PreviewColorSetting, persist: Boolean = true) {
-        _previewThreadFillSetting.value = setting
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setPreviewThreadFillSetting(getApplication(), setting) }
-        }
-    }
-
-    fun setPreviewThreadHatchSetting(setting: PreviewColorSetting, persist: Boolean = true) {
-        _previewThreadHatchSetting.value = setting
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setPreviewThreadHatchSetting(getApplication(), setting) }
-        }
-    }
-
-    fun setShowComponentArrows(show: Boolean, persist: Boolean = true) {
-        _showComponentArrows.value = show
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setShowComponentArrows(getApplication(), show) }
-        }
-    }
-
-    fun setComponentArrowWidthDp(widthDp: Int, persist: Boolean = true) {
-        val clamped = widthDp.coerceIn(24, 72)
-        _componentArrowWidthDp.value = clamped
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setComponentArrowWidthDp(getApplication(), clamped) }
-        }
-    }
-    fun setDevOptionsEnabled(enabled: Boolean, persist: Boolean = true) {
-        _devOptionsEnabled.value = enabled
-        syncVerboseLogConfig()
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setDevOptionsEnabled(getApplication(), enabled) }
-        }
-    }
-
-    fun setShowOalDebugLabel(show: Boolean, persist: Boolean = true) {
-        _showOalDebugLabel.value = show
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setShowOalDebugLabel(getApplication(), show) }
-        }
-    }
-
-    fun setShowOalHelperLine(show: Boolean, persist: Boolean = true) {
-        _showOalHelperLine.value = show
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setShowOalHelperLine(getApplication(), show) }
-        }
-    }
-
-    fun setShowOalInPreviewBox(show: Boolean, persist: Boolean = true) {
-        _showOalInPreviewBox.value = show
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setShowOalInPreviewBox(getApplication(), show) }
-        }
-    }
-
-    fun setShowComponentDebugLabels(show: Boolean, persist: Boolean = true) {
-        _showComponentDebugLabels.value = show
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setShowComponentDebugLabels(getApplication(), show) }
-        }
-    }
-
-    fun setShowRenderLayoutDebugOverlay(show: Boolean, persist: Boolean = true) {
-        _showRenderLayoutDebugOverlay.value = show
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setShowRenderLayoutDebugOverlay(getApplication(), show) }
-        }
-    }
-
-    fun setShowRenderOalMarkers(show: Boolean, persist: Boolean = true) {
-        _showRenderOalMarkers.value = show
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setShowRenderOalMarkers(getApplication(), show) }
-        }
-    }
-
-    fun setVerboseLoggingEnabled(enabled: Boolean, persist: Boolean = true) {
-        _verboseLoggingEnabled.value = enabled
-        syncVerboseLogConfig()
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setVerboseLoggingEnabled(getApplication(), enabled) }
-        }
-    }
-
-    fun setVerboseLoggingRender(enabled: Boolean, persist: Boolean = true) {
-        _verboseLoggingRender.value = enabled
-        syncVerboseLogConfig()
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setVerboseLoggingRender(getApplication(), enabled) }
-        }
-    }
-
-    fun setVerboseLoggingOal(enabled: Boolean, persist: Boolean = true) {
-        _verboseLoggingOal.value = enabled
-        syncVerboseLogConfig()
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setVerboseLoggingOal(getApplication(), enabled) }
-        }
-    }
-
-    fun setVerboseLoggingPdf(enabled: Boolean, persist: Boolean = true) {
-        _verboseLoggingPdf.value = enabled
-        syncVerboseLogConfig()
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setVerboseLoggingPdf(getApplication(), enabled) }
-        }
-    }
-
-    fun setVerboseLoggingIo(enabled: Boolean, persist: Boolean = true) {
-        _verboseLoggingIo.value = enabled
-        syncVerboseLogConfig()
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setVerboseLoggingIo(getApplication(), enabled) }
-        }
-    }
-
-    fun setAchievementsEnabled(enabled: Boolean, persist: Boolean = true) {
-        _achievementsEnabled.value = enabled
-        if (persist) {
-            viewModelScope.launch { SettingsStore.setAchievementsEnabled(getApplication(), enabled) }
-        }
-    }
-
-    fun unlockAchievement(id: String) {
-        if (!_achievementsEnabled.value) return
-        if (_unlockedAchievementIds.value.contains(id)) return
-        viewModelScope.launch {
-            SettingsStore.unlockAchievement(getApplication(), id)
-        }
-    }
-
-    fun unlockAchievement(definition: Achievements.Definition) {
-        unlockAchievement(definition.id)
     }
 
     /** Explicitly snap forward from the given anchor key, end-to-end along the chain. */

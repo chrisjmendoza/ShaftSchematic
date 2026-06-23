@@ -70,6 +70,7 @@ import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
