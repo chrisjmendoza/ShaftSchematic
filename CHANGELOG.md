@@ -8,6 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-06-23
 
+### fix: auto-body not promoted on tap-and-leave; body length = 1 bug
+
+`NumericInputField` previously called `onCommit` on every blur, even when the user hadn't changed the field's value. For auto-body carousel cards, this silently triggered `promoteIfNeeded()` — converting the virtual auto-body into a stored body using whatever dimensions were current at the time of the blur.
+
+**Root cause**: The OAL field updates `spec.overallLengthMm` on every keystroke. While the user was typing a multi-digit OAL (e.g. "158.125"), the auto-body's span changed with each character, resetting its ID and therefore its `promoted` state (keyed on `component.id`). Any unfocused CommitNum field in the auto-body card would then commit — with the transient auto-body dimensions — and create a real body prematurely (e.g. with length = 1" when OAL was momentarily "1").
+
+**Fix**: `NumericInputField` now captures the text value at focus-gain (`textWhenFocused`) and only calls `commitOrRevert()` on blur if the text actually changed. A tap-and-leave with no edit is a no-op. This prevents spurious auto-body promotion and avoids unnecessary model updates from unchanged fields throughout the app.
+
+**`ui/input/NumericInputField.kt`** — added `textWhenFocused` state; blur handler now guards on `text.text != captured`.
+
 ### fix: numeric fields select-all on focus; zero clears in OAL field
 
 Two input UX fixes:

@@ -61,6 +61,10 @@ fun NumericInputField(
         return true
     }
 
+    // Null when not focused; set to the text value at the moment focus was gained.
+    // Used to skip commits when the user tapped a field but didn't change its value.
+    var textWhenFocused by remember(initialText) { mutableStateOf<String?>(null) }
+
     fun commitOrRevert() {
         val ok = validate(text.text, updateError = true)
         if (ok) {
@@ -102,9 +106,19 @@ fun NumericInputField(
         keyboardActions = KeyboardActions(onDone = { commitOrRevert() }),
         modifier = modifier.onFocusChanged { f ->
             if (f.isFocused) {
+                textWhenFocused = text.text
                 text = text.copy(selection = TextRange(0, text.text.length))
             }
-            if (!f.isFocused) commitOrRevert()
+            if (!f.isFocused) {
+                val captured = textWhenFocused
+                textWhenFocused = null
+                // Only commit if the user actually changed the value; a tap-and-leave
+                // with no edit should not trigger side-effectful onCommit callbacks
+                // (e.g. auto-body promotion).
+                if (captured == null || text.text != captured) {
+                    commitOrRevert()
+                }
+            }
         }
     )
 }
