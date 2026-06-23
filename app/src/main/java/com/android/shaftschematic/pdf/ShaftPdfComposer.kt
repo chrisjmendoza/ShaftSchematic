@@ -966,11 +966,11 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
     val aft = mutableListOf<String>()
     if (cfg.showAftTaper) {
         taperSides.aft?.let { tp ->
-            val (let, set) = letSet(tp)
+            val ls = letSet(tp)
             aft += "AFT Taper"
             aft += "Rate: ${tp.taperRateText.trim().ifEmpty { rate1toN(tp) }}"
-            aft += "L.E.T.: ${formatDiaWithUnit(let.toDouble(), unit)}"
-            aft += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
+            aft += "L.E.T. (${ls.letFace}): ${formatDiaWithUnit(ls.let.toDouble(), unit)}"
+            aft += "S.E.T. (${ls.setFace}): ${formatDiaWithUnit(ls.set.toDouble(), unit)}"
             aft += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
             if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
                 val spoon = if (tp.keywaySpooned) " (spooned)" else ""
@@ -991,11 +991,11 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
     val fwd = mutableListOf<String>()
     if (cfg.showFwdTaper) {
         taperSides.fwd?.let { tp ->
-            val (let, set) = letSet(tp)
+            val ls = letSet(tp)
             fwd += "FWD Taper"
             fwd += "Rate: ${tp.taperRateText.trim().ifEmpty { rate1toN(tp) }}"
-            fwd += "L.E.T.: ${formatDiaWithUnit(let.toDouble(), unit)}"
-            fwd += "S.E.T.: ${formatDiaWithUnit(set.toDouble(), unit)}"
+            fwd += "L.E.T. (${ls.letFace}): ${formatDiaWithUnit(ls.let.toDouble(), unit)}"
+            fwd += "S.E.T. (${ls.setFace}): ${formatDiaWithUnit(ls.set.toDouble(), unit)}"
             fwd += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
             if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
                 val spoon = if (tp.keywaySpooned) " (spooned)" else ""
@@ -1038,11 +1038,15 @@ internal fun buildBodyOdCallouts(bodies: List<Body>): List<DiaCallout> =
         }
         .filterNotNull()
 
-private fun letSet(t: Taper): Pair<Float, Float> {
-    val let = max(t.startDiaMm, t.endDiaMm)
-    val set = min(t.startDiaMm, t.endDiaMm)
-    return let to set
-}
+private data class LetSetResult(val let: Float, val set: Float, val letFace: String, val setFace: String)
+
+// startDiaMm is always the AFT-facing end of the taper (position = startFromAftMm).
+// Determine which physical face carries the large end so the footer can label it correctly.
+private fun letSet(t: Taper): LetSetResult =
+    if (t.startDiaMm >= t.endDiaMm)
+        LetSetResult(t.startDiaMm, t.endDiaMm, "AFT", "FWD")
+    else
+        LetSetResult(t.endDiaMm, t.startDiaMm, "FWD", "AFT")
 
 private fun rate1toN(t: Taper): String {
     val d = abs(t.startDiaMm - t.endDiaMm)

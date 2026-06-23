@@ -41,8 +41,8 @@ class FooterUnitsTest {
         run {
             val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfg)
             val lines = cols.aftLines.joinToString("\n")
-            assertTrue(lines.contains("L.E.T.: ") && lines.contains(" mm"))
-            assertTrue(lines.contains("S.E.T.: ") && lines.contains(" mm"))
+            assertTrue(lines.contains("L.E.T. (AFT): ") && lines.contains(" mm"))
+            assertTrue(lines.contains("S.E.T. (FWD): ") && lines.contains(" mm"))
             assertTrue(lines.contains("Length: ") && lines.contains(" mm"))
             assertTrue(lines.contains("Thread: ") && lines.contains(" mm"))
         }
@@ -50,8 +50,8 @@ class FooterUnitsTest {
         run {
             val cols = buildFooterEndColumns(spec, UnitSystem.INCHES, cfg)
             val lines = cols.aftLines.joinToString("\n")
-            assertTrue(lines.contains("L.E.T.: ") && lines.contains("\""))
-            assertTrue(lines.contains("S.E.T.: ") && lines.contains("\""))
+            assertTrue(lines.contains("L.E.T. (AFT): ") && lines.contains("\""))
+            assertTrue(lines.contains("S.E.T. (FWD): ") && lines.contains("\""))
             assertTrue(lines.contains("Length: ") && lines.contains("\""))
             assertTrue(lines.contains("Thread: ") && lines.contains("\""))
             assertTrue(lines.contains(" TPI "))

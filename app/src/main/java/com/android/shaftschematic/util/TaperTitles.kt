@@ -50,13 +50,18 @@ fun buildTaperTitleById(spec: ShaftSpec): Map<String, String> {
     }
 
     return sorted.associate { t ->
-        val dir = directionById[t.id] ?: TaperDirection.AFT
-        val count = countByDirection[dir] ?: 0
-        val title = if (count <= 1) {
-            "${prefix(dir)} Taper"
+        val customLabel = t.label?.trim()?.takeIf { it.isNotEmpty() }
+        val title = if (customLabel != null) {
+            customLabel
         } else {
-            val n = nById[t.id] ?: 0
-            "${prefix(dir)} Taper #$n"
+            val dir = directionById[t.id] ?: TaperDirection.AFT
+            val count = countByDirection[dir] ?: 0
+            if (count <= 1) {
+                "${prefix(dir)} Taper"
+            } else {
+                val n = nById[t.id] ?: 0
+                "${prefix(dir)} Taper #$n"
+            }
         }
         t.id to title
     }

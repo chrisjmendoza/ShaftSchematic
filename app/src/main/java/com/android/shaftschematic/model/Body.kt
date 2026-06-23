@@ -18,6 +18,8 @@ data class Body(
     override val startFromAftMm: Float = 0f,
     override val lengthMm: Float = 0f,
     val diaMm: Float = 0f,
+    /** Optional user-defined label for display (not used for geometry). */
+    val label: String? = null,
 ) : Segment
 
 /** Basic invariants for a Body. */

@@ -325,14 +325,14 @@ Bodies are "Body 1", "Body 2", etc. Tapers are "Taper 1", etc. Only Liners have 
 | 9 | UI/UX | No recent documents on start screen | Medium | ✅ Fixed 2026-06-22 — up to 5 most-recently-modified files shown on start screen; tap to open directly |
 | 10 | Engineering | Float precision in inch→mm conversion | Medium | ✅ Fixed 2026-06-22 — `toMmOrNull`, `formatDisplay`, `tpiToPitchMm` now use Double arithmetic via `MM_PER_IN` constant |
 | 11 | Engineering | Two conflicting EPS constants in PDF composer | Medium | ✅ Fixed 2026-06-19 |
-| 12 | Dev | `composed {}` is deprecated | Low | |
-| 13 | Dev | `-Xlambdas=class` flag likely unnecessary | Low | |
-| 14 | Dev | Debug flags persist across restarts | Low | |
-| 15 | Machinist | LET/SET direction assumes prop-convention | Low | |
-| 16 | UI/UX | No "Save As" / document rename | Low | |
-| 17 | UI/UX | No confirmation on New with unsaved changes | Low | |
-| 18 | UI/UX | Component names can't be customized (except liners) | Low | |
-| 19 | UI/UX | "Highlight selection" toggle in editor surface | Low | |
-| 20 | UI/UX | Double header region wastes vertical space | Low | |
+| 12 | Dev | `composed {}` is deprecated | Low | ✅ Fixed 2026-06-23 — `clickableWithoutRipple` rewritten with `Modifier.clickable(interactionSource = null, indication = null)`; valid in Compose Foundation 1.7+ (BOM 2024.09.00) |
+| 13 | Dev | `-Xlambdas=class` flag likely unnecessary | Low | ✅ Fixed 2026-06-23 — removed `freeCompilerArgs.add("-Xlambdas=class")` from `app/build.gradle.kts`; modern Kotlin compiler defaults are correct |
+| 14 | Dev | Debug flags persist across restarts | Low | ✅ Fixed 2026-06-23 — `SettingsStore.resetDevSubFlagsIfDisabled()` clears all 8 dev sub-flags on startup when dev options are disabled; called from `ShaftViewModel.init` via `resetDevFlagsOnStartup()` |
+| 15 | Machinist | LET/SET direction assumes prop-convention | Low | ✅ Fixed 2026-06-23 — `letSet()` in `ShaftPdfComposer` now computes LET/SET from diameter comparison (`startDiaMm >= endDiaMm` → AFT is LET); PDF footer shows `L.E.T. (AFT)` / `S.E.T. (FWD)` with direction in parentheses |
+| 16 | UI/UX | No "Save As" / document rename | Low | ✅ Fixed 2026-06-23 — `vm.currentDocumentName: StateFlow<String?>` tracks loaded/saved file; Save toolbar button quick-saves when name is known, falls through to name dialog otherwise; "Save As…" added to OverflowMenu; set on load, save, rename, and recent-open |
+| 17 | UI/UX | No confirmation on New with unsaved changes | Low | ✅ Already implemented — `pendingAction` AlertDialog in `AppNav.kt:124-141`; both New and Open are gated by `hasUnsavedWork()` |
+| 18 | UI/UX | Component names can't be customized (except liners) | Low | ✅ Fixed 2026-06-23 — `label: String? = null` added to `Body`, `Taper`, `Threads` models; tap-to-edit label inline on card title (same pattern as Liner); `buildBodyTitleById`, `buildTaperTitleById`, `buildThreadTitleById` now use custom label when set |
+| 19 | UI/UX | "Highlight selection" toggle in editor surface | Low | ✅ Fixed 2026-06-23 — inline Switch removed from editor body; toggle moved to Settings screen; `showHighlightSelection` persisted via `SettingsStore` |
+| 20 | UI/UX | Double header region wastes vertical space | Low | ✅ Fixed 2026-06-23 — `Column { Text("Shaft Editor") + TopAppBar(title={}) }` collapsed to single `TopAppBar(title = { Text("Shaft Editor") })`; saves ~56dp vertical space |
 | 21 | Engineering | FWD-ref tapers/liners drift on OAL change | High | ✅ Fixed 2026-06-22 — `withNewOal()` in ShaftSpecExtensions.kt; both OAL mutation paths updated |
 | 22 | PDF | Excluded AFT thread shift overflows shaft FWD edge past right margin | High | ✅ Fixed 2026-06-22 — ptPerMm now derived from total content span (OAL + excluded thread tails); layout always fits within geomRect |

@@ -97,6 +97,7 @@ fun SettingsRoute(
     val showGrid by vm.showGrid.collectAsState()
     val showComponentArrows by vm.showComponentArrows.collectAsState()
     val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
+    val showHighlightSelection by vm.showHighlightSelection.collectAsState()
     val achievementsEnabled by vm.achievementsEnabled.collectAsState()
     val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
 
@@ -216,6 +217,14 @@ fun SettingsRoute(
                         Switch(checked = showGrid, onCheckedChange = { vm.setShowGrid(it) })
                         Spacer(Modifier.width(8.dp))
                         Text("Show Grid in Preview")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = showHighlightSelection,
+                            onCheckedChange = { vm.setShowHighlightSelection(it) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Highlight Selected Component in Preview")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Switch(

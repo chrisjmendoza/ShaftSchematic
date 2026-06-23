@@ -148,7 +148,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     // ────────────────────────────────────────────────────────────────────────────
-    // Unsaved-changes tracking
+    // Unsaved-changes tracking + current document name
     // ────────────────────────────────────────────────────────────────────────────
 
     private var _savedSpec: ShaftSpec = ShaftSpec()
@@ -156,6 +156,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private var _savedCustomer: String = ""
     private var _savedVessel: String = ""
     private var _savedNotes: String = ""
+
+    // Filename (with .shaft extension) of the last save/open, or null when the document
+    // has never been saved. Used to enable silent quick-save without reprompting for a name.
+    private val _currentDocumentName = MutableStateFlow<String?>(null)
+    val currentDocumentName: StateFlow<String?> = _currentDocumentName.asStateFlow()
+
+    fun setCurrentDocumentName(name: String?) { _currentDocumentName.value = name }
 
     fun markDocumentSaved() {
         _savedSpec = _spec.value
@@ -235,6 +242,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     internal val _showComponentArrows = MutableStateFlow(false)
     val showComponentArrows: StateFlow<Boolean> = _showComponentArrows.asStateFlow()
+
+    internal val _showHighlightSelection = MutableStateFlow(true)
+    val showHighlightSelection: StateFlow<Boolean> = _showHighlightSelection.asStateFlow()
 
     internal val _componentArrowWidthDp = MutableStateFlow(40)
     val componentArrowWidthDp: StateFlow<Int> = _componentArrowWidthDp.asStateFlow()
@@ -621,11 +631,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
+            SettingsStore.showHighlightSelectionFlow(getApplication()).collectLatest { persisted ->
+                setShowHighlightSelection(persisted, persist = false)
+            }
+        }
+        viewModelScope.launch {
             SettingsStore.componentArrowWidthDpFlow(getApplication()).collectLatest { persisted ->
                 setComponentArrowWidthDp(persisted, persist = false)
             }
         }
 
+        resetDevFlagsOnStartup()
         viewModelScope.launch {
             SettingsStore.devOptionsEnabledFlow(getApplication()).collectLatest { persisted ->
                 _devOptionsEnabled.value = persisted
@@ -1306,6 +1322,45 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateBodyLabel(index: Int, label: String?) = _spec.update { s ->
+        if (index !in s.bodies.indices) s else {
+            val old = s.bodies[index]
+            val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
+            if (old.label == normalized) return@update s
+            s.copy(
+                bodies = s.bodies.toMutableList().also { l ->
+                    l[index] = old.copy(label = normalized)
+                }
+            )
+        }
+    }
+
+    fun updateTaperLabel(index: Int, label: String?) = _spec.update { s ->
+        if (index !in s.tapers.indices) s else {
+            val old = s.tapers[index]
+            val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
+            if (old.label == normalized) return@update s
+            s.copy(
+                tapers = s.tapers.toMutableList().also { l ->
+                    l[index] = old.copy(label = normalized)
+                }
+            )
+        }
+    }
+
+    fun updateThreadLabel(index: Int, label: String?) = _spec.update { s ->
+        if (index !in s.threads.indices) s else {
+            val old = s.threads[index]
+            val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
+            if (old.label == normalized) return@update s
+            s.copy(
+                threads = s.threads.toMutableList().also { l ->
+                    l[index] = old.copy(label = normalized)
+                }
+            )
+        }
+    }
+
     /** Remove a [Liner] by id with multi-step delete history support. */
     fun removeLiner(id: String) {
         Log.d("ShaftViewModel", "removeLiner invoked for id=$id")
@@ -1490,6 +1545,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
         _componentOrder.value = emptyList()
         ensureOrderCoversSpec(blankSpec)
+        _currentDocumentName.value = null
         markDocumentSaved()
     }
 

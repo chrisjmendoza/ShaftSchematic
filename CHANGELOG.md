@@ -8,6 +8,28 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-06-23
 
+### feat: Open page — search, sort by name/date, and date column in list
+
+The Open drawing page previously showed a flat alphabetical list with no filtering or sorting. It now has:
+
+- **Search field** at the top with a clear (×) button — filters by filename as you type, shows "No drawings match…" when nothing found.
+- **Name / Date sort chips** — tap to switch column; tap again to flip direction (↑/↓). Date defaults to descending (most recent first). Name defaults to ascending.
+- **Date column** under each filename — shows relative age ("Today", "Yesterday", "3w ago", etc.) so you can see at a glance when each drawing was last saved. The old "Open" text label is removed.
+- File list now loads via `listWithMetadata()` so timestamps are always available.
+
+**`ui/nav/InternalDocRoutes.kt`** — `files` changed from `List<String>` to `List<Pair<String,Long>>`; `displayFiles` derived state for filter+sort; search + sort header added as sticky `LazyColumn` item.
+
+### feat: Start screen recent list — card layout, chevron, limit 3
+
+The recent documents section on the Start screen was a plain divider list that didn't read as tappable and had misaligned text when names were short.
+
+- Wrapped in a `Card` (surfaceVariant) for visual grouping.
+- Name now fills available width (`weight(1f)`) so the relative date and chevron always right-align.
+- `KeyboardArrowRight` chevron added to each row to signal tappability.
+- Limit reduced from 5 → 3 files (reduces clutter for a tool where drawings are rarely revisited).
+
+**`ui/screen/StartScreen.kt`** — card wrapping, weight fix, chevron icon, `take(3)`.
+
 ### refactor: extract ViewModel settings setters to ShaftViewModelSettings.kt
 
 `ShaftViewModel.kt` was 2134 lines — a single class managing spec mutations, 40+ state flows, autosave, undo/redo, achievements, dev options, and persisted settings. The 237-line block of settings setter functions has been extracted to a new `ShaftViewModelSettings.kt` extension file in the same package.
@@ -26,6 +48,87 @@ Two unit tests were asserting against formats that changed in later commits and 
 - `FooterUnitsTest` expected `" in"` unit suffix but `formatDiaWithUnit()`/`formatLenWithUnit()` now produce `"\""` (quote suffix, per shop convention).
 
 Both test expectations updated to match current output. No production code changed.
+
+### fix: remove deprecated `composed{}` in `clickableWithoutRipple` (analysis #12)
+
+`Modifier.composed {}` is deprecated in Compose since Foundation 1.6. `clickableWithoutRipple` was using it unnecessarily — the wrapper added nothing over a direct `Modifier.clickable(interactionSource = null, indication = null)` call, which is valid in Foundation 1.7+ (BOM 2024.09.00 used in this project).
+
+**`ui/screen/ShaftScreen.kt`** — `clickableWithoutRipple` rewritten without `composed {}`.
+
+### chore: remove `-Xlambdas=class` Kotlin compiler flag (analysis #13)
+
+`-Xlambdas=class` was added to work around a legacy Compose compiler issue. It forces lambda expressions to compile to anonymous classes, bypassing SAM/invoke-based inlining. The modern Kotlin 2.x + Compose K2 compiler handles this correctly without the flag; keeping it degrades runtime performance (more class loading, more GC pressure).
+
+**`app/build.gradle.kts`** — removed `freeCompilerArgs.add("-Xlambdas=class")`.
+
+### fix: reset dev-option sub-flags on startup when dev options disabled (analysis #14)
+
+All 8 developer sub-flags (OAL debug label, helper line, preview box overlay, component debug labels, render layout overlay, OAL markers, verbose logging categories) persisted to DataStore across restarts. If a debug APK was handed to a customer with any flags enabled, they would remain active indefinitely.
+
+`SettingsStore.resetDevSubFlagsIfDisabled(ctx)` now resets all 8 flags to false on startup unless dev options are explicitly enabled. Called from `ShaftViewModel.init` via `ShaftViewModelSettings.resetDevFlagsOnStartup()`.
+
+**`data/SettingsStore.kt`** — added `resetDevSubFlagsIfDisabled()`.  
+**`ui/viewmodel/ShaftViewModelSettings.kt`** — added `resetDevFlagsOnStartup()` extension; called from VM init.
+
+### fix: LET/SET direction now determined from actual taper geometry (analysis #15)
+
+The PDF footer labeled taper ends as "L.E.T." and "S.E.T." without stating which physical end was which. For coupling tapers (FWD taper, LET is at the FWD end) this was ambiguous and potentially misleading.
+
+`letSet()` in `ShaftPdfComposer` now compares `startDiaMm` vs `endDiaMm` to determine which end is the larger (LET) and smaller (SET), then includes the direction label in the footer: `L.E.T. (AFT): …` / `S.E.T. (FWD): …`. Since `startDiaMm` is always the AFT-facing end of the taper model, the direction is deterministic.
+
+**`pdf/ShaftPdfComposer.kt`** — new `LetSetResult` data class; `letSet()` rewritten to derive direction from geometry.  
+**`pdf/FooterUnitsTest.kt`, `pdf/FooterOrderTest.kt`** — assertions updated from `"L.E.T.: "` / `"S.E.T.: "` to `"L.E.T. ("` / `"S.E.T. ("` pattern.
+
+### feat: Save As and quick-save by document name (analysis #16)
+
+The Save toolbar button now distinguishes between two states:
+- **Named document** (opened from file or previously saved): silently overwrites the existing file without navigating to the name dialog.
+- **Unsaved/new document**: navigates to the name dialog as before.
+
+A new "Save As…" item in the overflow menu always navigates to the name dialog, allowing a renamed copy to be saved without overwriting the original.
+
+`vm.currentDocumentName: StateFlow<String?>` tracks the active filename across open, save, rename, and recent-open operations. `vm.setCurrentDocumentName()` is called in all four code paths.
+
+**`ui/viewmodel/ShaftViewModel.kt`** — `_currentDocumentName` StateFlow added; `setCurrentDocumentName()` and `newDocument()` reset added.  
+**`ui/nav/AppNav.kt`** — `onSave` lambda split into quick-save vs navigate; `onSaveAs` added; recent-open path sets name.  
+**`ui/nav/InternalDocRoutes.kt`** — `setCurrentDocumentName()` called after save (both overwrite and new-name paths) and after open.  
+**`ui/screen/ShaftEditorRoute.kt`, `ShaftRoute.kt`, `ShaftScreen.kt`** — `onSaveAs` parameter threaded through.  
+**`ui/screen/ShaftScreen.kt`** — `OverflowMenu` receives `onSaveAs` and shows "Save As…" item.
+
+### fix: move "Highlight selection" toggle from editor to Settings (analysis #19)
+
+The "Highlight selection in preview" Switch was rendered inline in the component editor body — a persistent setting that most users never change taking up vertical space in the editing area.
+
+Moved to the Settings screen, persisted via `SettingsStore`, and backed by `vm.showHighlightSelection: StateFlow<Boolean>` that flows into `ShaftScreen`.
+
+**`data/SettingsStore.kt`** — `KEY_SHOW_HIGHLIGHT_SELECTION`, `showHighlightSelectionFlow()`, `setShowHighlightSelection()` added.  
+**`ui/viewmodel/ShaftViewModel.kt`** — `_showHighlightSelection` StateFlow; collector in `init`.  
+**`ui/viewmodel/ShaftViewModelSettings.kt`** — `setShowHighlightSelection()` extension.  
+**`ui/screen/ShaftRoute.kt`** — collects and passes `showHighlightSelection`.  
+**`ui/screen/SettingsRoute.kt`** — Switch row added after showGrid toggle.  
+**`ui/screen/ShaftScreen.kt`** — inline Switch removed from editor body; `showHighlightSelection` parameter added.
+
+### fix: collapse double header into single TopAppBar (analysis #20)
+
+The top of the editor screen had a `Text("Shaft Editor")` label stacked above a `TopAppBar(title = {})` with an empty title. The combined chrome wasted approximately 56dp of vertical space.
+
+Collapsed into a single `TopAppBar(title = { Text("Shaft Editor") })` carrying all existing navigation icons and actions.
+
+**`ui/screen/ShaftScreen.kt`** — `Column { Text + TopAppBar(title={}) }` replaced with `TopAppBar(title = { Text(...) })`.
+
+### feat: custom labels for Body, Taper, and Thread components (analysis #18)
+
+Bodies, Tapers, and Threads previously had auto-generated display names only ("Body #1", "AFT Taper", etc.). Liners already supported custom labels. All three component types now support optional user-defined labels.
+
+Tap the card title to enter edit mode — an `OutlinedTextField` replaces the title, pre-filled with the current label (or blank for a new one). Focus-lost and Enter commit the label. Clear the field to revert to the auto-generated name.
+
+`label: String? = null` is added to each data class with a default so existing serialized documents deserialize without error. `buildBodyTitleById`, `buildTaperTitleById`, and `buildThreadTitleById` now prefer the custom label when set.
+
+**`model/Body.kt`, `model/Taper.kt`, `model/Threads.kt`** — `label: String? = null` field added.  
+**`util/BodyTitles.kt`, `util/TaperTitles.kt`, `util/ThreadTitles.kt`** — custom label wins over auto-generated title.  
+**`ui/viewmodel/ShaftViewModel.kt`** — `updateBodyLabel()`, `updateTaperLabel()`, `updateThreadLabel()` added.  
+**`ui/screen/ComponentCarousel.kt`** — tap-to-edit label added to Body, Taper, Thread cards (same `titleContent` pattern as Liner); `onUpdateBodyLabel`, `onUpdateTaperLabel`, `onUpdateThreadLabel` threaded through.  
+**`ui/screen/ShaftScreen.kt`, `ui/screen/ShaftRoute.kt`** — new label callbacks threaded through.
 
 ---
 

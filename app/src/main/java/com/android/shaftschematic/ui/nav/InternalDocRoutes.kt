@@ -7,18 +7,23 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.android.shaftschematic.io.InternalStorage
@@ -49,6 +54,9 @@ import com.android.shaftschematic.doc.stripShaftDocExtension
 - Names are unique to avoid conflicts with SAF routes.
  */
 
+private enum class OpenSortColumn { NAME, DATE }
+private enum class OpenSortDir    { ASC, DESC }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
@@ -58,12 +66,17 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var files by remember { mutableStateOf(listOf<String>()) }
+    // files stores (filename, lastModifiedMs)
+    var files by remember { mutableStateOf(listOf<Pair<String, Long>>()) }
     val unit by vm.unit.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
     var pendingRename by remember { mutableStateOf<String?>(null) }
+
+    var searchQuery by remember { mutableStateOf("") }
+    var sortColumn by remember { mutableStateOf(OpenSortColumn.DATE) }
+    var sortDir    by remember { mutableStateOf(OpenSortDir.DESC) }
 
     fun sanitizeUserBaseName(raw: String): String {
         val collapsed = raw.trim().replace(Regex("\\s+"), " ")
@@ -75,8 +88,23 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
             .trim()
     }
 
-    // Load list once on enter (keeps behavior the same as your original)
-    LaunchedEffect(Unit) { files = InternalStorage.list(ctx) }
+    LaunchedEffect(Unit) {
+        files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
+    }
+
+    // Derived: filtered + sorted list used by the LazyColumn
+    val displayFiles = remember(files, searchQuery, sortColumn, sortDir) {
+        val q = searchQuery.trim()
+        val filtered = if (q.isEmpty()) files
+            else files.filter { (name, _) ->
+                stripShaftDocExtension(name).contains(q, ignoreCase = true)
+            }
+        val sorted = when (sortColumn) {
+            OpenSortColumn.NAME -> filtered.sortedBy { stripShaftDocExtension(it.first).lowercase() }
+            OpenSortColumn.DATE -> filtered.sortedBy { it.second }
+        }
+        if (sortDir == OpenSortDir.DESC) sorted.reversed() else sorted
+    }
 
     if (pendingDelete != null) {
         val name = pendingDelete!!
@@ -92,7 +120,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                 InternalStorage.delete(ctx, name)
                             }
                             if (ok) {
-                                files = InternalStorage.list(ctx)
+                                files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
                             } else {
                                 snackbarHostState.showSnackbar(
                                     message = "Could not delete ‘${stripShaftDocExtension(name)}’."
@@ -151,8 +179,11 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                 InternalStorage.rename(ctx, fromName, toName)
                             }
                             if (ok) {
-                                files = InternalStorage.list(ctx)
+                                files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
                                 pendingRename = null
+                                if (vm.currentDocumentName.value == fromName) {
+                                    vm.setCurrentDocumentName(toName)
+                                }
                             } else {
                                 snackbarHostState.showSnackbar(
                                     message = "Could not rename to ‘${stripShaftDocExtension(toName)}’."
@@ -196,40 +227,127 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
     ) { pad ->
         LazyColumn(
             modifier = Modifier
+                .fillMaxSize()
                 .padding(pad)
-                .padding(16.dp)
         ) {
-            if (files.isEmpty()) {
-                item { Text("No saved drawings yet.", style = MaterialTheme.typography.bodyMedium) }
-            } else {
-                items(files) { name ->
-                    var menuOpen by remember(name) { mutableStateOf(false) }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                scope.launch {
-                                    val text = withContext(Dispatchers.IO) {
-                                        InternalStorage.load(ctx, name)
-                                    }
-                                    vm.importJson(text)
-                                    onFinished()
+            // ── Search + sort header ──────────────────────────────────────────
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 12.dp, bottom = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search drawings…") },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Filled.Clear, contentDescription = "Clear search")
                                 }
                             }
-                            .padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Text(
-                            text = stripShaftDocExtension(name),
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(end = 8.dp),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    // Sort chips — tapping the active column toggles direction;
+                    // tapping the inactive column switches to it (ascending by default).
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val nameSelected = sortColumn == OpenSortColumn.NAME
+                        val dateSelected = sortColumn == OpenSortColumn.DATE
+                        val nameLabel = if (nameSelected)
+                            "Name ${if (sortDir == OpenSortDir.ASC) "↑" else "↓"}" else "Name"
+                        val dateLabel = if (dateSelected)
+                            "Date ${if (sortDir == OpenSortDir.ASC) "↑" else "↓"}" else "Date"
+
+                        FilterChip(
+                            selected = nameSelected,
+                            onClick = {
+                                if (nameSelected) {
+                                    sortDir = if (sortDir == OpenSortDir.ASC) OpenSortDir.DESC else OpenSortDir.ASC
+                                } else {
+                                    sortColumn = OpenSortColumn.NAME
+                                    sortDir = OpenSortDir.ASC
+                                }
+                            },
+                            label = { Text(nameLabel) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null) }
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Open", color = MaterialTheme.colorScheme.primary)
+                        FilterChip(
+                            selected = dateSelected,
+                            onClick = {
+                                if (dateSelected) {
+                                    sortDir = if (sortDir == OpenSortDir.ASC) OpenSortDir.DESC else OpenSortDir.ASC
+                                } else {
+                                    sortColumn = OpenSortColumn.DATE
+                                    sortDir = OpenSortDir.DESC  // most recent first by default
+                                }
+                            },
+                            label = { Text(dateLabel) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null) }
+                        )
+                    }
+                }
+            }
+
+            // ── File list ────────────────────────────────────────────────────
+            if (files.isEmpty()) {
+                item {
+                    Text(
+                        "No saved drawings yet.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            } else if (displayFiles.isEmpty()) {
+                item {
+                    Text(
+                        "No drawings match \"$searchQuery\".",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            } else {
+                items(displayFiles, key = { it.first }) { (name, lastModMs) ->
+                    var menuOpen by remember(name) { mutableStateOf(false) }
+                    val relDate = relativeOpenDate(lastModMs)
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    scope.launch {
+                                        val text = withContext(Dispatchers.IO) {
+                                            InternalStorage.load(ctx, name)
+                                        }
+                                        vm.importJson(text)
+                                        vm.setCurrentDocumentName(name)
+                                        onFinished()
+                                    }
+                                }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Name + date stacked
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stripShaftDocExtension(name),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = relDate,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             Box {
                                 IconButton(onClick = { menuOpen = true }) {
                                     Icon(Icons.Filled.MoreVert, contentDescription = "More")
@@ -258,7 +376,6 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                             Icon(Icons.Filled.Delete, contentDescription = null)
                                         }
                                     )
-
                                     DropdownMenuItem(
                                         text = { Text("Send Feedback") },
                                         onClick = {
@@ -273,7 +390,6 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                                     }
                                                     out
                                                 }
-
                                                 val intent = FeedbackIntentFactory.create(
                                                     context = ctx,
                                                     screen = "Open/Saved",
@@ -281,7 +397,6 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                                     selectedSaveName = stripShaftDocExtension(name),
                                                     attachments = attachments
                                                 )
-
                                                 try {
                                                     ctx.startActivity(Intent.createChooser(intent, "Send Feedback"))
                                                 } catch (_: ActivityNotFoundException) {
@@ -296,11 +411,23 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                 }
                             }
                         }
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     }
-                    HorizontalDivider()
                 }
             }
         }
+    }
+}
+
+private fun relativeOpenDate(lastModifiedMs: Long): String {
+    val nowMs = System.currentTimeMillis()
+    val days = ((nowMs - lastModifiedMs) / (1000L * 60 * 60 * 24)).toInt()
+    return when {
+        days == 0 -> "Today"
+        days == 1 -> "Yesterday"
+        days < 7  -> "$days days ago"
+        days < 30 -> "${days / 7}w ago"
+        else      -> "${days / 30}mo ago"
     }
 }
 
@@ -357,6 +484,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                             withContext(Dispatchers.IO) {
                                 InternalStorage.save(ctx, file, vm.exportJson())
                             }
+                            vm.setCurrentDocumentName(file)
                             vm.markDocumentSaved()
                             vm.unlockAchievement(Achievements.Id.FIRST_SAVE)
                             pendingOverwrite = null
@@ -451,6 +579,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                 withContext(Dispatchers.IO) {
                                     InternalStorage.save(ctx, targetName, vm.exportJson())
                                 }
+                                vm.setCurrentDocumentName(targetName)
                                 vm.markDocumentSaved()
                                 vm.unlockAchievement(Achievements.Id.FIRST_SAVE)
                                 onFinished()

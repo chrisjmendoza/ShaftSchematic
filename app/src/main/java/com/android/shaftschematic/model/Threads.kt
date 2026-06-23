@@ -45,7 +45,9 @@ data class Threads(
     @JsonNames("excludeFromOAL", "excludeFromOal", "exclude_from_oal")
     val excludeFromOAL: Boolean = false,
     val isAftEnd: Boolean = true,
-    val tpi: Float? = null
+    val tpi: Float? = null,
+    /** Optional user-defined label for display (not used for geometry). */
+    val label: String? = null,
 ) : Segment {
 
     /**

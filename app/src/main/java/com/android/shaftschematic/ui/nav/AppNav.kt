@@ -106,6 +106,7 @@ fun AppNav(vm: ShaftViewModel) {
                                     withContext(Dispatchers.IO) { InternalStorage.load(ctx, filename) }
                                 }.onSuccess { text ->
                                     vm.importJson(text)
+                                    vm.setCurrentDocumentName(filename)
                                     nav.navigate("editor")
                                 }.onFailure {
                                     snackbarHostState.showSnackbar("Could not open file.")
@@ -119,6 +120,9 @@ fun AppNav(vm: ShaftViewModel) {
 
         /* ───────── Editor ───────── */
         composable("editor") {
+            val ctx = LocalContext.current
+            val scope = rememberCoroutineScope()
+            val currentDocumentName by vm.currentDocumentName.collectAsState()
             var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
             if (pendingAction != null) {
@@ -159,7 +163,20 @@ fun AppNav(vm: ShaftViewModel) {
                     if (vm.hasUnsavedWork()) pendingAction = { nav.navigate("openLocal") }
                     else nav.navigate("openLocal")
                 },
-                onSave = { nav.navigate("saveLocal") },
+                onSave = {
+                    val docName = currentDocumentName
+                    if (docName != null) {
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                InternalStorage.save(ctx, docName, vm.exportJson())
+                            }
+                            vm.markDocumentSaved()
+                        }
+                    } else {
+                        nav.navigate("saveLocal")
+                    }
+                },
+                onSaveAs = { nav.navigate("saveLocal") },
                 onOpenSettings = { nav.navigate("settings") },
                 onOpenDeveloperOptions = { nav.navigate("developerOptions") },
                 // PDF EXPORT = show preview first, then SAF

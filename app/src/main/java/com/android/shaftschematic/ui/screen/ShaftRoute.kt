@@ -39,6 +39,7 @@ fun ShaftRoute(
     onNew: () -> Unit,
     onOpen: () -> Unit,
     onSave: () -> Unit,
+    onSaveAs: () -> Unit = {},
     onExportPdf: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
@@ -99,6 +100,7 @@ fun ShaftRoute(
     val previewThreadHatch by vm.previewThreadHatchSetting.collectAsState()
     val showComponentArrows by vm.showComponentArrows.collectAsState()
     val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
+    val showHighlightSelection by vm.showHighlightSelection.collectAsState()
     val showOalDebugLabel by vm.showOalDebugLabel.collectAsState()
     val showOalHelperLine by vm.showOalHelperLine.collectAsState()
     val showOalInPreviewBox by vm.showOalInPreviewBox.collectAsState()
@@ -162,6 +164,7 @@ fun ShaftRoute(
         showRenderOalMarkers = showRenderOalMarkers,
         showComponentArrows = showComponentArrows,
         componentArrowWidthDp = componentArrowWidthDp,
+        showHighlightSelection = showHighlightSelection,
         selectedComponentId = selectedComponentId,
 
         previewOutline = previewOutline,
@@ -193,10 +196,13 @@ fun ShaftRoute(
         onAddLiner  = { s, l, od, ref -> vm.addLinerAt(s, l, od, ref) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
+        onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label) },
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },
+        onUpdateTaperLabel = { i, label    -> vm.updateTaperLabel(i, label) },
         onUpdateTaperKeyway = { i, w, d, l, offset, spooned -> vm.updateTaperKeyway(i, w, d, l, offset, spooned) },
         onUpdateTaperReference = { i, ref -> vm.updateTaperAuthoredReference(i, ref) },
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
+        onUpdateThreadLabel = { i, label   -> vm.updateThreadLabel(i, label) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
@@ -215,6 +221,7 @@ fun ShaftRoute(
         onNew = onNew,
         onOpen = onOpen,
         onSave = onSave,
+        onSaveAs = onSaveAs,
         onExportPdf = onExportPdf,
         onOpenSettings = onOpenSettings,
         onSendFeedback = onSendFeedback,

@@ -57,13 +57,18 @@ fun buildThreadTitleById(spec: ShaftSpec): Map<String, String> {
     }
 
     return sorted.associate { th ->
-        val end = endById[th.id] ?: ThreadEnd.AFT
-        val count = countByEnd[end] ?: 0
-        val title = if (count <= 1) {
-            "${prefix(end)} Thread"
+        val customLabel = th.label?.trim()?.takeIf { it.isNotEmpty() }
+        val title = if (customLabel != null) {
+            customLabel
         } else {
-            val n = nById[th.id] ?: 0
-            "${prefix(end)} Thread #$n"
+            val end = endById[th.id] ?: ThreadEnd.AFT
+            val count = countByEnd[end] ?: 0
+            if (count <= 1) {
+                "${prefix(end)} Thread"
+            } else {
+                val n = nById[th.id] ?: 0
+                "${prefix(end)} Thread #$n"
+            }
         }
         th.id to title
     }

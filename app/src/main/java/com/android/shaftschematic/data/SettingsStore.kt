@@ -28,6 +28,7 @@ object SettingsStore {
     private val KEY_SHOW_GRID    = booleanPreferencesKey("show_grid")
     private val KEY_SHOW_COMPONENT_ARROWS = booleanPreferencesKey("show_component_arrows")
     private val KEY_COMPONENT_ARROW_WIDTH_DP = intPreferencesKey("component_arrow_width_dp")
+    private val KEY_SHOW_HIGHLIGHT_SELECTION = booleanPreferencesKey("show_highlight_selection")
 
     // Developer options (hidden behind About taps)
     private val KEY_DEV_OPTIONS_ENABLED = booleanPreferencesKey("dev_options_enabled")
@@ -170,6 +171,9 @@ object SettingsStore {
 
     fun showComponentArrowsFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_COMPONENT_ARROWS] ?: false }
+
+    fun showHighlightSelectionFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_HIGHLIGHT_SELECTION] ?: true }
 
     fun componentArrowWidthDpFlow(ctx: Context): Flow<Int> =
         ctx.settingsDataStore.data.map { p -> p[KEY_COMPONENT_ARROW_WIDTH_DP] ?: 40 }
@@ -386,6 +390,10 @@ object SettingsStore {
         ctx.settingsDataStore.edit { it[KEY_SHOW_COMPONENT_ARROWS] = show }
     }
 
+    suspend fun setShowHighlightSelection(ctx: Context, show: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_SHOW_HIGHLIGHT_SELECTION] = show }
+    }
+
     suspend fun setOpenPdfAfterExport(ctx: Context, enabled: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_OPEN_PDF_AFTER_EXPORT] = enabled }
     }
@@ -439,6 +447,26 @@ object SettingsStore {
 
     suspend fun setVerboseLoggingIo(ctx: Context, enabled: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_VERBOSE_LOGGING_IO] = enabled }
+    }
+
+    // Clears all dev sub-flags when dev options master toggle is off. Safe to call on every
+    // startup — a no-op when devOptionsEnabled is true (developer session).
+    suspend fun resetDevSubFlagsIfDisabled(ctx: Context) {
+        val devEnabled = devOptionsEnabledFlow(ctx).first()
+        if (devEnabled) return
+        ctx.settingsDataStore.edit { prefs ->
+            prefs[KEY_SHOW_OAL_DEBUG_LABEL] = false
+            prefs[KEY_SHOW_OAL_HELPER_LINE] = false
+            prefs[KEY_SHOW_OAL_IN_PREVIEW_BOX] = false
+            prefs[KEY_SHOW_COMPONENT_DEBUG_LABELS] = false
+            prefs[KEY_SHOW_RENDER_LAYOUT_DEBUG_OVERLAY] = false
+            prefs[KEY_SHOW_RENDER_OAL_MARKERS] = false
+            prefs[KEY_VERBOSE_LOGGING_ENABLED] = false
+            prefs[KEY_VERBOSE_LOGGING_RENDER] = false
+            prefs[KEY_VERBOSE_LOGGING_OAL] = false
+            prefs[KEY_VERBOSE_LOGGING_PDF] = false
+            prefs[KEY_VERBOSE_LOGGING_IO] = false
+        }
     }
 
     suspend fun setAchievementsEnabled(ctx: Context, enabled: Boolean) {

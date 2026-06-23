@@ -44,8 +44,8 @@ class FooterOrderTest {
         val lines = cols.aftLines
 
         val idxRate = lines.indexOfFirst { it.startsWith("Rate: ") }
-        val idxLet = lines.indexOfFirst { it.startsWith("L.E.T.: ") }
-        val idxSet = lines.indexOfFirst { it.startsWith("S.E.T.: ") }
+        val idxLet = lines.indexOfFirst { it.startsWith("L.E.T. (") }
+        val idxSet = lines.indexOfFirst { it.startsWith("S.E.T. (") }
         val idxKw = lines.indexOfFirst { it.startsWith("KW: ") }
         val idxLen = lines.indexOfFirst { it.startsWith("Length: ") }
         val idxThread = lines.indexOfFirst { it.startsWith("Thread: ") }

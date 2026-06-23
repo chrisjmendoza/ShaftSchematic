@@ -114,10 +114,13 @@ internal fun ComponentCarouselPager(
     selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
+    onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
+    onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
@@ -231,10 +234,15 @@ internal fun ComponentCarouselPager(
                     outerPaddingHorizontal = componentCardPadding,
                     showComponentDebugLabels = showComponentDebugLabels,
                     onAddBody = onAddBody,
-                    onUpdateBody = onUpdateBody, onUpdateTaper = onUpdateTaper,
+                    onUpdateBody = onUpdateBody,
+                    onUpdateBodyLabel = onUpdateBodyLabel,
+                    onUpdateTaper = onUpdateTaper,
+                    onUpdateTaperLabel = onUpdateTaperLabel,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateTaperReference = onUpdateTaperReference,
-                    onUpdateThread = onUpdateThread, onUpdateLiner = onUpdateLiner,
+                    onUpdateThread = onUpdateThread,
+                    onUpdateThreadLabel = onUpdateThreadLabel,
+                    onUpdateLiner = onUpdateLiner,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
                     bodyTitleById = bodyTitleById, taperTitleById = taperTitleById,
@@ -302,10 +310,13 @@ internal fun ComponentPagerCard(
     showComponentDebugLabels: Boolean,
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
+    onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
+    onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
@@ -369,8 +380,44 @@ internal fun ComponentPagerCard(
 
             val idx = explicitIndex ?: return
             val b   = spec.bodies.getOrNull(idx) ?: return
+            val computedBodyTitle = bodyTitleById[b.id] ?: "Body"
+            var editingBodyTitle by rememberSaveable(b.id) { mutableStateOf(false) }
+            val bodyFocusRequester = remember { FocusRequester() }
+            var bodyHasFocusedOnce by remember(b.id) { mutableStateOf(false) }
             ComponentCard(
-                title = bodyTitleById[b.id] ?: "Body",
+                title = computedBodyTitle,
+                titleContent = {
+                    if (!editingBodyTitle) {
+                        Text(
+                            computedBodyTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.fillMaxWidth().clickable { editingBodyTitle = true },
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    } else {
+                        var text by remember(b.id, b.label) { mutableStateOf(b.label.orEmpty()) }
+                        LaunchedEffect(b.id) { bodyFocusRequester.requestFocus() }
+                        OutlinedTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            singleLine = true,
+                            placeholder = { Text(computedBodyTitle) },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                onUpdateBodyLabel(idx, text.trim().takeIf { it.isNotEmpty() })
+                                editingBodyTitle = false
+                            }),
+                            modifier = Modifier.fillMaxWidth().focusRequester(bodyFocusRequester)
+                                .onFocusChanged { f ->
+                                    if (f.isFocused) bodyHasFocusedOnce = true
+                                    if (bodyHasFocusedOnce && !f.isFocused) {
+                                        onUpdateBodyLabel(idx, text.trim().takeIf { it.isNotEmpty() })
+                                        editingBodyTitle = false
+                                    }
+                                }
+                        )
+                    }
+                },
                 debugText = if (showComponentDebugLabels) "id=${b.id} • startMm=${f1(b.startFromAftMm)} • endMm=${f1(b.startFromAftMm + b.lengthMm)}" else null,
                 errorMessage = if (b.id in collidingComponentIds) "Overlaps another component" else null,
                 warningMessage = bodyWarningMessage(b),
@@ -404,8 +451,44 @@ internal fun ComponentPagerCard(
             } else {
                 t.startFromAftMm
             }
+            val computedTaperTitle = taperTitleById[t.id] ?: "Taper"
+            var editingTaperTitle by rememberSaveable(t.id) { mutableStateOf(false) }
+            val taperFocusRequester = remember { FocusRequester() }
+            var taperHasFocusedOnce by remember(t.id) { mutableStateOf(false) }
             ComponentCard(
-                title = taperTitleById[t.id] ?: "Taper",
+                title = computedTaperTitle,
+                titleContent = {
+                    if (!editingTaperTitle) {
+                        Text(
+                            computedTaperTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.fillMaxWidth().clickable { editingTaperTitle = true },
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    } else {
+                        var text by remember(t.id, t.label) { mutableStateOf(t.label.orEmpty()) }
+                        LaunchedEffect(t.id) { taperFocusRequester.requestFocus() }
+                        OutlinedTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            singleLine = true,
+                            placeholder = { Text(computedTaperTitle) },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                onUpdateTaperLabel(idx, text.trim().takeIf { it.isNotEmpty() })
+                                editingTaperTitle = false
+                            }),
+                            modifier = Modifier.fillMaxWidth().focusRequester(taperFocusRequester)
+                                .onFocusChanged { f ->
+                                    if (f.isFocused) taperHasFocusedOnce = true
+                                    if (taperHasFocusedOnce && !f.isFocused) {
+                                        onUpdateTaperLabel(idx, text.trim().takeIf { it.isNotEmpty() })
+                                        editingTaperTitle = false
+                                    }
+                                }
+                        )
+                    }
+                },
                 debugText = if (showComponentDebugLabels) "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}" else null,
                 errorMessage = if (t.id in collidingComponentIds) "Overlaps another component" else null,
                 warningMessage = taperWarningMessage(t),
@@ -520,8 +603,44 @@ internal fun ComponentPagerCard(
             val idx        = explicitIndex ?: return
             val th         = spec.threads.getOrNull(idx) ?: return
             val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
+            val computedThreadTitle = threadTitleById[th.id] ?: "Thread"
+            var editingThreadTitle by rememberSaveable(th.id) { mutableStateOf(false) }
+            val threadFocusRequester = remember { FocusRequester() }
+            var threadHasFocusedOnce by remember(th.id) { mutableStateOf(false) }
             ComponentCard(
-                title = threadTitleById[th.id] ?: "Thread",
+                title = computedThreadTitle,
+                titleContent = {
+                    if (!editingThreadTitle) {
+                        Text(
+                            computedThreadTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.fillMaxWidth().clickable { editingThreadTitle = true },
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    } else {
+                        var text by remember(th.id, th.label) { mutableStateOf(th.label.orEmpty()) }
+                        LaunchedEffect(th.id) { threadFocusRequester.requestFocus() }
+                        OutlinedTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            singleLine = true,
+                            placeholder = { Text(computedThreadTitle) },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                onUpdateThreadLabel(idx, text.trim().takeIf { it.isNotEmpty() })
+                                editingThreadTitle = false
+                            }),
+                            modifier = Modifier.fillMaxWidth().focusRequester(threadFocusRequester)
+                                .onFocusChanged { f ->
+                                    if (f.isFocused) threadHasFocusedOnce = true
+                                    if (threadHasFocusedOnce && !f.isFocused) {
+                                        onUpdateThreadLabel(idx, text.trim().takeIf { it.isNotEmpty() })
+                                        editingThreadTitle = false
+                                    }
+                                }
+                        )
+                    }
+                },
                 debugText = if (showComponentDebugLabels) "id=${th.id} • startMm=${f1(th.startFromAftMm)} • endMm=${f1(th.startFromAftMm + th.lengthMm)}" else null,
                 errorMessage = if (th.excludeFromOAL) null else (
                     startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)

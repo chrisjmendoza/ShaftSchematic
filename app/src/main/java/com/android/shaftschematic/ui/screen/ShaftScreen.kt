@@ -3,7 +3,6 @@ package com.android.shaftschematic.ui.screen
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +23,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -88,7 +86,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import com.android.shaftschematic.geom.computeOalWindow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
@@ -192,6 +189,7 @@ fun ShaftScreen(
     showRenderOalMarkers: Boolean,
     showComponentArrows: Boolean,
     componentArrowWidthDp: Int,
+    showHighlightSelection: Boolean = true,
     selectedComponentId: String?,
 
     previewOutline: PreviewColorSetting,
@@ -232,10 +230,13 @@ fun ShaftScreen(
 
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
+    onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
+    onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
@@ -261,6 +262,7 @@ fun ShaftScreen(
     onNew: () -> Unit,
     onOpen: () -> Unit,
     onSave: () -> Unit,
+    onSaveAs: () -> Unit = {},
     onExportPdf: () -> Unit,
     onOpenSettings: () -> Unit,
     onSendFeedback: () -> Unit,
@@ -277,8 +279,6 @@ fun ShaftScreen(
 
 ) {
     key(resetNonce) {
-    // UI options for preview highlight (renderer should consume these—see comment in PreviewCard)
-    var highlightEnabled by rememberSaveable { mutableStateOf(true) }
     var highlightId by rememberSaveable { mutableStateOf<String?>(null) }
 
 
@@ -377,101 +377,96 @@ fun ShaftScreen(
             WindowInsetsSides.Horizontal
         ),
         topBar = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Shaft Editor",
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Shaft Editor",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                navigationIcon = {
+                    // Hamburger opens the sidebar nav drawer.
+                    // Home lives inside the sidebar — not duplicated here.
+                    IconButton(
+                        onClick = onOpenSidebar,
+                        modifier = Modifier.testTag("toolbar_menu")
+                    ) {
+                        Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                    }
+                },
+                actions = {
+                    HistoryMenu(
+                        canUndo = canUndo,
+                        canRedo = canRedo,
+                        onUndo = onUndo,
+                        onRedo = onRedo
+                    )
 
-                TopAppBar(
-                    title = { },
-                    windowInsets = WindowInsets(0, 0, 0, 0),
-                    navigationIcon = {
-                        // Hamburger opens the sidebar nav drawer.
-                        // Home lives inside the sidebar — not duplicated here.
-                        IconButton(
-                            onClick = onOpenSidebar,
-                            modifier = Modifier.testTag("toolbar_menu")
-                        ) {
-                            Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
-                        }
-                    },
-                    actions = {
-                        HistoryMenu(
-                            canUndo = canUndo,
-                            canRedo = canRedo,
-                            onUndo = onUndo,
-                            onRedo = onRedo
-                        )
+                    IconButton(
+                        onClick = { projectInfoOpen = true },
+                        modifier = Modifier.testTag("toolbar_project_info")
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = "Project information")
+                    }
 
-                        IconButton(
-                            onClick = { projectInfoOpen = true },
-                            modifier = Modifier.testTag("toolbar_project_info")
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = "Project information")
-                        }
+                    IconButton(
+                        onClick = onNew,
+                        modifier = Modifier.testTag("toolbar_new")
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = "New")
+                    }
 
-                        IconButton(
-                            onClick = onNew,
-                            modifier = Modifier.testTag("toolbar_new")
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = "New")
-                        }
+                    IconButton(
+                        onClick = onOpen,
+                        modifier = Modifier.testTag("toolbar_open")
+                    ) {
+                        Icon(Icons.Filled.FolderOpen, contentDescription = "Open")
+                    }
 
-                        IconButton(
-                            onClick = onOpen,
-                            modifier = Modifier.testTag("toolbar_open")
-                        ) {
-                            Icon(Icons.Filled.FolderOpen, contentDescription = "Open")
-                        }
+                    IconButton(
+                        onClick = onSave,
+                        modifier = Modifier.testTag("toolbar_save")
+                    ) {
+                        Icon(Icons.Filled.Save, contentDescription = "Save")
+                    }
 
-                        IconButton(
-                            onClick = onSave,
-                            modifier = Modifier.testTag("toolbar_save")
-                        ) {
-                            Icon(Icons.Filled.Save, contentDescription = "Save")
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .testTag("toolbar_export_pdf_container")
-                                .then(
-                                    if (!exportPdfEnabled) {
-                                        Modifier.pointerInput(Unit) {
-                                            detectTapGestures {
-                                                topBarScope.launch {
-                                                    snackbarHostState.showSnackbar(exportPdfDisabledMessage)
-                                                }
+                    Box(
+                        modifier = Modifier
+                            .testTag("toolbar_export_pdf_container")
+                            .then(
+                                if (!exportPdfEnabled) {
+                                    Modifier.pointerInput(Unit) {
+                                        detectTapGestures {
+                                            topBarScope.launch {
+                                                snackbarHostState.showSnackbar(exportPdfDisabledMessage)
                                             }
                                         }
-                                    } else {
-                                        Modifier
                                     }
-                                )
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    ) {
+                        IconButton(
+                            onClick = onExportPdf,
+                            enabled = exportPdfEnabled,
+                            modifier = Modifier.testTag("toolbar_export_pdf")
                         ) {
-                            IconButton(
-                                onClick = onExportPdf,
-                                enabled = exportPdfEnabled,
-                                modifier = Modifier.testTag("toolbar_export_pdf")
-                            ) {
-                                Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF")
-                            }
+                            Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF")
                         }
-
-                        OverflowMenu(
-                            onOpenSettings = onOpenSettings,
-                            onSendFeedback = onSendFeedback,
-                            onOpenDeveloperOptions = onOpenDeveloperOptions,
-                            showDeveloperOptions = devOptionsEnabled,
-                        )
                     }
-                )
-            }
+
+                    OverflowMenu(
+                        onSaveAs = onSaveAs,
+                        onOpenSettings = onOpenSettings,
+                        onSendFeedback = onSendFeedback,
+                        onOpenDeveloperOptions = onOpenDeveloperOptions,
+                        showDeveloperOptions = devOptionsEnabled,
+                    )
+                }
+            )
         },
     ) { inner ->
         Column(
@@ -493,7 +488,7 @@ fun ShaftScreen(
                 overallIsManual = overallIsManual,
                 devOptionsEnabled = devOptionsEnabled,
                 showOalInPreviewBox = showOalInPreviewBox,
-                highlightEnabled = highlightEnabled,
+                highlightEnabled = showHighlightSelection,
                 highlightId = selectedComponentId,
                 onTapComponentId = { onSelectComponentById(it) },
                 onTapAtMm = onTapAtRawMm,
@@ -683,14 +678,6 @@ fun ShaftScreen(
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Highlight selection in preview", Modifier.weight(1f))
-                    androidx.compose.material3.Switch(
-                        checked = highlightEnabled,
-                        onCheckedChange = { highlightEnabled = it }
-                    )
-                }
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
@@ -732,10 +719,13 @@ fun ShaftScreen(
                     selectedComponentId = selectedComponentId,
                     onAddBody = onAddBody,
                     onUpdateBody = snappedBodyUpdater,
+                    onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateTaper = snappedTaperUpdater,
+                    onUpdateTaperLabel = onUpdateTaperLabel,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateTaperReference = onUpdateTaperReference,
                     onUpdateThread = snappedThreadUpdater,
+                    onUpdateThreadLabel = onUpdateThreadLabel,
                     onUpdateLiner = snappedLinerUpdater,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
@@ -955,6 +945,7 @@ private fun HistoryMenu(
 
 @Composable
 private fun OverflowMenu(
+    onSaveAs: () -> Unit,
     onOpenSettings: () -> Unit,
     onSendFeedback: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
@@ -974,6 +965,15 @@ private fun OverflowMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
+            DropdownMenuItem(
+                text = { Text("Save As…") },
+                leadingIcon = { Icon(Icons.Default.Save, contentDescription = null) },
+                modifier = Modifier.testTag("overflow_save_as"),
+                onClick = {
+                    expanded = false
+                    onSaveAs()
+                }
+            )
             DropdownMenuItem(
                 text = { Text("Settings") },
                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
@@ -1495,16 +1495,12 @@ private fun snapBounds(
 
 /* ───────────────── Click helper ───────────────── */
 
-// Compose-safe no-ripple click helper
 private fun Modifier.clickableWithoutRipple(
     enabled: Boolean = true,
     onClick: () -> Unit
-): Modifier = composed {
-    val interaction = remember { MutableInteractionSource() }
-    clickable(
-        enabled = enabled,
-        indication = null,
-        interactionSource = interaction,
-        onClick = onClick
-    )
-}
+): Modifier = clickable(
+    enabled = enabled,
+    indication = null,
+    interactionSource = null,
+    onClick = onClick
+)

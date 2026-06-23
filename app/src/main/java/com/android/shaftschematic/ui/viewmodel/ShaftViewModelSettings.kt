@@ -152,6 +152,13 @@ fun ShaftViewModel.setShowComponentArrows(show: Boolean, persist: Boolean = true
     }
 }
 
+fun ShaftViewModel.setShowHighlightSelection(show: Boolean, persist: Boolean = true) {
+    _showHighlightSelection.value = show
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setShowHighlightSelection(getApplication(), show) }
+    }
+}
+
 fun ShaftViewModel.setComponentArrowWidthDp(widthDp: Int, persist: Boolean = true) {
     val clamped = widthDp.coerceIn(24, 72)
     _componentArrowWidthDp.value = clamped
@@ -161,6 +168,10 @@ fun ShaftViewModel.setComponentArrowWidthDp(widthDp: Int, persist: Boolean = tru
 }
 
 // ── Debug / developer options ─────────────────────────────────────────────────
+
+fun ShaftViewModel.resetDevFlagsOnStartup() {
+    viewModelScope.launch { SettingsStore.resetDevSubFlagsIfDisabled(getApplication()) }
+}
 
 fun ShaftViewModel.setDevOptionsEnabled(enabled: Boolean, persist: Boolean = true) {
     _devOptionsEnabled.value = enabled
