@@ -1,0 +1,86 @@
+# AddComponentDialogs Contract (v1.0, 2026-06-23)
+
+## Purpose
+Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
+`AddThreadDialog`, `AddTaperDialog`. Each dialog is the **add-time counterpart** to the
+component's carousel edit card in `ComponentCarousel.kt`.
+
+---
+
+## Core invariant — dialog/card parity
+
+> **Every control in a carousel edit card must also appear in its Add dialog under
+> the same conditions.**
+
+Corollary: if you add a control to a carousel card, add it to the Add dialog too, and
+vice versa. Parity is checked per-condition (e.g. "only when excluded from OAL"), not
+just per field.
+
+Failure mode: the AFT/FWD thread-end selector was present in the carousel card but
+missing from `AddThreadDialog` for several versions (restored 2026-06-23).
+
+---
+
+## Per-dialog contracts
+
+### AddBodyDialog
+| Field | Always shown |
+|-------|-------------|
+| Start | ✓ |
+| Length | ✓ |
+| Diameter (Ø) | ✓ |
+
+### AddLinerDialog
+| Field / control | Condition |
+|-----------------|-----------|
+| Measure From: AFT \| FWD chips | Always |
+| Start from AFT / FWD | Always (label follows chip) |
+| Length | Always |
+| Outer Ø | Always |
+
+### AddThreadDialog
+| Field / control | Condition |
+|-----------------|-----------|
+| Start | Only when `countInOal = true` |
+| Thread end: AFT \| FWD chips | Only when `countInOal = false` |
+| Major Ø | Always |
+| TPI | Always |
+| Length | Always |
+| Count in OAL toggle | Always |
+
+The Start field is **replaced** by the AFT/FWD chips when excluded from OAL — it is
+not hidden in addition to them. Matches `ComponentCarousel.kt` `ResolvedThread` branch,
+`!includeInOal` block.
+
+`isAftEnd` is passed through: `onSubmit → ShaftScreen.onAddThread → ShaftRoute →
+ShaftViewModel.addThreadAt()` and stored on the `Threads` model object.
+
+### AddTaperDialog
+| Field / control | Condition |
+|-----------------|-----------|
+| Measure From: AFT \| FWD chips | Always |
+| Start from SET / LET | Always (label follows chip) |
+| Length | Always |
+| SET Ø / LET Ø | Always (labels swap for FWD) |
+| Rate | Always |
+| Keyway fields | Always |
+
+---
+
+## Do Nots
+- Do **not** remove the AFT/FWD thread-end selector from `AddThreadDialog`; it is only
+  conditionally visible but must always be present in the excluded-from-OAL branch.
+- Do **not** add collision/overlap checks for excluded threads — they live outside the
+  shaft span by design.
+- Do **not** call `onSubmit` with a negative `startMm` when the thread is excluded from
+  OAL; the ViewModel derives position from `isAftEnd` + OAL via
+  `syncExcludedThreadPositions()`.
+
+---
+
+## Change log
+**v1.0 (2026-06-23)**
+- Initial contract. Documents dialog/card parity rule and thread AFT/FWD restoration.
+- `AddThreadDialog.onSubmit` signature updated to include `isAftEnd: Boolean`.
+- When `countInOal = false`: Start field hidden, "Thread end: AFT | FWD" chips shown
+  using `DirectionChip` (same component as `AddLinerDialog`).

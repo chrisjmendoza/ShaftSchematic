@@ -8,6 +8,26 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-06-23
 
+### docs: CLAUDE.md + AddComponentDialogs.md — lock in dialog/card parity invariants
+
+Added project-level documentation to prevent future regressions where controls present in carousel edit cards get accidentally dropped from their corresponding Add dialogs.
+
+- **`CLAUDE.md`** (project root) — Claude Code loads this at the start of every session. Lists critical do-not-remove invariants: dialog/card parity, numeric commit guard, auto-body promotion, Free-to-End badge suppression, and commit policy.
+- **`docs/AddComponentDialogs.md`** — New contract doc. Tables every field per dialog, states the parity rule explicitly, and includes a "Do Nots" section referencing the thread AFT/FWD regression as the canonical failure mode.
+- **`docs/ShaftScreen.md`** — Updated to v0.8 with changelog entries for all 2026-06-23 fixes.
+- **`docs/README.md`** — Added `AddComponentDialogs.md` to the index.
+
+### fix: thread AFT/FWD end selector missing from Add Thread dialog
+
+`AddThreadDialog` was missing the "Thread end: AFT | FWD" chip selector that appears in the carousel edit card when a thread is excluded from OAL. The feature existed in the card (`ComponentCarousel.kt`) but was never wired into the add dialog.
+
+When `Count in OAL` is toggled off, the dialog now shows AFT/FWD chips and hides the Start field — matching the carousel card exactly. `isAftEnd` is passed through: `onSubmit → ShaftScreen.onAddThread → ShaftRoute → ShaftViewModel.addThreadAt()` and stored on the `Threads` model object.
+
+**`ui/screen/AddComponentDialogs.kt`** — `AddThreadDialog`: added `isAftEnd` state, conditional Start/chips layout, updated `onSubmit` signature.  
+**`ui/screen/ShaftScreen.kt`** — `onAddThread` signature updated.  
+**`ui/screen/ShaftRoute.kt`** — passes `isAftEnd` to `vm.addThreadAt()`.  
+**`ui/viewmodel/ShaftViewModel.kt`** — `addThreadAt()` accepts and stores `isAftEnd`.
+
 ### fix: auto-body not promoted on tap-and-leave; body length = 1 bug
 
 `NumericInputField` previously called `onCommit` on every blur, even when the user hadn't changed the field's value. For auto-body carousel cards, this silently triggered `promoteIfNeeded()` — converting the virtual auto-body into a stored body using whatever dimensions were current at the time of the blur.

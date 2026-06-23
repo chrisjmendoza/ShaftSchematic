@@ -246,6 +246,10 @@ fun AddLinerDialog(
  * Thread — Start, Length, Major Ø, TPI (always TPI; caller converts to pitch mm)
  * ──────────────────────────────────────────────────────────────────────────── */
 
+// CONTRACT (AddComponentDialogs.md): dialog/card parity.
+// When countInOal=false, show "Thread end: AFT | FWD" chips and hide the Start field —
+// mirroring ComponentCarousel.kt ResolvedThread !includeInOal block.
+// Do not remove the AFT/FWD branch; isAftEnd must be passed through to addThreadAt().
 @Composable
 fun AddThreadDialog(
     unit: UnitSystem,
@@ -255,7 +259,7 @@ fun AddThreadDialog(
     initialLengthMm: Float,
     initialMajorDiaMm: Float,
     initialPitchMm: Float,
-    onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, tpi: Float, excludeFromOAL: Boolean) -> Unit,
+    onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, tpi: Float, excludeFromOAL: Boolean, isAftEnd: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -272,15 +276,17 @@ fun AddThreadDialog(
     var major by remember(unit, effectiveMajorMm) { mutableStateOf(toDisplayString(max(1f, effectiveMajorMm), unit)) }
     var tpiText by remember(initialTpi) { mutableStateOf(formatTpi(initialTpi)) }
     var countInOal by remember { mutableStateOf(true) }
+    var isAftEnd by remember { mutableStateOf(true) }
 
     val startMm = toMmOrNull(start, unit) ?: -1f
     val lengthMm = toMmOrNull(length, unit) ?: -1f
     val majorMm = toMmOrNull(major, unit) ?: -1f
     val tpi = parseFractionOrDecimal(tpiText) ?: -1f   // allow e.g., "20", "10", "32"
 
-    val startError = if (startMm >= 0f && lengthMm > 0f)
-        startOverlapErrorMm(spec, "", ComponentKind.THREAD, lengthMm, startMm)
-    else null
+    val startError = if (!countInOal) null
+                     else if (startMm >= 0f && lengthMm > 0f)
+                         startOverlapErrorMm(spec, "", ComponentKind.THREAD, lengthMm, startMm)
+                     else null
 
     // Pre-submit collision / bounds warning state.
     var warningLines by remember { mutableStateOf(emptyList<String>()) }
@@ -309,8 +315,22 @@ fun AddThreadDialog(
         title = { Text("Add Thread") },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
-                CommitNumField("Start (${abbr(unit)})", start, errorText = startError) { start = it }
-                Spacer(Modifier.height(8.dp))
+                if (countInOal) {
+                    CommitNumField("Start (${abbr(unit)})", start, errorText = startError) { start = it }
+                    Spacer(Modifier.height(8.dp))
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Thread end:", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        DirectionChip("AFT", selected =  isAftEnd) { isAftEnd = true  }
+                        DirectionChip("FWD", selected = !isAftEnd) { isAftEnd = false }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
                 CommitNumField("Major Ø (${abbr(unit)})", major) { major = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("TPI", tpiText) { tpiText = it }
@@ -331,10 +351,11 @@ fun AddThreadDialog(
             }
         },
         confirmButton = {
-            val ok = startMm >= 0f && lengthMm > 0f && majorMm > 0f && tpi > 0f && startError == null
+            val ok = (countInOal && startMm >= 0f || !countInOal) &&
+                     lengthMm > 0f && majorMm > 0f && tpi > 0f && startError == null
             Button(enabled = ok, onClick = {
                 val excludeFromOAL = !countInOal
-                val action = { onSubmit(startMm, lengthMm, majorMm, tpi, excludeFromOAL) }
+                val action = { onSubmit(startMm, lengthMm, majorMm, tpi, excludeFromOAL, isAftEnd) }
                 // Excluded threads don't live on the shaft span, so skip collision for them.
                 val warnings = if (excludeFromOAL) emptyList()
                                else collectAddWarnings(spec, startMm, lengthMm, overallIsManual)

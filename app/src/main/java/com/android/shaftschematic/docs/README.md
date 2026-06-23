@@ -4,6 +4,7 @@
 **Date:** 2025-10-04
 
 Included docs:
+- AddComponentDialogs.md — add-dialog/carousel-card parity rules; per-dialog field contracts
 - ShaftScreen.md
 - ShaftDrawing.md
 - ShaftRenderer.md

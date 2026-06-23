@@ -192,7 +192,7 @@ fun ShaftRoute(
 
         onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
         onAddTaper  = { s, l, sd, ed, rate, kwW, kwD, kwL, kwO, kwS -> vm.addTaperAt(s, l, sd, ed, rate, kwW, kwD, kwL, kwO, kwS) },
-        onAddThread = { s, l, maj, p, ex -> vm.addThreadAt(s, l, maj, p, ex) },
+        onAddThread = { s, l, maj, p, ex, aft -> vm.addThreadAt(s, l, maj, p, ex, aft) },
         onAddLiner  = { s, l, od, ref -> vm.addLinerAt(s, l, od, ref) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },

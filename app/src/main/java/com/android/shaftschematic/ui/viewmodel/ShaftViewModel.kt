@@ -1107,7 +1107,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         lengthMm: Float,
         majorDiaMm: Float,
         pitchMm: Float,
-        excludeFromOAL: Boolean = false
+        excludeFromOAL: Boolean = false,
+        isAftEnd: Boolean = true
     ) {
         val id = newId()
         _spec.update { s ->
@@ -1126,7 +1127,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         majorDiaMm = max(0f, majorDiaMm),
                         pitchMm = max(0f, pitchMm),
                         lengthMm = max(0f, lengthMm),
-                        excludeFromOAL = excludeFromOAL
+                        excludeFromOAL = excludeFromOAL,
+                        isAftEnd = isAftEnd
                     )
                 ) + split.spec.threads
             )

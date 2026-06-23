@@ -225,7 +225,7 @@ fun ShaftScreen(
     // Adds (all mm)
     onAddBody: (Float, Float, Float) -> Unit,
     onAddTaper: (Float, Float, Float, Float, String, Float, Float, Float, Float, Boolean) -> Unit,
-    onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean) -> Unit,
+    onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean, isAftEnd: Boolean) -> Unit,
     onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
 
     // Updates (all mm)
@@ -787,7 +787,7 @@ fun ShaftScreen(
                         initialLengthMm = sessionAddDefaults.threadLenMm,
                         initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
                         initialPitchMm = sessionAddDefaults.threadPitchMm,
-                        onSubmit = { startMm, lengthMm, majorDiaMm, tpi, excludeFromOAL ->
+                        onSubmit = { startMm, lengthMm, majorDiaMm, tpi, excludeFromOAL, isAftEnd ->
                             addThreadOpen = false
                             // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL.
                             // Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt` to avoid
@@ -797,7 +797,8 @@ fun ShaftScreen(
                                 lengthMm,
                                 majorDiaMm,
                                 tpiToPitchMm(tpi),
-                                excludeFromOAL
+                                excludeFromOAL,
+                                isAftEnd
                             )
                         },
                         onCancel = { addThreadOpen = false }
