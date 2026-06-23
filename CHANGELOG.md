@@ -6,6 +6,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-06-23 (2)
+
+### fix: Free-to-End badge hidden when only bodies are present
+
+The Free-to-End badge in Manual OAL mode was showing a large "free" value even when the shaft was visually fully covered — e.g. "Free to end: 148.125 in" on a 158.125" shaft with a single 10" body. This was confusing because the auto-body system always generates a trailing virtual body from the last real component to the OAL, so the shaft appears completely filled in the preview.
+
+**Root cause**: `lastOccupiedEndMm()` only counts stored (explicit) bodies; it did not see the auto-body covering the remainder. The badge correctly computed `OAL − realBodyEnd` but that gap was always covered visually.
+
+**Fix**: `FreeToEndBadge` now returns early (hides) when there are no precision components (tapers, non-excluded threads, liners) **and** the shaft is not oversized. When only bodies exist, auto-bodies always cover the remainder up to OAL, so the badge value would always be misleading. The red/oversized warning still fires regardless, ensuring users are still told when a body exceeds the OAL.
+
+**`ui/screen/ShaftScreen.kt`** — added early-return guard in `FreeToEndBadge`.  
+**`docs/FreeToEndBadge.md`** — invariant documented.
+
+---
+
 ## 2026-06-23
 
 ### feat: Open page — search, sort by name/date, and date column in list

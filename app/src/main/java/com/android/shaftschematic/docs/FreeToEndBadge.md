@@ -13,3 +13,4 @@
 ## Invariants
 - No layout-dependent math in computation.
 - Hidden when `overallLengthMm <= 0`.
+- Hidden when no precision components (tapers/non-excluded threads/liners) are present AND shaft is not oversized. With only bodies, auto-bodies visually fill the remaining OAL span, so the badge would mislead the user. The oversized (red) case still shows regardless.

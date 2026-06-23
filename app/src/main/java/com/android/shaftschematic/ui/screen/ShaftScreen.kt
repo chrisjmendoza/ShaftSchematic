@@ -1368,6 +1368,14 @@ private fun FreeToEndBadge(
     val isOversized = freeSignedMm < 0f
     val isSnug = !isOversized && freeSignedMm < 10f
 
+    // When there are no precision components (tapers/liners/threads), auto-bodies always fill
+    // visually to OAL, so the badge would mislead the user into thinking there's uncovered
+    // shaft. Only suppress in the non-oversized case — oversized is always a red warning.
+    val hasPrecisionComponents = spec.tapers.isNotEmpty() ||
+        spec.threads.any { !it.excludeFromOAL } ||
+        spec.liners.isNotEmpty()
+    if (!isOversized && !hasPrecisionComponents) return
+
     val bg = when {
         isOversized -> MaterialTheme.colorScheme.errorContainer
         isSnug      -> MaterialTheme.colorScheme.tertiaryContainer
