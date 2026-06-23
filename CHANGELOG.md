@@ -6,7 +6,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
-## 2026-06-23 (2)
+## 2026-06-23
 
 ### fix: Free-to-End badge hidden when only bodies are present
 
@@ -18,10 +18,6 @@ The Free-to-End badge in Manual OAL mode was showing a large "free" value even w
 
 **`ui/screen/ShaftScreen.kt`** — added early-return guard in `FreeToEndBadge`.  
 **`docs/FreeToEndBadge.md`** — invariant documented.
-
----
-
-## 2026-06-23
 
 ### feat: Open page — search, sort by name/date, and date column in list
 
