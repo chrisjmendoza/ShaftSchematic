@@ -50,10 +50,10 @@ class FooterUnitsTest {
         run {
             val cols = buildFooterEndColumns(spec, UnitSystem.INCHES, cfg)
             val lines = cols.aftLines.joinToString("\n")
-            assertTrue(lines.contains("L.E.T.: ") && lines.contains(" in"))
-            assertTrue(lines.contains("S.E.T.: ") && lines.contains(" in"))
-            assertTrue(lines.contains("Length: ") && lines.contains(" in"))
-            assertTrue(lines.contains("Thread: ") && lines.contains(" in"))
+            assertTrue(lines.contains("L.E.T.: ") && lines.contains("\""))
+            assertTrue(lines.contains("S.E.T.: ") && lines.contains("\""))
+            assertTrue(lines.contains("Length: ") && lines.contains("\""))
+            assertTrue(lines.contains("Thread: ") && lines.contains("\""))
             assertTrue(lines.contains(" TPI "))
         }
     }

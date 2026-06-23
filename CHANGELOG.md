@@ -6,6 +6,134 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-06-23
+
+### refactor: extract ViewModel settings setters to ShaftViewModelSettings.kt
+
+`ShaftViewModel.kt` was 2134 lines — a single class managing spec mutations, 40+ state flows, autosave, undo/redo, achievements, dev options, and persisted settings. The 237-line block of settings setter functions has been extracted to a new `ShaftViewModelSettings.kt` extension file in the same package.
+
+32 private backing fields (`_openPdfAfterExport`, `_pdfTieringMode`, `_previewBlackWhiteOnly`, `_devOptionsEnabled`, verbose logging fields, achievement fields, etc.) were promoted to `internal` to allow the extension functions to access them. All callers outside the `ui.viewmodel` package received explicit imports.
+
+**`ui/viewmodel/ShaftViewModelSettings.kt`** (new) — 237 lines; all settings setters + `syncVerboseLogConfig` as extension functions on `ShaftViewModel`.  
+**`ui/viewmodel/ShaftViewModel.kt`** — 32 fields changed from `private` to `internal`; settings setter block removed; file reduced to ~1800 lines.  
+**`ui/nav/InternalDocRoutes.kt`, `PdfExportRoute.kt`, `ui/screen/AboutRoute.kt`, `DeveloperOptionsRoute.kt`, `PdfPreviewScreen.kt`, `RunoutRoute.kt`, `SettingsRoute.kt`** — added `ui.viewmodel.*` imports so extension functions resolve outside their declaring package.
+
+### test: fix stale test expectations after LengthFormat and UnitFormat updates
+
+Two unit tests were asserting against formats that changed in later commits and were never updated:
+
+- `LengthFormatTest` expected `"1 3/4"` but `formatInchesSmart()` now returns `"1 ¾"` (Unicode fractions added in a prior commit).
+- `FooterUnitsTest` expected `" in"` unit suffix but `formatDiaWithUnit()`/`formatLenWithUnit()` now produce `"\""` (quote suffix, per shop convention).
+
+Both test expectations updated to match current output. No production code changed.
+
+---
+
+## 2026-06-22
+
+### chore: auto-derive versionCode and versionName from git commit count
+
+`versionCode` was a manually-maintained integer (`3`); `versionName` was a static `"1.2.0"`. Firebase App Distribution was labelling every upload as a duplicate because neither changed between builds.
+
+Both are now derived from `git rev-list --count HEAD` at build time. The current count (244) becomes the patch digit:
+- `versionCode = gitCount` (e.g., 244, 245, …)
+- `versionName = "1.2.$gitCount"` (e.g., `1.2.244`, `1.2.245`, …)
+
+Every commit automatically produces a uniquely-identified build with no manual editing. The major.minor (`1.2`) is still bumped manually when a breaking change or significant feature milestone warrants it.
+
+**`app/build.gradle.kts`** — added `gitCount` exec block; replaced hardcoded `versionCode`/`versionName`.
+
+---
+
+### feat: Project Information moved to modal bottom sheet
+
+Customer, Vessel, Job #, Shaft Position, and Notes were in a collapsible section inside the editor scroll area, consuming vertical space needed by the component carousel. They now live in a `ModalBottomSheet` opened from a new toolbar clipboard icon (Assignment). The scroll area is now entirely dedicated to components.
+
+**`ui/screen/ShaftScreen.kt`** — removed `ExpandableSection("Project Information")` from scroll area; added `IconButton` (Assignment icon) to `TopAppBar`; added `ProjectInfoBottomSheet` composable with `rememberModalBottomSheetState(skipPartiallyExpanded = true)`.
+
+---
+
+### fix: FWD-reference taper length edit now keeps the FWD end anchored
+
+Editing the length of a FWD-referenced taper was passing `startFromAftMm` through unchanged, so the FWD end drifted inward as the taper grew. The length commit handler now recomputes `physStart = OAL − authoredFromFwd − newLen` so the FWD face stays fixed and the AFT start slides.
+
+**`ui/screen/ComponentCarousel.kt`** — `CommitNum("Length")` handler for tapers.
+
+---
+
+### fix: FWD-ref tapers and liners now stay anchored when OAL changes
+
+`onSetOverallLengthMm()` and `ensureOverall()` were calling `.copy(overallLengthMm = …).syncExcludedThreadPositions()`. FWD-referenced tapers and liners have their start position stored physically from the AFT face, so a raw OAL change left them in place — drifting relative to the FWD face they were authored from.
+
+New `ShaftSpec.withNewOal(newOal: Float)` recomputes `startFromAftMm` for every FWD-referenced taper and liner (`newStart = newOal − authoredFromFwd − length`) before calling `syncExcludedThreadPositions()`. Both OAL mutation paths now use it.
+
+**`model/ShaftSpecExtensions.kt`** — added `withNewOal()`.  
+**`ui/viewmodel/ShaftViewModel.kt`** — `onSetOverallLengthMm()` and `ensureOverall()` use `withNewOal()`.
+
+---
+
+### fix: excluded end thread shift no longer pushes shaft FWD edge past right margin
+
+`ptPerMm` was computed from `overallLengthMm` alone, then the excluded-AFT-thread origin shift (`left += threadLen × ptPerMm`) consumed page width that wasn't accounted for in the scale. For the Siberian Sea shaft (OAL 147⅞", 4.5" prop thread), the FWD taper was drawing ~16pt past the right margin.
+
+The fix computes the full content span — `contentMinMm` (excluded AFT thread tails, negative) through `contentMaxMm` (excluded FWD thread tails, past OAL) — before deriving `ptPerMm`. The shaft body's portion of that span is passed as `effectiveGeomWidthPt` to `computeDetailPtPerMm`, ensuring all content lands within `geomRect` regardless of thread count or length.
+
+**`pdf/ShaftPdfComposer.kt`** — `contentMinMm`, `contentMaxMm`, `contentSpanMm`, `effectiveGeomWidthPt` computed before `ptPerMm`; bodies-only branch also updated.
+
+---
+
+### feat: body OD callouts on shaft drawing and footer
+
+Body diameters were only visible inside the open carousel card. They now appear on the exported PDF in two places:
+
+- **Drawing**: one leader-line callout per unique body OD (`Ø value`), placed above and below alternating for readability. Anchor is the center of the longest body section for that OD.
+- **Footer center column**: "Body: Ø X, Ø Y" row listing all unique body ODs, appended after the date.
+
+**`pdf/ShaftPdfComposer.kt`** — `buildBodyOdCallouts()` groups bodies by OD, picks longest anchor per group, alternates `LeaderSide.ABOVE/BELOW`; live `DiameterLeaderRenderer` call replaces the prior stub; `drawFooter()` adds body OD row.
+
+**`test/pdf/BodyOdCalloutsTest.kt`** — 9 tests: empty/zero skip, single above, center placement, same-OD uses longest body, two ODs, alternating sides, three ODs cycle, OD accuracy.
+
+---
+
+### fix: float precision in inch↔mm conversions
+
+Three conversion sites in `ShaftScreen.kt` used `25.4f` (Float literal) for inch↔mm math, introducing rounding error on common shaft dimensions. For example, `5 15/16"` (5.9375") via Float arithmetic can lose sub-thou accuracy that survives Double arithmetic.
+
+All three sites now use the canonical `MM_PER_IN = 25.4` Double constant and promote through `Double` before rounding back to `Float`:
+- `toMmOrNull()` — inch input to mm storage: `(num.toDouble() * MM_PER_IN).toFloat()`
+- `formatDisplay()` — mm to inch display: `(valueMm.toDouble() / MM_PER_IN).toFloat()`
+- `tpiToPitchMm()` — TPI to pitch mm: `(MM_PER_IN / tpi.toDouble()).toFloat()`
+
+**`ui/screen/ShaftScreen.kt`** — three `25.4f` → Double arithmetic; added `MM_PER_IN` import.
+
+**`test/ui/screen/UnitConversionTest.kt`** — 10 tests: mm passthrough, whole-number inch, common fractions (5 15/16, 1/8), blank/invalid null, tpiToPitchMm 16/20 TPI, formatDisplay round-trip.
+
+---
+
+### feat: recent documents list on start screen
+
+The start screen now shows the 5 most recently modified shaft documents between the title and the New Drawing / Open… buttons. Tapping a recent entry loads it directly into the editor without going through the Open… dialog.
+
+**`io/InternalStorage.kt`** — `listWithMetadata(dir)` returns `List<Pair<String, Long>>` (filename, lastModifiedMs) sorted newest-first, mirrors existing `list()` filter for `.shaft` and legacy `.json`.
+
+**`ui/screen/StartScreen.kt`** — added `recentFiles` and `onOpenRecent` params; renders up to 5 recent entries with display name and relative date ("Today", "Yesterday", "N days ago", etc.).
+
+**`ui/nav/AppNav.kt`** — start composable loads recent files on mount via `LaunchedEffect`; `onOpenRecent` handler loads file from storage and navigates to editor.
+
+**`test/io/RecentFilesTest.kt`** — 7 tests: empty dir, single file, newest-first sort, non-shaft excluded, legacy json included, directories excluded, multi-file ordering.
+
+---
+
+### test: WithNewOalTest, PdfLayoutBoundsTest, BodySplitMergeTest
+
+**`test/model/WithNewOalTest.kt`** — 17 tests: AFT components unchanged, FWD reanchors on grow/shrink, FWD flush with shaft face, mixed AFT+FWD spec, liner reanchoring and `endMmPhysical` consistency, excluded thread sync, OAL clamp, idempotency, old-copy regression.
+
+**`test/pdf/PdfLayoutBoundsTest.kt`** — 9 tests: no-thread baseline, excluded AFT overflow regression (Siberian Sea), excluded FWD overflow, both ends, short shaft, very short/wide shaft (diameter-bound), variable AFT thread lengths.
+
+**`test/model/BodySplitMergeTest.kt`** — 19 tests: mid-split, AFT/FWD edge inserts, full-consume, non-overlap, touching endpoints, multiple bodies, merge flanking/single-side/float-drift-tolerance, round-trips at center/AFT end/FWD end.
+
+---
+
 ## 2026-06-19
 
 ### fix: updating a component no longer repositions other components

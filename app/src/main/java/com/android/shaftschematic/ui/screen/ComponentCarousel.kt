@@ -449,7 +449,14 @@ internal fun ComponentPagerCard(
                     onUpdateTaper(idx, physStart, t.lengthMm, t.startDiaMm, t.endDiaMm, t.taperRateText)
                 }
                 CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
-                    toMmOrNull(s, unit)?.let { onUpdateTaper(idx, t.startFromAftMm, it, t.startDiaMm, t.endDiaMm, t.taperRateText) }
+                    val newLen = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physStart = if (isFwdRef) {
+                        val authored = spec.overallLengthMm - t.startFromAftMm - t.lengthMm
+                        spec.overallLengthMm - authored - newLen
+                    } else {
+                        t.startFromAftMm
+                    }
+                    onUpdateTaper(idx, physStart, newLen, t.startDiaMm, t.endDiaMm, t.taperRateText)
                 }
                 CommitNum("${endMap.leftCode} Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, it, t.endDiaMm, t.taperRateText) }

@@ -145,6 +145,49 @@ fun ShaftSpec.collidingIds(): Set<String> {
     return result
 }
 
+/**
+ * Returns a copy of this [ShaftSpec] with [overallLengthMm] set to [newOal], reanchoring
+ * any FWD-referenced tapers and liners so their authored distance from the FWD face is
+ * preserved.  AFT-referenced components keep their [startFromAftMm] unchanged.
+ *
+ * After reanchoring, excluded end threads are repositioned via [syncExcludedThreadPositions].
+ *
+ * This is the single authoritative OAL-change helper; every mutation that changes the shaft
+ * length should go through here rather than calling `.copy(overallLengthMm = …)` directly.
+ */
+fun ShaftSpec.withNewOal(newOal: Float): ShaftSpec {
+    val clampedOal = newOal.coerceAtLeast(0f)
+    val oldOal = overallLengthMm
+
+    val newTapers = tapers.map { t ->
+        if (t.authoredReference == LinerAuthoredReference.FWD) {
+            val authoredFromFwd = oldOal - t.startFromAftMm - t.lengthMm
+            t.copy(startFromAftMm = clampedOal - authoredFromFwd - t.lengthMm)
+        } else {
+            t
+        }
+    }
+
+    val newLiners = liners.map { ln ->
+        if (ln.authoredReference == LinerAuthoredReference.FWD) {
+            val authoredFromFwd = oldOal - ln.startFromAftMm - ln.lengthMm
+            ln.withPhysical(
+                startMmPhysical = clampedOal - authoredFromFwd - ln.lengthMm,
+                lengthMm = ln.lengthMm,
+                odMm = ln.odMm,
+            )
+        } else {
+            ln
+        }
+    }
+
+    return copy(
+        overallLengthMm = clampedOal,
+        tapers = newTapers,
+        liners = newLiners,
+    ).syncExcludedThreadPositions()
+}
+
 /** Shift every component's start position by [delta] millimeters (clamped at 0). */
 fun ShaftSpec.shiftAllBy(delta: Float): ShaftSpec {
     if (delta == 0f) return this

@@ -126,28 +126,39 @@ fun composeShaftPdf(
         color = 0xFF000000.toInt()
     }
 
-    val ptPerMm = when {
-        bodyOnly || hasNonBodyDetail -> {
-            // PDF schematic scaling rule:
-            // - For any spec with "detail" (tapers/threads/liners), target a stable drawn shaft height
-            //   of ~1.25" when possible (uniform scale; no x/y distortion).
-            // - Body center-break/compression is a readability fallback, not the default.
-            // For any detailed shaft (tapers/threads/liners) prefer a stable schematic height
-            // (~1.0–1.5 in). Keep uniform scaling (no x/y distortion), and still respect page width.
-            computeDetailPtPerMm(spec, geomRect.width(), geomRect.height())
-        }
-        else -> {
-            // Bodies-only: classic width-fit.
-            val overallMm = max(1f, spec.overallLengthMm)
-            geomRect.width() / overallMm
-        }
-    }
-    // Excluded AFT threads have startFromAftMm = -lengthMm (negative). Shift the origin
-    // rightward so they have room to draw to the left of the shaft body.
+    // Total content span: shaft body (0..OAL) plus any excluded end threads that sit
+    // outside the OAL range.  AFT excluded threads have startFromAftMm = -lengthMm (negative);
+    // FWD excluded threads have startFromAftMm = OAL and extend to OAL + lengthMm.
+    // ptPerMm must be derived from this full span so neither end clips the page margin.
     val contentMinMm = minOf(0f,
         spec.threads.filter { it.excludeFromOAL && it.isAftEnd }
             .minOfOrNull { it.startFromAftMm } ?: 0f
     )
+    val contentMaxMm = maxOf(spec.overallLengthMm,
+        spec.threads.filter { it.excludeFromOAL && !it.isAftEnd }
+            .maxOfOrNull { it.startFromAftMm + it.lengthMm } ?: spec.overallLengthMm
+    )
+    val contentSpanMm = (contentMaxMm - contentMinMm).coerceAtLeast(1f)
+
+    // For the width-fit constraint, shrink the available page width proportionally so that
+    // the scale derived from the shaft OAL alone (used by computeDetailPtPerMm) still fits
+    // the full content span inside geomRect.  Scaling identity:
+    //   ptPerMm = geomWidth / contentSpanMm  =  (geomWidth × oal/contentSpan) / oal
+    val oalMmClamped = max(1f, spec.overallLengthMm)
+    val effectiveGeomWidthPt = geomRect.width() * (oalMmClamped / contentSpanMm)
+
+    val ptPerMm = when {
+        bodyOnly || hasNonBodyDetail -> {
+            // Target a stable drawn shaft height (~1.25") while never exceeding the page width
+            // or the full content span (including excluded end threads).
+            computeDetailPtPerMm(spec, effectiveGeomWidthPt, geomRect.height())
+        }
+        else -> {
+            // Bodies-only: classic width-fit to the full content span.
+            geomRect.width() / contentSpanMm
+        }
+    }
+    // Origin offset: shift right so excluded AFT threads (at negative mm) have drawing room.
     val left = geomRect.left + (-contentMinMm * ptPerMm).coerceAtLeast(0f)
 
     val winDbg = computeOalWindow(spec)
@@ -293,9 +304,9 @@ fun composeShaftPdf(
         renderer.drawTop(c, oalSpan(oalAft, oalFwd, unit, labelMm = spec.overallLengthMm.toDouble()), true)
     }
 
-    // --- diameter callouts (optional; leave empty until you have stations) ---
+    // --- body Ø callouts: one leader per unique body OD ---
     run {
-        val calls: List<DiaCallout> = emptyList()
+        val calls = buildBodyOdCallouts(bodiesForPdf)
         if (calls.isNotEmpty()) {
             val leaderText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
@@ -908,6 +919,16 @@ private fun drawFooter(
         c.drawText("Job #: ${project.jobNumber}",   midX, y, text); y += lh
         c.drawText("Date: $date",                   midX, y, text); y += lh
 
+        val uniqueODs = spec.bodies
+            .filter { it.diaMm > 0f }
+            .map { it.diaMm }
+            .distinct()
+            .sorted()
+        if (uniqueODs.isNotEmpty()) {
+            val label = uniqueODs.joinToString(", ") { "Ø ${formatDiaWithUnit(it.toDouble(), unit)}" }
+            c.drawText("Body: $label", midX, y, text); y += lh
+        }
+
         project.side.printableLabelOrNull()?.let { pos ->
             y += lh * 0.35f
             val posPaint = Paint(text).apply {
@@ -998,6 +1019,24 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One [DiaCallout] per unique body OD, anchored at the center of the longest
+ * body with that diameter.  Multiple ODs alternate ABOVE/BELOW to prevent overlap.
+ */
+internal fun buildBodyOdCallouts(bodies: List<Body>): List<DiaCallout> =
+    bodies
+        .filter { it.diaMm > 0f }
+        .groupBy { it.diaMm }
+        .entries
+        .sortedByDescending { it.key }
+        .mapIndexed { idx, (diaMm, group) ->
+            val anchor = group.maxByOrNull { it.lengthMm } ?: return@mapIndexed null
+            val centerMm = (anchor.startFromAftMm + anchor.lengthMm * 0.5).toDouble()
+            val side = if (idx % 2 == 0) LeaderSide.ABOVE else LeaderSide.BELOW
+            DiaCallout(xMm = centerMm, valueMm = diaMm.toDouble(), side = side)
+        }
+        .filterNotNull()
 
 private fun letSet(t: Taper): Pair<Float, Float> {
     val let = max(t.startDiaMm, t.endDiaMm)

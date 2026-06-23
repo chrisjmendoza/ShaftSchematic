@@ -11,6 +11,12 @@ val gitSha: String = try {
     }.standardOutput.asText.get().trim()
 } catch (_: Exception) { "unknown" }
 
+val gitCount: Int = try {
+    providers.exec {
+        commandLine("git", "rev-list", "--count", "HEAD")
+    }.standardOutput.asText.get().trim().toInt()
+} catch (_: Exception) { 1 }
+
 android {
     namespace = "com.android.shaftschematic"
     compileSdk = 36
@@ -31,8 +37,8 @@ android {
         applicationId = "com.android.shaftschematic"
         minSdk = 28
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = gitCount
+        versionName = "1.2.$gitCount"
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

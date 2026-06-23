@@ -90,6 +90,7 @@ import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

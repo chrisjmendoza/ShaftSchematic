@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.ManageHistory
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.Button
@@ -71,6 +72,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -107,6 +110,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.model.LinerAuthoredReference
+import com.android.shaftschematic.model.MM_PER_IN
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
@@ -289,6 +293,7 @@ fun ShaftScreen(
     var tapAddGapMm by rememberSaveable { mutableFloatStateOf(50f) }
 
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
+    var projectInfoOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
     val topBarScope = rememberCoroutineScope()
 
@@ -403,6 +408,13 @@ fun ShaftScreen(
                             onUndo = onUndo,
                             onRedo = onRedo
                         )
+
+                        IconButton(
+                            onClick = { projectInfoOpen = true },
+                            modifier = Modifier.testTag("toolbar_project_info")
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = "Project information")
+                        }
 
                         IconButton(
                             onClick = onNew,
@@ -671,28 +683,6 @@ fun ShaftScreen(
                     )
                 }
 
-                // Project info (optional)
-                ExpandableSection("Project Information", initiallyExpanded = true) {
-                    CommitTextField("Job Number", jobNumber, onSetJobNumber, Modifier.fillMaxWidth())
-                    CommitTextField("Customer", customer, onSetCustomer, Modifier.fillMaxWidth())
-                    CommitTextField("Vessel", vessel, onSetVessel, Modifier.fillMaxWidth())
-
-                    ShaftPositionDropdown(
-                        selected = shaftPosition,
-                        onSelected = onSetShaftPosition,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    CommitTextField(
-                        label = "Notes",
-                        initial = notes,
-                        onCommit = onSetNotes,
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = false,
-                        minHeight = 88.dp
-                    )
-                }
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Highlight selection in preview", Modifier.weight(1f))
                     androidx.compose.material3.Switch(
@@ -891,6 +881,22 @@ fun ShaftScreen(
                             onAddTaper(s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned)
                         },
                         onCancel = { tapAddTaperOpen = false }
+                    )
+                }
+
+                if (projectInfoOpen) {
+                    ProjectInfoBottomSheet(
+                        customer = customer,
+                        vessel = vessel,
+                        jobNumber = jobNumber,
+                        shaftPosition = shaftPosition,
+                        notes = notes,
+                        onSetCustomer = onSetCustomer,
+                        onSetVessel = onSetVessel,
+                        onSetJobNumber = onSetJobNumber,
+                        onSetShaftPosition = onSetShaftPosition,
+                        onSetNotes = onSetNotes,
+                        onDismiss = { projectInfoOpen = false }
                     )
                 }
             }
@@ -1185,6 +1191,60 @@ private fun ExpandableSection(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun ProjectInfoBottomSheet(
+    customer: String,
+    vessel: String,
+    jobNumber: String,
+    shaftPosition: ShaftPosition,
+    notes: String,
+    onSetCustomer: (String) -> Unit,
+    onSetVessel: (String) -> Unit,
+    onSetJobNumber: (String) -> Unit,
+    onSetShaftPosition: (ShaftPosition) -> Unit,
+    onSetNotes: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .imePadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                "Project Information",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            CommitTextField("Job Number", jobNumber, onSetJobNumber, Modifier.fillMaxWidth())
+            CommitTextField("Customer", customer, onSetCustomer, Modifier.fillMaxWidth())
+            CommitTextField("Vessel", vessel, onSetVessel, Modifier.fillMaxWidth())
+            ShaftPositionDropdown(
+                selected = shaftPosition,
+                onSelected = onSetShaftPosition,
+                modifier = Modifier.fillMaxWidth()
+            )
+            CommitTextField(
+                label = "Notes",
+                initial = notes,
+                onCommit = onSetNotes,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = false,
+                minHeight = 88.dp
+            )
+        }
+    }
+}
+
+@Composable
 private fun CommitTextField(
     label: String,
     initial: String,
@@ -1227,7 +1287,7 @@ internal fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String
     val v = if (unit == UnitSystem.MILLIMETERS) {
         valueMm
     } else {
-        valueMm / 25.4f
+        (valueMm.toDouble() / MM_PER_IN).toFloat()
     }
 
     return "%.${decimals}f"
@@ -1245,7 +1305,7 @@ internal fun disp(mm: Float, unit: UnitSystem, d: Int = 3): String =
 internal fun toMmOrNull(text: String, unit: UnitSystem): Float? {
     val t = text.trim(); if (t.isEmpty()) return null
     val num = parseFractionOrDecimal(t) ?: return null
-    return if (unit == UnitSystem.MILLIMETERS) num else num * 25.4f
+    return if (unit == UnitSystem.MILLIMETERS) num else (num.toDouble() * MM_PER_IN).toFloat()
 }
 
 
@@ -1336,7 +1396,7 @@ private fun FreeToEndBadge(
 
 private const val OAL_EPS_MM: Double = 1e-3
 
-internal fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) 25.4f / tpi else 0f
+internal fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) (MM_PER_IN / tpi.toDouble()).toFloat() else 0f
 
 /** Defaults for new components (mm). */
 private data class AddDefaults(val startMm: Float, val lastDiaMm: Float)
