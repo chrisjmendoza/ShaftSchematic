@@ -27,7 +27,9 @@ class PdfDimensionRenderer(
     private val arrowSize: Float = 5f,      // arrowhead half-size
     private val textPad: Float = 6f,        // left/right text padding inside a span
     private val minGap: Float = 8f,         // reserved for future use; do not shift horizontally
-    private val lineAdvance: Float = 10f    // reserved for future use; do not shift horizontally
+    private val lineAdvance: Float = 10f,   // reserved for future use; do not shift horizontally
+    /** When false, draws a gap + blank underline in place of the numeric label (blank-template mode). */
+    private val showDimensionValues: Boolean = true,
 ) {
     private val labelBoundsByRail = mutableMapOf<Int, MutableList<RectF>>()
 
@@ -50,21 +52,36 @@ class PdfDimensionRenderer(
         val x2 = pageX(span.x2Mm)
         val xa = min(x1, x2)
         val xb = max(x1, x2)
+        val mid = (xa + xb) * 0.5f
 
-        // main dimension line
-        canvas.drawLine(xa, y, xb, y, linePaint)
-
-        // extension lines (from object to rail with clearance)
+        // extension lines (from object to rail with clearance) — same in both modes
         if (drawExtensions) {
             val extTop = objectTopY - objectClearance
             canvas.drawLine(xa, extTop, xa, y, linePaint)
             canvas.drawLine(xb, extTop, xb, y, linePaint)
         }
 
+        if (!showDimensionValues) {
+            // Blank-template mode: gap in the middle with a short write-here underline.
+            val gapHalf = BLANK_GAP_HALF_PT
+            val leftEnd = mid - gapHalf
+            val rightEnd = mid + gapHalf
+            if (leftEnd > xa) canvas.drawLine(xa, y, leftEnd, y, linePaint)
+            if (rightEnd < xb) canvas.drawLine(rightEnd, y, xb, y, linePaint)
+            // Short underline above the gap so the user knows where to write
+            canvas.drawLine(leftEnd, y - textAboveDy, rightEnd, y - textAboveDy, linePaint)
+            // Arrows always inward for blank mode
+            drawArrow(canvas, xAt = xa, y = y, inward = true, isLeftEnd = true)
+            drawArrow(canvas, xAt = xb, y = y, inward = true, isLeftEnd = false)
+            return
+        }
+
+        // main dimension line
+        canvas.drawLine(xa, y, xb, y, linePaint)
+
         // ---- centered label placement with clamping + bounded bump ----
         val label = span.labelTop
         val w = textPaint.measureText(label)
-        val mid = (xa + xb) * 0.5f
 
         // keep label center inside [xa+pad+w/2, xb-pad-w/2]
         val half = w * 0.5f
@@ -159,5 +176,6 @@ class PdfDimensionRenderer(
 
 private const val LABEL_GAP_PX = 6f
 private const val MAX_BUMPS = 3
+private const val BLANK_GAP_HALF_PT = 20f  // half-width of the write-here gap in blank-template mode
 
 private fun RectF.offsetCopy(dx: Float, dy: Float): RectF = RectF(left + dx, top + dy, right + dx, bottom + dy)

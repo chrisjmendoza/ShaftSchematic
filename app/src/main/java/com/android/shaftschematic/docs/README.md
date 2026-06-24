@@ -23,5 +23,6 @@ Included docs:
 - RunoutSheet.md — runout + wear tabs, OAL alignment, PDF appearance options, back-press handling
 - PdfExportRoute.md
 - PdfPreviewScreen.md
+- TemplateBuilderScreen.md — blank-template builder: TemplateViewModel, slider UX, BlankTemplate PDF mode
 
 Use these to keep Kotlin files aligned with responsibilities & invariants. Pair each Kotlin file with the header comment that references the corresponding doc and version.

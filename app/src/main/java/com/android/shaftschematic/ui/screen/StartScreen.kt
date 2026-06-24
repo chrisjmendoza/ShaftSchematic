@@ -42,6 +42,7 @@ fun StartScreen(
     onOpen: () -> Unit,
     onSettings: () -> Unit,
     onSendFeedback: () -> Unit,
+    onOpenTemplateBuilder: () -> Unit = {},
     hasDraft: Boolean = false,
     onContinueDraft: (() -> Unit)? = null,
     onDiscardDraft: (() -> Unit)? = null,
@@ -113,6 +114,9 @@ fun StartScreen(
 
         Button(onClick = onNew, modifier = Modifier.fillMaxWidth()) { Text("New Drawing") }
         Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text("Open…") }
+        OutlinedButton(onClick = onOpenTemplateBuilder, modifier = Modifier.fillMaxWidth()) {
+            Text("Template Builder")
+        }
         if (hasDraft && onContinueDraft != null && onDiscardDraft != null) {
             Button(onClick = onContinueDraft, modifier = Modifier.fillMaxWidth()) {
                 Text("Continue Draft")

@@ -6,6 +6,48 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-06-24
+
+### feat: Template Builder screen
+
+New stand-alone screen for quickly assembling a blank shaft schematic without entering real measurements. Accessed from the Start screen via "Template Builder". Produces a printable PDF with dimension leader lines and blank write-here underlines so values can be filled in by hand.
+
+**UI**
+- Chip bar at the top: **Add: [Body] [Thread] [Taper] [Liner]** — each tap appends a component at position 0 and immediately selects it.
+- Live preview uses the existing `ShaftDrawing` composable (same renderer as the editor, no grid, no OAL markers).
+- Tap any component on the canvas to select it; a bottom sheet slides up with sliders for Length, Diameter (or start/end diameters for tapers), and Position. Tap empty space to deselect.
+- Remove button (red) in the bottom sheet deletes the selected component.
+- Print icon in the top bar triggers SAF `CreateDocument` → writes a US Letter landscape PDF.
+
+**Template OAL** is fixed at 600 mm (notional, never displayed). Sliders control proportions in mm units; no unit labels are shown to the user.
+
+**PDF — `PdfExportMode.BlankTemplate`**
+- New `BlankTemplate` value added to `PdfExportMode`.
+- Dimension rails are drawn with a **40 pt gap** at the midpoint; a short underline fills the gap as a "write here" indicator. Arrowheads and extension lines are preserved.
+- Component labels, body OD callouts, and footer are suppressed.
+- `PdfDimensionRenderer` gains a `showDimensionValues: Boolean = true` parameter that implements the gap/underline rendering when `false`.
+- `ShaftPdfComposer` guards body OD callouts behind `effectiveOptions.showLabels` (suppressed for both `Template` and `BlankTemplate` modes).
+
+**Architecture**
+- `TemplateViewModel` — plain `ViewModel()`, no Application context. Manages in-memory `ShaftSpec`; exposes `spec`, `selectedId`, `selectedType` as `StateFlow`. Full add/update/remove API for all four component types.
+- `TemplateScreen` — `"template"` route in `AppNav`; `TemplateViewModel` scoped to the nav back-stack entry. PDF export runs on `Dispatchers.IO`.
+- Fully independent of `ShaftViewModel`; no shared state, no file I/O, no undo/redo.
+
+**Files changed**
+- `ui/screen/TemplateScreen.kt` — new
+- `ui/viewmodel/TemplateViewModel.kt` — new
+- `docs/TemplateBuilderScreen.md` — new contract doc
+- `pdf/PdfExportOptions.kt` — added `BlankTemplate` to `PdfExportMode`
+- `pdf/render/PdfDimensionRenderer.kt` — added `showDimensionValues` parameter and blank-gap rendering
+- `pdf/ShaftPdfComposer.kt` — handles `BlankTemplate`, suppresses body callouts, passes `showDimensionValues`
+- `ui/nav/AppNav.kt` — added `"template"` route and `onOpenTemplateBuilder` callback
+- `ui/screen/StartScreen.kt` — added "Template Builder" outlined button
+- `CLAUDE.md` — documented template builder independence invariant
+- `docs/README.md` — added `TemplateBuilderScreen.md` to index
+- `docs/Navigation.md` — added route table with `"template"` entry
+
+---
+
 ## 2026-06-23
 
 ### docs: CLAUDE.md + AddComponentDialogs.md — lock in dialog/card parity invariants

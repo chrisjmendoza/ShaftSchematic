@@ -31,6 +31,7 @@ import com.android.shaftschematic.ui.screen.PdfPreviewScreen
 import com.android.shaftschematic.ui.screen.SettingsRoute
 import com.android.shaftschematic.ui.screen.ShaftEditorRoute
 import com.android.shaftschematic.ui.screen.StartScreen
+import com.android.shaftschematic.ui.screen.TemplateScreen
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.FeedbackIntentFactory
@@ -99,6 +100,7 @@ fun AppNav(vm: ShaftViewModel) {
                         hasDraft = hasDraft,
                         onContinueDraft = { nav.navigate("editor") },
                         onDiscardDraft = { vm.discardDraft() },
+                        onOpenTemplateBuilder = { nav.navigate("template") },
                         recentFiles = recentFiles,
                         onOpenRecent = { filename ->
                             scope.launch {
@@ -242,6 +244,14 @@ fun AppNav(vm: ShaftViewModel) {
         */
         composable("exportPdf") {
             PdfExportRoute(nav = nav, vm = vm) { nav.popBackStack() }
+        }
+
+        /* ───────── Template Builder ─────────
+           Stand-alone blank-template builder with slider sizing and printable output.
+           Does not share state with ShaftViewModel.
+        */
+        composable("template") {
+            TemplateScreen(onBack = { nav.popBackStack() })
         }
     }
 }

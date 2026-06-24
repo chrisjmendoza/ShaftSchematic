@@ -70,8 +70,14 @@ fun composeShaftPdf(
             showLabels = false,
             showFooter = false,
         )
+        PdfExportMode.BlankTemplate -> options.copy(
+            showDimensions = true,
+            showLabels = false,
+            showFooter = false,
+        )
         PdfExportMode.Standard -> options
     }
+    val showDimensionValues = options.mode != PdfExportMode.BlankTemplate
 
     val c = page.canvas
     // PDF safety: explicitly paint a white page background so geometry/labels are visible
@@ -289,7 +295,8 @@ fun composeShaftPdf(
             textPaint = dimText,
             objectTopY = yTopOfShaft,
             contentTopPx = geomRect.top,
-            objectClearance = 6f
+            objectClearance = 6f,
+            showDimensionValues = showDimensionValues,
         )
 
         assignments.forEach { rs ->
@@ -305,7 +312,9 @@ fun composeShaftPdf(
     }
 
     // --- body Ø callouts: one leader per unique body OD ---
+    // Suppressed when labels are off (Template / BlankTemplate modes).
     run {
+        if (!effectiveOptions.showLabels) return@run
         val calls = buildBodyOdCallouts(bodiesForPdf)
         if (calls.isNotEmpty()) {
             val leaderText = Paint(Paint.ANTI_ALIAS_FLAG).apply {

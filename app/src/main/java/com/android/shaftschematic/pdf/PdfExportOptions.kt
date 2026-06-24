@@ -2,7 +2,8 @@ package com.android.shaftschematic.pdf
 
 enum class PdfExportMode {
     Standard,
-    Template
+    Template,
+    BlankTemplate,
 }
 
 data class PdfExportOptions(

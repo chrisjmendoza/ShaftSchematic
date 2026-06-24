@@ -14,6 +14,7 @@ Read the relevant doc before editing a subsystem. Key files:
 - `NumberField.md` — numeric input field contract
 - `ShaftViewModel.md` — ViewModel responsibilities and state ownership
 - `Model_Conventions.md` — model layer rules
+- `TemplateBuilderScreen.md` — blank-template builder contracts and invariants
 
 ## Critical invariants — do not remove or weaken these
 
@@ -48,6 +49,12 @@ remainder, so the badge value would always mislead. See `FreeToEndBadge.md`.
 The OAL field calls `onSetOverallLengthMm` on **every keystroke** in manual mode (not
 just on blur). This is intentional — the preview updates live. Do not change this to
 commit-on-blur only.
+
+### Template Builder independence
+`TemplateViewModel` is entirely separate from `ShaftViewModel`. It must never call
+editor methods (`addBodyAt`, `exportJson`, etc.) and must never be hoisted above the
+`"template"` nav route. The template OAL is fixed at 600 mm (notional, never shown).
+PDF export always uses `PdfExportMode.BlankTemplate`. See `TemplateBuilderScreen.md`.
 
 ## Commit policy
 Do **not** auto-commit. The user reviews changes before every commit.
