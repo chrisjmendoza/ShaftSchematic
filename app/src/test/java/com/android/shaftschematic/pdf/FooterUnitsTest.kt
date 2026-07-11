@@ -45,6 +45,9 @@ class FooterUnitsTest {
             assertTrue(lines.contains("S.E.T. (FWD): ") && lines.contains(" mm"))
             assertTrue(lines.contains("Length: ") && lines.contains(" mm"))
             assertTrue(lines.contains("Thread: ") && lines.contains(" mm"))
+            // Metric mode prints pitch in mm, never TPI.
+            assertTrue(lines.contains("mm pitch"))
+            assertTrue(!lines.contains("TPI"))
         }
 
         run {

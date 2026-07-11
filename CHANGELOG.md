@@ -8,6 +8,34 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-11
 
+### fix: audit remediation pass — 13 bugs + dead-code sweep (branch `fix/audit-remediation`)
+
+Fixes every live bug found by the deep audit (`docs/deep_audit_2026-07.md`, Part 1 §1.0 B1–B13) plus the confirmed dead code. 379 unit tests green (23 net new).
+
+**Data integrity**
+- **Atomic saves** — `InternalStorage.save()` now writes to a `.tmp` file, keeps the previous version as `name.shaft.bak`, then swaps into place. A crash or disk-full mid-save can no longer corrupt the only copy of a document. `.tmp`/`.bak` siblings are invisible to the file list. (B5; new `InternalStorageAtomicSaveTest`.)
+- **Corrupt files no longer crash the app** — both open paths (Open screen + Start-screen recents) now catch decode failures and show "file may be damaged" instead of throwing inside a coroutine. (B4)
+- **Newer-format files are refused, not silently gutted** — `ShaftDocCodec.decode()` now checks the envelope `version`; files from a future app version throw `UnsupportedDocVersionException` (surfaced with an "update the app" message) instead of decoding with unknown fields dropped and destroyed on re-save. (B6; new `DocVersionTest`.)
+
+**Geometry / domain correctness**
+- **Taper-rate derivation is direction-aware** — `deriveTaperDiameters` previously assumed the start diameter was the *large* end, so an AFT-end taper entered as SET + rate derived an upside-down taper (LET smaller than SET). It now takes `smallEndAtStart` (classified by taper midpoint, matching the SET/LET labeling rule in `taperSetLetMapping`) and always derives SET < LET. Params renamed `setMm/letMm` → `startDiaMm/endDiaMm` to match what they actually are. (B3; `TaperRateTest` rewritten with AFT + FWD cases.)
+- **FWD-referenced coupler slots re-anchor on OAL change** — `withNewOal()` now preserves a slot's authored distance from the FWD face (same rule as FWD-ref tapers/liners); previously slots silently drifted off the coupling when OAL changed. `shiftAllBy()` also includes slots now. (B1; new `WithNewOalTest` cases.)
+- **Slot-only drafts are protected** — `isSessionDefault()` now checks `couplerBoltSlots`, so an autosaved draft containing only slots can't be clobbered by the restore path. (B2)
+- **Coupler-slot bounds validation at add time** — `AddCouplerBoltSlotDialog` now blocks rows that bite past the AFT face or run past the FWD end (mirrors `CouplerBoltSlot.isValid`). (B7; new `CouplerBoltSlotTest` for the model.)
+
+**PDF output**
+- **Long text can't overrun footer columns** — footer lines (all three columns) and the runout/wear headers are now ellipsized to their column width via `ellipsizeToWidth()`. (B8)
+- **One OAL number across all three documents** — the runout sheet and wear document now print the *typed* OAL as the label (arrows still bracket the drawn SET-to-SET span), matching the main schematic's "OAL label never changes" rule from `docs/OverallLength.md`. Previously they printed the SET-to-SET distance labeled "OAL". (B12; `RunoutSheet.md` updated.) **Review note:** this supersedes the older RunoutSheet.md convention — revert `RunoutPdfComposer`/`WearPdfComposer` call sites if SET-to-SET was intended.
+- **Metric footers print pitch in mm** — thread callouts now show `2 mm pitch` in metric mode instead of TPI (TPI kept for inch mode). (B13; `FooterUnitsTest` strengthened.)
+- **Slot cutouts use the drawn surface radius** — `drawCouplerBoltSlots` now takes the same body list the composer actually drew (resolved bodies incl. auto-bodies), so a slot over an auto-body region no longer falls back to the global max OD. (B9)
+- **Wear OAL line anchors to the true outline top** — uses `maxOuterDiaMm()` (liners/tapers included) instead of body diameters only. (B10)
+
+**UX**
+- **"Save" in the unsaved-changes dialog no longer swallows the pending action** — with a known filename it quick-saves and continues the New/Open; otherwise the action resumes after a successful Save-As (dropped on cancel). (B11)
+- Removed the debug pointer-event logging loop that ran on every carousel delete button.
+
+**Dead code removed (~1,400 lines, zero callers, verified by grep + green build):** `ui/editor/ComponentCarousel.kt` (stale pre-refactor copy), `ui/drawing/LayoutMap.kt` + `ui/config/DisplayCompressionConfig.kt` + `ui/drawing/DrawingConfig.kt` (abandoned display-compression system), `data/ShaftRepository.kt` + `ShaftFileRepository.kt` + `NoopShaftRepository.kt` (unused repo layer), `data/MetaInfo.kt`, `pdf/ShaftPdfComposerCompat.kt`, `ui/nav/SafRoutes.kt`, `ui/input/NumberField.kt` (wrong package) + `Inputs.kt` + `ShaftMetaSection.kt` + `UnitSelector.kt`, `util/TaperParser.kt`, `util/HintStyle.kt`, and `geom.computeExcludedThreadLengths` (production-dead since the immutable-OAL fix; its two tests removed with it).
+
 ### feat: coupler bolt slots — radial muff-coupler bolt cutouts
 
 New component type: **coupler bolt slots** — one axial row of radial bolt cutouts carved into the shaft at a muff-coupler location. Each cutout renders as a circle straddling the shaft outline (half in the shaft, half in the coupling), mirrored top and bottom, everywhere the shaft is drawn (preview + all three PDFs).

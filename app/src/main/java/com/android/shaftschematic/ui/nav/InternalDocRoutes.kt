@@ -42,6 +42,7 @@ import java.util.Locale
 import androidx.compose.runtime.collectAsState
 import java.io.File
 import com.android.shaftschematic.doc.SHAFT_DOT_EXT
+import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.doc.stripShaftDocExtension
 
 /**
@@ -322,12 +323,19 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                 .fillMaxWidth()
                                 .clickable {
                                     scope.launch {
-                                        val text = withContext(Dispatchers.IO) {
-                                            InternalStorage.load(ctx, name)
+                                        // A truncated/corrupt file must surface an error,
+                                        // never crash (importJson throws on bad JSON).
+                                        runCatching {
+                                            val text = withContext(Dispatchers.IO) {
+                                                InternalStorage.load(ctx, name)
+                                            }
+                                            vm.importJson(text)
+                                        }.onSuccess {
+                                            vm.setCurrentDocumentName(name)
+                                            onFinished()
+                                        }.onFailure { e ->
+                                            snackbarHostState.showSnackbar(openFailureMessage(name, e))
                                         }
-                                        vm.importJson(text)
-                                        vm.setCurrentDocumentName(name)
-                                        onFinished()
                                     }
                                 }
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -417,6 +425,13 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
             }
         }
     }
+}
+
+/** User-facing message for a failed document open. Version mismatches get their specific text. */
+internal fun openFailureMessage(name: String, e: Throwable): String = when (e) {
+    is ShaftDocCodec.UnsupportedDocVersionException ->
+        e.message ?: "This file needs a newer version of the app."
+    else -> "Could not open ‘${stripShaftDocExtension(name)}’ — the file may be damaged."
 }
 
 private fun relativeOpenDate(lastModifiedMs: Long): String {

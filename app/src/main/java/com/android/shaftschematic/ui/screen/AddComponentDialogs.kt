@@ -291,6 +291,20 @@ fun AddCouplerBoltSlotDialog(
         startEntered
     }
 
+    // Bounds check: every cutout (center ± hole radius) must lie on the shaft. Mirrors
+    // CouplerBoltSlot.isValid(); only enforced once an OAL exists to check against.
+    val boundsError: String? =
+        if (spec.overallLengthMm > 0f && physStartMm >= 0f && holeDiaMm > 0f && count >= 1) {
+            val lastCenterMm = physStartMm + rowSpanMm
+            val eps = 1e-3f
+            when {
+                physStartMm - holeDiaMm * 0.5f < -eps -> "Row extends past the AFT end of the shaft"
+                lastCenterMm + holeDiaMm * 0.5f > spec.overallLengthMm + eps ->
+                    "Row extends past the end of the shaft"
+                else -> null
+            }
+        } else null
+
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Add Coupler Bolt Slot") },
@@ -309,6 +323,7 @@ fun AddCouplerBoltSlotDialog(
                 CommitNumField(
                     label = "First slot from ${if (isFwd) "FWD" else "AFT"} (${abbr(unit)})",
                     initial = if (isFwd) startFwd else startAft,
+                    errorText = boundsError,
                 ) { if (isFwd) startFwd = it else startAft = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Hole Ø (${abbr(unit)})", holeDia) { holeDia = it }
@@ -335,7 +350,8 @@ fun AddCouplerBoltSlotDialog(
         },
         confirmButton = {
             val ok = physStartMm >= 0f && holeDiaMm > 0f && count >= 1 &&
-                (count == 1 || spacingMm > 0f) && (through || depthMm > 0f)
+                (count == 1 || spacingMm > 0f) && (through || depthMm > 0f) &&
+                boundsError == null
             Button(enabled = ok, onClick = {
                 val ref = if (isFwd) SlotAuthoredReference.FWD else SlotAuthoredReference.AFT
                 onSubmit(

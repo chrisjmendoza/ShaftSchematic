@@ -67,7 +67,12 @@ xAt(mm)    = contentLeft + (mm − aftSetMm) × ptPerMm
 
 **Why:** Thread components at the aft/fwd ends are NOT drawn in the shaft profile (the profile only draws bodies, tapers, and liners). If the span were based on `overallLengthMm`, the OAL arrows would extend into un-drawn whitespace. Basing the span on the SET faces keeps the arrow tips coincident with the visible shaft ends.
 
-The OAL label shows the SET-to-SET distance, which is the physically meaningful dimension for a machinist.
+**Label rule (2026-07-11):** the printed OAL value is always the user's **typed OAL**
+(`spec.overallLengthMm`) — the same "OAL never changes" rule as the main schematic
+(`OverallLength.md`). The arrows still bracket the drawn SET-to-SET span; only the label
+uses the typed value. Previously these documents labeled the SET-to-SET distance "OAL",
+which meant the runout/wear sheets and the schematic could show two different numbers
+under the same name for the same shaft.
 
 ---
 

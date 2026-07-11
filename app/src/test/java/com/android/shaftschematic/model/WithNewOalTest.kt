@@ -25,6 +25,12 @@ class WithNewOalTest {
     private fun authoredFromFwd(spec: ShaftSpec, ln: Liner): Float =
         spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
 
+    /** Distance from the FWD face to the fwd-most cutout center (the authored FWD value). */
+    private fun authoredFromFwd(spec: ShaftSpec, cs: CouplerBoltSlot): Float {
+        val rowSpan = (cs.count - 1).coerceAtLeast(0) * cs.spacingMm
+        return spec.overallLengthMm - (cs.startFromAftMm + rowSpan)
+    }
+
     // ── OAL update, no FWD components ────────────────────────────────────────
 
     @Test
@@ -281,5 +287,59 @@ class WithNewOalTest {
             50f, 1000f - result.tapers[0].startFromAftMm - result.tapers[0].lengthMm, EPS)
         assertEquals("FWD end is now at 950 (oal - authored)", 950f, newFwdEnd, EPS)
         assertEquals("Old copy would have put FWD end at 450 (drifted)", 450f, oldBehaviourFwdEnd, EPS)
+    }
+
+    // ── Coupler bolt slots — FWD default reference must reanchor like tapers/liners ──
+
+    @Test
+    fun `fwd-ref coupler slot preserves authored-from-fwd distance on oal grow`() {
+        // Row of 3 cutouts, spacing 20: aft-most center at 340, fwd-most at 380.
+        // OAL 400 → authoredFromFwd = 400 − 380 = 20mm off the FWD face.
+        val slot = CouplerBoltSlot(id = "cs1", startFromAftMm = 340f, holeDiaMm = 10f,
+            count = 3, spacingMm = 20f, authoredReference = SlotAuthoredReference.FWD)
+        val spec = ShaftSpec(overallLengthMm = 400f, couplerBoltSlots = listOf(slot))
+        val originalFwdDist = authoredFromFwd(spec, slot)  // 20mm
+
+        val result = spec.withNewOal(800f)
+
+        val newFwdDist = authoredFromFwd(result, result.couplerBoltSlots[0])
+        assertEquals(originalFwdDist, newFwdDist, EPS)
+        // aft-most center slides: 800 − 20 − 40 = 740
+        assertEquals(740f, result.couplerBoltSlots[0].startFromAftMm, EPS)
+    }
+
+    @Test
+    fun `fwd-ref coupler slot preserves authored-from-fwd distance on oal shrink`() {
+        val slot = CouplerBoltSlot(id = "cs1", startFromAftMm = 340f, holeDiaMm = 10f,
+            count = 3, spacingMm = 20f, authoredReference = SlotAuthoredReference.FWD)
+        val spec = ShaftSpec(overallLengthMm = 400f, couplerBoltSlots = listOf(slot))
+
+        val result = spec.withNewOal(300f)
+
+        assertEquals(20f, authoredFromFwd(result, result.couplerBoltSlots[0]), EPS)
+        assertEquals(240f, result.couplerBoltSlots[0].startFromAftMm, EPS)
+    }
+
+    @Test
+    fun `aft-ref coupler slot keeps startFromAftMm on oal change`() {
+        val slot = CouplerBoltSlot(id = "cs1", startFromAftMm = 50f, holeDiaMm = 10f,
+            count = 2, spacingMm = 25f, authoredReference = SlotAuthoredReference.AFT)
+        val spec = ShaftSpec(overallLengthMm = 400f, couplerBoltSlots = listOf(slot))
+
+        val result = spec.withNewOal(800f)
+
+        assertEquals(50f, result.couplerBoltSlots[0].startFromAftMm, EPS)
+    }
+
+    @Test
+    fun `single-cutout fwd-ref slot reanchors by its center`() {
+        // count=1 → rowSpan 0; center at 390, OAL 400 → authored 10mm from FWD.
+        val slot = CouplerBoltSlot(id = "cs1", startFromAftMm = 390f, holeDiaMm = 10f,
+            count = 1, spacingMm = 0f, authoredReference = SlotAuthoredReference.FWD)
+        val spec = ShaftSpec(overallLengthMm = 400f, couplerBoltSlots = listOf(slot))
+
+        val result = spec.withNewOal(600f)
+
+        assertEquals(590f, result.couplerBoltSlots[0].startFromAftMm, EPS)
     }
 }

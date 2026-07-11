@@ -191,9 +191,12 @@ fun composeRunoutPdf(
         headerTop, headerHeight, spec, project, unit, drawSpanMm)
 
     // ── Draw OAL span line — sits just above the shaft top, like the schematic ─
+    // The arrows bracket the drawn SET-to-SET span, but the LABEL is always the typed
+    // OAL — same rule as the main schematic (the OAL number is sacred and never changes;
+    // see docs/OverallLength.md).
     val oalLineY = shaftCy - shaftHalfPt - OAL_LINE_SPACE_PT
     drawOalSpanLine(c, dim, text, contentLeft, contentRight,
-        oalLineY, spec, unit, drawSpanMm)
+        oalLineY, spec, unit, spec.overallLengthMm)
 
     // ── Draw shaft profile ────────────────────────────────────────────────────
     drawShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx,
@@ -433,7 +436,7 @@ private fun drawRunoutHeader(
         if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
         append("Date: $date$side")
     }
-    c.drawText(headerText, left, y, text)
+    c.drawText(ellipsizeToWidth(headerText, text, right - left), left, y, text)
 
     // Thin rule below header
     val ruleY = top + height

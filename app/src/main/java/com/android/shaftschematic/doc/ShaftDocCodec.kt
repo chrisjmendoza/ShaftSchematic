@@ -24,6 +24,19 @@ import kotlinx.serialization.json.Json
  */
 object ShaftDocCodec {
 
+    /** Highest envelope version this build can read/write safely. */
+    const val CURRENT_VERSION = 1
+
+    /**
+     * Thrown when a document was written by a newer app version (envelope version above
+     * [CURRENT_VERSION]). Decoding it with `ignoreUnknownKeys` would silently drop the newer
+     * fields, and re-saving it would destroy them — so we refuse instead.
+     */
+    class UnsupportedDocVersionException(val docVersion: Int) : Exception(
+        "This file was saved by a newer version of ShaftSchematic (format v$docVersion). " +
+            "Update the app to open it."
+    )
+
     /**
      * Versioned document envelope. Add new optional fields here with default values —
      * they round-trip silently with files that were saved before the field existed.
@@ -75,6 +88,8 @@ object ShaftDocCodec {
         // Try envelope first.
         runCatching { json.decodeFromString(ShaftDocV1.serializer(), raw) }
             .onSuccess { doc ->
+                // Refuse files from a newer format rather than silently dropping their data.
+                if (doc.version > CURRENT_VERSION) throw UnsupportedDocVersionException(doc.version)
                 return Decoded(
                     format = Format.ENVELOPE_V1,
                     preferredUnit = doc.preferredUnit,

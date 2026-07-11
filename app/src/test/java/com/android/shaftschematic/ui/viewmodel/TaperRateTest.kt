@@ -52,57 +52,101 @@ class TaperRateTest {
     }
 
     // ─────────────────────────────────────────────
-    // deriveTaperDiameters
+    // deriveTaperDiameters — direction-aware
+    //
+    // Model diameters are axial start/end (AFT → FWD). The SET (Small End of Taper)
+    // faces the nearer shaft end:
+    //   AFT-end taper  → SET at start (smallEndAtStart = true)  → end = start + rate·len
+    //   FWD-end taper  → SET at end   (smallEndAtStart = false) → end = start − rate·len
     // ─────────────────────────────────────────────
 
     @Test fun derive_bothProvided_rateIgnored() {
-        val (set, let) = ShaftViewModel.deriveTaperDiameters(
-            setMm = 100f, letMm = 80f, lengthMm = 200f, rateText = "1:12"
+        val (start, end) = ShaftViewModel.deriveTaperDiameters(
+            startDiaMm = 100f, endDiaMm = 80f, lengthMm = 200f, rateText = "1:12"
         )
-        assertEquals(100f, set, 1e-4f)
-        assertEquals(80f, let, 1e-4f)
+        assertEquals(100f, start, 1e-4f)
+        assertEquals(80f, end, 1e-4f)
     }
 
-    @Test fun derive_onlySet_deriveLetFromRate() {
-        // SET=100, length=240, rate=1:12 → diameter change = 240/12=20 → LET=80
-        val (set, let) = ShaftViewModel.deriveTaperDiameters(
-            setMm = 100f, letMm = 0f, lengthMm = 240f, rateText = "1:12"
+    @Test fun derive_aftTaper_onlySet_deriveLetLarger() {
+        // AFT taper: SET=100 at start, length=240, rate=1:12 → delta 20 → LET (end) = 120
+        val (start, end) = ShaftViewModel.deriveTaperDiameters(
+            startDiaMm = 100f, endDiaMm = 0f, lengthMm = 240f, rateText = "1:12",
+            smallEndAtStart = true
         )
-        assertEquals(100f, set, 1e-4f)
-        assertEquals(80f, let, 1e-4f)
+        assertEquals(100f, start, 1e-4f)
+        assertEquals(120f, end, 1e-4f)
     }
 
-    @Test fun derive_onlyLet_deriveSetFromRate() {
-        // LET=80, length=240, rate=1:12 → SET = 80 + 240/12 = 100
-        val (set, let) = ShaftViewModel.deriveTaperDiameters(
-            setMm = 0f, letMm = 80f, lengthMm = 240f, rateText = "1:12"
+    @Test fun derive_aftTaper_onlyLet_deriveSetSmaller() {
+        // AFT taper: LET=120 at end → SET (start) = 120 − 20 = 100
+        val (start, end) = ShaftViewModel.deriveTaperDiameters(
+            startDiaMm = 0f, endDiaMm = 120f, lengthMm = 240f, rateText = "1:12",
+            smallEndAtStart = true
         )
-        assertEquals(100f, set, 1e-4f)
-        assertEquals(80f, let, 1e-4f)
+        assertEquals(100f, start, 1e-4f)
+        assertEquals(120f, end, 1e-4f)
+    }
+
+    @Test fun derive_fwdTaper_onlyLetAtStart_deriveSetSmaller() {
+        // FWD taper: LET=100 at start → SET (end) = 100 − 20 = 80
+        val (start, end) = ShaftViewModel.deriveTaperDiameters(
+            startDiaMm = 100f, endDiaMm = 0f, lengthMm = 240f, rateText = "1:12",
+            smallEndAtStart = false
+        )
+        assertEquals(100f, start, 1e-4f)
+        assertEquals(80f, end, 1e-4f)
+    }
+
+    @Test fun derive_fwdTaper_onlySetAtEnd_deriveLetLarger() {
+        // FWD taper: SET=80 at end → LET (start) = 80 + 20 = 100
+        val (start, end) = ShaftViewModel.deriveTaperDiameters(
+            startDiaMm = 0f, endDiaMm = 80f, lengthMm = 240f, rateText = "1:12",
+            smallEndAtStart = false
+        )
+        assertEquals(100f, start, 1e-4f)
+        assertEquals(80f, end, 1e-4f)
     }
 
     @Test fun derive_blankRate_diametersUnchanged() {
-        val (set, let) = ShaftViewModel.deriveTaperDiameters(
-            setMm = 100f, letMm = 0f, lengthMm = 240f, rateText = ""
+        val (start, end) = ShaftViewModel.deriveTaperDiameters(
+            startDiaMm = 100f, endDiaMm = 0f, lengthMm = 240f, rateText = ""
         )
         // No rate → can't derive → returned as-is
-        assertEquals(100f, set, 1e-4f)
-        assertEquals(0f, let, 1e-4f)
+        assertEquals(100f, start, 1e-4f)
+        assertEquals(0f, end, 1e-4f)
     }
 
     @Test fun derive_zeroLength_diametersUnchanged() {
-        val (set, let) = ShaftViewModel.deriveTaperDiameters(
-            setMm = 100f, letMm = 0f, lengthMm = 0f, rateText = "1:12"
+        val (start, end) = ShaftViewModel.deriveTaperDiameters(
+            startDiaMm = 100f, endDiaMm = 0f, lengthMm = 0f, rateText = "1:12"
         )
-        assertEquals(100f, set, 1e-4f)
-        assertEquals(0f, let, 1e-4f)
+        assertEquals(100f, start, 1e-4f)
+        assertEquals(0f, end, 1e-4f)
     }
 
     @Test fun derive_resultClampedToZero() {
-        // Very steep rate might produce negative LET → clamp to 0
-        val (_, let) = ShaftViewModel.deriveTaperDiameters(
-            setMm = 10f, letMm = 0f, lengthMm = 1000f, rateText = "1:1"
+        // Very steep rate on a FWD taper can drive the derived end negative → clamp to 0
+        val (_, end) = ShaftViewModel.deriveTaperDiameters(
+            startDiaMm = 10f, endDiaMm = 0f, lengthMm = 1000f, rateText = "1:1",
+            smallEndAtStart = false
         )
-        assertTrue("LET must be ≥ 0", let >= 0f)
+        assertTrue("derived end must be ≥ 0", end >= 0f)
+    }
+
+    // ─────────────────────────────────────────────
+    // taperSmallEndAtStart — midpoint classification
+    // ─────────────────────────────────────────────
+
+    @Test fun smallEnd_aftHalf_isAtStart() {
+        assertTrue(ShaftViewModel.taperSmallEndAtStart(startMm = 0f, lengthMm = 100f, overallLengthMm = 1000f))
+    }
+
+    @Test fun smallEnd_fwdHalf_isAtEnd() {
+        assertFalse(ShaftViewModel.taperSmallEndAtStart(startMm = 900f, lengthMm = 100f, overallLengthMm = 1000f))
+    }
+
+    @Test fun smallEnd_unknownOal_defaultsToStart() {
+        assertTrue(ShaftViewModel.taperSmallEndAtStart(startMm = 500f, lengthMm = 100f, overallLengthMm = 0f))
     }
 }

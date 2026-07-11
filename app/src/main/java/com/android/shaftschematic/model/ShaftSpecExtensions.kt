@@ -181,10 +181,23 @@ fun ShaftSpec.withNewOal(newOal: Float): ShaftSpec {
         }
     }
 
+    // Coupler bolt slots default to FWD authoring; preserve the authored distance from the
+    // FWD face to the fwd-most cutout center (row span excludes the hole-radius padding).
+    val newSlots = couplerBoltSlots.map { cs ->
+        if (cs.authoredReference == SlotAuthoredReference.FWD) {
+            val rowSpan = (cs.count - 1).coerceAtLeast(0) * cs.spacingMm
+            val authoredFromFwd = oldOal - (cs.startFromAftMm + rowSpan)
+            cs.copy(startFromAftMm = clampedOal - authoredFromFwd - rowSpan)
+        } else {
+            cs
+        }
+    }
+
     return copy(
         overallLengthMm = clampedOal,
         tapers = newTapers,
         liners = newLiners,
+        couplerBoltSlots = newSlots,
     ).syncExcludedThreadPositions()
 }
 
@@ -197,7 +210,8 @@ fun ShaftSpec.shiftAllBy(delta: Float): ShaftSpec {
         bodies = bodies.map { it.copy(startFromAftMm = it.startFromAftMm.shift()) },
         tapers = tapers.map { it.copy(startFromAftMm = it.startFromAftMm.shift()) },
         threads = threads.map { it.copy(startFromAftMm = it.startFromAftMm.shift()) },
-        liners = liners.map { it.copy(startFromAftMm = it.startFromAftMm.shift()) }
+        liners = liners.map { it.copy(startFromAftMm = it.startFromAftMm.shift()) },
+        couplerBoltSlots = couplerBoltSlots.map { it.copy(startFromAftMm = it.startFromAftMm.shift()) }
     )
 }
 

@@ -49,7 +49,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -985,22 +984,8 @@ internal fun ComponentCard(
 
             if (onRemove != null) {
                 IconButton(
-                    onClick = {
-                        Log.d("ShaftUIButton", "Delete IconButton onClick fired for id=${componentId ?: "<unknown>"} (componentType=${componentKind?.name ?: "<unknown>"})")
-                        onRemove()
-                    },
+                    onClick = onRemove,
                     modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp)
-                        .pointerInput(componentId, componentKind) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    val pressed = event.changes.firstOrNull()?.pressed
-                                    if (pressed != null) {
-                                        Log.d("ShaftUIButton", "Pointer event on delete button: pressed=$pressed for id=${componentId ?: "<unknown>"} (componentType=${componentKind?.name ?: "<unknown>"})")
-                                    }
-                                }
-                            }
-                        }
                 ) {
                     Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
                 }

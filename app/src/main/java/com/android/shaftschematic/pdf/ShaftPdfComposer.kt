@@ -214,7 +214,7 @@ fun composeShaftPdf(
     drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill)
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill)
-    drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill())
+    drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill(), bodies = bodiesForPdf)
     c.restore()
 
     if (effectiveOptions.showLabels && pdfPrefs.showComponentTitles) {
@@ -870,13 +870,17 @@ internal fun drawCouplerBoltSlots(
     rPx: (Float) -> Float,
     outline: Paint,
     fill: Paint?,
+    // The bodies actually drawn on this surface. The main composer draws *resolved* bodies
+    // (auto-bodies included); the local surface radius must come from the same list or a
+    // slot over an auto-body region falls back to the global max OD at the wrong radius.
+    bodies: List<Body> = spec.bodies,
 ) {
     if (slots.isEmpty()) return
     val fallbackDia = spec.maxOuterDiaMm()
 
     fun surfaceRadiusPx(xMm: Float): Float {
         var maxDia = 0f
-        spec.bodies.forEach {
+        bodies.forEach {
             if (xMm >= it.startFromAftMm && xMm <= it.startFromAftMm + it.lengthMm) maxDia = max(maxDia, it.diaMm)
         }
         spec.liners.forEach {
@@ -958,11 +962,18 @@ private fun drawFooter(
     val midX   = rect.left + rect.width() * 0.40f
     val rightX = rect.left + rect.width() * 0.76f
 
+    // Column budgets: long free text (customer/vessel names) must never overrun the
+    // neighbouring column — ellipsize to the available width.
+    val colPad = 6f
+    val leftMaxW  = midX - leftX - colPad
+    val midMaxW   = rightX - midX - colPad
+    val rightMaxW = rect.right - rightX
+
     // AFT (left) — left-aligned at left margin
     run {
         var y = top
         cols.aftLines.forEach { line ->
-            c.drawText(line, leftX, y, text)
+            c.drawText(ellipsizeToWidth(line, text, leftMaxW), leftX, y, text)
             y += lh
         }
     }
@@ -971,9 +982,9 @@ private fun drawFooter(
     run {
         var y = top
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        c.drawText("Customer: ${project.customer}", midX, y, text); y += lh
-        c.drawText("Vessel: ${project.vessel}",     midX, y, text); y += lh
-        c.drawText("Job #: ${project.jobNumber}",   midX, y, text); y += lh
+        c.drawText(ellipsizeToWidth("Customer: ${project.customer}", text, midMaxW), midX, y, text); y += lh
+        c.drawText(ellipsizeToWidth("Vessel: ${project.vessel}", text, midMaxW),     midX, y, text); y += lh
+        c.drawText(ellipsizeToWidth("Job #: ${project.jobNumber}", text, midMaxW),   midX, y, text); y += lh
         c.drawText("Date: $date",                   midX, y, text); y += lh
 
         val uniqueODs = spec.bodies
@@ -983,7 +994,7 @@ private fun drawFooter(
             .sorted()
         if (uniqueODs.isNotEmpty()) {
             val label = uniqueODs.joinToString(", ") { "Ø ${formatDiaWithUnit(it.toDouble(), unit)}" }
-            c.drawText("Body: $label", midX, y, text); y += lh
+            c.drawText(ellipsizeToWidth("Body: $label", text, midMaxW), midX, y, text); y += lh
         }
 
         project.side.printableLabelOrNull()?.let { pos ->
@@ -1000,7 +1011,7 @@ private fun drawFooter(
     run {
         var y = top
         cols.fwdLines.forEach { line ->
-            c.drawText(line, rightX, y, text)
+            c.drawText(ellipsizeToWidth(line, text, rightMaxW), rightX, y, text)
             y += lh
         }
     }
@@ -1041,7 +1052,7 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
     }
     if (cfg.showAftThread && ends.aftThread) {
         getAftEndThread(spec)?.let { th ->
-            aft += "Thread: ${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}"
+            aft += "Thread: ${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtPitch(th.pitchMm, unit)} × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}"
         }
     }
 
@@ -1066,7 +1077,7 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
     }
     if (cfg.showFwdThread && ends.fwdThread) {
         getFwdEndThread(spec)?.let { th ->
-            fwd += "Thread: ${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtTpi(tpiFromPitch(th.pitchMm))} TPI × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}"
+            fwd += "Thread: ${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtPitch(th.pitchMm, unit)} × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}"
         }
     }
 
@@ -1122,6 +1133,23 @@ private fun tpiFromPitch(pitchMm: Float): Float = if (pitchMm > 0f) MM_PER_IN / 
 private fun fmtTpi(tpi: Float): String {
     val i = tpi.toInt()
     return if (abs(tpi - i) < 0.01f) i.toString() else String.format(Locale.US, "%.2f", tpi)
+}
+
+/** Pitch callout matching the active unit system: TPI for inches, mm pitch for metric. */
+private fun fmtPitch(pitchMm: Float, unit: UnitSystem): String =
+    if (unit == UnitSystem.INCHES) "${fmtTpi(tpiFromPitch(pitchMm))} TPI"
+    else "${formatLenWithUnit(pitchMm.toDouble(), unit)} pitch"
+
+/**
+ * Truncates [text] with an ellipsis so it fits within [maxWidth] points. Footer columns sit
+ * at fixed x positions; long customer/vessel names must never overrun the next column.
+ */
+internal fun ellipsizeToWidth(text: String, paint: Paint, maxWidth: Float): String {
+    if (maxWidth <= 0f || paint.measureText(text) <= maxWidth) return text
+    val ellipsis = "…"
+    var end = text.length
+    while (end > 0 && paint.measureText(text.substring(0, end) + ellipsis) > maxWidth) end--
+    return text.substring(0, end).trimEnd() + ellipsis
 }
 
 private fun ShaftSpec.maxOuterDiaMm(): Float {

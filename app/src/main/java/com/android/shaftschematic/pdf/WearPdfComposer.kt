@@ -118,17 +118,21 @@ fun composeWearPdf(
     fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * ptPerMm
 
     // OAL dimension line sits just above the shaft's top outline.
-    // Computed after scale so we can use the actual drawn shaft radius.
-    val maxDiaMm       = (spec.bodies.maxOfOrNull { it.diaMm } ?: 50f).coerceAtLeast(20f)
+    // Computed after scale so we can use the actual drawn shaft radius. The outline's
+    // true top may come from a liner OD or a taper LET, not just a body — use the full
+    // max outer diameter so the dimension line never overlaps drawn geometry.
+    val maxDiaMm       = (spec.maxOuterDiaMm().takeIf { it > 0f } ?: 50f).coerceAtLeast(20f)
     val shaftTopApprox = shaftCy - rPx(maxDiaMm)
     val oalLineY       = (shaftTopApprox - WEAR_OAL_ABOVE_SHAFT_PT)
         .coerceAtLeast(midTop + WEAR_TEXT_PT + 6f)
 
     // ── Header ───────────────────────────────────────────────────────────
-    drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, unit, drawSpanMm)
+    // Label rule: the printed OAL is always the user's typed OAL (same as the main
+    // schematic); the arrows below bracket the drawn SET-to-SET span.
+    drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, unit, spec.overallLengthMm)
 
     // ── OAL line (with witness lines, anchored near shaft) ────────────────
-    drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox, unit, drawSpanMm)
+    drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox, unit, spec.overallLengthMm)
 
     // ── Shaft profile ─────────────────────────────────────────────────────
     drawWearShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx,
@@ -172,8 +176,10 @@ private fun drawWearHeader(
     fun centeredX(str: String): Float =
         ((left + right - text.measureText(str)) * 0.5f).coerceAtLeast(left)
 
-    c.drawText(line1, centeredX(line1), top + ts, text)
-    c.drawText(line2, centeredX(line2), top + ts + ts * 1.4f, text)
+    val line1Fit = ellipsizeToWidth(line1, text, right - left)
+    val line2Fit = ellipsizeToWidth(line2, text, right - left)
+    c.drawText(line1Fit, centeredX(line1Fit), top + ts, text)
+    c.drawText(line2Fit, centeredX(line2Fit), top + ts + ts * 1.4f, text)
 
     val ruleY = top + WEAR_HEADER_HEIGHT_PT
     c.drawLine(left, ruleY, right, ruleY, Paint(text).apply {

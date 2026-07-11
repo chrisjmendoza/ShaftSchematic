@@ -741,7 +741,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             s.bodies.isEmpty() &&
             s.tapers.isEmpty() &&
             s.threads.isEmpty() &&
-            s.liners.isEmpty()
+            s.liners.isEmpty() &&
+            s.couplerBoltSlots.isEmpty()
 
         return specEmpty &&
             _shaftPosition.value == ShaftPosition.OTHER &&
@@ -945,8 +946,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
             orderAdd(ComponentKind.TAPER, id)
             val (resolvedSet, resolvedLet) = deriveTaperDiameters(
-                setMm = startDiaMm, letMm = endDiaMm,
-                lengthMm = lengthMm, rateText = rateText
+                startDiaMm = startDiaMm, endDiaMm = endDiaMm,
+                lengthMm = lengthMm, rateText = rateText,
+                smallEndAtStart = taperSmallEndAtStart(startMm, lengthMm, s.overallLengthMm)
             )
             split.spec.copy(
                 tapers = listOf(
@@ -985,8 +987,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val effectiveRate = rateText.ifBlank { old.taperRateText }
 
             val (resolvedSet, resolvedLet) = deriveTaperDiameters(
-                setMm = startDiaMm, letMm = endDiaMm,
-                lengthMm = lengthMm, rateText = effectiveRate
+                startDiaMm = startDiaMm, endDiaMm = endDiaMm,
+                lengthMm = lengthMm, rateText = effectiveRate,
+                smallEndAtStart = taperSmallEndAtStart(startMm, lengthMm, s.overallLengthMm)
             )
 
             s.copy(
@@ -1890,34 +1893,56 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         private const val INCH_TO_MM = 25.4f
 
         /**
-         * Derive final SET and LET diameters applying taper-rate logic:
-         * - If both SET > 0 and LET > 0: rate is ignored.
-         * - If only SET > 0: LET = SET - rate * lengthMm  (rate = diameter-per-length).
-         * - If only LET > 0: SET = LET + rate * lengthMm.
+         * Derive the missing taper diameter from the taper rate.
+         *
+         * Parameters are the model's axial start/end diameters (AFT → FWD). Exactly which of
+         * them is the Small End of Taper depends on which shaft end the taper sits at:
+         * - AFT-end taper: SET faces the AFT end → SET is at the *start* (smallEndAtStart = true).
+         * - FWD-end taper: SET faces the FWD end → SET is at the *end*   (smallEndAtStart = false).
+         *
+         * Rules:
+         * - If both diameters > 0: rate is ignored.
+         * - If only one is provided: the other is derived so that |start − end| = rate × length
+         *   and the derived diameter respects [smallEndAtStart] (SET < LET, always).
          * - If neither > 0: returns 0f for both.
          * - Rate is parsed from [rateText] (formats: "1:12", "3/4", "0.0833", "1"). A "1:12"
          *   ratio is interpreted as (1 unit diameter change per 12 units length), so rate = 1/12.
          * - If rate text is blank or unparseable the raw diameters are returned unchanged.
+         * - Derived diameters are clamped ≥ 0.
          */
         fun deriveTaperDiameters(
-            setMm: Float,
-            letMm: Float,
+            startDiaMm: Float,
+            endDiaMm: Float,
             lengthMm: Float,
             rateText: String,
+            smallEndAtStart: Boolean = true,
         ): Pair<Float, Float> {
             // Both provided: rate is ignored per contract.
-            if (setMm > 0f && letMm > 0f) return setMm to letMm
+            if (startDiaMm > 0f && endDiaMm > 0f) return startDiaMm to endDiaMm
 
-            val rate = parseRateText(rateText) ?: return setMm to letMm
-            if (lengthMm <= 0f) return setMm to letMm
+            val rate = parseRateText(rateText) ?: return startDiaMm to endDiaMm
+            if (lengthMm <= 0f) return startDiaMm to endDiaMm
 
+            // end = start + sign·delta, where sign makes the SET the smaller diameter.
             val diaDelta = rate * lengthMm
+            val sign = if (smallEndAtStart) 1f else -1f
 
             return when {
-                setMm > 0f -> setMm to maxOf(0f, setMm - diaDelta)
-                letMm > 0f -> maxOf(0f, letMm + diaDelta) to letMm
+                startDiaMm > 0f -> startDiaMm to maxOf(0f, startDiaMm + sign * diaDelta)
+                endDiaMm > 0f -> maxOf(0f, endDiaMm - sign * diaDelta) to endDiaMm
                 else -> 0f to 0f
             }
+        }
+
+        /**
+         * True when the taper's Small End faces the AFT end of the shaft — i.e. the taper sits
+         * in the AFT half. Mirrors the UI's SET/LET labeling rule
+         * ([com.android.shaftschematic.ui.input.taperSetLetMapping]): mid-point ≤ OAL/2 → AFT
+         * taper (SET at start). Falls back to AFT when OAL is unknown (0).
+         */
+        fun taperSmallEndAtStart(startMm: Float, lengthMm: Float, overallLengthMm: Float): Boolean {
+            if (overallLengthMm <= 0f) return true
+            return startMm + lengthMm * 0.5f <= overallLengthMm * 0.5f
         }
 
         /**

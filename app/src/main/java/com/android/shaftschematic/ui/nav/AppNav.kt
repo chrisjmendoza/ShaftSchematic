@@ -58,6 +58,11 @@ import kotlinx.coroutines.withContext
 fun AppNav(vm: ShaftViewModel) {
     val nav = rememberNavController()
 
+    // Continuation for the unsaved-changes dialog's "Save" path: when the user must first
+    // name the document (saveLocal route), the intended action (New/Open) is stashed here
+    // and resumed after a successful save. Cleared on cancel (unsaved work still present).
+    val pendingPostSaveAction = remember { mutableStateOf<(() -> Unit)?>(null) }
+
     NavHost(navController = nav, startDestination = "start") {
 
         /* ───────── Start ───────── */
@@ -102,14 +107,16 @@ fun AppNav(vm: ShaftViewModel) {
                         recentFiles = recentFiles,
                         onOpenRecent = { filename ->
                             scope.launch {
+                                // importJson must be inside runCatching — it throws on
+                                // corrupt files and unsupported (newer) format versions.
                                 runCatching {
-                                    withContext(Dispatchers.IO) { InternalStorage.load(ctx, filename) }
-                                }.onSuccess { text ->
+                                    val text = withContext(Dispatchers.IO) { InternalStorage.load(ctx, filename) }
                                     vm.importJson(text)
+                                }.onSuccess {
                                     vm.setCurrentDocumentName(filename)
                                     nav.navigate("editor")
-                                }.onFailure {
-                                    snackbarHostState.showSnackbar("Could not open file.")
+                                }.onFailure { e ->
+                                    snackbarHostState.showSnackbar(openFailureMessage(filename, e))
                                 }
                             }
                         }
@@ -132,8 +139,23 @@ fun AppNav(vm: ShaftViewModel) {
                     text = { Text("You have unsaved changes. Save before continuing?") },
                     confirmButton = {
                         TextButton(onClick = {
+                            val action = pendingAction
                             pendingAction = null
-                            nav.navigate("saveLocal")
+                            val docName = currentDocumentName
+                            if (docName != null) {
+                                // Known filename → quick-save, then continue the action.
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        InternalStorage.save(ctx, docName, vm.exportJson())
+                                    }
+                                    vm.markDocumentSaved()
+                                    action?.invoke()
+                                }
+                            } else {
+                                // Needs a name → resume the action after the save screen.
+                                pendingPostSaveAction.value = action
+                                nav.navigate("saveLocal")
+                            }
                         }) { Text("Save") }
                     },
                     dismissButton = {
@@ -221,7 +243,14 @@ fun AppNav(vm: ShaftViewModel) {
             }
         }
         composable("saveLocal") {
-            SaveLocalDocumentRoute(nav = nav, vm = vm) { nav.popBackStack() }
+            SaveLocalDocumentRoute(nav = nav, vm = vm) {
+                nav.popBackStack()
+                // Resume a stashed New/Open only if the save actually happened
+                // (cancel leaves unsaved work in place → drop the continuation).
+                val action = pendingPostSaveAction.value
+                pendingPostSaveAction.value = null
+                if (action != null && !vm.hasUnsavedWork()) action()
+            }
         }
 
         /* ───────── PDF Preview ─────────

@@ -97,9 +97,36 @@ object InternalStorage {
         save(dir(ctx), name, content)
     }
 
+    /**
+     * Atomic save: writes to a temp file first, keeps a `.bak` of any previous version,
+     * then swaps the temp file into place. Process death or disk-full mid-write can never
+     * corrupt the existing document — the worst case leaves a stale `.tmp` alongside it.
+     *
+     * `.tmp`/`.bak` siblings are invisible to [list]/[listWithMetadata] (extension filter).
+     */
     internal fun save(dir: File, name: String, content: String) {
         require(name.endsWith(SHAFT_DOT_EXT, ignoreCase = true)) { "Name must end with $SHAFT_DOT_EXT" }
-        File(dir, name).writeText(content)
+        val target = File(dir, name)
+        val tmp = File(dir, "$name.tmp")
+
+        tmp.writeText(content)
+
+        if (target.exists()) {
+            // Keep the previous version as a recovery copy before replacing it.
+            val bak = File(dir, "$name.bak")
+            runCatching {
+                if (bak.exists()) bak.delete()
+                target.copyTo(bak, overwrite = true)
+            }
+            // File.renameTo does not replace an existing target on all filesystems.
+            target.delete()
+        }
+
+        if (!tmp.renameTo(target)) {
+            // Rename failed (unusual) — fall back to a direct copy of the temp content.
+            tmp.copyTo(target, overwrite = true)
+            tmp.delete()
+        }
     }
 
     fun load(ctx: Context, name: String): String =

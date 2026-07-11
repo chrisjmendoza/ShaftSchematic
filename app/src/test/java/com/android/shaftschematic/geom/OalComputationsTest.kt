@@ -147,37 +147,8 @@ class OalComputationsTest {
         assertEquals(0.0, win.measureStartMm, EPS_EXACT)
     }
 
-    // ─── computeExcludedThreadLengths ─────────────────────────────────────────
-    // Unchanged helper — still correctly identifies end-thread engagement lengths.
-
-    @Test
-    fun `aft end thread detection is epsilon anchored`() {
-        val withinEps = Threads(startFromAftMm = 0.0005f, lengthMm = 10f,
-            majorDiaMm = 50f, pitchMm = 2f, excludeFromOAL = true)
-        val beyondEps = Threads(startFromAftMm = 0.5f, lengthMm = 10f,
-            majorDiaMm = 50f, pitchMm = 2f, excludeFromOAL = true)
-
-        val exWithin = computeExcludedThreadLengths(ShaftSpec(overallLengthMm = 1000f, threads = listOf(withinEps)))
-        assertEquals(withinEps.lengthMm.toDouble(), exWithin.aftExcludedMm, EPS_EXACT)
-
-        val exBeyond = computeExcludedThreadLengths(ShaftSpec(overallLengthMm = 1000f, threads = listOf(beyondEps)))
-        assertEquals(0.0, exBeyond.aftExcludedMm, EPS_EXACT)
-    }
-
-    @Test
-    fun `fwd end thread detection is epsilon anchored`() {
-        val overall = 1000f
-        val withinEps = Threads(startFromAftMm = (overall - 10f) - 0.0005f, lengthMm = 10f,
-            majorDiaMm = 50f, pitchMm = 2f, excludeFromOAL = true)
-        val beyondEps = Threads(startFromAftMm = (overall - 10f) - 0.5f, lengthMm = 10f,
-            majorDiaMm = 50f, pitchMm = 2f, excludeFromOAL = true)
-
-        val exWithin = computeExcludedThreadLengths(ShaftSpec(overallLengthMm = overall, threads = listOf(withinEps)))
-        assertEquals(withinEps.lengthMm.toDouble(), exWithin.fwdExcludedMm, EPS_EXACT)
-
-        val exBeyond = computeExcludedThreadLengths(ShaftSpec(overallLengthMm = overall, threads = listOf(beyondEps)))
-        assertEquals(0.0, exBeyond.fwdExcludedMm, EPS_EXACT)
-    }
+    // computeExcludedThreadLengths tests removed 2026-07-11 — the function was deleted
+    // (production-dead since the immutable-OAL fix; see OalComputations.kt note).
 
     // ─── computeSetPositionsInMeasureSpace ────────────────────────────────────
     // With measureStartMm = 0 always, SET positions are physical shaft coordinates.

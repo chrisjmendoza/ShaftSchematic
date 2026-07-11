@@ -11,11 +11,6 @@ private const val EPS_MM = 1e-3
 // Shared with ShaftPdfComposer via `internal` visibility — only one definition exists.
 internal const val END_EPS_MM = 0.5
 
-data class ExcludedThreadLengths(
-    val aftExcludedMm: Double,
-    val fwdExcludedMm: Double,
-)
-
 private fun findAftEndThread(spec: ShaftSpec): com.android.shaftschematic.model.Threads? {
     // Coordinate-anchored selection only: an AFT end-attached thread must start at x=0 (within epsilon).
     // This avoids any list-order dependence or "first adjacent" heuristics.
@@ -47,27 +42,10 @@ private fun findFwdEndThread(spec: ShaftSpec, overallLengthMm: Double): com.andr
         .firstOrNull()
 }
 
-/**
- * Computes how much length is excluded from OAL at the AFT and FWD ends.
- *
- * Contract:
- * - This is a **dimensioning-frame offset**, not a geometry change.
- * - Uses the per-end thread engagement length from the model ([Threads.lengthMm]) for the
- *   actual AFT/FWD end-attached thread components.
- * - Each excluded length is clamped to 0..overallLengthMm.
- * - If no excluded end threads exist, both are 0.
- */
-fun computeExcludedThreadLengths(spec: ShaftSpec): ExcludedThreadLengths {
-    val oalRaw = spec.overallLengthMm.toDouble().coerceAtLeast(0.0)
-    if (oalRaw <= 0.0) return ExcludedThreadLengths(0.0, 0.0)
-
-    val aftThread = findAftEndThread(spec)
-    val fwdThread = findFwdEndThread(spec, overallLengthMm = oalRaw)
-
-    val aft = if (aftThread?.excludeFromOAL == true) aftThread.lengthMm.toDouble().coerceIn(0.0, oalRaw) else 0.0
-    val fwd = if (fwdThread?.excludeFromOAL == true) fwdThread.lengthMm.toDouble().coerceIn(0.0, oalRaw) else 0.0
-    return ExcludedThreadLengths(aftExcludedMm = aft, fwdExcludedMm = fwd)
-}
+// NOTE: computeExcludedThreadLengths was removed 2026-07-11 (audit dead-code sweep) — it was
+// production-dead since the immutable-OAL fix (docs/OAL_THREAD_BUG_ANALYSIS.md §6) and, after
+// syncExcludedThreadPositions() moved excluded threads outside 0..OAL, it could no longer
+// find them anyway (it matched threads at x≈0 / x≈OAL).
 
 // The OAL window always spans the full user input. Excluding a thread from OAL changes how the
 // OAL bracket is drawn (SET-to-SET vs shaft-end-to-shaft-end) but never mutates the number.
