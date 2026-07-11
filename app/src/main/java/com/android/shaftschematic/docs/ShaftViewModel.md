@@ -4,7 +4,7 @@ ShaftViewModel Contract
 Layer: UI → ViewModel  
 Purpose: Owns editable ShaftSpec state, unit selection, grid toggle, and routes all commits from the UI to the model/persistence.
 
-Version: v0.4 (2026-06-19)
+Version: v0.5 (2026-07-11)
 
 Invariants
 - All stored geometry is **canonical millimeters (mm)**.  
@@ -20,6 +20,7 @@ Responsibilities
 
 Add APIs
 - `addLinerAt(startMm, lengthMm, odMm, reference: LinerAuthoredReference = AFT)` — the `reference` parameter records which end the user measured from; stored on `Liner.authoredReference` for the carousel edit card to display correctly. The default is `AFT` for the quick-add path which does not ask for a reference.
+- `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through = true, depthMm = 0f, reference: SlotAuthoredReference = FWD)` — adds a coupler bolt-slot row. **Does not** call `ensureOverall()` (slots never drive OAL); no body split. Paired with `updateCouplerBoltSlot(index, …)`, `updateCouplerBoltSlotReference/Label/ShowRail`, and `removeCouplerBoltSlot(id)` (undo via `LastDeleted.CouplerBoltSlot`; no body merge). See `CouplerBoltSlot.md`.
 
 Do Nots
 - Do not format values for display (UI edge only).  
@@ -37,6 +38,9 @@ Future Enhancements
 
 Change Log
 ----------
+**v0.5 (2026-07-11)**
+- Added coupler bolt-slot APIs: `addCouplerBoltSlotAt`, `updateCouplerBoltSlot` (+ `Reference`/`Label`/`ShowRail`), `removeCouplerBoltSlot`; undo via `LastDeleted.CouplerBoltSlot`. Slots never call `ensureOverall()` and never split bodies.
+
 **v0.4 (2026-06-19)**
 - `updateBody()`, `updateTaper()`, `updateLiner()`, `updateThread()` — removed `snapForwardFrom()` cascade. Editing a component now mutates only that component; other components' positions are completely untouched.
 - Removed `_autoSnap` StateFlow, `autoSnap` property, and `setAutoSnap()`. Snap is now purely explicit via `snapChainFrom()` / `snapChainFromId()`.

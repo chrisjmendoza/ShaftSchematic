@@ -1,5 +1,5 @@
 # ShaftSchematic Architecture
-Version: v0.4.x
+Version: v0.5.x
 
 ## Overview
 ShaftSchematic is an MVVM-based Android application designed to create accurate, dimensionally consistent shaft schematics for marine propulsion work. The system is built around a strict separation of responsibilities:
@@ -27,7 +27,11 @@ User Input → ViewModel → ShaftSpec (model) → ShaftLayout (layout engine)
 ## Architectural Layers
 
 ### 1. Model Layer (`model/`)
-Defines immutable data classes (Body, Taper, Threads, Liner) and the root ShaftSpec aggregate.
+Defines immutable data classes (Body, Taper, Threads, Liner, CouplerBoltSlot) and the root ShaftSpec aggregate.
+
+`CouplerBoltSlot` is a **pure reference overlay** (muff-coupling bolt cutouts): it is
+excluded from OAL/`coverageEndMm`, excluded from collision detection, and never splits
+bodies. Its list defaults empty, so older documents decode unchanged (no migration).
 
 Key constraints:
 - All geometry is millimeters.
@@ -93,6 +97,7 @@ The single source of truth for drawing geometry.
 
 Responsibilities:
 - Draw bodies, tapers, threads, liners
+- Draw coupler bolt slot cutouts (row of circles straddling the shaft outline, mirrored top/bottom)
 - Draw dimension-style elements (ticks, hatch)
 - Draw the **single "Overall" dimension label** (UI never draws this)
 

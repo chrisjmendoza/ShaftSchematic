@@ -68,6 +68,7 @@ fun ShaftRoute(
                         ComponentKind.TAPER  -> "Taper"
                         ComponentKind.THREAD -> "Thread"
                         ComponentKind.LINER  -> "Liner"
+                        ComponentKind.COUPLER_BOLT_SLOT -> "Coupler bolt slot"
                     }
 
                     val result = snackbarHostState.showSnackbar(
@@ -194,6 +195,7 @@ fun ShaftRoute(
         onAddTaper  = { s, l, sd, ed, rate, kwW, kwD, kwL, kwO, kwS -> vm.addTaperAt(s, l, sd, ed, rate, kwW, kwD, kwL, kwO, kwS) },
         onAddThread = { s, l, maj, p, ex, aft -> vm.addThreadAt(s, l, maj, p, ex, aft) },
         onAddLiner  = { s, l, od, ref -> vm.addLinerAt(s, l, od, ref) },
+        onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label) },
@@ -206,6 +208,10 @@ fun ShaftRoute(
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
+        onUpdateCouplerBoltSlot = { i, s, dia, cnt, sp, thru, dep -> vm.updateCouplerBoltSlot(i, s, dia, cnt, sp, thru, dep) },
+        onUpdateCouplerBoltSlotLabel = { i, label -> vm.updateCouplerBoltSlotLabel(i, label) },
+        onUpdateCouplerBoltSlotReference = { i, ref -> vm.updateCouplerBoltSlotReference(i, ref) },
+        onUpdateCouplerBoltSlotShowRail = { i, show -> vm.updateCouplerBoltSlotShowRail(i, show) },
 
         onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
         onSetThreadEndPosition = vm::setThreadEndPosition,
@@ -214,6 +220,7 @@ fun ShaftRoute(
         onRemoveTaper  = vm::removeTaper,
         onRemoveThread = vm::removeThread,
         onRemoveLiner  = vm::removeLiner,
+        onRemoveCouplerBoltSlot = vm::removeCouplerBoltSlot,
 
         snackbarHostState = snackbarHostState,
 

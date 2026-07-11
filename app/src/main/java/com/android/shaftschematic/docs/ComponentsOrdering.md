@@ -9,7 +9,8 @@ After adding, users immediately edit. Surfacing the newest minimizes scrolling a
 ## Implementation
 - ViewModel inserts newly created components at index 0 in their respective lists.
 - `ComponentsUnifiedList` must keep each list’s order as-is (no `.sorted*` calls).
-- The combined list may group by type in a fixed order (Bodies, Tapers, Threads, Liners) for predictability.
+- The combined list may group by type in a fixed order (Bodies, Tapers, Threads, Liners, Coupler Bolt Slots) for predictability.
+- `ComponentKind` values: `BODY, TAPER, THREAD, LINER, COUPLER_BOLT_SLOT`. Coupler bolt slots participate in the cross-type UI order (newest-on-top) like any other component, but are reference-only for geometry (they never affect OAL, split bodies, or collide). See `CouplerBoltSlot.md`.
 
 ## QA
 - Add Body → Body #1 appears at top of the Body group.

@@ -8,7 +8,8 @@ enum class CollisionGroup { LINER, THREAD }
 fun ComponentKind.collisionGroup(): CollisionGroup? = when (this) {
     ComponentKind.LINER -> CollisionGroup.LINER
     ComponentKind.THREAD -> CollisionGroup.THREAD
-    ComponentKind.BODY, ComponentKind.TAPER -> null
+    // Coupler bolt slots are reference cutouts — they overlay other components by design.
+    ComponentKind.BODY, ComponentKind.TAPER, ComponentKind.COUPLER_BOLT_SLOT -> null
 }
 
 fun startOverlapErrorMm(

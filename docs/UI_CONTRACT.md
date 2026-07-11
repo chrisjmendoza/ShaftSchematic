@@ -1,5 +1,5 @@
 # UI Contract
-Version: v0.4.x
+Version: v0.5.x
 
 ## Purpose
 This document defines all UI interaction rules, screen behaviors, dialog behavior, input handling, and UI–ViewModel boundaries.  
@@ -92,7 +92,7 @@ The default start for a new component is the **furthest FWD end** among sacred c
 - All liners
 - Threads with `excludeFromOAL = false`
 
-Bodies are fillers and are **excluded** from this calculation. Excluded threads sit outside the shaft envelope and are **excluded**. This ensures new components always default to the next logical open slot in the shaft, not past the end.
+Bodies are fillers and are **excluded** from this calculation. Excluded threads sit outside the shaft envelope and are **excluded**. Coupler bolt slots are pure reference overlays and are likewise **excluded**. This ensures new components always default to the next logical open slot in the shaft, not past the end.
 
 ### 3.1.3 Auto-Selection After Add
 
@@ -106,7 +106,7 @@ When a sacred component is deleted the engine merges adjacent body fragments bac
 
 ### 3.1.5 Direction Chip (AFT / FWD Toggle)
 
-Add dialogs that expose a direction toggle (Liner, Taper) use a custom `DirectionChip` composable:
+Add dialogs that expose a direction toggle (Liner, Taper, Coupler Bolt Slot) use a custom `DirectionChip` composable:
 
 - **Selected state**: 2 dp primary-color border, `primaryContainer` background.
 - **Unselected state**: no border, `surface` background.
@@ -143,6 +143,28 @@ UI cannot calculate mm values.
 - UI must project authored “Start” based on selected reference.
 - Switching AFT/FWD must **not** mutate physical geometry.
 - ViewModel stores reference metadata; geometry remains canonical.
+
+### 3.6 Coupler Bolt Slot Dialog
+The add-component chooser (`InlineAddChooserDialog`) includes a **"Coupler Bolt Slot"**
+entry that opens `AddCouplerBoltSlotDialog`. A carousel edit card exposes the same
+controls for editing an existing slot.
+
+Fields:
+- Start (position of the first cutout center, projected per the authored reference)
+- Hole diameter
+- Count (integer ≥ 1)
+- Spacing (axial center-to-center pitch)
+- Through / blind toggle; Depth field (relevant only when blind)
+- Label
+- Measure From: **AFT | FWD** direction chips (default FWD) — `DirectionChip`, per §3.1.5
+- Show dimension rail toggle (present but deferred; no rail is drawn in v1)
+
+Reference behavior mirrors the Liner (§3.5): when FWD-referenced the entered Start
+locates the fwd-most cutout and the row extends aft. Switching AFT/FWD must **not**
+mutate the canonical geometry; the ViewModel stores the reference as metadata.
+
+Coupler bolt slots are a reference overlay — adding, editing, or removing one never
+splits/merges bodies, never changes OAL, and never triggers collision warnings.
 
 ---
 

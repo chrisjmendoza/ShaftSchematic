@@ -5,6 +5,7 @@
 
 Included docs:
 - AddComponentDialogs.md — add-dialog/carousel-card parity rules; per-dialog field contracts
+- CouplerBoltSlot.md — coupler bolt slot feature contract (reference-only radial cutouts)
 - ShaftScreen.md
 - ShaftDrawing.md
 - ShaftRenderer.md

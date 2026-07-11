@@ -26,7 +26,8 @@ fun InlineAddChooserDialog(
     onAddBody: () -> Unit,
     onAddLiner: () -> Unit,
     onAddThread: () -> Unit,
-    onAddTaper: () -> Unit
+    onAddTaper: () -> Unit,
+    onAddCouplerBoltSlot: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -37,6 +38,7 @@ fun InlineAddChooserDialog(
                 Button(onClick = { onAddLiner() }, modifier = androidx.compose.ui.Modifier.fillMaxWidth()) { Text("Liner") }
                 Button(onClick = { onAddTaper() }, modifier = androidx.compose.ui.Modifier.fillMaxWidth()) { Text("Taper") }
                 Button(onClick = { onAddThread() },modifier = androidx.compose.ui.Modifier.fillMaxWidth()) { Text("Thread") }
+                Button(onClick = { onAddCouplerBoltSlot() }, modifier = androidx.compose.ui.Modifier.fillMaxWidth()) { Text("Coupler Bolt Slot") }
             }
         },
         confirmButton = {

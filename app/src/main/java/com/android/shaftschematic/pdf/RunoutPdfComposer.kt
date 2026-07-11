@@ -571,6 +571,9 @@ private fun drawShaftProfile(
         c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
     }
+    // Coupler bolt slots — reference cutouts, same as the main schematic.
+    val slotFill = Paint(outline).apply { style = Paint.Style.FILL; alpha = 40 }
+    drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, xAt, rPx, outline, slotFill)
 }
 
 /** Draw bodies using compression breaks for sections long enough to trigger it. */

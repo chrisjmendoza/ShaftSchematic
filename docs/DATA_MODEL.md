@@ -1,5 +1,5 @@
 # ShaftSchematic Data Model
-Version: v0.4.x
+Version: v0.5.x
 
 ## Overview
 The data model defines all immutable geometric entities that compose a shaft schematic. All measurements are stored in **millimeters** (`Float`). No rendering or UI logic is present in this layer.
@@ -19,6 +19,7 @@ data class ShaftSpec(
     val tapers: List<Taper> = emptyList(),
     val threads: List<Threads> = emptyList(),
     val liners: List<Liner> = emptyList(),
+    val couplerBoltSlots: List<CouplerBoltSlot> = emptyList(),
 )
 Responsibilities:
 ```
@@ -119,6 +120,39 @@ data class Liner(
     override val lengthMm: Float = 0f,
     val odMm: Float = 0f,
 ) : Segment
+CouplerBoltSlot
+@Serializable
+data class CouplerBoltSlot(
+    override val id: String = UUID.randomUUID().toString(),
+    override val startFromAftMm: Float = 0f, // position of the first/aft-most cutout center
+    val holeDiaMm: Float = 0f,
+    val count: Int = 1,                        // user-defined, >= 1
+    val spacingMm: Float = 0f,                 // axial center-to-center pitch between cutouts
+    val through: Boolean = true,               // true = through-hole, false = blind
+    val depthMm: Float = 0f,                   // blind depth; ignored when through
+    val authoredReference: SlotAuthoredReference = SlotAuthoredReference.FWD,
+    val showDimensionRail: Boolean = false,    // deferred — no rail drawn in v1
+    val label: String = "",
+) : Segment
+
+Derived axial footprint:
+val CouplerBoltSlot.lengthMm get() = (count - 1) * spacingMm + holeDiaMm
+
+`SlotAuthoredReference` selects the end the entered `startFromAftMm` is measured
+from. When FWD-referenced the entered value locates the fwd-most cutout and the
+row extends aft; the canonical `startFromAftMm` still stores the aft-most cutout
+center, so physical geometry is reference-independent (same pattern as Liner).
+
+    enum class SlotAuthoredReference { AFT, FWD }
+
+Coupler bolt slots are a **pure reference feature** — they mark muff-coupling
+bolt cutouts and never participate in shaft geometry:
+- Excluded from `coverageEndMm()` and overall length (OAL) — never affect OAL.
+- Excluded from collision/overlap validation (`collisionGroup()` → null).
+- Never split or merge bodies (no body-split on add, no merge on remove).
+- Resolved **after** body resolution, so they never participate in
+  auto-body/subtraction geometry (see `ResolvedCouplerBoltSlot`).
+
 Validation
 Component-Level
 Each component type implements:
@@ -163,6 +197,8 @@ Migration:
 Backfill missing UUIDs
 
 Normalize thread pitch/tpi relationships
+
+`couplerBoltSlots` round-trips automatically through `ShaftDocCodec` with no schema/version bump: the list defaults empty and decode uses `ignoreUnknownKeys`, so documents written before the field decode unchanged.
 
 Invariants
 All geometry stored in millimeters.

@@ -1,9 +1,9 @@
-# AddComponentDialogs Contract (v1.0, 2026-06-23)
+# AddComponentDialogs Contract (v1.1, 2026-07-11)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
-`AddThreadDialog`, `AddTaperDialog`. Each dialog is the **add-time counterpart** to the
-component's carousel edit card in `ComponentCarousel.kt`.
+`AddThreadDialog`, `AddTaperDialog`, `AddCouplerBoltSlotDialog`. Each dialog is the
+**add-time counterpart** to the component's carousel edit card in `ComponentCarousel.kt`.
 
 ---
 
@@ -65,6 +65,25 @@ ShaftViewModel.addThreadAt()` and stored on the `Threads` model object.
 | Rate | Always |
 | Keyway fields | Always |
 
+### AddCouplerBoltSlotDialog
+| Field / control | Condition |
+|-----------------|-----------|
+| Measure From: AFT \| FWD chips | Always (default FWD) |
+| First slot from AFT / FWD | Always (label follows chip) |
+| Hole Ø | Always |
+| Count | Always |
+| Spacing | Only when `count > 1` |
+| Through hole toggle | Always |
+| Depth | Only when blind (`through = false`) |
+
+Matches `ComponentCarousel.kt` `ResolvedCouplerBoltSlot` branch. The carousel card carries
+one extra control — the **"show dimension rail"** toggle (deferred; off by default). It is
+a card-only affordance (not an add-time choice), so its absence from the dialog is
+intentional and does not violate parity. See `CouplerBoltSlot.md`.
+
+FWD-reference math: the entered position locates the fwd-most cutout; the ViewModel stores
+the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spacingMm`.
+
 ---
 
 ## Do Nots
@@ -75,10 +94,16 @@ ShaftViewModel.addThreadAt()` and stored on the `Threads` model object.
 - Do **not** call `onSubmit` with a negative `startMm` when the thread is excluded from
   OAL; the ViewModel derives position from `isAftEnd` + OAL via
   `syncExcludedThreadPositions()`.
+- Do **not** add collision/overlap checks for coupler bolt slots — they are reference
+  cutouts that overlay other components by design.
 
 ---
 
 ## Change log
+**v1.1 (2026-07-11)**
+- Added `AddCouplerBoltSlotDialog` contract + its dialog/card parity note (show-dimension-rail
+  is a card-only affordance).
+
 **v1.0 (2026-06-23)**
 - Initial contract. Documents dialog/card parity rule and thread AFT/FWD restoration.
 - `AddThreadDialog.onSubmit` signature updated to include `isAftEnd: Boolean`.

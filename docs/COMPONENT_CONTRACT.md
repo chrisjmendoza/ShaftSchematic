@@ -1,5 +1,5 @@
 # Component vs Feature Contract
-Version: v0.4.x
+Version: v0.5.x
 
 This document is **normative**.
 It defines what constitutes a **component** versus a **feature** in ShaftSchematic.
@@ -45,6 +45,12 @@ Features:
 
 - **Threads**: threaded span.
   - Intended for shaft-end threading; enforcement of “end-only” constraints is a ViewModel/validation rule.
+
+- **Coupler Bolt Slot**: reference overlay for muff-coupling bolt cutouts.
+  - A first-class list in `ShaftSpec` (`couplerBoltSlots`) and implements `Segment`, but it is a **pure reference marker**, not a geometric span.
+  - Draws a row of `count` cutouts (pitch `spacingMm`, diameter `holeDiaMm`) straddling the shaft outline; `through`/`depthMm` distinguish through vs blind.
+  - Excluded from OAL/`coverageEndMm`, excluded from collision detection (`collisionGroup()` → null), and never splits or merges bodies.
+  - Position authored from AFT/FWD (default FWD); `showDimensionRail` is deferred (no rail drawn in v1). See DATA_MODEL.md for the full field list.
 
 ---
 

@@ -16,6 +16,8 @@ import kotlinx.serialization.Serializable
  * @property tapers Linear transitions between diameters.
  * @property threads External threaded segments.
  * @property liners Outer sleeves/liners.
+ * @property couplerBoltSlots Radial muff-coupler bolt cutouts (reference features; never
+ *           affect OAL/coverage). Optional — defaults empty for back-compat.
  */
 @Serializable
 data class ShaftSpec(
@@ -24,6 +26,7 @@ data class ShaftSpec(
     val tapers: List<Taper> = emptyList(),
     val threads: List<Threads> = emptyList(),
     val liners: List<Liner> = emptyList(),
+    val couplerBoltSlots: List<CouplerBoltSlot> = emptyList(),
 )
 
 /**
@@ -36,6 +39,7 @@ fun ShaftSpec.validate(): Boolean {
     if (!tapers.all { it.isValid(overallLengthMm) }) return false
     if (!threads.all { it.isValid(overallLengthMm) }) return false
     if (!liners.all { it.isValid(overallLengthMm) }) return false
+    if (!couplerBoltSlots.all { it.isValid(overallLengthMm) }) return false
     return true
 }
 

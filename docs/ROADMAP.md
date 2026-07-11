@@ -1,6 +1,6 @@
 # ShaftSchematic Roadmap
 Version: v0.5.x  
-Last updated: 2026-06-12
+Last updated: 2026-07-11
 
 This roadmap defines the grounded, realistic, and approved feature trajectory for ShaftSchematic.
 
@@ -33,6 +33,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - [ ] **Preview panel + event wiring extraction** — remaining ShaftScreen refactor work (lower priority)
 
 **Delivered in v0.5.x so far:**
+- Coupler bolt slots — reference overlay for muff-coupling bolt cutouts; new `CouplerBoltSlot` model type + `ShaftSpec.couplerBoltSlots` list, add-chooser entry, add dialog, carousel card; row of `count` cutouts at `spacingMm` pitch drawn straddling the shaft outline (mirrored top/bottom) in preview and all three PDFs; AFT/FWD authored reference (default FWD); pure reference — excluded from OAL/coverage, collision, and body split/merge; dimension rail toggle present but deferred (not drawn in v1)
 - Taper keyway drawing (open + floating) — plan-view schematic convention, mill-cutter arc, white fill
 - Shared signing config — single debug.keystore, all machines update-install without data wipe
 - Selection highlight — single thin ring, seeded on file load

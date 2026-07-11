@@ -9,7 +9,7 @@ import kotlin.math.max
  * Resolved component model used for layout/rendering and UI visibility.
  * Canonical units: millimeters (mm).
  */
-enum class ResolvedComponentType { BODY, BODY_AUTO, TAPER, THREAD, LINER }
+enum class ResolvedComponentType { BODY, BODY_AUTO, TAPER, THREAD, LINER, COUPLER_BOLT_SLOT }
 
 enum class ResolvedComponentSource { EXPLICIT, AUTO }
 
@@ -59,6 +59,24 @@ data class ResolvedLiner(
     val odMm: Float,
 ) : ResolvedComponent()
 
+/**
+ * A row of coupler bolt cutouts. Purely an overlay/reference feature — it does NOT participate
+ * in auto-body derivation or body subtraction (it is appended after body resolution). It exists
+ * as a [ResolvedComponent] so it gets a carousel card, ordering, and selection/highlight.
+ */
+data class ResolvedCouplerBoltSlot(
+    override val id: String,
+    override val type: ResolvedComponentType = ResolvedComponentType.COUPLER_BOLT_SLOT,
+    override val source: ResolvedComponentSource = ResolvedComponentSource.EXPLICIT,
+    override val startMmPhysical: Float,
+    override val endMmPhysical: Float,
+    val holeDiaMm: Float,
+    val count: Int,
+    val spacingMm: Float,
+    val through: Boolean,
+    val depthMm: Float,
+) : ResolvedComponent()
+
 fun resolveComponents(spec: ShaftSpec, overallIsManual: Boolean): List<ResolvedComponent> {
     val explicit = resolveExplicitComponents(spec)
     val autoBodies = deriveAutoBodies(
@@ -69,8 +87,30 @@ fun resolveComponents(spec: ShaftSpec, overallIsManual: Boolean): List<ResolvedC
         compareBy<ResolvedComponent>({ it.startMmPhysical }, { it.typeSortKey() })
     )
     val subtracted = subtractBodiesAgainstNonBodies(merged)
-    return normalizeBodies(subtracted)
+    val bodiesAndFeatures = normalizeBodies(subtracted)
+
+    // Coupler bolt slots are overlays: resolved separately and appended so they never enter
+    // auto-body/subtraction geometry, then merged back in physical order for the carousel.
+    val slots = resolveCouplerBoltSlots(spec)
+    if (slots.isEmpty()) return bodiesAndFeatures
+    return (bodiesAndFeatures + slots).sortedWith(
+        compareBy<ResolvedComponent>({ it.startMmPhysical }, { it.typeSortKey() })
+    )
 }
+
+fun resolveCouplerBoltSlots(spec: ShaftSpec): List<ResolvedComponent> =
+    spec.couplerBoltSlots.map { cs ->
+        ResolvedCouplerBoltSlot(
+            id = cs.id,
+            startMmPhysical = cs.startFromAftMm,
+            endMmPhysical = cs.startFromAftMm + cs.lengthMm,
+            holeDiaMm = cs.holeDiaMm,
+            count = cs.count,
+            spacingMm = cs.spacingMm,
+            through = cs.through,
+            depthMm = cs.depthMm,
+        )
+    }
 
 fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildList {
     spec.bodies.forEach { b ->
@@ -185,6 +225,7 @@ fun ResolvedComponent.maxDiaMm(): Float = when (this) {
     is ResolvedTaper -> max(startDiaMm, endDiaMm)
     is ResolvedThread -> majorDiaMm
     is ResolvedLiner -> odMm
+    is ResolvedCouplerBoltSlot -> 0f // overlay; does not define shaft OD
 }
 
 private fun ResolvedComponent.aftDiaMm(): Float = when (this) {
@@ -192,6 +233,7 @@ private fun ResolvedComponent.aftDiaMm(): Float = when (this) {
     is ResolvedTaper -> startDiaMm
     is ResolvedThread -> majorDiaMm
     is ResolvedLiner -> odMm
+    is ResolvedCouplerBoltSlot -> 0f
 }
 
 private fun ResolvedComponent.fwdDiaMm(): Float = when (this) {
@@ -199,6 +241,7 @@ private fun ResolvedComponent.fwdDiaMm(): Float = when (this) {
     is ResolvedTaper -> endDiaMm
     is ResolvedThread -> majorDiaMm
     is ResolvedLiner -> odMm
+    is ResolvedCouplerBoltSlot -> 0f
 }
 
 private fun resolveAutoBodyDia(startMm: Float, explicit: List<ResolvedComponent>): Float {
@@ -234,6 +277,7 @@ private fun ResolvedComponent.typeSortKey(): Int = when (type) {
     ResolvedComponentType.TAPER -> 2
     ResolvedComponentType.THREAD -> 3
     ResolvedComponentType.LINER -> 4
+    ResolvedComponentType.COUPLER_BOLT_SLOT -> 5
 }
 
 private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>): List<ResolvedComponent> {

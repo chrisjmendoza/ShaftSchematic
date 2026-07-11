@@ -1,5 +1,5 @@
 # Glossary
-Version: v0.4.x
+Version: v0.5.x
 
 Definitions of all terms used across architecture, components, rendering, validation, and PDF export.
 
@@ -58,6 +58,16 @@ External thread region defined by major diameter and pitch.
 
 ### Liner
 Outer sleeve or bearing surface.
+
+### Coupler Bolt Slot
+Reference marker for the bolt cutouts in a muff coupling — the row of holes through
+which the coupling is bolted to the shaft. Modeled as a row of `count` cutouts at a
+fixed axial pitch (`spacingMm`), each of diameter `holeDiaMm`, drawn straddling the
+shaft outline (half in the shaft, half in the coupling), mirrored on the top and
+bottom edges. Cutouts may be through-holes or blind (`through` / `depthMm`). It is a
+**pure reference overlay**: it never contributes to overall length, is not checked for
+collisions, and never splits bodies. Position is authored from the AFT or FWD end
+(default FWD).
 
 ---
 

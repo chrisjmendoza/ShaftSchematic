@@ -1,5 +1,5 @@
 # Validation Appendix  
-Version: v0.4.x  
+Version: v0.5 (2026-07-11)  
 Companion to: VALIDATION_RULES.md
 
 This appendix provides a condensed, high-speed reference to all validation behavior in ShaftSchematic.  
@@ -34,6 +34,10 @@ This table categorizes every validation rule by:
 | Liner OD < shaft OD | Liner | Warning | Allow |
 | Taper extremely steep | Taper | Warning | Allow |
 | Diameter jump (body→taper→body) | Body/Taper | Warning | Allow |
+| count < 1 | CouplerBoltSlot | Blocking | Reject |
+| Negative holeDia / spacing | CouplerBoltSlot | Blocking | Reject |
+| Cutout center outside 0..OAL | CouplerBoltSlot | Blocking | Reject (`isValid`) |
+| Overlaps any component | CouplerBoltSlot | — | **Allowed** (reference cutout; overlays by design) |
 
 ---
 
@@ -150,6 +154,7 @@ When the user taps **Add** in any add dialog (Taper, Liner, Thread), `collectAdd
 | Liner collision | Overlaps any existing Liner | Always |
 | Body collision | — | **Never** (bodies auto-split) |
 | Excluded thread | — | **Skipped** (lives outside shaft span by design) |
+| Coupler bolt slot | — | **Never** (`collisionGroup()` → null; reference cutout) |
 
 ---
 

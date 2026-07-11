@@ -223,6 +223,8 @@ private fun ShaftSpec.segmentFor(key: ComponentKey): Segment? =
         ComponentKind.TAPER  -> tapers.firstOrNull { it.id == key.id }
         ComponentKind.THREAD -> threads.firstOrNull { it.id == key.id }
         ComponentKind.LINER  -> liners.firstOrNull { it.id == key.id }
+        // Reference feature: never part of physical snap ordering.
+        ComponentKind.COUPLER_BOLT_SLOT -> couplerBoltSlots.firstOrNull { it.id == key.id }
     }
 
 /** Return a copy where exactly the addressed segment has a new startFromAftMm. */
@@ -261,6 +263,15 @@ private fun ShaftSpec.withSegmentStart(key: ComponentKey, newStartMm: Float): Sh
                 liners = liners.toMutableList().also { list ->
                     val ln = list[idx]
                     list[idx] = ln.copy(startFromAftMm = newStartMm)
+                }
+            )
+        }
+        ComponentKind.COUPLER_BOLT_SLOT -> {
+            val idx = couplerBoltSlots.indexOfFirst { it.id == key.id }
+            if (idx < 0) this else copy(
+                couplerBoltSlots = couplerBoltSlots.toMutableList().also { list ->
+                    val cs = list[idx]
+                    list[idx] = cs.copy(startFromAftMm = newStartMm)
                 }
             )
         }

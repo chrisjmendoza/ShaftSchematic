@@ -21,6 +21,10 @@ data class SessionAddDefaults(
     val threadMajorDiaMm: Float,
     val threadLenMm: Float,
     val threadPitchMm: Float,
+    val slotHoleDiaMm: Float,
+    val slotSpacingMm: Float,
+    val slotDepthMm: Float,
+    val slotCount: Int,
 ) {
     companion object {
         private const val MM_PER_INCH = 25.4f
@@ -36,6 +40,10 @@ data class SessionAddDefaults(
             threadMajorDiaMm = AddDefaultsConfig.THREAD_MAJ_DIA_IN * MM_PER_INCH,
             threadLenMm = AddDefaultsConfig.THREAD_LEN_IN * MM_PER_INCH,
             threadPitchMm = MM_PER_INCH / AddDefaultsConfig.THREAD_TPI_IN,
+            slotHoleDiaMm = AddDefaultsConfig.SLOT_HOLE_DIA_IN * MM_PER_INCH,
+            slotSpacingMm = AddDefaultsConfig.SLOT_SPACING_IN * MM_PER_INCH,
+            slotDepthMm = AddDefaultsConfig.SLOT_DEPTH_IN * MM_PER_INCH,
+            slotCount = AddDefaultsConfig.SLOT_COUNT_DEFAULT,
         )
     }
 }

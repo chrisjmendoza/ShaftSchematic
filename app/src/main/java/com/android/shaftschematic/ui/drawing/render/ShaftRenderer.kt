@@ -14,9 +14,12 @@ import androidx.compose.ui.text.TextMeasurer
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.hasKeyway
+import com.android.shaftschematic.model.maxOuterDiaMm
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentType
+import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
+import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.ResolvedThread
@@ -441,6 +444,58 @@ object ShaftRenderer {
 
             // Outline
                 drawRect(color = outline, topLeft = topLeft, size = size, style = Stroke(width = outlineW))
+            }
+        }
+
+        // ───────── Coupler bolt slots (overlay; drawn on top of everything) ─────────
+        if (spec.couplerBoltSlots.isNotEmpty()) {
+            val slotFill = Color(opts.slotFillColor)
+
+            // Outer radius (px) of the shaft surface at an axial position, so each cutout
+            // can straddle the outline (half in the shaft, half in the coupling).
+            fun surfaceRadiusPx(xMm: Float): Float {
+                var maxDia = 0f
+                if (components != null) {
+                    for (c in components) {
+                        if (c is ResolvedCouplerBoltSlot) continue
+                        if (xMm < c.startMmPhysical - 1e-3f || xMm > c.endMmPhysical + 1e-3f) continue
+                        val dia = if (c is ResolvedTaper) {
+                            val span = c.endMmPhysical - c.startMmPhysical
+                            val t = if (span > 1e-3f) ((xMm - c.startMmPhysical) / span).coerceIn(0f, 1f) else 0f
+                            c.startDiaMm + (c.endDiaMm - c.startDiaMm) * t
+                        } else {
+                            c.maxDiaMm()
+                        }
+                        if (dia > maxDia) maxDia = dia
+                    }
+                }
+                if (maxDia <= 0f) maxDia = spec.maxOuterDiaMm() // fallback: largest OD on the shaft
+                return L.rPx(maxDia)
+            }
+
+            for (slot in spec.couplerBoltSlots) {
+                val holeR = L.rPx(slot.holeDiaMm)
+                if (holeR <= 0f || slot.count < 1) continue
+                val highlighted = isHighlighted(hiEnabled, hiId, slot.id)
+                for (i in 0 until slot.count) {
+                    val cxMm = slot.startFromAftMm + i * slot.spacingMm
+                    val cx = L.xPx(cxMm)
+                    val rSurface = surfaceRadiusPx(cxMm)
+                    // One cutout on the top surface, mirrored on the bottom surface.
+                    for (surfY in floatArrayOf(cy - rSurface, cy + rSurface)) {
+                        val center = Offset(cx, surfY)
+                        drawCircle(color = slotFill, radius = holeR, center = center)
+                        if (highlighted) {
+                            drawCircle(
+                                color = hiGlowCol.copy(alpha = hiGlowA),
+                                radius = holeR + hiGlowDx,
+                                center = center,
+                                style = Stroke(width = outlineW)
+                            )
+                        }
+                        drawCircle(color = outline, radius = holeR, center = center, style = Stroke(width = outlineW))
+                    }
+                }
             }
         }
     }

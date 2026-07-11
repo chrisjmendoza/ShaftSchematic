@@ -1,5 +1,5 @@
 # Validation Rules  
-Version: v0.4.x
+Version: v0.5.x
 
 ## Purpose
 This document defines all validation behavior used by ShaftSchematic.  
@@ -172,6 +172,26 @@ Non-blocking warnings:
 
 ---
 
+## 3.6 Coupler Bolt Slot Validation
+
+Coupler bolt slots are a **pure reference overlay** and are validated in isolation.
+Unlike sacred components, they are **not** bounded against `overallLengthMm` (the
+shared `endFromAftMm <= overallLengthMm` rule in §3.1 does not apply) — much as
+excluded threads are skipped in envelope checks.
+
+`isValid` requires:
+- `holeDiaMm ≥ 0`, `spacingMm ≥ 0`, `depthMm ≥ 0` (all fields non-negative) (blocking)
+- `count ≥ 1` (blocking)
+- All cutout centers lie within the shaft (`0 ≤ each center`, and the row does not
+  run past the shaft) (blocking)
+
+`depthMm` is ignored when `through = true`.
+
+Coupler bolt slots are **excluded from all collision detection** (`collisionGroup()`
+→ null); they never produce overlap warnings and never block another component.
+
+---
+
 # 4. ShaftSpec-Level Validation
 
 ### 4.1 Global Requirements
@@ -219,6 +239,8 @@ The following pairs are checked by `collidingIds()`. A non-blocking warning ("Ov
 
 Excluded threads (`excludeFromOAL = true`) are skipped in all collision checks — they sit outside the shaft envelope and their position is always derived.
 
+Coupler bolt slots are likewise skipped in all collision checks (`collisionGroup()` → null). As pure reference overlays they may sit over any component without warning.
+
 Reasoning: marine machining workflows often use stacked geometry and nested regions; overlaps are flagged as warnings only, never blocking.
 
 ---
@@ -230,7 +252,7 @@ Before exporting:
 2. If **any blocking error** exists → cancel export, show dialog with reason.
 3. If only warnings remain → export continues.
 
-`blockingExportError()` in `PdfExportRoute` checks component positions for out-of-bounds starts. **Excluded threads** (`excludeFromOAL = true`) are skipped in this check — they have negative or OAL+ `startFromAftMm` by design and are not part of the shaft envelope.
+`blockingExportError()` in `PdfExportRoute` checks component positions for out-of-bounds starts. **Excluded threads** (`excludeFromOAL = true`) are skipped in this check — they have negative or OAL+ `startFromAftMm` by design and are not part of the shaft envelope. **Coupler bolt slots** are also skipped — they are reference overlays outside the OAL envelope and do not gate export.
 
 PDF export does not interpret warnings; UI handles presentation.
 

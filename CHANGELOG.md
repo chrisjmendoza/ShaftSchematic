@@ -6,6 +6,30 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-11
+
+### feat: coupler bolt slots — radial muff-coupler bolt cutouts
+
+New component type: **coupler bolt slots** — one axial row of radial bolt cutouts carved into the shaft at a muff-coupler location. Each cutout renders as a circle straddling the shaft outline (half in the shaft, half in the coupling), mirrored top and bottom, everywhere the shaft is drawn (preview + all three PDFs).
+
+A coupler bolt slot is a **pure reference feature**: it never affects overall length (`coverageEndMm` ignores it), never splits bodies, and never collides with other components. This is the key simplification versus threads/liners.
+
+**Model** — **`model/CouplerBoltSlot.kt`** (new) + `SlotAuthoredReference { AFT, FWD }`. Fields: `startFromAftMm` (first/aft-most cutout center), `holeDiaMm`, `count`, `spacingMm`, `through` + `depthMm` (blind), `authoredReference` (default **FWD**), `showDimensionRail` (deferred; off), `label`. Added `couplerBoltSlots: List<CouplerBoltSlot>` to `ShaftSpec` (defaults empty → back-compat, no migration) and wired `validate()`.
+
+**Enum / branches** — `ComponentKind.COUPLER_BOLT_SLOT`; branches added in `ShaftSpecExtensions` (`segmentFor`/`withSegmentStart`), `StartOverlapValidation.collisionGroup()` (→ null, no collisions), and the `ShaftRoute` delete-snackbar label.
+
+**Resolved layer** — `ResolvedCouplerBoltSlot`, resolved *after* body resolution so it never enters auto-body/subtraction geometry, then merged back by position for the carousel.
+
+**ViewModel** — `addCouplerBoltSlotAt` / `updateCouplerBoltSlot` (+ `Reference`/`Label`/`ShowRail`) / `removeCouplerBoltSlot`; `LastDeleted.CouplerBoltSlot` undo/redo; ordering + session defaults. Deliberately does **not** call `ensureOverall()`.
+
+**Render** — overlay pass in **`ui/drawing/render/ShaftRenderer.kt`** (preview) and `drawCouplerBoltSlots()` in **`pdf/ShaftPdfComposer.kt`**, reused by `RunoutPdfComposer` and `WearPdfComposer`. New `RenderOptions.slotFillColor`.
+
+**UI** — "Coupler Bolt Slot" entry in `InlineAddChooserDialog`; new `AddCouplerBoltSlotDialog` (position from AFT/**FWD default**, hole Ø, count, spacing, through/blind + depth); carousel edit card with the same controls plus the deferred "show dimension rail" toggle. When FWD-referenced, the entered position locates the fwd-most cutout and the row extends aft.
+
+**Deferred (v1):** the per-slot dimension rail is captured (`showDimensionRail`) but not drawn; through vs blind draw the same cutout for now. See `docs/CouplerBoltSlot_Proposal.md`.
+
+---
+
 ## 2026-06-23
 
 ### docs: CLAUDE.md + AddComponentDialogs.md — lock in dialog/card parity invariants

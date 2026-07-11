@@ -101,6 +101,17 @@ private sealed class LastDeleted {
         override val id: String get() = value.id
         override val kind: ComponentKind get() = ComponentKind.LINER
     }
+
+    data class CouplerBoltSlot(
+        val value: com.android.shaftschematic.model.CouplerBoltSlot,
+        override val orderIndex: Int,
+        val listIndex: Int,
+        override val beforeSpec: ShaftSpec,
+        override val beforeOrder: List<ComponentKey>,
+    ) : LastDeleted() {
+        override val id: String get() = value.id
+        override val kind: ComponentKind get() = ComponentKind.COUPLER_BOLT_SLOT
+    }
 }
 
 /** Maximum number of delete steps tracked for undo/redo. */
@@ -1416,6 +1427,160 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ────────────────────────────────────────────────────────────────────────────
+    // Coupler bolt slots — reference cutouts. No body-splitting, no OAL impact,
+    // no collision. Add/update/remove mirror the other component trios.
+    // ────────────────────────────────────────────────────────────────────────────
+
+    fun addCouplerBoltSlotAt(
+        startMm: Float,
+        holeDiaMm: Float,
+        count: Int,
+        spacingMm: Float,
+        through: Boolean = true,
+        depthMm: Float = 0f,
+        reference: SlotAuthoredReference = SlotAuthoredReference.FWD,
+    ) {
+        val id = newId()
+        _spec.update { s ->
+            orderAdd(ComponentKind.COUPLER_BOLT_SLOT, id)
+            val slot = CouplerBoltSlot(
+                id = id,
+                startFromAftMm = max(0f, startMm),
+                holeDiaMm = max(0f, holeDiaMm),
+                count = count.coerceAtLeast(1),
+                spacingMm = max(0f, spacingMm),
+                through = through,
+                depthMm = max(0f, depthMm),
+                authoredReference = reference,
+            )
+            // Newest-on-top, like the other component lists.
+            s.copy(couplerBoltSlots = listOf(slot) + s.couplerBoltSlots)
+        }
+        rememberSlotDefaults(holeDiaMm = holeDiaMm, spacingMm = spacingMm, depthMm = depthMm, count = count)
+        // NOTE: deliberately no ensureOverall() — slots never drive OAL.
+        ensureOrderCoversSpec()
+        _selectedComponentId.value = id
+    }
+
+    fun updateCouplerBoltSlot(
+        index: Int,
+        startMm: Float,
+        holeDiaMm: Float,
+        count: Int,
+        spacingMm: Float,
+        through: Boolean,
+        depthMm: Float,
+    ) = _spec.update { s ->
+        if (index !in s.couplerBoltSlots.indices) s else {
+            val old = s.couplerBoltSlots[index]
+            s.copy(
+                couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
+                    l[index] = old.copy(
+                        startFromAftMm = max(0f, startMm),
+                        holeDiaMm = max(0f, holeDiaMm),
+                        count = count.coerceAtLeast(1),
+                        spacingMm = max(0f, spacingMm),
+                        through = through,
+                        depthMm = max(0f, depthMm),
+                    )
+                }
+            )
+        }
+    }.also {
+        if (index in _spec.value.couplerBoltSlots.indices) {
+            rememberSlotDefaults(holeDiaMm = holeDiaMm, spacingMm = spacingMm, depthMm = depthMm, count = count)
+        }
+    }
+
+    fun updateCouplerBoltSlotReference(index: Int, reference: SlotAuthoredReference) = _spec.update { s ->
+        if (index !in s.couplerBoltSlots.indices) s else {
+            val old = s.couplerBoltSlots[index]
+            if (old.authoredReference == reference) return@update s
+            s.copy(
+                couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
+                    l[index] = old.copy(authoredReference = reference)
+                }
+            )
+        }
+    }
+
+    fun updateCouplerBoltSlotShowRail(index: Int, show: Boolean) = _spec.update { s ->
+        if (index !in s.couplerBoltSlots.indices) s else {
+            val old = s.couplerBoltSlots[index]
+            if (old.showDimensionRail == show) return@update s
+            s.copy(
+                couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
+                    l[index] = old.copy(showDimensionRail = show)
+                }
+            )
+        }
+    }
+
+    fun updateCouplerBoltSlotLabel(index: Int, label: String?) = _spec.update { s ->
+        if (index !in s.couplerBoltSlots.indices) s else {
+            val old = s.couplerBoltSlots[index]
+            val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
+            if (old.label == normalized) return@update s
+            s.copy(
+                couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
+                    l[index] = old.copy(label = normalized)
+                }
+            )
+        }
+    }
+
+    /** Remove a [CouplerBoltSlot] by id with multi-step delete history support. */
+    fun removeCouplerBoltSlot(id: String) {
+        val specBefore = _spec.value
+        val orderBefore = _componentOrder.value
+        var deleted: LastDeleted.CouplerBoltSlot? = null
+
+        _spec.update { s ->
+            val idx = s.couplerBoltSlots.indexOfFirst { it.id == id }
+            if (idx < 0) return@update s
+
+            val slot = s.couplerBoltSlots[idx]
+            val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }
+                .let { if (it < 0) 0 else it }
+
+            deleted = LastDeleted.CouplerBoltSlot(
+                value = slot,
+                orderIndex = orderIdx,
+                listIndex = idx,
+                beforeSpec = specBefore,
+                beforeOrder = orderBefore
+            )
+
+            // No body merge needed — slots never split bodies.
+            s.copy(couplerBoltSlots = s.couplerBoltSlots.toMutableList().apply { removeAt(idx) })
+        }
+
+        deleted?.let { snapshot ->
+            orderRemove(snapshot.id)
+
+            deleteHistory.addLast(snapshot)
+            if (deleteHistory.size > MAX_DELETE_HISTORY) {
+                deleteHistory.removeFirst()
+            }
+            redoHistory.clear()
+
+            updateUndoRedoFlags()
+            emitDeletedSnack(snapshot.kind)
+        }
+    }
+
+    private fun rememberSlotDefaults(holeDiaMm: Float, spacingMm: Float, depthMm: Float, count: Int) {
+        _sessionAddDefaults.update { cur ->
+            cur.copy(
+                slotHoleDiaMm = if (holeDiaMm > 0f) holeDiaMm else cur.slotHoleDiaMm,
+                slotSpacingMm = if (spacingMm > 0f) spacingMm else cur.slotSpacingMm,
+                slotDepthMm = if (depthMm > 0f) depthMm else cur.slotDepthMm,
+                slotCount = if (count >= 1) count else cur.slotCount,
+            )
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
     // Explicit snap helpers — never called automatically; only on user request
     // ────────────────────────────────────────────────────────────────────────────
 
@@ -1657,6 +1822,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             addAll(s.tapers.map { it.id })
             addAll(s.threads.map { it.id })
             addAll(s.liners.map { it.id })
+            addAll(s.couplerBoltSlots.map { it.id })
         }
 
         // Start from current order, but drop any ids that no longer exist
@@ -1679,6 +1845,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         addMissing(ComponentKind.TAPER,  s.tapers.map { it.id })
         addMissing(ComponentKind.THREAD, s.threads.map { it.id })
         addMissing(ComponentKind.LINER,  s.liners.map { it.id })
+        addMissing(ComponentKind.COUPLER_BOLT_SLOT, s.couplerBoltSlots.map { it.id })
 
         if (cur != _componentOrder.value) {
             _componentOrder.value = cur
@@ -1840,6 +2007,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             is LastDeleted.Taper -> removeTaper(snapshot.id)
             is LastDeleted.Thread -> removeThread(snapshot.id)
             is LastDeleted.Liner -> removeLiner(snapshot.id)
+            is LastDeleted.CouplerBoltSlot -> removeCouplerBoltSlot(snapshot.id)
         }
 
         updateUndoRedoFlags()

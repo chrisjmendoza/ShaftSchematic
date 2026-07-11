@@ -14,6 +14,7 @@ Read the relevant doc before editing a subsystem. Key files:
 - `NumberField.md` — numeric input field contract
 - `ShaftViewModel.md` — ViewModel responsibilities and state ownership
 - `Model_Conventions.md` — model layer rules
+- `CouplerBoltSlot.md` — coupler bolt slot feature contract (reference-only cutouts)
 
 ## Critical invariants — do not remove or weaken these
 
@@ -28,6 +29,18 @@ Specifically:
   (`ComponentCarousel.kt`, `ResolvedThread` branch, `!includeInOal` block).
 - **Liner AFT/FWD reference**: `AddLinerDialog` must show "Measure From: AFT | FWD" chips.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
+- **Coupler bolt slot**: `AddCouplerBoltSlotDialog` and the `ResolvedCouplerBoltSlot`
+  carousel card must both expose Measure From (AFT | FWD), hole Ø, count, spacing (only
+  when count > 1), through/blind toggle + depth (only when blind). The card additionally
+  has the deferred "show dimension rail" toggle.
+
+### Coupler bolt slots are reference features
+Coupler bolt slots (`ShaftSpec.couplerBoltSlots`) are radial cutouts drawn on the shaft
+but they **never** affect overall length (`coverageEndMm` ignores them), **never** split
+bodies, and **never** collide with other components (`collisionGroup() → null`). Do not
+add them to `coverageEndMm`, `ensureOverall`, body-split/merge, or overlap validation.
+They are resolved as `ResolvedCouplerBoltSlot` *after* body resolution so they stay out
+of auto-body/subtraction geometry. See `docs/CouplerBoltSlot.md`.
 
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus

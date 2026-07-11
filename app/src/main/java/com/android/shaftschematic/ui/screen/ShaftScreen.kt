@@ -107,6 +107,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.model.LinerAuthoredReference
+import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.MM_PER_IN
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
@@ -227,6 +228,7 @@ fun ShaftScreen(
     onAddTaper: (Float, Float, Float, Float, String, Float, Float, Float, Float, Boolean) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean, isAftEnd: Boolean) -> Unit,
     onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
+    onAddCouplerBoltSlot: (startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float, reference: SlotAuthoredReference) -> Unit,
 
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
@@ -240,6 +242,10 @@ fun ShaftScreen(
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
+    onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
+    onUpdateCouplerBoltSlotLabel: (Int, String?) -> Unit,
+    onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
+    onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
 
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
     onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
@@ -249,6 +255,7 @@ fun ShaftScreen(
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
+    onRemoveCouplerBoltSlot: (String) -> Unit,
 
     // Other
     snackbarHostState: SnackbarHostState,
@@ -284,6 +291,9 @@ fun ShaftScreen(
 
     var addThreadOpen by rememberSaveable { mutableStateOf(false) }
     var addThreadStartMm by rememberSaveable { mutableFloatStateOf(0f) }
+
+    var addSlotOpen by rememberSaveable { mutableStateOf(false) }
+    var addSlotStartMm by rememberSaveable { mutableFloatStateOf(0f) }
 
     // Tap-to-add: after chooser selection, position is captured here while the add dialog is open
     var tapAddBodyOpen by rememberSaveable { mutableStateOf(false) }
@@ -731,6 +741,10 @@ fun ShaftScreen(
                     onUpdateLiner = snappedLinerUpdater,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
+                    onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
+                    onUpdateCouplerBoltSlotLabel = onUpdateCouplerBoltSlotLabel,
+                    onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
+                    onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
 
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
                     onSetThreadEndPosition = onSetThreadEndPosition,
@@ -739,6 +753,7 @@ fun ShaftScreen(
                     onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread,
                     onRemoveLiner = onRemoveLiner,
+                    onRemoveCouplerBoltSlot = onRemoveCouplerBoltSlot,
                     onSelectComponentById = onSelectComponentById,
                     collidingComponentIds = collidingComponentIds,
                 )
@@ -774,6 +789,11 @@ fun ShaftScreen(
                             tapAddStartMm = d.startMm
                             tapAddGapMm = sessionAddDefaults.taperLenMm
                             tapAddTaperOpen = true
+                        },
+                        onAddCouplerBoltSlot = {
+                            chooserOpen = false
+                            addSlotStartMm = d.startMm
+                            addSlotOpen = true
                         }
                     )
                 }
@@ -805,6 +825,23 @@ fun ShaftScreen(
                     )
                 }
 
+                if (addSlotOpen) {
+                    AddCouplerBoltSlotDialog(
+                        unit = unit,
+                        spec = spec,
+                        initialStartMm = addSlotStartMm,
+                        initialHoleDiaMm = sessionAddDefaults.slotHoleDiaMm,
+                        initialCount = sessionAddDefaults.slotCount,
+                        initialSpacingMm = sessionAddDefaults.slotSpacingMm,
+                        initialDepthMm = sessionAddDefaults.slotDepthMm,
+                        onSubmit = { startMm, holeDiaMm, count, spacingMm, through, depthMm, ref ->
+                            addSlotOpen = false
+                            onAddCouplerBoltSlot(startMm, holeDiaMm, count, spacingMm, through, depthMm, ref)
+                        },
+                        onCancel = { addSlotOpen = false }
+                    )
+                }
+
                 // Tap-to-add chooser — shown when the user taps empty space in the preview.
                 // Position is already snapped by the ViewModel before we receive it.
                 val tapPosition = pendingAddPositionMm
@@ -833,6 +870,11 @@ fun ShaftScreen(
                             addThreadStartMm = tapPosition
                             onClearPendingAddPosition()
                             addThreadOpen = true
+                        },
+                        onAddCouplerBoltSlot = {
+                            addSlotStartMm = tapPosition
+                            onClearPendingAddPosition()
+                            addSlotOpen = true
                         },
                     )
                 }

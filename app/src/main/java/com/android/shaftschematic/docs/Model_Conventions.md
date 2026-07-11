@@ -2,9 +2,9 @@ Model Conventions
 -----------------
 
 Layer: Model  
-Purpose: Shared expectations across Body, Taper, ThreadSpec, Liner, Segment.
+Purpose: Shared expectations across Body, Taper, ThreadSpec, Liner, CouplerBoltSlot, Segment.
 
-Version: v0.2 (2026-06-18)
+Version: v0.3 (2026-07-11)
 
 Invariants
 - All fields are **Float mm** unless stated otherwise.  
@@ -23,6 +23,12 @@ Invariants
 - The carousel edit card uses this to label and convert the Start input; the canonical `startFromAftMm` is always stored AFT-face.
 - When a user selects "FWD" in `AddTaperDialog`, SET and LET are swapped before submission so the model's `startDiaMm/endDiaMm` pair is always stored AFT → FWD.
 
+`CouplerBoltSlot` — reference-only feature (see `CouplerBoltSlot.md`)
+- One axial **row** of radial bolt cutouts. `startFromAftMm` = the aft-most cutout center; `count`, `spacingMm` describe the row; `holeDiaMm`, `through`/`depthMm` the hole.
+- `SlotAuthoredReference` (AFT / **FWD** default) is UI-only; canonical `startFromAftMm` is always stored AFT-face. FWD → `startFromAftMm = OAL − enteredFwd − (count−1)·spacingMm`.
+- **Excluded from OAL/coverage**: `coverageEndMm` and `maxOuterDiaMm` ignore slots. Its `lengthMm` (derived footprint) exists only for layout/ordering, never for OAL.
+- Never split bodies, never collide. `isValid(overallLengthMm)` checks non-negative fields, `count ≥ 1`, and that all cutout centers fall within `0..OAL`.
+
 Responsibilities
 - Keep data classes passive (no business logic).  
 - Provide `isValid(overallLengthMm)` checks per type (skip for excluded threads).
@@ -38,6 +44,9 @@ Notes
 
 Change Log
 ----------
+**v0.3 (2026-07-11)**
+- Added `CouplerBoltSlot` reference-feature conventions (excluded from OAL/coverage/collision; FWD-default authoring reference).
+
 **v0.2 (2026-06-18)**
 - Documented that excluded-thread `startFromAftMm` may be negative or ≥ OAL.
 - Added `LinerAuthoredReference` semantics and taper direction convention notes.

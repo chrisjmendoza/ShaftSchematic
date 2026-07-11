@@ -2,9 +2,9 @@ ShaftRenderer Contract
 ----------------------
 
 Layer: UI → Drawing → Render  
-Purpose: Draw the shaft and its components (bodies, tapers, threads, liners) onto a Canvas in mm-space.
+Purpose: Draw the shaft and its components (bodies, tapers, threads, liners, coupler bolt slots) onto a Canvas in mm-space.
 
-Version: v0.3 (2025-10-04)
+Version: v0.4 (2026-07-11)
 
 Invariants
 - **All geometry is canonical millimeters (mm)**. No unit conversion is performed here.  
@@ -22,6 +22,11 @@ Responsibilities
 Threads
 - Default style: unified profile (crest/root rails + pitch-spaced flanks).  
 - Legacy style: diagonal hatch helper (`drawThreadHatch`) remains available.
+
+Coupler bolt slots
+- Drawn as a final **overlay pass** on top of all other geometry (reads `spec.couplerBoltSlots` directly, not the resolved list).
+- Each cutout is a circle straddling the shaft outline (half in / half out), mirrored top and bottom, at each cutout center along the row.
+- Local surface radius is looked up from the covering component at that axial position (falls back to the shaft's max OD). Fill from `RenderOptions.slotFillColor`. See `CouplerBoltSlot.md`.
 
 Performance
 - Avoid allocations in hot paths except small Paths for tapers.  

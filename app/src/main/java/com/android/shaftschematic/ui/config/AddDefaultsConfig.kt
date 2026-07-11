@@ -41,6 +41,17 @@ object AddDefaultsConfig {
     const val THREAD_LEN_MM      = 152.4f
     const val THREAD_MAJ_DIA_MM  = 127.0f
 
+    // ---- Coupler bolt slot defaults ------------------------------------------
+    // 0.5" hole, 2 cutouts, 2" pitch, 0.25" blind depth.
+    const val SLOT_HOLE_DIA_IN   = 0.5f
+    const val SLOT_SPACING_IN    = 2f
+    const val SLOT_DEPTH_IN      = 0.25f
+    const val SLOT_COUNT_DEFAULT = 2
+
+    const val SLOT_HOLE_DIA_MM   = 12.7f
+    const val SLOT_SPACING_MM    = 50.8f
+    const val SLOT_DEPTH_MM      = 6.35f
+
     // ---- Geometry helpers ----------------------------------------------------
     /** Taper slope as rise/run; 1:12 by default. */
     const val TAPER_RATIO = 1f / 12f

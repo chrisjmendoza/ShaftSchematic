@@ -37,6 +37,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.util.collectAddWarnings
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
@@ -236,6 +237,111 @@ fun AddLinerDialog(
                 val action = { onSubmit(physStartMm, lengthMm, odMm, ref) }
                 val warnings = collectAddWarnings(spec, physStartMm, lengthMm, overallIsManual)
                 if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
+            }) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
+    )
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Coupler Bolt Slot — one axial row of radial cutouts.
+ * Start, Hole Ø, Count, Spacing, Through/Blind (+ Depth). Reference defaults FWD.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+@Composable
+fun AddCouplerBoltSlotDialog(
+    unit: UnitSystem,
+    spec: ShaftSpec,
+    initialStartMm: Float,
+    initialHoleDiaMm: Float,
+    initialCount: Int,
+    initialSpacingMm: Float,
+    initialDepthMm: Float,
+    onSubmit: (
+        startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float,
+        through: Boolean, depthMm: Float, reference: SlotAuthoredReference,
+    ) -> Unit,
+    onCancel: () -> Unit,
+) {
+    // Default reference is FWD per spec.
+    var isFwd by remember { mutableStateOf(true) }
+    var through by remember { mutableStateOf(true) }
+
+    var startAft by remember(unit, initialStartMm) { mutableStateOf(toDisplayString(initialStartMm, unit)) }
+    var startFwd by remember(unit) { mutableStateOf("0") }
+    var holeDia by remember(unit, initialHoleDiaMm) { mutableStateOf(toDisplayString(max(1f, initialHoleDiaMm), unit)) }
+    var countText by remember(initialCount) { mutableStateOf(initialCount.coerceAtLeast(1).toString()) }
+    var spacing by remember(unit, initialSpacingMm) { mutableStateOf(toDisplayString(initialSpacingMm, unit)) }
+    var depth by remember(unit, initialDepthMm) { mutableStateOf(toDisplayString(initialDepthMm, unit)) }
+
+    val holeDiaMm = toMmOrNull(holeDia, unit) ?: -1f
+    val count = countText.toIntOrNull()?.coerceAtLeast(1) ?: 0
+    val spacingMm = toMmOrNull(spacing, unit) ?: 0f
+    val depthMm = toMmOrNull(depth, unit) ?: -1f
+    val startEntered = toMmOrNull(if (isFwd) startFwd else startAft, unit) ?: -1f
+
+    // Axial span from the aft-most cutout (i = 0) to the fwd-most, used for FWD anchoring.
+    val rowSpanMm = (count - 1).coerceAtLeast(0) * spacingMm.coerceAtLeast(0f)
+
+    // Physical position (from AFT) of the aft-most cutout center. When measuring from FWD, the
+    // entered value locates the fwd-most cutout; the row then extends aft.
+    val physStartMm = if (isFwd) {
+        if (startEntered >= 0f) (spec.overallLengthMm - startEntered - rowSpanMm).coerceAtLeast(0f) else -1f
+    } else {
+        startEntered
+    }
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Add Coupler Bolt Slot") },
+        text = {
+            Column(Modifier.padding(top = 4.dp).verticalScroll(rememberScrollState())) {
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Measure From:", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    DirectionChip("AFT", selected = !isFwd) { isFwd = false }
+                    DirectionChip("FWD", selected =  isFwd) { isFwd = true  }
+                }
+                CommitNumField(
+                    label = "First slot from ${if (isFwd) "FWD" else "AFT"} (${abbr(unit)})",
+                    initial = if (isFwd) startFwd else startAft,
+                ) { if (isFwd) startFwd = it else startAft = it }
+                Spacer(Modifier.height(8.dp))
+                CommitNumField("Hole Ø (${abbr(unit)})", holeDia) { holeDia = it }
+                Spacer(Modifier.height(8.dp))
+                CommitNumField("Count", countText) { countText = it }
+                if (count > 1 || countText.isBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    CommitNumField("Spacing (${abbr(unit)})", spacing) { spacing = it }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Through hole", Modifier.weight(1f))
+                    Switch(checked = through, onCheckedChange = { through = it })
+                }
+                if (!through) {
+                    Spacer(Modifier.height(8.dp))
+                    CommitNumField("Depth (${abbr(unit)})", depth) { depth = it }
+                }
+            }
+        },
+        confirmButton = {
+            val ok = physStartMm >= 0f && holeDiaMm > 0f && count >= 1 &&
+                (count == 1 || spacingMm > 0f) && (through || depthMm > 0f)
+            Button(enabled = ok, onClick = {
+                val ref = if (isFwd) SlotAuthoredReference.FWD else SlotAuthoredReference.AFT
+                onSubmit(
+                    physStartMm, holeDiaMm, count, spacingMm.coerceAtLeast(0f),
+                    through, if (through) 0f else depthMm, ref,
+                )
             }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }

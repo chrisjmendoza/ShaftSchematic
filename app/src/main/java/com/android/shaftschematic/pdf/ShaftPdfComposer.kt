@@ -214,6 +214,7 @@ fun composeShaftPdf(
     drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill)
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill)
+    drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill())
     c.restore()
 
     if (effectiveOptions.showLabels && pdfPrefs.showComponentTitles) {
@@ -850,6 +851,62 @@ private fun drawThreads(
             while (hx <= rect.right + 4f) {
                 c.drawLine(hx - 4f, rect.bottom, hx + 4f, rect.top, dim)
                 hx += step
+            }
+        }
+    }
+}
+
+/**
+ * Draw coupler bolt-slot cutouts on the shaft profile. Each cutout is a circle straddling the
+ * shaft outline (half in the shaft, half in the coupling), mirrored top and bottom. Reference
+ * feature — no dimension rail in v1.
+ */
+internal fun drawCouplerBoltSlots(
+    c: Canvas,
+    slots: List<CouplerBoltSlot>,
+    spec: ShaftSpec,
+    cy: Float,
+    xAt: (Float) -> Float,
+    rPx: (Float) -> Float,
+    outline: Paint,
+    fill: Paint?,
+) {
+    if (slots.isEmpty()) return
+    val fallbackDia = spec.maxOuterDiaMm()
+
+    fun surfaceRadiusPx(xMm: Float): Float {
+        var maxDia = 0f
+        spec.bodies.forEach {
+            if (xMm >= it.startFromAftMm && xMm <= it.startFromAftMm + it.lengthMm) maxDia = max(maxDia, it.diaMm)
+        }
+        spec.liners.forEach {
+            if (xMm >= it.startFromAftMm && xMm <= it.startFromAftMm + it.lengthMm) maxDia = max(maxDia, it.odMm)
+        }
+        spec.threads.forEach {
+            if (xMm >= it.startFromAftMm && xMm <= it.startFromAftMm + it.lengthMm) maxDia = max(maxDia, it.majorDiaMm)
+        }
+        spec.tapers.forEach {
+            val s = it.startFromAftMm; val e = it.startFromAftMm + it.lengthMm
+            if (xMm in s..e) {
+                val span = e - s
+                val t = if (span > 1e-3f) ((xMm - s) / span).coerceIn(0f, 1f) else 0f
+                maxDia = max(maxDia, it.startDiaMm + (it.endDiaMm - it.startDiaMm) * t)
+            }
+        }
+        if (maxDia <= 0f) maxDia = fallbackDia
+        return rPx(maxDia)
+    }
+
+    slots.forEach { slot ->
+        val holeR = rPx(slot.holeDiaMm)
+        if (holeR <= 0f || slot.count < 1) return@forEach
+        for (i in 0 until slot.count) {
+            val cxMm = slot.startFromAftMm + i * slot.spacingMm
+            val cx = xAt(cxMm)
+            val rSurface = surfaceRadiusPx(cxMm)
+            floatArrayOf(cy - rSurface, cy + rSurface).forEach { surfY ->
+                if (fill != null) c.drawCircle(cx, surfY, holeR, fill)
+                c.drawCircle(cx, surfY, holeR, outline)
             }
         }
     }

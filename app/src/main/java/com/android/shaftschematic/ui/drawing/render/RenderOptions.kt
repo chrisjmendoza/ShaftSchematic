@@ -77,6 +77,8 @@ data class RenderOptions(
     val taperFillColor: Int = 0x11000000,
     /** Fill under liners. */
     val linerFillColor: Int = 0x11000000,
+    /** Fill for coupler bolt-slot cutouts (the half carved into the shaft). */
+    val slotFillColor: Int = 0x33000000,
 
     // ──────────────────────────────
     // Thread styling

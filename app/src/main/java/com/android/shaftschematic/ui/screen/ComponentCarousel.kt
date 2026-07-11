@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.ui.input.NumericInputField
 import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
@@ -64,6 +65,7 @@ import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
+import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.ResolvedThread
@@ -124,12 +126,17 @@ internal fun ComponentCarouselPager(
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
+    onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
+    onUpdateCouplerBoltSlotLabel: (Int, String?) -> Unit,
+    onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
+    onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
     onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
     onRemoveBody: (String) -> Unit,
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
+    onRemoveCouplerBoltSlot: (String) -> Unit,
     onSelectComponentById: (String?) -> Unit,
     collidingComponentIds: Set<String> = emptySet(),
 ) {
@@ -143,12 +150,14 @@ internal fun ComponentCarouselPager(
         val taperIdx  = spec.tapers.withIndex().associate { it.value.id to it.index }
         val threadIdx = spec.threads.withIndex().associate { it.value.id to it.index }
         val linerIdx  = spec.liners.withIndex().associate { it.value.id to it.index }
+        val slotIdx   = spec.couplerBoltSlots.withIndex().associate { it.value.id to it.index }
         resolvedComponents.mapNotNull { comp ->
             val index = when (comp) {
                 is ResolvedBody   -> bodyIdx[comp.id]
                 is ResolvedTaper  -> taperIdx[comp.id]
                 is ResolvedThread -> threadIdx[comp.id]
                 is ResolvedLiner  -> linerIdx[comp.id]
+                is ResolvedCouplerBoltSlot -> slotIdx[comp.id]
             }
             RowRef(component = comp, explicitIndex = index)
         }
@@ -245,12 +254,17 @@ internal fun ComponentCarouselPager(
                     onUpdateLiner = onUpdateLiner,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
+                    onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
+                    onUpdateCouplerBoltSlotLabel = onUpdateCouplerBoltSlotLabel,
+                    onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
+                    onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
                     bodyTitleById = bodyTitleById, taperTitleById = taperTitleById,
                     linerTitleById = linerTitleById, threadTitleById = threadTitleById,
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
                     onSetThreadEndPosition = onSetThreadEndPosition,
                     onRemoveBody = onRemoveBody, onRemoveTaper = onRemoveTaper,
                     onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner,
+                    onRemoveCouplerBoltSlot = onRemoveCouplerBoltSlot,
                     collidingComponentIds = collidingComponentIds,
                 )
             }
@@ -320,6 +334,10 @@ internal fun ComponentPagerCard(
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
+    onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
+    onUpdateCouplerBoltSlotLabel: (Int, String?) -> Unit,
+    onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
+    onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
     bodyTitleById: Map<String, String>,
     taperTitleById: Map<String, String>,
     linerTitleById: Map<String, String>,
@@ -330,6 +348,7 @@ internal fun ComponentPagerCard(
     onRemoveTaper: (String) -> Unit,
     onRemoveThread: (String) -> Unit,
     onRemoveLiner: (String) -> Unit,
+    onRemoveCouplerBoltSlot: (String) -> Unit,
     collidingComponentIds: Set<String> = emptySet(),
 ) {
     fun f1(mm: Float): String = "%.1f".format(mm)
@@ -812,6 +831,104 @@ internal fun ComponentPagerCard(
                 }
                 CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateLiner(idx, ln.startFromAftMm, ln.lengthMm, it) }
+                }
+            }
+        }
+
+        // ── Coupler bolt slot ──────────────────────────────────────────────────
+        is ResolvedCouplerBoltSlot -> {
+            val idx = explicitIndex ?: return
+            val cs  = spec.couplerBoltSlots.getOrNull(idx) ?: return
+            val isFwdRef = cs.authoredReference == SlotAuthoredReference.FWD
+            // Row span from aft-most (i=0) to fwd-most center.
+            val rowSpanMm = (cs.count - 1).coerceAtLeast(0) * cs.spacingMm
+            // Displayed authored start: distance from the reference face to the nearest cutout.
+            val authoredStartMm = if (isFwdRef) {
+                spec.overallLengthMm - (cs.startFromAftMm + rowSpanMm)
+            } else {
+                cs.startFromAftMm
+            }
+            // Recompute the aft-most physical start from an authored value.
+            fun physFromAuthored(authoredMm: Float, count: Int, spacingMm: Float): Float {
+                val span = (count - 1).coerceAtLeast(0) * spacingMm
+                return if (isFwdRef) (spec.overallLengthMm - authoredMm - span).coerceAtLeast(0f) else authoredMm
+            }
+
+            ComponentCard(
+                title = cs.label ?: "Coupler Bolt Slot",
+                debugText = if (showComponentDebugLabels) "id=${cs.id} • startMm=${f1(cs.startFromAftMm)} • count=${cs.count}" else null,
+                componentId = cs.id, componentKind = ComponentKind.COUPLER_BOLT_SLOT,
+                outerPaddingHorizontal = outerPaddingHorizontal,
+                onRemove = { onRemoveCouplerBoltSlot(cs.id) }
+            ) {
+                // AFT / FWD reference toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val selectedColors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+                        containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
+                    )
+                    FilterChip(selected = !isFwdRef, onClick = { onUpdateCouplerBoltSlotReference(idx, SlotAuthoredReference.AFT) },
+                        label = { Text("AFT") }, colors = selectedColors,
+                        border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                    FilterChip(selected = isFwdRef, onClick = { onUpdateCouplerBoltSlotReference(idx, SlotAuthoredReference.FWD) },
+                        label = { Text("FWD") }, colors = selectedColors,
+                        border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                }
+
+                CommitNum(
+                    label = "First slot from ${if (isFwdRef) "FWD" else "AFT"} (${abbr(unit)})",
+                    initialDisplay = disp(authoredStartMm, unit)
+                ) { s ->
+                    val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
+                    onUpdateCouplerBoltSlot(idx, physFromAuthored(authoredMm, cs.count, cs.spacingMm), cs.holeDiaMm, cs.count, cs.spacingMm, cs.through, cs.depthMm)
+                }
+                CommitNum("Hole Ø (${abbr(unit)})", disp(cs.holeDiaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateCouplerBoltSlot(idx, cs.startFromAftMm, it, cs.count, cs.spacingMm, cs.through, cs.depthMm) }
+                }
+                CommitNum("Count", cs.count.toString()) { s ->
+                    val newCount = s.trim().toIntOrNull()?.coerceAtLeast(1) ?: return@CommitNum
+                    // Keep the authored (referenced) end fixed as count changes.
+                    val newPhys = physFromAuthored(authoredStartMm, newCount, cs.spacingMm)
+                    onUpdateCouplerBoltSlot(idx, newPhys, cs.holeDiaMm, newCount, cs.spacingMm, cs.through, cs.depthMm)
+                }
+                if (cs.count > 1) {
+                    CommitNum("Spacing (${abbr(unit)})", disp(cs.spacingMm, unit)) { s ->
+                        val newSpacing = toMmOrNull(s, unit) ?: return@CommitNum
+                        val newPhys = physFromAuthored(authoredStartMm, cs.count, newSpacing)
+                        onUpdateCouplerBoltSlot(idx, newPhys, cs.holeDiaMm, cs.count, newSpacing, cs.through, cs.depthMm)
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Through hole", modifier = Modifier.weight(1f))
+                    androidx.compose.material3.Switch(
+                        checked = cs.through,
+                        onCheckedChange = { checked ->
+                            onUpdateCouplerBoltSlot(idx, cs.startFromAftMm, cs.holeDiaMm, cs.count, cs.spacingMm, checked, cs.depthMm)
+                        }
+                    )
+                }
+                if (!cs.through) {
+                    CommitNum("Depth (${abbr(unit)})", disp(cs.depthMm, unit)) { s ->
+                        toMmOrNull(s, unit)?.let { onUpdateCouplerBoltSlot(idx, cs.startFromAftMm, cs.holeDiaMm, cs.count, cs.spacingMm, cs.through, it) }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Show dimension rail", modifier = Modifier.weight(1f))
+                    androidx.compose.material3.Switch(
+                        checked = cs.showDimensionRail,
+                        onCheckedChange = { onUpdateCouplerBoltSlotShowRail(idx, it) }
+                    )
                 }
             }
         }

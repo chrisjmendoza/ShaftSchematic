@@ -1,5 +1,5 @@
 # ShaftLayout Engine
-Version: v0.4.x
+Version: v0.5.x
 
 ## Purpose
 The layout engine converts millimeter-space geometry into pixel-space coordinates for rendering.  
@@ -69,6 +69,13 @@ maxOuterDiaMm = max(
     all liner odMm
 )
 3) Fit to available canvas region using two-axis rule.
+
+Note: **Coupler bolt slots** are reference overlays and contribute **0** to
+`maxOuterDiaMm` — their cutout circles are drawn relative to the shaft outline, not as
+an outer envelope. They also do not extend `maxXMm` (excluded from `coverageEndMm()`).
+A slot therefore never widens or heightens the layout window; it only occupies the
+axial position implied by its own `startFromAftMm` / `spacingMm`, which already falls
+inside the existing window when authored on the shaft.
 5. Layout Invariants
 Layout must never read component mm and convert to px manually outside the two mapping functions.
 
@@ -117,6 +124,7 @@ Renderer performs **no mm→px conversion** and **no geometry calculations** (e.
 - Tapers
 - Threads (major-diameter envelope + hatch)
 - Liners (top/bottom + tick marks)
+- Coupler bolt slot cutouts (row of circles straddling the shaft outline, mirrored top/bottom)
 - Overall length dimension line + label
 
 ### Renderer Does NOT Draw:
@@ -221,10 +229,13 @@ Rule:
 2. Tapers  
 3. Liners  
 4. Threads  
-5. Dimension line + ticks  
-6. Overall label  
+5. Coupler bolt slot cutouts (overlay, drawn after the shaft outline)  
+6. Dimension line + ticks  
+7. Overall label  
 
 This order minimizes visual occlusion and matches drafting standards.
+Coupler bolt slots are drawn as an overlay after the shaft outline so their cutout
+circles read clearly against the shaft/coupling boundary.
 
 ---
 

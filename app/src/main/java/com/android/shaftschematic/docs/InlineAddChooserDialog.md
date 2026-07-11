@@ -4,7 +4,7 @@
 Modal chooser to add a new component to the current ShaftSpec. Lives outside `ShaftScreen` so screen refactors do not remove it.
 
 ## Responsibilities
-- Present four primary actions: Add **Body**, **Liner**, **Thread**, **Taper**.
+- Present five primary actions: Add **Body**, **Liner**, **Taper**, **Thread**, **Coupler Bolt Slot**.
 - Invoke the corresponding callback and then dismiss.
 - Provide a “Close” button that only dismisses.
 
@@ -16,5 +16,6 @@ fun InlineAddChooserDialog(
   onAddBody: () -> Unit,
   onAddLiner: () -> Unit,
   onAddThread: () -> Unit,
-  onAddTaper: () -> Unit
+  onAddTaper: () -> Unit,
+  onAddCouplerBoltSlot: () -> Unit
 )
