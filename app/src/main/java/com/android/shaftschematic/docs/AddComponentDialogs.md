@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.1, 2026-07-11)
+# AddComponentDialogs Contract (v1.2, 2026-07-11)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -62,7 +62,8 @@ ShaftViewModel.addThreadAt()` and stored on the `Threads` model object.
 | Start from SET / LET | Always (label follows chip) |
 | Length | Always |
 | SET Ø / LET Ø | Always (labels swap for FWD) |
-| Rate | Always |
+| Rate mode: Auto \| Manual | Always |
+| Rate | Always (read-only in Auto, editable in Manual) |
 | Keyway fields | Always |
 
 ### AddCouplerBoltSlotDialog
@@ -100,6 +101,10 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.2 (2026-07-11)**
+- Added taper **Rate mode: Auto | Manual** parity requirement.
+- Clarified taper rate field behavior: read-only in Auto mode, editable in Manual mode.
+
 **v1.1 (2026-07-11)**
 - Added `AddCouplerBoltSlotDialog` contract + its dialog/card parity note (show-dimension-rail
   is a card-only affordance).

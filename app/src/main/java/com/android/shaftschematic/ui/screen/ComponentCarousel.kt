@@ -79,6 +79,7 @@ import com.android.shaftschematic.ui.util.taperWarningMessage
 import com.android.shaftschematic.ui.util.threadWarningMessage
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.autoTaperRateText
 import kotlinx.coroutines.launch
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -520,6 +521,42 @@ internal fun ComponentPagerCard(
                     onRemoveTaper(t.id)
                 }
             ) {
+                var autoRate by rememberSaveable(t.id) { mutableStateOf(true) }
+                val computedRateText = autoTaperRateText(
+                    lengthMm = t.lengthMm,
+                    setDiaMm = t.startDiaMm,
+                    letDiaMm = t.endDiaMm,
+                    exactDecimals = 3
+                )
+                val nextRateText: (Float, Float, Float) -> String = { lengthMm, startDiaMm, endDiaMm ->
+                    if (autoRate) {
+                        autoTaperRateText(
+                            lengthMm = lengthMm,
+                            setDiaMm = startDiaMm,
+                            letDiaMm = endDiaMm,
+                            exactDecimals = 3
+                        ).orEmpty()
+                    } else {
+                        t.taperRateText
+                    }
+                }
+
+                LaunchedEffect(autoRate, computedRateText, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, t.taperRateText) {
+                    if (autoRate) {
+                        val autoText = computedRateText.orEmpty()
+                        if (t.taperRateText != autoText) {
+                            onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, autoText)
+                        }
+                    }
+                }
+
+                val selectedColors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = Color.Black,
+                    selectedLabelColor = Color.White,
+                    containerColor = Color.Transparent,
+                    labelColor = MaterialTheme.colorScheme.onSurface
+                )
+
                 // AFT / FWD reference toggle
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -527,10 +564,6 @@ internal fun ComponentPagerCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    val selectedColors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
-                        containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
-                    )
                     FilterChip(selected = !isFwdRef, onClick = { onUpdateTaperReference(idx, LinerAuthoredReference.AFT) },
                         label = { Text("AFT") }, colors = selectedColors,
                         border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null)
@@ -550,7 +583,7 @@ internal fun ComponentPagerCard(
                 ) { s ->
                     val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
                     val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
-                    onUpdateTaper(idx, physStart, t.lengthMm, t.startDiaMm, t.endDiaMm, t.taperRateText)
+                    onUpdateTaper(idx, physStart, t.lengthMm, t.startDiaMm, t.endDiaMm, nextRateText(t.lengthMm, t.startDiaMm, t.endDiaMm))
                 }
                 CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
                     val newLen = toMmOrNull(s, unit) ?: return@CommitNum
@@ -560,19 +593,37 @@ internal fun ComponentPagerCard(
                     } else {
                         t.startFromAftMm
                     }
-                    onUpdateTaper(idx, physStart, newLen, t.startDiaMm, t.endDiaMm, t.taperRateText)
+                    onUpdateTaper(idx, physStart, newLen, t.startDiaMm, t.endDiaMm, nextRateText(newLen, t.startDiaMm, t.endDiaMm))
                 }
                 CommitNum("${endMap.leftCode} Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
-                    toMmOrNull(s, unit)?.let { onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, it, t.endDiaMm, t.taperRateText) }
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, it, t.endDiaMm, nextRateText(t.lengthMm, it, t.endDiaMm))
+                    }
                 }
                 CommitNum("${endMap.rightCode} Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
-                    toMmOrNull(s, unit)?.let { onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, it, t.taperRateText) }
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, it, nextRateText(t.lengthMm, t.startDiaMm, it))
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Rate mode:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    FilterChip(selected = autoRate, onClick = { autoRate = true },
+                        label = { Text("Auto") }, colors = selectedColors,
+                        border = if (autoRate) BorderStroke(1.dp, Color.Black) else null)
+                    FilterChip(selected = !autoRate, onClick = { autoRate = false },
+                        label = { Text("Manual") }, colors = selectedColors,
+                        border = if (!autoRate) BorderStroke(1.dp, Color.Black) else null)
                 }
                 CommitNum(
                     label = "Rate (1:12, 3/4, or decimal)",
-                    initialDisplay = t.taperRateText.ifBlank { "" },
+                    initialDisplay = if (autoRate) computedRateText.orEmpty() else t.taperRateText.ifBlank { "" },
                     keyboardType = KeyboardType.Ascii,
-                    allowColon = true
+                    allowColon = true,
+                    enabled = !autoRate
                 ) { s ->
                     onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, s.trim())
                 }
@@ -1016,6 +1067,7 @@ private fun CommitNum(
     showValidationErrors: Boolean = true,
     keyboardType: KeyboardType = KeyboardType.Decimal,
     allowColon: Boolean = false,
+    enabled: Boolean = true,
     validator: ((String) -> String?)? = null,
     onCommit: (String) -> Unit
 ) {
@@ -1023,6 +1075,7 @@ private fun CommitNum(
         label = label,
         initialText = initialDisplay,
         modifier = Modifier.let { if (fillMaxWidth) it.fillMaxWidth() else it }.then(modifier),
+        enabled = enabled,
         allowNegative = false,
         allowFraction = true,
         allowColon = allowColon,

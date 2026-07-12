@@ -41,6 +41,7 @@ import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.util.collectAddWarnings
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
+import com.android.shaftschematic.util.autoTaperRateText
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.max
 
@@ -521,6 +522,7 @@ fun AddTaperDialog(
     var setText by remember(unit, d.lastDiaMm)       { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
     var letText by remember(unit) { mutableStateOf("") }  // allow deriving via rate
     var rateText by remember { mutableStateOf("1:12") }   // legacy default; bare "1" means 1:12
+    var autoRate by remember { mutableStateOf(true) }
 
     // Keyway — all optional (blank = 0)
     var kwWidth   by remember { mutableStateOf("") }
@@ -533,6 +535,18 @@ fun AddTaperDialog(
     val lengthMm = toMmOrNull(length, unit) ?: -1f
     val setMm = toMmOrNull(setText, unit) ?: -1f   // -1 means "not provided"
     val letMm = toMmOrNull(letText, unit) ?: -1f
+    val computedRateText = autoTaperRateText(
+        lengthMm = lengthMm,
+        setDiaMm = setMm,
+        letDiaMm = letMm,
+        exactDecimals = 3
+    )
+
+    LaunchedEffect(autoRate, computedRateText) {
+        if (autoRate) {
+            rateText = computedRateText.orEmpty()
+        }
+    }
 
     // Resolve physical AFT-origin start from the entered value.
     val physStartMm = if (isFwd) {
@@ -601,10 +615,21 @@ fun AddTaperDialog(
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("L.E.T. Ø (${abbr(unit)})", letText) { letText = it }
                 Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Rate mode:", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    DirectionChip("Auto", selected = autoRate) { autoRate = true }
+                    DirectionChip("Manual", selected = !autoRate) { autoRate = false }
+                }
                 CommitNumField(
                     "Taper Rate (1:12, 3/4, 1)",
                     rateText,
-                    keyboardType = KeyboardType.Ascii
+                    keyboardType = KeyboardType.Ascii,
+                    enabled = !autoRate
                 ) { rateText = it }
                 Spacer(Modifier.height(12.dp))
                 Text("Keyway (optional)", style = MaterialTheme.typography.labelMedium,
@@ -656,8 +681,9 @@ fun AddTaperDialog(
                     val kwD = toMmOrNull(kwDepth,  unit) ?: 0f
                     val kwL = toMmOrNull(kwLength, unit) ?: 0f
                     val kwO = toMmOrNull(kwOffset, unit) ?: 0f
+                    val submitRateText = if (autoRate) computedRateText.orEmpty() else rateText
                     val action = {
-                        onSubmit(physStartMm, lengthMm, startDia, endDia, rateText,
+                        onSubmit(physStartMm, lengthMm, startDia, endDia, submitRateText,
                                  kwW, kwD, kwL, kwO, kwSpooned && !isFloating)
                     }
                     val warnings = collectAddWarnings(spec, physStartMm, lengthMm, overallIsManual)
@@ -702,6 +728,7 @@ private fun CommitNumField(
     errorText: String? = null,
     modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Decimal,
+    enabled: Boolean = true,
     onCommit: (String) -> Unit
 ) {
     // text is the live value; initial only resets it when the parent externally
@@ -718,6 +745,7 @@ private fun CommitNumField(
             onCommit(newText)   // commit on every keystroke so Add always has the current value
         },
         label = { Text(label) },
+        enabled = enabled,
         singleLine = true,
         isError = errorText != null,
         supportingText = if (errorText != null) {

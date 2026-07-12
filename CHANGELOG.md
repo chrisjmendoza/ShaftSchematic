@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-11
 
+### feat: auto taper-rate from Length + SET + LET (auto default, 3-decimal exact)
+
+- Added automatic taper-rate calculation when Length, SET, and LET are present.
+- New **Rate mode** control (`Auto | Manual`) in both Add Taper dialog and taper
+  carousel card. Auto mode is the default.
+- Auto mode snaps to common shop tapers when close (3% slope tolerance), and falls
+  back to exact `1:N.NNN` when not close.
+- Exact auto rate now preserves 3 decimal places for review (thousandths-friendly).
+- Added `TaperRateAutoTest` coverage for snapping, exact fallback, alternate common
+  lists, and invalid-input guards.
+
 ### fix: taper rate input accepts colon ratios on Android keyboards
 
 - Taper rate fields now request an ASCII-capable keyboard so users can enter

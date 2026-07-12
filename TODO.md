@@ -21,6 +21,7 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 | OAL window / excluded thread logic | ✅ Implemented & unit-tested |
 | Taper rate input + derivation | ✅ Implemented (taperRateText, parseRateText, deriveTaperDiameters) |
 | Taper rate colon entry (`1:12`) | ✅ Keyboard-compatible on Android (ASCII rate input + colon filter path) |
+| Taper rate auto-calc (Length + SET + LET) | ✅ Auto-by-default with manual override; 3% common-rate snap + exact `1:N.NNN` fallback |
 | Keyway on Taper | ✅ Open + floating, plan-view rectangle, mill-cutter arc, white fill |
 | Carousel selection fix | ✅ Fixed (seeded on load, swipe works before first tap) |
 | Shared signing config | ✅ debug.keystore committed; all machines update-install |
