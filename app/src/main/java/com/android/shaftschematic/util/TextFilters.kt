@@ -32,10 +32,12 @@ fun filterDecimalPermissive(input: String, allowSign: Boolean = false): String {
 fun filterNumericInput(
     raw: String,
     allowNegative: Boolean,
-    allowFraction: Boolean
+    allowFraction: Boolean,
+    allowColon: Boolean = false
 ): String {
     var dotSeen = false
     var slashSeen = false
+    var colonSeen = false
     var signSeen = false
     var sawNonSpace = false
     val sb = StringBuilder(raw.length)
@@ -59,6 +61,11 @@ fun filterNumericInput(
             ch == '/' && allowFraction && !slashSeen -> {
                 sb.append(ch)
                 slashSeen = true
+                sawNonSpace = true
+            }
+            ch == ':' && allowColon && !colonSeen -> {
+                sb.append(ch)
+                colonSeen = true
                 sawNonSpace = true
             }
             ch == ' ' && allowFraction -> {

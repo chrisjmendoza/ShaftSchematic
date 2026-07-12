@@ -568,7 +568,12 @@ internal fun ComponentPagerCard(
                 CommitNum("${endMap.rightCode} Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, it, t.taperRateText) }
                 }
-                CommitNum("Rate (1:12, 3/4, or decimal)", t.taperRateText.ifBlank { "" }) { s ->
+                CommitNum(
+                    label = "Rate (1:12, 3/4, or decimal)",
+                    initialDisplay = t.taperRateText.ifBlank { "" },
+                    keyboardType = KeyboardType.Ascii,
+                    allowColon = true
+                ) { s ->
                     onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, s.trim())
                 }
 
@@ -1009,6 +1014,8 @@ private fun CommitNum(
     modifier: Modifier = Modifier,
     fillMaxWidth: Boolean = true,
     showValidationErrors: Boolean = true,
+    keyboardType: KeyboardType = KeyboardType.Decimal,
+    allowColon: Boolean = false,
     validator: ((String) -> String?)? = null,
     onCommit: (String) -> Unit
 ) {
@@ -1018,8 +1025,9 @@ private fun CommitNum(
         modifier = Modifier.let { if (fillMaxWidth) it.fillMaxWidth() else it }.then(modifier),
         allowNegative = false,
         allowFraction = true,
+        allowColon = allowColon,
         showValidationErrors = showValidationErrors,
-        keyboardType = KeyboardType.Decimal,
+        keyboardType = keyboardType,
         validator = validator,
         parseValid = { parseFractionOrDecimal(it) != null },
         onCommit = onCommit

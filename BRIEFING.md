@@ -1,7 +1,7 @@
 # ShaftSchematic — Project Briefing
 
 **Generated:** 2026-05-03  
-**Last updated:** 2026-06-11  
+**Last updated:** 2026-07-11  
 **Current Version:** 1.1.1  
 **Series:** v0.5.x — runout/wear docs, line thickness, OAL fix
 
@@ -37,6 +37,7 @@ The core feature set is **shipped and working**:
 | OAL window / excluded thread logic | ✅ Implemented & unit-tested |
 | Validation — blocking errors (dialogs, badges, export gate) | ✅ Wired |
 | Validation — non-blocking warnings (yellow badges, free-to-end) | ✅ Wired |
+| Taper rate keyboard compatibility (`1:12`) | ✅ Shipped (ASCII rate fields + colon-aware filter path) |
 | Taper keyway drawing (open + floating, plan-view convention) | ✅ Working |
 | Shared signing config (single keystore across machines) | ✅ Configured |
 | Autosave / draft restore on launch | ✅ Working |

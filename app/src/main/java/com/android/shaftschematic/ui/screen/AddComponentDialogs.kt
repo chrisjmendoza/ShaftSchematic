@@ -601,7 +601,11 @@ fun AddTaperDialog(
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("L.E.T. Ø (${abbr(unit)})", letText) { letText = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Taper Rate (1:12, 3/4, 1)", rateText) { rateText = it }
+                CommitNumField(
+                    "Taper Rate (1:12, 3/4, 1)",
+                    rateText,
+                    keyboardType = KeyboardType.Ascii
+                ) { rateText = it }
                 Spacer(Modifier.height(12.dp))
                 Text("Keyway (optional)", style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -697,6 +701,7 @@ private fun CommitNumField(
     initial: String,
     errorText: String? = null,
     modifier: Modifier = Modifier,
+    keyboardType: KeyboardType = KeyboardType.Decimal,
     onCommit: (String) -> Unit
 ) {
     // text is the live value; initial only resets it when the parent externally
@@ -718,7 +723,7 @@ private fun CommitNumField(
         supportingText = if (errorText != null) {
             { Text(errorText, color = MaterialTheme.colorScheme.error) }
         } else null,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
         modifier = modifier
             .fillMaxWidth()

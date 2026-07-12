@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**  
-**Last updated: 2026-06-11**
+**Last updated: 2026-07-11**
 
 Tasks are ordered by priority. Completed series are collapsed to a single summary line to keep this readable.
 
@@ -20,6 +20,7 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 | Tap-to-add pipeline | ✅ Implemented |
 | OAL window / excluded thread logic | ✅ Implemented & unit-tested |
 | Taper rate input + derivation | ✅ Implemented (taperRateText, parseRateText, deriveTaperDiameters) |
+| Taper rate colon entry (`1:12`) | ✅ Keyboard-compatible on Android (ASCII rate input + colon filter path) |
 | Keyway on Taper | ✅ Open + floating, plan-view rectangle, mill-cutter arc, white fill |
 | Carousel selection fix | ✅ Fixed (seeded on load, swipe works before first tap) |
 | Shared signing config | ✅ debug.keystore committed; all machines update-install |

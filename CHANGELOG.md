@@ -8,6 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-11
 
+### fix: taper rate input accepts colon ratios on Android keyboards
+
+- Taper rate fields now request an ASCII-capable keyboard so users can enter
+  ratio forms like `1:12` even when the numeric keypad omits `:`.
+- Numeric input filtering now supports an opt-in colon mode used by taper-rate
+  inputs, while preserving existing numeric/fraction behavior for all other
+  fields.
+- Added focused unit coverage for input filtering in
+  `app/src/test/java/com/android/shaftschematic/util/TextFiltersTest.kt`.
+
 ### fix: cleanup sweep wave 1 — 5 bugs + hot-path fixes (branch `fix/wave1-cleanup`)
 
 From `docs/cleanup_sweep_2026-07-11.md` Part 1 and the Wave-1 one-liners:

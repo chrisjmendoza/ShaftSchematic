@@ -31,6 +31,7 @@ fun NumericInputField(
     modifier: Modifier = Modifier,
     allowNegative: Boolean = false,
     allowFraction: Boolean = true,
+    allowColon: Boolean = false,
     showValidationErrors: Boolean = true,
     singleLine: Boolean = true,
     maxLines: Int = if (singleLine) 1 else 5,
@@ -82,7 +83,8 @@ fun NumericInputField(
             val filtered = filterNumericInput(
                 raw = raw.text,
                 allowNegative = allowNegative,
-                allowFraction = allowFraction
+                allowFraction = allowFraction,
+                allowColon = allowColon
             )
             text = if (filtered == raw.text) raw else raw.copy(text = filtered)
 
