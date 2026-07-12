@@ -36,7 +36,9 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Auto taper-rate workflow — Add Taper and carousel taper cards now include
 	`Rate mode: Auto | Manual` (Auto default). In Auto mode, rate is computed from
 	Length + SET + LET, snaps to nearby common shop tapers (3% slope tolerance), and
-	falls back to exact `1:N.NNN` when no common taper is close
+	falls back to exact `1:N.NNN` when no common taper is close; manual mode rejects
+	bare `1`, allows `1/1`, requires a rate when deriving a missing end, and warns
+	when typed rate text disagrees with Length + SET + LET
 - Taper rate keyboard compatibility — taper rate inputs now accept colon-ratio
 	entry (`1:12`) on Android keyboards that omit `:` on numeric pads by using an
 	ASCII-capable field + colon-aware filtering for the rate path

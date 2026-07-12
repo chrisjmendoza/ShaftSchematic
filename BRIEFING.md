@@ -38,7 +38,7 @@ The core feature set is **shipped and working**:
 | Validation — blocking errors (dialogs, badges, export gate) | ✅ Wired |
 | Validation — non-blocking warnings (yellow badges, free-to-end) | ✅ Wired |
 | Taper rate keyboard compatibility (`1:12`) | ✅ Shipped (ASCII rate fields + colon-aware filter path) |
-| Taper rate auto-calc from Length + SET + LET | ✅ Shipped (Auto default, manual override, exact `1:N.NNN` fallback) |
+| Taper rate auto-calc from Length + SET + LET | ✅ Shipped (Auto default, manual override, exact `1:N.NNN` fallback, manual ambiguity/mismatch checks) |
 | Taper keyway drawing (open + floating, plan-view convention) | ✅ Working |
 | Shared signing config (single keystore across machines) | ✅ Configured |
 | Autosave / draft restore on launch | ✅ Working |
@@ -176,7 +176,7 @@ Instrumented tests in `app/src/androidTest/` include a `ClearDataStoreRule` to i
 
 - ✅ Snap engine, tap-to-add pipeline, OAL exclusion
 - ✅ Taper rate input + derivation (all formats)
-- ✅ Taper rate auto-calc mode (Add dialog + carousel parity, Auto default, 3% common-rate snap)
+- ✅ Taper rate auto-calc mode (Add dialog + carousel parity, Auto default, 3% common-rate snap, bare `1` blocked, mismatch warning)
 - ✅ Taper keyway drawing — open and floating, plan-view schematic convention
 - ✅ Validation fully wired — blocking errors (red) + non-blocking warnings (yellow) in carousel, Add dialogs, and export gate
 - ✅ Selection box fix — seeded on file load, swipe works before first tap, single thin ring

@@ -30,6 +30,7 @@ fun NumericInputField(
     initialText: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    externalIssueText: String? = null,
     allowNegative: Boolean = false,
     allowFraction: Boolean = true,
     allowColon: Boolean = false,
@@ -98,10 +99,12 @@ fun NumericInputField(
         },
         label = { Text(label) },
         enabled = enabled,
-        isError = showError && errorText != null,
+        isError = (showError && errorText != null) || externalIssueText != null,
         supportingText = {
             if (showError && errorText != null) {
                 Text(errorText!!)
+            } else if (externalIssueText != null) {
+                Text(externalIssueText)
             }
         },
         singleLine = singleLine,

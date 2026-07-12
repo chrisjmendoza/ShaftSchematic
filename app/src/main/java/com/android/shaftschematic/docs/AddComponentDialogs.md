@@ -66,6 +66,14 @@ ShaftViewModel.addThreadAt()` and stored on the `Threads` model object.
 | Rate | Always (read-only in Auto, editable in Manual) |
 | Keyway fields | Always |
 
+Manual taper-rate rules:
+- Bare `1` is invalid/ambiguous and must be rewritten as a full ratio or fraction.
+- `1/1` is allowed.
+- When only one taper end is present, Manual mode requires a valid rate so the
+  missing end can be derived.
+- When Length + SET + LET are all present, a typed manual rate that disagrees with
+  the geometry is shown as a warning for review.
+
 ### AddCouplerBoltSlotDialog
 | Field / control | Condition |
 |-----------------|-----------|
@@ -104,6 +112,8 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 **v1.2 (2026-07-11)**
 - Added taper **Rate mode: Auto | Manual** parity requirement.
 - Clarified taper rate field behavior: read-only in Auto mode, editable in Manual mode.
+- Added manual taper-rate rules: bare `1` blocked, `1/1` allowed, missing-end derivation
+  requires a rate, mismatch with Length + SET + LET warns.
 
 **v1.1 (2026-07-11)**
 - Added `AddCouplerBoltSlotDialog` contract + its dialog/card parity note (show-dimension-rail

@@ -25,6 +25,7 @@ import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.parseToMm
 import com.android.shaftschematic.util.VerboseLog
 import android.util.Log
@@ -1972,30 +1973,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
          * Parse a taper rate string into a dimensionless ratio (diameter change per length unit).
          * Supports: "1:12" → 1/12, "3/4" → 0.75, "0.0833" → 0.0833, "1" → 1/12 (legacy bare int).
          */
-        fun parseRateText(text: String): Float? {
-            val t = text.trim()
-            if (t.isEmpty()) return null
-
-            val colon = t.indexOf(':')
-            if (colon >= 0) {
-                val num = t.substring(0, colon).trim().toFloatOrNull() ?: return null
-                val den = t.substring(colon + 1).trim().toFloatOrNull() ?: return null
-                if (den == 0f) return null
-                return num / den
-            }
-
-            val slash = t.indexOf('/')
-            if (slash >= 0) {
-                val num = t.substring(0, slash).trim().toFloatOrNull() ?: return null
-                val den = t.substring(slash + 1).trim().toFloatOrNull() ?: return null
-                if (den == 0f) return null
-                return num / den
-            }
-
-            val v = t.toFloatOrNull() ?: return null
-            // Bare integer (e.g., "12") is treated as 1:N taper.
-            return if (v >= 1f) 1f / v else v
-        }
+        fun parseRateText(text: String): Float? = parseTaperRateText(text, allowAmbiguousBareOne = true)
     }
 
     /** Current snap tolerance expressed in mm, based on the active UI unit system. */

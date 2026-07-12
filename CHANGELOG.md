@@ -15,7 +15,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
   carousel card. Auto mode is the default.
 - Auto mode snaps to common shop tapers when close (3% slope tolerance), and falls
   back to exact `1:N.NNN` when not close.
+- Auto matching now carries the shop preference order for common bores: 1:16 is the
+  preferred small-bore candidate (6" and under), 1:12 is preferred above 6" when
+  inputs are otherwise comparably close.
 - Exact auto rate now preserves 3 decimal places for review (thousandths-friendly).
+- Manual mode now rejects bare `1` as ambiguous, allows intentional `1/1`, requires
+  a rate when one taper end must be derived, and warns when a typed manual rate does
+  not match Length + SET + LET.
 - Added `TaperRateAutoTest` coverage for snapping, exact fallback, alternate common
   lists, and invalid-input guards.
 

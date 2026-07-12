@@ -42,6 +42,9 @@ import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.util.collectAddWarnings
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.autoTaperRateText
+import com.android.shaftschematic.util.manualTaperRateBlockingMessage
+import com.android.shaftschematic.util.manualTaperRateWarning
+import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.max
 
@@ -535,12 +538,32 @@ fun AddTaperDialog(
     val lengthMm = toMmOrNull(length, unit) ?: -1f
     val setMm = toMmOrNull(setText, unit) ?: -1f   // -1 means "not provided"
     val letMm = toMmOrNull(letText, unit) ?: -1f
+    val hasSet = setMm > 0f
+    val hasLet = letMm > 0f
+    val hasBothEnds = hasSet && hasLet
+    val hasExactlyOneEnd = hasSet.xor(hasLet)
     val computedRateText = autoTaperRateText(
         lengthMm = lengthMm,
         setDiaMm = setMm,
         letDiaMm = letMm,
         exactDecimals = 3
     )
+    val manualRateBlock = manualTaperRateBlockingMessage(
+        rateText = rateText,
+        lengthMm = lengthMm,
+        setDiaMm = setMm,
+        letDiaMm = letMm,
+    )
+    val manualRateWarn = manualTaperRateWarning(
+        rateText = rateText,
+        lengthMm = lengthMm,
+        setDiaMm = setMm,
+        letDiaMm = letMm,
+    )
+    val autoRateIssue = if (autoRate && hasExactlyOneEnd) {
+        "Auto needs Length + SET + LET. Switch to Manual to derive the missing end"
+    } else null
+    val rateIssueText = if (autoRate) autoRateIssue else (manualRateBlock ?: manualRateWarn)
 
     LaunchedEffect(autoRate, computedRateText) {
         if (autoRate) {
@@ -626,10 +649,12 @@ fun AddTaperDialog(
                     DirectionChip("Manual", selected = !autoRate) { autoRate = false }
                 }
                 CommitNumField(
-                    "Taper Rate (1:12, 3/4, 1)",
+                    "Taper Rate (1:12, 3/4, decimal)",
                     rateText,
                     keyboardType = KeyboardType.Ascii,
-                    enabled = !autoRate
+                    enabled = !autoRate,
+                    supportingText = rateIssueText,
+                    highlight = rateIssueText != null
                 ) { rateText = it }
                 Spacer(Modifier.height(12.dp))
                 Text("Keyway (optional)", style = MaterialTheme.typography.labelMedium,
@@ -667,7 +692,14 @@ fun AddTaperDialog(
             }
         },
         confirmButton = {
-            val ok = physStartMm >= 0f && lengthMm > 0f && (setMm > 0f || letMm > 0f)
+            val rateModeValid = if (autoRate) {
+                autoRateIssue == null
+            } else {
+                manualRateBlock == null
+            }
+            val canResolveDiameters = hasBothEnds ||
+                (hasExactlyOneEnd && !autoRate && parseTaperRateText(rateText, allowAmbiguousBareOne = false) != null)
+            val ok = physStartMm >= 0f && lengthMm > 0f && rateModeValid && canResolveDiameters
             Button(
                 enabled = ok,
                 onClick = {
@@ -726,9 +758,11 @@ private fun CommitNumField(
     label: String,
     initial: String,
     errorText: String? = null,
+    supportingText: String? = null,
     modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Decimal,
     enabled: Boolean = true,
+    highlight: Boolean = false,
     onCommit: (String) -> Unit
 ) {
     // text is the live value; initial only resets it when the parent externally
@@ -747,9 +781,15 @@ private fun CommitNumField(
         label = { Text(label) },
         enabled = enabled,
         singleLine = true,
-        isError = errorText != null,
-        supportingText = if (errorText != null) {
-            { Text(errorText, color = MaterialTheme.colorScheme.error) }
+        isError = highlight || errorText != null,
+        supportingText = if (errorText != null || supportingText != null) {
+            {
+                Text(
+                    errorText ?: supportingText.orEmpty(),
+                    color = if (highlight || errorText != null) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         } else null,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         keyboardActions = KeyboardActions(onDone = { onCommit(text) }),

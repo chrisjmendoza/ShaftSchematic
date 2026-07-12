@@ -80,6 +80,9 @@ import com.android.shaftschematic.ui.util.threadWarningMessage
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.autoTaperRateText
+import com.android.shaftschematic.util.manualTaperRateBlockingMessage
+import com.android.shaftschematic.util.manualTaperRateWarning
+import com.android.shaftschematic.util.parseTaperRateText
 import kotlinx.coroutines.launch
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -521,13 +524,28 @@ internal fun ComponentPagerCard(
                     onRemoveTaper(t.id)
                 }
             ) {
-                var autoRate by rememberSaveable(t.id) { mutableStateOf(true) }
                 val computedRateText = autoTaperRateText(
                     lengthMm = t.lengthMm,
                     setDiaMm = t.startDiaMm,
                     letDiaMm = t.endDiaMm,
                     exactDecimals = 3
                 )
+                var autoRate by rememberSaveable(t.id, computedRateText, t.taperRateText) {
+                    mutableStateOf(t.taperRateText.isBlank() || t.taperRateText == computedRateText)
+                }
+                val manualRateBlock = manualTaperRateBlockingMessage(
+                    rateText = t.taperRateText,
+                    lengthMm = t.lengthMm,
+                    setDiaMm = t.startDiaMm,
+                    letDiaMm = t.endDiaMm,
+                )
+                val manualRateWarn = manualTaperRateWarning(
+                    rateText = t.taperRateText,
+                    lengthMm = t.lengthMm,
+                    setDiaMm = t.startDiaMm,
+                    letDiaMm = t.endDiaMm,
+                )
+                val manualRateIssue = if (!autoRate) manualRateBlock ?: manualRateWarn else null
                 val nextRateText: (Float, Float, Float) -> String = { lengthMm, startDiaMm, endDiaMm ->
                     if (autoRate) {
                         autoTaperRateText(
@@ -623,7 +641,10 @@ internal fun ComponentPagerCard(
                     initialDisplay = if (autoRate) computedRateText.orEmpty() else t.taperRateText.ifBlank { "" },
                     keyboardType = KeyboardType.Ascii,
                     allowColon = true,
-                    enabled = !autoRate
+                    enabled = !autoRate,
+                    externalIssueText = manualRateIssue,
+                    parseValid = { parseTaperRateText(it, allowAmbiguousBareOne = false) != null || it.trim() == "1" || it.isBlank() },
+                    validator = { raw -> manualTaperRateBlockingMessage(raw, t.lengthMm, t.startDiaMm, t.endDiaMm) }
                 ) { s ->
                     onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, s.trim())
                 }
@@ -1068,6 +1089,8 @@ private fun CommitNum(
     keyboardType: KeyboardType = KeyboardType.Decimal,
     allowColon: Boolean = false,
     enabled: Boolean = true,
+    externalIssueText: String? = null,
+    parseValid: (String) -> Boolean = { parseFractionOrDecimal(it) != null },
     validator: ((String) -> String?)? = null,
     onCommit: (String) -> Unit
 ) {
@@ -1076,13 +1099,14 @@ private fun CommitNum(
         initialText = initialDisplay,
         modifier = Modifier.let { if (fillMaxWidth) it.fillMaxWidth() else it }.then(modifier),
         enabled = enabled,
+        externalIssueText = externalIssueText,
         allowNegative = false,
         allowFraction = true,
         allowColon = allowColon,
         showValidationErrors = showValidationErrors,
         keyboardType = keyboardType,
         validator = validator,
-        parseValid = { parseFractionOrDecimal(it) != null },
+        parseValid = parseValid,
         onCommit = onCommit
     )
 }
