@@ -15,7 +15,8 @@ S-curve plus a return sweep that starts at one tip of the S, arcs back on the op
 side, and dies into the centerline — closing the "eye" that makes the break read as a
 revolved 3D surface instead of a flat wave. The two edges of a break alternate (left
 edge closes its eye at the bottom, right edge at the top), matching how the symbol is
-drawn by hand. One shared `drawBreakEdge` in
+drawn by hand. The eye is shaded with a light translucent wash (~18% black, the
+shaded-body recipe) to deepen the 3D read. One shared `drawBreakEdge` in
 `pdf/BreakSymbol.kt` replaces the three private copies in `ShaftPdfComposer`,
 `RunoutPdfComposer`, and `WearPdfComposer` — the wear document's slightly different
 double-wave variant now matches the other two documents.
