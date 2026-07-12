@@ -20,7 +20,7 @@ val gitCount: Int = try {
 // Manual version floor. gitCount alone can shrink (shallow CI clones count 1;
 // git absent falls back to 1), which distribution channels reject as a downgrade.
 // Bump this when a distributed build must supersede all previously installed ones.
-val versionBase = 300
+val versionBase = 320
 
 android {
     namespace = "com.android.shaftschematic"
