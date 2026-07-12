@@ -615,11 +615,11 @@ private fun drawBodiesCompressedCenterBreak(
             c.drawLine(x0, top, leftEnd, top, outline)
             c.drawLine(x0, bot, leftEnd, bot, outline)
             c.drawLine(x0, top, x0, bot, outline)
-            drawBreakEdge(c, leftEnd, top, bot, amp, capPaint)
+            drawBreakEdge(c, leftEnd, top, bot, amp, capPaint, eyeAtTop = false)
 
             // Right stub — same-direction S-curve on left end (curves match so edges appear to merge)
             if (fill != null) c.drawRect(rightBeg, top, x1, bot, fill)
-            drawBreakEdge(c, rightBeg, top, bot, amp, capPaint)
+            drawBreakEdge(c, rightBeg, top, bot, amp, capPaint, eyeAtTop = true)
             c.drawLine(rightBeg, top, x1, top, outline)
             c.drawLine(rightBeg, bot, x1, bot, outline)
             c.drawLine(x1, top, x1, bot, outline)
@@ -711,16 +711,6 @@ private fun tierOriginMmFor(mode: PdfTieringMode, oalMm: Double): Double? = when
     PdfTieringMode.AFT -> 0.0
     PdfTieringMode.FWD -> oalMm
     PdfTieringMode.AUTO -> null
-}
-
-/** S-curve from (x, yTop) to (x, yBot). Positive [amplitude] bulges right then left; negative mirrors. */
-private fun drawBreakEdge(c: Canvas, x: Float, yTop: Float, yBot: Float, amplitude: Float, p: Paint) {
-    val h = yBot - yTop
-    val path = Path().apply {
-        moveTo(x, yTop)
-        cubicTo(x + amplitude, yTop + h / 3f, x - amplitude, yBot - h / 3f, x, yBot)
-    }
-    c.drawPath(path, p)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

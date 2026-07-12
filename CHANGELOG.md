@@ -8,6 +8,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-11
 
+### feat: classic S-break symbol on compression breaks (all three PDFs)
+
+Long-body compression breaks now draw the full round-stock break symbol: the existing
+S-curve plus a return sweep that starts at one tip of the S, arcs back on the opposite
+side, and dies into the centerline — closing the "eye" that makes the break read as a
+revolved 3D surface instead of a flat wave. The two edges of a break alternate (left
+edge closes its eye at the bottom, right edge at the top), matching how the symbol is
+drawn by hand. One shared `drawBreakEdge` in
+`pdf/BreakSymbol.kt` replaces the three private copies in `ShaftPdfComposer`,
+`RunoutPdfComposer`, and `WearPdfComposer` — the wear document's slightly different
+double-wave variant now matches the other two documents.
+
 ### fix: audit remediation pass — 13 bugs + dead-code sweep (branch `fix/audit-remediation`)
 
 Fixes every live bug found by the deep audit (`docs/deep_audit_2026-07.md`, Part 1 §1.0 B1–B13) plus the confirmed dead code. 379 unit tests green (23 net new).

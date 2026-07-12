@@ -281,8 +281,8 @@ private fun drawWearShaftProfile(
             val rBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
             c.drawLine(x0, top, lEnd, top, outline); c.drawLine(x0, bot, lEnd, bot, outline)
             c.drawLine(x0, top, x0, bot, outline)
-            drawWearBreakEdge(c, lEnd, top, bot, amp, capPaint)
-            drawWearBreakEdge(c, rBeg, top, bot, amp, capPaint)
+            drawBreakEdge(c, lEnd, top, bot, amp, capPaint, eyeAtTop = false)
+            drawBreakEdge(c, rBeg, top, bot, amp, capPaint, eyeAtTop = true)
             c.drawLine(rBeg, top, x1, top, outline); c.drawLine(rBeg, bot, x1, bot, outline)
             c.drawLine(x1, top, x1, bot, outline)
         }
@@ -326,16 +326,6 @@ private fun drawWearShaftProfile(
     // Coupler bolt slots — reference cutouts, same as the main schematic.
     val slotFill = Paint(outline).apply { style = Paint.Style.FILL; alpha = 40 }
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, xAt, rPx, outline, slotFill)
-}
-
-private fun drawWearBreakEdge(c: Canvas, x: Float, yTop: Float, yBot: Float, amplitude: Float, p: Paint) {
-    val h = yBot - yTop; val q = h / 4f
-    val path = android.graphics.Path().apply {
-        moveTo(x, yTop)
-        cubicTo(x + amplitude, yTop + q, x - amplitude, yTop + q * 2f, x, yTop + q * 2f)
-        cubicTo(x + amplitude, yTop + q * 3f, x - amplitude, yBot, x, yBot)
-    }
-    c.drawPath(path, p)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

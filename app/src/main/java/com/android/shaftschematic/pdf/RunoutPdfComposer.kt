@@ -613,8 +613,8 @@ private fun drawBodiesForRunout(
             c.drawLine(x0, top, lEnd, top, outline)
             c.drawLine(x0, bot, lEnd, bot, outline)
             c.drawLine(x0, top, x0, bot, outline)
-            drawBreakEdge(c, lEnd, top, bot, amp, capPaint)
-            drawBreakEdge(c, rBeg, top, bot, amp, capPaint)
+            drawBreakEdge(c, lEnd, top, bot, amp, capPaint, eyeAtTop = false)
+            drawBreakEdge(c, rBeg, top, bot, amp, capPaint, eyeAtTop = true)
             c.drawLine(rBeg, top, x1, top, outline)
             c.drawLine(rBeg, bot, x1, bot, outline)
             c.drawLine(x1, top, x1, bot, outline)
@@ -725,26 +725,6 @@ private fun drawTirLine(
         TirDirection.AFT     -> c.drawText("AFT",     fillStart, y, text)
         TirDirection.FORWARD -> c.drawText("FORWARD", fillStart, y, text)
     }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// S-curve break edge helper (shared with ShaftPdfComposer convention)
-// ──────────────────────────────────────────────────────────────────────────────
-
-/**
- * Draw one S-curve break edge at position x, spanning the shaft from [yTop] to [yBot].
- * Amplitude controls how far the S-curves bulge. Positive amplitude bulges right then left;
- * negative mirrors. This matches the convention in [ShaftPdfComposer].
- */
-private fun drawBreakEdge(c: Canvas, x: Float, yTop: Float, yBot: Float, amplitude: Float, p: Paint) {
-    val h = yBot - yTop
-    val q = h / 4f
-    val path = android.graphics.Path().apply {
-        moveTo(x, yTop)
-        cubicTo(x + amplitude, yTop + q, x - amplitude, yTop + q * 2f, x, yTop + q * 2f)
-        cubicTo(x + amplitude, yTop + q * 3f, x - amplitude, yBot, x, yBot)
-    }
-    c.drawPath(path, p)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
