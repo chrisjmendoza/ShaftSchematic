@@ -6,6 +6,42 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-12
+
+### fix: auto taper-rate review fixes (formatting, sentinels, state ownership)
+
+Post-review hardening of the auto taper-rate feature shipped 2026-07-11:
+
+- **Snapped `1:10` / `1:20` no longer corrupt to `1:1` / `1:2`.** The common-rate
+  formatter trimmed trailing zeros off integer output; zeros are now only trimmed
+  in the fractional part. Regression-tested.
+- **No rate is fabricated from missing diameters.** `autoTaperRate` now requires
+  both diameters to be real positive values; the dialog's `-1` "not provided"
+  sentinel and the model's `0` default previously produced garbage rates (e.g.
+  `1:2.970` from SET 100 / LET blank) that could survive a switch to Manual and
+  drive missing-end derivation.
+- **Viewing a taper card no longer mutates the document.** The carousel card's
+  composition-time `LaunchedEffect` write to `taperRateText` (which dirtied and
+  autosaved untouched files, and could rewrite a derive-pending diameter) is
+  removed. The model is written only on explicit commits: geometry edits carry
+  the recomputed rate; tapping the Auto chip syncs the stored text.
+- **Auto/Manual mode is now user-owned state**, seeded once per taper instead of
+  re-derived from string equality — a typed manual rate that happened to match
+  the computed text no longer silently flips the card back to Auto.
+- **Bore preference actually works now.** The 1:16 (≤ 6 in) / 1:12 (> 6 in)
+  preference was a dead-code float-equality tie-break; it now selects among
+  within-tolerance candidates whose errors are comparably close (≤ 1 pt apart),
+  while a clearly closer candidate still wins on geometry. Expressed in
+  canonical mm (152.4) per the unit-edge rule. Covered by new tests.
+- **Blank manual rate reverts instead of committing.** Committing `""` left the
+  field blank while `updateTaper`'s `ifBlank` kept the old rate in the model/PDF.
+- **Dialog no longer clobbers a typed manual rate** when toggling Auto → Manual;
+  the rate field's display is derived, matching the carousel pattern.
+- **Carousel card gained the Auto one-end-missing message** ("Auto needs
+  Length + SET + LET…") for parity with the Add dialog.
+- **PDF footer rate fallback delegates to the shared formatter**, so a
+  blank-rate taper prints the same snapped/exact text the card shows on screen.
+
 ## 2026-07-11
 
 ### feat: auto taper-rate from Length + SET + LET (auto default, 3-decimal exact)

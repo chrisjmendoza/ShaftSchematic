@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.2, 2026-07-11)
+# AddComponentDialogs Contract (v1.3, 2026-07-12)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -74,6 +74,22 @@ Manual taper-rate rules:
 - When Length + SET + LET are all present, a typed manual rate that disagrees with
   the geometry is shown as a warning for review.
 
+Auto taper-rate rules (both surfaces — dialog and carousel card):
+- Auto rate is computed only when Length and **both** diameters are real positive
+  values. The dialog's `-1` "not provided" and the model's `0` defaults are
+  sentinels; a rate must never be fabricated from them (`autoTaperRate` returns
+  null and the surface shows "Auto needs Length + SET + LET…").
+- Auto/Manual mode is **user-owned state** — seeded once per taper (blank stored
+  text or text matching the computed rate ⇒ Auto), never re-derived from string
+  comparison afterward. Re-deriving silently discards an explicit mode choice.
+- The model is written only on explicit user commits (geometry edits carry the
+  recomputed rate; the Auto chip tap syncs the stored text). **Never** write
+  `taperRateText` from a composition-time effect — merely viewing a card must
+  not dirty the document (see `NumberField.md` tap-and-leave rule).
+- Blank manual rate text must not commit: `updateTaper` keeps the old rate on
+  blank (`ifBlank`), so committing `""` would leave the field empty while the
+  model retains the old rate. Blank reverts like any other invalid input.
+
 ### AddCouplerBoltSlotDialog
 | Field / control | Condition |
 |-----------------|-----------|
@@ -109,6 +125,12 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.3 (2026-07-12)**
+- Added Auto taper-rate rules: positive-diameter sentinel guard, user-owned mode
+  state (no re-derivation), no composition-time model writes, blank-rate revert.
+- The Auto one-end-missing block/message now applies to **both** surfaces (was
+  dialog-only — a parity gap).
+
 **v1.2 (2026-07-11)**
 - Added taper **Rate mode: Auto | Manual** parity requirement.
 - Clarified taper rate field behavior: read-only in Auto mode, editable in Manual mode.

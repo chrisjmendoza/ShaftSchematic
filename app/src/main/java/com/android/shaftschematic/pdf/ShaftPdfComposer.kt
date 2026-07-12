@@ -19,6 +19,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
+import com.android.shaftschematic.util.autoTaperRateText
 import com.android.shaftschematic.util.buildBodyTitleById
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.buildTaperTitleById
@@ -1120,12 +1121,15 @@ private fun letSet(t: Taper): LetSetResult =
     else
         LetSetResult(t.endDiaMm, t.startDiaMm, "FWD", "AFT")
 
-private fun rate1toN(t: Taper): String {
-    val d = abs(t.startDiaMm - t.endDiaMm)
-    if (d <= 1e-4f || t.lengthMm <= 0f) return "—"
-    val n = t.lengthMm / d
-    return "1:" + String.format(Locale.US, "%.0f", n)
-}
+// Delegate to the shared auto-rate formatter so a blank-rate taper prints the
+// same snapped/exact text the taper card's Auto mode shows on screen.
+private fun rate1toN(t: Taper): String =
+    autoTaperRateText(
+        lengthMm = t.lengthMm,
+        setDiaMm = t.startDiaMm,
+        letDiaMm = t.endDiaMm,
+        exactDecimals = 3,
+    ) ?: "—"
 
 private fun fmtLen(unit: UnitSystem, mm: Float): String = when (unit.name.uppercase(Locale.US)) {
     "MILLIMETERS", "MM" -> String.format(Locale.US, "%.1f mm", mm)

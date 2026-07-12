@@ -1,12 +1,20 @@
 package com.android.shaftschematic.util
 
-import com.android.shaftschematic.model.MM_PER_IN
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 
 private const val DEFAULT_SLOPE_ERROR_TOLERANCE = 0.03f
-private const val BORE_BREAK_IN = 6f
+
+/** 6 in expressed in canonical mm; unit conversion stays out of this layer. */
+private const val BORE_BREAK_MM = 152.4f
+
+/**
+ * Two within-tolerance candidates whose relative errors differ by no more than
+ * this are "comparably close": shop preference decides between them. A clearly
+ * closer candidate (larger error gap) always wins on geometry.
+ */
+private const val COMPARABLY_CLOSE_MARGIN = 0.01f
 
 val DEFAULT_COMMON_TAPER_ONE_TO_N: List<Float> = listOf(20f, 16f, 14f, 12f, 10f, 8f)
 
@@ -22,6 +30,13 @@ data class AutoTaperRateResult(
  * Returns either:
  * - a snapped common taper (for example, "1:16") when within tolerance, or
  * - an exact one-to-N form with fixed decimals (for example, "1:15.875").
+ *
+ * Both diameters must be real, positive values. UI callers use 0 / -1 as
+ * "not provided" sentinels; treating those as geometry would fabricate a rate.
+ *
+ * When more than one common rate is within tolerance and their errors are
+ * comparably close, the bore-preferred rate wins (1:16 at or under the 6 in
+ * bore break, 1:12 above). A clearly closer candidate wins on geometry.
  */
 fun autoTaperRate(
     lengthMm: Float,
@@ -33,37 +48,41 @@ fun autoTaperRate(
     exactDecimals: Int = 3,
 ): AutoTaperRateResult? {
     if (lengthMm <= 0f) return null
+    if (setDiaMm <= 0f || letDiaMm <= 0f) return null
 
     val diaDelta = abs(letDiaMm - setDiaMm)
     if (diaDelta <= 0f) return null
 
     val exactSlope = diaDelta / lengthMm
-    if (exactSlope <= 0f) return null
+    val exactN = lengthMm / diaDelta
 
     val preferredOrder = preferredCommonOneToN(referenceDiaMm, commonOneToN)
 
-    val nearestCommon = commonOneToN
+    val withinTolerance = commonOneToN
         .filter { it > 0f }
         .map { n ->
             val slope = 1f / n
-            val relErr = abs(slope - exactSlope) / exactSlope
             CommonCandidate(
                 oneToN = n,
-                relativeError = relErr,
+                relativeError = abs(slope - exactSlope) / exactSlope,
                 preferenceRank = preferredOrder.indexOf(n).takeIf { it >= 0 } ?: Int.MAX_VALUE,
             )
         }
-        .minWithOrNull(compareBy<CommonCandidate> { it.relativeError }.thenBy { it.preferenceRank })
+        .filter { it.relativeError <= maxRelativeSlopeError }
 
-    if (nearestCommon != null && nearestCommon.relativeError <= maxRelativeSlopeError) {
+    val bestError = withinTolerance.minOfOrNull { it.relativeError }
+    val snapped = withinTolerance
+        .filter { bestError != null && it.relativeError - bestError <= COMPARABLY_CLOSE_MARGIN }
+        .minWithOrNull(compareBy<CommonCandidate> { it.preferenceRank }.thenBy { it.relativeError })
+
+    if (snapped != null) {
         return AutoTaperRateResult(
-            text = "1:${formatOneToN(nearestCommon.oneToN, decimals = 0, trimTrailingZeros = true)}",
-            matchedCommonOneToN = nearestCommon.oneToN,
-            exactOneToN = lengthMm / diaDelta,
+            text = "1:${formatOneToN(snapped.oneToN, decimals = 3, trimTrailingZeros = true)}",
+            matchedCommonOneToN = snapped.oneToN,
+            exactOneToN = exactN,
         )
     }
 
-    val exactN = lengthMm / diaDelta
     return AutoTaperRateResult(
         text = "1:${formatOneToN(exactN, decimals = exactDecimals, trimTrailingZeros = false)}",
         matchedCommonOneToN = null,
@@ -169,7 +188,7 @@ private data class CommonCandidate(
 )
 
 private fun preferredCommonOneToN(referenceDiaMm: Float, commonOneToN: List<Float>): List<Float> {
-    val preferred = if (referenceDiaMm / MM_PER_IN <= BORE_BREAK_IN) {
+    val preferred = if (referenceDiaMm <= BORE_BREAK_MM) {
         listOf(16f, 12f)
     } else {
         listOf(12f, 16f)
@@ -180,5 +199,7 @@ private fun preferredCommonOneToN(referenceDiaMm: Float, commonOneToN: List<Floa
 private fun formatOneToN(value: Float, decimals: Int, trimTrailingZeros: Boolean): String {
     val fmt = "%.${decimals}f"
     val out = String.format(Locale.US, fmt, value.toDouble())
-    return if (trimTrailingZeros) out.trimEnd('0').trimEnd('.') else out
+    // Only strip zeros in the fractional part; trimming an integer like "20"
+    // would corrupt it to "2".
+    return if (trimTrailingZeros && out.contains('.')) out.trimEnd('0').trimEnd('.') else out
 }

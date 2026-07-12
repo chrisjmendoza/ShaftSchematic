@@ -524,7 +524,7 @@ fun AddTaperDialog(
     var length  by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
     var setText by remember(unit, d.lastDiaMm)       { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
     var letText by remember(unit) { mutableStateOf("") }  // allow deriving via rate
-    var rateText by remember { mutableStateOf("1:12") }   // legacy default; bare "1" means 1:12
+    var rateText by remember { mutableStateOf("1:12") }   // manual-mode text; shop default
     var autoRate by remember { mutableStateOf(true) }
 
     // Keyway — all optional (blank = 0)
@@ -542,34 +542,35 @@ fun AddTaperDialog(
     val hasLet = letMm > 0f
     val hasBothEnds = hasSet && hasLet
     val hasExactlyOneEnd = hasSet.xor(hasLet)
-    val computedRateText = autoTaperRateText(
-        lengthMm = lengthMm,
-        setDiaMm = setMm,
-        letDiaMm = letMm,
-        exactDecimals = 3
-    )
-    val manualRateBlock = manualTaperRateBlockingMessage(
-        rateText = rateText,
-        lengthMm = lengthMm,
-        setDiaMm = setMm,
-        letDiaMm = letMm,
-    )
-    val manualRateWarn = manualTaperRateWarning(
-        rateText = rateText,
-        lengthMm = lengthMm,
-        setDiaMm = setMm,
-        letDiaMm = letMm,
-    )
+    // autoTaperRateText guards against the -1 sentinels (returns null unless both
+    // diameters are real), so Auto never fabricates a rate from a missing end.
+    val computedRateText = remember(lengthMm, setMm, letMm) {
+        autoTaperRateText(
+            lengthMm = lengthMm,
+            setDiaMm = setMm,
+            letDiaMm = letMm,
+            exactDecimals = 3
+        )
+    }
+    val manualRateBlock = if (!autoRate) {
+        remember(rateText, lengthMm, setMm, letMm) {
+            manualTaperRateBlockingMessage(rateText, lengthMm, setMm, letMm)
+        }
+    } else null
+    val manualRateWarn = if (!autoRate) {
+        remember(rateText, lengthMm, setMm, letMm) {
+            manualTaperRateWarning(rateText, lengthMm, setMm, letMm)
+        }
+    } else null
     val autoRateIssue = if (autoRate && hasExactlyOneEnd) {
         "Auto needs Length + SET + LET. Switch to Manual to derive the missing end"
     } else null
     val rateIssueText = if (autoRate) autoRateIssue else (manualRateBlock ?: manualRateWarn)
 
-    LaunchedEffect(autoRate, computedRateText) {
-        if (autoRate) {
-            rateText = computedRateText.orEmpty()
-        }
-    }
+    // The rate field's display is derived (computed in Auto, typed text in Manual);
+    // rateText itself is never overwritten by Auto, so a typed manual rate survives
+    // toggling Auto and back.
+    val rateDisplayText = if (autoRate) computedRateText.orEmpty() else rateText
 
     // Resolve physical AFT-origin start from the entered value.
     val physStartMm = if (isFwd) {
@@ -650,7 +651,7 @@ fun AddTaperDialog(
                 }
                 CommitNumField(
                     "Taper Rate (1:12, 3/4, decimal)",
-                    rateText,
+                    rateDisplayText,
                     keyboardType = KeyboardType.Ascii,
                     enabled = !autoRate,
                     supportingText = rateIssueText,

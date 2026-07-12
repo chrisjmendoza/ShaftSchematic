@@ -524,28 +524,34 @@ internal fun ComponentPagerCard(
                     onRemoveTaper(t.id)
                 }
             ) {
-                val computedRateText = autoTaperRateText(
-                    lengthMm = t.lengthMm,
-                    setDiaMm = t.startDiaMm,
-                    letDiaMm = t.endDiaMm,
-                    exactDecimals = 3
-                )
-                var autoRate by rememberSaveable(t.id, computedRateText, t.taperRateText) {
+                val computedRateText = remember(t.lengthMm, t.startDiaMm, t.endDiaMm) {
+                    autoTaperRateText(
+                        lengthMm = t.lengthMm,
+                        setDiaMm = t.startDiaMm,
+                        letDiaMm = t.endDiaMm,
+                        exactDecimals = 3
+                    )
+                }
+                // Mode is user-owned state, seeded once per taper from whether the
+                // stored text already matches the computed auto text. It must not be
+                // re-derived on text/geometry changes — that silently discards an
+                // explicit Auto/Manual choice.
+                var autoRate by rememberSaveable(t.id) {
                     mutableStateOf(t.taperRateText.isBlank() || t.taperRateText == computedRateText)
                 }
-                val manualRateBlock = manualTaperRateBlockingMessage(
-                    rateText = t.taperRateText,
-                    lengthMm = t.lengthMm,
-                    setDiaMm = t.startDiaMm,
-                    letDiaMm = t.endDiaMm,
-                )
-                val manualRateWarn = manualTaperRateWarning(
-                    rateText = t.taperRateText,
-                    lengthMm = t.lengthMm,
-                    setDiaMm = t.startDiaMm,
-                    letDiaMm = t.endDiaMm,
-                )
-                val manualRateIssue = if (!autoRate) manualRateBlock ?: manualRateWarn else null
+                val hasExactlyOneEnd = (t.startDiaMm > 0f).xor(t.endDiaMm > 0f)
+                val autoRateIssue = if (autoRate && hasExactlyOneEnd) {
+                    "Auto needs Length + SET + LET. Switch to Manual to derive the missing end"
+                } else null
+                val manualRateIssue = if (!autoRate) {
+                    remember(t.taperRateText, t.lengthMm, t.startDiaMm, t.endDiaMm) {
+                        manualTaperRateBlockingMessage(t.taperRateText, t.lengthMm, t.startDiaMm, t.endDiaMm)
+                            ?: manualTaperRateWarning(t.taperRateText, t.lengthMm, t.startDiaMm, t.endDiaMm)
+                    }
+                } else null
+                val rateIssue = if (autoRate) autoRateIssue else manualRateIssue
+                // In Auto mode, geometry edits carry the recomputed rate with them;
+                // the model is only ever written from an explicit user commit.
                 val nextRateText: (Float, Float, Float) -> String = { lengthMm, startDiaMm, endDiaMm ->
                     if (autoRate) {
                         autoTaperRateText(
@@ -553,18 +559,9 @@ internal fun ComponentPagerCard(
                             setDiaMm = startDiaMm,
                             letDiaMm = endDiaMm,
                             exactDecimals = 3
-                        ).orEmpty()
+                        ) ?: t.taperRateText
                     } else {
                         t.taperRateText
-                    }
-                }
-
-                LaunchedEffect(autoRate, computedRateText, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, t.taperRateText) {
-                    if (autoRate) {
-                        val autoText = computedRateText.orEmpty()
-                        if (t.taperRateText != autoText) {
-                            onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, autoText)
-                        }
                     }
                 }
 
@@ -629,7 +626,15 @@ internal fun ComponentPagerCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Rate mode:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    FilterChip(selected = autoRate, onClick = { autoRate = true },
+                    FilterChip(selected = autoRate, onClick = {
+                        autoRate = true
+                        // Explicit user action: sync the stored text to the computed
+                        // rate so model/PDF match what the card now shows.
+                        val autoText = computedRateText
+                        if (autoText != null && autoText != t.taperRateText) {
+                            onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, autoText)
+                        }
+                    },
                         label = { Text("Auto") }, colors = selectedColors,
                         border = if (autoRate) BorderStroke(1.dp, Color.Black) else null)
                     FilterChip(selected = !autoRate, onClick = { autoRate = false },
@@ -642,8 +647,11 @@ internal fun ComponentPagerCard(
                     keyboardType = KeyboardType.Ascii,
                     allowColon = true,
                     enabled = !autoRate,
-                    externalIssueText = manualRateIssue,
-                    parseValid = { parseTaperRateText(it, allowAmbiguousBareOne = false) != null || it.trim() == "1" || it.isBlank() },
+                    externalIssueText = rateIssue,
+                    // Bare "1" passes parse so the validator can explain the ambiguity;
+                    // blank must NOT pass — updateTaper keeps the old rate on blank, so
+                    // committing "" would leave the field empty while the model retains it.
+                    parseValid = { parseTaperRateText(it, allowAmbiguousBareOne = false) != null || it.trim() == "1" },
                     validator = { raw -> manualTaperRateBlockingMessage(raw, t.lengthMm, t.startDiaMm, t.endDiaMm) }
                 ) { s ->
                     onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, s.trim())
