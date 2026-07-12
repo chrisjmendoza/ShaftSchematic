@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.ShaftPosition
+import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +35,11 @@ object AutosaveManager {
         val customer: String,
         val vessel: String,
         val jobNumber: String,
-        val notes: String
+        val notes: String,
+        // Added 2026-07: absent in older drafts; defaults keep them decodable.
+        val runoutConfig: RunoutConfig = RunoutConfig(),
+        val unitLocked: Boolean = false,
+        val overallIsManual: Boolean = false,
     )
 
     suspend fun autosave(context: Context, snapshot: SessionSnapshot) {

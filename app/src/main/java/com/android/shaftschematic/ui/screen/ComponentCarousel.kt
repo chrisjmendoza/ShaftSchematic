@@ -233,7 +233,10 @@ internal fun ComponentCarouselPager(
 
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.weight(1f).fillMaxHeight()
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            // Key pages by component id so per-page state (scroll, focus) follows the
+            // component when one is inserted/removed, instead of staying positional.
+            key = { page -> rowsSorted.getOrNull(page)?.component?.id ?: page }
         ) { page ->
             Box(Modifier.fillMaxSize().padding(horizontal = pageGutter)) {
                 val row = rowsSorted.getOrNull(page) ?: return@HorizontalPager

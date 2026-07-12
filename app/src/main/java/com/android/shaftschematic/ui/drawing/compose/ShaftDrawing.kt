@@ -138,7 +138,12 @@ fun ShaftDrawing(
     // RenderOptions (keep most defaults; set only what we actively control here)
     // NOTE: legacy color fields in RenderOptions are ARGB Ints → use toArgb().
     //       highlight colors are Color → pass Color directly.
-    val options = RenderOptions(
+    val options = remember(
+        unit, lineThicknessScale, outlineColor,
+        bodyFill, previewBodyFill, linerFill, previewLinerFill,
+        taperFill, previewTaperFill, threadFill, previewThreadFill, threadHatch,
+        highlightEnabled, highlightId, themeGlow,
+    ) { RenderOptions(
         // Grid is drawn in this composable; renderer's internal grid stays off.
         showGrid = false,
         gridUseInches = (unit == UnitSystem.INCHES),
@@ -169,7 +174,7 @@ fun ShaftDrawing(
         highlightEdgeAlpha = 1.0f,
         highlightGlowExtraPx = 12f,
         highlightEdgeExtraPx = 6f
-    )
+    ) }
 
     // Preview-safe spec: if OAL is zero but parts exist, extend to last occupied end.
     val safeSpec = remember(spec) {
@@ -288,10 +293,14 @@ fun ShaftDrawing(
             )
             latestLayoutRef.set(layout)
 
-            val dbg = layout.dbg()
-            if (VerboseLog.isEnabled(VerboseLog.Category.RENDER) && lastLayoutDbg[0] != dbg) {
-                lastLayoutDbg[0] = dbg
-                VerboseLog.d(VerboseLog.Category.RENDER, "ShaftDrawing") { "layout: $dbg" }
+            // Build the debug string only when verbose rendering is on — this lambda
+            // re-runs every pan/zoom frame, and dbg() formats six strings per call.
+            if (VerboseLog.isEnabled(VerboseLog.Category.RENDER)) {
+                val dbg = layout.dbg()
+                if (lastLayoutDbg[0] != dbg) {
+                    lastLayoutDbg[0] = dbg
+                    VerboseLog.d(VerboseLog.Category.RENDER, "ShaftDrawing") { "layout: $dbg" }
+                }
             }
 
             withTransform({

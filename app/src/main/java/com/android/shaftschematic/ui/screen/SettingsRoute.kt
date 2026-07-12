@@ -491,11 +491,18 @@ private fun LineThicknessControl(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("50%", style = MaterialTheme.typography.bodySmall)
+            // Track the drag locally; commit once on release so each drag frame
+            // doesn't write DataStore (and re-render any open PDF preview).
+            var sliderDrag by remember { mutableStateOf<Float?>(null) }
             Slider(
-                value = scale,
+                value = sliderDrag ?: scale,
                 onValueChange = { v ->
-                    onScaleChange(v)
+                    sliderDrag = v
                     fieldText = (v * 100).roundToInt().toString()
+                },
+                onValueChangeFinished = {
+                    sliderDrag?.let(onScaleChange)
+                    sliderDrag = null
                 },
                 valueRange = 0.5f..2.0f,
                 modifier = Modifier.weight(1f),

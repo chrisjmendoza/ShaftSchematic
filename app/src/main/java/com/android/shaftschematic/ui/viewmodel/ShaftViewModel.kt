@@ -402,6 +402,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val deleteHistory = ArrayDeque<LastDeleted>()
     private val redoHistory = ArrayDeque<LastDeleted>()
 
+    // True while redoLastDelete() replays a delete through the public removeX APIs.
+    // A replayed delete must not clear redoHistory — only a fresh user delete starts
+    // a new branch. Single-threaded (all mutations on Main), so a plain flag suffices.
+    private var isRedoing = false
+
     // Expose whether deletes can be undone/redone for UI buttons.
     private val _canUndoDeletes = MutableStateFlow(false)
     val canUndoDeletes: StateFlow<Boolean> = _canUndoDeletes.asStateFlow()
@@ -447,9 +452,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         @Suppress("UNCHECKED_CAST")
         // Flow.combine overload for >5 flows returns Array<Any?>
         combine(
-            spec, unit, shaftPosition, customer, vessel, jobNumber, notes
+            spec, unit, shaftPosition, customer, vessel, jobNumber, notes,
+            runoutConfig, unitLocked, overallIsManual
         ) { values: Array<Any?> ->
-            check(values.size == 7) { "Autosave combine expected 7 values, got ${values.size}" }
+            check(values.size == 10) { "Autosave combine expected 10 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -458,6 +464,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val ves = values[4] as String
             val job = values[5] as String
             val n = values[6] as String
+            val runout = values[7] as RunoutConfig
+            val locked = values[8] as Boolean
+            val manual = values[9] as Boolean
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -466,7 +475,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 customer = cust,
                 vessel = ves,
                 jobNumber = job,
-                notes = n
+                notes = n,
+                runoutConfig = runout,
+                unitLocked = locked,
+                overallIsManual = manual,
             )
         }
                 .debounce(1500)
@@ -760,6 +772,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _vessel.value = snapshot.vessel
         _jobNumber.value = snapshot.jobNumber
         _notes.value = snapshot.notes
+        _runoutConfig.value = snapshot.runoutConfig
+        // Restore unitLocked before any defaultUnitFlow emission can overwrite the
+        // draft's unit, and overallIsManual so a manually-set OAL isn't auto-resized.
+        _unitLocked.value = snapshot.unitLocked
+        _overallIsManual.value = snapshot.overallIsManual
     }
 
     /** Sets the UI unit (preview/labels only). Model remains canonical mm. */
@@ -917,7 +934,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
             }
-            redoHistory.clear()
+            if (!isRedoing) redoHistory.clear()
 
             ensureOverall()
             updateUndoRedoFlags()
@@ -1094,7 +1111,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
             }
-            redoHistory.clear()
+            if (!isRedoing) redoHistory.clear()
 
             ensureOverall()
             updateUndoRedoFlags()
@@ -1254,7 +1271,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
             }
-            redoHistory.clear()
+            if (!isRedoing) redoHistory.clear()
 
             // Maintain coverage + flags and show snackbar
             ensureOverall()
@@ -1421,7 +1438,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
             }
-            redoHistory.clear()
+            if (!isRedoing) redoHistory.clear()
 
             ensureOverall()
             updateUndoRedoFlags()
@@ -1565,7 +1582,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             if (deleteHistory.size > MAX_DELETE_HISTORY) {
                 deleteHistory.removeFirst()
             }
-            redoHistory.clear()
+            if (!isRedoing) redoHistory.clear()
 
             updateUndoRedoFlags()
             emitDeletedSnack(snapshot.kind)
@@ -1678,6 +1695,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _shaftPosition.value = decoded.shaftPosition
         _notes.value = decoded.notes
         _runoutConfig.value = decoded.runoutConfig
+
+        // Derive OAL mode from the document instead of leaking the previous session's
+        // flag: an authored OAL beyond the content end must be treated as manual, or
+        // the auto-sync path would snap it back down to the content end on open.
+        _overallIsManual.value =
+            decoded.spec.overallLengthMm > coverageEndMm(decoded.spec) + 1e-3f
 
         // Reset order to this document's components only
         _componentOrder.value = emptyList()
@@ -2027,12 +2050,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun redoLastDelete() {
         val snapshot = redoHistory.removeLastOrNull() ?: return
 
-        when (snapshot) {
-            is LastDeleted.Body -> removeBody(snapshot.id)
-            is LastDeleted.Taper -> removeTaper(snapshot.id)
-            is LastDeleted.Thread -> removeThread(snapshot.id)
-            is LastDeleted.Liner -> removeLiner(snapshot.id)
-            is LastDeleted.CouplerBoltSlot -> removeCouplerBoltSlot(snapshot.id)
+        isRedoing = true
+        try {
+            when (snapshot) {
+                is LastDeleted.Body -> removeBody(snapshot.id)
+                is LastDeleted.Taper -> removeTaper(snapshot.id)
+                is LastDeleted.Thread -> removeThread(snapshot.id)
+                is LastDeleted.Liner -> removeLiner(snapshot.id)
+                is LastDeleted.CouplerBoltSlot -> removeCouplerBoltSlot(snapshot.id)
+            }
+        } finally {
+            isRedoing = false
         }
 
         updateUndoRedoFlags()

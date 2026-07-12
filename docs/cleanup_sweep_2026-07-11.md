@@ -236,6 +236,10 @@ imports).
 
 **Wave 1 — bugs + one-liners (a day):** B-1..B-5, `dbg()` guard, pager `key`, slider
 debounce, `RenderOptions` remember, theme wiring decision.
+> **STATUS 2026-07-11:** DONE on branch `fix/wave1-cleanup` (see CHANGELOG). Still open
+> from Wave 1: the theme-wiring decision (wire `ShaftSchematicTheme` into MainActivity
+> for dark mode, or delete `ui/theme`), and a redo regression test (needs Robolectric or
+> a seam — nothing constructs ShaftViewModel in JVM tests today). Waves 2–4 not started.
 
 **Wave 2 — deletion pass (a day):** everything in C-2 that is delete-only, plus the
 model-layer dead items in C-7. Zero behavior change, big readability payoff; run the full

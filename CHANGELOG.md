@@ -8,6 +8,34 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-11
 
+### fix: cleanup sweep wave 1 — 5 bugs + hot-path fixes (branch `fix/wave1-cleanup`)
+
+From `docs/cleanup_sweep_2026-07-11.md` Part 1 and the Wave-1 one-liners:
+
+- **Multi-step redo works** — replayed deletes no longer clear the redo stack
+  (`isRedoing` guard in the five `removeX` paths); previously the first redo destroyed
+  the remaining redo entries.
+- **No more save-state crash from previews** — runout/wear preview bitmaps moved from
+  `rememberSaveable` to `remember`; an `ImageBitmap` is not saveable and threw on
+  backgrounding with a preview open.
+- **Runout/wear exports match their previews** — the SAF export launchers now pass
+  `pdfPrefs` and `lineThicknessScale` like the preview paths always did.
+- **Autosave restores the full session** — `SessionSnapshot` now carries `runoutConfig`,
+  `unitLocked`, and `overallIsManual` (older drafts still decode via defaults). Opening
+  a document also derives the OAL-manual flag from the file (oversized OAL ⇒ manual)
+  instead of leaking the previous session's flag — an authored oversized OAL can no
+  longer be snapped down by the auto-sync on open.
+- **PDF compression note matches the drawing** — the "compressed for clarity" footer
+  note now tests the resolved body list the geometry pass actually drew.
+- **Preview hot path** — `layout.dbg()` no longer formats debug strings every pan/zoom
+  frame when verbose logging is off; `RenderOptions` is remembered instead of rebuilt
+  per recomposition.
+- **Carousel pages keyed by component id** — per-page state (scroll, focus) follows the
+  component when one is inserted/removed instead of bleeding to the neighbor.
+- **Line-thickness sliders commit on release** — dragging no longer writes DataStore and
+  re-renders the PDF preview on every frame (PDF preview sheet, runout/wear sheet,
+  Settings).
+
 ### feat: classic S-break symbol on compression breaks (all three PDFs)
 
 Long-body compression breaks now draw the full round-stock break symbol: the existing

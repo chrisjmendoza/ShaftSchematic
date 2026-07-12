@@ -327,7 +327,9 @@ fun composeShaftPdf(
 
     if (effectiveOptions.showFooter) {
         // footer
-        val showCompressionNote = !bodyOnly && spec.bodies.any { b -> b.lengthMm * ptPerMm >= COMPRESS_TRIGGER_PT }
+        // Test the same body list the geometry pass drew (resolved incl. auto-bodies),
+        // so the note and the drawn center breaks can't disagree.
+        val showCompressionNote = !bodyOnly && bodiesForPdf.any { b -> b.lengthMm * ptPerMm >= COMPRESS_TRIGGER_PT }
 
         val footerTapers = selectFooterTapers(spec)
         val footerCfg = FooterConfig(

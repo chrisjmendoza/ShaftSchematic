@@ -40,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -95,8 +96,10 @@ fun WearRoute(
 
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
-    var previewBitmap by rememberSaveable { mutableStateOf<ImageBitmap?>(null) }
-    var previewLoading by rememberSaveable { mutableStateOf(false) }
+    // Plain remember: an ImageBitmap is not saveable (crashes onSaveInstanceState),
+    // and the LaunchedEffect below regenerates it anyway.
+    var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var previewLoading by remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
@@ -113,6 +116,8 @@ fun WearRoute(
                             project = ProjectInfo(customer = customer, vessel = vessel,
                                 jobNumber = jobNumber, side = shaftPosition),
                             unit = unit,
+                            pdfPrefs = vm.currentPdfPrefs,
+                            lineThicknessScale = lineThicknessScale,
                         )
                         doc.finishPage(page)
                         doc.writeTo(out)

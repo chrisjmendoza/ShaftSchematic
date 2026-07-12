@@ -127,8 +127,10 @@ fun RunoutRoute(
 
     val ctx = LocalContext.current
     var showPreview    by rememberSaveable { mutableStateOf(false) }
-    var previewBitmap  by rememberSaveable { mutableStateOf<ImageBitmap?>(null) }
-    var previewLoading by rememberSaveable { mutableStateOf(false) }
+    // Plain remember: an ImageBitmap is not saveable (crashes onSaveInstanceState),
+    // and the LaunchedEffect below regenerates it anyway.
+    var previewBitmap  by remember { mutableStateOf<ImageBitmap?>(null) }
+    var previewLoading by remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
@@ -145,6 +147,8 @@ fun RunoutRoute(
                             project = ProjectInfo(customer = customer, vessel = vessel,
                                 jobNumber = jobNumber, side = shaftPosition),
                             unit = unit,
+                            pdfPrefs = vm.currentPdfPrefs,
+                            lineThicknessScale = lineThicknessScale,
                         )
                         doc.finishPage(page)
                         doc.writeTo(out)
@@ -720,16 +724,23 @@ internal fun RunoutWearOptionsSheet(
         Spacer(Modifier.height(12.dp))
 
         // ── Line thickness ───────────────────────────────────────────────────
+        // Track the drag locally; commit once on release. Committing per drag frame
+        // writes DataStore and re-renders the whole PDF preview each frame.
+        var thicknessDrag by remember { mutableStateOf<Float?>(null) }
         Text(
-            "Line thickness  ${(lineThicknessScale * 100).roundToInt()}%",
+            "Line thickness  ${((thicknessDrag ?: lineThicknessScale) * 100).roundToInt()}%",
             style = MaterialTheme.typography.titleSmall,
         )
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("50%", style = MaterialTheme.typography.bodySmall)
             Slider(
-                value = lineThicknessScale,
-                onValueChange = { vm.setLineThicknessScale(it) },
+                value = thicknessDrag ?: lineThicknessScale,
+                onValueChange = { thicknessDrag = it },
+                onValueChangeFinished = {
+                    thicknessDrag?.let { vm.setLineThicknessScale(it) }
+                    thicknessDrag = null
+                },
                 valueRange = 0.5f..2.0f,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )

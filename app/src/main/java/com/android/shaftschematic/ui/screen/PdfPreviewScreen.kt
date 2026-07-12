@@ -426,9 +426,12 @@ private fun PdfOptionsSheet(
         Spacer(Modifier.height(12.dp))
 
         // ── Line thickness ───────────────────────────────────────────────────
+        // Track the drag locally; commit once on release. Committing per drag frame
+        // writes DataStore and re-renders the whole PDF preview each frame.
+        var thicknessDrag by remember { mutableStateOf<Float?>(null) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Line thickness  ${(lineThicknessScale * 100).roundToInt()}%",
+                "Line thickness  ${((thicknessDrag ?: lineThicknessScale) * 100).roundToInt()}%",
                 style = MaterialTheme.typography.titleSmall,
             )
         }
@@ -436,8 +439,12 @@ private fun PdfOptionsSheet(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("50%", style = MaterialTheme.typography.bodySmall)
             Slider(
-                value = lineThicknessScale,
-                onValueChange = { vm.setLineThicknessScale(it) },
+                value = thicknessDrag ?: lineThicknessScale,
+                onValueChange = { thicknessDrag = it },
+                onValueChangeFinished = {
+                    thicknessDrag?.let { vm.setLineThicknessScale(it) }
+                    thicknessDrag = null
+                },
                 valueRange = 0.5f..2.0f,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
