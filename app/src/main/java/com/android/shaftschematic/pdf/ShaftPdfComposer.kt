@@ -15,6 +15,7 @@ import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
@@ -331,8 +332,24 @@ fun composeShaftPdf(
         // so the note and the drawn center breaks can't disagree.
         val showCompressionNote = !bodyOnly && bodiesForPdf.any { b -> b.lengthMm * ptPerMm >= COMPRESS_TRIGGER_PT }
 
+        // Footer "Body:" diameters — authored bodies as actually drawn. Raw spec.bodies
+        // can hold degenerate rows (zero-length, or fully swallowed by body subtraction
+        // under a liner/taper) that are invisible in the drawing and the carousel; their
+        // Ø must not print in the footer.
+        val footerBodyDiasMm = (
+            resolvedComponents
+                ?.filterIsInstance<ResolvedBody>()
+                ?.filter {
+                    it.source == ResolvedComponentSource.EXPLICIT &&
+                        it.endMmPhysical - it.startMmPhysical > 0f && it.diaMm > 0f
+                }
+                ?.map { it.diaMm }
+                ?: spec.bodies.filter { it.lengthMm > 0f && it.diaMm > 0f }.map { it.diaMm }
+            ).distinct().sorted()
+
         val footerTapers = selectFooterTapers(spec)
         val footerCfg = FooterConfig(
+            bodyDiasMm = footerBodyDiasMm,
             showAftThread = hasAftThread(spec),
             showFwdThread = hasFwdThread(spec),
             // Taper rendering is gated by detectEndFeatures(); this flag only controls whether
@@ -979,13 +996,8 @@ private fun drawFooter(
         c.drawText(ellipsizeToWidth("Job #: ${project.jobNumber}", text, midMaxW),   midX, y, text); y += lh
         c.drawText("Date: $date",                   midX, y, text); y += lh
 
-        val uniqueODs = spec.bodies
-            .filter { it.diaMm > 0f }
-            .map { it.diaMm }
-            .distinct()
-            .sorted()
-        if (uniqueODs.isNotEmpty()) {
-            val label = uniqueODs.joinToString(", ") { "Ø ${formatDiaWithUnit(it.toDouble(), unit)}" }
+        if (cfg.bodyDiasMm.isNotEmpty()) {
+            val label = cfg.bodyDiasMm.joinToString(", ") { "Ø ${formatDiaWithUnit(it.toDouble(), unit)}" }
             c.drawText(ellipsizeToWidth("Body: $label", text, midMaxW), midX, y, text); y += lh
         }
 
@@ -1323,5 +1335,7 @@ data class FooterConfig(
     val showFwdThread: Boolean,
     val showAftTaper: Boolean,
     val showFwdTaper: Boolean,
-    val showCompressionNote: Boolean
+    val showCompressionNote: Boolean,
+    /** Distinct body ODs (mm) to print as the "Body:" line; empty hides the line. */
+    val bodyDiasMm: List<Float> = emptyList(),
 )

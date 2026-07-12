@@ -27,6 +27,10 @@ From `docs/cleanup_sweep_2026-07-11.md` Part 1 and the Wave-1 one-liners:
   longer be snapped down by the auto-sync on open.
 - **PDF compression note matches the drawing** — the "compressed for clarity" footer
   note now tests the resolved body list the geometry pass actually drew.
+- **Footer "Body:" line lists only drawn bodies** — it previously read raw `spec.bodies`,
+  so a degenerate body row (zero-length, or fully swallowed by body subtraction under a
+  liner/taper) printed a phantom Ø that appeared nowhere in the drawing or carousel.
+  Now it lists authored bodies as actually drawn.
 - **Preview hot path** — `layout.dbg()` no longer formats debug strings every pan/zoom
   frame when verbose logging is off; `RenderOptions` is remembered instead of rebuilt
   per recomposition.
