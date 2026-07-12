@@ -17,6 +17,11 @@ val gitCount: Int = try {
     }.standardOutput.asText.get().trim().toInt()
 } catch (_: Exception) { 1 }
 
+// Manual version floor. gitCount alone can shrink (shallow CI clones count 1;
+// git absent falls back to 1), which distribution channels reject as a downgrade.
+// Bump this when a distributed build must supersede all previously installed ones.
+val versionBase = 300
+
 android {
     namespace = "com.android.shaftschematic"
     compileSdk = 36
@@ -37,8 +42,8 @@ android {
         applicationId = "com.android.shaftschematic"
         minSdk = 28
         targetSdk = 36
-        versionCode = gitCount
-        versionName = "1.2.$gitCount"
+        versionCode = versionBase + gitCount
+        versionName = "1.3.${versionBase + gitCount}"
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
