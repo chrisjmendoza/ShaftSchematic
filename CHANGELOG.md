@@ -8,6 +8,36 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-12
 
+### feat: backup & restore for saved shafts (+ fix for update data loss)
+
+Layered protection against losing saved shafts to a bad update:
+
+- **Fixed the root cause of saves lost on update.** Sample pruning previously
+  deleted any file whose name matched a bundled sample and whose notes carried
+  the `[SAMPLE]` marker — silently destroying shafts a user had built by
+  editing a seeded sample. Pruning is now ledger-driven: at seed time the app
+  records a SHA-256 of exactly what it wrote, and on a version bump it deletes
+  only files still byte-identical to that hash. Anything edited (or predating
+  the ledger) is kept. Regression-tested.
+- **Settings → Data → "Back up all shafts…"** writes every saved shaft into a
+  single dated zip (with a manifest) at any location you pick — Drive,
+  Downloads, SD card — so a copy lives outside the app sandbox.
+- **Settings → Data → "Restore from backup…"** imports a backup zip. Never
+  overwrites: identical docs are skipped, name collisions are saved as
+  `<name> (restored)`. Result summary shown in a snackbar.
+- **Open screen → "Import"** brings a single `.shaft` file from anywhere on
+  the device into Saved (same never-overwrite policy).
+- **Save screen → "Save a copy to device…"** exports the current shaft as a
+  `.shaft` file to a picked location (device-to-device sharing, ad-hoc copies).
+- **Automatic pre-update snapshots:** on the first launch after an app-version
+  change, the whole saves folder is zipped into internal `backups/` (keeping
+  the last 3) *before* any migration or seeding runs.
+- **Android Auto Backup wired up:** `shafts/` is now included in Google cloud
+  backup and device-to-device transfer rules, so a reinstall can restore saves
+  without any manual step.
+- New `ShaftBackup` util (zip write/read, restore policy, snapshots) with a
+  JVM test suite; seeding tests extended to cover the ledger-guarded pruning.
+
 ### fix: auto taper-rate review fixes (formatting, sentinels, state ownership)
 
 Post-review hardening of the auto taper-rate feature shipped 2026-07-11:

@@ -20,6 +20,9 @@ import com.android.shaftschematic.util.PreviewColorSetting
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 
 val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -239,6 +242,37 @@ object SettingsStore {
 
     suspend fun setSampleSeedVersion(ctx: Context, v: Int) {
         ctx.settingsDataStore.edit { it[KEY_SAMPLE_SEED_VERSION] = v }
+    }
+
+    // ── Seeded-sample ledger (filename → SHA-256 of seeded content) ──────────
+    // Lets sample pruning prove a file untouched before deleting it. Stored as
+    // a JSON map; an unreadable value degrades to "prune nothing" (safe).
+
+    private val KEY_SEEDED_SAMPLE_HASHES = stringPreferencesKey("seeded_sample_hashes")
+    private val seededHashesSerializer = MapSerializer(String.serializer(), String.serializer())
+
+    suspend fun getSeededSampleHashes(ctx: Context): Map<String, String> {
+        val raw = ctx.settingsDataStore.data.first()[KEY_SEEDED_SAMPLE_HASHES] ?: return emptyMap()
+        return runCatching {
+            Json.decodeFromString(seededHashesSerializer, raw)
+        }.getOrDefault(emptyMap())
+    }
+
+    suspend fun setSeededSampleHashes(ctx: Context, hashes: Map<String, String>) {
+        ctx.settingsDataStore.edit {
+            it[KEY_SEEDED_SAMPLE_HASHES] = Json.encodeToString(seededHashesSerializer, hashes)
+        }
+    }
+
+    // ── Pre-update snapshot gate ──────────────────────────────────────────────
+
+    private val KEY_LAST_SNAPSHOT_VERSION_CODE = intPreferencesKey("last_snapshot_version_code")
+
+    suspend fun getLastSnapshotVersionCode(ctx: Context): Int =
+        ctx.settingsDataStore.data.first()[KEY_LAST_SNAPSHOT_VERSION_CODE] ?: 0
+
+    suspend fun setLastSnapshotVersionCode(ctx: Context, v: Int) {
+        ctx.settingsDataStore.edit { it[KEY_LAST_SNAPSHOT_VERSION_CODE] = v }
     }
 
     private fun parseRole(raw: String?, fallback: PreviewColorRole): PreviewColorRole {

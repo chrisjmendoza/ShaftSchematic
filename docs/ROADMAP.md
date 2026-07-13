@@ -33,6 +33,15 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - [ ] **Preview panel + event wiring extraction** — remaining ShaftScreen refactor work (lower priority)
 
 **Delivered in v0.5.x so far:**
+- Backup & restore for saved shafts — Settings → Data gains "Back up all
+	shafts…" (single zip to any picked location: Drive, Downloads, SD card) and
+	"Restore from backup…" (never overwrites; identical docs skipped, collisions
+	renamed "(restored)"). Open screen gains per-file Import; Save screen gains
+	"Save a copy to device…". Automatic pre-update snapshots (zip of the saves
+	folder, kept ×3) run before any migration/seeding, and Android Auto Backup /
+	device-transfer rules now include `shafts/`. Root cause of saves lost on
+	update fixed: sample pruning now only deletes files byte-identical to what
+	was seeded (SHA-256 ledger); user-edited samples are never touched
 - Auto taper-rate workflow — Add Taper and carousel taper cards now include
 	`Rate mode: Auto | Manual` (Auto default). In Auto mode, rate is computed from
 	Length + SET + LET, snaps to nearby common shop tapers (3% slope tolerance), and

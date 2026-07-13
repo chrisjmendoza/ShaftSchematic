@@ -5,6 +5,8 @@ import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.pdf.PdfExportMode
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/SettingsRoute.kt
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -59,6 +61,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import kotlin.math.roundToInt
 import com.android.shaftschematic.BuildConfig
+import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.ui.viewmodel.*
@@ -274,6 +277,40 @@ fun SettingsRoute(
 
                     HorizontalDivider()
                     Text("Data", style = MaterialTheme.typography.titleMedium)
+
+                    val backupLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.CreateDocument("application/zip")
+                    ) { uri -> uri?.let(vm::backupAllShaftsTo) }
+                    val restoreLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.OpenDocument()
+                    ) { uri -> uri?.let(vm::restoreShaftsFromBackup) }
+
+                    ListItem(
+                        headlineContent = { Text("Back up all shafts…") },
+                        supportingContent = { Text("Save every shaft as one zip to a location you choose (Drive, Downloads, SD card)") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                backupLauncher.launch(
+                                    ShaftBackup.defaultBackupFilename(System.currentTimeMillis())
+                                )
+                            }
+                    )
+                    ListItem(
+                        headlineContent = { Text("Restore from backup…") },
+                        supportingContent = { Text("Import shafts from a backup zip — never overwrites, collisions are renamed") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                restoreLauncher.launch(
+                                    arrayOf(
+                                        "application/zip",
+                                        "application/x-zip-compressed",
+                                        "application/octet-stream",
+                                    )
+                                )
+                            }
+                    )
                     ListItem(
                         headlineContent = { Text("Restore sample shafts") },
                         supportingContent = { Text("Re-add bundled examples to Saved (won't overwrite your files)") },

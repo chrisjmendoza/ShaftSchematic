@@ -238,6 +238,14 @@ object InternalStorage {
         val currentSeedVersion: Int
         suspend fun getSeedVersion(): Int
         suspend fun setSeedVersion(v: Int)
+
+        /**
+         * Ledger of exactly what was seeded: filename → SHA-256 of the seeded
+         * content. Pruning may only delete a file whose current content still
+         * matches its ledger hash — i.e. provably untouched by the user.
+         */
+        suspend fun getSeededSampleHashes(): Map<String, String>
+        suspend fun setSeededSampleHashes(hashes: Map<String, String>)
     }
 
     internal class SettingsStoreSampleSeedSettings(
@@ -251,6 +259,13 @@ object InternalStorage {
 
         override suspend fun setSeedVersion(v: Int) {
             settingsStore.setSampleSeedVersion(ctx, v)
+        }
+
+        override suspend fun getSeededSampleHashes(): Map<String, String> =
+            settingsStore.getSeededSampleHashes(ctx)
+
+        override suspend fun setSeededSampleHashes(hashes: Map<String, String>) {
+            settingsStore.setSeededSampleHashes(ctx, hashes)
         }
     }
 
@@ -310,14 +325,14 @@ object InternalStorage {
                 return SeedReport(attemptedCount = 0, savedCount = 0, failedCount = 0)
             }
 
-            // Version-bump cleanup: remove previously seeded *legacy* sample docs so the
+            // Version-bump cleanup: remove previously seeded sample docs so the
             // Saved list doesn't accumulate old+new bundled examples.
             //
-            // Safety constraints:
-            // - Only runs when upgrading from a non-zero seed version.
-            // - Matches by stable notes marker + base-name match against current bundled samples.
+            // Safety constraint: only files recorded in the seed ledger AND whose
+            // content is still byte-identical to what was seeded are deleted.
+            // Anything the user has edited (or that predates the ledger) is kept.
             if (seedVersion > 0) {
-                prunePreviouslySeededBundledSamples(dir, assets)
+                prunePreviouslySeededBundledSamples(dir, settings)
             }
         }
 
@@ -338,6 +353,7 @@ object InternalStorage {
 
         var saved = 0
         var failed = 0
+        val newSeedHashes = mutableMapOf<String, String>()
 
         for (filename in filenames) {
             val raw = runCatching { assets.readSampleShaftText(filename) }.getOrElse {
@@ -383,9 +399,17 @@ object InternalStorage {
 
             if (ok) {
                 existingBaseNames.add(uniqueBase)
+                newSeedHashes[targetName] = ShaftBackup.sha256Hex(raw)
                 saved++
             } else {
                 failed++
+            }
+        }
+
+        if (newSeedHashes.isNotEmpty()) {
+            // Ledger what was seeded so future prunes can prove a file untouched.
+            runCatching {
+                settings.setSeededSampleHashes(settings.getSeededSampleHashes() + newSeedHashes)
             }
         }
 
@@ -458,49 +482,45 @@ object InternalStorage {
     // Bundled samples: versioned cleanup
     // ────────────────────────────────────────────────────────────────────────────
 
-    private suspend fun prunePreviouslySeededBundledSamples(dir: File, assets: SampleAssetSource): Int {
-        val bundledSampleBases = bundledSampleBaseNames(assets)
-        if (bundledSampleBases.isEmpty()) return 0
+    /**
+     * Deletes previously seeded sample docs — but ONLY when the file's current
+     * content is byte-identical to what the seeder wrote (proven via the seed
+     * ledger). A user who opened a sample, edited it, and saved it back keeps
+     * their file: the hash no longer matches, so it is left alone and simply
+     * dropped from the ledger (it is user data now, not ours).
+     *
+     * Files that predate the ledger (or were seeded before this safety existed)
+     * are never deleted; they may linger alongside newer samples, which is the
+     * deliberate trade-off after seeded-name saves were silently lost on update.
+     */
+    private suspend fun prunePreviouslySeededBundledSamples(dir: File, settings: SampleSeedSettings): Int {
+        val ledger = runCatching { settings.getSeededSampleHashes() }.getOrDefault(emptyMap())
+        if (ledger.isEmpty()) return 0
 
         var deleted = 0
+        val remaining = ledger.toMutableMap()
 
-        // Only consider `.shaft` docs. Legacy `.json` docs are user data and shouldn't be touched.
-        val names = list(dir).filter { it.endsWith(SHAFT_DOT_EXT, ignoreCase = true) }
-        for (name in names) {
-            val base = stripShaftDocExtension(name)
-            if (!bundledSampleBases.contains(base)) continue
+        for ((name, seededHash) in ledger) {
+            val file = File(dir, name)
+            if (!file.exists()) {
+                // User already deleted it; the ledger entry is stale either way.
+                remaining.remove(name)
+                continue
+            }
 
-            val raw = runCatching { File(dir, name).readText() }.getOrNull() ?: continue
-            val doc = runCatching { ShaftDocCodec.decode(raw) }.getOrNull() ?: continue
-            if (!isSeededSampleNotes(doc.notes)) continue
-
-            if (delete(dir, name)) deleted++
+            val raw = runCatching { file.readText() }.getOrNull() ?: continue
+            if (ShaftBackup.sha256Hex(raw) == seededHash) {
+                if (delete(dir, name)) {
+                    remaining.remove(name)
+                    deleted++
+                }
+            } else {
+                // Edited since seeding → user data. Keep the file, forget the entry.
+                remaining.remove(name)
+            }
         }
 
+        runCatching { settings.setSeededSampleHashes(remaining) }
         return deleted
-    }
-
-    private suspend fun bundledSampleBaseNames(assets: SampleAssetSource): Set<String> {
-        val filenames = runCatching { assets.listSampleShaftFiles() }.getOrDefault(emptyList())
-            .filter { it.endsWith(SHAFT_DOT_EXT, ignoreCase = true) }
-
-        val bases = mutableSetOf<String>()
-        for (filename in filenames) {
-            val raw = runCatching { assets.readSampleShaftText(filename) }.getOrNull() ?: continue
-            val decoded = runCatching { ShaftDocCodec.decode(raw) }.getOrNull() ?: continue
-
-            val suffix = decoded.shaftPosition.printableLabelOrNull()
-            val preferredBase =
-                DocumentNaming.suggestedBaseName(
-                    jobNumber = decoded.jobNumber,
-                    customer = decoded.customer,
-                    vessel = decoded.vessel,
-                    suffix = suffix,
-                ) ?: deriveBaseNameFromFilename(filename)
-
-            bases.add(sanitizeFilenameBase(preferredBase))
-        }
-
-        return bases
     }
 }

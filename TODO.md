@@ -26,6 +26,7 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 | Carousel selection fix | ✅ Fixed (seeded on load, swipe works before first tap) |
 | Shared signing config | ✅ debug.keystore committed; all machines update-install |
 | Internal save/open | ✅ Working |
+| Backup & restore | ✅ Zip backup/restore via file picker, per-shaft import/export, pre-update snapshots (keep 3), Auto Backup rules; sample pruning made non-destructive (seed-hash ledger) |
 | Autosave / draft restore | ✅ Working |
 | ShaftScreen.kt | ✅ Carousel extracted to `ComponentCarousel.kt` (2322 → 1434 lines) |
 | Sidebar nav (3 tabs) | ✅ EditorSidebar + EditorTab + ShaftEditorRoute updated |

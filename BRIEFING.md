@@ -42,6 +42,7 @@ The core feature set is **shipped and working**:
 | Taper keyway drawing (open + floating, plan-view convention) | ✅ Working |
 | Shared signing config (single keystore across machines) | ✅ Configured |
 | Autosave / draft restore on launch | ✅ Working |
+| Backup & restore (zip backup/restore, per-shaft import/export, pre-update snapshots, Auto Backup rules) | ✅ Shipped (sample pruning made non-destructive via seed-hash ledger) |
 | Settings screen (units, grid, PDF prefs, line thickness) | ✅ Working |
 | Line thickness control (50%–200%, persisted) | ✅ Shipped |
 | Runout drawing (inline preview, fan-spread bubbles, TIR label) | ✅ Shipped |

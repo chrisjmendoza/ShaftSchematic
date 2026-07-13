@@ -1,7 +1,12 @@
 package com.android.shaftschematic.ui.nav
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,8 +47,10 @@ import java.util.Locale
 import androidx.compose.runtime.collectAsState
 import java.io.File
 import com.android.shaftschematic.doc.SHAFT_DOT_EXT
+import com.android.shaftschematic.doc.SHAFT_MIME
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.doc.stripShaftDocExtension
+import com.android.shaftschematic.io.ShaftBackup
 
 /**
 # InternalDocRoutes – open/save shaft docs *inside app storage*
@@ -91,6 +98,40 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
 
     LaunchedEffect(Unit) {
         files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
+    }
+
+    // Import a single .shaft file from anywhere on the device into app storage.
+    // Never overwrites: identical content is reported as already saved, a name
+    // collision with different content lands as "<name> (restored)".
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val message = withContext(Dispatchers.IO) {
+                runCatching {
+                    val text = ctx.contentResolver.openInputStream(uri)?.use {
+                        it.readBytes().toString(Charsets.UTF_8)
+                    } ?: error("Could not open the selected file")
+
+                    val name = displayNameForUri(ctx, uri) ?: "Imported"
+                    val report = ShaftBackup.restoreInto(
+                        dir = InternalStorage.dir(ctx.filesDir),
+                        docs = listOf(name to text),
+                    ) { raw -> runCatching { ShaftDocCodec.decode(raw) }.isSuccess }
+
+                    when {
+                        report.restoredCount + report.renamedCount > 0 ->
+                            "Imported ‘${stripShaftDocExtension(name)}’"
+                        report.skippedIdenticalCount > 0 ->
+                            "Already saved — an identical copy exists"
+                        else -> "That file isn’t a readable shaft document."
+                    }
+                }.getOrElse { "Could not import that file." }
+            }
+            files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
+            snackbarHostState.showSnackbar(message)
+        }
     }
 
     // Derived: filtered + sorted list used by the LazyColumn
@@ -205,6 +246,9 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
             TopAppBar(
                 title = { Text("Open drawing") },
                 actions = {
+                    TextButton(
+                        onClick = { importLauncher.launch(arrayOf("*/*")) }
+                    ) { Text("Import") }
                     TextButton(
                         onClick = {
                             val intent = FeedbackIntentFactory.create(
@@ -427,6 +471,13 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
     }
 }
 
+/** Best-effort display name for a SAF-picked document (import filename suggestion). */
+private fun displayNameForUri(ctx: Context, uri: Uri): String? =
+    runCatching {
+        ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+
 /** User-facing message for a failed document open. Version mismatches get their specific text. */
 internal fun openFailureMessage(name: String, e: Throwable): String = when (e) {
     is ShaftDocCodec.UnsupportedDocVersionException ->
@@ -457,11 +508,33 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val jobNumber by vm.jobNumber.collectAsState()
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
+
+    // "Save a copy to device": writes the current document to a SAF-picked
+    // location (Drive, Downloads, SD card). Purely additive — internal save
+    // state (current name, dirty flag) is untouched.
+    val saveCopyLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(SHAFT_MIME)
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(vm.exportJson().toByteArray(Charsets.UTF_8))
+                    } ?: error("Could not open the selected location")
+                }.isSuccess
+            }
+            snackbarHostState.showSnackbar(
+                if (ok) "Copy saved to device" else "Could not save the copy"
+            )
+        }
+    }
 
     var existingFiles by remember { mutableStateOf(listOf<String>()) }
     LaunchedEffect(Unit) { existingFiles = InternalStorage.list(ctx) }
@@ -514,7 +587,10 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
         )
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Save Drawing") }) }) { pad ->
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Save Drawing") }) },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { pad ->
         Column(
             modifier = Modifier
                 .padding(pad)
@@ -604,6 +680,11 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                 }) { Text("Save") }
                 OutlinedButton(onClick = onFinished) { Text("Cancel") }
             }
+
+            OutlinedButton(onClick = {
+                val base = stripShaftDocExtension(name.text.trim()).ifBlank { "Shaft" }
+                saveCopyLauncher.launch(base + SHAFT_DOT_EXT)
+            }) { Text("Save a copy to device…") }
         }
     }
 }

@@ -26,12 +26,20 @@ class SeedBundledSamplesTest {
 
     private class FakeSettings(
         var seedVersion: Int,
-        override val currentSeedVersion: Int = 4,
+        override var currentSeedVersion: Int = 4,
     ) : InternalStorage.SampleSeedSettings {
+        var seededHashes: Map<String, String> = emptyMap()
+
         override suspend fun getSeedVersion(): Int = seedVersion
 
         override suspend fun setSeedVersion(v: Int) {
             seedVersion = v
+        }
+
+        override suspend fun getSeededSampleHashes(): Map<String, String> = seededHashes
+
+        override suspend fun setSeededSampleHashes(hashes: Map<String, String>) {
+            seededHashes = hashes
         }
     }
 
@@ -267,58 +275,187 @@ class SeedBundledSamplesTest {
     }
 
     @Test
-        fun `version bump prunes previously seeded samples by marker and base name`() = runBlocking {
+    fun `version bump prunes only ledger-tracked unmodified seeded samples`() = runBlocking {
         val filesDir = createTempDir(prefix = "shaftschematic_test_")
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
 
-                        val job = "814333"
-                        val customer = "Harborline Propulsion"
-                        val vessel = "MV New Dawn"
-                        val position = ShaftPosition.STBD
+            val job = "814333"
+            val customer = "Harborline Propulsion"
+            val vessel = "MV New Dawn"
+            val position = ShaftPosition.STBD
 
-                        val desiredBase = DocumentNaming.suggestedBaseName(
-                                jobNumber = job,
-                                customer = customer,
-                                vessel = vessel,
-                                suffix = position.printableLabelOrNull(),
-                        )!!
+            val desiredBase = DocumentNaming.suggestedBaseName(
+                jobNumber = job,
+                customer = customer,
+                vessel = vessel,
+                suffix = position.printableLabelOrNull(),
+            )!!
 
-                        val oldSeededRaw = encodeDoc(
-                                jobNumber = job,
-                                customer = customer,
-                                vessel = vessel,
-                                position = position,
-                                spec = ShaftSpec(overallLengthMm = 111f),
-                                notes = "[SAMPLE] old seeded",
-                        )
+            // Seed v1 for real so the ledger records the file + hash.
+            val settings = FakeSettings(seedVersion = 0, currentSeedVersion = 1)
+            val v1Assets = FakeAssets(
+                mapOf(
+                    "01_old" + SHAFT_DOT_EXT to encodeDoc(
+                        jobNumber = job,
+                        customer = customer,
+                        vessel = vessel,
+                        position = position,
+                        spec = ShaftSpec(overallLengthMm = 111f),
+                        notes = "[SAMPLE] old seeded",
+                    )
+                )
+            )
+            InternalStorage.seedBundledSamplesIfNeeded(shaftsDir, v1Assets, settings)
+            assertEquals(1, settings.seedVersion)
+            assertTrue(settings.seededHashes.containsKey(desiredBase + SHAFT_DOT_EXT))
 
-                        // Previously seeded sample doc under the canonical base name.
-                        File(shaftsDir, desiredBase + SHAFT_DOT_EXT).writeText(oldSeededRaw)
-
-            val assets = FakeAssets(
+            // Simulate an app update bumping the bundled seed version.
+            settings.currentSeedVersion = 4
+            val v4Assets = FakeAssets(
                 mapOf(
                     "01_new" + SHAFT_DOT_EXT to encodeDoc(
-                                                jobNumber = job,
-                                                customer = customer,
-                                                vessel = vessel,
-                                                position = position,
-                                                spec = ShaftSpec(overallLengthMm = 123f),
-                                                notes = "[SAMPLE] new bundled",
+                        jobNumber = job,
+                        customer = customer,
+                        vessel = vessel,
+                        position = position,
+                        spec = ShaftSpec(overallLengthMm = 123f),
+                        notes = "[SAMPLE] new bundled",
                     )
                 )
             )
 
-            // Simulate upgrading from seed v1 → v4.
-            val settings = FakeSettings(seedVersion = 1, currentSeedVersion = 4)
-
-            val report = InternalStorage.seedBundledSamplesIfNeeded(shaftsDir, assets, settings)
+            val report = InternalStorage.seedBundledSamplesIfNeeded(shaftsDir, v4Assets, settings)
             assertEquals("Expected 1 file seeded on version bump", 1, report.savedCount)
             assertEquals("Expected seed version to bump to 4", 4, settings.seedVersion)
 
-            // Existing seeded sample was replaced (pruned then re-added).
+            // Untouched seeded sample was replaced (pruned then re-added under its name).
             val updated = ShaftDocCodec.decode(File(shaftsDir, desiredBase + SHAFT_DOT_EXT).readText())
             assertEquals(123f, updated.spec.overallLengthMm)
+        } finally {
+            filesDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `version bump keeps a seeded sample the user has edited`() = runBlocking {
+        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        try {
+            val shaftsDir = InternalStorage.dir(filesDir)
+
+            val job = "814444"
+            val customer = "NorthSound Marine"
+            val vessel = "MV Copper Kestrel"
+            val position = ShaftPosition.PORT
+
+            val desiredBase = DocumentNaming.suggestedBaseName(
+                jobNumber = job,
+                customer = customer,
+                vessel = vessel,
+                suffix = position.printableLabelOrNull(),
+            )!!
+            val seededName = desiredBase + SHAFT_DOT_EXT
+
+            val settings = FakeSettings(seedVersion = 0, currentSeedVersion = 1)
+            InternalStorage.seedBundledSamplesIfNeeded(
+                shaftsDir,
+                FakeAssets(
+                    mapOf(
+                        "01_old" + SHAFT_DOT_EXT to encodeDoc(
+                            jobNumber = job, customer = customer, vessel = vessel,
+                            position = position,
+                            spec = ShaftSpec(overallLengthMm = 111f),
+                        )
+                    )
+                ),
+                settings,
+            )
+
+            // User opens the sample, edits it, and saves it back under the same
+            // name — even keeping the [SAMPLE] notes marker. This was the exact
+            // scenario that used to get silently deleted on update.
+            val userEdited = encodeDoc(
+                jobNumber = job, customer = customer, vessel = vessel,
+                position = position,
+                spec = ShaftSpec(overallLengthMm = 999f),
+                notes = "[SAMPLE] still has the marker, but this is user work now",
+            )
+            File(shaftsDir, seededName).writeText(userEdited)
+
+            settings.currentSeedVersion = 4
+            InternalStorage.seedBundledSamplesIfNeeded(
+                shaftsDir,
+                FakeAssets(
+                    mapOf(
+                        "01_new" + SHAFT_DOT_EXT to encodeDoc(
+                            jobNumber = job, customer = customer, vessel = vessel,
+                            position = position,
+                            spec = ShaftSpec(overallLengthMm = 123f),
+                        )
+                    )
+                ),
+                settings,
+            )
+
+            // The edited file survives untouched; the new sample lands beside it.
+            val kept = ShaftDocCodec.decode(File(shaftsDir, seededName).readText())
+            assertEquals(999f, kept.spec.overallLengthMm)
+            assertTrue(File(shaftsDir, "$desiredBase (Sample)$SHAFT_DOT_EXT").exists())
+            // Edited file is user data now — dropped from the ledger.
+            assertTrue(!settings.seededHashes.containsKey(seededName) ||
+                settings.seededHashes[seededName] != ShaftBackup.sha256Hex(userEdited))
+        } finally {
+            filesDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `version bump never deletes files that predate the seed ledger`() = runBlocking {
+        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        try {
+            val shaftsDir = InternalStorage.dir(filesDir)
+
+            val job = "814555"
+            val customer = "Harborline Propulsion"
+            val vessel = "FV Silver Marlin"
+            val position = ShaftPosition.STBD
+
+            val desiredBase = DocumentNaming.suggestedBaseName(
+                jobNumber = job,
+                customer = customer,
+                vessel = vessel,
+                suffix = position.printableLabelOrNull(),
+            )!!
+
+            // A pre-ledger doc: canonical sample name AND the [SAMPLE] marker,
+            // but no ledger entry (seeded by an older app version).
+            val legacy = encodeDoc(
+                jobNumber = job, customer = customer, vessel = vessel,
+                position = position,
+                spec = ShaftSpec(overallLengthMm = 111f),
+                notes = "[SAMPLE] legacy seeded, no ledger",
+            )
+            File(shaftsDir, desiredBase + SHAFT_DOT_EXT).writeText(legacy)
+
+            val settings = FakeSettings(seedVersion = 1, currentSeedVersion = 4)
+            InternalStorage.seedBundledSamplesIfNeeded(
+                shaftsDir,
+                FakeAssets(
+                    mapOf(
+                        "01_new" + SHAFT_DOT_EXT to encodeDoc(
+                            jobNumber = job, customer = customer, vessel = vessel,
+                            position = position,
+                            spec = ShaftSpec(overallLengthMm = 123f),
+                        )
+                    )
+                ),
+                settings,
+            )
+
+            // Legacy file kept; new sample seeded beside it with a suffix.
+            val kept = ShaftDocCodec.decode(File(shaftsDir, desiredBase + SHAFT_DOT_EXT).readText())
+            assertEquals(111f, kept.spec.overallLengthMm)
+            assertTrue(File(shaftsDir, "$desiredBase (Sample)$SHAFT_DOT_EXT").exists())
         } finally {
             filesDir.deleteRecursively()
         }

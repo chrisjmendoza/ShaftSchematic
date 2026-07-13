@@ -7,12 +7,16 @@ import com.android.shaftschematic.pdf.PdfExportMode
 
 import android.app.Application
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.android.shaftschematic.BuildConfig
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.data.SettingsStore.UnitPref
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.io.InternalStorage
+import com.android.shaftschematic.io.ShaftBackup
+import java.io.File
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.model.snapForwardFrom
 import com.android.shaftschematic.model.snapForwardFromOrdered
@@ -502,17 +506,42 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         // --- SETTINGSSTORE FLOWS AND MIGRATIONS ---
-        // One-time migration: internal saved shafts were historically `*.json`.
-        // Keep them visible/openable, but prefer `*.shaft` going forward.
-        viewModelScope.launch {
+        // Startup storage maintenance runs as ONE sequential pipeline so the
+        // safety snapshot always lands before anything can rewrite saved docs:
+        //   1. pre-update snapshot (zip of shafts/, once per versionCode change)
+        //   2. legacy `*.json` → `*.shaft` rename migration
+        //   3. versioned bundled-sample seeding (incl. ledger-guarded pruning)
+        viewModelScope.launch(Dispatchers.IO) {
             val app = getApplication<Application>()
+
+            runCatching {
+                val versionCode = BuildConfig.VERSION_CODE
+                if (SettingsStore.getLastSnapshotVersionCode(app) != versionCode) {
+                    val written = ShaftBackup.writeSnapshot(
+                        shaftsDir = InternalStorage.dir(app.filesDir),
+                        backupsDir = File(app.filesDir, "backups"),
+                        appVersion = BuildConfig.VERSION_NAME,
+                        docFormatVersion = ShaftDocCodec.CURRENT_VERSION,
+                        nowMs = System.currentTimeMillis(),
+                    )
+                    SettingsStore.setLastSnapshotVersionCode(app, versionCode)
+                    VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") {
+                        "pre-update snapshot: ${written?.name ?: "nothing to snapshot"}"
+                    }
+                }
+            }.onFailure {
+                VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") {
+                    "pre-update snapshot failed: ${it.javaClass.simpleName}: ${it.message}"
+                }
+            }
+
+            // One-time migration: internal saved shafts were historically `*.json`.
+            // Keep them visible/openable, but prefer `*.shaft` going forward.
             val alreadyMigrated = runCatching { SettingsStore.internalDocsMigratedToShaft(app) }
                 .getOrDefault(false)
             if (!alreadyMigrated) {
                 runCatching {
-                    withContext(Dispatchers.IO) {
-                        migrateLegacyInternalDocs(app)
-                    }
+                    migrateLegacyInternalDocs(app)
                 }.onSuccess { report ->
                     VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") {
                         "legacy migration finished: migrated=${report.migratedCount} skipped=${report.skippedCount}"
@@ -527,11 +556,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
-        }
 
-        // One-time (versioned) seeding: bundled sample shafts into internal Saved list.
-        viewModelScope.launch(Dispatchers.IO) {
-            val app = getApplication<Application>()
+            // One-time (versioned) seeding: bundled sample shafts into internal Saved list.
             runCatching {
                 InternalStorage.seedBundledSamplesIfNeeded(app, SettingsStore)
             }.onSuccess { report ->
@@ -1656,6 +1682,89 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 else -> "Sample shafts already present"
             }
 
+            _uiEvents.emit(UiEvent.ShowSnackbarMessage(msg))
+        }
+    }
+
+    /**
+     * Writes every saved shaft into a single zip at the SAF-picked [uri]
+     * (Settings → "Back up all shafts…"). Result is reported via snackbar.
+     */
+    fun backupAllShaftsTo(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val result = runCatching {
+                val docs = InternalStorage.list(app).mapNotNull { name ->
+                    runCatching { name to InternalStorage.load(app, name) }.getOrNull()
+                }
+                app.contentResolver.openOutputStream(uri)?.use { out ->
+                    ShaftBackup.writeZip(
+                        out = out,
+                        docs = docs,
+                        manifest = ShaftBackup.Manifest(
+                            appVersion = BuildConfig.VERSION_NAME,
+                            docFormatVersion = ShaftDocCodec.CURRENT_VERSION,
+                            createdEpochMs = System.currentTimeMillis(),
+                            documentCount = docs.size,
+                        ),
+                    )
+                } ?: error("Could not open the selected location")
+                docs.size
+            }
+
+            val msg = result.fold(
+                onSuccess = { count ->
+                    if (count > 0) "Backed up $count shaft${if (count == 1) "" else "s"}"
+                    else "Backup written, but there were no saved shafts"
+                },
+                onFailure = {
+                    VerboseLog.e(VerboseLog.Category.IO, "ShaftBackup") { "backup failed: ${it.message}" }
+                    "Backup failed — could not write the file"
+                },
+            )
+            _uiEvents.emit(UiEvent.ShowSnackbarMessage(msg))
+        }
+    }
+
+    /**
+     * Restores shafts from a backup zip at the SAF-picked [uri]
+     * (Settings → "Restore from backup…"). Never overwrites: identical docs are
+     * skipped, name collisions are saved as "<name> (restored)".
+     */
+    fun restoreShaftsFromBackup(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val result = runCatching {
+                val contents = app.contentResolver.openInputStream(uri)?.use { input ->
+                    ShaftBackup.readZip(input)
+                } ?: error("Could not open the selected file")
+
+                if (contents.docs.isEmpty()) return@runCatching null
+
+                ShaftBackup.restoreInto(
+                    dir = InternalStorage.dir(app.filesDir),
+                    docs = contents.docs,
+                ) { raw -> runCatching { ShaftDocCodec.decode(raw) }.isSuccess }
+            }
+
+            val msg = result.fold(
+                onSuccess = { report ->
+                    when {
+                        report == null -> "No shaft files found in that backup"
+                        else -> buildString {
+                            val added = report.restoredCount + report.renamedCount
+                            append("Restored $added shaft${if (added == 1) "" else "s"}")
+                            if (report.renamedCount > 0) append(" (${report.renamedCount} renamed)")
+                            if (report.skippedIdenticalCount > 0) append(", ${report.skippedIdenticalCount} already present")
+                            if (report.failedCount > 0) append(", ${report.failedCount} unreadable")
+                        }
+                    }
+                },
+                onFailure = {
+                    VerboseLog.e(VerboseLog.Category.IO, "ShaftBackup") { "restore failed: ${it.message}" }
+                    "Restore failed — could not read the file"
+                },
+            )
             _uiEvents.emit(UiEvent.ShowSnackbarMessage(msg))
         }
     }
