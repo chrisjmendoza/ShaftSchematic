@@ -86,6 +86,11 @@ import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.drawing.render.ThreadStyle
+import com.android.shaftschematic.ui.resolved.ResolvedBody
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
+import com.android.shaftschematic.ui.resolved.ResolvedLiner
+import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
@@ -148,6 +153,7 @@ fun RunoutRoute(
                                 jobNumber = jobNumber, side = shaftPosition),
                             unit = unit,
                             pdfPrefs = vm.currentPdfPrefs,
+                            resolvedComponents = resolvedComponents,
                             lineThicknessScale = lineThicknessScale,
                         )
                         doc.finishPage(page)
@@ -162,7 +168,7 @@ fun RunoutRoute(
         }
     }
 
-    LaunchedEffect(showPreview, spec, runoutConfig, unit,
+    LaunchedEffect(showPreview, spec, runoutConfig, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
@@ -175,6 +181,7 @@ fun RunoutRoute(
                     jobNumber = jobNumber, side = shaftPosition),
                 unit = unit,
                 pdfPrefs = prefsSnapshot,
+                resolvedComponents = resolvedComponents,
                 lineThicknessScale = thicknessSnapshot,
             )
         }
@@ -208,22 +215,31 @@ fun RunoutRoute(
         )
     }
 
-    // Bodies, tapers, liners in axial order for the station count selector
-    val entries: List<RunoutComponentEntry> = remember(spec) {
+    // Bodies, tapers, liners in axial order for the station count selector.
+    // Built from RESOLVED components — the same list the drawn profile uses — so bodies
+    // appear as their drawable segments (subtracted against tapers/liners, auto-fill
+    // included), never at their raw spec positions. A body split into several fragments
+    // by liners keeps one row (one id) controlling all its fragments.
+    val entries: List<RunoutComponentEntry> = remember(spec, resolvedComponents) {
         val bodyTitles  = buildBodyTitleById(spec)
         val taperTitles = buildTaperTitleById(spec)
         val linerTitles = buildLinerTitleById(spec)
         buildList {
-            spec.bodies.forEach { b ->
-                add(RunoutComponentEntry(b.id, bodyTitles[b.id] ?: "Body",  RunoutConfig.BODY_DEFAULT_COUNT,  b.startFromAftMm))
+            resolvedComponents.forEach { rc ->
+                when (rc) {
+                    is ResolvedBody -> {
+                        val label = if (rc.source == ResolvedComponentSource.AUTO) "Body (auto)"
+                                    else bodyTitles[rc.id] ?: "Body"
+                        add(RunoutComponentEntry(rc.id, label, RunoutConfig.BODY_DEFAULT_COUNT, rc.startMmPhysical))
+                    }
+                    is ResolvedTaper ->
+                        add(RunoutComponentEntry(rc.id, taperTitles[rc.id] ?: "Taper", RunoutConfig.TAPER_DEFAULT_COUNT, rc.startMmPhysical))
+                    is ResolvedLiner ->
+                        add(RunoutComponentEntry(rc.id, linerTitles[rc.id] ?: "Liner", RunoutConfig.LINER_DEFAULT_COUNT, rc.startMmPhysical))
+                    else -> {}
+                }
             }
-            spec.tapers.forEach { t ->
-                add(RunoutComponentEntry(t.id, taperTitles[t.id] ?: "Taper", RunoutConfig.TAPER_DEFAULT_COUNT, t.startFromAftMm))
-            }
-            spec.liners.forEach { ln ->
-                add(RunoutComponentEntry(ln.id, linerTitles[ln.id] ?: "Liner", RunoutConfig.LINER_DEFAULT_COUNT, ln.startFromAftMm))
-            }
-        }.sortedBy { it.startMm }
+        }.distinctBy { it.id }.sortedBy { it.startMm }
     }
 
     // Zoom state for the shaft preview (hoisted so it survives spec updates)
@@ -303,7 +319,7 @@ fun RunoutRoute(
                         with(ShaftRenderer) {
                             draw(spec, layout, previewOpts, textMeasurer, resolvedComponents)
                         }
-                        drawRunoutMarkers(spec, runoutConfig, layout, size.height)
+                        drawRunoutMarkers(resolvedComponents, runoutConfig, layout, size.height)
                     }
                 }
             }
@@ -435,7 +451,7 @@ private fun TirButton(label: String, selected: Boolean, onClick: () -> Unit) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 private fun DrawScope.drawRunoutMarkers(
-    spec: ShaftSpec,
+    components: List<ResolvedComponent>,
     config: RunoutConfig,
     layout: ShaftLayout.Result,
     canvasH: Float,
@@ -459,20 +475,19 @@ private fun DrawScope.drawRunoutMarkers(
 
     fun odMmAt(stMm: Float): Float {
         var od = 10f
-        spec.bodies.forEach { b ->
-            if (stMm >= b.startFromAftMm - 0.1f && stMm <= b.startFromAftMm + b.lengthMm + 0.1f)
-                od = maxOf(od, b.diaMm)
-        }
-        spec.tapers.forEach { t ->
-            val end = t.startFromAftMm + t.lengthMm
-            if (stMm >= t.startFromAftMm - 0.1f && stMm <= end + 0.1f) {
-                val frac = ((stMm - t.startFromAftMm) / t.lengthMm).coerceIn(0f, 1f)
-                od = maxOf(od, t.startDiaMm + (t.endDiaMm - t.startDiaMm) * frac)
+        components.forEach { rc ->
+            val inRange = stMm >= rc.startMmPhysical - 0.1f && stMm <= rc.endMmPhysical + 0.1f
+            if (!inRange) return@forEach
+            when (rc) {
+                is ResolvedBody  -> od = maxOf(od, rc.diaMm)
+                is ResolvedTaper -> {
+                    val len  = rc.endMmPhysical - rc.startMmPhysical
+                    val frac = if (len > 0f) ((stMm - rc.startMmPhysical) / len).coerceIn(0f, 1f) else 0f
+                    od = maxOf(od, rc.startDiaMm + (rc.endDiaMm - rc.startDiaMm) * frac)
+                }
+                is ResolvedLiner -> od = maxOf(od, rc.odMm)
+                else -> {}
             }
-        }
-        spec.liners.forEach { ln ->
-            if (stMm >= ln.startFromAftMm - 0.1f && stMm <= ln.startFromAftMm + ln.lengthMm + 0.1f)
-                od = maxOf(od, ln.odMm)
         }
         return od
     }
@@ -501,9 +516,15 @@ private fun DrawScope.drawRunoutMarkers(
         }
     }
 
-    spec.bodies.forEach { b  -> collectMarkers(b.startFromAftMm,  b.lengthMm,  b.id,  RunoutConfig.BODY_DEFAULT_COUNT,  false) }
-    spec.tapers.forEach { t  -> collectMarkers(t.startFromAftMm,  t.lengthMm,  t.id,  RunoutConfig.TAPER_DEFAULT_COUNT, true)  }
-    spec.liners.forEach { ln -> collectMarkers(ln.startFromAftMm, ln.lengthMm, ln.id, RunoutConfig.LINER_DEFAULT_COUNT, true)  }
+    components.forEach { rc ->
+        val lengthMm = rc.endMmPhysical - rc.startMmPhysical
+        when (rc) {
+            is ResolvedBody  -> collectMarkers(rc.startMmPhysical, lengthMm, rc.id, RunoutConfig.BODY_DEFAULT_COUNT,  false)
+            is ResolvedTaper -> collectMarkers(rc.startMmPhysical, lengthMm, rc.id, RunoutConfig.TAPER_DEFAULT_COUNT, true)
+            is ResolvedLiner -> collectMarkers(rc.startMmPhysical, lengthMm, rc.id, RunoutConfig.LINER_DEFAULT_COUNT, true)
+            else -> {}
+        }
+    }
 
     // Pass 2: greedy global level assignment sorted by bubble X
     val levels = IntArray(allMarkers.size)
@@ -552,6 +573,7 @@ private fun renderRunoutBitmap(
     project: ProjectInfo,
     unit: com.android.shaftschematic.util.UnitSystem,
     pdfPrefs: PdfPrefs = PdfPrefs(),
+    resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
 ): Bitmap? = runCatching {
     val tempFile = File.createTempFile("runout_preview_", ".pdf", context.cacheDir)
@@ -560,7 +582,8 @@ private fun renderRunoutBitmap(
         val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
         val page = doc.startPage(pageInfo)
         composeRunoutPdf(page = page, spec = spec, config = config, project = project, unit = unit,
-            pdfPrefs = pdfPrefs, lineThicknessScale = lineThicknessScale)
+            pdfPrefs = pdfPrefs, resolvedComponents = resolvedComponents,
+            lineThicknessScale = lineThicknessScale)
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
     } finally {

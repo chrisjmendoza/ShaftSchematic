@@ -31,6 +31,11 @@ Both tabs share the same layout pattern: outer `Column` with `systemBarsPadding(
 Both the canvas preview and the PDF use the same three-pass algorithm:
 
 ### Pass 1 — Collect
+Components are the **resolved** list (`resolveComponents()` output), not raw spec:
+resolved bodies are subtracted against tapers/liners, split/merged, and include
+auto-body gap fill. Raw spec bodies may legally overlap tapers/liners and must never
+be used for station placement or profile drawing (2026-07-18 fix).
+
 For each component (sorted AFT→FWD), compute `N` axial station positions:
 - **Bodies:** evenly distributed across full length.
 - **Tapers / Liners:** inset from each edge by `RUNOUT_EDGE_INSET_MM` (≈ 25.4 mm) so measurements land on the cylindrical run-out, not the transition slope.
@@ -137,6 +142,7 @@ fun composeRunoutPdf(
     page: PdfDocument.Page, spec: ShaftSpec, config: RunoutConfig,
     project: ProjectInfo, unit: UnitSystem,
     pdfPrefs: PdfPrefs = PdfPrefs(),
+    resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
 )
 
@@ -144,9 +150,14 @@ fun composeWearPdf(
     page: PdfDocument.Page, spec: ShaftSpec,
     project: ProjectInfo, unit: UnitSystem,
     pdfPrefs: PdfPrefs = PdfPrefs(),
+    resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
 )
 ```
+
+`resolvedComponents` follows the `composeShaftPdf` contract: when provided, resolved
+bodies replace `spec.bodies` (via `ShaftSpec.withResolvedBodies`) for the profile,
+OD lookups, and runout stations. Both routes always pass `vm.resolvedComponents`.
 
 | Parameter | Effect |
 |---|---|

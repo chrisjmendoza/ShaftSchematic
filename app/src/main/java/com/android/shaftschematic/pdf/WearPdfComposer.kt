@@ -10,6 +10,7 @@ import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.util.UnitSystem
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -51,6 +52,9 @@ import kotlin.math.min
  * @param spec    Shaft specification in millimeters.
  * @param project Job information (customer, vessel, job#, side).
  * @param unit    Display unit for the OAL dimension label.
+ * @param resolvedComponents Resolved component list from the ViewModel. When provided,
+ *                resolved bodies replace `spec.bodies` for the drawn profile — same
+ *                contract as `composeShaftPdf`/`composeRunoutPdf`.
  */
 fun composeWearPdf(
     page: PdfDocument.Page,
@@ -58,10 +62,13 @@ fun composeWearPdf(
     project: ProjectInfo,
     unit: UnitSystem,
     pdfPrefs: PdfPrefs = PdfPrefs(),
+    resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
 ) {
     val c = page.canvas
     c.drawColor(Color.WHITE)
+
+    val docSpec = spec.withResolvedBodies(resolvedComponents)
 
     val pageW = page.info.pageWidth.toFloat()
     val pageH = page.info.pageHeight.toFloat()
@@ -121,7 +128,7 @@ fun composeWearPdf(
     // Computed after scale so we can use the actual drawn shaft radius. The outline's
     // true top may come from a liner OD or a taper LET, not just a body — use the full
     // max outer diameter so the dimension line never overlaps drawn geometry.
-    val maxDiaMm       = (spec.maxOuterDiaMm().takeIf { it > 0f } ?: 50f).coerceAtLeast(20f)
+    val maxDiaMm       = (docSpec.maxOuterDiaMm().takeIf { it > 0f } ?: 50f).coerceAtLeast(20f)
     val shaftTopApprox = shaftCy - rPx(maxDiaMm)
     val oalLineY       = (shaftTopApprox - WEAR_OAL_ABOVE_SHAFT_PT)
         .coerceAtLeast(midTop + WEAR_TEXT_PT + 6f)
@@ -135,7 +142,7 @@ fun composeWearPdf(
     drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox, unit, spec.overallLengthMm)
 
     // ── Shaft profile ─────────────────────────────────────────────────────
-    drawWearShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx,
+    drawWearShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
 
     // ── Notes / dye-pen area ──────────────────────────────────────────────

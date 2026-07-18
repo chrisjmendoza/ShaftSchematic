@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**  
-**Last updated: 2026-07-11**
+**Last updated: 2026-07-18**
 
 Tasks are ordered by priority. Completed series are collapsed to a single summary line to keep this readable.
 
@@ -30,11 +30,12 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 | Autosave / draft restore | ✅ Working |
 | ShaftScreen.kt | ✅ Carousel extracted to `ComponentCarousel.kt` (2322 → 1434 lines) |
 | Sidebar nav (3 tabs) | ✅ EditorSidebar + EditorTab + ShaftEditorRoute updated |
-| Runout drawing | ✅ RunoutPdfComposer, inline shaft preview, scrollable layout, fan-spread bubble layout |
-| Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes |
+| Runout drawing | ✅ RunoutPdfComposer, inline shaft preview, scrollable layout, fan-spread bubble layout; resolved-component geometry (2026-07-18) |
+| Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes; resolved-component geometry (2026-07-18) |
+| Liner wear areas | 🔲 Proposal written (`docs/LinerWearAreas_Proposal.md`) — awaiting review |
 | Line thickness control | ✅ Slider 50%–200% in Settings, DataStore-persisted, affects preview + PDF |
 | OAL include-thread toggle | ✅ PDF OAL span now extends to shaft ends when thread marked included |
-| Resolved component pipeline | 🔲 Partial — not fully wired into rendering |
+| Resolved component pipeline | ✅ Wired into schematic screen/PDF + runout & wear documents (2026-07-18) |
 | Insert-Between workflow | 🔲 Not implemented |
 | Liner shoulders | 🔲 Not implemented |
 | Fiberglass body support | 🔲 Not implemented |

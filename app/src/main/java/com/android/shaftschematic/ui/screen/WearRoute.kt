@@ -83,6 +83,7 @@ fun WearRoute(
     onOpenSidebar: () -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
+    val resolvedComponents by vm.resolvedComponents.collectAsState()
     val unit               by vm.unit.collectAsState()
     val customer           by vm.customer.collectAsState()
     val vessel             by vm.vessel.collectAsState()
@@ -117,6 +118,7 @@ fun WearRoute(
                                 jobNumber = jobNumber, side = shaftPosition),
                             unit = unit,
                             pdfPrefs = vm.currentPdfPrefs,
+                            resolvedComponents = resolvedComponents,
                             lineThicknessScale = lineThicknessScale,
                         )
                         doc.finishPage(page)
@@ -131,7 +133,7 @@ fun WearRoute(
         }
     }
 
-    LaunchedEffect(showPreview, spec, unit,
+    LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
@@ -144,6 +146,7 @@ fun WearRoute(
                     jobNumber = jobNumber, side = shaftPosition),
                 unit = unit,
                 pdfPrefs = prefsSnapshot,
+                resolvedComponents = resolvedComponents,
                 lineThicknessScale = thicknessSnapshot,
             )
         }
@@ -262,6 +265,7 @@ private fun renderWearBitmap(
     project: ProjectInfo,
     unit: com.android.shaftschematic.util.UnitSystem,
     pdfPrefs: PdfPrefs = PdfPrefs(),
+    resolvedComponents: List<com.android.shaftschematic.ui.resolved.ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
 ): Bitmap? = runCatching {
     val tempFile = File.createTempFile("wear_preview_", ".pdf", context.cacheDir)
@@ -270,7 +274,8 @@ private fun renderWearBitmap(
         val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
         val page = doc.startPage(pageInfo)
         composeWearPdf(page = page, spec = spec, project = project, unit = unit,
-            pdfPrefs = pdfPrefs, lineThicknessScale = lineThicknessScale)
+            pdfPrefs = pdfPrefs, resolvedComponents = resolvedComponents,
+            lineThicknessScale = lineThicknessScale)
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
     } finally {

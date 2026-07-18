@@ -12,6 +12,8 @@ import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
+import com.android.shaftschematic.ui.resolved.ResolvedBody
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.util.UnitSystem
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -66,6 +68,11 @@ import kotlin.math.min
  * @param config   Runout preferences — bubble count overrides and TIR direction label.
  * @param project  Job information (customer, vessel, job#, side).
  * @param unit     Display unit for the OAL dimension label.
+ * @param resolvedComponents Resolved component list from the ViewModel. When provided,
+ *                 resolved bodies (subtracted against tapers/liners, split/merged, with
+ *                 auto-fill gaps) replace `spec.bodies` for the profile and the stations —
+ *                 same contract as `composeShaftPdf`. Raw spec bodies may legally overlap
+ *                 tapers/liners; resolution is what turns them into drawable segments.
  */
 fun composeRunoutPdf(
     page: PdfDocument.Page,
@@ -74,10 +81,13 @@ fun composeRunoutPdf(
     project: ProjectInfo,
     unit: UnitSystem,
     pdfPrefs: PdfPrefs = PdfPrefs(),
+    resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
 ) {
     val c = page.canvas
     c.drawColor(Color.WHITE)
+
+    val docSpec = spec.withResolvedBodies(resolvedComponents)
 
     val pageW = page.info.pageWidth.toFloat()
     val pageH = page.info.pageHeight.toFloat()
@@ -147,7 +157,7 @@ fun composeRunoutPdf(
     //   margin → header → OAL line → [shaftTop … shaftCy … shaftBottom] →
     //   bubble area (two rows) → TIR line → margin
 
-    val maxOuterDiaMm  = spec.maxOuterDiaMm().coerceAtLeast(10f)
+    val maxOuterDiaMm  = docSpec.maxOuterDiaMm().coerceAtLeast(10f)
     val shaftHalfPt    = rPx(maxOuterDiaMm)  // actual half-height of the shaft drawing
 
     // Vertical space from below the OAL line to the bottom margin
@@ -168,18 +178,18 @@ fun composeRunoutPdf(
     // Used so leader lines originate from the shaft's visible outline, not a fixed y.
     fun shaftOuterRPxAt(mm: Float): Float {
         var maxR = 0f
-        spec.bodies.forEach { b ->
+        docSpec.bodies.forEach { b ->
             if (mm >= b.startFromAftMm - 0.1f && mm <= b.startFromAftMm + b.lengthMm + 0.1f)
                 maxR = maxOf(maxR, rPx(b.diaMm))
         }
-        spec.tapers.forEach { t ->
+        docSpec.tapers.forEach { t ->
             val s = t.startFromAftMm; val e = s + t.lengthMm
             if (mm >= s - 0.1f && mm <= e + 0.1f) {
                 val frac = ((mm - s) / (e - s)).coerceIn(0f, 1f)
                 maxR = maxOf(maxR, rPx(t.startDiaMm + (t.endDiaMm - t.startDiaMm) * frac))
             }
         }
-        spec.liners.forEach { ln ->
+        docSpec.liners.forEach { ln ->
             if (mm >= ln.startFromAftMm - 0.1f && mm <= ln.startFromAftMm + ln.lengthMm + 0.1f)
                 maxR = maxOf(maxR, rPx(ln.odMm))
         }
@@ -199,12 +209,12 @@ fun composeRunoutPdf(
         oalLineY, spec, unit, spec.overallLengthMm)
 
     // ── Draw shaft profile ────────────────────────────────────────────────────
-    drawShaftProfile(c, spec, shaftCy, outline, geomRect, ::xAt, ::rPx,
+    drawShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
 
     // ── Compute placed stations (with guaranteed collision-free bubble positions) ──
     val placedStations = computePlacedStations(
-        spec = spec,
+        spec = docSpec,
         config = config,
         contentLeft = contentLeft,
         contentRight = contentRight,

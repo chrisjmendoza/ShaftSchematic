@@ -6,6 +6,35 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-18
+
+### fix: runout & wear documents now use resolved components
+
+The runout sheet and wear document built their profiles and measurement stations from
+**raw** `spec.bodies`, while the schematic uses the resolved component list (bodies
+subtracted against tapers/liners, split/merged, auto-fill gaps). A stored body
+overlapping the AFT taper therefore produced runout stations *inside* the taper
+(stacked, low-hanging bubbles), listed "Body #1" above "AFT Taper" in the station
+selector, and drew body rectangles through the taper trapezoid on the wear document.
+
+- `composeRunoutPdf` / `composeWearPdf` now accept `resolvedComponents` (same contract
+  as `composeShaftPdf`) via a shared `ShaftSpec.withResolvedBodies` helper; profile,
+  OD lookups, and station placement all use resolved bodies.
+- `RunoutRoute` station selector + canvas bubbles and `WearRoute` previews/exports all
+  pass `vm.resolvedComponents`.
+- Auto-body spans now get stations and outline on both documents (previously silently
+  skipped); auto segments are labeled "Body (auto)" — carousel parity.
+- Analysis: `docs/runout_wear_resolved_components_fix_2026-07-18.md`.
+
+### docs: liner wear-area feature proposal
+
+`docs/LinerWearAreas_Proposal.md` — scoping document for tap-a-liner wear inspection
+on the Wear tab (break-out detail view matching the shop-sketch convention, wear spots
+with liner-local start/length + min-Ø reading, `wear_record` envelope field, 4-phase
+implementation plan). Awaiting review; 5 open questions listed in §10.
+
+---
+
 ## 2026-07-12
 
 ### feat: backup & restore for saved shafts (+ fix for update data loss)

@@ -1149,6 +1149,25 @@ private fun fmtPitch(pitchMm: Float, unit: UnitSystem): String =
     else "${formatLenWithUnit(pitchMm.toDouble(), unit)} pitch"
 
 /**
+ * Returns a copy of this spec whose `bodies` are the resolved body segments — subtracted
+ * against tapers/liners, split/merged, auto-fill gaps included. Raw spec bodies may
+ * legally overlap tapers/liners; only resolution turns them into drawable segments.
+ * Returns the spec unchanged when [resolved] is null. Tapers, threads, liners, and
+ * coupler bolt slots pass through resolution verbatim, so only bodies are swapped.
+ */
+internal fun ShaftSpec.withResolvedBodies(resolved: List<ResolvedComponent>?): ShaftSpec {
+    if (resolved == null) return this
+    return copy(bodies = resolved.filterIsInstance<ResolvedBody>().map { b ->
+        Body(
+            id = b.id,
+            startFromAftMm = b.startMmPhysical,
+            lengthMm = b.endMmPhysical - b.startMmPhysical,
+            diaMm = b.diaMm,
+        )
+    })
+}
+
+/**
  * Truncates [text] with an ellipsis so it fits within [maxWidth] points. Footer columns sit
  * at fixed x positions; long customer/vessel names must never overrun the next column.
  */
