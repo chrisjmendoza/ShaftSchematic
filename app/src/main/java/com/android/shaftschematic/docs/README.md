@@ -21,7 +21,7 @@ Included docs:
 - TextFilters.md
 - Navigation.md
 - Model_Conventions.md
-- RunoutSheet.md — runout + wear tabs, OAL alignment, PDF appearance options, back-press handling
+- RunoutSheet.md — runout + wear tabs, bubble placement engine (geom/RunoutBubbleLayout.kt), OAL alignment, PDF appearance options, back-press handling
 - PdfExportRoute.md
 - PdfPreviewScreen.md
 

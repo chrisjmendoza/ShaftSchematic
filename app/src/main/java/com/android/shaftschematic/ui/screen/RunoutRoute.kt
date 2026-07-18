@@ -64,6 +64,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -76,6 +77,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.RunoutBubbleGeometry
+import com.android.shaftschematic.geom.RunoutBubblePlan
+import com.android.shaftschematic.geom.RunoutComponentKind
+import com.android.shaftschematic.geom.RunoutComponentSpan
+import com.android.shaftschematic.geom.collectRunoutStations
+import com.android.shaftschematic.geom.planRunoutBubbles
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.pdf.composeRunoutPdf
@@ -302,24 +309,49 @@ fun RunoutRoute(
                                 translationY = previewOffset.y,
                             ),
                     ) {
-                        // Reserve vertical space for bubbles so shaft+bubbles are centred
-                        val marginPx  = 12.dp.toPx()
-                        val circleR   = 6.dp.toPx()
-                        val leaderGap = 5.dp.toPx()
-                        val bubblesH  = leaderGap + circleR * 2f
-                        val layout = ShaftLayout.compute(
-                            spec               = spec,
-                            leftPx             = 0f,
-                            topPx              = 0f,
-                            rightPx            = size.width,
-                            bottomPx           = size.height - bubblesH,
-                            marginPx           = marginPx,
-                            resolvedComponents = resolvedComponents,
+                        val marginPx = 12.dp.toPx()
+                        val bubbleGeom = RunoutBubbleGeometry(
+                            radius = 6.dp.toPx(),
+                            minGap = 5.dp.toPx(),
+                            shortLeader = 5.dp.toPx(),
+                            contentLeft = 0f,
+                            contentRight = size.width,
                         )
+                        val spans = runoutSpans(resolvedComponents)
+
+                        // Same engine as the PDF (geom/RunoutBubbleLayout.kt): reserve
+                        // vertical space for the planned bubble rows so shaft + bubbles
+                        // are centred together. First pass assumes the typical two-row
+                        // layout; re-plan once if the actual row count differs.
+                        fun planFor(reservedH: Float): Pair<ShaftLayout.Result, RunoutBubblePlan> {
+                            val layout = ShaftLayout.compute(
+                                spec               = spec,
+                                leftPx             = 0f,
+                                topPx              = 0f,
+                                rightPx            = size.width,
+                                bottomPx           = size.height - reservedH,
+                                marginPx           = marginPx,
+                                resolvedComponents = resolvedComponents,
+                            )
+                            val stations = collectRunoutStations(
+                                spans, runoutConfig.componentOverrides,
+                            ) { mm -> layout.xPx(mm) }
+                            return layout to planRunoutBubbles(stations, bubbleGeom)
+                        }
+
+                        val twoRowH = bubbleGeom.shortLeader + 2f * bubbleGeom.radius + bubbleGeom.rowStep
+                        var (layout, plan) = planFor(twoRowH)
+                        val neededH = plan.sectionHeight(0f)
+                        if (kotlin.math.abs(neededH - twoRowH) > 0.5f) {
+                            val replanned = planFor(neededH)
+                            layout = replanned.first
+                            plan = replanned.second
+                        }
+
                         with(ShaftRenderer) {
                             draw(spec, layout, previewOpts, textMeasurer, resolvedComponents)
                         }
-                        drawRunoutMarkers(resolvedComponents, runoutConfig, layout, size.height)
+                        drawRunoutMarkers(plan, layout, resolvedComponents)
                     }
                 }
             }
@@ -450,28 +482,30 @@ private fun TirButton(label: String, selected: Boolean, onClick: () -> Unit) {
 // Canvas helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-private fun DrawScope.drawRunoutMarkers(
-    components: List<ResolvedComponent>,
-    config: RunoutConfig,
-    layout: ShaftLayout.Result,
-    canvasH: Float,
-) {
-    val circleR     = 6.dp.toPx()
-    val leaderGap   = 5.dp.toPx()
-    val strokeW     = 1.2.dp.toPx()
-    val markerColor = Color.Black.copy(alpha = 0.70f)
-
-    fun stationsMm(startMm: Float, lengthMm: Float, count: Int, useInset: Boolean): List<Float> {
-        if (count <= 0 || lengthMm <= 0f) return emptyList()
-        if (count == 1) return listOf(startMm + lengthMm * 0.5f)
-        return if (!useInset) {
-            List(count) { i -> startMm + (i + 0.5f) * lengthMm / count }
-        } else {
-            val inset = RunoutConfig.RUNOUT_EDGE_INSET_MM.coerceAtMost(lengthMm * 0.35f)
-            val span  = (lengthMm - 2f * inset).coerceAtLeast(0f)
-            List(count) { i -> startMm + inset + if (count > 1) i * span / (count - 1) else 0f }
+/** Component spans eligible for runout stations, from the resolved component list. */
+private fun runoutSpans(components: List<ResolvedComponent>): List<RunoutComponentSpan> =
+    components.mapNotNull { rc ->
+        val lengthMm = rc.endMmPhysical - rc.startMmPhysical
+        when (rc) {
+            is ResolvedBody  -> RunoutComponentSpan(rc.id, RunoutComponentKind.BODY,  rc.startMmPhysical, lengthMm)
+            is ResolvedTaper -> RunoutComponentSpan(rc.id, RunoutComponentKind.TAPER, rc.startMmPhysical, lengthMm)
+            is ResolvedLiner -> RunoutComponentSpan(rc.id, RunoutComponentKind.LINER, rc.startMmPhysical, lengthMm)
+            else -> null
         }
     }
+
+/**
+ * Draw the planned runout bubbles and leader polylines. Placement comes from the shared
+ * engine (`geom/RunoutBubbleLayout.kt`) — the same rows, x positions, and leader routing
+ * as the PDF, so the preview matches the export exactly.
+ */
+private fun DrawScope.drawRunoutMarkers(
+    plan: RunoutBubblePlan,
+    layout: ShaftLayout.Result,
+    components: List<ResolvedComponent>,
+) {
+    val strokeW     = 1.2.dp.toPx()
+    val markerColor = Color.Black.copy(alpha = 0.70f)
 
     fun odMmAt(stMm: Float): Float {
         var od = 10f
@@ -492,59 +526,41 @@ private fun DrawScope.drawRunoutMarkers(
         return od
     }
 
-    val slot = circleR * 2f + leaderGap  // horizontal slot per bubble (diameter + min gap)
-
-    // Pass 1: collect all markers globally with separate station X (shaft tap) and bubble X (spread).
-    // Bubbles within each component are centred on the component's canvas midpoint — identical to
-    // the PDF layout — so leader lines fan diagonally and never overlap their own bubble.
-    data class Marker(val stationX: Float, val shaftBottomY: Float, val bubbleX: Float)
-    val allMarkers = mutableListOf<Marker>()
-
-    fun collectMarkers(startMm: Float, lengthMm: Float, id: String, defaultCount: Int, useInset: Boolean) {
-        val count = config.componentOverrides[id] ?: defaultCount
-        if (count <= 0) return
-        val compLeft  = layout.xPx(startMm)
-        val compRight = layout.xPx(startMm + lengthMm)
-        val compMidX  = (compLeft + compRight) * 0.5f
-        val totalW    = count * slot - leaderGap
-        val groupLeft = compMidX - totalW * 0.5f
-        stationsMm(startMm, lengthMm, count, useInset).forEachIndexed { localIdx, stMm ->
-            val stationX     = layout.xPx(stMm).coerceIn(circleR, size.width - circleR)
-            val shaftBottomY = layout.centerlineYPx + layout.rPx(odMmAt(stMm))
-            val bubbleX      = (groupLeft + localIdx * slot + circleR).coerceIn(circleR, size.width - circleR)
-            allMarkers.add(Marker(stationX, shaftBottomY, bubbleX))
-        }
-    }
-
-    components.forEach { rc ->
-        val lengthMm = rc.endMmPhysical - rc.startMmPhysical
+    val maxOdMm = components.maxOfOrNull { rc ->
         when (rc) {
-            is ResolvedBody  -> collectMarkers(rc.startMmPhysical, lengthMm, rc.id, RunoutConfig.BODY_DEFAULT_COUNT,  false)
-            is ResolvedTaper -> collectMarkers(rc.startMmPhysical, lengthMm, rc.id, RunoutConfig.TAPER_DEFAULT_COUNT, true)
-            is ResolvedLiner -> collectMarkers(rc.startMmPhysical, lengthMm, rc.id, RunoutConfig.LINER_DEFAULT_COUNT, true)
-            else -> {}
+            is ResolvedBody  -> rc.diaMm
+            is ResolvedTaper -> maxOf(rc.startDiaMm, rc.endDiaMm)
+            is ResolvedLiner -> rc.odMm
+            else -> 0f
         }
-    }
+    }?.coerceAtLeast(10f) ?: 10f
 
-    // Pass 2: greedy global level assignment sorted by bubble X
-    val levels = IntArray(allMarkers.size)
-    val levelRightEdge = mutableListOf<Float>()
-    val levelStep = circleR * 2f + leaderGap
-    for (origIdx in allMarkers.indices.sortedBy { allMarkers[it].bubbleX }) {
-        val bLeft = allMarkers[origIdx].bubbleX - circleR
-        val level = levelRightEdge.indexOfFirst { it + leaderGap <= bLeft }
-            .takeIf { it >= 0 } ?: levelRightEdge.size
-        while (levelRightEdge.size <= level) levelRightEdge.add(Float.NEGATIVE_INFINITY)
-        levelRightEdge[level] = allMarkers[origIdx].bubbleX + circleR
-        levels[origIdx] = level
-    }
+    val result = plan.finish(
+        anchorY = layout.centerlineYPx + layout.rPx(maxOdMm),
+        surfaceYAtMm = { mm -> layout.centerlineYPx + layout.rPx(odMmAt(mm)) },
+    )
 
-    // Pass 3: draw diagonal leader from shaft tap point to bubble top, then the bubble.
-    allMarkers.forEachIndexed { idx, marker ->
-        val circleCy = marker.shaftBottomY + leaderGap + circleR + levels[idx] * levelStep
-        if (circleCy + circleR > canvasH) return@forEachIndexed
-        drawLine(markerColor, Offset(marker.stationX, marker.shaftBottomY), Offset(marker.bubbleX, circleCy - circleR), strokeWidth = strokeW)
-        drawCircle(markerColor, radius = circleR, center = Offset(marker.bubbleX, circleCy), style = Stroke(width = strokeW))
+    // Keyway notch sized proportionally to the PDF's (7pt on a 40pt bubble).
+    val notchSize = plan.geom.radius * 0.35f
+    result.bubbles.forEach { b ->
+        b.leader.zipWithNext { p, q ->
+            drawLine(markerColor, Offset(p.x, p.y), Offset(q.x, q.y), strokeWidth = strokeW)
+        }
+        drawCircle(
+            markerColor,
+            radius = plan.geom.radius,
+            center = Offset(b.bubbleX, b.bubbleCenterY),
+            style = Stroke(width = strokeW),
+        )
+        // Keyway reference marker: open square notch straddling the rim at 12-o'clock,
+        // same as the PDF. White fill blanks the rim inside the notch first.
+        val notchTopLeft = Offset(
+            b.bubbleX - notchSize * 0.5f,
+            b.bubbleCenterY - plan.geom.radius - notchSize * 0.6f,
+        )
+        drawRect(Color.White, topLeft = notchTopLeft, size = Size(notchSize, notchSize))
+        drawRect(markerColor, topLeft = notchTopLeft, size = Size(notchSize, notchSize),
+            style = Stroke(width = strokeW))
     }
 }
 

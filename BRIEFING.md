@@ -45,7 +45,7 @@ The core feature set is **shipped and working**:
 | Backup & restore (zip backup/restore, per-shaft import/export, pre-update snapshots, Auto Backup rules) | ✅ Shipped (sample pruning made non-destructive via seed-hash ledger) |
 | Settings screen (units, grid, PDF prefs, line thickness) | ✅ Working |
 | Line thickness control (50%–200%, persisted) | ✅ Shipped |
-| Runout drawing (inline preview, fan-spread bubbles, TIR label) | ✅ Shipped |
+| Runout drawing (inline preview, collision-free alternating bubbles, TIR label) | ✅ Shipped |
 | Wear document (profile + PASS/FAIL checkboxes) | ✅ Shipped |
 | OAL include-thread toggle (PDF dimension) | ✅ Fixed |
 | Developer Options screen | ✅ Working |
@@ -184,7 +184,7 @@ Instrumented tests in `app/src/androidTest/` include a `ClearDataStoreRule` to i
 - ✅ Shared signing config — single debug.keystore across all machines
 - ✅ PDF label collision avoidance, `END_EPS_MM` deduplication, BRIEFING accuracy
 - ✅ ShaftScreen carousel extracted to `ComponentCarousel.kt`; sidebar nav (3 tabs)
-- ✅ Runout drawing — inline shaft preview, scrollable layout, fan-spread bubble placement, TIR label
+- ✅ Runout drawing — inline shaft preview, scrollable layout, collision-free alternating bubble placement (shared engine, 2026-07-18), TIR label
 - ✅ Wear document — shaft profile + PASS/FAIL dye-pen checkboxes
 - ✅ Line thickness control — Settings slider 50%–200%, DataStore-persisted, preview + PDF
 - ✅ OAL include-thread fix — PDF OAL dimension correctly spans shaft ends when thread is marked included

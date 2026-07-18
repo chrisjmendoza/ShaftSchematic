@@ -8,6 +8,49 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-18
 
+### feat: collision-free runout bubble layout — shared engine, alternating rows
+
+Runout bubble placement is rewritten around a hard guarantee: **bubbles never touch
+each other, and leader lines never enter a bubble or cross another leader.** The old
+greedy level assignment only prevented same-level bubble overlap — a leader to a
+level-1 bubble could slice through a level-0 circle, adjacent levels could physically
+overlap (38 pt step vs 40 pt bubbles), and the PDF and canvas preview had drifted apart
+(different body-station math, different taper inset caps, preview silently dropping
+overflow bubbles).
+
+- **New shared engine `geom/RunoutBubbleLayout.kt`** (pure Kotlin, JVM-tested) used by
+  BOTH `RunoutPdfComposer` and the `RunoutRoute` canvas preview — identical renderings
+  by construction; placement logic no longer lives in any renderer.
+- **Alternating rows** (0,1,0,1 within each component, phase-flip at crowded component
+  boundaries), globally aligned row heights anchored below the deepest drawn shaft
+  point — the hand-drawn shop convention.
+- **Spacing invariants** make bubble contact geometrically impossible; bubble x
+  positions are a least-squares fit (pool-adjacent-violators) so bubbles sit directly
+  under their stations whenever there is room. Two rows is width-optimal — every
+  leader's drop needs its own horizontal lane past the rows above it, so deeper stacks
+  can never pack tighter (see `docs/runout_bubble_collision_system_2026-07-18.md`).
+- **Leader verification + dogleg re-routing**: every leader is collision-checked
+  (segment-circle, segment-segment); failures re-route as doglegs through a common
+  departure line + corridor + vertical drop, which provably converges to zero
+  intersections. Physically impossible densities (~27+ stations/page) compress and
+  flag themselves (`RunoutBubblePlan.compressed`).
+- **Standardised station math** (was silently different between PDF and preview):
+  bodies use cell midpoints; taper/liner edge inset caps at 20 % of length.
+- 20 unit tests (`geom/RunoutBubbleLayoutTest.kt`) incl. randomized stress configs,
+  stepped-OD shafts, and degenerate overload.
+
+### feat: runout sheet drawing conventions — raised OAL, keyway notch
+
+- **OAL dimension raised** to 90 pt (≈ 1.25 in) above the shaft top with witness
+  (extension) lines dropping to the shaft's actual top edge at each SET face — the
+  schematic/wear-document convention; the line no longer crowds the profile.
+- **Keyway reference marker** upgraded from a 4 pt filled square to a 7 pt **open
+  square notch straddling the rim at 12-o'clock** (key-at-top convention, like the
+  hand-drawn sheets), and now drawn in the canvas preview too (was PDF-only).
+- Docs corrected: threads ARE drawn on the runout profile (hatched envelopes, no
+  stations; excluded-from-OAL threads sit outside the SET-to-SET arrows at their
+  physical position) — `RunoutSheet.md` previously claimed otherwise.
+
 ### fix: runout & wear documents now use resolved components
 
 The runout sheet and wear document built their profiles and measurement stations from

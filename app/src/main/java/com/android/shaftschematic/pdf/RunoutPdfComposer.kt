@@ -7,8 +7,14 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
+import com.android.shaftschematic.geom.PlacedRunoutBubble
+import com.android.shaftschematic.geom.RunoutBubbleGeometry
+import com.android.shaftschematic.geom.RunoutComponentKind
+import com.android.shaftschematic.geom.RunoutComponentSpan
+import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.planRunoutBubbles
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
@@ -34,12 +40,12 @@ import kotlin.math.min
  *
  * ```
  * ┌─── header: Customer / Vessel / Job# / Date / Side ───────────────────────┐
- * │   ←─────────── OAL (AFT SET → FWD SET) ───────────────────────→         │
- * │   [shaft profile: bodies, tapers, liners, compression breaks]             │
+ * │  |←────────── OAL (AFT SET → FWD SET) ────────────────────→|  ← raised  │
+ * │  |  [shaft profile: bodies, tapers, liners, threads, breaks] |  witness  │
  * │                                                                            │
- * │   ╲  ╲  ╲  ╲   ╲  ╲  ╲   ╲  ╲  ╲     ← diagonal leader lines           │
- * │   ○  ○  ○  ○   ○  ○  ○   ○  ○  ○     ← row-1 bubbles (shorter leaders) │
- * │      ○     ○      ○          ○        ← row-2 bubbles (longer leaders)  │
+ * │   ╲  ╲  ╲  ╲   ╲  ╲  ╲   ╲  ╲  ╲     ← leader lines (straight/dogleg)  │
+ * │   ○     ○      ○      ○      ○        ← row-0 bubbles (closer to shaft) │
+ * │      ○      ○     ○      ○       ○    ← row-1 bubbles (alternating)     │
  * │                                                                            │
  * │  TIR's taken looking: _______________________                             │
  * └───────────────────────────────────────────────────────────────────────────┘
@@ -49,19 +55,26 @@ import kotlin.math.min
  * - **Tapers**: two stations inset from each edge by [RunoutConfig.RUNOUT_EDGE_INSET_MM].
  *   Readings taken right on a taper's SET or LET face are unreliable.
  * - **Liners**: same inset convention as tapers.
- * - **Bodies**: evenly distributed stations, no edge inset (body surfaces are uniform).
- * - **Threads**: no stations (threads are not measured for runout).
+ * - **Bodies**: stations at cell midpoints across the full length, no edge inset
+ *   (body surfaces are uniform).
+ * - **Threads**: no stations (threads are not measured for runout). Still drawn as
+ *   hatched envelopes for visual reference; excluded-from-OAL threads sit outside the
+ *   SET-to-SET arrows at their physical position.
  *
- * ## Two-row layout
- * Within each component section, consecutive stations alternate between row 1 (shorter
- * leader, bubbles closer to shaft) and row 2 (longer leader, bubbles further away).
- * This prevents overlap between adjacent circles and visually groups each section's
- * readings together — matching the hand-drawn convention in the shop reference drawings.
+ * ## Bubble rows and leader routing
+ * Placement is delegated to the shared engine in `geom/RunoutBubbleLayout.kt` (also used
+ * by the RunoutRoute canvas preview, so the two renderings are identical). Within each
+ * component, consecutive stations alternate between row 0 (closer to the shaft) and
+ * row 1 (further away) — matching the hand-drawn convention in the shop reference
+ * drawings — and the engine guarantees that no bubble touches another bubble and no
+ * leader line crosses a bubble or another leader. See RunoutBubbleLayout's KDoc for the
+ * spacing invariants and the dogleg fallback.
  *
  * ## Keyway reference marker
- * A small filled square drawn at the top of each circle indicates keyway-at-top centre.
- * In Phase 2 (value entry), a radial line will be added inside the circle to indicate
- * the high-spot direction relative to this reference.
+ * An open square notch straddling each circle's rim at 12-o'clock indicates
+ * keyway-at-top centre, matching the hand-drawn shop sheets. In Phase 2 (value entry),
+ * a radial line will be added inside the circle to indicate the high-spot direction
+ * relative to this reference.
  *
  * @param page     Target PDF page (US Letter landscape, already started).
  * @param spec     Shaft specification in millimeters.
@@ -100,10 +113,6 @@ fun composeRunoutPdf(
         color = Color.BLACK
     }
     val dim = Paint(outline).apply { strokeWidth = DIM_PT * thicknessScale }
-    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        color = Color.BLACK
-    }
     fun shadeFill() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.argb(40, 0, 0, 0)
@@ -147,6 +156,26 @@ fun composeRunoutPdf(
     /** Convert a diameter mm → radius in points. */
     fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * ptPerMm
 
+    // ── Bubble plan — horizontal solve first (rows + bubble x need only ptPerMm) ─
+    // The shared engine (geom/RunoutBubbleLayout.kt) is also used by the RunoutRoute
+    // canvas preview, so both renderings are guaranteed identical.
+    val stationSpans = buildList {
+        docSpec.bodies.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.BODY, it.startFromAftMm, it.lengthMm)) }
+        docSpec.tapers.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.TAPER, it.startFromAftMm, it.lengthMm)) }
+        docSpec.liners.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.LINER, it.startFromAftMm, it.lengthMm)) }
+    }
+    val bubbleGeom = RunoutBubbleGeometry(
+        radius = BUBBLE_RADIUS_PT,
+        minGap = BUBBLE_MIN_GAP_PT,
+        shortLeader = SHORT_LEADER_PT,
+        contentLeft = contentLeft,
+        contentRight = contentRight,
+    )
+    val bubblePlan = planRunoutBubbles(
+        collectRunoutStations(stationSpans, config.componentOverrides, ::xAt),
+        bubbleGeom,
+    )
+
     // ── Vertical layout — shaft centred, bubbles below, TIR at bottom ─────────
     //
     // The shaft is drawn at its ACTUAL outer diameter (not a fixed height) so the
@@ -155,7 +184,7 @@ fun composeRunoutPdf(
     //
     // Layout (top → bottom):
     //   margin → header → OAL line → [shaftTop … shaftCy … shaftBottom] →
-    //   bubble area (two rows) → TIR line → margin
+    //   bubble area (rows from the plan) → TIR line → margin
 
     val maxOuterDiaMm  = docSpec.maxOuterDiaMm().coerceAtLeast(10f)
     val shaftHalfPt    = rPx(maxOuterDiaMm)  // actual half-height of the shaft drawing
@@ -164,8 +193,8 @@ fun composeRunoutPdf(
     val tirY           = pageH - margin - TIR_LINE_HEIGHT_PT
     val availableH     = tirY - (headerBottom + OAL_GAP_PT + OAL_LINE_SPACE_PT)
 
-    // How tall the bubble section is: short leaders + long leaders row + two diameters + gaps
-    val bubbleSectionH = LONG_LEADER_PT + BUBBLE_RADIUS_PT * 2f + BUBBLE_GAP_PT
+    // How tall the bubble section is: leader gap + however many rows the plan needs
+    val bubbleSectionH = bubblePlan.sectionHeight(BUBBLE_GAP_PT)
 
     // Place the shaft centred in the top part of the available space
     val shaftAreaH     = availableH - bubbleSectionH
@@ -200,211 +229,32 @@ fun composeRunoutPdf(
     drawRunoutHeader(c, text, contentLeft, contentRight,
         headerTop, headerHeight, spec, project, unit, drawSpanMm)
 
-    // ── Draw OAL span line — sits just above the shaft top, like the schematic ─
+    // ── Draw OAL span line — raised well above the shaft, with witness lines ──
     // The arrows bracket the drawn SET-to-SET span, but the LABEL is always the typed
     // OAL — same rule as the main schematic (the OAL number is sacred and never changes;
-    // see docs/OverallLength.md).
+    // see docs/OverallLength.md). Witness (extension) lines drop to the shaft's actual
+    // top edge at each SET face, matching the schematic/wear-document convention.
     val oalLineY = shaftCy - shaftHalfPt - OAL_LINE_SPACE_PT
-    drawOalSpanLine(c, dim, text, contentLeft, contentRight,
-        oalLineY, spec, unit, spec.overallLengthMm)
+    drawOalSpanLine(
+        c, dim, text, contentLeft, contentRight, oalLineY,
+        aftShaftTopY = shaftCy - shaftOuterRPxAt(aftSetMm),
+        fwdShaftTopY = shaftCy - shaftOuterRPxAt(fwdSetMm),
+        unit = unit, oalMm = spec.overallLengthMm,
+    )
 
     // ── Draw shaft profile ────────────────────────────────────────────────────
     drawShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
 
-    // ── Compute placed stations (with guaranteed collision-free bubble positions) ──
-    val placedStations = computePlacedStations(
-        spec = docSpec,
-        config = config,
-        contentLeft = contentLeft,
-        contentRight = contentRight,
-        ptPerMm = ptPerMm,
-        measureStartMm = measureStartMm,
-        shaftCy = shaftCy,
-        shaftOuterRPxAt = ::shaftOuterRPxAt,
+    // ── Fix vertical bubble positions, route leaders, draw ────────────────────
+    val bubbleResult = bubblePlan.finish(
+        anchorY = shaftCy + shaftHalfPt,
+        surfaceYAtMm = { mm -> shaftCy + shaftOuterRPxAt(mm) },
     )
-
-    // ── Draw bubbles with diagonal fanning leaders ────────────────────────────
-    drawPlacedBubbles(c, placedStations, shaftCy, outline, fill)
+    drawPlacedBubbles(c, bubbleResult.bubbles, outline)
 
     // ── Draw TIR direction line ───────────────────────────────────────────────
     drawTirLine(c, text, contentLeft, contentRight, tirY, config.tirDirection)
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Station data model — placed (collision-free)
-// ──────────────────────────────────────────────────────────────────────────────
-
-/**
- * A fully resolved runout station, ready to draw.
- *
- * @param stationXPt     Page-x of the axial measurement point on the shaft.
- * @param shaftBottomYPt Page-y of the shaft's outer surface at this station.
- *                       Leaders originate HERE, touching the shaft outline.
- * @param bubbleXPt      Page-x assigned to the bubble centre (spread out to avoid collision).
- * @param bubbleCenterYPt Page-y of the bubble centre.
- */
-private data class PlacedStation(
-    val stationXPt: Float,
-    val shaftBottomYPt: Float,
-    val bubbleXPt: Float,
-    val bubbleCenterYPt: Float,
-)
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Station computation
-// ──────────────────────────────────────────────────────────────────────────────
-
-/** Component type for runout station assignment — determines default count and inset behaviour. */
-private enum class StationKind { BODY, TAPER, LINER }
-
-/**
- * Compute all runout stations and assign component-local, collision-free bubble positions.
- *
- * ## Key design principle
- * Bubbles must stay **near the component they measure**. A taper's bubbles cluster below
- * the taper's page region; a body's bubbles cluster below the body. This matches the
- * hand-drawn shop convention and makes the drawing readable.
- *
- * ## Algorithm (per component)
- * 1. Compute the component's page X span: `[xAt(startMm), xAt(endMm)]`.
- * 2. Compute N axial station positions within that component.
- * 3. Split into two rows: local index 0,2,4,… → row 0 (shorter leaders);
- *    local index 1,3,5,… → row 1 (longer leaders).
- * 4. Spread N bubble X positions centred on the component's midpoint.
- *    Slot width = BUBBLE_DIAMETER + MIN_GAP. If N slots exceed the component width
- *    the group is centred symmetrically beyond the edges — a natural "splay".
- * 5. Leaders fan diagonally from the shaft surface at each station's axial x to the
- *    assigned bubble position. Monotonicity within each component guarantees leaders
- *    do not cross each other.
- *
- * Thread components produce no stations.
- */
-private fun computePlacedStations(
-    spec: ShaftSpec,
-    config: RunoutConfig,
-    contentLeft: Float,
-    contentRight: Float,
-    ptPerMm: Float,
-    measureStartMm: Float,
-    shaftCy: Float,
-    shaftOuterRPxAt: (Float) -> Float,
-): List<PlacedStation> {
-
-    data class ComponentEntry(
-        val startMm: Float,
-        val lengthMm: Float,
-        val kind: StationKind,
-        val id: String,
-    )
-
-    // Sort all components by AFT→FWD start position.
-    val entries = buildList {
-        spec.bodies.forEach  { add(ComponentEntry(it.startFromAftMm, it.lengthMm, StationKind.BODY,  it.id)) }
-        spec.tapers.forEach  { add(ComponentEntry(it.startFromAftMm, it.lengthMm, StationKind.TAPER, it.id)) }
-        spec.liners.forEach  { add(ComponentEntry(it.startFromAftMm, it.lengthMm, StationKind.LINER, it.id)) }
-    }.filter { it.lengthMm > 0f }.sortedBy { it.startMm }
-
-    val bubbleD = BUBBLE_RADIUS_PT * 2f
-    val slot    = bubbleD + BUBBLE_MIN_GAP_PT
-
-    data class RawStation(val stationXPt: Float, val shaftBottomYPt: Float, val bubbleXPt: Float)
-    val rawList = mutableListOf<RawStation>()
-
-    for (entry in entries) {
-        val count = config.componentOverrides[entry.id]
-            ?: when (entry.kind) {
-                StationKind.TAPER -> RunoutConfig.TAPER_DEFAULT_COUNT
-                StationKind.LINER -> RunoutConfig.LINER_DEFAULT_COUNT
-                StationKind.BODY  -> RunoutConfig.BODY_DEFAULT_COUNT
-            }
-        if (count <= 0) continue
-
-        // Axial station positions for this component (sorted AFT→FWD)
-        val stationsMm = stationPositions(
-            startMm      = entry.startMm,
-            lengthMm     = entry.lengthMm,
-            count        = count,
-            useEdgeInset = entry.kind == StationKind.TAPER || entry.kind == StationKind.LINER,
-        )
-
-        // Component page X span
-        val compLeft  = contentLeft + (entry.startMm - measureStartMm) * ptPerMm
-        val compRight = contentLeft + (entry.startMm + entry.lengthMm - measureStartMm) * ptPerMm
-        val compMidX  = (compLeft + compRight) * 0.5f
-
-        // Centre N bubbles on the component's midpoint.
-        // totalW = full width needed for this component's bubble group.
-        val totalW   = count * slot - BUBBLE_MIN_GAP_PT
-        val groupLeft = compMidX - totalW * 0.5f   // may extend outside the component edges
-
-        stationsMm.forEachIndexed { localIdx, mm ->
-            val stationX = contentLeft + (mm - measureStartMm) * ptPerMm
-            val outerR   = shaftOuterRPxAt(mm)
-            val bubbleX  = (groupLeft + localIdx * slot + BUBBLE_RADIUS_PT)
-                .coerceIn(contentLeft + BUBBLE_RADIUS_PT, contentRight - BUBBLE_RADIUS_PT)
-            rawList.add(RawStation(stationX, shaftCy + outerR, bubbleX))
-        }
-    }
-
-    // Global greedy level assignment: sort by bubble X, assign the lowest level where
-    // this bubble doesn't horizontally overlap any already-placed bubble at that level.
-    val levels = IntArray(rawList.size)
-    val levelRightEdge = mutableListOf<Float>()
-    for (origIdx in rawList.indices.sortedBy { rawList[it].bubbleXPt }) {
-        val bLeft = rawList[origIdx].bubbleXPt - BUBBLE_RADIUS_PT
-        val level = levelRightEdge.indexOfFirst { it + BUBBLE_MIN_GAP_PT <= bLeft }
-            .takeIf { it >= 0 } ?: levelRightEdge.size
-        while (levelRightEdge.size <= level) levelRightEdge.add(Float.NEGATIVE_INFINITY)
-        levelRightEdge[level] = rawList[origIdx].bubbleXPt + BUBBLE_RADIUS_PT
-        levels[origIdx] = level
-    }
-
-    val levelStep = LONG_LEADER_PT - SHORT_LEADER_PT
-    return rawList.mapIndexed { idx, raw ->
-        val leaderLen = SHORT_LEADER_PT + levels[idx] * levelStep
-        PlacedStation(
-            stationXPt      = raw.stationXPt,
-            shaftBottomYPt  = raw.shaftBottomYPt,
-            bubbleXPt       = raw.bubbleXPt,
-            bubbleCenterYPt = raw.shaftBottomYPt + leaderLen + BUBBLE_RADIUS_PT,
-        )
-    }
-}
-
-/**
- * Compute the axial mm positions of [count] measurement stations within a component.
- *
- * @param startMm      Component start position (AFT edge), mm.
- * @param lengthMm     Component axial length, mm.
- * @param count        Number of stations.
- * @param useEdgeInset If true (tapers and liners), the first and last stations are inset
- *                     from the component edges by [RunoutConfig.RUNOUT_EDGE_INSET_MM].
- *                     Bodies distribute evenly across the full length.
- */
-private fun stationPositions(
-    startMm: Float,
-    lengthMm: Float,
-    count: Int,
-    useEdgeInset: Boolean,
-): List<Float> {
-    if (count == 1) return listOf(startMm + lengthMm * 0.5f)
-
-    return if (useEdgeInset) {
-        // Cap inset to 20% of component length so very short components still get sensible positions.
-        val inset = min(RunoutConfig.RUNOUT_EDGE_INSET_MM, lengthMm * 0.20f)
-        val innerStart = startMm + inset
-        val innerEnd   = startMm + lengthMm - inset
-        val innerSpan  = innerEnd - innerStart
-        List(count) { i ->
-            if (count == 1) innerStart + innerSpan * 0.5f
-            else            innerStart + innerSpan * (i.toFloat() / (count - 1))
-        }
-    } else {
-        // Evenly distributed across the full length (no inset for body sections).
-        val spacing = lengthMm / (count + 1)
-        List(count) { i -> startMm + spacing * (i + 1) }
-    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -460,7 +310,9 @@ private fun drawRunoutHeader(
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * Draw a single OAL dimension arrow spanning the full SET-to-SET measurement window.
+ * Draw a single OAL dimension arrow spanning the full SET-to-SET measurement window,
+ * with witness (extension) lines dropping to the shaft's top edge at each SET face —
+ * the same convention as the main schematic and the wear document.
  *
  * This is the only dimension shown on the runout sheet — everything else the field crew
  * needs is on the main schematic page.
@@ -472,11 +324,19 @@ private fun drawOalSpanLine(
     x0: Float,
     x1: Float,
     y: Float,
-    spec: ShaftSpec,
+    aftShaftTopY: Float,
+    fwdShaftTopY: Float,
     unit: UnitSystem,
     oalMm: Float,
 ) {
     val arrowLen = 8f
+    val witnessGap = 3f   // gap between shaft edge and witness line start
+    val witnessExt = 5f   // how far the witness line extends past the dimension line
+
+    // Witness lines from the shaft's local top edge up past the dimension line
+    c.drawLine(x0, aftShaftTopY - witnessGap, x0, y - witnessExt, dim)
+    c.drawLine(x1, fwdShaftTopY - witnessGap, x1, y - witnessExt, dim)
+
     // Horizontal line
     c.drawLine(x0, y, x1, y, dim)
     // Left arrowhead
@@ -662,43 +522,36 @@ private fun drawTapersForRunout(
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * Draw all placed runout bubbles with diagonal fanning leader lines.
+ * Draw all placed runout bubbles with their leader polylines.
  *
- * Each [PlacedStation] has a pre-computed [bubbleXPt] that guarantees no collision
- * between adjacent circles. The leader runs diagonally from the shaft's actual outer
- * surface at the station's axial x to the bubble's assigned x position below — exactly
- * matching the hand-drawn convention where lines fan out to separate the bubbles.
- *
- * The monotonic assignment (station order = bubble order) guarantees that no two leader
- * lines cross each other.
+ * Placement comes from the shared engine (`geom/RunoutBubbleLayout.kt`), which
+ * guarantees bubbles never touch and leaders never enter a bubble or cross each other.
+ * A leader polyline is either a straight station→bubble diagonal (2 vertices) or a
+ * dogleg with a vertical drop (3 vertices) when the straight route would collide.
  */
 private fun drawPlacedBubbles(
     c: Canvas,
-    stations: List<PlacedStation>,
-    shaftCy: Float,
+    bubbles: List<PlacedRunoutBubble>,
     outline: Paint,
-    fill: Paint,
 ) {
-    for (st in stations) {
-        val leaderEndY = st.bubbleCenterYPt - BUBBLE_RADIUS_PT  // top of the circle
-
-        // Diagonal leader from the shaft surface at the station's axial x
-        // to the top of the bubble at its assigned (spread-out) x.
-        c.drawLine(st.stationXPt, st.shaftBottomYPt, st.bubbleXPt, leaderEndY, outline)
+    val notchBlank = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.WHITE
+    }
+    for (b in bubbles) {
+        // Leader polyline from the shaft surface to the top of the circle.
+        b.leader.zipWithNext { p, q -> c.drawLine(p.x, p.y, q.x, q.y, outline) }
 
         // Circle (blank — space for hand-written TIR value)
-        c.drawCircle(st.bubbleXPt, st.bubbleCenterYPt, BUBBLE_RADIUS_PT, outline)
+        c.drawCircle(b.bubbleX, b.bubbleCenterY, BUBBLE_RADIUS_PT, outline)
 
-        // Keyway reference marker: small filled square at 12-o'clock on the circle.
-        // Indicates keyway-at-top-centre as the angular reference for the reading.
-        val sqH = KEYWAY_SQUARE_SIZE_PT * 0.5f
-        c.drawRect(
-            st.bubbleXPt - sqH,
-            st.bubbleCenterYPt - BUBBLE_RADIUS_PT - sqH * 0.6f,
-            st.bubbleXPt + sqH,
-            st.bubbleCenterYPt - BUBBLE_RADIUS_PT + sqH * 0.6f,
-            fill,
-        )
+        // Keyway reference marker: open square notch straddling the rim at 12-o'clock —
+        // key-at-top-centre as the angular reference, matching the hand-drawn sheets.
+        // The white fill blanks the rim (and leader tip) inside the notch first.
+        val sq = KEYWAY_SQUARE_SIZE_PT
+        val top = b.bubbleCenterY - BUBBLE_RADIUS_PT - sq * 0.6f
+        c.drawRect(b.bubbleX - sq * 0.5f, top, b.bubbleX + sq * 0.5f, top + sq, notchBlank)
+        c.drawRect(b.bubbleX - sq * 0.5f, top, b.bubbleX + sq * 0.5f, top + sq, outline)
     }
 }
 
@@ -750,18 +603,18 @@ private const val TEXT_PT    = 10f
 private const val PAGE_MARGIN_PT   = 36f    // 0.5 in margins
 private const val HEADER_HEIGHT_PT = 22f    // Compact single-line header
 private const val OAL_GAP_PT       = 6f     // Gap from header rule to OAL line
-private const val OAL_LINE_SPACE_PT = 18f   // Vertical room for OAL span line + label
+private const val OAL_LINE_SPACE_PT = 90f   // OAL line height above shaft top (≈1.25 in — raised so the dimension doesn't crowd the profile, 2026-07-18)
 private const val TIR_LINE_HEIGHT_PT = 20f  // Space for TIR direction line at bottom
 
 // Bubble geometry — sized to hold hand-written decimal readings (e.g. .016)
+// Row spacing and leader routing are derived from these by geom/RunoutBubbleLayout.kt.
 private const val BUBBLE_RADIUS_PT      = 20f  // 40 pt ≈ 0.55 inch diameter (readable, not too large)
-private const val BUBBLE_MIN_GAP_PT     = 5f   // Minimum horizontal gap between bubble edges
-private const val SHORT_LEADER_PT       = 18f  // Leader length: row-0 (even-indexed per component)
-private const val LONG_LEADER_PT        = 56f  // Leader length: row-1 (odd-indexed per component)
-private const val KEYWAY_SQUARE_SIZE_PT = 4f   // Small filled square at top of each circle
+private const val BUBBLE_MIN_GAP_PT     = 5f   // Minimum clear distance between circle edges
+private const val SHORT_LEADER_PT       = 18f  // Deepest shaft surface → top of bubble row 0
+private const val KEYWAY_SQUARE_SIZE_PT = 7f   // Open square notch straddling the rim at 12-o'clock
 
-// Total height occupied by both bubble rows below the shaft
-private const val BUBBLE_GAP_PT         = 8f   // Extra space below last bubble row
+// Extra space below the last bubble row
+private const val BUBBLE_GAP_PT         = 8f
 
 // Body compression break (matches ShaftPdfComposer threshold)
 private const val COMPRESS_TRIGGER_PT = 220f

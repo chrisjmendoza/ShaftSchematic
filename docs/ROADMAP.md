@@ -58,7 +58,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Warning badge system — yellow per-component chips, 3-state free-to-end badge
 - ShaftScreen.kt carousel extracted to `ComponentCarousel.kt`
 - Sidebar nav (3 tabs: Schematic / Runout Sheet / Wear Document)
-- Runout drawing — inline shaft preview, scrollable layout, fan-spread bubble placement, TIR direction label
+- Runout drawing — inline shaft preview, scrollable layout, collision-free alternating bubble placement (shared `geom/RunoutBubbleLayout.kt` engine), TIR direction label
 - Wear document — shaft profile + header + dye-pen PASS/FAIL checkboxes
 - Line thickness control — Settings slider 50%–200%, DataStore-persisted, applies to preview and PDF strokes
 - OAL include-thread fix — bracket spans SET-to-SET (excluded) or shaft-end-to-SET (included); label always equals typed OAL

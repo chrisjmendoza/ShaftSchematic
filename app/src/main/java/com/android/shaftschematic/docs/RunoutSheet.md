@@ -1,6 +1,7 @@
 # RunoutSheet & WearDocument
 
 **Files:**
+- `geom/RunoutBubbleLayout.kt` — shared bubble placement engine (stations, rows, x-solve, leader routing + collision verification)
 - `ui/screen/RunoutRoute.kt` — runout station config, canvas preview, PDF preview overlay
 - `ui/screen/WearRoute.kt` — wear inspection document tab
 - `pdf/RunoutPdfComposer.kt` — letter-landscape runout PDF generation
@@ -28,33 +29,82 @@ Both tabs share the same layout pattern: outer `Column` with `systemBarsPadding(
 
 ## Bubble Placement Algorithm (RunoutRoute only)
 
-Both the canvas preview and the PDF use the same three-pass algorithm:
+**Single source of truth: `geom/RunoutBubbleLayout.kt`.** Both the canvas preview and
+the PDF call the same engine (`collectRunoutStations` → `planRunoutBubbles` →
+`RunoutBubblePlan.finish`), so the two renderings are identical by construction —
+station math, row assignment, bubble x positions, and leader routing. Do not re-implement
+any placement logic in a renderer. The engine is pure Kotlin (no Android imports) and is
+covered by `geom/RunoutBubbleLayoutTest.kt`.
 
-### Pass 1 — Collect
+### Stations (mm domain)
 Components are the **resolved** list (`resolveComponents()` output), not raw spec:
 resolved bodies are subtracted against tapers/liners, split/merged, and include
 auto-body gap fill. Raw spec bodies may legally overlap tapers/liners and must never
 be used for station placement or profile drawing (2026-07-18 fix).
 
-For each component (sorted AFT→FWD), compute `N` axial station positions:
-- **Bodies:** evenly distributed across full length.
-- **Tapers / Liners:** inset from each edge by `RUNOUT_EDGE_INSET_MM` (≈ 25.4 mm) so measurements land on the cylindrical run-out, not the transition slope.
+Per component (`runoutStationPositionsMm`):
+- **Bodies:** cell midpoints, `(i + 0.5) · length / count` — even coverage of the full length.
+- **Tapers / Liners:** inset from each edge by `min(RUNOUT_EDGE_INSET_MM ≈ 25.4 mm, 20% of length)` so measurements land on the cylindrical run, not the transition slope.
 
-Each station produces:
-- `stationX` — canvas/page X at the axial measurement point.
-- `shaftBottomY` — canvas/page Y at the shaft's outer surface at that station.
-- `bubbleX` — bubble center X, spread horizontally within the component. Bubbles are centred on the component's page midpoint; slot width = bubble diameter + minimum gap. The group may splay beyond the component edges symmetrically if N slots exceed the component width.
+(2026-07-18: the canvas preview and PDF previously used *different* station math —
+body stations `len/(count+1)` on the PDF vs cell midpoints on canvas, inset caps 20% vs
+35%. Standardised on cell midpoints and the 20% cap in the shared engine.)
 
-### Pass 2 — Greedy Level Assignment
-All bubbles are sorted by `bubbleX`. Each is assigned the **lowest level** where its circle does not horizontally overlap any already-placed bubble at that level (i.e., `prevRightEdge[level] + minGap ≤ bubbleLeft`).
+### Rows — alternating, globally aligned
+Within each component, consecutive stations **alternate rows** (0, 1, 0, 1, …) — the
+hand-drawn shop convention. Single-station components sit on row 0. When a component
+would start on the same row the previous component ended on, close enough to collide,
+its phase flips. All bubbles in a row share one centre Y anchored below the **deepest
+drawn shaft point** (aligned rows across the whole sheet — bubble depth no longer varies
+with the local shaft OD).
 
-- Level 0 → shortest leader (closest to shaft).
-- Level N → `SHORT_LEADER + N × (LONG_LEADER − SHORT_LEADER)`.
+Spacing invariants (centre-to-centre horizontal, enforced between x-adjacent bubbles):
 
-This guarantees zero overlap regardless of station density or component count. In typical configurations only levels 0–1 are used; level 2+ appears only when adjacent components produce densely-packed bubbles at a shared boundary.
+| pair | minimum dx | why |
+|---|---|---|
+| same row | `2·radius + minGap` | circles can never touch |
+| different row | `radius + minGap` | a vertical leader drop at one bubble's x clears every circle in the rows above |
 
-### Pass 3 — Draw
-Each bubble's leader line is drawn **diagonally** from `(stationX, shaftBottomY)` to `(bubbleX, bubbleTop)`. Because `stationX ≠ bubbleX` in general and spreading is monotonic within each component, leaders fan outward and cannot enter any bubble's interior.
+`rowStep = 2·radius + minGap` vertically, so circles on different rows are disjoint at any
+dx. Because `2 × crossRowPitch ≥ sameRowPitch`, adjacent-pair constraints are sufficient
+for all pairs.
+
+**Two rows is a hard design point, not a simplification.** Every leader's final drop
+passes through every row band above its bubble and needs its own horizontal lane
+(`crossRowPitch`) past the circles there — so each bubble consumes ~one lane of width
+regardless of how deep it sits. Rows 3+ therefore cannot reduce splay or increase
+capacity; they only add page height and longer leaders. In tight regions the alternation
+plus the boundary phase flip already put every binding adjacent pair on different rows
+(the minimum pitch), which is the densest packing this leader convention allows. When the
+station count cannot fit the content width at minimum clearances (~27 stations on a
+letter page), spacing compresses uniformly (`RunoutBubblePlan.compressed = true`,
+degenerate configs only — the collision guarantees are void in that case and
+`RunoutBubbleResult.unresolvedCollisions` reports what's left).
+
+### Bubble x — least-squares under constraints
+Bubble x positions minimise Σ(bubbleX − stationX)² subject to the pitch constraints and
+page bounds (isotonic regression / pool-adjacent-violators). Bubbles sit **directly under
+their stations** whenever there is room; dense clusters spread symmetrically and stay
+centred over their stations. Bubble order always equals station order.
+
+### Leaders — verified, with dogleg fallback
+Each leader is first tried as a straight diagonal from `(stationX, shaftSurfaceY)` to the
+top of its bubble. The engine then runs an explicit collision check — segment-vs-circle
+against every other bubble (inflated by `minGap/2`) and segment-vs-segment against every
+other leader. Any leader that fails is re-routed as a **dogleg**:
+
+```
+(stationX, surfaceY)          vertical stub down to the common departure line
+   → (stationX, departY)      (departY = deepest shaft surface; zero-length when already there)
+   → (bubbleX, elbowY)        diagonal in the corridor above the row-0 circle tops
+   → (bubbleX, bubbleTop)     vertical drop through the rows (clears circles by crossRowPitch)
+```
+
+All dogleg diagonals run between the same two horizontal lines with matching left-to-right
+order at both ends, so dogleg-vs-dogleg crossings are geometrically impossible; the repair
+loop therefore provably converges to **zero intersections** in every non-compressed
+configuration. The unit test suite asserts this across randomized stress configurations,
+stepped shaft surfaces (OD jumps), and dense component boundaries.
 
 ---
 
@@ -70,7 +120,9 @@ ptPerMm    = contentWidth / drawSpanMm
 xAt(mm)    = contentLeft + (mm − aftSetMm) × ptPerMm
 ```
 
-**Why:** Thread components at the aft/fwd ends are NOT drawn in the shaft profile (the profile only draws bodies, tapers, and liners). If the span were based on `overallLengthMm`, the OAL arrows would extend into un-drawn whitespace. Basing the span on the SET faces keeps the arrow tips coincident with the visible shaft ends.
+**Why:** Measurements on these documents always originate from the SET faces (see `computeSetPositionsInMeasureSpace`), so the arrows bracket the SET-to-SET span regardless of end threads. Threads ARE drawn — hatched envelopes at their physical position, purely for visual reference — and end threads (including excluded-from-OAL threads, which live outside 0..OAL after `syncExcludedThreadPositions`) stick out past the arrow tips into the margins.
+
+**Layout (2026-07-18):** the runout sheet's OAL dimension line sits `OAL_LINE_SPACE_PT` = 90 pt (≈ 1.25 in) above the shaft top — raised so it doesn't crowd the profile — with witness (extension) lines dropping to the shaft's actual top edge at each SET face (gap 3 pt, extending 5 pt past the line), matching the schematic/wear-document convention.
 
 **Label rule (2026-07-11):** the printed OAL value is always the user's **typed OAL**
 (`spec.overallLengthMm`) — the same "OAL never changes" rule as the main schematic
@@ -205,10 +257,11 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
 ## Contracts & Invariants
 
 - Model dimensions are canonical **mm**; all px/pt conversion happens inside the composer/preview.
-- Thread components produce no runout stations and are not drawn in the shaft profile.
+- Thread components produce no runout stations; they are drawn as hatched envelopes for visual reference only and may extend past the OAL arrows (excluded threads sit outside the SET-to-SET span).
 - The PDF page is U.S. Letter landscape (792 × 612 pt).
-- Canvas preview and PDF use the same spreading and level-assignment logic so they look identical.
-- Keyway reference marker (small filled square at 12-o'clock) appears on every bubble in the PDF.
+- Canvas preview and PDF share one placement engine (`geom/RunoutBubbleLayout.kt`) so they are identical by construction — never re-implement placement in a renderer.
+- Bubbles never touch each other; leader lines never enter a bubble or cross another leader (engine-verified; see the algorithm section).
+- Keyway reference marker — an open square notch straddling the rim at 12-o'clock (key-at-top-centre convention, like the hand-drawn sheets) — appears on every bubble in BOTH the PDF and the canvas preview.
 - OAL arrows bracket the SET-to-SET span, not the full `overallLengthMm`.
 - The preview bitmap is rendered at 2× raster scale for sharpness on high-density displays.
 - Temp PDF files used for preview rendering are deleted after rasterisation.
