@@ -44,6 +44,16 @@ import kotlin.math.min
  *    page), spacing compresses uniformly and the plan flags itself
  *    ([RunoutBubblePlan.compressed]; [RunoutBubbleResult.unresolvedCollisions] reports
  *    anything the repair pass could not fix in that degenerate state).
+ * 7. `crossRowPitch` is the geometric MINIMUM that keeps a deeper bubble's leader from
+ *    touching a shallower neighbour — enough for the plan to be correct, but not enough
+ *    for a machinist to write a reading beside that neighbour without the pen crossing the
+ *    leader. When a row has horizontal slack (stations far enough apart that the pitch
+ *    constraint isn't binding at the sheet's edges), cross-row adjacent gaps are widened by
+ *    up to [RunoutBubbleGeometry.leaderClearance] on top of `crossRowPitch`, split evenly
+ *    across the slack-eligible gaps and capped so the total never exceeds the available
+ *    span. This can only ever grow a gap, never shrink one below its geometric minimum, so
+ *    it changes zero collision guarantees — it degrades to exactly the old behaviour the
+ *    moment a row is tight (no free slack to spend).
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,6 +62,15 @@ import kotlin.math.min
 
 /** Fraction of a component's length that caps the edge inset for short tapers/liners. */
 const val RUNOUT_EDGE_INSET_MAX_FRACTION = 0.20f
+
+/**
+ * Multiplier on [RunoutBubbleGeometry.minGap] used to derive [RunoutBubbleGeometry.leaderClearance]
+ * — the extra breathing room (beyond the geometric minimum) a bubble edge should keep from a
+ * FOREIGN leader's leg when the row has slack to spare. Expressed as a factor of `minGap`
+ * (rather than a fixed output-unit constant) so it scales correctly whether the caller is
+ * working in PDF points or canvas px. At the PDF's `minGap = 5f`, this evaluates to 8f.
+ */
+const val LEADER_CLEARANCE_FACTOR = 1.6f
 
 /**
  * Axial mm positions of [count] measurement stations within one component.
@@ -155,6 +174,14 @@ data class RunoutBubbleGeometry(
 
     /** Vertical distance between row centres. */
     val rowStep: Float get() = 2f * radius + minGap
+
+    /**
+     * Extra clearance (beyond `crossRowPitch`'s geometric minimum) a bubble edge should keep
+     * from a foreign bubble's leader leg, spent only when the row has slack to spare
+     * (see [planRunoutBubbles] rule 7). Comfort margin for a hand-written reading, not a
+     * collision requirement.
+     */
+    val leaderClearance: Float get() = minGap * LEADER_CLEARANCE_FACTOR
 }
 
 /** One vertex of a leader polyline. */
@@ -208,6 +235,21 @@ fun planRunoutBubbles(
     val rows = assignRows(sorted, desired, geom)
     val gaps = FloatArray(max(n - 1, 0)) { i ->
         if (rows[i + 1] == rows[i]) geom.sameRowPitch else geom.crossRowPitch
+    }
+
+    // Leader-clearance spread (see class KDoc rule 7): a cross-row adjacent gap sitting at
+    // exactly `crossRowPitch` is the bare geometric minimum for "leader doesn't touch the
+    // neighbour" — widen it towards `leaderClearance` extra whenever the row has slack, so a
+    // machinist has room to write a reading beside the bubble. Bounded by the ACTUAL slack
+    // (available − baseNeeded) split evenly across eligible gaps, so this can only grow gaps
+    // that were already going to fit — it never pushes a previously-uncompressed layout into
+    // compression, and a tight layout (no slack) gets zero widening, i.e. today's behaviour.
+    val crossRowGapIdx = gaps.indices.filter { rows[it + 1] != rows[it] }
+    val baseNeeded = gaps.sum()
+    val slack = available - baseNeeded
+    if (slack > 0f && crossRowGapIdx.isNotEmpty()) {
+        val extra = min(geom.leaderClearance, slack / crossRowGapIdx.size)
+        for (i in crossRowGapIdx) gaps[i] += extra
     }
 
     // Degenerate fallback: compress uniformly so the group still fits the page.

@@ -183,7 +183,9 @@ class RunoutBubbleLayoutTest {
 
     @Test
     fun `dense cluster stays centred over its stations`() {
-        // Two stations 10pt apart: must spread to crossRowPitch (25) but stay centred at 400
+        // Two stations 10pt apart: must spread past crossRowPitch (25) but stay centred at 400.
+        // Content span here (36..756) has ample slack, so the leader-clearance spread (rule 7)
+        // takes the full gap to crossRowPitch + leaderClearance, not the bare crossRowPitch.
         val stations = listOf(
             RunoutStationX("t1", 100f, 395f),
             RunoutStationX("t1", 110f, 405f),
@@ -191,7 +193,57 @@ class RunoutBubbleLayoutTest {
         val plan = planRunoutBubbles(stations, geom)
         val mid = (plan.bubbleX[0] + plan.bubbleX[1]) / 2f
         assertEquals(400f, mid, 1e-2f)
-        assertEquals(geom.crossRowPitch, plan.bubbleX[1] - plan.bubbleX[0], 1e-2f)
+        assertEquals(
+            geom.crossRowPitch + geom.leaderClearance,
+            plan.bubbleX[1] - plan.bubbleX[0],
+            1e-2f,
+        )
+    }
+
+    @Test
+    fun `ample slack spreads a bubble clear of a foreign leader's leg`() {
+        // Mirrors the reported field defect: two liners' worth of stations mid-shaft, packed
+        // just tight enough to alternate rows, but with a wide-open page around them. With
+        // room to spare, every cross-row adjacent pair should land leaderClearance beyond the
+        // bare crossRowPitch minimum — enough room for a hand-written reading beside the bubble
+        // without the pen crossing the neighbour's leader.
+        val stations = listOf(
+            RunoutStationX("linerA", 400f, 400f),
+            RunoutStationX("linerA", 410f, 410f),
+            RunoutStationX("linerB", 420f, 420f),
+            RunoutStationX("linerB", 430f, 430f),
+        )
+        val plan = planRunoutBubbles(stations, geom)
+        for (i in 0 until plan.bubbleX.size - 1) {
+            if (plan.rows[i + 1] != plan.rows[i]) {
+                val dx = plan.bubbleX[i + 1] - plan.bubbleX[i]
+                assertTrue(
+                    "cross-row gap $i..${i + 1} = $dx wants >= ${geom.crossRowPitch + geom.leaderClearance}",
+                    dx >= geom.crossRowPitch + geom.leaderClearance - 1e-2f,
+                )
+            }
+        }
+        assertInvariants(place(stations))
+    }
+
+    @Test
+    fun `tight page barely spreads and still resolves with zero unresolved collisions`() {
+        // A narrow content window (160pt available) with 6 alternating-row stations needing
+        // 5 * crossRowPitch(25) = 125pt minimum — only 35pt of slack, not the 5 * 8 = 40pt
+        // the full leaderClearance spread would want. The widening must degrade to exactly
+        // what fits (7pt/gap, not 8), never compress, never collide — the same
+        // no-new-collisions guarantee the layout had before rule 7 existed.
+        val tight = geom.copy(contentLeft = 0f, contentRight = 200f)
+        val stations = List(6) { i -> RunoutStationX("c0", i * 20f, i * 20f + 10f) }
+        val plan = planRunoutBubbles(stations, tight)
+        assertTrue("should not need to compress", !plan.compressed)
+        val expectedGap = tight.crossRowPitch + 7f // 35pt slack / 5 gaps = 7pt each, capped below leaderClearance(8)
+        for (i in 1 until plan.bubbleX.size) {
+            assertEquals(expectedGap, plan.bubbleX[i] - plan.bubbleX[i - 1], 1e-2f)
+        }
+        val result = plan.finish(300f) { 300f }
+        assertEquals(0, result.unresolvedCollisions)
+        assertInvariants(result, tight)
     }
 
     @Test

@@ -124,7 +124,8 @@ fun composeWearPdf(
     fun xAt(mm: Float): Float = contentLeft + (mm - measureStartMm) * ptPerMm
     fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * ptPerMm
 
-    // OAL dimension line sits just above the shaft's top outline.
+    // OAL dimension line sits well above the shaft's top outline (same 90 pt convention
+    // as the runout sheet), not crowding the profile.
     // Computed after scale so we can use the actual drawn shaft radius. The outline's
     // true top may come from a liner OD or a taper LET, not just a body — use the full
     // max outer diameter so the dimension line never overlaps drawn geometry.
@@ -384,7 +385,7 @@ private const val WEAR_MARGIN_PT  = 36f
 
 private const val WEAR_HEADER_HEIGHT_PT       = 36f   // 2-line header block height
 private const val WEAR_HEADER_GAP_PT          = 16f   // gap from header rule to drawing area
-private const val WEAR_OAL_ABOVE_SHAFT_PT     = 16f   // gap from shaft top edge to OAL line
+private const val WEAR_OAL_ABOVE_SHAFT_PT     = 90f   // gap from shaft top edge to OAL line (≈1.25 in — raised so the dimension doesn't crowd the profile; matches RunoutPdfComposer.OAL_LINE_SPACE_PT, 2026-07-18)
 private const val WEAR_NOTES_BOTTOM_OFFSET_PT = 24f   // notes baseline above contentBot
 private const val WEAR_NOTES_GAP_PT           = 28f   // gap from drawing area bottom to notes
 

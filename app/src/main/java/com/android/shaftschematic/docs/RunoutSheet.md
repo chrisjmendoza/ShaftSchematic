@@ -69,6 +69,20 @@ Spacing invariants (centre-to-centre horizontal, enforced between x-adjacent bub
 dx. Because `2 × crossRowPitch ≥ sameRowPitch`, adjacent-pair constraints are sufficient
 for all pairs.
 
+**Leader clearance — comfort margin beyond the geometric minimum.** `crossRowPitch` is the
+bare minimum that keeps a deeper bubble's leader from touching a shallower neighbour — it
+does not leave room for a machinist to write a reading beside that neighbour without the
+pen crossing the leader (reported from a real field PDF: a row-0 bubble sitting right next
+to a row-1 bubble's leader between two mid-shaft liners). When a row has horizontal slack —
+station spacing wide enough that the pitch constraint isn't the only thing pinning bubble
+positions — every cross-row adjacent gap is widened by up to `RunoutBubbleGeometry
+.leaderClearance` (`= minGap × LEADER_CLEARANCE_FACTOR`, `LEADER_CLEARANCE_FACTOR = 1.6`,
+i.e. 8 pt at the PDF's `minGap = 5 pt`) on top of `crossRowPitch`. The extra is split evenly
+across the eligible gaps and capped so the total never exceeds the row's actual available
+span, so it can only ever grow a gap — never shrink one below its geometric minimum. A tight
+row (no slack to spend) degrades to exactly the old behaviour: zero widening, same pitches
+as before this existed.
+
 **Two rows is a hard design point, not a simplification.** Every leader's final drop
 passes through every row band above its bubble and needs its own horizontal lane
 (`crossRowPitch`) past the circles there — so each bubble consumes ~one lane of width
@@ -162,14 +176,14 @@ under the same name for the same shaft.
 | Drawing area top | 88 |
 | **Shaft centre** | **≈ 306** (page centre) |
 | Shaft top edge | ≈ 291 (depends on shaft OD and scale) |
-| OAL dimension line | ≈ 275 (shaft top − 16 pt) |
+| OAL dimension line | ≈ 201 (shaft top − 90 pt) |
 | Drawing area bottom | 524 |
 | Notes / checkboxes | 552 |
 
 **Key layout decisions:**
 - Header is split across two centred lines so long job-info strings don't overflow the 720 pt content width.
 - Shaft centre is `(midTop + midBot) / 2` where `midTop = headerBottom + WEAR_HEADER_GAP_PT` and `midBot = notesY − WEAR_NOTES_GAP_PT`. It is independent of the OAL line position and sits at exactly the page centre for the default margins.
-- OAL dimension line is computed **after** the horizontal scale factor (`ptPerMm`) is known: `oalLineY = shaftCy − rPx(maxBodyDia) − WEAR_OAL_ABOVE_SHAFT_PT`. This anchors it just above the actual drawn shaft top rather than at a fixed offset from the header.
+- OAL dimension line is computed **after** the horizontal scale factor (`ptPerMm`) is known: `oalLineY = shaftCy − rPx(maxBodyDia) − WEAR_OAL_ABOVE_SHAFT_PT`. This anchors it well above the actual drawn shaft top (raised 90 pt, same convention as the runout sheet) rather than at a fixed offset from the header.
 - Witness (extension) lines are drawn at `x0` and `x1` from just above the shaft top up through the dimension line, matching standard engineering drawing convention.
 - Notes row is anchored at `contentBot − WEAR_NOTES_BOTTOM_OFFSET_PT`, independent of shaft size.
 
@@ -179,7 +193,7 @@ under the same name for the same shaft.
 |---|---|---|
 | `WEAR_HEADER_HEIGHT_PT` | 36 | Two-line header block height (rule sits at this offset from `contentTop`) |
 | `WEAR_HEADER_GAP_PT` | 16 | Gap from header rule to drawing area top |
-| `WEAR_OAL_ABOVE_SHAFT_PT` | 16 | Gap from shaft top edge to OAL dimension line |
+| `WEAR_OAL_ABOVE_SHAFT_PT` | 90 | Gap from shaft top edge to OAL dimension line (parity with `RunoutPdfComposer.OAL_LINE_SPACE_PT`) |
 | `WEAR_NOTES_BOTTOM_OFFSET_PT` | 24 | Distance of notes baseline above `contentBot` |
 | `WEAR_NOTES_GAP_PT` | 28 | Gap from drawing area bottom to notes baseline |
 
