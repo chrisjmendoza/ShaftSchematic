@@ -4,12 +4,17 @@ Model Conventions
 Layer: Model  
 Purpose: Shared expectations across Body, Taper, ThreadSpec, Liner, CouplerBoltSlot, Segment.
 
-Version: v0.3 (2026-07-11)
+Version: v0.4 (2026-07-18)
 
 Invariants
 - All fields are **Float mm** unless stated otherwise.  
 - `startFromAftMm + lengthMm` gives end; for most components this must be ≤ `overallLengthMm`.  
-- Thread pitch stored as **pitchMm**; TPI only at UI edge.
+- Thread pitch/TPI are **both canonical stored fields**: `Threads.pitchMm` (mm/turn) and
+  `Threads.tpi: Float?` (imperial) live side by side in the model. `Threads.normalized()`
+  populates whichever is missing from the other (`tpi` present → `pitchMm = 25.4/tpi`;
+  `pitchMm` present → `tpi = 25.4/pitchMm`) and is applied on decode (`ShaftDocCodec.decode`
+  calls `.normalized()`). Other units (in, mixed) are still forbidden — only mm and TPI,
+  the two canonical thread-pitch representations, are stored.
 - **Exception — excluded threads:** `Threads` with `excludeFromOAL = true` are placed outside the 0..OAL shaft span by `syncExcludedThreadPositions()`. Their `startFromAftMm` will be **negative** for AFT-end threads (`–lengthMm`) or equal to `overallLengthMm` for FWD-end threads. Do not validate excluded-thread positions against `overallLengthMm`.
 
 `LinerAuthoredReference` (enum: AFT / FWD)
@@ -35,7 +40,8 @@ Responsibilities
 
 Do Nots
 - Do not embed UI types or formatting.  
-- Do not store inches, TPI, or mixed units.
+- Do not store inches, or any unit besides mm and thread TPI (the two canonical
+  thread-pitch fields); no other imperial fields belong in the model.
 - Do not clamp or mutate an excluded thread's `startFromAftMm` to keep it within 0..OAL — that would destroy the intended rendering position.
 
 Notes
@@ -44,6 +50,10 @@ Notes
 
 Change Log
 ----------
+**v0.4 (2026-07-18)**
+- Corrected thread-pitch convention: `pitchMm` and `tpi` are both canonical stored
+  fields (kept in sync by `Threads.normalized()`), not "pitchMm stored, TPI UI-only."
+
 **v0.3 (2026-07-11)**
 - Added `CouplerBoltSlot` reference-feature conventions (excluded from OAL/coverage/collision; FWD-default authoring reference).
 

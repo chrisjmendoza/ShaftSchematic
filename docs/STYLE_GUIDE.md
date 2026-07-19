@@ -101,7 +101,7 @@ fix: correct liner end-tick stroke usage
 docs: rewrite PDF export spec
 6. Directory Rules
 Do:
-Follow the package map from Architecture.md
+Follow the package map from ARCHITECTURE.md
 
 Keep each class in a single file
 

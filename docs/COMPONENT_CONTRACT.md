@@ -1,5 +1,6 @@
 # Component vs Feature Contract
 Version: v0.5.x
+Last updated: 2026-07-18 — manual bodies documented as current/persisted (was "future"); body keyway support marked shelved per ROADMAP.md.
 
 This document is **normative**.
 It defines what constitutes a **component** versus a **feature** in ShaftSchematic.
@@ -70,14 +71,18 @@ Features:
 
 - **Auto bodies** (derived):
   - Ephemeral and read-only
-  - Generated from OAL + explicit components
+  - Generated from OAL + explicit components (`ui/resolved/ResolvedComponent.kt`,
+    `deriveAutoBodies()`), tagged `ResolvedComponentSource.AUTO`
   - Removed or split as explicit components occupy their span
-- **Manual bodies** (explicit, future):
-  - Persisted components stored in `ShaftSpec`
+- **Manual bodies** (explicit, current):
+  - Persisted components stored in `ShaftSpec.bodies`
   - Replace auto bodies in overlapping regions
   - Never coexist with auto bodies in the same region
 
-**Rule:** Manual body components promote over auto bodies in any overlapping span.
+**Rule:** Manual body components promote over auto bodies in any overlapping span. This
+promotion is live today: the carousel's auto-body card calls `promoteIfNeeded()`
+(`ComponentCarousel.kt`) the moment the user edits Start/Length/Ø, which persists the section
+as a real `Body` in `ShaftSpec`. Viewing an auto-body card without editing it never promotes it.
 
 ---
 
@@ -94,12 +99,18 @@ Features:
 
 - Keyways are **features**, not components.
 - Currently supported on **Tapers** (taper-hosted).
-- Planned support for **Bodies** (body-hosted).
+- Body-hosted keyways are **shelved** (non-goal) — see `docs/ROADMAP.md` v1.0 "Non-goals":
+  "Body keyway (shelved — no marine propeller shaft use case identified)". Not planned; do not
+  build against an expectation that this will land.
 - Keyways will **never** exist as standalone components.
 
-Keyway attributes (host-owned):
+Keyway attributes (host-owned, `model/Taper.kt`):
 - `length` (stored as `keywayLengthMm`)
-- `spoon flag` (stored as `keywaySpooned`, aka “keywayHasSpoon”)
+- `width` (stored as `keywayWidthMm`)
+- `depth` (stored as `keywayDepthMm`)
+- `offset from SET` (stored as `keywayOffsetFromSetMm`; 0 = open keyway at the SET face, > 0 =
+  floating keyway inset from SET)
+- `spoon flag` (stored as `keywaySpooned` — there is no `keywayHasSpoon` alias)
 
 ---
 

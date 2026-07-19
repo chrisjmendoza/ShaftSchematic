@@ -131,6 +131,7 @@ These are defined in the contract but not yet computed. Lower priority — add w
 - [ ] Preset library (common tapers, common shoulder patterns)
 - [ ] Dual-unit display (primary in, secondary mm in smaller text)
 - [ ] Quick inline mm ↔ in calculator in dialogs
+- [ ] Backup auto-mirror folder — user picks a SAF folder once in Settings (persisted URI); every internal save silently mirrors a copy there so the off-device backup is always current. Needs `takePersistableUriPermission` + careful URI-permission lifecycle handling (revoked permission, deleted folder). Originally Tier 3 of the 2026-05-27 backup plan; the shipped backup system covers Tiers 1–2.
 
 ---
 

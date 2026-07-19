@@ -1,134 +1,86 @@
 # ShaftSchematic – AI Agent Instructions
 
 ## Project Overview
-Android app for modeling marine prop-shaft assemblies with real-time preview and PDF export. Single-activity Compose app using Material3, targeting Android 8.0+ (API 28).
+Android app for modeling marine prop-shaft assemblies with real-time preview and PDF
+export (shaft drawing, runout sheet, wear document). Single-activity Compose app using
+Material3, targeting Android 8.0+ (API 28), Target SDK 36.
+
+Authoritative sources, in order:
+1. `CLAUDE.md` (repo root) — project conventions and critical invariants
+2. `app/src/main/java/com/android/shaftschematic/docs/` — per-subsystem contract docs
+   (index: `README.md` in that folder). Read the relevant doc before editing a subsystem.
+3. `CONTRIBUTING.md` — architecture overview and coding guidelines
 
 ## Critical Architecture Rules
 
 ### Units: Millimeters Everywhere
-- **All model geometry stored in millimeters** (`ShaftSpec`, `Body`, `Taper`, `Threads`, `Liner`)
+- **All model geometry stored in millimeters** (`ShaftSpec`, `Body`, `Taper`, `Threads`,
+  `Liner`, `CouplerBoltSlot`)
 - Convert to inches **only at UI edges**: formatting, grid legends, dimension labels
 - Never store or calculate geometry in inches
-- Example: `Body.diaMm`, `Taper.lengthMm` are canonical; UI displays based on `UnitSystem` preference
 
-### Rendering: Single Source of Truth
-Drawing logic lives in **one place only** to avoid divergence between preview and PDF:
+### Rendering: Two Separate Drawing Paths
+Preview and PDF share the same model and layout math but have **separate Canvas code**:
 
 ```
-ui/drawing/render/ShaftLayout.kt   → Computes mm→px mapping, layout bounds
-ui/drawing/render/ShaftRenderer.kt → Draws geometry (bodies/tapers/threads/liners)
-ui/drawing/compose/ShaftDrawing.kt → Compose wrapper, draws grid + axis labels ONLY
-pdf/ShaftPdfComposer.kt            → PDF export uses same Layout + Renderer
+ui/drawing/render/ShaftLayout.kt   → mm→px mapping, layout bounds (shared math)
+ui/drawing/render/ShaftRenderer.kt → preview geometry (DrawScope)
+ui/drawing/compose/ShaftDrawing.kt → Compose host; grid + axis labels only
+pdf/ShaftPdfComposer.kt            → shaft drawing PDF (own drawing code)
+pdf/RunoutPdfComposer.kt           → runout sheet PDF
+pdf/WearPdfComposer.kt             → wear document PDF
 ```
 
-**Invariants:**
-- `ShaftDrawing` draws grid + axis labels, delegates geometry to `ShaftRenderer`
-- `ShaftRenderer` draws all geometry + single "Overall" label (no grid duplication)
-- `ShaftLayout.compute()` provides `pxPerMm`, `minXMm`, `maxXMm`, `centerlineYPx`
-- Scale fits **both axes**: `pxPerMm = min(widthPx/(maxX-minX), heightPx/maxDiameter)`
-
-**Common pitfalls:**
-- ❌ Drawing "Overall" label in multiple places → use `ShaftRenderer` only
-- ❌ Fixed X=0 at canvas left → must use `left + (0 - minXMm) * pxPerMm` for origin
-- ❌ Ignoring vertical fit → scale must accommodate `maxOuterDiaMm()`
+A fix in `ShaftRenderer` does **not** propagate to the PDF composers automatically
+(or vice versa). When changing how anything draws, check both paths.
 
 ### Package Structure (Canonical)
 ```
 com.android.shaftschematic/
 ├─ MainActivity.kt
-├─ data/         ← SettingsStore (DataStore), repositories
-├─ model/        ← ShaftSpec, Body, Taper, Threads, Liner (all mm)
-├─ pdf/          ← ShaftPdfComposer
+├─ model/     ← ShaftSpec, components, migrations (all mm)
+├─ geom/      ← pure geometry: OAL, SET positions, tier assignment, runout bubbles
+├─ doc/       ← ShaftDocCodec (JSON serialization + migrations)
+├─ io/        ← InternalStorage (.shaft library), ShaftBackup
+├─ data/      ← SettingsStore (DataStore), AutosaveManager
+├─ pdf/       ← PDF composers + dim/, notes/, render/
+├─ settings/  ← PdfPrefs, RunoutConfig
 ├─ ui/
-│  ├─ drawing/
-│  │  ├─ compose/  ← ShaftDrawing (grid + labels)
-│  │  └─ render/   ← ShaftLayout, ShaftRenderer (geometry)
-│  ├─ input/       ← Form widgets (NOT ui/components/)
-│  ├─ screen/      ← ShaftScreen, AddComponentDialogs
-│  └─ viewmodel/   ← ShaftViewModel, factory
-└─ util/         ← UnitSystem, parsing helpers
+│  ├─ drawing/   ← compose/ (hosts), render/ (layout + renderers)
+│  ├─ screen/    ← StartScreen, ShaftEditorRoute, ShaftScreen, ComponentCarousel,
+│  │              AddComponentDialogs, Runout/Wear/Settings routes
+│  ├─ input/     ← NumericInputField (commit-on-blur numeric entry)
+│  ├─ resolved/  ← ResolvedComponent (derived auto-body pipeline)
+│  ├─ order/     ← ComponentOrder
+│  ├─ viewmodel/ ← ShaftViewModel, factory, snap utils
+│  ├─ nav/       ← AppNav, PDF export routes
+│  └─ dialog/, config/, util/, theme/
+└─ util/      ← UnitSystem, parsing, taper rate auto-calc, naming helpers
 ```
-
-**File placement rules:**
-- Rendering code: `ui/drawing/render/` (Canvas logic)
-- Compose wrappers: `ui/drawing/compose/` (Composables that host Canvas)
-- Input widgets: `ui/input/` (not `ui/components/`)
-- Match package declaration to folder structure exactly
+Match package declaration to folder structure exactly.
 
 ## State Management
-
-### ViewModel Pattern
-- `ShaftViewModel` extends `AndroidViewModel` (needs Application context for DataStore)
-- **Always use factory:** `viewModel(factory = ShaftViewModelFactory)`
+- `ShaftViewModel` extends `AndroidViewModel`; **always use**
+  `viewModel(factory = ShaftViewModelFactory)`
 - State exposed via `StateFlow`; mutate with `.update { it.copy(...) }`
-- Commit-on-blur for inputs: no VM mutation while typing, update on Done/focus loss
+- **Commit-on-blur** for numeric inputs: no VM mutation while typing;
+  `ui/input/NumericInputField.kt` implements this, and a tap-and-leave with no edit
+  must be a no-op (critical invariant — see `docs/NumberField.md`)
+- Exception: the OAL field commits on every keystroke in manual mode (intentional)
 
-### Persistence
-- User preferences: `SettingsStore` (DataStore) for default unit + grid visibility
-- Document state: JSON save/load via SAF (Storage Access Framework)
-- Thread pitch normalization: `ShaftSpec.normalized()` populates both `pitchMm` and `tpi` after decode
-
-## UI Input Conventions
-1. **Tap-to-clear numeric fields** only when committed value is `0`
-2. **No state mutation while typing** (commit on blur/Done)
-3. `NumberField.kt` in `ui/input/` implements this (if it exists)
-
-## Type Contracts (Keep in Sync)
-```kotlin
-// RenderOptions fields
-paddingPx: Int              // not Float
-textSizePx: Float
-gridUseInches: Boolean
-showGrid: Boolean
-
-// ShaftLayout.Result (minimum API)
-pxPerMm: Float
-contentLeftPx, contentTopPx, contentRightPx, contentBottomPx: Float
-minXMm, maxXMm: Float
-centerlineYPx: Float
-spec: ShaftSpec
-```
+## Persistence
+- User preferences: `SettingsStore` (DataStore)
+- Document state: internal `.shaft` JSON library (`io/InternalStorage.kt`) with
+  versioned envelope + migrations (`doc/ShaftDocCodec.kt`); SAF for open/export
+- Backup: `io/ShaftBackup.kt` (ZIP backup/restore, pre-update snapshots)
 
 ## Build & Dependencies
-- **Gradle:** Version catalogs in `gradle/libs.versions.toml`
-- **Kotlin:** 2.2.20 with Compose plugin (no manual `composeOptions`)
-- **Compose BOM:** 2024.09.00 controls all Compose artifact versions
-- **DataStore:** 1.1.1 for preferences persistence
-- **Target SDK:** 36, Min SDK: 28
-
-**Common dependency patterns:**
-```kotlin
-implementation(platform(libs.androidx.compose.bom))
-implementation(libs.androidx.compose.material3)
-implementation(libs.androidx.datastore.preferences)
-```
-
-## Development Workflows
-
-### Adding a New Component Type
-1. **Model:** Add data class in `model/` (all fields in mm)
-2. **ViewModel:** Add mutation methods (`addX()`, `removeX(id)`), parsing helpers
-3. **Renderer:** Draw geometry in `ShaftRenderer.draw()` using `layout.xPx()`, `layout.rPx()`
-4. **UI:** Add dialog/form in `screen/AddComponentDialogs.kt`
-5. **Validation:** Update `ShaftSpec.validate()` and coverage helpers
-
-### Running the App
-- **Build:** Android Studio → Run (or `./gradlew assembleDebug`)
-- **Tests:** `./gradlew test` (unit), `./gradlew connectedAndroidTest` (instrumented)
-- **Lint:** `./gradlew lint`
-
-### Debugging
-- Use Android Studio's Layout Inspector for Compose previews
-- Check DataStore values: Device File Explorer → `/data/data/com.android.shaftschematic/files/datastore/`
-- PDF issues: Verify `ShaftPdfComposer` mirrors `ShaftDrawing` render path exactly
+- Gradle version catalogs in `gradle/libs.versions.toml`
+- Kotlin 2.2.20 with Compose plugin; Compose BOM 2024.09.00; DataStore 1.1.1
+- **Build:** `./gradlew assembleDebug` · **Tests:** `./gradlew test` ·
+  **Lint:** `./gradlew lint`
 
 ## Code Style
-- **Immutability:** Prefer `data class` + `.copy()`; avoid mutable collections
-- **Null safety:** Use `?:`, `?.let {}` instead of `!!`
-- **Comments:** File headers describe "What/Inputs/Outputs"; KDoc for public APIs
-- **Imports:** Run "Optimize Imports" before committing
-
-## References
-- Architecture overview: `CONTRIBUTING.md`
-- Package map + file rules: `docs/Codebase Structure & File Rules.md`
-- Main README: Feature list + dependencies
+- Immutability: `data class` + `.copy()`; avoid mutable collections
+- Null safety: `?:`, `?.let {}` instead of `!!`
+- File headers describe "What/Inputs/Outputs"; KDoc for public APIs

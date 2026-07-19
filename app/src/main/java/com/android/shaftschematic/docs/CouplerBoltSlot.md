@@ -4,7 +4,7 @@ Layer: Model → ViewModel → Render/UI
 Purpose: Radial muff-coupler bolt cutouts on the shaft. One entry = one **axial row** of
 cutouts at a coupler location.
 
-See also: `docs/CouplerBoltSlot_Proposal.md` (design + scoping), `Model_Conventions.md`,
+See also: `docs/archive/CouplerBoltSlot_Proposal.md` (design + scoping), `Model_Conventions.md`,
 `AddComponentDialogs.md`, `ComponentsOrdering.md`.
 
 ---

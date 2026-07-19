@@ -1,9 +1,13 @@
 # ShaftSchematic — Project Briefing
 
 **Generated:** 2026-05-03  
-**Last updated:** 2026-07-11  
+**Last updated:** 2026-07-18  
 **Current Version:** 1.1.1  
 **Series:** v0.5.x — runout/wear docs, line thickness, OAL fix
+
+> This is the narrative onboarding/architecture doc. Feature-by-feature status lives in
+> `TODO.md` §0 (single source of truth); the release-series roadmap lives in
+> `docs/ROADMAP.md`. Status is not duplicated here.
 
 ---
 
@@ -18,39 +22,13 @@ Target hardware: Android 8.0+ (API 28), Target SDK 36.
 
 ## Current Status (v1.1.1 — Stable)
 
-The core feature set is **shipped and working**:
+The core feature set is **shipped and working**: modeling (bodies, tapers with keyways
+and auto-rate, threads with OAL exclusion, liners, coupler bolt slots), live preview,
+validation (blocking + warnings), three PDF documents (shaft drawing, runout sheet,
+wear document), internal library with autosave and backup/restore, and full settings.
 
-| Area | Status |
-|---|---|
-| Core data model (Body, Taper, Threads, Liner) | ✅ Stable |
-| ShaftLayout & ShaftRenderer | ✅ Contract-locked |
-| Live preview (Canvas, grid, labels) | ✅ Working |
-| Preview color presets + B/W mode | ✅ Shipped |
-| PDF export (one-page, landscape) | ✅ Stable, theme-safe |
-| Unit switching mm ↔ inch (persisted) | ✅ Working |
-| Component delete + multi-step Undo (up to 10) | ✅ Working |
-| Internal save/open (`.shaft` JSON) | ✅ Working |
-| SAF open/export | ✅ Working |
-| Component carousel + editor UI | ✅ Working |
-| Snapping engine (`SnapEngine`) | ✅ Implemented & unit-tested |
-| Tap-to-add pipeline | ✅ Working |
-| OAL window / excluded thread logic | ✅ Implemented & unit-tested |
-| Validation — blocking errors (dialogs, badges, export gate) | ✅ Wired |
-| Validation — non-blocking warnings (yellow badges, free-to-end) | ✅ Wired |
-| Taper rate keyboard compatibility (`1:12`) | ✅ Shipped (ASCII rate fields + colon-aware filter path) |
-| Taper rate auto-calc from Length + SET + LET | ✅ Shipped (Auto default, manual override, exact `1:N.NNN` fallback, manual ambiguity/mismatch checks) |
-| Taper keyway drawing (open + floating, plan-view convention) | ✅ Working |
-| Shared signing config (single keystore across machines) | ✅ Configured |
-| Autosave / draft restore on launch | ✅ Working |
-| Backup & restore (zip backup/restore, per-shaft import/export, pre-update snapshots, Auto Backup rules) | ✅ Shipped (sample pruning made non-destructive via seed-hash ledger) |
-| Settings screen (units, grid, PDF prefs, line thickness) | ✅ Working |
-| Line thickness control (50%–200%, persisted) | ✅ Shipped |
-| Runout drawing (inline preview, collision-free alternating bubbles, TIR label) | ✅ Shipped |
-| Wear document (profile + PASS/FAIL checkboxes) | ✅ Shipped |
-| OAL include-thread toggle (PDF dimension) | ✅ Fixed |
-| Developer Options screen | ✅ Working |
-| Achievements screen | ✅ Stub present |
-| Portrait orientation lock | ✅ Enforced |
+For the authoritative feature-by-feature status table, see **`TODO.md` §0 — Current
+System State**. For what's next, see **`docs/ROADMAP.md`**.
 
 ---
 
@@ -58,11 +36,11 @@ The core feature set is **shipped and working**:
 
 ```
 User Input → ShaftViewModel → ShaftSpec (mm)
+           → resolveComponents() (derived auto-bodies, ui/resolved/)
            → ShaftLayout (px mapping)
-           → ShaftRenderer (geometry drawing)
-           → ShaftDrawing (Compose canvas host)
-           → Screen
-           → ShaftPdfComposer (PDF, mirrors same renderer)
+           → ShaftRenderer (preview geometry) → ShaftDrawing (Compose host) → Screen
+           → ShaftPdfComposer / RunoutPdfComposer / WearPdfComposer
+             (PDF — separate drawing code, shared model + layout math)
 ```
 
 **Key invariants:**
@@ -79,15 +57,15 @@ geom/           ← pure geometry helpers (OAL, tier assignment, snap)
 ui/viewmodel/   ← ShaftViewModel + SnapUtils + SessionAddDefaults
 ui/drawing/     ← ShaftLayout, ShaftRenderer, GridRenderer, ShaftDrawing
 ui/screen/      ← StartScreen, ShaftScreen, ShaftEditorRoute, dialogs
-ui/input/       ← NumberField, ShaftMetaSection
-ui/resolved/    ← ResolvedComponent (derived pipeline, partial)
-ui/order/       ← ComponentKey, ComponentKind (ordering layer)
+ui/input/       ← NumericInputField, TaperSetLetMapping
+ui/resolved/    ← ResolvedComponent (derived auto-body pipeline)
+ui/order/       ← ComponentOrder (ComponentKey, ComponentKind)
 ui/theme/       ← Material3 theme
-pdf/            ← ShaftPdfComposer + dim/ + notes/ + render/
+pdf/            ← ShaftPdfComposer, RunoutPdfComposer, WearPdfComposer + dim/ + notes/ + render/
 data/           ← SettingsStore (DataStore), AutosaveManager
 doc/            ← ShaftDocCodec (JSON serialization + migrations)
-io/             ← InternalStorage (app-private file management)
-settings/       ← PdfPrefs, PdfTieringMode
+io/             ← InternalStorage (app-private file management), ShaftBackup
+settings/       ← PdfPrefs, RunoutConfig
 util/           ← UnitSystem, parsing helpers, PreviewColorSetting
 ```
 
@@ -120,7 +98,7 @@ All axial positions are measured **AFT → FWD**. `ShaftSpec.validate()` checks 
 `geom/DeterministicTierAssigner.kt` — assigns PDF dimension tier/rail slots to components deterministically. Tested in `DeterministicTierAssignerTest`.
 
 ### Resolved Component Pipeline
-`ui/resolved/ResolvedComponent.kt` — early-stage derived pipeline intended to generate auto bodies for UI rendering without persisting them. **Partially implemented** — the full pipeline (auto body seeding, ordered rendering) is still planned in v0.4.x.
+`ui/resolved/ResolvedComponent.kt` — derived pipeline that generates auto bodies for unoccupied spans without persisting them. **Fully wired** (2026-07-18) into the schematic screen/PDF and the runout & wear documents — all rendering consumes the resolved list, not the raw spec.
 
 ### Internal Storage
 `io/InternalStorage.kt` — manages the app-private `.shaft` file list; handles save, load, delete, overwrite confirmation. Filenames follow the convention: `{vessel/job}_{position}_{date}` (position suffix is optional, falls back to generated name).
@@ -171,36 +149,10 @@ Instrumented tests in `app/src/androidTest/` include a `ClearDataStoreRule` to i
 
 ---
 
-## Active Sprint: v0.5.x
+## Active Sprint
 
-### Completed in v0.4.x / v0.5.x so far
-
-- ✅ Snap engine, tap-to-add pipeline, OAL exclusion
-- ✅ Taper rate input + derivation (all formats)
-- ✅ Taper rate auto-calc mode (Add dialog + carousel parity, Auto default, 3% common-rate snap, bare `1` blocked, mismatch warning)
-- ✅ Taper keyway drawing — open and floating, plan-view schematic convention
-- ✅ Validation fully wired — blocking errors (red) + non-blocking warnings (yellow) in carousel, Add dialogs, and export gate
-- ✅ Selection box fix — seeded on file load, swipe works before first tap, single thin ring
-- ✅ Shared signing config — single debug.keystore across all machines
-- ✅ PDF label collision avoidance, `END_EPS_MM` deduplication, BRIEFING accuracy
-- ✅ ShaftScreen carousel extracted to `ComponentCarousel.kt`; sidebar nav (3 tabs)
-- ✅ Runout drawing — inline shaft preview, scrollable layout, collision-free alternating bubble placement (shared engine, 2026-07-18), TIR label
-- ✅ Wear document — shaft profile + PASS/FAIL dye-pen checkboxes
-- ✅ Line thickness control — Settings slider 50%–200%, DataStore-persisted, preview + PDF
-- ✅ OAL include-thread fix — PDF OAL dimension correctly spans shaft ends when thread is marked included
-
-### Current Focus
-
-**Validation & rendering backlog** — taper field validation wiring, liner shoulders, fiberglass body support. Carousel extraction is complete; remaining ShaftScreen refactor (preview panel, event wiring) is deferred until the screen grows again.
-
-### Roadmap Horizon
-
-| Series | Focus |
-|---|---|
-| v0.5.x | ShaftScreen refactor, liner shoulders, taper validation wiring |
-| v0.6.x | Component presets, machining heuristic warnings, undo/redo |
-| v0.7.x | Optional cloud save, DXF export (if approved) |
-| v1.0 | All component types, complete test coverage, complete docs |
+Sprint status, the active queue, and the release-series roadmap are tracked in
+**`TODO.md`** and **`docs/ROADMAP.md`** — not duplicated here.
 
 ---
 

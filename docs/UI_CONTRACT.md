@@ -1,5 +1,6 @@
 # UI Contract
 Version: v0.5.x
+Last updated: 2026-07-18 — §5.2 "Planned Preview Tap + Implicit Bodies" documented as shipped and merged into §3.1.1 (also fixes broken section numbering, a 5.2 appearing before 5.1); §§3.2–3.6 trimmed to summaries pointing at the more current in-source `AddComponentDialogs.md`.
 
 ## Purpose
 This document defines all UI interaction rules, screen behaviors, dialog behavior, input handling, and UI–ViewModel boundaries.  
@@ -76,14 +77,28 @@ All Add/Edit dialogs follow the same conventions:
   - Update succeeds, and  
   - ViewModel applies new spec
 
-### 3.1.1 Add Entry Points
+### 3.1.1 Add Entry Points & Implicit (Auto) Bodies
 
 There are two paths to open an add dialog:
 
-1. **Tap-to-add** (tap on canvas gap): sets `tapAddStartMm` and `tapAddGapMm` from the tapped position, then opens the appropriate `tapAdd*Open` dialog state.
+1. **Tap-to-add** (tap on canvas gap): sets `tapAddStartMm` and `tapAddGapMm` from the tapped
+   position (`ShaftScreen.kt`, tap-to-add state ~lines 299-303, dialog wiring ~lines 768-861),
+   then opens the appropriate `tapAdd*Open` dialog state.
 2. **FAB chooser** (`InlineAddChooserDialog`): computes default start via `computeAddDefaults()` (see §3.1.2), sets the same state vars, then opens the same dialogs.
 
 Both paths go through the full dialog — there is **no quick-add bypass** that skips user input.
+
+**Implicit (auto) bodies** — shipped, not planned. Derived, read-only gap-fillers; never
+persisted in `ShaftSpec`:
+- Computed by `ui/resolved/ResolvedComponent.kt`: `resolveComponents()` calls
+  `deriveAutoBodies()`, producing `ResolvedBody(source = ResolvedComponentSource.AUTO)` entries.
+- Fill axial gaps between explicit (sacred) components. When OAL is manually authored, a base
+  auto body spans 0 → OAL immediately; derived OAL does **not** seed a base auto body.
+- Promotion to an explicit `Body` happens the moment the user edits one of the auto-body card's
+  fields (Start / Length / Ø): `promoteIfNeeded()` in `ComponentCarousel.kt` calls
+  `onAddBody(...)` on that first genuine edit and persists the section into `ShaftSpec.bodies`.
+  Viewing the card without editing it never promotes it (see the "Auto-body promotion"
+  invariant in `CLAUDE.md`).
 
 ### 3.1.2 Default Start Position (`computeAddDefaults`)
 
@@ -113,57 +128,38 @@ Add dialogs that expose a direction toggle (Liner, Taper, Coupler Bolt Slot) use
 
 The border (not fill) is the selection indicator. An outlined unselected chip would visually compete with the selected chip; the borderless unselected state keeps the hierarchy clear.
 
-### 3.2 Taper Dialog
-Real-time fields:
-- length
-- startDia (SET)
-- endDia (LET)
-- optional taperRate
+### 3.2–3.6 Per-Dialog Contracts
 
-Rules:
-- If SET & LET both given → taperRate ignored
-- If only one diameter given → ViewModel derives the other from taperRate
-- If neither diameter nor taperRate is sufficient → blocking error
+The authoritative, current per-dialog field contract lives in
+`app/src/main/java/com/android/shaftschematic/docs/AddComponentDialogs.md` (covers
+`AddBodyDialog`, `AddLinerDialog`, `AddThreadDialog`, `AddTaperDialog`,
+`AddCouplerBoltSlotDialog`) — it is kept up to date with feature work (e.g. the taper
+Auto/Manual rate-mode system) faster than this document. Consult it first; the notes below
+only capture what it does **not** state.
 
-### 3.3 Thread Dialog
-UI displays:
-- majorDia
-- pitchMm
-- tpi (imperial)
+**3.2 Taper Dialog** — See `AddTaperDialog` there for fields and the Auto/Manual taper-rate
+rules (these superseded the older "SET & LET both given → taperRate ignored" wording that used
+to live here). Not covered there: the UI never derives geometry itself — it assembles
+Length/SET/LET/rate text and submits it; all derivation happens in the ViewModel.
 
-UI must never compute pitch↔tpi; ViewModel handles it.
+**3.3 Thread Dialog** — See `AddThreadDialog` there for fields. Not covered there: the dialog
+also surfaces `pitchMm` alongside TPI; UI must never compute pitch↔TPI conversion — the
+ViewModel handles it (`Threads.normalized()`).
 
-### 3.4 Liner Dialog
-Displays: freeToEndMm (ViewModel computed)
+**3.4 Liner Dialog** — See `AddLinerDialog` there for fields. Not covered there: the dialog
+displays `freeToEndMm`, which is always ViewModel-computed; UI cannot calculate mm values itself.
 
-UI cannot calculate mm values.
-
-### 3.5 Liner Authored Reference (AFT/FWD)
+**3.5 Liner Authored Reference (AFT/FWD)** — not restated in the in-source doc; kept here as
+the canonical statement:
 - Liners separate authored reference from physical geometry.
 - UI must project authored “Start” based on selected reference.
 - Switching AFT/FWD must **not** mutate physical geometry.
 - ViewModel stores reference metadata; geometry remains canonical.
 
-### 3.6 Coupler Bolt Slot Dialog
-The add-component chooser (`InlineAddChooserDialog`) includes a **"Coupler Bolt Slot"**
-entry that opens `AddCouplerBoltSlotDialog`. A carousel edit card exposes the same
-controls for editing an existing slot.
-
-Fields:
-- Start (position of the first cutout center, projected per the authored reference)
-- Hole diameter
-- Count (integer ≥ 1)
-- Spacing (axial center-to-center pitch)
-- Through / blind toggle; Depth field (relevant only when blind)
-- Label
-- Measure From: **AFT | FWD** direction chips (default FWD) — `DirectionChip`, per §3.1.5
-- Show dimension rail toggle (present but deferred; no rail is drawn in v1)
-
-Reference behavior mirrors the Liner (§3.5): when FWD-referenced the entered Start
-locates the fwd-most cutout and the row extends aft. Switching AFT/FWD must **not**
-mutate the canonical geometry; the ViewModel stores the reference as metadata.
-
-Coupler bolt slots are a reference overlay — adding, editing, or removing one never
+**3.6 Coupler Bolt Slot Dialog** — See `AddCouplerBoltSlotDialog` there for the full field
+table, FWD-reference math, and Do-Nots (including the card-only "show dimension rail" toggle
+parity note). Not covered there: the dialog also carries a **Label** field (free text,
+carousel-display only). As a reference overlay, adding/editing/removing a slot never
 splits/merges bodies, never changes OAL, and never triggers collision warnings.
 
 ---
@@ -198,18 +194,6 @@ UI must never:
 - Compute component boundaries
 
 ---
-
-# 5.2 Planned Preview Tap + Implicit Bodies (Upcoming)
-
-**Planned behavior (not yet implemented):**
-- Preview taps produce raw mm coordinates.
-- ViewModel performs snapping and stores snapped positions.
-- Implicit bodies are derived and read-only (computed gaps between components).
-- Promotion to an explicit Body is required before editing.
-- When OAL is manually authored, a base auto body spans 0 → OAL immediately.
-- Derived OAL does **not** seed a base body.
-
- 
 
 # 5.1 Preview Color Preferences (Settings)
 

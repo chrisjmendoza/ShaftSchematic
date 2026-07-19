@@ -33,7 +33,7 @@ a liner detail with wear lines at `3T` and `15½` and an anchor dim `110 FROM CP
 1. Replace the current static explanation block with an interactive shaft canvas at the
    top (same pattern as `RunoutRoute`'s preview canvas: `ShaftLayout.compute` +
    `ShaftRenderer.draw` with `resolvedComponents` — **never raw spec**; see
-   `docs/runout_wear_resolved_components_fix_2026-07-18.md`).
+   `docs/archive/runout_wear_resolved_components_fix_2026-07-18.md`).
 2. Liners are tap targets. Hit-test in **mm space**: invert `layout.xPx()` to map the tap
    x back to mm, pick the liner whose span contains it (liners never overlap each other
    in practice; if two match, pick the nearer edge). Add a subtle affordance: liners get

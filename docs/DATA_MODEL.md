@@ -1,5 +1,6 @@
 # ShaftSchematic Data Model
 Version: v0.5.x
+Last updated: 2026-07-18 — component field listings corrected to match `model/*.kt` (Body/Taper/Threads/Liner gained fields since this was last accurate); fixed nonexistent `keywayHasSpoon` alias; body keyway marked shelved; removed a garbled duplicate tail section.
 
 ## Overview
 The data model defines all immutable geometric entities that compose a shaft schematic. All measurements are stored in **millimeters** (`Float`). No rendering or UI logic is present in this layer.
@@ -70,6 +71,7 @@ data class Body(
     override val startFromAftMm: Float = 0f,
     override val lengthMm: Float = 0f,
     val diaMm: Float = 0f,
+    val label: String? = null,  // optional user-defined display label; not used for geometry
 ) : Segment
 Taper
 @Serializable
@@ -84,20 +86,29 @@ data class Taper(
     val keywayWidthMm: Float = 0f,
     val keywayDepthMm: Float = 0f,
     val keywayLengthMm: Float = 0f,
-    val keywaySpooned: Boolean = false, // aka “keywayHasSpoon”
+    // Axial distance from the SET face to the start of the keyway slot.
+    // 0 = open keyway (starts at SET face, open-ended there).
+    // > 0 = floating keyway (inset from SET, rounded at both ends).
+    val keywayOffsetFromSetMm: Float = 0f,
+    val keywaySpooned: Boolean = false,  // no "keywayHasSpoon" alias exists
+    val taperRateText: String = "",  // user-authored rate text (e.g. "1:12"); derived/validated in the ViewModel
+    val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
+    val label: String? = null,  // optional user-defined display label; not used for geometry
 ) : Segment
 
 Keyways are features, not standalone components.
 They are currently taper-associated and cannot exist without a host.
 
-Note: Keyways may also be added to Body components in a future revision.
+Body-hosted keyways are **shelved** — see `docs/ROADMAP.md` v1.0 "Non-goals": no marine
+propeller shaft use case has been identified. Do not plan against this landing.
 
 Keyway invariants (hosted feature):
 - keywayLengthMm >= 0
-- keywayLengthMm <= host component length
+- keywayOffsetFromSetMm >= 0
+- keywayOffsetFromSetMm + keywayLengthMm <= host component length
 Derived:
+val Taper.hasKeyway: Boolean get() = keywayWidthMm > 0f && keywayDepthMm > 0f && keywayLengthMm > 0f
 val Taper.maxDiaMm get() = max(startDiaMm, endDiaMm)
-val Taper.minDiaMm get() = min(startDiaMm, endDiaMm)
 Threads
 @Serializable
 data class Threads(
@@ -107,8 +118,15 @@ data class Threads(
     val pitchMm: Float = 0f,
     override val lengthMm: Float = 0f,
     val excludeFromOAL: Boolean = false,
-    val tpi: Float? = null
+    val isAftEnd: Boolean = true,
+    val tpi: Float? = null,
+    val label: String? = null,  // optional user-defined display label; not used for geometry
 ) : Segment
+`isAftEnd` only matters when `excludeFromOAL = true`: true pins the thread's derived position
+to the AFT end (start = 0, extending to negative mm outside the envelope), false pins it to the
+FWD end (start = overallLengthMm). It is ignored when the thread counts toward OAL — position
+is authored normally in that case.
+
 Normalization:
 If pitch present & tpi missing → compute tpi
 If tpi present & pitch missing → compute pitchMm
@@ -116,10 +134,15 @@ Liner
 @Serializable
 data class Liner(
     override val id: String = UUID.randomUUID().toString(),
-    override val startFromAftMm: Float = 0f,
+    override val startFromAftMm: Float = 0f,  // @SerialName("startMmPhysical")
     override val lengthMm: Float = 0f,
     val odMm: Float = 0f,
+    val label: String? = null,  // optional user-defined display label; not used for geometry
+    val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
+    val endMmPhysical: Float = 0f,  // kept in sync with start + length by Liner.normalized()
 ) : Segment
+`authoredReference` (AFT/FWD) only affects how the UI projects/displays the Start value; the
+canonical `startFromAftMm`/`endMmPhysical` are always physical AFT-referenced geometry.
 CouplerBoltSlot
 @Serializable
 data class CouplerBoltSlot(
@@ -218,48 +241,4 @@ This document defines all geometry data structures in the system.
 See also:
 - docs/COMPONENT_CONTRACT.md (normative component vs feature rules)
 - docs/UI_CONTRACT.md (UI, rendering, and responsibility boundaries)
-
-Hatch lines are drawn entirely in pixel space using fixed dp widths.  
-Renderer never recalculates pitchMm → pixels.
-
----
-
-# 4. Liner Contract
-
-## Data
-Outer sleeve/bearing liner.
-
-Field:
-- odMm
-
-## Validation
-- All fields ≥ 0
-- endFromAftMm ≤ overallLengthMm
-
-## Free-to-End
-ViewModel computes:
-freeToEndMm = overallLengthMm - (start + length)
-
-yaml
- 
-No pixel math allowed.
-
-## Rendering
-Renderer draws:
-- Top edge: shaftWidth
-- Bottom edge: shaftWidth
-- End ticks: dimWidth
-
-Ticks emphasize liner boundaries without dominating the drawing.
-
----
-
-# 5. Invariants Across Components
-
-1. All mm → px conversion occurs ONLY in ShaftLayout.
-2. Renderer never reads component mm fields directly for pixel lengths.
-3. Renderer never performs pitch/diameter/derivation logic.
-4. Components must preserve UUID across edits.
-5. All validation errors occur in ViewModel, not renderer/UI.
-
-This document is the authoritative source for component behavior.
+- app/src/main/java/com/android/shaftschematic/docs/Rendering.md (in-source preview rendering contract)

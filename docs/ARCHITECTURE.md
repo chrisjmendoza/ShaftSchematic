@@ -1,5 +1,6 @@
 # ShaftSchematic Architecture
 Version: v0.5.x
+Last updated: 2026-07-18 — resolved-component pipeline documented as shipped (was "planned"); PDF export corrected to a separate drawing path from the preview renderer; removed the nonexistent "Overall" dimension label claim.
 
 ## Overview
 ShaftSchematic is an MVVM-based Android application designed to create accurate, dimensionally consistent shaft schematics for marine propulsion work. The system is built around a strict separation of responsibilities:
@@ -55,13 +56,20 @@ Responsibilities:
 - Maintaining `_componentOrder` for UI ordering
 - File import/export
 
-Planned (not yet implemented):
-- Build a resolved component pipeline that derives auto bodies for UI/rendering.
-- Auto bodies are **not** persisted in `ShaftSpec` and are regenerated deterministically.
-- Auto bodies are downstream of OAL + explicit components and never overlap them.
+Resolved component pipeline (shipped):
+- `ui/resolved/ResolvedComponent.kt` implements `resolveComponents(spec, overallIsManual)`,
+  which resolves explicit components and calls `deriveAutoBodies()` to fill the gaps.
+- Auto bodies (`ResolvedComponentSource.AUTO`, `ResolvedComponentType.BODY_AUTO`) are **not**
+  persisted in `ShaftSpec` — they are regenerated deterministically on every resolve.
+- Auto bodies are downstream of OAL + explicit components and never overlap them
+  (`subtractBodiesAgainstNonBodies()` carves auto/explicit body spans around sacred components).
 - Auto bodies must never define measurement references or snapping anchors.
-- Manual OAL seeds a base auto body spanning 0 → OAL; derived OAL does not.
-- Manual body components (future) promote over auto bodies in overlapping spans.
+- Manual OAL seeds a base auto body spanning 0 → OAL; derived OAL does not
+  (`deriveAutoBodies(overallLengthMm = if (overallIsManual) spec.overallLengthMm else 0f, …)`).
+- Manual (explicit) body components promote over auto bodies in overlapping spans: the carousel
+  card for an auto body (`ComponentCarousel.kt`) calls `promoteIfNeeded()` on the first field edit,
+  which invokes `onAddBody(...)` to persist a real `Body` — see the "Auto-body promotion" invariant
+  in `CLAUDE.md`.
 
 Liner authored reference:
 - Liners store authored reference (AFT/FWD) as metadata.
@@ -99,7 +107,9 @@ Responsibilities:
 - Draw bodies, tapers, threads, liners
 - Draw coupler bolt slot cutouts (row of circles straddling the shaft outline, mirrored top/bottom)
 - Draw dimension-style elements (ticks, hatch)
-- Draw the **single "Overall" dimension label** (UI never draws this)
+
+Note: the renderer draws no text/labels at all (no "Overall" label or otherwise). See
+`app/src/main/java/com/android/shaftschematic/docs/Rendering.md` for the current contract.
 
 Renderer rules:
 - Consumes pixel coordinates ONLY from ShaftLayout.Result
@@ -138,11 +148,17 @@ spec + layoutResult + renderOptions → ShaftDrawing
 ## PDF Export (`pdf/ShaftPdfComposer.kt`)
 Purpose: Produce a **single-page** PDF export of the drawing.
 
+**Preview rendering (`ShaftLayout` + `ShaftRenderer`) and the PDF composers
+(`ShaftPdfComposer`, `RunoutPdfComposer`, `WearPdfComposer`) are SEPARATE drawing paths.**
+They share model and layout-math *concepts* but not code: `ShaftPdfComposer` never calls
+`ShaftLayout.compute()` and instead has its own fit functions — `computeBodyOnlyPtPerMm`,
+`computeDetailPtPerMm`, `computePdfPtPerMmFitAxes` — and its own drawing functions
+(`drawBodiesPlain`/`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`).
+
 Rules:
-- Uses the **same layout engine** (no compression)
-- Uses the **same renderer** (full geometric fidelity)
-- Computes `pxPerMmPDF` from page content width and overallLengthMm
-- Draws title block + rendered shaft
+- Computes its own `ptPerMm` from page content width/height and overallLengthMm (see the three
+  fit functions above); does not reuse `ShaftLayout`'s `pxPerMm`.
+- Draws title block + shaft geometry using its own drawing routines
 
 PDF export does NOT:
 - Create multiple pages

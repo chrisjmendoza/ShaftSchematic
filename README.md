@@ -1,102 +1,79 @@
 📐 ShaftSchematic
 
-ShaftSchematic is an Android application for rapidly modeling marine prop-shaft assemblies and exporting clean, dimensioned drawings as PDFs. It supports multi-segment shafts with bodies, tapers, threads, and liners.
+ShaftSchematic is an Android application for rapidly modeling marine prop-shaft assemblies and exporting clean, dimensioned drawings as PDFs. It supports multi-segment shafts with bodies, tapers, threads, liners, and coupler bolt slots.
 
 This tool is built for machinists, shipyards, repair techs, and engineering teams that need fast, clear shaft visualizations without CAD overhead.
 
 ✨ Current Features
+
 Real-Time Shaft Modeling
 
-Add Bodies, Tapers, Threads, and Liners
+- Bodies, tapers (with keyways and auto taper-rate calculation), threads (with OAL include/exclude), liners, and coupler bolt slots (reference-only cutouts)
+- Resolved-component pipeline: auto-bodies fill unoccupied spans in the preview without being persisted
+- Live preview with grid, centerline, and component labels; tap-to-add at position
+- Preview colors configurable via Settings (presets + Custom theme palette), Black/White Only drafting mode
+- Line thickness control (50%–200%, persisted, affects preview + PDF)
 
-Components rendered with:
+Editing Workflow
 
-Bodies & liners as closed rectangles
+- Component carousel with edit cards; Add dialogs mirror the carousel cards control-for-control
+- Unit switching (mm / inch) at the UI edge only — the model is always canonical millimeters
+- Validation: blocking errors (dialogs, badges, export gate) and non-blocking warnings (collision detection, free-to-end badge)
+- Delete with multi-step Undo; undo/redo history menu
 
-Tapers as true 4-point polygons
+Documents
 
-Threads as dimensioned segments
+- Shaft drawing: one-page landscape technical PDF with dimension tiers, callouts, grid, and title block
+- Runout sheet: inline shaft preview with collision-free alternating runout bubbles and TIR label
+- Wear document: shaft profile with PASS/FAIL dye-pen checkboxes and field notes
+- All three reachable from the editor sidebar (Schematic / Runout / Wear tabs)
 
-Live preview that masks the centerline underneath occupied spans
+Persistence & Data Safety
 
-Preview Styling (on-screen only)
+- Internal `.shaft` library (JSON, versioned envelope with migrations) plus SAF open/export
+- Autosave / draft restore on launch; Start screen with recent documents
+- Backup & restore: ZIP backup/restore via file picker, per-shaft import/export, pre-update snapshots, Android Auto Backup rules
 
-Preview colors configurable via Settings (presets + Custom theme palette)
+Misc
 
-Black/White Only mode for drafting-style preview
-
-Clean Editing Workflow
-
-Incremental component creation (in the order you build the shaft)
-
-Unit switching (mm / inch) with DataStore persistence
-
-Grid visibility persistence (DataStore)
-
-Validation nudges when component total length doesn't match overall length
-
-Delete + Undo (v1)
-
-Tap trash icon → segment is removed instantly
-
-Snackbar with Undo restores it in the correct order and position
-
-Multi-step undo buffer (up to 10 deletes)
-
-PDF Export
-
-One-page, landscape technical drawing
-
-Includes:
-
-Component labels
-
-Major/minor grid
-
-Centerline rules
-
-Dimensioning and callouts
-
-Reliable system-document picker integration (SAF)
-
-Portrait UI
-
-The editor UI is locked to portrait orientation (landscape is currently disabled).
-
-Session Tools
-
-Clear All → resets to a clean shaft
-
-Dynamic layout that shows advanced sections only when components exist
+- Settings screen (units, grid, preview colors, PDF prefs, line thickness), Developer Options, Achievements screen, Project-Info sheet
+- Portrait-locked UI (landscape is currently disabled)
 
 📂 Project Structure
 ```
 app/
 └─ com.android.shaftschematic/
    ├─ MainActivity.kt (single-activity host)
-   ├─ data/
-   │   ├─ SettingsStore.kt → DataStore persistence
-   │   └─ ShaftRepository / ShaftFileRepository → JSON I/O
-   ├─ model/
-   │   ├─ ShaftSpec.kt → root aggregate (mm)
-   │   ├─ Body, Taper, Threads, Liner → component models
-   │   └─ Segment.kt → shared interface
-   ├─ pdf/
-   │   ├─ ShaftPdfComposer.kt → PDF export engine
-   │   └─ render/, dim/, notes/ → dimension & annotation rendering
+   ├─ model/     → ShaftSpec (root aggregate, mm), Body, Taper, Threads, Liner,
+   │              CouplerBoltSlot, ProjectInfo, migrations
+   ├─ geom/      → pure geometry: OAL computations, SET positions,
+   │              dimension-tier assignment, runout bubble layout
+   ├─ doc/       → ShaftDocCodec (JSON serialization + format migrations)
+   ├─ io/        → InternalStorage (app-private .shaft library), ShaftBackup
+   ├─ data/      → SettingsStore (DataStore), AutosaveManager
+   ├─ pdf/       → ShaftPdfComposer, RunoutPdfComposer, WearPdfComposer
+   │              + dim/, notes/, render/ (dimension & annotation rendering)
+   ├─ settings/  → PdfPrefs, RunoutConfig
    ├─ ui/
-   │   ├─ drawing/
-   │   │   ├─ compose/ShaftDrawing.kt → preview wrapper
-   │   │   └─ render/ → ShaftLayout, ShaftRenderer, GridRenderer
-   │   ├─ screen/ → ShaftScreen, AddComponentDialogs
-   │   ├─ input/ → ShaftMetaSection, NumberField
-   │   ├─ viewmodel/ → ShaftViewModel, factory
-   │   └─ nav/ → AppNav, routing
-   ├─ util/
-   │   ├─ UnitSystem.kt → mm/inch conversions
-   │   └─ Parsing.kt, TaperParser.kt → input parsing
-   └─ settings/ → PdfPrefs configuration
+   │   ├─ drawing/   → compose/ShaftDrawing (preview host),
+   │   │              render/ (ShaftLayout, ShaftRenderer, GridRenderer)
+   │   ├─ screen/    → StartScreen, ShaftEditorRoute (sidebar + tabs), ShaftScreen,
+   │   │              ComponentCarousel, AddComponentDialogs, Runout/Wear/Settings routes
+   │   ├─ input/     → NumericInputField (commit-on-blur numeric entry)
+   │   ├─ resolved/  → ResolvedComponent (derived auto-body pipeline)
+   │   ├─ order/     → ComponentOrder (component identity/ordering layer)
+   │   ├─ viewmodel/ → ShaftViewModel, factory, snap utils
+   │   ├─ nav/       → AppNav, PDF export routes
+   │   └─ dialog/, config/, util/, theme/
+   ├─ util/     → UnitSystem, parsing, taper rate auto-calc, naming/titles
+   └─ docs/     → in-source contract docs (see below)
 ```
+
+📚 Documentation
+
+- `CLAUDE.md` — project conventions and critical invariants
+- `app/src/main/java/com/android/shaftschematic/docs/` — per-subsystem contract docs (read the relevant one before editing a subsystem; `README.md` there is the index)
+- `docs/` — repo-level reference docs (architecture, data model, validation rules, PDF export), proposals, and archived analyses
 
 🔧 Requirements
 
@@ -137,53 +114,17 @@ Run on a device or emulator
 
 📘 Usage Guide
 
-Set the overall shaft length
-
-Press the ➕ Add Component FAB
-
-Add bodies, tapers, threads, or liners in physical build order
-
-Switch units anytime (top bar dropdown)
-
-Export to PDF from the top-right icon
-
-Use ⋮ → Clear All to reset the layout
-
-Component ordering honors a persisted/explicit component order when provided.
-Otherwise, components are ordered by their physical starting X-position.
-
-🧠 Persistence
-
-Unit preference persists via DataStore (default unit + grid visibility)
-
-Document state: JSON save/load via Storage Access Framework (SAF)
-
-Versioned JSON envelope preserves unit preference and lock state per-document
-
-Thread pitch normalization: auto-populates both `pitchMm` and `tpi` when either is present
+1. Start screen: create a New Drawing, Open a saved shaft, or Continue Draft
+2. Set the overall shaft length (manual, or auto from components)
+3. Add bodies, tapers, threads, liners, or coupler bolt slots via + Add Component
+4. Edit any component in the carousel; switch units anytime
+5. Use the sidebar to switch between Schematic, Runout, and Wear tabs
+6. Export the current document to PDF from the top bar (SAF picker)
+7. Back up or restore your shaft library from Settings → Data
 
 🛠️ Roadmap
-Active
 
-Component highlighting in preview (tap-to-select)
-
-Better precision input (fractions, 4–6 decimals)
-
-Liner dimension rendering improvements
-
-Next Sprints
-
-Inline "+ Add here" between segments
-
-Tap-to-edit directly from the preview
-
-Autosave/drafts system
-
-PDF dimension clarity improvements
-
-Overlap detection and warnings
-
-Web/Multi-platform port (concept phase)
+See docs/ROADMAP.md for the release-series roadmap and TODO.md for the active development queue.
 
 📄 License
 
@@ -192,4 +133,3 @@ Pending — private/closed until final licensing decision.
 📜 Changelog
 
 See CHANGELOG.md for version history.
-Latest entries include rendering updates, UI cleanups, validation improvements, and the new Delete/Undo system.

@@ -1,5 +1,6 @@
 # Glossary
 Version: v0.5.x
+Last updated: 2026-07-18 — Keyway entry: body-hosted keyways marked shelved (was "planned").
 
 Definitions of all terms used across architecture, components, rendering, validation, and PDF export.
 
@@ -137,8 +138,8 @@ Rectangular torque-transfer slot (a cut feature), owned by a host component.
 Current state:
 - Supported on `Taper` (taper-hosted), including keyway length and a spooned flag.
 
-Planned:
-- Body-hosted keyways.
+Shelved (non-goal, per `docs/ROADMAP.md` v1.0):
+- Body-hosted keyways — no marine propeller shaft use case identified.
 - Keyways will never exist as standalone components.
 
 ### Pilot Diameter (future)

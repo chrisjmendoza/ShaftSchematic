@@ -1,5 +1,6 @@
 # PDF Export Specification
 Version: v0.5.x
+Last updated: 2026-07-18 — fixed page orientation (landscape, not portrait); clarified preview/PDF as separate drawing paths (named the three fit functions); replaced the "no display compression" invariant with the actual round-stock S-break behavior; fixed the AUDIT.md path.
 
 ## Purpose
 Defines the **single-page** PDF export process.  
@@ -11,11 +12,18 @@ PDF output must faithfully reproduce the shaft schematic at high resolution with
 
 spec → ShaftLayout (PDF size) → ShaftPdfComposer (draws geometry + dimensions + footer) → Final PDF Document
 
-PDF export shares:
-- Same `ShaftLayout` scaling rules as the preview
-- Same model geometry (mm) and unit formatting conventions
+Preview rendering (`ShaftLayout` + `ShaftRenderer`) and the PDF composers (`ShaftPdfComposer`,
+`RunoutPdfComposer`, `WearPdfComposer`) are **SEPARATE drawing paths**. They share model geometry
+(mm) and layout-math *concepts* but not code:
+- `ShaftPdfComposer` never calls `ShaftLayout.compute()`. It computes its own point-per-mm scale
+  via three fit functions: `computeBodyOnlyPtPerMm`, `computeDetailPtPerMm`,
+  `computePdfPtPerMmFitAxes` (which one is used depends on export mode/body-only vs. detail).
+- Unit formatting conventions match the preview, but the pixel/point math is independent.
 
-**Note:** `ShaftPdfComposer` contains its own geometry drawing functions (`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) separate from `ShaftRenderer`. This is a known divergence from the intended architecture — geometry fixes must be applied in both paths until they are unified. See AUDIT.md §4.4.
+**Note:** `ShaftPdfComposer` contains its own geometry drawing functions (`drawBodiesPlain`,
+`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) separate from
+`ShaftRenderer`. This is an intentional architectural split, not a bug to unify — see
+`docs/archive/AUDIT.md` §4.4 for history.
 
 **Coupler bolt slots** are drawn on **all three PDF profiles** — the main schematic (`ShaftPdfComposer`), the runout sheet (`RunoutPdfComposer`), and the wear document (`WearPdfComposer`) — via a shared `drawCouplerBoltSlots` helper. Each cutout is a circle straddling the shaft outline (half in the shaft, half in the coupling), mirrored on the top and bottom edges, at each cutout position along the row. No dimension rail is drawn in v1 (the `showDimensionRail` toggle exists but is deferred).
 
@@ -24,8 +32,9 @@ PDF export shares:
 # 2. Page Format
 
 ### Standard Page
-- US Letter: 8.5" × 11"
-- Portrait orientation
+- US Letter: 11" × 8.5" (792 × 612 pt)
+- **Landscape** orientation (`PdfDocument.PageInfo.Builder(792, 612, 1)` —
+  `PdfExportRoute.kt`, `PdfPreviewScreen.kt`)
 - 50–75 pt margins (configurable)
 
 ### PDF Coordinate System
@@ -41,16 +50,13 @@ PDF uses its own fixed black-and-white styling inside `ShaftPdfComposer`.
 # 3. Layout Flow
 
 1. Define content bounds based on margins.
-2. Compute:
-pxPerMmPDF = min(
-contentWidthPx / overallLengthMm,
-contentHeightPx / maxOuterDiaMm
-)
-
- 
-3. Call `ShaftLayout.compute` with PDF bounds.
-4. Draw shaft using `ShaftRenderer`.
-5. Draw title block.
+2. Compute `ptPerMm` using one of `ShaftPdfComposer`'s own fit functions (not `ShaftLayout`):
+   `computeBodyOnlyPtPerMm`, `computeDetailPtPerMm`, or `computePdfPtPerMmFitAxes`, each taking
+   the geometry rect's width/height in points and fitting `overallLengthMm` / `maxOuterDiaMm`.
+3. Draw shaft geometry using `ShaftPdfComposer`'s own drawing functions (`drawBodiesPlain` /
+   `drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) — **not**
+   `ShaftRenderer`.
+4. Draw title block.
 
 ---
 
@@ -121,8 +127,16 @@ The label is passed as an explicit `labelMm` override to `oalSpan()` so it is al
 1. Export is **single page** only.
 2. No multi-page continuation.
 3. No BOM tables.
-4. No display compression.
-5. No component overlays, cross-sections, or detailed machinist symbols.
+4. **Round-stock display compression exists for long bodies** (this replaces an earlier "no
+   display compression" claim, which is no longer true). `ShaftPdfComposer.drawBodiesCompressedCenterBreak()`
+   triggers per-body when that body's on-paper length reaches `COMPRESS_TRIGGER_PT` (220 pt): the
+   body is drawn as two shortened stubs, each capped with an S-curve "round-stock break" symbol
+   (`pdf/BreakSymbol.kt`, `drawBreakEdge()`) instead of a straight end cap, so the drawing reads as
+   a foreshortened cylindrical bar rather than a literal-length rectangle. The footer prints an
+   explanatory compression note (`showCompressionNote`) whenever any drawn body triggers this.
+   Only bodies are compressed this way — tapers/threads/liners are never broken.
+5. No component overlays, cross-sections, or detailed machinist symbols (aside from the
+   round-stock break symbol above, which is a length-compression cue, not a machinist symbol).
 6. Geometry must reflect the same logic as preview.
 7. PDF export never modifies the model.
 

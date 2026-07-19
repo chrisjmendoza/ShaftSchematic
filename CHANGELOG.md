@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to **ShaftSchematic** will be documented in this file.
 
@@ -28,7 +28,7 @@ overflow bubbles).
   positions are a least-squares fit (pool-adjacent-violators) so bubbles sit directly
   under their stations whenever there is room. Two rows is width-optimal — every
   leader's drop needs its own horizontal lane past the rows above it, so deeper stacks
-  can never pack tighter (see `docs/runout_bubble_collision_system_2026-07-18.md`).
+  can never pack tighter (see `docs/archive/runout_bubble_collision_system_2026-07-18.md`).
 - **Leader verification + dogleg re-routing**: every leader is collision-checked
   (segment-circle, segment-segment); failures re-route as doglegs through a common
   departure line + corridor + vertical drop, which provably converges to zero
@@ -67,7 +67,7 @@ selector, and drew body rectangles through the taper trapezoid on the wear docum
   pass `vm.resolvedComponents`.
 - Auto-body spans now get stations and outline on both documents (previously silently
   skipped); auto segments are labeled "Body (auto)" — carousel parity.
-- Analysis: `docs/runout_wear_resolved_components_fix_2026-07-18.md`.
+- Analysis: `docs/archive/runout_wear_resolved_components_fix_2026-07-18.md`.
 
 ### docs: liner wear-area feature proposal
 
@@ -264,7 +264,7 @@ A coupler bolt slot is a **pure reference feature**: it never affects overall le
 
 **UI** — "Coupler Bolt Slot" entry in `InlineAddChooserDialog`; new `AddCouplerBoltSlotDialog` (position from AFT/**FWD default**, hole Ø, count, spacing, through/blind + depth); carousel edit card with the same controls plus the deferred "show dimension rail" toggle. When FWD-referenced, the entered position locates the fwd-most cutout and the row extends aft.
 
-**Deferred (v1):** the per-slot dimension rail is captured (`showDimensionRail`) but not drawn; through vs blind draw the same cutout for now. See `docs/CouplerBoltSlot_Proposal.md`.
+**Deferred (v1):** the per-slot dimension rail is captured (`showDimensionRail`) but not drawn; through vs blind draw the same cutout for now. See `docs/archive/CouplerBoltSlot_Proposal.md`.
 
 ---
 

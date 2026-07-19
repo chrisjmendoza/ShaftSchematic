@@ -1,4 +1,4 @@
-# Overall Length — Auto vs Manual (v1.1)
+# Overall Length — Auto vs Manual (v1.2, 2026-07-18)
 
 ## Scope
 Defines how the **Overall Length** field behaves, how it interacts with components, and how the UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
@@ -38,13 +38,27 @@ Component dimension rails (liners, taper lengths) always reference SET positions
 ## Computation
 
 ### Last occupied end (mm)
+Excluded threads (`excludeFromOAL = true`) live outside the 0..OAL span by design
+(`Model_Conventions.md`) and must be filtered out before folding into the max — otherwise
+an AFT excluded thread's negative start or a FWD excluded thread's `OAL`-anchored end would
+corrupt the result. Both real implementations filter first:
+`ShaftSpecExtensions.kt` `ShaftSpec.lastOccupiedEndMm()` and the ViewModel's `coverageEndMm`.
 ```
 /** Latest occupied end (in mm) from all components. */
-fun lastOccupiedEndMm(spec: ShaftSpec): Float {
-    var end = 0f
-    spec.bodies.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.tapers.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.threads.forEach { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.liners.forEach  { if (it.lengthMm  > 0f) end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    return end
+fun ShaftSpec.lastOccupiedEndMm(): Float {
+    var maxEnd = 0f
+    bodies.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
+    tapers.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
+    threads.filter { !it.excludeFromOAL }
+           .forEach { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
+    liners.forEach   { maxEnd = max(maxEnd, it.startFromAftMm + it.lengthMm) }
+    return maxEnd
 }
+```
+
+---
+
+## Change Log
+**v1.2 (2026-07-18)** — Fixed the sample to filter `!it.excludeFromOAL` on threads before
+folding into the max, matching the real `lastOccupiedEndMm()`/`coverageEndMm` implementations
+(the old sample summed all threads, including excluded ones).

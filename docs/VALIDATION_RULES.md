@@ -1,11 +1,19 @@
 # Validation Rules  
 Version: v0.5.x
+Last updated: 2026-07-18 — §2.3 numeric "safety filters" (NaN/Infinity/>100000 rejection) were never implemented; removed the false claim. Validation is not ViewModel-only (overlap/bounds checks live in `ui/util/StartOverlapValidation.kt`, called from Compose UI). Negative-start rejection is a dialog-level Submit gate, not a ViewModel rejection; `ShaftSpec.validate()` exists but is dead code. §6 export gate corrected to what `blockingExportError()` actually checks.
 
 ## Purpose
 This document defines all validation behavior used by ShaftSchematic.  
 Validation ensures data consistency, machining plausibility, and clean export conditions—without restricting legitimate edge-case layouts.
 
-Validation is performed **only in the ViewModel**.  
+Validation is **not** performed only in the ViewModel. The ViewModel owns numeric parsing and
+per-field clamping (e.g. length/diameter ≥ 0), but overlap/bounds validation lives in
+`ui/util/StartOverlapValidation.kt` (`startOverlapErrorMm`, `collectAddWarnings`) and is called
+directly from Compose UI code — `AddComponentDialogs.kt`, `ComponentCarousel.kt`,
+`ShaftScreen.kt`. This is a deliberate exception to the general "UI performs no validation
+logic" rule stated elsewhere in this doc set; treat `StartOverlapValidation.kt` as part of the
+validation system regardless of which layer it happens to live in.
+
 Neither the Layout Engine nor the Renderer performs validation.
 
 ---
@@ -22,14 +30,21 @@ These prevent:
 
 Examples:
 - Negative lengths or diameters
-- startFromAft < 0
+- startFromAft < 0 (Add dialogs only — see the note below; existing components can be edited to
+  a negative start via the carousel without the ViewModel rejecting it)
 - endFromAft > overallLengthMm
 - Missing taper parameters (SET/LET/taperRate insufficient)
-- Invalid thread pitch/tpi values (NaN, Infinity)
-- Derived taper diameters < 0
 - overallLengthMm < coverageEndMm
 
 Blocking means **the dialog stays open** and the change is not accepted.
+
+**Important caveat on `startFromAft < 0`:** this is enforced only as an **Add dialog Submit
+button enabled-condition** (e.g. `AddComponentDialogs.kt`: `val ok = startMm >= 0f && …`) — a
+UI-level gate on the *add* flow. The ViewModel's `update*()` functions (`updateBody`,
+`updateTaper`, `updateThread`, `updateLiner` in `ShaftViewModel.kt`) do **not** reject or clamp
+a negative `startFromAftMm` on commit; they only clamp `lengthMm`/diameter fields to
+`max(0f, …)`. `ShaftSpec.validate()` (`model/ShaftSpec.kt`) implements the stricter bounds check
+described in this document, but it is **dead code** — nothing in the app calls it.
 
 ---
 
@@ -70,18 +85,26 @@ If user commits:
 1. The change is **not committed**, and  
 2. UI reverts to last valid committed value.
 
-## 2.3 Safety Filters
-Reject immediately (blocking):
-- `Float.NaN`
-- `Float.POSITIVE_INFINITY`
-- `Float.NEGATIVE_INFINITY`
-- Negative physical values
+## 2.3 Numeric Safety Filter — Gap (nothing implemented)
+**No numeric safety filter exists anywhere in the codebase.** This section previously claimed a
+blocking rejection of `Float.NaN` / `Float.POSITIVE_INFINITY` / `Float.NEGATIVE_INFINITY` /
+negative values, and a sanity-max rejection above `100000f`. Neither was ever built:
+- `util/Parsing.kt`'s `parseToMm()`/`parseFractionOrDecimal()` are explicitly documented to be
+  neutral — "do not clamp negatives or enforce ranges here" — and contain no NaN/Infinity/range
+  checks.
+- `NumericInputField` and `ShaftViewModel` contain no such checks either.
 
-Reject values above a sanity maximum:
-value > 100000f → blocking
+What actually happens instead:
+- **Parse-or-revert** (§2.2): unparseable text is never committed; the field reverts to the
+  last committed value. This incidentally screens out most ways to *type* a NaN/Infinity, but
+  does nothing to bound magnitude or sign.
+- **Per-field validators**: individual fields clamp specific values downstream (e.g.
+  `ShaftViewModel.updateBody/updateTaper/updateThread/updateLiner` clamp `lengthMm`/diameter
+  fields to `max(0f, …)` on commit), but this is per-field clamping, not a general safety filter,
+  and it does not cover every numeric field (notably `startFromAftMm` — see §3.1).
 
-yaml
-Copy code
+If a NaN/Infinity/huge value reaches the model through a non-UI path (e.g. a hand-edited saved
+file), nothing in this codebase currently guards against it.
 
 ---
 
@@ -94,9 +117,22 @@ startFromAftMm >= 0
 lengthMm >= 0
 endFromAftMm <= overallLengthMm
 
-yaml
-Copy code
-If any part is violated → **blocking**.
+These three rules are the **intended** shared contract, but only some are actually enforced as
+a hard block today:
+- `lengthMm >= 0` and the diameter fields **are** clamped on commit in `ShaftViewModel`
+  (`max(0f, …)`).
+- `startFromAftMm >= 0` is **not** enforced by the ViewModel on update — `updateBody` /
+  `updateTaper` / `updateThread` / `updateLiner` write `startMm` through unclamped. The only
+  place this is gated is the **Add dialog's Submit button enabled-condition**
+  (`AddComponentDialogs.kt`, e.g. `val ok = startMm >= 0f && …`), which blocks *adding* a new
+  component with a negative start but does not stop an existing component from being edited to
+  one via the carousel.
+- `endFromAftMm <= overallLengthMm` is not enforced as a hard commit-time block either; see the
+  overlap/bounds checks in §5 for what actually runs (`startOverlapErrorMm` in
+  `ui/util/StartOverlapValidation.kt`).
+- `model/ShaftSpec.kt` does define `fun ShaftSpec.validate(): Boolean` implementing the fuller
+  bounds check described in this document, but it is **dead code** — no caller invokes it
+  anywhere in the app.
 
 ---
 
@@ -128,10 +164,16 @@ Missing keyway data is valid (all keyway fields may be 0/false).
 TODO: Body keyway validation not yet implemented.
 
 ### Taper Rate Behavior
-- If **both** SET & LET provided → taperRate ignored  
-- If **one** diameter missing → taperRate is required  
-- Derived diameter must be ≥ 0  
-- Missing both SET and LET with no taperRate → **blocking**
+Superseded by the Auto/Manual rate-mode system — authoritative contract in the
+in-source `TaperRate.md` and `AddComponentDialogs.md`. In brief:
+- **Auto mode** (default): rate computed from Length + SET + LET when all are real
+  positive values; sentinels (`-1`, `0`) never fabricate a rate.
+- **Manual mode**: required when one diameter is missing (derives the missing end;
+  derived diameter must be ≥ 0); a manual rate disagreeing with complete geometry
+  shows a **warning**, it is not silently ignored.
+- Missing both SET and LET with no usable rate → **blocking**.
+- Bare `1` is blocked as ambiguous; common-rate snapping uses a 3% tolerance
+  (confirmed product decision).
 
 Non-blocking warnings:
 - Extremely steep tapers *(planned — not yet implemented)*
@@ -151,10 +193,10 @@ Normalization rules:
 - If both present → leave unchanged, but validate consistency
 - If neither present → blocking
 
-Invalid cases (blocking):
-- conversion leads to NaN
-- conversion leads to Infinity
-- tpi or pitch < 0
+Invalid cases: no NaN/Infinity/negative-value guard actually exists for this conversion (see
+§2.3 — there is no numeric safety filter anywhere in the codebase). `Threads.normalized()`
+(`model/Threads.kt`) computes the missing side unconditionally when the other is `> 0f`; a
+degenerate input that produced NaN/Infinity would pass through uncaught.
 
 Non-blocking warnings:
 - pitchMm = 0 (thread rendered flat, allowed)
@@ -243,16 +285,46 @@ Coupler bolt slots are likewise skipped in all collision checks (`collisionGroup
 
 Reasoning: marine machining workflows often use stacked geometry and nested regions; overlaps are flagged as warnings only, never blocking.
 
+### 5.3 Add-time pre-submit warnings (`collectAddWarnings`)
+
+When the user taps **Add** in the Taper, Liner, or Thread dialog, `collectAddWarnings()`
+(`ui/util/StartOverlapValidation.kt`) runs before the component is committed. If
+collisions or bounds violations are found, a confirmation dialog appears
+("Add Anyway?" / "Cancel") — the add is **never silently blocked**.
+
+| Check | Condition | Applies when |
+|-------|-----------|--------------|
+| Bounds | `start < 0` or `end > OAL` | OAL is manual (not auto) |
+| Taper collision | overlaps any existing Taper | always |
+| Thread collision | overlaps any existing non-excluded Thread | always |
+| Liner collision | overlaps any existing Liner | always |
+| Body collision | — | **never** (bodies auto-split) |
+| Excluded thread | — | **skipped** (outside shaft span by design) |
+| Coupler bolt slot | — | **never** (`collisionGroup()` → null) |
+
 ---
 
 # 6. Export Validation (PDF)
 
 Before exporting:
-1. ViewModel runs full validation.
-2. If **any blocking error** exists → cancel export, show dialog with reason.
-3. If only warnings remain → export continues.
+1. `blockingExportError(spec)` (`ui/nav/PdfExportRoute.kt`) runs — **not** a general
+   "ViewModel runs full validation" pass (there is no such single entry point; see the Purpose
+   section above and §3.1).
+2. If it returns a non-null message → cancel export, show a blocking dialog with that reason.
+3. If it returns `null` → export continues, regardless of any outstanding non-blocking warnings.
 
-`blockingExportError()` in `PdfExportRoute` checks component positions for out-of-bounds starts. **Excluded threads** (`excludeFromOAL = true`) are skipped in this check — they have negative or OAL+ `startFromAftMm` by design and are not part of the shaft envelope. **Coupler bolt slots** are also skipped — they are reference overlays outside the OAL envelope and do not gate export.
+`blockingExportError()` actually checks only two component kinds, both via
+`startOverlapErrorMm()` (`ui/util/StartOverlapValidation.kt`):
+- **Non-excluded Threads** (`excludeFromOAL = false`): pairwise Thread↔Thread overlap, plus
+  `start ≥ 0`. Excluded threads are skipped — they intentionally sit at negative/OAL+
+  `startFromAftMm` outside the envelope.
+- **Liners**: pairwise Liner↔Liner overlap, plus `start ≥ 0`.
+
+It does **not** check Bodies, Tapers, or Coupler Bolt Slots at all. In particular, **Taper
+overlaps never block export** — they are only surfaced as a non-blocking warning via
+`collidingIds()` (§5.2); a shaft with two overlapping tapers exports successfully. Coupler bolt
+slots are reference overlays outside the OAL envelope and never gate export (`collisionGroup()`
+→ null, consistent with §3.6/§5.2).
 
 PDF export does not interpret warnings; UI handles presentation.
 
@@ -262,14 +334,27 @@ PDF export does not interpret warnings; UI handles presentation.
 
 1. Validation occurs **only** before state update or export.
 2. Renderer/Layout must never throw validation errors.
-3. UI never performs validation logic beyond string formatting.
+3. UI performs overlap/bounds validation directly (`ui/util/StartOverlapValidation.kt`, called
+   from `AddComponentDialogs.kt`/`ComponentCarousel.kt`/`ShaftScreen.kt`) in addition to string
+   formatting — this is a deliberate, documented exception (see the Purpose section and §3.1),
+   not a violation to fix.
 4. Warnings do not affect behavior, only UI hints.
-5. Blocking errors prevent both save and export.
+5. Blocking errors from `startOverlapErrorMm` prevent the Add dialog's Submit and PDF export
+   (§6); they do not retroactively block edits made after a component already exists (§3.1).
 6. Derivation (taper rate, pitch/tpi) is validated before application.
 
 ---
 
-# 8. Summary
+# 8. Debugging Checklist
+
+When you see unexpected validation behavior, check in order: numeric parsing →
+taper derivation (most common failure) → thread pitch/TPI conversion →
+`overallLengthMm` vs `coverageEndMm` → UUID stability across edited components →
+dialogs committing partial values.
+
+---
+
+# 9. Summary
 
 Validation ensures:
 - Consistency of geometric data  

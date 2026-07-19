@@ -4,7 +4,7 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.7 (2026-06-18)
+Version: v0.9 (2026-07-18)
 
 ---
 
@@ -12,9 +12,11 @@ Invariants
 -----------
 - Model values are canonical **millimeters (mm)** at all times.  
 - All unit conversion (mm ↔ in) occurs **only at the UI edge** for display and input.  
-- Component list is a **unified mixed list** (no grouping) ordered newest → top  
-  by `startFromAftMm` descending.  
-- Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.  
+- Component carousel shows the **resolved** component list (auto-bodies included) in
+  **physical position order** along the shaft. See `ComponentsOrdering.md` (v1.2).  
+- Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.
+  **Exception:** the OAL field commits on every keystroke in manual mode (intentional —
+  the preview updates live; see CLAUDE.md).  
 - IME padding is applied **only to the scrollable region**, not the entire screen.  
 - Renderer and layout layers are **mm-only** (no unit logic in rendering or layout).
 
@@ -22,17 +24,26 @@ Invariants
 
 Responsibilities
 ----------------
-- **Header Row:**  
-  App bar providing:
-  - Navigation/back
-  - Editor actions (save/export/etc)
-  - Settings entry point
+- **Header Row (TopAppBar):**  
+  - Hamburger icon → opens the editor sidebar (Schematic / Runout / Wear tabs)
+  - Undo/Redo history menu (`HistoryMenu`)
+  - Project-Info icon
+  - New / Open / Save / Export-PDF action icons
+  - Overflow menu (⋮) → Settings, Clear All, etc.
 
 - **Preview Card:**  
   - Fixed preview area rendering the shaft via `ShaftDrawing(...)`  
   - Optional grid overlay (user setting)  
   - Transparent or theme-color background (user selectable)  
-  - “Free to end” badge aligned **TopCenter** with formatted distance and unit suffix
+  - “Free to end” badge aligned **TopStart**, shown only in manual OAL mode
+    (see `FreeToEndBadge.md`)
+  - Style (`PreviewCard`): `RectangleShape`, transparent container and inner Box —
+    the preview draws on the screen background; colors come from preview color
+    settings, not the card. Sizing: `heightIn(120–200 dp)`, `aspectRatio(3.0)`.
+    Grid colors are hardcoded translucent black (`0x55000000` majors,
+    `0x22000000` minors, `GridRenderer.kt`), not theme-derived.
+    No px/pt math leaks into the model; IME safety is handled by the screen
+    scaffold, not the preview box.
 
 - **Settings (Preferences):**
   - Units (mm/in) affect labels and input formatting only (model remains mm)
@@ -41,17 +52,18 @@ Responsibilities
   - Black/White Only mode (forces black outlines and disables fills in Preview)
 
 - **Scrollable Form Area:**  
-  - Overall length field (unit-aware, commit-on-blur)  
+  - Overall length field (unit-aware; commits per keystroke in manual mode)  
   - Project information fields (Job Number, Customer, Vessel, Notes)  
-  - Unified components list for **Body**, **Taper**, **Thread**, and **Liner**
+  - Component carousel for **Body**, **Taper**, **Thread**, **Liner**, and
+    **Coupler Bolt Slot** (see `ComponentCarousel.kt`)
 
 - **Component Card:**  
   - Displays a component title such as “Body #1”  
   - Hosts a **trash-can remove icon** aligned **Top-End** within the card chrome  
   - Contains input fields (`CommitNum`) with proper unit abbreviation labels
 
-- **Floating Action Button:**  
-  - “+” icon (IME-safe positioning)  
+- **Add Component button:**  
+  - Full-width “+ Add Component” button inside the scrollable column (not a FAB)  
   - Opens the Add-Chooser dialog for new components
 
 ---
@@ -88,6 +100,14 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.9 (2026-07-18)**
+- **Doc sweep corrections:** ordering invariant updated to resolved-pipeline physical
+  order (newest-on-top superseded — see `ComponentsOrdering.md` v1.2); header row
+  updated to actual TopAppBar contents (sidebar hamburger, undo/redo, project info,
+  overflow menu); Free-to-End badge corrected to TopStart + manual-OAL-only; FAB
+  replaced by in-column “+ Add Component” button; Coupler Bolt Slot added to the
+  component list; OAL per-keystroke commit exception documented.
+
 **v0.8 (2026-06-23)**
 - **Thread AFT/FWD in Add dialog restored:** `AddThreadDialog` now shows "Thread end: AFT | FWD" chips (and hides the Start field) when `countInOal = false`, matching the carousel card. `onSubmit` signature updated to include `isAftEnd: Boolean`; threaded through `ShaftScreen → ShaftRoute → ShaftViewModel.addThreadAt()`. Contract documented in `AddComponentDialogs.md`.
 - **Numeric commit guard:** `NumericInputField` now captures text at focus-gain (`textWhenFocused`) and skips `commitOrRevert()` on blur when the value is unchanged. Prevents spurious auto-body promotion and unnecessary ViewModel calls.

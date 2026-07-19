@@ -1,9 +1,20 @@
-# AddComponentDialogs Contract (v1.3, 2026-07-12)
+# AddComponentDialogs Contract (v1.4, 2026-07-18)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
 `AddThreadDialog`, `AddTaperDialog`, `AddCouplerBoltSlotDialog`. Each dialog is the
 **add-time counterpart** to the component's carousel edit card in `ComponentCarousel.kt`.
+
+Default field values are seeded per `Defaults.md` (`ui/config/AddDefaultsConfig.kt`
++ `SessionAddDefaults`).
+
+## Entry point — InlineAddChooserDialog
+The chooser (`ui/dialog/InlineAddChooserDialog.kt`) is the modal that precedes these
+dialogs: five actions (Add **Body**, **Liner**, **Taper**, **Thread**, **Coupler Bolt
+Slot**), lambda-based API (`onDismiss`, `onAddBody`, `onAddLiner`, `onAddThread`,
+`onAddTaper`, `onAddCouplerBoltSlot`), invoke-then-dismiss semantics plus a Close
+button that only dismisses. It lives outside `ShaftScreen` so screen refactors don't
+remove it.
 
 ---
 
@@ -125,6 +136,10 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.4 (2026-07-18)**
+- Absorbed `InlineAddChooserDialog.md` (chooser contract now documented here) and
+  linked `Defaults.md` for seed values.
+
 **v1.3 (2026-07-12)**
 - Added Auto taper-rate rules: positive-diameter sentinel guard, user-owned mode
   state (no re-derivation), no composition-time model writes, blank-rate revert.
