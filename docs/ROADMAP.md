@@ -60,6 +60,8 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Sidebar nav (3 tabs: Schematic / Runout Sheet / Wear Document)
 - Runout drawing — inline shaft preview, scrollable layout, collision-free alternating bubble placement (shared `geom/RunoutBubbleLayout.kt` engine), TIR direction label
 - Wear document — shaft profile + header + dye-pen PASS/FAIL checkboxes
+- Liner wear areas — tap-to-inspect liners, wear-spot recording (SET/liner-edge
+  references, blocking span validation), PDF detail strips with dimension rails
 - Line thickness control — Settings slider 50%–200%, DataStore-persisted, applies to preview and PDF strokes
 - OAL include-thread fix — bracket spans SET-to-SET (excluded) or shaft-end-to-SET (included); label always equals typed OAL
 - Unsaved-changes guard — "Save / Discard / Cancel" dialog when New or Open is triggered with unsaved work; dirty state tracks spec + metadata fields against last save or load

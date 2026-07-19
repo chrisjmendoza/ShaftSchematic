@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.ShaftPosition
+import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.CoroutineScope
@@ -40,6 +41,9 @@ object AutosaveManager {
         val runoutConfig: RunoutConfig = RunoutConfig(),
         val unitLocked: Boolean = false,
         val overallIsManual: Boolean = false,
+        // Added 2026-07-18 (liner wear areas Phase 1): absent in older drafts; default
+        // empty record keeps them decodable.
+        val wearRecord: WearRecord = WearRecord(),
     )
 
     suspend fun autosave(context: Context, snapshot: SessionSnapshot) {

@@ -1,7 +1,10 @@
 # Liner Wear Areas — Feature Scoping Document
 
 **Date:** 2026-07-18 · **Scoped by:** Fable (for implementation by other models)
-**Status:** PROPOSAL — awaiting Chris's review. Do not implement until approved.
+**Status:** ✅ IMPLEMENTED 2026-07-18 (all 4 phases, plus Chris's post-review input
+spec: SET/liner-edge start references + blocking span validation). Decisions and
+deviations: `docs/LinerWearAreas_BuildLog_2026-07-18.md`. This document is the design
+record; the living contract is the wear section of the in-source `RunoutSheet.md`.
 **Reference:** Chris's shop sketch (Tidewater job 934918 STBD) — three liner detail views,
 each "cut out" of the shaft with break symbols, enlarged, with wear spans drawn as lines
 on the liner and dimensioned (e.g. `37¾`, `15½`, `110 FROM CPLG S.E.T.`).

@@ -3,9 +3,15 @@
 **Files:**
 - `geom/RunoutBubbleLayout.kt` — shared bubble placement engine (stations, rows, x-solve, leader routing + collision verification)
 - `ui/screen/RunoutRoute.kt` — runout station config, canvas preview, PDF preview overlay
-- `ui/screen/WearRoute.kt` — wear inspection document tab
+- `ui/screen/WearRoute.kt` — wear inspection document tab; interactive shaft canvas + liner
+  wear tap/badges (Phase 2, see "Liner Wear Inspection (UI)" below)
+- `ui/screen/LinerWearDetail.kt` — full-screen liner wear detail overlay (Phase 3)
+- `ui/screen/LinerWearMath.kt` — pure math for tap hit-testing, band clamping, and detail-canvas
+  scale, shared by the two files above
 - `pdf/RunoutPdfComposer.kt` — letter-landscape runout PDF generation
 - `pdf/WearPdfComposer.kt` — letter-landscape wear document PDF generation
+- `pdf/WearStripLayout.kt` — android-free pure-math layout for the wear PDF's per-liner
+  detail strips (Phase 4); see "Wear Detail Strips" below
 
 ---
 
@@ -19,11 +25,96 @@
 - Preview the PDF in-app via `PdfPreviewOverlay` with a Tune options sheet.
 
 ### WearRoute
-- Display a brief explanation of the blank-outline field form.
+- Render a live, tappable shaft canvas (liners only) so the user can inspect/record wear —
+  see "Liner Wear Inspection (UI)" below.
 - Preview the wear document PDF in-app via `PdfPreviewOverlay` with a Tune options sheet.
 - Export a blank shaft outline PDF via SAF for field damage and dye-pen inspection marking.
 
 Both tabs share the same layout pattern: outer `Column` with `systemBarsPadding()`, a toolbar `Row` (hamburger + title), `HorizontalDivider`, then a vertically-scrollable inner `Column`.
+
+---
+
+## Liner Wear Inspection (UI, Phase 2/3, 2026-07-18)
+
+See `docs/LinerWearAreas_Proposal.md` for the full feature scope; this section covers only
+the UI contract added on top of the existing wear-document tab.
+
+**Overview canvas (`WearRoute.kt`)** — same rendering pattern as `RunoutRoute`'s preview
+canvas (`ShaftLayout.compute` + `ShaftRenderer.draw` against `resolvedComponents`, never raw
+spec), but deliberately **no pinch-to-zoom** — this canvas only needs a single tap gesture, so
+skipping the transformable/zoom state kept the tap-coordinate math simple (no scale/offset to
+divide out). After `ShaftRenderer.draw`, `drawLinerWearAffordances` adds a faint primary-tint
+fill + border over every liner (tap affordance) and a small count badge above any liner that
+already has ≥1 recorded wear spot.
+
+**Tap hit-testing** inverts the existing `ShaftLayout.Result.xMmFromPx` to get the tap position
+in mm, then calls the pure `pickLinerIdAtMm` (`LinerWearMath.kt`) to pick the liner whose span
+contains it — ties (a tap exactly on a shared boundary) broken by whichever liner has the
+nearer edge. A hit opens `LinerWearDetailOverlay` for that liner's id.
+
+**Detail overlay (`LinerWearDetail.kt`)** — a full-screen composable, not a nav destination,
+same shape as `PdfPreviewOverlay`: its own `BackHandler` plus a back-arrow top bar. Layout math
+is self-contained (draws one liner + short neighbor stubs, not the whole shaft, so it does not
+use `ShaftLayout`): `computeLinerDetailPxPerMm` is width-driven but capped by an available-height
+budget so a very short liner doesn't blow its drawn diameter off-canvas. Neighbor stubs (~24dp)
+come from `resolvedComponents` at the diameter touching the liner, terminated at their *far* end
+with a Compose port of the pdf layer's S-curve break edge (`pdf/BreakSymbol.kt`'s math,
+redrawn with Compose `Path`/`DrawScope` rather than importing pdf code) — the edge touching the
+liner itself is a plain line (a real boundary, not a "cut"). Wear bands render as hatched/tinted
+rects at `clampWearBandToLiner` positions (visual clamp only; the underlying `WearSpot` is never
+mutated) with a small per-spot dimension rail below (offset from the liner's AFT edge, then band
+length, formatted via the existing `disp`/`abbr` helpers in the active unit). Spot cards below
+the canvas use `NumericInputField` for Start/Length/Min-Ø (commit-on-blur, tap-and-leave no-op,
+per `NumberField.md`) plus a same-discipline Notes field, a delete icon per card, and an
+"Add spot" button wired to `ShaftViewModel.addWearSpot`/`updateWearSpot`/`removeWearSpot`.
+
+**Break-edge eye orientation (2026-07-18 fix):** `drawBreakEdgeCompose`'s `eyeAtTop` must be
+chosen so the eye's larger "sweep" curve bulges into the **void** side of the break, never the
+material side. This is the *opposite* of the flag choice used for a centered compression break
+(`ShaftPdfComposer`/`WearPdfComposer`'s body-shortening breaks, where the two break edges face a
+shared gap in the middle — there, left edge = false, right edge = true): here each stub's break
+sits at its own far/outer end (void beyond it, material toward the liner), so the mapping
+inverts — left (AFT) stub = `eyeAtTop = true`, right (FWD) stub = `eyeAtTop = false`. The same
+fix applies to `WearPdfComposer.kt`'s `drawWearDetailStrip` neighbor-stub break calls (its main
+shaft-profile compression break is unaffected — that one *is* the centered-gap case and keeps
+the original flags). See `drawBreakEdgeCompose`'s KDoc for the full derivation.
+
+**"Measure from" reference (Change 1, 2026-07-18 post-review spec)** — each `WearSpot` carries
+an additive, defaulted `authoredReference: WearSpotReference` (`LINER_AFT` / `LINER_FWD` /
+`AFT_SET` / `FWD_SET`), display-only metadata recording which of four reference points the
+Start field was entered against. **Canonical storage is unchanged**: `WearSpot.startMm` is
+always liner-local, measured from the liner's AFT edge — the same convention documented on the
+model. Conversion (`ui/screen/LinerWearMath.kt`):
+- `LINER_AFT` / `AFT_SET` (AFT-referenced): the entered value locates the band's **AFT edge**,
+  measured FWD from the reference point. `LINER_AFT` canonical = entered as-is; `AFT_SET`
+  canonical = `(aftSetXMm + entered) − liner.startFromAftMm`.
+- `LINER_FWD` / `FWD_SET` (FWD-referenced): the entered value locates the band's **FWD edge**,
+  measured AFT from the reference point. `LINER_FWD` canonical = `linerLengthMm − entered −
+  lengthMm`; `FWD_SET` canonical = `(fwdSetXMm − entered) − liner.startFromAftMm − lengthMm`.
+
+`wearStartToCanonicalMm`/`canonicalToWearStartMm` are the pure, exactly-inverse conversion pair.
+AFT/FWD SET positions come from `geom/OalComputations.kt`'s `computeOalWindow` +
+`computeSetPositionsInMeasureSpace` (computed once per overlay open in `LinerWearDetailOverlay`
+and threaded down to each `WearSpotCard`) — its `measureStartMm` is always `0.0`, so the
+returned measure-space X values already are physical shaft-space mm from AFT, the same space as
+`liner.startFromAftMm`. Switching the "Measure From" chip re-projects the *displayed* Start
+value only and persists the reference immediately via `ShaftViewModel.updateWearSpotReference`
+(mirrors `updateLinerAuthoredReference`/`updateCouplerBoltSlotReference`) — canonical `startMm`
+never moves as a result, same rule as the Liner/CouplerBoltSlot AFT/FWD chips.
+
+**Blocking in-span validation (Change 2)** — a wear band's canonical span
+`[startMm, startMm + lengthMm]` must lie entirely within `[0, linerLengthMm]`. This is enforced
+at **entry** via `NumericInputField`'s `validator`/`externalIssueText` (per `NumberField.md`):
+an out-of-span commit is rejected, the field reverts, and the model is never touched. Checked
+for both the Start field (after converting to canonical via the active reference) and the
+Length field (existing canonical start + new length must fit) using the pure
+`wearSpotSpanIssue(...)` classifier (epsilon `1e-3mm`, boundary-exact bands accepted). Stale
+data — a spot that was valid when recorded but no longer fits because the liner was later
+shortened — is **not** retroactively blocked: the render clamp (`clampWearBandToLiner`) remains
+the safety net, and the spot's card shows a small warning icon + "Extends past liner end —
+re-measure" text instead, driven by the separate non-blocking `isWearSpotStaleOverrun(...)`
+classifier. `ShaftViewModel.addWearSpot`'s default 25.4mm (1in) band length is clamped to the
+liner's own length so the default is never rejected on a tiny liner.
 
 ---
 
@@ -199,6 +290,100 @@ under the same name for the same shaft.
 
 ---
 
+### Wear Detail Strips (Phase 4, 2026-07-18)
+
+`composeWearPdf` takes an optional `wearRecord: WearRecord = WearRecord()` param (see
+`docs/LinerWearAreas_Proposal.md` §6.2). Every existing call site is unaffected by the
+default. All strip geometry (liner spans, neighbor diameters for the break-out stubs)
+comes from `docSpec` — the spec after `withResolvedBodies(resolvedComponents)` — never
+raw `spec.bodies`, same contract as the rest of this document.
+
+**Selection & pagination** — `pdf/WearStripLayout.kt` (android-free, unit-tested directly,
+`WearStripLayoutTest`):
+- `collectWearLinerGroups` groups `wearRecord.spots` by liner, keeps only liners with ≥1
+  spot, sorted aft → fwd. Orphaned spots (stale `linerId`) are dropped defensively (the
+  authoritative drop is at decode time, `ShaftDocCodec`).
+- `selectWearStripsForPage` caps at `WEAR_STRIP_MAX_PER_PAGE` (3). Liners beyond that are
+  **not** put on a second PDF page — `composeWearPdf` only ever receives a single
+  caller-supplied `PdfDocument.Page` (every call site does one `startPage` /
+  `finishPage`), and growing that into true multi-page output would mean changing the
+  function's signature and every call site. Instead, overflow renders as one text note
+  line ("+N more liner(s) with wear spots ..., page limit 3") in a reserved band just
+  above the notes area. Revisit if/when `composeWearPdf` grows multi-page support.
+
+**Main profile** — liners with ≥1 wear spot get thin hatched bands (`drawWearBandsOnProfile`)
+at their true axial position, clamped to the liner span (`clampWearBandToLiner`), drawn
+after the profile's own liner outlines. Visible but not dominant — same alpha/weight
+convention as the thread hatch already on this page.
+
+**Vertical page split** — `computeWearVerticalLayout` splits the profile band into a
+(possibly shrunk) main-profile region followed by up to 3 stacked strips. The profile
+never shrinks below `max(WEAR_MIN_PROFILE_HEIGHT_PT, 2×drawn-shaft-radius + margin)` —
+folding in the actual radius matters because `ptPerMm` here is a purely horizontal
+(SET-to-SET) scale, so a short/wide shaft's true diameter isn't otherwise height-aware.
+When the preferred strip height doesn't fit, every strip shrinks together (never
+independently, never past the main profile). By construction the last strip's bottom
+always lands exactly on the reserved area's bottom edge.
+
+**Per-strip layout** — `computeWearStripHorizontalLayout` centers a break-out liner
+(scaled `ptPerMm` local to the strip, capped/floored so very short/long liners don't
+explode/vanish) between two fixed-width neighbor stubs; `computeWearStripInnerLayout`
+then splits the strip's own vertical band into a title row, the liner cylinder, and the
+single chained dimension rail below it (see "Dimension rail" below) — the cylinder
+shrinks first, and if a pathological input leaves no room at all, the rail's label rows
+drop toward zero (the rail line still draws; labels are simply not placed) rather than
+let anything render past the strip's bottom edge. Each strip draws:
+- Neighbor stubs at the resolved diameter abutting the liner (`neighborDiaMmAtAft` /
+  `neighborDiaMmAtFwd`, falling back to the liner's own OD when there's no neighbor),
+  broken out with the standard S-curve edge (`BreakSymbol.drawBreakEdge`).
+- Hatched wear bands on the liner at strip-local scale, clamped the same way as the
+  main-profile bands, plus a min-Ø reading printed just above each band — omitted
+  entirely when `minDiaMm == 0` (unrecorded).
+- One chained dimension rail below the cylinder (see "Dimension rail" below).
+- One anchor-from-SET label per strip (`buildLinerAnchorLabel`) — the digitized form of
+  the shop sketch's "110 FROM CPLG S.E.T." line. It reuses `mapToLinerDimsForPdf` +
+  `LinerSpanBuilder.buildLinerSpans` verbatim, so the number always matches the liner
+  dimension shown on the main schematic PDF.
+
+**Dimension rail (2026-07-18 rework)** — replaces the original per-spot "AFT edge → band
+start" / "band start → band end" text rows with one standard chained dimension rail below
+the liner cylinder, following the same witness-line/arrowed-span/centered-label
+convention the main schematic uses (`pdf/render/PdfDimensionRenderer.kt`):
+- `buildWearStripRailSpans` (`pdf/WearStripLayout.kt`) walks the liner's clamped wear
+  bands aft → fwd and builds the ordered chain: liner AFT edge → first band start, each
+  band's own length, the gap between consecutive bands, and the trailing remainder to the
+  liner FWD edge. Zero-length spans (a band starting exactly at the AFT edge, two
+  back-to-back bands with no gap, a band ending exactly at the FWD edge) are omitted —
+  the chain still covers `[0, linerLengthMm]` exactly, since an omitted span had zero mm
+  to contribute. Bands that overlap each other (legal — only the liner-bounds check is
+  enforced at entry, not inter-spot overlap) have their effective start pulled forward to
+  the running cursor so the chain never runs backward or double-counts the overlap.
+- `layoutWearStripRail` resolves that chain to on-page geometry: each label is centered on
+  its own span when it fits with padding on both sides, else centered on the span's
+  midpoint and allowed to overhang (never dropped); arrowheads point inward when there's
+  room beside the label, outward when cramped (same test as
+  `PdfDimensionRenderer.canFitInwardArrows`); and a label is bumped to the next stacked row
+  when it would otherwise overlap an already-placed label — the crowding fallback for
+  short bands/gaps whose label is wider than the span itself.
+  `PdfDimensionRenderer` itself isn't reused directly: it's built around the schematic's
+  multi-tier DATUM/LOCAL rail stacking (spans that overlap in x get assigned different
+  rails) and draws its rails ABOVE the shaft outline, whereas a wear strip's rail is a
+  single flat chain of never-overlapping spans BELOW the liner cylinder — different enough
+  on both the tiering model and the draw direction that the minimal shared idea (label
+  centering, arrow direction, collision-bump) is replicated as small pure functions in
+  `WearStripLayout.kt` instead of bending that renderer's API to a shape it wasn't built
+  for.
+- The rail's own vertical budget is now FIXED — `WEAR_RAIL_MAX_LABEL_ROWS` (2) stacked
+  label rows reserved above the rail line, regardless of how many wear spots the liner
+  has (the rail is always one chained line no matter how many spans it's divided into;
+  the old per-spot row budget scaled with spot count, which no longer applies).
+  `computeWearStripInnerLayout` no longer takes a `spotCount` parameter. `WearPdfComposer`'s
+  `drawWearStripRail` draws the witness lines, arrowed spans, and labels, clamping any
+  label row beyond what `computeWearStripInnerLayout` actually fit for this strip's height
+  to the last available row rather than draw past the strip's bottom edge.
+
+---
+
 ## PDF Appearance Options
 
 Both composers accept:
@@ -266,6 +451,8 @@ All four values are included in the `LaunchedEffect` key list so changing any op
 
 Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` before the `if (showPreview)` block. This intercepts the system back gesture while the overlay is visible, dismissing the overlay instead of propagating to the NavController.
 
+`LinerWearDetailOverlay` hosts its own unconditional `BackHandler` internally (rather than the caller adding a conditional one) since `WearRoute` only composes it while `selectedLinerId != null` — there is nothing to gate.
+
 ---
 
 ## Contracts & Invariants
@@ -287,4 +474,6 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
 - User-selectable keyway reference angle.
 - Multiple orientation diagrams on one sheet (e.g., Looking AFT + Looking FWD side-by-side).
 - Printable measurement table rows below each bubble.
-- Phase 2 wear: digital damage annotation — tap zones, severity rating, dye-pen pass/fail toggle.
+- Severity rating / dye-pen pass-fail digitization and photos on wear spots (explicitly out of
+  scope for the liner wear feature — see `docs/LinerWearAreas_Proposal.md` §1).
+- Wear on bodies/tapers, not just liners (see the proposal's §10.5 open question).

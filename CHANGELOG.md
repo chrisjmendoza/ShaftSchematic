@@ -8,6 +8,41 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-18
 
+### feat: liner wear areas — inspection recording on the Wear tab + PDF detail strips
+
+Digitizes the shop-sketch liner wear workflow (`docs/LinerWearAreas_Proposal.md`; build
+record: `docs/LinerWearAreas_BuildLog_2026-07-18.md`). Uncommitted decisions from the
+proposal's §10 were resolved and are logged there.
+
+- **Model/persistence:** `model/WearSpot.kt` (`WearSpot`/`WearRecord`) — reference-only
+  (never affects OAL/coverage/collision), liner-local AFT-edge canonical coordinates,
+  additive `wear_record` envelope field (no version bump), orphan spots dropped at
+  decode, wired through autosave; backup needed no change (raw byte copies).
+- **Wear tab:** interactive shaft canvas (resolved components), liners are tap targets
+  with tint affordance + spot-count badges.
+- **Detail overlay:** full-screen break-out liner (S-curve stubs, eye outward), hatched
+  wear bands with per-spot dimension rails, editable spot cards (commit-on-blur).
+- **Input spec (Chris):** per-spot "Measure From" — AFT SET / FWD SET / Liner AFT /
+  Liner FWD (canonical storage unchanged; display projection only) — and **blocking
+  in-span validation** (start or start+length outside the liner rejects the commit
+  inline); stale overruns (liner shortened later) warn + render clamped, never block.
+  Min-Ø stays optional (0 = not recorded); start + length required.
+- **Wear PDF:** thin hatched bands on the main profile + up to 3 broken-out detail
+  strips per page (auto-selected aft→fwd, overflow noted as "+N more"), each with
+  common-factor radius scaling (preserves the liner-vs-shaft OD step), anchor-from-SET
+  title, and a **chained dimension rail** (AFT edge → band start, band lengths, gaps,
+  trailing remainder — provably tiles the liner; narrow-span label fallback).
+- Tests 431 → 527 (`WearRecordPersistenceTest`, `ShaftViewModelWearSpotTest`,
+  `AutosaveSnapshotWearRecordTest`, `LinerWearMathTest`, `WearStripLayoutTest` et al).
+
+### fix: wear OAL line raised to runout spacing; runout bubble leader clearance
+
+(Committed earlier today as `61ef2c6`; entry added retroactively.) Wear document's OAL
+dimension line raised 16 → 90 pt above the shaft (matches the runout sheet). Runout
+bubbles gain a leader-clearance spread — cross-row gaps widen by up to 1.6×minGap
+(+8 pt on PDF) funded from row slack, so bubbles keep writing room from neighboring
+leaders; tight rows degrade to prior behavior.
+
 ### feat: collision-free runout bubble layout — shared engine, alternating rows
 
 Runout bubble placement is rewritten around a hard guarantee: **bubbles never touch

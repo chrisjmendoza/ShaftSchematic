@@ -2,6 +2,7 @@ package com.android.shaftschematic.doc
 
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.normalized
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.UnitSystem
@@ -59,6 +60,12 @@ object ShaftDocCodec {
         /** Runout-sheet preferences. Absent in older files → default empty config. */
         @SerialName("runout_config")
         val runoutConfig: RunoutConfig = RunoutConfig(),
+        /**
+         * Liner wear-inspection record. Absent in older files → default empty record.
+         * Additive + defaulted: no version bump needed. See `docs/LinerWearAreas_Proposal.md`.
+         */
+        @SerialName("wear_record")
+        val wearRecord: WearRecord = WearRecord(),
     )
 
     enum class Format { ENVELOPE_V1, LEGACY_SPEC }
@@ -74,6 +81,7 @@ object ShaftDocCodec {
         val notes: String,
         val spec: ShaftSpec,
         val runoutConfig: RunoutConfig,
+        val wearRecord: WearRecord,
     )
 
     private val json = Json {
@@ -90,6 +98,8 @@ object ShaftDocCodec {
             .onSuccess { doc ->
                 // Refuse files from a newer format rather than silently dropping their data.
                 if (doc.version > CURRENT_VERSION) throw UnsupportedDocVersionException(doc.version)
+                // Back-compat thread normalization (pitch/tpi)
+                val normalizedSpec = doc.spec.normalized()
                 return Decoded(
                     format = Format.ENVELOPE_V1,
                     preferredUnit = doc.preferredUnit,
@@ -99,9 +109,18 @@ object ShaftDocCodec {
                     vessel = doc.vessel,
                     shaftPosition = doc.shaftPosition,
                     notes = doc.notes,
-                    // Back-compat thread normalization (pitch/tpi)
-                    spec = doc.spec.normalized(),
+                    spec = normalizedSpec,
                     runoutConfig = doc.runoutConfig,
+                    // Orphan policy: spots whose linerId no longer matches a liner in this
+                    // spec are dropped here, at decode time — the same layer that already
+                    // normalizes the spec above. Every decode() caller (VM import/open,
+                    // bundled-sample seeding, backup restore validation) gets clean data
+                    // without having to remember to filter it themselves.
+                    wearRecord = doc.wearRecord.copy(
+                        spots = doc.wearRecord.spots.filter { spot ->
+                            normalizedSpec.liners.any { it.id == spot.linerId }
+                        }
+                    ),
                 )
             }
 
@@ -118,6 +137,7 @@ object ShaftDocCodec {
             notes = "",
             spec = legacy,
             runoutConfig = RunoutConfig(),
+            wearRecord = WearRecord(),
         )
     }
 }

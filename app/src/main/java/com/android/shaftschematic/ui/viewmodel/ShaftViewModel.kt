@@ -51,6 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.math.max
+import kotlin.math.min
 
 // Internal payload used by Undo/Redo for deletes.
 // Not part of the public API; safe to change as the undo feature evolves.
@@ -365,6 +366,81 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutConfig.update { it.copy(tirDirection = direction) }
     }
 
+    // ── Liner wear inspection record ──────────────────────────────────────────
+    // Persisted alongside the spec in the .shaft file, same as runoutConfig above.
+    // Reference-only data: plain state updates, no geometry side effects, no
+    // ensureOverall/auto-body interaction. See docs/LinerWearAreas_Proposal.md §5, §7.
+
+    private val _wearRecord = MutableStateFlow(WearRecord())
+    val wearRecord: StateFlow<WearRecord> = _wearRecord.asStateFlow()
+
+    /**
+     * Add a new wear spot on [linerId] with sensible defaults (start 0, no reading). The
+     * default length is 1in (25.4mm), clamped to the liner's own length for tiny liners so
+     * the default band is never rejected by [wearSpotSpanIssue] at first render/edit.
+     */
+    fun addWearSpot(linerId: String) {
+        val linerLengthMm = _spec.value.liners.firstOrNull { it.id == linerId }?.lengthMm ?: 25.4f
+        val defaultLengthMm = min(25.4f, linerLengthMm.coerceAtLeast(0f))
+        _wearRecord.update { rec ->
+            rec.copy(
+                spots = rec.spots + WearSpot(
+                    linerId = linerId,
+                    startMm = 0f,
+                    lengthMm = defaultLengthMm,
+                    minDiaMm = 0f,
+                    note = "",
+                )
+            )
+        }
+    }
+
+    /**
+     * Update an existing wear spot's fields by [id]. No-op if the id is not found.
+     *
+     * [startMm]/[lengthMm] are always canonical (liner-local AFT-edge mm) — reference
+     * conversion happens in the UI (`LinerWearMath.kt`'s `wearStartToCanonicalMm`) before
+     * this is called, and blocking in-span validation (`wearSpotSpanIssue`) happens at the
+     * `NumericInputField` layer, so a rejected entry never reaches here. See
+     * [updateWearSpotReference] for the separate, geometry-free "Measure from" setter.
+     */
+    fun updateWearSpot(id: String, startMm: Float, lengthMm: Float, minDiaMm: Float, note: String) {
+        _wearRecord.update { rec ->
+            rec.copy(
+                spots = rec.spots.map { spot ->
+                    if (spot.id != id) spot else spot.copy(
+                        startMm = max(0f, startMm),
+                        lengthMm = max(0f, lengthMm),
+                        minDiaMm = max(0f, minDiaMm),
+                        note = note,
+                    )
+                }
+            )
+        }
+    }
+
+    /**
+     * Update a wear spot's authored "Measure from" reference by [id]. Display-only — same
+     * pattern as `updateLinerAuthoredReference`/`updateCouplerBoltSlotReference`: it never
+     * touches [WearSpot.startMm]/[WearSpot.lengthMm], only which reference point the Start
+     * field re-projects against.
+     */
+    fun updateWearSpotReference(id: String, reference: WearSpotReference) {
+        _wearRecord.update { rec ->
+            rec.copy(
+                spots = rec.spots.map { spot ->
+                    if (spot.id != id || spot.authoredReference == reference) spot
+                    else spot.copy(authoredReference = reference)
+                }
+            )
+        }
+    }
+
+    /** Remove a wear spot by [id]. Confirm-free, as authored in the detail-view UI. */
+    fun removeWearSpot(id: String) {
+        _wearRecord.update { rec -> rec.copy(spots = rec.spots.filterNot { it.id == id }) }
+    }
+
     // Tap-to-add pending position: non-null while the user has tapped empty space and
     // has not yet confirmed or dismissed the add-at-position flow.
     private val _pendingAddPositionMm = MutableStateFlow<Float?>(null)
@@ -458,9 +534,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Flow.combine overload for >5 flows returns Array<Any?>
         combine(
             spec, unit, shaftPosition, customer, vessel, jobNumber, notes,
-            runoutConfig, unitLocked, overallIsManual
+            runoutConfig, unitLocked, overallIsManual, wearRecord
         ) { values: Array<Any?> ->
-            check(values.size == 10) { "Autosave combine expected 10 values, got ${values.size}" }
+            check(values.size == 11) { "Autosave combine expected 11 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -472,6 +548,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val runout = values[7] as RunoutConfig
             val locked = values[8] as Boolean
             val manual = values[9] as Boolean
+            val wear = values[10] as WearRecord
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -484,6 +561,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 runoutConfig = runout,
                 unitLocked = locked,
                 overallIsManual = manual,
+                wearRecord = wear,
             )
         }
                 .debounce(1500)
@@ -800,6 +878,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _jobNumber.value = snapshot.jobNumber
         _notes.value = snapshot.notes
         _runoutConfig.value = snapshot.runoutConfig
+        _wearRecord.value = snapshot.wearRecord
         // Restore unitLocked before any defaultUnitFlow emission can overwrite the
         // draft's unit, and overallIsManual so a manually-set OAL isn't auto-resized.
         _unitLocked.value = snapshot.unitLocked
@@ -1781,6 +1860,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             notes = _notes.value,
             spec = _spec.value,
             runoutConfig = _runoutConfig.value,
+            wearRecord = _wearRecord.value,
         )
     )
 
@@ -1805,6 +1885,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _shaftPosition.value = decoded.shaftPosition
         _notes.value = decoded.notes
         _runoutConfig.value = decoded.runoutConfig
+        // Already orphan-filtered against decoded.spec.liners inside ShaftDocCodec.decode().
+        _wearRecord.value = decoded.wearRecord
 
         // Derive OAL mode from the document instead of leaking the previous session's
         // flag: an authored OAL beyond the content end must be treated as manual, or
@@ -1843,6 +1925,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _vessel.value = ""
         _shaftPosition.value = ShaftPosition.OTHER
         _runoutConfig.value = RunoutConfig()
+        _wearRecord.value = WearRecord()
         _notes.value = ""
         _overallIsManual.value = false
 
