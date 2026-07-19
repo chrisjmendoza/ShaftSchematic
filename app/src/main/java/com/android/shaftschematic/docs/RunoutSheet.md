@@ -290,13 +290,52 @@ under the same name for the same shaft.
 
 ---
 
-### Wear Detail Strips (Phase 4, 2026-07-18)
+### Wear PDF Rendering Modes (2026-07-18 either/or rule)
+
+Shop practice: the wear document shows EITHER the per-liner detail strips OR the shaft
+profile — never both stacked once there are enough wear liners to make that crowded.
+`composeWearPdf` resolves one of three `WearPdfMode`s (`pdf/WearStripLayout.kt`) from
+`determineWearPdfMode(collectWearLinerGroups(docSpec.liners, wearRecord).size)` — a pure
+function of how many liners have ≥1 recorded, non-orphan wear spot (spots on a
+since-deleted liner are already dropped by `collectWearLinerGroups`, so "spots recorded
+only against deleted liners" counts the same as "no spots" here):
+
+| Wear liners | Mode | Page shows |
+|---|---|---|
+| 0 | `PROFILE_FORM` | The original blank hand-marking shaft profile — unchanged. |
+| 1–2 | `COMBINED` | Today's page: shaft profile + wear bands, shrunk to fit the detail strip(s) below (see "Wear Document Page Layout" above). |
+| 3+ | `STRIPS_ONLY` | **No** shaft profile, **no** OAL dimension line/witness lines. The header and the dye-pen PASS/FAIL + Notes baseline stay. Detail strips (still capped at `WEAR_STRIP_MAX_PER_PAGE` = 3 shown, "+N more" overflow note for 4+) get the entire freed vertical band and grow taller. |
+
+This is automatic — there is no user-facing setting for it (deliberate, Chris's call
+2026-07-18): 3+ wear liners on a page is treated as evidence that the strips are the
+useful view and the profile would just be crowded filler.
+
+**`STRIPS_ONLY` layout** — `computeWearStripsOnlyVerticalLayout` (`pdf/WearStripLayout.kt`)
+is the strips-only sibling of `computeWearVerticalLayout`: instead of shrinking a profile
+to make room, it hands the *entire* freed band below the header to the strips. Each
+strip's height is capped at `WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT` = **216pt** (2.0× the
+combined page's 108pt `WEAR_STRIP_HEIGHT_PT`, the top of the "~1.8-2x" range Chris asked
+for) so a page with only 3 wear liners and lots of vertical room doesn't let a strip
+balloon absurdly tall. Height freed by that cap is redistributed as extra inter-strip gap
+(or, with a single strip and therefore no gap to grow, extra top gap) so the strip band
+still spans the full available area edge-to-edge, same "nothing wasted" guarantee
+`computeWearVerticalLayout` documents. Everything below the vertical split — horizontal
+strip layout, cylinder/rail inner layout, dimension rail, neighbor stubs, min-Ø labels,
+anchor-from-SET title — is the same `drawWearDetailStrip` used by the combined page; only
+the vertical band each strip is drawn into, and the absence of the profile/OAL draw
+calls, differ.
+
+---
+
+### Wear Detail Strips (Phase 4, 2026-07-18; strips-only mode added 2026-07-18)
 
 `composeWearPdf` takes an optional `wearRecord: WearRecord = WearRecord()` param (see
 `docs/LinerWearAreas_Proposal.md` §6.2). Every existing call site is unaffected by the
 default. All strip geometry (liner spans, neighbor diameters for the break-out stubs)
 comes from `docSpec` — the spec after `withResolvedBodies(resolvedComponents)` — never
-raw `spec.bodies`, same contract as the rest of this document.
+raw `spec.bodies`, same contract as the rest of this document. This section describes the
+strip content itself, shared by `COMBINED` and `STRIPS_ONLY` mode (see "Wear PDF Rendering
+Modes" above for which vertical-layout function positions the strips in each mode).
 
 **Selection & pagination** — `pdf/WearStripLayout.kt` (android-free, unit-tested directly,
 `WearStripLayoutTest`):

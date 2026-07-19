@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-18
 
+### feat: wear PDF rendering modes — liners-only page at 3+ wear liners
+
+Matches shop practice (wear doc shows the liner cutouts OR the shaft drawing, not
+both stacked). Automatic three-way rule, no toggle (`determineWearPdfMode`,
+`pdf/WearStripLayout.kt`): 0 wear liners → blank shaft-profile field form (unchanged);
+1–2 → combined page as before (path untouched); **3+ → strips-only** — no shaft
+profile or OAL dimension line (header + dye-pen/notes stay), strips grow into the
+freed page (130 pt each at 3 strips, capped 216 pt) with extra inter-strip gap.
+Orphaned spots count as zero. +14 tests (mode boundaries incl. 2→3, strips-only
+layout bounds/cap/fill); suite 527 → 541 green.
+
 ### feat: liner wear areas — inspection recording on the Wear tab + PDF detail strips
 
 Digitizes the shop-sketch liner wear workflow (`docs/LinerWearAreas_Proposal.md`; build

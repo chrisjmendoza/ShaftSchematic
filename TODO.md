@@ -132,6 +132,15 @@ These are defined in the contract but not yet computed. Lower priority — add w
 - [ ] Dual-unit display (primary in, secondary mm in smaller text)
 - [ ] Quick inline mm ↔ in calculator in dialogs
 - [ ] Backup auto-mirror folder — user picks a SAF folder once in Settings (persisted URI); every internal save silently mirrors a copy there so the off-device backup is always current. Needs `takePersistableUriPermission` + careful URI-permission lifecycle handling (revoked permission, deleted folder). Originally Tier 3 of the 2026-05-27 backup plan; the shipped backup system covers Tiers 1–2.
+- [ ] "Indicated wear" rendering style for wear bands (Chris, 2026-07-18): match the shop
+  hand-sketch convention — squiggly/wavy lines along the liner top and bottom edges in
+  the worn region, with straight lines depicting the wear on the liner face itself —
+  as an alternative/refinement to the current hatched bands. Chris has specific ideas;
+  get a sketch/photo before building. Applies to detail strips + overlay (main-profile
+  bands probably stay hatched at that scale).
+- [ ] Compact wear-strip option: strips currently stretch the liner toward full content
+  width for readability; a denser mode (don't stretch, natural/shared scale) would ease
+  crowded 3-strip pages. Chris noted full-stretch reads well, so keep it the default.
 
 ---
 

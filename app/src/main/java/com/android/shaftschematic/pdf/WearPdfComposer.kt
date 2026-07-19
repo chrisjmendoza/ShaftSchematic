@@ -57,9 +57,18 @@ import kotlin.math.min
  *                resolved bodies replace `spec.bodies` for the drawn profile — same
  *                contract as `composeShaftPdf`/`composeRunoutPdf`.
  * @param wearRecord Recorded liner wear spots (Phase 4, `docs/LinerWearAreas_Proposal.md`
- *                §6.2). Liners with ≥1 spot get thin hatched bands on the main profile
- *                (true position, clamped to the liner span) plus a broken-out detail
- *                strip below the profile — aft→fwd order, max
+ *                §6.2). The page picks one of three [WearPdfMode]s from
+ *                `determineWearPdfMode(collectWearLinerGroups(...).size)` (2026-07-18
+ *                either/or spec):
+ *                - **0 wear liners** ([WearPdfMode.PROFILE_FORM]) — the original blank
+ *                  hand-marking shaft profile, unchanged.
+ *                - **1-2 wear liners** ([WearPdfMode.COMBINED]) — today's page: thin
+ *                  hatched wear bands on the main profile (true position, clamped to the
+ *                  liner span) plus a broken-out detail strip below the (shrunk) profile.
+ *                - **3+ wear liners** ([WearPdfMode.STRIPS_ONLY]) — no main shaft profile,
+ *                  no OAL dimension line; the detail strips alone fill the freed page,
+ *                  each grown up to [WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT] tall.
+ *                In every mode with strips, they're aft→fwd order, max
  *                [WEAR_STRIP_MAX_PER_PAGE] per page; any remainder is listed as a text
  *                note (see `selectWearStripsForPage`'s KDoc for why this document draws
  *                into a single caller-supplied page rather than growing to a second
@@ -144,47 +153,20 @@ fun composeWearPdf(
     val stripCount     = stripSelection.onPage.size
     val overflowNoteH  = if (stripSelection.overflow.isNotEmpty()) WEAR_OVERFLOW_NOTE_HEIGHT_PT else 0f
 
-    // Shaft profile shrinks/shifts to make room for the strips (zero-op when stripCount == 0).
-    // The profile's minimum height also protects the actual drawn shaft radius — ptPerMm
-    // is a purely horizontal (SET-to-SET) scale, so a wide/short shaft's true diameter
-    // could otherwise exceed a shrunk profile band.
-    val minProfileHeightPt = maxOf(WEAR_MIN_PROFILE_HEIGHT_PT, 2f * rPx(maxDiaMm) + WEAR_PROFILE_RADIUS_MARGIN_PT)
-    val vLayout = computeWearVerticalLayout(
-        midTopFull, midBotFull, stripCount,
-        reservedBottomPt = overflowNoteH,
-        minProfileHeightPt = minProfileHeightPt,
-    )
-    val midTop   = vLayout.profileTop
-    val midBot   = vLayout.profileBottom
-    val shaftCy  = (midTop + midBot) * 0.5f
-    val geomRect = RectF(contentLeft, midTop, contentRight, midBot)
+    // Which of the three modes this page renders (2026-07-18 either/or spec) — see
+    // determineWearPdfMode's KDoc and the composeWearPdf-level KDoc above for the full rule.
+    val wearMode = determineWearPdfMode(wearGroups.size)
 
-    // OAL dimension line sits well above the shaft's top outline (same 90 pt convention
-    // as the runout sheet), not crowding the profile.
-    val shaftTopApprox = shaftCy - rPx(maxDiaMm)
-    val oalLineY       = (shaftTopApprox - WEAR_OAL_ABOVE_SHAFT_PT)
-        .coerceAtLeast(midTop + WEAR_TEXT_PT + 6f)
-
-    // ── Header ───────────────────────────────────────────────────────────
-    // Label rule: the printed OAL is always the user's typed OAL (same as the main
-    // schematic); the arrows below bracket the drawn SET-to-SET span.
+    // ── Header (always drawn, in every mode) ───────────────────────────────
     drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, unit, spec.overallLengthMm)
 
-    // ── OAL line (with witness lines, anchored near shaft) ────────────────
-    drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox, unit, spec.overallLengthMm)
-
-    // ── Shaft profile ─────────────────────────────────────────────────────
-    drawWearShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
-        bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
-
-    // ── Wear bands on the main profile ─────────────────────────────────────
-    // Thin hatched bands at true position for every liner with recorded wear spots —
-    // visible but not dominant (proposal §6.2 / build-log §10.3). Bands are clamped to
-    // the liner span for rendering only; the stored spot data is never touched.
-    drawWearBandsOnProfile(c, wearGroups, shaftCy, ::xAt, ::rPx, outline)
-
-    // ── Per-liner detail strips ─────────────────────────────────────────────
-    if (stripCount > 0) {
+    if (wearMode == WearPdfMode.STRIPS_ONLY) {
+        // ── Strips-only page (3+ wear liners): no shaft profile, no OAL line ───
+        // Strips get the ENTIRE freed vertical band below the header, each grown up to
+        // WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT tall instead of the combined page's 108pt.
+        val vLayout = computeWearStripsOnlyVerticalLayout(
+            midTopFull, midBotFull, stripCount, reservedBottomPt = overflowNoteH,
+        )
         stripSelection.onPage.forEachIndexed { i, group ->
             drawWearDetailStrip(
                 c, docSpec, group, vLayout.stripTops[i], vLayout.stripBottoms[i],
@@ -196,6 +178,60 @@ fun composeWearPdf(
                 c, text, contentLeft, contentRight,
                 vLayout.stripBottoms.last(), midBotFull, stripSelection.overflow,
             )
+        }
+    } else {
+        // ── Combined page (0-2 wear liners): shaft profile + bands (+ strips below when
+        // there are 1-2 wear liners) — unchanged from the pre-2026-07-18 layout.
+        // Shaft profile shrinks/shifts to make room for the strips (zero-op when stripCount == 0).
+        // The profile's minimum height also protects the actual drawn shaft radius — ptPerMm
+        // is a purely horizontal (SET-to-SET) scale, so a wide/short shaft's true diameter
+        // could otherwise exceed a shrunk profile band.
+        val minProfileHeightPt = maxOf(WEAR_MIN_PROFILE_HEIGHT_PT, 2f * rPx(maxDiaMm) + WEAR_PROFILE_RADIUS_MARGIN_PT)
+        val vLayout = computeWearVerticalLayout(
+            midTopFull, midBotFull, stripCount,
+            reservedBottomPt = overflowNoteH,
+            minProfileHeightPt = minProfileHeightPt,
+        )
+        val midTop   = vLayout.profileTop
+        val midBot   = vLayout.profileBottom
+        val shaftCy  = (midTop + midBot) * 0.5f
+        val geomRect = RectF(contentLeft, midTop, contentRight, midBot)
+
+        // OAL dimension line sits well above the shaft's top outline (same 90 pt convention
+        // as the runout sheet), not crowding the profile.
+        val shaftTopApprox = shaftCy - rPx(maxDiaMm)
+        val oalLineY       = (shaftTopApprox - WEAR_OAL_ABOVE_SHAFT_PT)
+            .coerceAtLeast(midTop + WEAR_TEXT_PT + 6f)
+
+        // ── OAL line (with witness lines, anchored near shaft) ────────────────
+        // Label rule: the printed OAL is always the user's typed OAL (same as the main
+        // schematic); the arrows below bracket the drawn SET-to-SET span.
+        drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox, unit, spec.overallLengthMm)
+
+        // ── Shaft profile ─────────────────────────────────────────────────────
+        drawWearShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
+            bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
+
+        // ── Wear bands on the main profile ─────────────────────────────────────
+        // Thin hatched bands at true position for every liner with recorded wear spots —
+        // visible but not dominant (proposal §6.2 / build-log §10.3). Bands are clamped to
+        // the liner span for rendering only; the stored spot data is never touched.
+        drawWearBandsOnProfile(c, wearGroups, shaftCy, ::xAt, ::rPx, outline)
+
+        // ── Per-liner detail strips ─────────────────────────────────────────────
+        if (stripCount > 0) {
+            stripSelection.onPage.forEachIndexed { i, group ->
+                drawWearDetailStrip(
+                    c, docSpec, group, vLayout.stripTops[i], vLayout.stripBottoms[i],
+                    contentLeft, contentRight, unit, setPositions, text, outline, dim,
+                )
+            }
+            if (stripSelection.overflow.isNotEmpty()) {
+                drawWearOverflowNote(
+                    c, text, contentLeft, contentRight,
+                    vLayout.stripBottoms.last(), midBotFull, stripSelection.overflow,
+                )
+            }
         }
     }
 

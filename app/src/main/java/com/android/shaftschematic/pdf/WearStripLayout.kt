@@ -57,6 +57,43 @@ data class WearStripSelection(val onPage: List<WearLinerGroup>, val overflow: Li
 const val WEAR_STRIP_MAX_PER_PAGE = 3
 
 /**
+ * Minimum number of liners with recorded wear (i.e. `collectWearLinerGroups(...).size`, so
+ * orphaned spots on a since-deleted liner are already excluded) that switches the wear PDF to
+ * **strips-only** mode (2026-07-18 spec, `docs/LinerWearAreas_BuildLog_2026-07-18.md` "either/or"
+ * rule): shop practice shows EITHER the per-liner detail strips OR the combined
+ * shaft-profile-plus-strips page, never both stacked — but only once there are enough wear
+ * liners that the combined page's profile-shrink starts genuinely crowding the page. Below this
+ * threshold (1-2 wear liners) the existing combined layout is unchanged; see [WearPdfMode].
+ * Coincidentally equal to [WEAR_STRIP_MAX_PER_PAGE] today (both are "3"), but they express
+ * different constraints (page capacity vs. mode-switch threshold) and are kept as separate named
+ * constants since either could change independently later.
+ */
+const val WEAR_STRIPS_ONLY_MIN_LINERS = 3
+
+/** Which of the wear PDF's three rendering modes applies — see [determineWearPdfMode]. */
+enum class WearPdfMode {
+    /** No recorded wear spots (or every spot's liner was deleted): the blank hand-marking form. */
+    PROFILE_FORM,
+    /** 1-2 wear liners: today's combined page — shaft profile + bands, shrunk to fit strips below. */
+    COMBINED,
+    /** 3+ wear liners: strips-only page — no profile, no OAL line; strips fill the freed page. */
+    STRIPS_ONLY,
+}
+
+/**
+ * Resolves the wear PDF's rendering mode from how many liners have recorded wear
+ * ([collectWearLinerGroups]'s result size — already excludes liners with zero spots and orphaned
+ * spots on a since-deleted liner). Pure three-way rule so `WearPdfComposer` never has to
+ * re-derive the threshold inline: `0` → [WearPdfMode.PROFILE_FORM], `1` or `2` →
+ * [WearPdfMode.COMBINED], `[WEAR_STRIPS_ONLY_MIN_LINERS]` or more → [WearPdfMode.STRIPS_ONLY].
+ */
+fun determineWearPdfMode(wearLinerGroupCount: Int): WearPdfMode = when {
+    wearLinerGroupCount <= 0 -> WearPdfMode.PROFILE_FORM
+    wearLinerGroupCount < WEAR_STRIPS_ONLY_MIN_LINERS -> WearPdfMode.COMBINED
+    else -> WearPdfMode.STRIPS_ONLY
+}
+
+/**
  * Splits [groups] into what fits on one page vs. overflow.
  *
  * NOTE on overflow handling: the current `composeWearPdf` signature draws into a
@@ -152,6 +189,90 @@ fun computeWearVerticalLayout(
     val tops = (0 until stripCount).map { i -> stripsTop + i * (perStripH + stripGapPt) }
     val bottoms = tops.map { it + perStripH }
     return WearVerticalLayout(areaTop, profileBottom, tops, bottoms)
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Strips-only vertical layout — no main profile at all (WearPdfMode.STRIPS_ONLY)
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Per-strip height cap used ONLY in [WearPdfMode.STRIPS_ONLY] mode (see
+ * [computeWearStripsOnlyVerticalLayout]) — 2.0× the combined-page preferred strip height
+ * ([WEAR_STRIP_HEIGHT_PT], 108pt), i.e. **216pt**. Chosen per Chris's 2026-07-18 spec ("~1.8-2x
+ * the old strip height") at the top of that range: with no profile competing for space, a
+ * strips-only page (3+ wear liners, but still capped at [WEAR_STRIP_MAX_PER_PAGE] shown) has
+ * roughly 3-4x the old strip band's worth of vertical room per strip, and letting one strip claim
+ * all of it would look absurd — a cylinder dwarfing its own title/rail. 216pt keeps each strip
+ * proportionate to the page while still giving noticeably more room for the cylinder, rail
+ * spacing, and label breathing room than the combined page's 108pt band.
+ */
+const val WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT = 216f
+
+/** Result of [computeWearStripsOnlyVerticalLayout]: strip bands only, no profile region. */
+data class WearStripsOnlyVerticalLayout(val stripTops: List<Float>, val stripBottoms: List<Float>)
+
+/**
+ * Strips-only sibling of [computeWearVerticalLayout] for [WearPdfMode.STRIPS_ONLY] (2026-07-18
+ * spec, `docs/LinerWearAreas_BuildLog_2026-07-18.md`): the wear PDF drops the main shaft profile
+ * and OAL dimension line entirely in this mode (shop practice — strips OR profile, never both
+ * stacked), so [stripCount] strips get the *entire* freed vertical band `[areaTop, areaBottom]`
+ * (minus [reservedBottomPt] for the overflow note) instead of whatever the profile left over.
+ *
+ * Splitting that band evenly among [stripCount] strips would let a strip on a mostly-empty page
+ * balloon far past any strip drawn today. [maxStripHeightPt] (default
+ * [WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT]) caps each strip's height; space freed by that cap is
+ * redistributed as EXTRA inter-strip gap (and, when there is only one strip and therefore no gap
+ * to grow, as extra top gap) so the strip band as a whole still spans the full available area
+ * edge-to-edge — the same "nothing wasted, nothing overflows" guarantee
+ * [computeWearVerticalLayout] documents, just with the freed space going to spacing instead of
+ * profile height.
+ *
+ * Guarantees, for any input including pathological ones (more strips than the area can hold at
+ * any positive height, or [reservedBottomPt] exceeding the area): every returned top/bottom stays
+ * within `[areaTop, areaBottom - reservedBottomPt]` (clamped so that lower bound never exceeds
+ * the upper one) and strips are ordered top-to-bottom, non-decreasing — degenerate cases favor
+ * staying in bounds over the edge-to-edge/per-cap guarantees above, matching
+ * [computeWearVerticalLayout]'s own pathological-input behavior.
+ */
+fun computeWearStripsOnlyVerticalLayout(
+    areaTop: Float,
+    areaBottom: Float,
+    stripCount: Int,
+    reservedBottomPt: Float = 0f,
+    maxStripHeightPt: Float = WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT,
+    stripGapPt: Float = WEAR_STRIP_GAP_PT,
+    topGapPt: Float = WEAR_STRIP_TOP_GAP_PT,
+): WearStripsOnlyVerticalLayout {
+    if (stripCount <= 0) return WearStripsOnlyVerticalLayout(emptyList(), emptyList())
+
+    // totalH is clamped >= 0 first (mirrors computeWearVerticalLayout), then usableBottom is
+    // re-derived FROM it — never from the raw areaBottom - reservedBottomPt — so a
+    // reservedBottomPt larger than the whole area can never push the upper clamp bound below
+    // areaTop (which would make the final coerceIn's bounds invalid and throw).
+    val totalH = (areaBottom - reservedBottomPt - areaTop).coerceAtLeast(0f)
+    val usableBottom = areaTop + totalH
+    val availableForStrips = (totalH - topGapPt).coerceAtLeast(0f)
+    val minGapsTotal = (stripCount - 1).coerceAtLeast(0) * stripGapPt
+
+    val perStripH = ((availableForStrips - minGapsTotal) / stripCount).coerceIn(0f, maxStripHeightPt)
+
+    // Height freed by the cap becomes extra spacing so the group still spans edge-to-edge.
+    val extraTotal = (availableForStrips - stripCount * perStripH - minGapsTotal).coerceAtLeast(0f)
+    val extraGapPerSlot = if (stripCount > 1) extraTotal / (stripCount - 1) else 0f
+    val effectiveGapPt = stripGapPt + extraGapPerSlot
+    // stripCount == 1 has no inter-strip gap to grow, so its leftover (from a lone strip pinned
+    // at the cap) goes to the top gap instead — still spans edge-to-edge, still respects the cap.
+    val effectiveTopGapPt = topGapPt + (if (stripCount == 1) extraTotal else 0f)
+
+    val firstTop = areaTop + effectiveTopGapPt
+    val rawTops = (0 until stripCount).map { i -> firstTop + i * (perStripH + effectiveGapPt) }
+    val rawBottoms = rawTops.map { it + perStripH }
+
+    // Final safety clamp for pathological inputs (more strips than the area can fit even at
+    // zero height) — coerceIn is monotonic, so top<=bottom ordering survives the clamp.
+    val tops = rawTops.map { it.coerceIn(areaTop, usableBottom) }
+    val bottoms = rawBottoms.map { it.coerceIn(areaTop, usableBottom) }
+    return WearStripsOnlyVerticalLayout(tops, bottoms)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

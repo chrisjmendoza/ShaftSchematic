@@ -82,6 +82,68 @@ class WearStripLayoutTest {
         assertEquals(listOf("l4", "l5"), selection.overflow.map { it.liner.id })
     }
 
+    // ── determineWearPdfMode (2026-07-18 either/or rule: 0 -> profile form, 1-2 -> combined
+    // page, 3+ -> strips-only) ────────────────────────────────────────────────────────────
+
+    @Test
+    fun `zero wear liners selects the profile form`() {
+        assertEquals(WearPdfMode.PROFILE_FORM, determineWearPdfMode(0))
+    }
+
+    @Test
+    fun `one or two wear liners selects the combined page, not strips-only`() {
+        assertEquals(WearPdfMode.COMBINED, determineWearPdfMode(1))
+        assertEquals(WearPdfMode.COMBINED, determineWearPdfMode(2))
+    }
+
+    @Test
+    fun `three or more wear liners selects strips-only`() {
+        assertEquals(WearPdfMode.STRIPS_ONLY, determineWearPdfMode(WEAR_STRIPS_ONLY_MIN_LINERS))
+        assertEquals(WearPdfMode.STRIPS_ONLY, determineWearPdfMode(4))
+        assertEquals(WearPdfMode.STRIPS_ONLY, determineWearPdfMode(10))
+    }
+
+    @Test
+    fun `no recorded spots at all resolves to the profile form via collectWearLinerGroups`() {
+        // composeWearPdf's mode is `determineWearPdfMode(collectWearLinerGroups(...).size)` — no
+        // separate pure function re-derives "are there any spots", it reuses the already-tested
+        // grouping/orphan-drop logic. Spelled out explicitly here for this feature's mode switch.
+        val liners = listOf(liner("a", 0f, 200f))
+        val groups = collectWearLinerGroups(liners, WearRecord(spots = emptyList()))
+        assertEquals(WearPdfMode.PROFILE_FORM, determineWearPdfMode(groups.size))
+    }
+
+    @Test
+    fun `spots recorded only against since-deleted liners resolve to the profile form too`() {
+        // All three "wear liners" here are orphans (their liner no longer exists in the spec) —
+        // collectWearLinerGroups drops them, so the mode switch correctly falls back to the
+        // profile form instead of rendering a strips-only page with nothing on it.
+        val liners = listOf(liner("still-here", 0f, 200f))
+        val record = WearRecord(
+            spots = listOf(spot(linerId = "deleted-1"), spot(linerId = "deleted-2"), spot(linerId = "deleted-3")),
+        )
+        val groups = collectWearLinerGroups(liners, record)
+        assertEquals(WearPdfMode.PROFILE_FORM, determineWearPdfMode(groups.size))
+    }
+
+    @Test
+    fun `exactly two wear liners is still combined, the boundary below strips-only`() {
+        val liners = listOf(liner("a", 0f, 200f), liner("b", 300f, 200f))
+        val record = WearRecord(spots = listOf(spot("a"), spot("b")))
+        val groups = collectWearLinerGroups(liners, record)
+        assertEquals(2, groups.size)
+        assertEquals(WearPdfMode.COMBINED, determineWearPdfMode(groups.size))
+    }
+
+    @Test
+    fun `exactly three wear liners crosses into strips-only`() {
+        val liners = listOf(liner("a", 0f, 200f), liner("b", 300f, 200f), liner("c", 600f, 200f))
+        val record = WearRecord(spots = listOf(spot("a"), spot("b"), spot("c")))
+        val groups = collectWearLinerGroups(liners, record)
+        assertEquals(3, groups.size)
+        assertEquals(WearPdfMode.STRIPS_ONLY, determineWearPdfMode(groups.size))
+    }
+
     // ── clampWearBandToLiner ──────────────────────────────────────────────────
 
     @Test
@@ -159,6 +221,111 @@ class WearStripLayoutTest {
             assertTrue(top <= layout.stripBottoms[i] + 1e-3f)
             assertTrue(layout.stripBottoms[i] <= 120f + 1e-3f)
             assertTrue(top >= 0f - 1e-3f)
+        }
+    }
+
+    // ── computeWearStripsOnlyVerticalLayout (WearPdfMode.STRIPS_ONLY, 2026-07-18) ─────────────
+
+    @Test
+    fun `zero strips returns empty lists`() {
+        val layout = computeWearStripsOnlyVerticalLayout(areaTop = 100f, areaBottom = 400f, stripCount = 0)
+        assertTrue(layout.stripTops.isEmpty())
+        assertTrue(layout.stripBottoms.isEmpty())
+    }
+
+    @Test
+    fun `single strip fills the page within content bounds, capped at the max strip height`() {
+        // Representative WearPdfComposer band (header to notes) — plenty of freed room for a
+        // single strip, which is exactly the case the cap exists for: without it, this one
+        // strip would balloon to fill the whole ~400pt band.
+        val areaTop = 88f; val areaBottom = 524f
+        val layout = computeWearStripsOnlyVerticalLayout(areaTop, areaBottom, stripCount = 1)
+        assertEquals(1, layout.stripTops.size)
+        val height = layout.stripBottoms[0] - layout.stripTops[0]
+        assertEquals("capped at the strips-only max, not left to balloon",
+            WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT, height, 1e-3f)
+        assertTrue("top stays within the content band", layout.stripTops[0] >= areaTop - 1e-3f)
+        // Leftover space freed by the cap becomes extra top gap (no inter-strip gap to grow with
+        // only one strip) so the strip still ends exactly at the area's bottom edge.
+        assertEquals("still fills to the bottom edge exactly despite the cap",
+            areaBottom, layout.stripBottoms[0], 1e-3f)
+    }
+
+    @Test
+    fun `two and three strip cases stay ordered, non-overlapping, and within bounds`() {
+        val areaTop = 88f; val areaBottom = 524f
+        for (stripCount in listOf(2, 3)) {
+            val layout = computeWearStripsOnlyVerticalLayout(areaTop, areaBottom, stripCount)
+            assertEquals(stripCount, layout.stripTops.size)
+            layout.stripTops.forEachIndexed { i, top ->
+                assertTrue("strip $i top >= areaTop", top >= areaTop - 1e-3f)
+                assertTrue("strip $i has positive height", layout.stripBottoms[i] > top)
+                assertTrue("strip $i bottom <= areaBottom", layout.stripBottoms[i] <= areaBottom + 1e-3f)
+            }
+            for (i in 0 until stripCount - 1) {
+                assertTrue("strip $i must not overlap strip ${i + 1}",
+                    layout.stripBottoms[i] <= layout.stripTops[i + 1] + 1e-3f)
+            }
+            // Edge-to-edge: the last strip's bottom always lands exactly on the area's bottom.
+            assertEquals(areaBottom, layout.stripBottoms.last(), 1e-3f)
+        }
+    }
+
+    @Test
+    fun `per-strip height cap is respected even on a page far larger than any real content area`() {
+        // Forces every strip count to hit the cap: even splitting this much room 3 ways would
+        // give each strip ~380pt, well past WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT.
+        val areaTop = 0f; val areaBottom = 1200f
+        for (stripCount in 1..3) {
+            val layout = computeWearStripsOnlyVerticalLayout(areaTop, areaBottom, stripCount)
+            layout.stripTops.forEachIndexed { i, top ->
+                val height = layout.stripBottoms[i] - top
+                assertTrue("strip $i height ($height) must not exceed the cap",
+                    height <= WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT + 1e-3f)
+            }
+            // Still spans edge-to-edge — the freed space becomes extra gap/top-gap, not a hole.
+            assertEquals(areaBottom, layout.stripBottoms.last(), 1e-3f)
+        }
+    }
+
+    @Test
+    fun `even split without hitting the cap divides the freed space equally across strips`() {
+        // Total band small enough that 3 even strips stay under the cap — demonstrates "let
+        // strips grow to use the page" (the freed space goes into strip height, not just gap)
+        // without the cap ever engaging.
+        val areaTop = 88f; val areaBottom = 524f
+        val layout = computeWearStripsOnlyVerticalLayout(areaTop, areaBottom, stripCount = 3)
+        val heights = layout.stripTops.indices.map { layout.stripBottoms[it] - layout.stripTops[it] }
+        assertTrue("cap must not have engaged for this band size",
+            heights.all { it < WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT - 1e-3f })
+        assertEquals(heights[0], heights[1], 1e-3f)
+        assertEquals(heights[1], heights[2], 1e-3f)
+    }
+
+    @Test
+    fun `strips-only reserved bottom space for the overflow note is respected`() {
+        val areaTop = 88f; val areaBottom = 524f; val reserved = 16f
+        val layout = computeWearStripsOnlyVerticalLayout(areaTop, areaBottom, stripCount = 3, reservedBottomPt = reserved)
+        assertTrue(layout.stripBottoms.last() <= areaBottom - reserved + 1e-3f)
+    }
+
+    @Test
+    fun `very small area or oversized reservedBottomPt still keeps strips within bounds and never inverts`() {
+        // Degenerate cases: not enough room for even the minimum gaps, or a reservedBottomPt
+        // that swallows the whole area. Must clamp to non-negative, non-inverted bands rather
+        // than throw or produce top > bottom.
+        val degenerate = listOf(
+            computeWearStripsOnlyVerticalLayout(areaTop = 0f, areaBottom = 20f, stripCount = 3),
+            computeWearStripsOnlyVerticalLayout(areaTop = 0f, areaBottom = 100f, stripCount = 3, reservedBottomPt = 500f),
+        )
+        degenerate.forEach { layout ->
+            layout.stripTops.forEachIndexed { i, top ->
+                assertTrue("strip $i top <= bottom", top <= layout.stripBottoms[i] + 1e-3f)
+            }
+            for (i in 0 until layout.stripTops.size - 1) {
+                assertTrue("strip $i must not start before the previous strip's top (non-decreasing)",
+                    layout.stripTops[i + 1] >= layout.stripTops[i] - 1e-3f)
+            }
         }
     }
 

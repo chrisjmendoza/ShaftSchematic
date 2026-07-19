@@ -234,3 +234,87 @@ realistic, not just synthetic, inputs. No row-bump was needed in this particular
 (all bands wide enough); the row-bump fallback itself is covered by a dedicated synthetic
 unit test instead. Nothing questionable visually — rail sits cleanly below the cylinder,
 inside the strip bounds, doesn't crowd the min-Ø labels or the neighbor stubs.
+
+## Strips-only wear PDF mode (2026-07-18, shop-practice refinement)
+
+Chris refined the wear-PDF design to match shop practice: the document normally shows
+EITHER the per-liner detail strips OR the shaft profile — never both stacked. Initial ask
+was "any recorded wear spot triggers strips-only"; Chris then corrected the threshold
+after seeing the combined page still reads fine with only 1-2 wear liners, so the actual
+rule (automatic, no settings toggle — deliberate, Chris's call) is a three-way count of
+liners with ≥1 valid (non-orphan) recorded wear spot:
+
+| Wear liners | Mode | Page |
+|---|---|---|
+| 0 | `PROFILE_FORM` | Blank hand-marking shaft profile — unchanged. |
+| 1-2 | `COMBINED` | Today's page — shaft profile + bands, shrunk to fit the strip(s) below — **unchanged**. |
+| 3+ | `STRIPS_ONLY` | No shaft profile, no OAL line/witness lines. Header and dye-pen PASS/FAIL + Notes stay. Strips (still ≤3 shown, "+N more" overflow note for 4+) get the whole freed page and grow taller. |
+
+**Pure-function API** (`pdf/WearStripLayout.kt`):
+- `WEAR_STRIPS_ONLY_MIN_LINERS = 3` — the threshold constant, kept separate from
+  `WEAR_STRIP_MAX_PER_PAGE` (also 3 today) since they express different constraints
+  (mode-switch threshold vs. page capacity) and could diverge later.
+- `WearPdfMode` enum (`PROFILE_FORM` / `COMBINED` / `STRIPS_ONLY`) +
+  `determineWearPdfMode(wearLinerGroupCount: Int): WearPdfMode` — the pure three-way rule,
+  fed `collectWearLinerGroups(...).size` (already excludes liners with zero spots and
+  orphaned spots on a since-deleted liner, so "spots recorded only against deleted
+  liners" correctly counts as zero, same as "no spots").
+- `computeWearStripsOnlyVerticalLayout(...)` — the `STRIPS_ONLY` sibling of
+  `computeWearVerticalLayout`: instead of shrinking a profile to make room, it hands the
+  strips the *entire* freed vertical band below the header. Each strip is capped at
+  `WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT = 216f` (**2.0× the combined page's 108pt**
+  `WEAR_STRIP_HEIGHT_PT`, the top of the "~1.8-2x" range Chris asked for) — chosen because
+  with no profile competing for space, a 3-wear-liner page has roughly 3-4× the old strip
+  band's worth of room per strip, and an uncapped split would let a strip balloon
+  absurdly tall (a cylinder dwarfing its own title/rail). Height freed by the cap is
+  redistributed as extra inter-strip gap (or, with a single strip and therefore no gap to
+  grow, extra top gap) so the strip band still spans the full area edge-to-edge — same
+  "nothing wasted, nothing overflows" guarantee `computeWearVerticalLayout` documents.
+  Degenerate inputs (more strips than the area can hold, or a `reservedBottomPt` larger
+  than the whole area) clamp to non-inverted, in-bounds bands rather than throw.
+
+**Composer** (`pdf/WearPdfComposer.kt`): `composeWearPdf` computes
+`wearMode = determineWearPdfMode(wearGroups.size)` once, draws the header unconditionally,
+then branches: `STRIPS_ONLY` calls `computeWearStripsOnlyVerticalLayout` and draws only the
+detail strips (+ overflow note); the `else` branch is the **pre-existing, byte-for-byte
+unchanged** combined-page code (profile shrink, OAL line, bands-on-profile, strips below)
+for the `PROFILE_FORM`/`COMBINED` cases (0-2 wear liners) — nothing in that path was
+touched, only wrapped in the `else`. Notes/dye-pen area draws unconditionally at the end,
+same as before.
+
+**Why the reachable strip count in `STRIPS_ONLY` mode is always exactly 3:**
+`selectWearStripsForPage` caps `onPage` at `WEAR_STRIP_MAX_PER_PAGE` (3), and
+`STRIPS_ONLY` only triggers when `wearGroups.size >= 3` — so `stripSelection.onPage.size`
+is always exactly 3 whenever the composer actually calls
+`computeWearStripsOnlyVerticalLayout`. The pure function itself still handles 1 and 2
+strips generically (matching this file's existing style, e.g.
+`computeWearVerticalLayout` also handles any `stripCount`), and those cases are covered by
+dedicated unit tests even though the real composer never reaches them today.
+
+**Tests** (`pdf/WearStripLayoutTest.kt`, +14): `determineWearPdfMode` boundary tests (0 →
+`PROFILE_FORM`; 1 and 2 → `COMBINED`; 3, 4, 10 → `STRIPS_ONLY`; the exact-2-vs-exact-3
+boundary via real `collectWearLinerGroups` output; spots-recorded-only-against-deleted-liners
+resolves to `PROFILE_FORM` the same as no-spots-at-all) and
+`computeWearStripsOnlyVerticalLayout` tests (zero strips; single strip fills the page and
+hits the height cap exactly, with the leftover becoming extra top gap so the bottom still
+lands exactly on the area's bottom edge; 2- and 3-strip cases stay ordered/non-overlapping
+and span edge-to-edge; the cap is respected even on a page far larger than any real content
+area; an even split that stays under the cap divides the freed space equally; the reserved
+bottom band for the overflow note is respected; a very small area or an oversized
+`reservedBottomPt` never inverts or throws). Full suite **527 → 541, all green**
+(`:app:compileDebugKotlin` / `:app:testDebugUnitTest` / `:app:assembleDebug` all succeed).
+
+**Docs**: `docs/RunoutSheet.md` gained a "Wear PDF Rendering Modes" section (the mode
+table above, the height-cap rationale, and a note that "Wear Detail Strips" describes
+content shared by both `COMBINED` and `STRIPS_ONLY` — only the vertical-layout function
+differs).
+
+**Same-math SVG regenerated** (`scratchpad/liner_wear_pdf_preview.svg`): the example
+shaft's `liner-aft` gained a recorded wear spot (previously only `liner-1`/`liner-2` had
+one), so all 3 liners now have wear — crossing the `STRIPS_ONLY` threshold exactly. The
+regenerated page confirms: no shaft profile, no OAL line; 3 strips each 130pt tall (up from
+the combined page's fixed 108pt, well under the 216pt cap in this particular 3-strip
+example — the cap engages when fewer strips share the same freed page, e.g. tested at 1
+strip in the unit tests above); rail spans, min-Ø labels, neighbor-diameter step, and label
+headroom all render cleanly at the new height with no overlap or crowding. Verified via
+Playwright screenshot (`liner_wear_pdf_preview_full.png`), 1584×1224 @2×.
