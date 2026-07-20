@@ -57,7 +57,7 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 
 ### 2.1 Remaining Validation Items
 
-- [ ] Taper on-blur field validation — rate derivation errors (missing both diameters with no rate, derived diameter < 0) shown inline on the field
+- [x] Taper on-blur field validation — rate derivation errors (missing both diameters with no rate, derived diameter < 0) shown inline on the field
 - [ ] Validate taper slope only when `lengthMm > 0` (currently deferred)
 - [ ] `freeToEndMm` badge: use `safeSpec` when `overallLengthMm == 0` (preview-mode edge case)
 
@@ -89,8 +89,8 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 ### 4.1 Dialog Cleanup (`§5.2`)
 
-- [ ] Standardize confirm/cancel patterns across all Add dialogs
-- [ ] Standardize commit-on-blur across all fields
+- [x] Standardize confirm/cancel patterns across all Add dialogs
+- [x] Standardize commit-on-blur across all fields
 - [ ] Remove leftover legacy length-editing utilities
 
 ### 4.2 Build Tooling (`§5.3`)
