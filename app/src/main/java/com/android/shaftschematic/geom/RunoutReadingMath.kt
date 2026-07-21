@@ -19,7 +19,7 @@ import kotlin.math.sin
  *
  * ## Clock convention
  * The high-spot marker sits on the bubble rim at a "clock position" expressed in **half-hour
- * ticks** (30-minute increments on a 12-hour face — Chris's hand convention). There are 24 ticks
+ * ticks** (30-minute increments on a 12-hour face — the shop hand convention). There are 24 ticks
  * `[0, 23]`: tick 0 = 12 o'clock (straight up), increasing **clockwise**, so each tick is 15°
  * (`n × 15°`). Screen/PDF space is y-down, so a tick's rim point is
  * `(cx + r·sinθ, cy − r·cosθ)` with `θ = n × 15°`.

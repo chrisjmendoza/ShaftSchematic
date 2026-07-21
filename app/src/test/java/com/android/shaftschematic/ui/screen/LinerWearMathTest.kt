@@ -162,7 +162,7 @@ class LinerWearMathTest {
         assertTrue(computeLinerDetailPxPerMm(800f, 200f, 0f, 400f) > 0f)
     }
 
-    // ── wearStartToCanonicalMm / canonicalToWearStartMm (Chris's post-review spec) ──────────
+    // ── wearStartToCanonicalMm / canonicalToWearStartMm (post-review spec) ──────────
 
     // Shared fixture: liner starts at shaft-space 100mm, is 300mm long (so its FWD edge sits
     // at shaft-space 400mm). AFT SET at shaft-space 0mm, FWD SET at shaft-space 500mm.
@@ -258,19 +258,19 @@ class LinerWearMathTest {
         assertEquals(3f, canonicalAft, 0.001f)
     }
 
-    // ── wearSpotSpanIssue (Chris's blocking in-span validation) ─────────────────────────────
+    // ── wearSpotSpanIssue (blocking in-span validation) ─────────────────────────────
 
     private val IN_TO_MM = 25.4f
 
     @Test
-    fun `start beyond the liner's own length is rejected (Chris's 37in-on-a-36in-liner example)`() {
+    fun `start beyond the liner's own length is rejected (37in-on-a-36in-liner example)`() {
         val linerLenMm = 36f * IN_TO_MM
         val startMm = 37f * IN_TO_MM
         assertTrue(wearSpotSpanIssue(startMm, lengthMm = 10f, linerLengthMm = linerLenMm) != null)
     }
 
     @Test
-    fun `start plus length beyond the liner's length is rejected (Chris's 30in start + 12in example)`() {
+    fun `start plus length beyond the liner's length is rejected (30in start + 12in example)`() {
         val linerLenMm = 36f * IN_TO_MM
         val startMm = 30f * IN_TO_MM
         val lengthMm = 12f * IN_TO_MM

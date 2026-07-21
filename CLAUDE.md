@@ -48,6 +48,22 @@ add them to `coverageEndMm`, `ensureOverall`, body-split/merge, or overlap valid
 They are resolved as `ResolvedCouplerBoltSlot` *after* body resolution so they stay out
 of auto-body/subtraction geometry. See `docs/CouplerBoltSlot.md`.
 
+### Wear pits are reference features
+Wear pits (`WearRecord.pits` — a `WearPit` "X" marker per pit/dye-failure, small or large) are
+**reference-only**, the same posture as wear spots / coupler bolt slots / runout readings. They
+**never** affect `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End badge, and
+they live outside `ShaftSpec` (inside `WearRecord`, so they ride the existing `wear_record`
+envelope field — no new field, no autosave/snapshot/import plumbing). Unlike wear spots (liner-only,
+keyed by `linerId`), a pit sits on **any** pit-eligible component — a liner, taper, or body
+(explicit or auto) — keyed by the **resolved component id** (`WearPit.componentId`), component-local
+`axialMm` from the AFT edge + a visual `acrossFrac`. Orphan pits (component no longer resolves) are
+skipped at the **render layer**, not pruned at decode (auto-body/taper ids aren't known to the
+codec) — same rule as runout readings; wear spots, by contrast, ARE pruned at decode. The "X" must
+be drawn **identically** (same crossed-line construction, same small:large ratio) in all draw sites:
+`ComponentWearDetailOverlay`'s `drawPitX` (canvas), `WearPdfComposer`'s `drawWearPitsOnProfile` +
+strip pits (PDF). Pure sizing/hit-test/clamp math lives in `geom/WearPitMath.kt` (shared, no
+`pdf → ui` dep). See `docs/RunoutSheet.md` (Wear Pits).
+
 ### Runout readings are reference features
 Per-station runout readings (`RunoutReadings` in the doc envelope — a TIR value + high-spot
 clock marker per bubble) are **reference-only**, same posture as coupler bolt slots and wear

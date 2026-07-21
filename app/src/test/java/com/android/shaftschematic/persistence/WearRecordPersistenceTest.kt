@@ -2,7 +2,9 @@ package com.android.shaftschematic.persistence
 
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.model.Liner
+import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.WearPit
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.model.WearSpotReference
@@ -58,7 +60,7 @@ class WearRecordPersistenceTest {
 
     @Test
     fun `authoredReference round trips through the envelope without a version bump`() {
-        // Chris's 2026-07-18 post-review spec: WearSpot gains an additive, defaulted
+        // 2026-07-18 post-review spec: WearSpot gains an additive, defaulted
         // `authoredReference` field — no envelope version bump, so the round trip must still
         // land on ENVELOPE_V1 and preserve the non-default reference exactly.
         val spot = WearSpot(
@@ -163,5 +165,71 @@ class WearRecordPersistenceTest {
         val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
 
         assertTrue(decoded.wearRecord.spots.isEmpty())
+    }
+
+    // ── Pits (the "X" markers) ────────────────────────────────────────────────
+
+    @Test
+    fun `envelope round trip preserves wear pits`() {
+        val pit = WearPit(
+            id = "pit-1", componentId = "ln1", axialMm = 30f, acrossFrac = 0.25f, size = PitSize.LARGE,
+        )
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(pits = listOf(pit)),
+        )
+
+        val raw = ShaftDocCodec.encodeV1(doc)
+        assertTrue("expected pits key in JSON", raw.contains("\"pits\""))
+
+        val decoded = ShaftDocCodec.decode(raw)
+        assertEquals(ShaftDocCodec.Format.ENVELOPE_V1, decoded.format)
+        val decodedPit = decoded.wearRecord.pits.single()
+        assertEquals("pit-1", decodedPit.id)
+        assertEquals("ln1", decodedPit.componentId)
+        assertEquals(30f, decodedPit.axialMm, 0.001f)
+        assertEquals(0.25f, decodedPit.acrossFrac, 0.001f)
+        assertEquals(PitSize.LARGE, decodedPit.size)
+    }
+
+    @Test
+    fun `a wear_record json without pits decodes to an empty pit list`() {
+        // Simulates a file written before pits existed: "wear_record" has only "spots".
+        val raw = """
+            {
+              "version": 1, "preferred_unit": "INCHES", "unit_locked": true,
+              "job_number": "", "customer": "", "vessel": "", "shaft_position": "OTHER", "notes": "",
+              "spec": {
+                "overallLengthMm": 500.0,
+                "liners": [ { "id": "ln1", "startMmPhysical": 0.0, "lengthMm": 200.0, "odMm": 50.0, "endMmPhysical": 200.0 } ]
+              },
+              "wear_record": { "spots": [ { "id": "spot-1", "linerId": "ln1", "startMm": 25.0, "lengthMm": 40.0 } ] }
+            }
+        """.trimIndent()
+
+        val decoded = ShaftDocCodec.decode(raw)
+
+        assertEquals(1, decoded.wearRecord.spots.size)
+        assertTrue(decoded.wearRecord.pits.isEmpty())
+    }
+
+    @Test
+    fun `pits on non-liner or missing components survive decode (unlike orphan spots)`() {
+        // Pits attach to bodies/tapers/auto-bodies whose ids the codec can't know, so — unlike
+        // wear spots — they are NOT pruned at decode. Orphan handling is at the render layer
+        // (same posture as runout readings). Here the pit's componentId matches no liner, yet
+        // it must be preserved while the orphan spot beside it is dropped.
+        val keptPit = WearPit(id = "p1", componentId = "auto_body_0.000_100.000", axialMm = 10f)
+        val orphanSpot = WearSpot(id = "orphan", linerId = "ln-deleted", startMm = 5f, lengthMm = 15f)
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(spots = listOf(orphanSpot), pits = listOf(keptPit)),
+        )
+
+        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
+
+        assertTrue("orphan spot should be dropped", decoded.wearRecord.spots.isEmpty())
+        assertEquals("pit should survive", 1, decoded.wearRecord.pits.size)
+        assertEquals("auto_body_0.000_100.000", decoded.wearRecord.pits.single().componentId)
     }
 }

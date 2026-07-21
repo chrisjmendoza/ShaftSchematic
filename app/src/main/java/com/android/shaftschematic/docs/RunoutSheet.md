@@ -3,11 +3,15 @@
 **Files:**
 - `geom/RunoutBubbleLayout.kt` — shared bubble placement engine (stations, rows, x-solve, leader routing + collision verification)
 - `ui/screen/RunoutRoute.kt` — runout station config, canvas preview, PDF preview overlay
-- `ui/screen/WearRoute.kt` — wear inspection document tab; interactive shaft canvas + liner
-  wear tap/badges (Phase 2, see "Liner Wear Inspection (UI)" below)
-- `ui/screen/LinerWearDetail.kt` — full-screen liner wear detail overlay (Phase 3)
+- `ui/screen/WearRoute.kt` — wear inspection document tab; interactive shaft canvas + wear
+  tap/badges over bodies/tapers/liners (Phase 2, see "Liner Wear Inspection (UI)" below)
+- `ui/screen/LinerWearDetail.kt` — full-screen component wear detail overlay
+  (`ComponentWearDetailOverlay`; liners get bands + pits, bodies/tapers get pits only — see
+  "Wear Pits" below)
 - `ui/screen/LinerWearMath.kt` — pure math for tap hit-testing, band clamping, and detail-canvas
   scale, shared by the two files above
+- `geom/WearPitMath.kt` — pure pit ("X" marker) sizing/hit-test/clamp math, shared by the canvas
+  and PDF draw sites (no `pdf → ui` dep)
 - `pdf/RunoutPdfComposer.kt` — letter-landscape runout PDF generation
 - `pdf/WearPdfComposer.kt` — letter-landscape wear document PDF generation
 - `pdf/WearStripLayout.kt` — android-free pure-math layout for the wear PDF's per-liner
@@ -116,6 +120,56 @@ the safety net, and the spot's card shows a small warning icon + "Extends past l
 re-measure" text instead, driven by the separate non-blocking `isWearSpotStaleOverrun(...)`
 classifier. `ShaftViewModel.addWearSpot`'s default 25.4mm (1in) band length is clamped to the
 liner's own length so the default is never rejected on a tiny liner.
+
+---
+
+## Wear Pits (interactive "X" markers, 2026-07-21)
+
+The shop hand-marks pits / dye-penetrant failures as little "X"s on the shaft — small for a tiny
+hole, larger for a bigger cavity. This digitizes that, and answers the proposal's §10.5 open
+question ("wear on bodies/tapers"). Pits are the fourth reference-only feature (see `CLAUDE.md`).
+
+**Data model** (`model/WearSpot.kt`): `WearPit(id, componentId, axialMm, acrossFrac, size: PitSize)`
+in `WearRecord.pits` — stored in the **existing** `wear_record` envelope field (no new field, so
+no autosave/snapshot/import/`newDocument` plumbing changed; it all rides `WearRecord` as before).
+- **Keyed by resolved component id.** Unlike a `WearSpot` (liner-only, keyed by `linerId`), a pit
+  sits on any pit-eligible component — a **liner, taper, or body** (explicit or auto). `componentId`
+  is the `ResolvedComponent.id`, the same identity a runout reading uses.
+- **`axialMm`** is component-local (from the component's AFT edge), so a pit survives the component
+  being repositioned — same convention as `WearSpot.startMm`. Shaft-space = `startMmPhysical + axialMm`.
+- **`acrossFrac`** ∈ interior band (`clampPitAcrossFrac`, `[0.08, 0.92]`) places the X vertically
+  within the drawn segment (`0` = top outline, `1` = bottom) — purely visual.
+- **`size`** = `SMALL` | `LARGE`, a **symbol** size (how big the X is drawn), not the pit's true
+  diameter. `LARGE` arm = `SMALL` arm × `PIT_LARGE_TO_SMALL_RATIO` (1.7).
+- **Orphans** (component no longer resolves): skipped at the **render layer**, not pruned at decode
+  — auto-body/taper ids aren't known to the codec, same as runout readings. (Wear spots ARE pruned
+  at decode, against the liner list — pits are deliberately not.)
+
+**ViewModel** (`ShaftViewModel`): `addWearPit(componentId, axialMm, acrossFrac, size)` /
+`updateWearPitSize(id, size)` / `removeWearPit(id)` — plain `_wearRecord` updates, no geometry
+side effects.
+
+**UI** — the overview canvas (`WearRoute.drawWearAffordances`) now tints **every** pit-eligible
+component (body/taper/liner) as a tap target and badges each with its total recorded wear
+(spots + pits). A tap opens `ComponentWearDetailOverlay` (`LinerWearDetail.kt`, generalized from the
+liner-only overlay): it breaks the tapped component out of the shaft (S-curve stubs) and draws it
+enlarged — a rect for a body/liner, a trapezoid for a taper (`componentEdgeDias` +
+`radiusLocalPx`). **Liners** still get the full wear-band editor (`WearSpotCard`s, dimension rail);
+**bodies/tapers** get pits only. Pit interaction on the detail canvas: **tap bare metal to drop an
+X** at the current brush size (a Small/Large chip); **tap an existing X to remove it**. The tap
+handler and the Canvas renderer share one layout (`computeSegDetailLayout`) so a tapped X removes
+exactly the X that was drawn (`pickPitAt` from `geom/WearPitMath.kt`, generous touch pad).
+
+**Rendering** (all draw sites, in lockstep — same crossed-line construction, same small:large
+ratio; only the destination units and API differ, exactly like the runout marker):
+- **Canvas detail:** `LinerWearDetail.kt`'s `drawPitX` (Compose `DrawScope`), base half-arm
+  `PIT_SMALL_HALF_DP` (9dp).
+- **PDF main profile:** `WearPdfComposer.drawWearPitsOnProfile` — X at each pit's true axial +
+  across position, taper diameter interpolated at the pit's axial. Base half-arm
+  `WEAR_PIT_SMALL_HALF_PROFILE_PT` (3.4pt). The shaft profile is always drawn now (see "Wear PDF
+  Rendering Modes"), so body/taper pits always have a whole-shaft view.
+- **PDF detail strip:** liner pits also drawn on the broken-out strip (base half-arm 5.0pt),
+  reinforcing the profile pits at the strip's larger scale.
 
 ---
 
@@ -345,52 +399,45 @@ under the same name for the same shaft.
 
 ---
 
-### Wear PDF Rendering Modes (2026-07-18 either/or rule)
+### Wear PDF Rendering Modes (2026-07-21 — profile always on top)
 
-Shop practice: the wear document shows EITHER the per-liner detail strips OR the shaft
-profile — never both stacked once there are enough wear liners to make that crowded.
-`composeWearPdf` resolves one of three `WearPdfMode`s (`pdf/WearStripLayout.kt`) from
-`determineWearPdfMode(collectWearLinerGroups(docSpec.liners, wearRecord).size)` — a pure
-function of how many liners have ≥1 recorded, non-orphan wear spot (spots on a
-since-deleted liner are already dropped by `collectWearLinerGroups`, so "spots recorded
-only against deleted liners" counts the same as "no spots" here):
+The **shaft profile is always drawn on top** of the wear document now (2026-07-21, Chris's
+request): body/taper pit "X"s live on the whole-shaft profile, so it must stay visible. The
+detail strips below pick their layout from `determineWearPdfMode(collectWearLinerGroups(
+docSpec.liners, wearRecord).size)` — a pure function of how many liners have ≥1 recorded,
+non-orphan wear *spot* (orphan spots on a since-deleted liner are already dropped by
+`collectWearLinerGroups`; pits don't affect the mode):
 
 | Wear liners | Mode | Page shows |
 |---|---|---|
-| 0 | `PROFILE_FORM` | The original blank hand-marking shaft profile — unchanged. |
-| 1–2 | `COMBINED` | Today's page: shaft profile + wear bands, shrunk to fit the detail strip(s) below (see "Wear Document Page Layout" above). |
-| 3+ | `STRIPS_ONLY` | **No** shaft profile, **no** OAL dimension line/witness lines. The header and the dye-pen PASS/FAIL + Notes baseline stay. Detail strips (still capped at `WEAR_STRIP_MAX_PER_PAGE` = 3 shown, "+N more" overflow note for 4+) get the entire freed vertical band and grow taller. |
+| 0 | `PROFILE_FORM` | Shaft profile only (still prints any recorded pits). |
+| 1 | `COMBINED` | Shaft profile + wear bands, with one full-width detail strip below. |
+| 2+ | `GRID` | Shaft profile on top + the detail strips in a **2-column grid** below — two side by side, the third on the next row, so the strips take ~2 rows and the profile keeps the top. Up to `WEAR_STRIP_GRID_MAX_PER_PAGE` = 4 shown; "+N more" overflow note beyond. |
 
-This is automatic — there is no user-facing setting for it (deliberate, Chris's call
-2026-07-18): 3+ wear liners on a page is treated as evidence that the strips are the
-useful view and the profile would just be crowded filler.
+This replaced the old strips-only mode (which dropped the profile at 3+ wear liners). Now that
+bodies/tapers can carry pits, keeping the shaft always visible matters more than giving the strips
+the whole page; compressing the strips two-up is what keeps the combined page from crowding.
 
-**`STRIPS_ONLY` layout** — `computeWearStripsOnlyVerticalLayout` (`pdf/WearStripLayout.kt`)
-is the strips-only sibling of `computeWearVerticalLayout`: instead of shrinking a profile
-to make room, it hands the *entire* freed band below the header to the strips. Each
-strip's height is capped at `WEAR_STRIP_MAX_HEIGHT_STRIPS_ONLY_PT` = **216pt** (2.0× the
-combined page's 108pt `WEAR_STRIP_HEIGHT_PT`, the top of the "~1.8-2x" range Chris asked
-for) so a page with only 3 wear liners and lots of vertical room doesn't let a strip
-balloon absurdly tall. Height freed by that cap is redistributed as extra inter-strip gap
-(or, with a single strip and therefore no gap to grow, extra top gap) so the strip band
-still spans the full available area edge-to-edge, same "nothing wasted" guarantee
-`computeWearVerticalLayout` documents. Everything below the vertical split — horizontal
-strip layout, cylinder/rail inner layout, dimension rail, neighbor stubs, min-Ø labels,
-anchor-from-SET title — is the same `drawWearDetailStrip` used by the combined page; only
-the vertical band each strip is drawn into, and the absence of the profile/OAL draw
-calls, differ.
+**`GRID` layout** — `computeWearStripGridLayout` (`pdf/WearStripLayout.kt`) reuses
+`computeWearVerticalLayout` with the **row** count (`ceil(strips / 2)`), so the profile still never
+shrinks below its minimum and the "nothing wasted / nothing overflows" guarantee carries over
+unchanged; each strip then takes its row's vertical band and one equal-width column slot across the
+content width (`WEAR_STRIP_COL_GAP_PT` gutter). A partial last row (e.g. the lone third strip) is
+**centered** at the same column width as a full row. Everything inside a strip — horizontal
+cylinder/stub layout, dimension rail, min-Ø labels, anchor-from-SET title, and now pit "X"s — is the
+same `drawWearDetailStrip` used by the single-column path; only the per-strip rectangle differs.
 
 ---
 
-### Wear Detail Strips (Phase 4, 2026-07-18; strips-only mode added 2026-07-18)
+### Wear Detail Strips (Phase 4, 2026-07-18; 2-column grid 2026-07-21)
 
 `composeWearPdf` takes an optional `wearRecord: WearRecord = WearRecord()` param (see
 `docs/LinerWearAreas_Proposal.md` §6.2). Every existing call site is unaffected by the
 default. All strip geometry (liner spans, neighbor diameters for the break-out stubs)
 comes from `docSpec` — the spec after `withResolvedBodies(resolvedComponents)` — never
 raw `spec.bodies`, same contract as the rest of this document. This section describes the
-strip content itself, shared by `COMBINED` and `STRIPS_ONLY` mode (see "Wear PDF Rendering
-Modes" above for which vertical-layout function positions the strips in each mode).
+strip content itself, shared by the `COMBINED` (single full-width) and `GRID` (2-column)
+layouts (see "Wear PDF Rendering Modes" above for how each positions the strips).
 
 **Selection & pagination** — `pdf/WearStripLayout.kt` (android-free, unit-tested directly,
 `WearStripLayoutTest`):
@@ -573,4 +620,5 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
   marker is already fully user-placed).
 - Severity rating / dye-pen pass-fail digitization and photos on wear spots (explicitly out of
   scope for the liner wear feature — see `docs/LinerWearAreas_Proposal.md` §1).
-- Wear on bodies/tapers, not just liners (see the proposal's §10.5 open question).
+- Wear *bands* on bodies/tapers, not just liners (pit "X" markers already work on all three — see
+  "Wear Pits" above; bands remain liner-only for now). Was the proposal's §10.5 open question.

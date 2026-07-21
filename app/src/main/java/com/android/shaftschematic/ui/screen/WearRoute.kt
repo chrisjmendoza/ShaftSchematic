@@ -71,8 +71,11 @@ import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.drawing.render.ThreadStyle
+import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
+import com.android.shaftschematic.ui.resolved.ResolvedTaper
+import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import kotlinx.coroutines.Dispatchers
@@ -130,8 +133,9 @@ fun WearRoute(
     // and the LaunchedEffect below regenerates it anyway.
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
-    // Which liner's wear-detail overlay is open, if any. Doubles as the overlay's visibility flag.
-    var selectedLinerId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Which component's wear-detail overlay is open, if any. Doubles as the overlay's visibility
+    // flag. A body, taper, or liner id (all pit-eligible); see ComponentWearDetailOverlay.
+    var selectedComponentId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
@@ -275,10 +279,12 @@ fun WearRoute(
                                     resolvedComponents = resolvedComponents,
                                 )
                                 val tapMm = layout.xMmFromPx(tapOffset.x)
-                                val linerSpans = resolvedComponents
-                                    .filterIsInstance<ResolvedLiner>()
-                                    .map { LinerSpanMm(it.id, it.startMmPhysical, it.endMmPhysical) }
-                                pickLinerIdAtMm(tapMm, linerSpans)?.let { selectedLinerId = it }
+                                // Pit-eligible resolved components (body / taper / liner) have
+                                // disjoint spans, so the first one containing the tap wins.
+                                resolvedComponents.firstOrNull { rc ->
+                                    (rc is ResolvedBody || rc is ResolvedTaper || rc is ResolvedLiner) &&
+                                        tapMm >= rc.startMmPhysical && tapMm <= rc.endMmPhysical
+                                }?.let { selectedComponentId = it.id }
                             }
                         },
                 ) {
@@ -296,7 +302,7 @@ fun WearRoute(
                         with(ShaftRenderer) {
                             draw(spec, layout, previewOpts, textMeasurer, resolvedComponents)
                         }
-                        drawLinerWearAffordances(
+                        drawWearAffordances(
                             layout = layout,
                             components = resolvedComponents,
                             wearRecord = wearRecord,
@@ -308,7 +314,7 @@ fun WearRoute(
                     }
                 }
                 Text(
-                    text = "Tap a liner to inspect wear.",
+                    text = "Tap a body, taper, or liner to inspect wear and mark pits.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -359,11 +365,11 @@ fun WearRoute(
         )
     }
 
-    // ── Liner wear detail overlay (Phase 3) ───────────────────────────────────
-    // LinerWearDetailOverlay hosts its own BackHandler; only compose it while a liner is selected.
-    selectedLinerId?.let { linerId ->
-        LinerWearDetailOverlay(
-            linerId = linerId,
+    // ── Component wear detail overlay ─────────────────────────────────────────
+    // ComponentWearDetailOverlay hosts its own BackHandler; only compose it while selected.
+    selectedComponentId?.let { componentId ->
+        ComponentWearDetailOverlay(
+            componentId = componentId,
             spec = spec,
             resolvedComponents = resolvedComponents,
             unit = unit,
@@ -372,7 +378,9 @@ fun WearRoute(
             onUpdateSpot = vm::updateWearSpot,
             onUpdateSpotReference = vm::updateWearSpotReference,
             onRemoveSpot = vm::removeWearSpot,
-            onClose = { selectedLinerId = null },
+            onAddPit = vm::addWearPit,
+            onRemovePit = vm::removeWearPit,
+            onClose = { selectedComponentId = null },
         )
     }
 }
@@ -392,15 +400,16 @@ private fun openWearPdf(context: Context, uri: Uri) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Liner tap-affordance overlay (Phase 2) — drawn after ShaftRenderer.draw()
+// Wear tap-affordance overlay — drawn after ShaftRenderer.draw()
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Draw a faint tint + border over every liner (tap affordance) and a small count badge above
- * any liner that already has recorded wear spots. Purely a rendering overlay — reads
- * [wearRecord] but never mutates it; see `docs/LinerWearAreas_Proposal.md` §2.1.
+ * Draw a faint tint + border over every pit-eligible component (body, taper, liner — the tap
+ * affordance) and a small count badge above any that already has recorded wear (spots + pits).
+ * Purely a rendering overlay — reads [wearRecord] but never mutates it. Generalized 2026-07-21
+ * from the liner-only version so bodies/tapers are tappable for pits too.
  */
-private fun DrawScope.drawLinerWearAffordances(
+private fun DrawScope.drawWearAffordances(
     layout: ShaftLayout.Result,
     components: List<ResolvedComponent>,
     wearRecord: WearRecord,
@@ -409,8 +418,8 @@ private fun DrawScope.drawLinerWearAffordances(
     badgeColor: Color,
     badgeTextArgb: Int,
 ) {
-    val liners = components.filterIsInstance<ResolvedLiner>()
-    if (liners.isEmpty()) return
+    val targets = components.filter { it is ResolvedBody || it is ResolvedTaper || it is ResolvedLiner }
+    if (targets.isEmpty()) return
 
     val badgePaint = android.graphics.Paint().apply {
         isAntiAlias = true
@@ -421,10 +430,10 @@ private fun DrawScope.drawLinerWearAffordances(
     val badgeRadiusPx = 11.dp.toPx()
     val badgeGapPx = 4.dp.toPx()
 
-    liners.forEach { ln ->
-        val x0 = layout.xPx(ln.startMmPhysical)
-        val x1 = layout.xPx(ln.endMmPhysical)
-        val r  = layout.rPx(ln.odMm)
+    targets.forEach { rc ->
+        val x0 = layout.xPx(rc.startMmPhysical)
+        val x1 = layout.xPx(rc.endMmPhysical)
+        val r  = layout.rPx(rc.maxDiaMm())
         val top = layout.centerlineYPx - r
         val bot = layout.centerlineYPx + r
 
@@ -436,13 +445,16 @@ private fun DrawScope.drawLinerWearAffordances(
             style = Stroke(width = 1.5.dp.toPx()),
         )
 
-        val spotCount = wearRecord.spots.count { it.linerId == ln.id }
-        if (spotCount > 0) {
+        // Spots are liner-only; pits attach to any pit-eligible component. Badge shows the total.
+        val spotCount = if (rc is ResolvedLiner) wearRecord.spots.count { it.linerId == rc.id } else 0
+        val pitCount = wearRecord.pits.count { it.componentId == rc.id }
+        val total = spotCount + pitCount
+        if (total > 0) {
             val cx = (x0 + x1) / 2f
             val cy = (top - badgeGapPx - badgeRadiusPx).coerceAtLeast(badgeRadiusPx)
             drawCircle(color = badgeColor, radius = badgeRadiusPx, center = Offset(cx, cy))
             drawContext.canvas.nativeCanvas.drawText(
-                "$spotCount", cx, cy + badgeRadiusPx * 0.35f, badgePaint,
+                "$total", cx, cy + badgeRadiusPx * 0.35f, badgePaint,
             )
         }
     }

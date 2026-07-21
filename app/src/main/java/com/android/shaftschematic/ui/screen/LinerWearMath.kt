@@ -62,7 +62,7 @@ fun clampWearBandToLiner(spotStartMm: Float, spotLengthMm: Float, linerLengthMm:
 fun wearBandToPx(band: ClampedWearBandMm, linerOriginPx: Float, pxPerMm: Float): Pair<Float, Float> =
     (linerOriginPx + band.startMm * pxPerMm) to (linerOriginPx + band.endMm * pxPerMm)
 
-// ── Wear-spot "Measure from" reference conversion (Chris's post-review spec, 2026-07-18) ──
+// ── Wear-spot "Measure from" reference conversion (post-review spec, 2026-07-18) ──
 
 /**
  * Convert an entered "Start" value, authored against [reference], into the canonical
@@ -129,7 +129,7 @@ fun canonicalToWearStartMm(
 private const val WEAR_SPAN_EPS_MM = 1e-3f
 
 /**
- * Blocking in-span validation (Chris's post-review spec): the band
+ * Blocking in-span validation (post-review spec): the band
  * `[canonicalStartMm, canonicalStartMm + lengthMm]` must lie entirely within
  * `[0, linerLengthMm]`. Returns a short message describing the violation, or `null` when
  * the band is in-span (boundary-exact bands are accepted — epsilon [WEAR_SPAN_EPS_MM],

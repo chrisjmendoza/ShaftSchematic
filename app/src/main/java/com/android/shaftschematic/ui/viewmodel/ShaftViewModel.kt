@@ -23,6 +23,7 @@ import com.android.shaftschematic.model.snapForwardFromOrdered
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.util.Achievements
+import com.android.shaftschematic.geom.clampPitAcrossFrac
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.PreviewColorSetting
@@ -477,6 +478,43 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /** Remove a wear spot by [id]. Confirm-free, as authored in the detail-view UI. */
     fun removeWearSpot(id: String) {
         _wearRecord.update { rec -> rec.copy(spots = rec.spots.filterNot { it.id == id }) }
+    }
+
+    // ── Wear pits (the "X" markers) ───────────────────────────────────────────
+    // Stored in the same reference-only [WearRecord] as wear spots (so they ride the same
+    // autosave/snapshot/import paths), but keyed by *resolved component id* — a pit can sit on
+    // a liner, taper, or body (explicit or auto), unlike a spot (liner-only). No geometry side
+    // effects; orphan pits (component no longer resolves) are skipped at the render layer, same
+    // posture as runout readings. See model/WearSpot.kt (WearPit) and geom/WearPitMath.kt.
+
+    /**
+     * Drop a new pit "X" on [componentId] at component-local [axialMm] (from the AFT edge) and
+     * [acrossFrac] (0 = top outline .. 1 = bottom), with the given [size]. `acrossFrac` is
+     * clamped to the interior band ([clampPitAcrossFrac]) and `axialMm` to non-negative.
+     */
+    fun addWearPit(componentId: String, axialMm: Float, acrossFrac: Float, size: PitSize) {
+        _wearRecord.update { rec ->
+            rec.copy(
+                pits = rec.pits + WearPit(
+                    componentId = componentId,
+                    axialMm = max(0f, axialMm),
+                    acrossFrac = clampPitAcrossFrac(acrossFrac),
+                    size = size,
+                )
+            )
+        }
+    }
+
+    /** Change an existing pit's drawn size by [id]. No-op if the id is absent. */
+    fun updateWearPitSize(id: String, size: PitSize) {
+        _wearRecord.update { rec ->
+            rec.copy(pits = rec.pits.map { if (it.id == id) it.copy(size = size) else it })
+        }
+    }
+
+    /** Remove a pit by [id]. Confirm-free — the detail canvas removes a pit by tapping its "X". */
+    fun removeWearPit(id: String) {
+        _wearRecord.update { rec -> rec.copy(pits = rec.pits.filterNot { it.id == id }) }
     }
 
     // Tap-to-add pending position: non-null while the user has tapped empty space and
