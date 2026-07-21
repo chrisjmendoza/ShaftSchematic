@@ -62,14 +62,22 @@ Resolved component pipeline (shipped):
 - Auto bodies (`ResolvedComponentSource.AUTO`, `ResolvedComponentType.BODY_AUTO`) are **not**
   persisted in `ShaftSpec` — they are regenerated deterministically on every resolve.
 - Auto bodies are downstream of OAL + explicit components and never overlap them
-  (`subtractBodiesAgainstNonBodies()` carves auto/explicit body spans around sacred components).
+  (`subtractBodiesAgainstNonBodies()` carves body spans around sacred components for rendering).
 - Auto bodies must never define measurement references or snapping anchors.
 - Manual OAL seeds a base auto body spanning 0 → OAL; derived OAL does not
   (`deriveAutoBodies(overallLengthMm = if (overallIsManual) spec.overallLengthMm else 0f, …)`).
+- **Explicit vs auto bodies (2026-07-21):** stored `ShaftSpec.bodies` are explicit,
+  non-negotiable components — they participate in `collidingIds()` (red card + blocked export),
+  a sacred add/move that would overlap one is hard-blocked (`bodyOverlapErrorMm` /
+  `nonBodyOverlapErrorMm`), and they are **never split**. Auto-bodies (derived, unstored) stay
+  fluid fillers. Consequence: taper/thread ends sit over an auto-body core, not an explicit body.
 - Manual (explicit) body components promote over auto bodies in overlapping spans: the carousel
-  card for an auto body (`ComponentCarousel.kt`) calls `promoteIfNeeded()` on the first field edit,
-  which invokes `onAddBody(...)` to persist a real `Body` — see the "Auto-body promotion" invariant
-  in `CLAUDE.md`.
+  card for an auto body (`ComponentCarousel.kt`) calls `promoteIfNeeded()` on the first field edit
+  **or when the user ticks "Make editable body"**, which invokes `onAddBody(...)` to persist a real
+  `Body` — see the "Auto-body promotion" invariant in `CLAUDE.md`.
+- A liner **length** edit that moves a shared edge with an abutting explicit body negotiates
+  (`linerBodyBoundaryAdjust` / `ShaftViewModel.updateLinerWithBodyBoundary`): shorten the body on
+  overlap, or grow it to fill a gap — the auto-body "filling", confirmed, without splitting.
 
 Liner authored reference:
 - Liners store authored reference (AFT/FWD) as metadata.

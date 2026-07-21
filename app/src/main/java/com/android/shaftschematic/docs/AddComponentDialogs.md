@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.4, 2026-07-18)
+# AddComponentDialogs Contract (v1.5, 2026-07-20)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -35,11 +35,22 @@ missing from `AddThreadDialog` for several versions (restored 2026-06-23).
 ## Per-dialog contracts
 
 ### AddBodyDialog
-| Field | Always shown |
-|-------|-------------|
-| Start | ✓ |
-| Length | ✓ |
-| Diameter (Ø) | ✓ |
+| Field / control | Condition |
+|-----------------|-----------|
+| Start | Always |
+| Length | Always |
+| Diameter (Ø) | Always |
+| KW from: AFT \| FWD chips | Always (keyway end-face reference, default AFT) |
+| KW W / KW D / KW L | Always (blank = 0 = no keyway) |
+| KW Offset from AFT / FWD | Always (label follows chip; 0 = open, > 0 = floating) |
+| Keyway spooned toggle | Always (disabled + "N/A — floating" when offset > 0) |
+| Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
+
+Matches `ComponentCarousel.kt` `ResolvedBody` explicit-body branch. The **auto-body**
+card intentionally shows only Start/Length/Ø — auto-bodies are derived and cannot host
+a keyway until promoted; that reduced card is not a parity violation. The 180°-apart
+toggle writes spec-level `ShaftSpec.keyways180Apart` (the card's switch appears when
+`spec.keywayCount() >= 2`, which is the same condition evaluated at add time).
 
 ### AddLinerDialog
 | Field / control | Condition |
@@ -76,6 +87,7 @@ ShaftViewModel.addThreadAt()` and stored on the `Threads` model object.
 | Rate mode: Auto \| Manual | Always |
 | Rate | Always (read-only in Auto, editable in Manual) |
 | Keyway fields | Always |
+| Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
 
 Manual taper-rate rules:
 - Bare `1` is invalid/ambiguous and must be rewritten as a full ratio or fraction.
@@ -136,6 +148,12 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.5 (2026-07-20)**
+- Body keyway support (un-shelved): `AddBodyDialog` gains the full keyway section
+  (KW from AFT|FWD, W×D, L, offset, spooned) mirroring the explicit body card.
+- Spec-level "Keyways 180° apart" toggle added to `AddBodyDialog` + `AddTaperDialog`
+  and both keyway-bearing carousel cards, gated on the shaft having ≥ 2 keyways.
+
 **v1.4 (2026-07-18)**
 - Absorbed `InlineAddChooserDialog.md` (chooser contract now documented here) and
   linked `Defaults.md` for seed values.

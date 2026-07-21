@@ -12,9 +12,9 @@ import org.junit.Test
  * one illegal overlap *within the current spec*.  This is distinct from
  * collectAddWarnings(), which checks whether a *new* proposed component would collide.
  *
- * Intentionally NOT checked (by design in the production code):
- *   Body–Body, Body–Taper, Body–Thread, Body–Liner.
- * Excluded threads are also always skipped.
+ * Explicit bodies are non-negotiable, first-class components (2026-07-21): they DO collide
+ * with tapers, threads, liners, and other bodies. (Auto-bodies are derived, not stored, so
+ * they never reach collidingIds and stay fluid.) Excluded threads are always skipped.
  */
 class CollidingIdsTest {
 
@@ -145,23 +145,41 @@ class CollidingIdsTest {
         assertTrue(ShaftSpec(overallLengthMm = 500f, liners = listOf(ln1, ln2)).collidingIds().isEmpty())
     }
 
-    // ── Bodies never flagged ──────────────────────────────────────────────
+    // ── Bodies are non-negotiable — they collide ──────────────────────────
 
     @Test
-    fun `bodies overlapping tapers are never flagged`() {
+    fun `body overlapping a taper flags both`() {
         val body  = Body( id = "b1",  startFromAftMm = 0f,  lengthMm = 300f, diaMm = 60f)
         val taper = Taper(id = "t1",  startFromAftMm = 100f,lengthMm = 100f, startDiaMm = 60f, endDiaMm = 50f)
         val ids = ShaftSpec(overallLengthMm = 500f, bodies = listOf(body), tapers = listOf(taper)).collidingIds()
-        assertFalse(ids.contains("b1"))
+        assertTrue(ids.contains("b1"))
+        assertTrue(ids.contains("t1"))
     }
 
     @Test
-    fun `bodies overlapping liners are never flagged`() {
+    fun `body overlapping a liner flags both`() {
         val body  = Body(id = "b1",  startFromAftMm = 0f,   lengthMm = 300f, diaMm = 60f)
         val liner = Liner(id = "ln1", startFromAftMm = 100f, lengthMm = 100f, odMm = 55f)
         val ids = ShaftSpec(overallLengthMm = 500f, bodies = listOf(body), liners = listOf(liner)).collidingIds()
+        assertTrue(ids.contains("b1"))
+        assertTrue(ids.contains("ln1"))
+    }
+
+    @Test
+    fun `excluded thread overlapping a body is not flagged`() {
+        val body = Body(id = "b1", startFromAftMm = 0f, lengthMm = 300f, diaMm = 60f)
+        val th = Threads(id = "th1", startFromAftMm = 0f, lengthMm = 100f, majorDiaMm = 50f, pitchMm = 2f,
+                         excludeFromOAL = true, isAftEnd = true)
+        val ids = ShaftSpec(overallLengthMm = 500f, bodies = listOf(body), threads = listOf(th)).collidingIds()
         assertFalse(ids.contains("b1"))
-        assertFalse("liner over body is by design, not a collision", ids.contains("ln1"))
+        assertFalse(ids.contains("th1"))
+    }
+
+    @Test
+    fun `body abutting a liner is not flagged`() {
+        val body  = Body(id = "b1",  startFromAftMm = 0f,   lengthMm = 100f, diaMm = 60f)
+        val liner = Liner(id = "ln1", startFromAftMm = 100f, lengthMm = 100f, odMm = 55f)
+        assertTrue(ShaftSpec(overallLengthMm = 500f, bodies = listOf(body), liners = listOf(liner)).collidingIds().isEmpty())
     }
 
     // ── Multi-collision ───────────────────────────────────────────────────

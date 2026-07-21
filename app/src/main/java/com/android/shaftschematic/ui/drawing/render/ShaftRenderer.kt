@@ -5,15 +5,19 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.TextMeasurer
+import com.android.shaftschematic.model.Body
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.hasKeyway
+import com.android.shaftschematic.model.hiddenKeywayHostIds
 import com.android.shaftschematic.model.maxOuterDiaMm
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -45,6 +49,14 @@ import kotlin.math.min
  * • Highlight outline: when enabled & an ID matches, we paint a two-ring under-stroke (glow + edge)
  *   then the normal stroke on top. When highlight is off, visuals are identical to legacy.
  */
+/**
+ * Hidden-line dash for far-side (180°-apart) keyways, in px. Mirrored exactly in the PDF
+ * (`DashPathEffect(floatArrayOf(HIDDEN_DASH_ON, HIDDEN_DASH_OFF), 0f)`) so preview and
+ * export match. Kept module-level so both the renderer and the same-math preview agree.
+ */
+internal const val HIDDEN_DASH_ON = 6f
+internal const val HIDDEN_DASH_OFF = 4f
+
 object ShaftRenderer {
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -180,6 +192,17 @@ object ShaftRenderer {
             }
         }
 
+        // Keyways 180° apart: far-side keyways render hidden (dashed, no fill). The
+        // aft-most keyway (measurement datum) stays solid. Empty unless the flag is set.
+        val hiddenKeywayIds = spec.hiddenKeywayHostIds()
+
+        // ───────── Body keyways ─────────
+        // Keyways live on explicit model bodies; draw from model geometry so resolved
+        // fragment subtraction can't displace the slot.
+        for (b in spec.bodies) {
+            if (b.hasKeyway) drawKeywayNotchBody(b, L, outline, outlineW, hidden = b.id in hiddenKeywayIds)
+        }
+
         val resolvedTapers = components?.filterIsInstance<ResolvedTaper>()
 
         // ───────── Tapers (trapezoid) ─────────
@@ -218,7 +241,7 @@ object ShaftRenderer {
                 // Keyway — look up model taper by id for keyway data
                 val modelTaper = spec.tapers.firstOrNull { it.id == t.id }
                 if (modelTaper != null && modelTaper.hasKeyway) {
-                    drawKeywayNotch(modelTaper, L, x0, x1, top0, top1, outline, outlineW, taperFill)
+                    drawKeywayNotch(modelTaper, L, x0, x1, top0, top1, outline, outlineW, taperFill, hidden = t.id in hiddenKeywayIds)
                 }
             }
         } else {
@@ -254,7 +277,7 @@ object ShaftRenderer {
                 drawLine(outline, Offset(x1, top1), Offset(x1, bot1), strokeWidth = outlineW)
 
                 if (t.hasKeyway) {
-                    drawKeywayNotch(t, L, x0, x1, top0, top1, outline, outlineW, taperFill)
+                    drawKeywayNotch(t, L, x0, x1, top0, top1, outline, outlineW, taperFill, hidden = t.id in hiddenKeywayIds)
                 }
             }
         }
@@ -639,21 +662,82 @@ private fun DrawScope.drawKeywayNotch(
     outline: Color,
     outlineW: Float,
     @Suppress("UNUSED_PARAMETER") taperFill: Color,
+    hidden: Boolean = false,
 ) {
     if (x1 == x0 || t.keywayWidthMm <= 0f) return
 
-    val cy   = L.centerlineYPx
     val setAtStart = t.startDiaMm <= t.endDiaMm
     val setX = if (setAtStart) x0 else x1
     val letX = if (setAtStart) x1 else x0
     val dir  = if (letX > setX) 1f else -1f   // +1 = LET is to the right of SET
 
-    val halfW    = (t.keywayWidthMm * L.pxPerMm) / 2f
-    val offsetPx = t.keywayOffsetFromSetMm * L.pxPerMm
-    val kwLenPx  = t.keywayLengthMm * L.pxPerMm
-    val kwSetX   = setX + dir * offsetPx
+    drawKeywaySlot(
+        refX = setX, dir = dir,
+        widthMm = t.keywayWidthMm,
+        offsetMm = t.keywayOffsetFromSetMm,
+        lengthMm = t.keywayLengthMm,
+        L = L, outline = outline, outlineW = outlineW, hidden = hidden,
+    )
+}
+
+/**
+ * Draw a body-hosted keyway (intermediate shafts with fitted couplings). Same plan-view
+ * slot as the taper keyway, referenced from the body's AFT or FWD end face instead of
+ * the SET face.
+ */
+private fun DrawScope.drawKeywayNotchBody(
+    b: Body,
+    L: ShaftRenderer.Layout,
+    outline: Color,
+    outlineW: Float,
+    hidden: Boolean = false,
+) {
+    val x0 = L.xPx(b.startFromAftMm)
+    val x1 = L.xPx(b.startFromAftMm + b.lengthMm)
+    if (x1 == x0 || b.keywayWidthMm <= 0f) return
+
+    val aftRef = b.keywayEnd == LinerAuthoredReference.AFT
+    val refX = if (aftRef) x0 else x1
+    val farX = if (aftRef) x1 else x0
+    val dir  = if (farX > refX) 1f else -1f
+
+    drawKeywaySlot(
+        refX = refX, dir = dir,
+        widthMm = b.keywayWidthMm,
+        offsetMm = b.keywayOffsetFromEndMm,
+        lengthMm = b.keywayLengthMm,
+        L = L, outline = outline, outlineW = outlineW, hidden = hidden,
+    )
+}
+
+/**
+ * Shared keyway slot geometry. [refX] is the referenced face (SET face for tapers, the
+ * AFT/FWD end face for bodies); [dir] is +1 when the slot extends rightward from it.
+ * offset ≈ 0 = open at the referenced face; > 0 = floating (mill arcs both ends).
+ *
+ * [hidden] draws the slot as a far-side feature (keyways 180° apart): dashed outline and
+ * **no** white void fill — the near shaft surface is unbroken, so nothing is carved away
+ * in this view. Geometry is otherwise identical to the near-side (solid) slot.
+ */
+private fun DrawScope.drawKeywaySlot(
+    refX: Float,
+    dir: Float,
+    widthMm: Float,
+    offsetMm: Float,
+    lengthMm: Float,
+    L: ShaftRenderer.Layout,
+    outline: Color,
+    outlineW: Float,
+    hidden: Boolean = false,
+) {
+    val cy   = L.centerlineYPx
+
+    val halfW    = (widthMm * L.pxPerMm) / 2f
+    val offsetPx = offsetMm * L.pxPerMm
+    val kwLenPx  = lengthMm * L.pxPerMm
+    val kwSetX   = refX + dir * offsetPx
     val kwLetX   = kwSetX + dir * kwLenPx
-    val isOpen   = t.keywayOffsetFromSetMm < 0.01f
+    val isOpen   = offsetMm < 0.01f
 
     // Arc center is halfW inward from the LET face (concave mill-cut profile).
     val letArcCx    = kwLetX - dir * halfW
@@ -670,46 +754,51 @@ private fun DrawScope.drawKeywayNotch(
     val lineRight = max(lineNear, lineFar)
 
     // ── White fill (keyway is a void — always white regardless of taper colour) ──
+    // Far-side (hidden) keyways are not cut into the near surface, so they get no fill.
     // For open keyways, inset the fill from the SET face by one line-width so the
     // taper's end-face line retains its full thickness under the fill.
-    val fillNear  = if (isOpen) kwSetX + dir * outlineW else setArcCx
-    val fillLeft  = min(fillNear, letArcCx)
-    val fillRight = max(fillNear, letArcCx)
-    drawRect(
-        color = Color.White,
-        topLeft = Offset(fillLeft, cy - halfW),
-        size = androidx.compose.ui.geometry.Size(fillRight - fillLeft, halfW * 2f)
-    )
-    drawArc(
-        color = Color.White,
-        startAngle = letArcStart, sweepAngle = 180f, useCenter = false,
-        topLeft = Offset(letArcCx - halfW, cy - halfW), size = letArcBox
-    )
-    if (!isOpen) {
+    if (!hidden) {
+        val fillNear  = if (isOpen) kwSetX + dir * outlineW else setArcCx
+        val fillLeft  = min(fillNear, letArcCx)
+        val fillRight = max(fillNear, letArcCx)
+        drawRect(
+            color = Color.White,
+            topLeft = Offset(fillLeft, cy - halfW),
+            size = androidx.compose.ui.geometry.Size(fillRight - fillLeft, halfW * 2f)
+        )
         drawArc(
             color = Color.White,
-            startAngle = setArcStart, sweepAngle = 180f, useCenter = false,
-            topLeft = Offset(setArcCx - halfW, cy - halfW), size = letArcBox
+            startAngle = letArcStart, sweepAngle = 180f, useCenter = false,
+            topLeft = Offset(letArcCx - halfW, cy - halfW), size = letArcBox
         )
+        if (!isOpen) {
+            drawArc(
+                color = Color.White,
+                startAngle = setArcStart, sweepAngle = 180f, useCenter = false,
+                topLeft = Offset(setArcCx - halfW, cy - halfW), size = letArcBox
+            )
+        }
     }
 
-    // ── Outline strokes on top ──
-    drawLine(outline, Offset(lineLeft, cy - halfW), Offset(lineRight, cy - halfW), strokeWidth = outlineW)
-    drawLine(outline, Offset(lineLeft, cy + halfW), Offset(lineRight, cy + halfW), strokeWidth = outlineW)
+    // ── Outline strokes on top (dashed for hidden far-side keyways) ──
+    val dash = if (hidden) PathEffect.dashPathEffect(floatArrayOf(HIDDEN_DASH_ON, HIDDEN_DASH_OFF), 0f) else null
+    drawLine(outline, Offset(lineLeft, cy - halfW), Offset(lineRight, cy - halfW), strokeWidth = outlineW, pathEffect = dash)
+    drawLine(outline, Offset(lineLeft, cy + halfW), Offset(lineRight, cy + halfW), strokeWidth = outlineW, pathEffect = dash)
 
     drawArc(
         color = outline,
         startAngle = letArcStart, sweepAngle = 180f, useCenter = false,
         topLeft = Offset(letArcCx - halfW, cy - halfW), size = letArcBox,
-        style = Stroke(width = outlineW)
+        style = Stroke(width = outlineW, pathEffect = dash)
     )
     if (!isOpen) {
         drawArc(
             color = outline,
             startAngle = setArcStart, sweepAngle = 180f, useCenter = false,
             topLeft = Offset(setArcCx - halfW, cy - halfW), size = letArcBox,
-            style = Stroke(width = outlineW)
+            style = Stroke(width = outlineW, pathEffect = dash)
         )
     }
-    // Open keyway: no SET-end wall — the shaft face end-line already closes the slot.
+    // Open keyway: no SET-end wall — the shaft face end-line already closes the slot
+    // (the same solid body/taper outline closes a hidden slot's open end too).
 }

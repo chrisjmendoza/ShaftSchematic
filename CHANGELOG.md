@@ -6,6 +6,73 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-21
+
+### feat: explicit bodies are non-negotiable components (+ auto-body promotion, liner boundary negotiation)
+
+Reworks the body model so an **explicit** body is a first-class, rigid component instead of
+a fluid filler. Auto-bodies (derived, unstored) stay fluid and flow around everything as
+before — they remain how you shape a shaft. Motivated by keyed line-shaft end bodies that
+must never be fragmented.
+
+- **Non-negotiable bodies:** explicit bodies now participate in `collidingIds()` (red card +
+  blocked PDF export) against tapers, threads, liners, and other bodies. Adding or moving any
+  component onto an explicit body is **hard-blocked** — `bodyOverlapErrorMm` /
+  `nonBodyOverlapErrorMm` disable the Add button (all four Add dialogs) and the carousel
+  start/length fields. A taper/thread/liner over an explicit body is refused; shape auto-body
+  regions and lock a span to explicit (via Add Body or the new checkbox) when it's final.
+  Because overlapping adds can't happen, explicit bodies are never split.
+- **"Make editable body" checkbox:** the auto-body carousel card promotes the derived fill
+  into a real, editable Body — the discoverable path to add a keyway to a line-shaft end span.
+- **Liner ↔ body boundary negotiation:** editing a liner's length so it moves a shared edge
+  with an abutting explicit body prompts to shorten the body (overlap) or grow it to fill
+  (gap) — `linerBodyBoundaryAdjust` + `updateLinerWithBodyBoundary` apply both atomically.
+  The "filling" of an auto-body, but confirmed, since explicit bodies never split.
+- **Behavior change:** threaded/tapered ends now require a fluid auto-body core, not an
+  explicit body (you can't overlap an explicit one). Existing collision/validation tests
+  updated to the reversed rule.
+- **Tests:** +16 (body collision, overlap validators, boundary math, start-validator
+  reversal); suite 573 → 589 green.
+
+## 2026-07-20
+
+### feat: body keyways + "keyways 180° apart" note (fitted-coupling intermediate shafts)
+
+Some intermediate shafts with fitted couplings end on a plain cylindrical body that
+carries the coupling keyway — previously keyways were taper-only and documented as a
+non-goal (reversed; ROADMAP/COMPONENT_CONTRACT/DATA_MODEL/VALIDATION_RULES updated).
+Ending a shaft on a body already worked (coverage/auto-OAL treat bodies as first-class);
+this adds the keyway the use case needs.
+
+- **Model:** `Body` gains taper-style keyway fields (`keywayWidthMm/DepthMm/LengthMm`,
+  `keywaySpooned`) referenced from an AFT/FWD end face (`keywayEnd` +
+  `keywayOffsetFromEndMm`; 0 = open at the face, > 0 = floating). `Body.isValid`
+  enforces offset + length ≤ body length. New `Body.hasKeyway`, `Body.keywayAbsSpanMm()`,
+  `ShaftSpec.keywayCount()`. All additive + defaulted — no doc-format version bump.
+- **Split/merge carry:** `carryBodyKeyway` keeps a body keyway at its **absolute**
+  position across body split/merge/expansion (re-anchors the offset to the surviving
+  fragment's face; drops the keyway if a cut passes through it).
+- **180° apart:** spec-level `ShaftSpec.keyways180Apart`. Toggle appears on keyway-bearing
+  cards/dialogs only when the shaft has (or would reach) ≥ 2 keyways; PDF prints "Keyways
+  180° apart" in the footer middle column. **Hidden-line rendering:** the aft-most keyway
+  (measurement datum) stays solid; every other keyway draws as a far-side hidden feature —
+  dashed outline (6/4 px), no void fill — in both preview and PDF.
+  `ShaftSpec.hiddenKeywayHostIds()` is the single classifier both surfaces consume.
+- **UI:** explicit-body carousel card + `AddBodyDialog` gain the full keyway section
+  (KW from AFT|FWD, W×D, L, offset, spooned) — dialog/card parity maintained; auto-body
+  card intentionally unchanged (promote first). `AddTaperDialog` gains the 180° toggle.
+- **Drawing:** preview + PDF keyway slot drawing generalized (`drawKeywaySlot` /
+  `drawKeywaySlotPdf`) and drawn for keyed bodies from model geometry; PDF footer lists
+  "Body KW: W × D × L" in the column matching the keyway's half of the shaft.
+- **Auto-body → explicit:** the auto-body carousel card gains a **"Make editable body"**
+  checkbox that promotes the derived fill into a real, editable Body (its current
+  Start/Length/Ø) — the discoverable path to add a keyway to a line-shaft end span or lock
+  a span in. Reuses the existing promotion; a field edit still promotes as before.
+- **Tests:** +32 (model invariants/abs-span/carry, keyway 180° clocking classifier +
+  taper abs-span, codec round-trip + legacy decode, footer columns); suite 541 → 573 green.
+
+---
+
 ## 2026-07-18
 
 ### feat: wear PDF rendering modes — liners-only page at 3+ wear liners

@@ -191,7 +191,7 @@ fun ShaftRoute(
         onSetOverallIsManual = vm::setOverallIsManual,
         onSelectComponentById = vm::selectComponentById,
 
-        onAddBody   = { s, l, d      -> vm.addBodyAt(s, l, d) },
+        onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp -> vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp) },
         onAddTaper  = { s, l, sd, ed, rate, kwW, kwD, kwL, kwO, kwS -> vm.addTaperAt(s, l, sd, ed, rate, kwW, kwD, kwL, kwO, kwS) },
         onAddThread = { s, l, maj, p, ex, aft -> vm.addThreadAt(s, l, maj, p, ex, aft) },
         onAddLiner  = { s, l, od, ref -> vm.addLinerAt(s, l, od, ref) },
@@ -199,6 +199,7 @@ fun ShaftRoute(
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label) },
+        onUpdateBodyKeyway = { i, w, d, l, offset, end, spooned -> vm.updateBodyKeyway(i, w, d, l, offset, end, spooned) },
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },
         onUpdateTaperLabel = { i, label    -> vm.updateTaperLabel(i, label) },
         onUpdateTaperKeyway = { i, w, d, l, offset, spooned -> vm.updateTaperKeyway(i, w, d, l, offset, spooned) },
@@ -206,6 +207,7 @@ fun ShaftRoute(
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateThreadLabel = { i, label   -> vm.updateThreadLabel(i, label) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
+        onUpdateLinerWithBodyBoundary = { li, s, l, od, bi, bs, bl -> vm.updateLinerWithBodyBoundary(li, s, l, od, bi, bs, bl) },
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
         onUpdateCouplerBoltSlot = { i, s, dia, cnt, sp, thru, dep -> vm.updateCouplerBoltSlot(i, s, dia, cnt, sp, thru, dep) },
@@ -213,6 +215,7 @@ fun ShaftRoute(
         onUpdateCouplerBoltSlotReference = { i, ref -> vm.updateCouplerBoltSlotReference(i, ref) },
         onUpdateCouplerBoltSlotShowRail = { i, show -> vm.updateCouplerBoltSlotShowRail(i, show) },
 
+        onSetKeyways180Apart = vm::setKeyways180Apart,
         onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
         onSetThreadEndPosition = vm::setThreadEndPosition,
 

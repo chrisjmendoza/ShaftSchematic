@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -55,8 +56,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.LinerAuthoredReference
+import com.android.shaftschematic.model.LinerBodyBoundary
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SlotAuthoredReference
+import com.android.shaftschematic.model.bodyOverlapErrorMm
+import com.android.shaftschematic.model.keywayCount
+import com.android.shaftschematic.model.linerBodyBoundaryAdjust
+import com.android.shaftschematic.model.nonBodyOverlapErrorMm
 import com.android.shaftschematic.ui.input.NumericInputField
 import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
@@ -95,6 +101,14 @@ internal val CAROUSEL_HEIGHT = 360.dp
 // Internal data model
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** A liner length/geometry edit awaiting the user's decision to adjust the abutting body. */
+private data class PendingLinerBoundary(
+    val physStartMm: Float,
+    val newLengthMm: Float,
+    val odMm: Float,
+    val adjust: LinerBodyBoundary,
+)
+
 internal data class RowRef(
     val component: ResolvedComponent,
     val explicitIndex: Int? = null
@@ -120,6 +134,7 @@ internal fun ComponentCarouselPager(
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
+    onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
@@ -127,12 +142,14 @@ internal fun ComponentCarouselPager(
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+    onUpdateLinerWithBodyBoundary: (linerIndex: Int, startMm: Float, lengthMm: Float, odMm: Float, bodyIndex: Int, bodyStartMm: Float, bodyLengthMm: Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
     onUpdateCouplerBoltSlotLabel: (Int, String?) -> Unit,
     onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
+    onSetKeyways180Apart: (Boolean) -> Unit,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
     onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
     onRemoveBody: (String) -> Unit,
@@ -251,6 +268,7 @@ internal fun ComponentCarouselPager(
                     onAddBody = onAddBody,
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyLabel = onUpdateBodyLabel,
+                    onUpdateBodyKeyway = onUpdateBodyKeyway,
                     onUpdateTaper = onUpdateTaper,
                     onUpdateTaperLabel = onUpdateTaperLabel,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
@@ -258,12 +276,14 @@ internal fun ComponentCarouselPager(
                     onUpdateThread = onUpdateThread,
                     onUpdateThreadLabel = onUpdateThreadLabel,
                     onUpdateLiner = onUpdateLiner,
+                    onUpdateLinerWithBodyBoundary = onUpdateLinerWithBodyBoundary,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
                     onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
                     onUpdateCouplerBoltSlotLabel = onUpdateCouplerBoltSlotLabel,
                     onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
                     onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
+                    onSetKeyways180Apart = onSetKeyways180Apart,
                     bodyTitleById = bodyTitleById, taperTitleById = taperTitleById,
                     linerTitleById = linerTitleById, threadTitleById = threadTitleById,
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
@@ -289,6 +309,31 @@ internal fun ComponentCarouselPager(
                 modifier = Modifier.fillMaxHeight().width(arrowWidth).padding(end = edgeGap)
             )
         }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Keyways 180° apart — spec-level drawing note, surfaced on any keyway-bearing
+// card once the shaft has two or more keyways (below that the flag is meaningless).
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+internal fun Keyways180ApartSwitch(spec: ShaftSpec, onSetKeyways180Apart: (Boolean) -> Unit) {
+    if (spec.keywayCount() < 2) return
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .toggleable(
+                value = spec.keyways180Apart,
+                role = androidx.compose.ui.semantics.Role.Switch,
+                onValueChange = onSetKeyways180Apart
+            ).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Keyways 180° apart", modifier = Modifier.weight(1f))
+        androidx.compose.material3.Switch(
+            checked = spec.keyways180Apart,
+            onCheckedChange = null
+        )
     }
 }
 
@@ -331,6 +376,7 @@ internal fun ComponentPagerCard(
     onAddBody: (Float, Float, Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
+    onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
@@ -338,12 +384,14 @@ internal fun ComponentPagerCard(
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+    onUpdateLinerWithBodyBoundary: (linerIndex: Int, startMm: Float, lengthMm: Float, odMm: Float, bodyIndex: Int, bodyStartMm: Float, bodyLengthMm: Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
     onUpdateCouplerBoltSlotLabel: (Int, String?) -> Unit,
     onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
+    onSetKeyways180Apart: (Boolean) -> Unit,
     bodyTitleById: Map<String, String>,
     taperTitleById: Map<String, String>,
     linerTitleById: Map<String, String>,
@@ -385,6 +433,16 @@ internal fun ComponentPagerCard(
                     }
                 }
 
+                // Explicit promotion via checkbox: turns this derived fill into a real,
+                // editable Body (needed to add a keyway to a line-shaft end span, or to
+                // lock the span in). Reuses the same promotion path as a field edit; the
+                // resulting Body carries the auto-body's current derived Start/Length/Ø.
+                fun promoteNow() {
+                    if (!promoted && startMm >= 0f && lengthMm > 0f && diaMm > 0f) {
+                        promoted = true; onAddBody(startMm, lengthMm, diaMm)
+                    }
+                }
+
                 ComponentCard(
                     title = "Body (auto)",
                     debugText = if (showComponentDebugLabels) "id=${component.id} • startMm=${f1(component.startMmPhysical)} • endMm=${f1(component.endMmPhysical)}" else null,
@@ -398,6 +456,27 @@ internal fun ComponentPagerCard(
                     }
                     CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit)) { s ->
                         toMmOrNull(s, unit)?.let { diaMm = it; promoteIfNeeded() }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            .toggleable(
+                                value = promoted,
+                                enabled = !promoted,
+                                role = androidx.compose.ui.semantics.Role.Checkbox,
+                                onValueChange = { checked -> if (checked) promoteNow() }
+                            ).padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Make editable body",
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        androidx.compose.material3.Checkbox(
+                            checked = promoted,
+                            enabled = !promoted,
+                            onCheckedChange = null
+                        )
                     }
                 }
                 return
@@ -456,12 +535,91 @@ internal fun ComponentPagerCard(
                 CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit), validator = startValidator(b.id, ComponentKind.BODY, b.lengthMm)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateBody(idx, it, b.lengthMm, b.diaMm) }
                 }
-                CommitNum("Length (${abbr(unit)})", disp(b.lengthMm, unit)) { s ->
+                CommitNum(
+                    label = "Length (${abbr(unit)})",
+                    initialDisplay = disp(b.lengthMm, unit),
+                    validator = { raw ->
+                        val newLen = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
+                        spec.bodyOverlapErrorMm(b.id, b.startFromAftMm, newLen)
+                            ?: spec.nonBodyOverlapErrorMm(b.id, b.startFromAftMm, newLen)
+                    }
+                ) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, it, b.diaMm) }
                 }
                 CommitNum("Ø (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, b.lengthMm, it) }
                 }
+
+                // Keyway fields — intermediate shafts with fitted couplings carry a
+                // keyway in a plain body at the shaft end. Mirrors the taper keyway
+                // section, with an AFT/FWD end reference instead of the SET face.
+                val kwSelectedColors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = Color.Black,
+                    selectedLabelColor = Color.White,
+                    containerColor = Color.Transparent,
+                    labelColor = MaterialTheme.colorScheme.onSurface
+                )
+                val isKwFwd = b.keywayEnd == LinerAuthoredReference.FWD
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("KW from:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    FilterChip(selected = !isKwFwd,
+                        onClick = { onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, b.keywayLengthMm, b.keywayOffsetFromEndMm, LinerAuthoredReference.AFT, b.keywaySpooned) },
+                        label = { Text("AFT") }, colors = kwSelectedColors,
+                        border = if (!isKwFwd) BorderStroke(1.dp, Color.Black) else null)
+                    FilterChip(selected = isKwFwd,
+                        onClick = { onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, b.keywayLengthMm, b.keywayOffsetFromEndMm, LinerAuthoredReference.FWD, b.keywaySpooned) },
+                        label = { Text("FWD") }, colors = kwSelectedColors,
+                        border = if (isKwFwd) BorderStroke(1.dp, Color.Black) else null)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CommitNum("KW W (${abbr(unit)})", dispKw(b.keywayWidthMm, unit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
+                        val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                        onUpdateBodyKeyway(idx, v, b.keywayDepthMm, b.keywayLengthMm, b.keywayOffsetFromEndMm, b.keywayEnd, b.keywaySpooned)
+                    }
+                    Text("×", style = MaterialTheme.typography.titleMedium)
+                    CommitNum("KW D (${abbr(unit)})", dispKw(b.keywayDepthMm, unit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
+                        val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                        onUpdateBodyKeyway(idx, b.keywayWidthMm, v, b.keywayLengthMm, b.keywayOffsetFromEndMm, b.keywayEnd, b.keywaySpooned)
+                    }
+                }
+                CommitNum("KW L (${abbr(unit)})", dispKw(b.keywayLengthMm, unit)) { s ->
+                    val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                    onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, v, b.keywayOffsetFromEndMm, b.keywayEnd, b.keywaySpooned)
+                }
+                CommitNum("KW Offset from ${if (isKwFwd) "FWD" else "AFT"} (${abbr(unit)})", dispKw(b.keywayOffsetFromEndMm, unit)) { s ->
+                    val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                    onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, b.keywayLengthMm, v, b.keywayEnd, b.keywaySpooned)
+                }
+
+                val isKwFloating = b.keywayOffsetFromEndMm > 0f
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .toggleable(
+                            value = b.keywaySpooned, enabled = !isKwFloating,
+                            role = androidx.compose.ui.semantics.Role.Switch,
+                            onValueChange = { checked ->
+                                onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, b.keywayLengthMm, b.keywayOffsetFromEndMm, b.keywayEnd, checked)
+                            }
+                        ).padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isKwFloating) "Keyway spooned (N/A — floating)" else "Keyway spooned",
+                        modifier = Modifier.weight(1f),
+                        color = if (isKwFloating) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                    )
+                    androidx.compose.material3.Switch(
+                        checked = b.keywaySpooned && !isKwFloating,
+                        enabled = !isKwFloating,
+                        onCheckedChange = null
+                    )
+                }
+
+                Keyways180ApartSwitch(spec, onSetKeyways180Apart)
             }
         }
 
@@ -600,7 +758,18 @@ internal fun ComponentPagerCard(
                     val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
                     onUpdateTaper(idx, physStart, t.lengthMm, t.startDiaMm, t.endDiaMm, nextRateText(t.lengthMm, t.startDiaMm, t.endDiaMm))
                 }
-                CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
+                CommitNum(
+                    label = "Length (${abbr(unit)})",
+                    initialDisplay = disp(t.lengthMm, unit),
+                    validator = { raw ->
+                        val newLen = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
+                        val physStart = if (isFwdRef) {
+                            val authored = spec.overallLengthMm - t.startFromAftMm - t.lengthMm
+                            spec.overallLengthMm - authored - newLen
+                        } else t.startFromAftMm
+                        spec.bodyOverlapErrorMm(t.id, physStart, newLen)
+                    }
+                ) { s ->
                     val newLen = toMmOrNull(s, unit) ?: return@CommitNum
                     val physStart = if (isFwdRef) {
                         val authored = spec.overallLengthMm - t.startFromAftMm - t.lengthMm
@@ -701,6 +870,8 @@ internal fun ComponentPagerCard(
                         onCheckedChange = null
                     )
                 }
+
+                Keyways180ApartSwitch(spec, onSetKeyways180Apart)
             }
         }
 
@@ -808,7 +979,14 @@ internal fun ComponentPagerCard(
                         onUpdateThread(idx, th.startFromAftMm, th.lengthMm, th.majorDiaMm, tpiToPitchMm(tpi))
                     }
                 }
-                CommitNum("Length (${abbr(unit)})", disp(th.lengthMm, unit)) { s ->
+                CommitNum(
+                    label = "Length (${abbr(unit)})",
+                    initialDisplay = disp(th.lengthMm, unit),
+                    validator = { raw ->
+                        val newLen = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
+                        spec.bodyOverlapErrorMm(th.id, th.startFromAftMm, newLen)
+                    }
+                ) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm) }
                 }
             }
@@ -822,7 +1000,45 @@ internal fun ComponentPagerCard(
             var editingTitle   by rememberSaveable(ln.id) { mutableStateOf(false) }
             val focusRequester = remember { FocusRequester() }
             var hasFocusedOnce by remember(ln.id) { mutableStateOf(false) }
+            var pendingBoundary by remember(ln.id) { mutableStateOf<PendingLinerBoundary?>(null) }
             val isFwdRef       = ln.authoredReference == LinerAuthoredReference.FWD
+
+            // Negotiation when a liner length edit moves a shared edge with an explicit
+            // (non-splittable) body: offer to shorten/grow that body to re-abut.
+            pendingBoundary?.let { p ->
+                val deltaStr = "${disp(p.adjust.deltaMm, unit)} ${abbr(unit)}"
+                AlertDialog(
+                    onDismissRequest = { pendingBoundary = null },
+                    title = { Text(if (p.adjust.shorten) "Shorten ${p.adjust.bodyLabel}?" else "Fill the gap?") },
+                    text = {
+                        Text(
+                            if (p.adjust.shorten)
+                                "This liner will overlap ${p.adjust.bodyLabel} by $deltaStr. " +
+                                    "Shorten the body to fit? (Explicit bodies are never split.)"
+                            else
+                                "Shortening this liner leaves a $deltaStr gap next to ${p.adjust.bodyLabel}. " +
+                                    "Extend the body to fill it?"
+                        )
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = {
+                            onUpdateLinerWithBodyBoundary(
+                                idx, p.physStartMm, p.newLengthMm, p.odMm,
+                                p.adjust.bodyIndex, p.adjust.newBodyStartMm, p.adjust.newBodyLengthMm
+                            )
+                            pendingBoundary = null
+                        }) { Text(if (p.adjust.shorten) "Shorten body" else "Extend body") }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = {
+                            // Shorten (overlap) can't stand alone → cancel the whole edit.
+                            // Grow (gap) is legal on its own → apply just the liner, leave the gap.
+                            if (!p.adjust.shorten) onUpdateLiner(idx, p.physStartMm, p.newLengthMm, p.odMm)
+                            pendingBoundary = null
+                        }) { Text(if (p.adjust.shorten) "Cancel" else "Leave gap") }
+                    }
+                )
+            }
             val authoredStartMm = if (isFwdRef) {
                 spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
             } else {
@@ -906,7 +1122,20 @@ internal fun ComponentPagerCard(
                     val physStart  = if (isFwdRef) spec.overallLengthMm - authoredMm - ln.lengthMm else authoredMm
                     onUpdateLiner(idx, physStart, ln.lengthMm, ln.odMm)
                 }
-                CommitNum("Length (${abbr(unit)})", disp(ln.lengthMm, unit)) { s ->
+                CommitNum(
+                    label = "Length (${abbr(unit)})",
+                    initialDisplay = disp(ln.lengthMm, unit),
+                    validator = { raw ->
+                        val newLen = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
+                        val physStart = if (isFwdRef) {
+                            val authored = spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
+                            spec.overallLengthMm - authored - newLen
+                        } else ln.startFromAftMm
+                        // A shared-edge body is negotiated (allowed); any other body overlap is blocked.
+                        if (spec.linerBodyBoundaryAdjust(ln.id, ln.startFromAftMm, ln.lengthMm, physStart, newLen) != null) null
+                        else spec.bodyOverlapErrorMm(ln.id, physStart, newLen)
+                    }
+                ) { s ->
                     val newLen    = toMmOrNull(s, unit) ?: return@CommitNum
                     val physStart = if (isFwdRef) {
                         val authored = spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
@@ -914,7 +1143,9 @@ internal fun ComponentPagerCard(
                     } else {
                         ln.startFromAftMm
                     }
-                    onUpdateLiner(idx, physStart, newLen, ln.odMm)
+                    val adj = spec.linerBodyBoundaryAdjust(ln.id, ln.startFromAftMm, ln.lengthMm, physStart, newLen)
+                    if (adj == null) onUpdateLiner(idx, physStart, newLen, ln.odMm)
+                    else pendingBoundary = PendingLinerBoundary(physStart, newLen, ln.odMm, adj)
                 }
                 CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateLiner(idx, ln.startFromAftMm, ln.lengthMm, it) }

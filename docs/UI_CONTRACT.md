@@ -94,11 +94,11 @@ persisted in `ShaftSpec`:
   `deriveAutoBodies()`, producing `ResolvedBody(source = ResolvedComponentSource.AUTO)` entries.
 - Fill axial gaps between explicit (sacred) components. When OAL is manually authored, a base
   auto body spans 0 → OAL immediately; derived OAL does **not** seed a base auto body.
-- Promotion to an explicit `Body` happens the moment the user edits one of the auto-body card's
-  fields (Start / Length / Ø): `promoteIfNeeded()` in `ComponentCarousel.kt` calls
-  `onAddBody(...)` on that first genuine edit and persists the section into `ShaftSpec.bodies`.
-  Viewing the card without editing it never promotes it (see the "Auto-body promotion"
-  invariant in `CLAUDE.md`).
+- Promotion to an explicit `Body` happens on an explicit user action — editing one of the
+  auto-body card's fields (Start / Length / Ø), **or** ticking the "Make editable body"
+  checkbox: `promoteIfNeeded()` in `ComponentCarousel.kt` calls `onAddBody(...)` and persists
+  the section into `ShaftSpec.bodies`. Viewing the card without acting never promotes it (see
+  the "Auto-body promotion" invariant in `CLAUDE.md`).
 
 ### 3.1.2 Default Start Position (`computeAddDefaults`)
 
@@ -107,17 +107,26 @@ The default start for a new component is the **furthest FWD end** among sacred c
 - All liners
 - Threads with `excludeFromOAL = false`
 
-Bodies are fillers and are **excluded** from this calculation. Excluded threads sit outside the shaft envelope and are **excluded**. Coupler bolt slots are pure reference overlays and are likewise **excluded**. This ensures new components always default to the next logical open slot in the shaft, not past the end.
+Bodies are **excluded** from this calculation (the default targets the FWD-most sacred edge, and auto-bodies fill from there). Excluded threads sit outside the shaft envelope and are **excluded**. Coupler bolt slots are pure reference overlays and are likewise **excluded**. This ensures new components always default to the next logical open slot in the shaft, not past the end.
 
 ### 3.1.3 Auto-Selection After Add
 
 When any `add*At` function completes in the ViewModel, `selectedComponentId` is set to the newly added component's ID. The carousel auto-scrolls to and highlights the new component.
 
-### 3.1.4 Body Split/Merge and the Carousel
+### 3.1.4 Explicit vs auto bodies in the Carousel
 
-Bodies are independent spec entities. The carousel shows **one card per body** in the spec — there is no deduplication. When a sacred component is placed over a body the engine produces two body fragments (each with a unique ID); the carousel shows both as separate cards so the user can edit each section's diameter independently.
+Bodies are independent spec entities; the carousel shows **one card per stored body**. As of
+2026-07-21, stored bodies are **explicit and non-negotiable**: a sacred component may not be
+added or moved onto one (hard-blocked via `bodyOverlapErrorMm`), so explicit bodies are **never
+split**. Auto-bodies (derived, unstored) remain fluid and flow around every component — they get
+"Body (auto)" cards and can be promoted to explicit (field edit or "Make editable body").
 
-When a sacred component is deleted the engine merges adjacent body fragments back into one card. The merged diameter is `max(left.diaMm, right.diaMm)`; the user can adjust it afterward.
+The one exception is the **liner ↔ body boundary negotiation**: editing a liner's length so it
+moves a shared edge with an abutting explicit body raises a confirm dialog to shorten the body
+(overlap) or grow it to fill (gap) — `linerBodyBoundaryAdjust` / `updateLinerWithBodyBoundary`.
+
+(Legacy body fragments from older builds still merge back on delete — `max(left.diaMm,
+right.diaMm)` — but new overlapping adds no longer fragment an explicit body.)
 
 ### 3.1.5 Direction Chip (AFT / FWD Toggle)
 

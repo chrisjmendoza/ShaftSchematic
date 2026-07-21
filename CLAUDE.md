@@ -28,6 +28,12 @@ Specifically:
   "Thread end: AFT | FWD" chips and hide the Start field — same as the carousel card
   (`ComponentCarousel.kt`, `ResolvedThread` branch, `!includeInOal` block).
 - **Liner AFT/FWD reference**: `AddLinerDialog` must show "Measure From: AFT | FWD" chips.
+- **Body keyway**: `AddBodyDialog` and the explicit-body carousel card must both expose
+  the keyway section (KW from AFT | FWD chips, W × D, L, offset, spooned toggle). The
+  auto-body card intentionally omits it (auto-bodies can't host keyways until promoted).
+- **Keyways 180° apart**: the spec-level toggle appears on keyway-bearing cards when the
+  shaft has ≥ 2 keyways, and in `AddBodyDialog`/`AddTaperDialog` when adding would reach
+  ≥ 2 (≥ 1 existing + this dialog's keyway defined). Same condition on both surfaces.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
 - **Coupler bolt slot**: `AddCouplerBoltSlotDialog` and the `ResolvedCouplerBoltSlot`
   carousel card must both expose Measure From (AFT | FWD), hole Ø, count, spacing (only
@@ -49,8 +55,22 @@ auto-body promotion and unnecessary ViewModel updates. See `NumberField.md`.
 
 ### Auto-body promotion
 Auto-body cards in the carousel (`ResolvedComponentSource.AUTO`) promote to real bodies
-only when the user **explicitly edits** one of their fields. Blur without a value change
-must not trigger `promoteIfNeeded()`. See the `promoted` state in `ComponentCarousel.kt`.
+only on an **explicit user action**: editing one of their fields, or ticking the
+**"Make editable body"** checkbox. Blur without a value change must not trigger
+`promoteIfNeeded()`. Both paths guard on the same `promoted` state so promotion fires
+once. See `ComponentCarousel.kt`.
+
+### Explicit bodies are non-negotiable components
+A stored (`ShaftSpec.bodies`) body is explicit and rigid — like a taper/liner, **not** a
+filler. It participates in `collidingIds()` (red card + blocked PDF export), and nothing
+may be added or moved onto it (`bodyOverlapErrorMm` / `nonBodyOverlapErrorMm` hard-block
+the Add dialogs and carousel start/length fields). Explicit bodies are **never split** —
+overlapping adds can't land, so no fragmentation happens. Auto-bodies (derived, unstored)
+stay fluid and flow around everything. Do not re-add bodies to `splitBodiesAround` on
+overlap, and do not exclude bodies from `collidingIds` again. The one exception is the
+**liner ↔ body boundary negotiation** (`linerBodyBoundaryAdjust` /
+`updateLinerWithBodyBoundary`): a liner length edit at a shared body edge offers to
+shorten/grow that body instead of blocking. See `docs/COMPONENT_CONTRACT.md`.
 
 ### Free-to-End badge suppression
 The badge is hidden when there are no precision components (tapers, non-excluded threads,

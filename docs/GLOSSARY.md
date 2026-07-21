@@ -1,6 +1,6 @@
 # Glossary
 Version: v0.5.x
-Last updated: 2026-07-18 — Keyway entry: body-hosted keyways marked shelved (was "planned").
+Last updated: 2026-07-21 — Keyway entry: body-hosted keyways now shipped (were shelved); added keyways-180°-apart and explicit-vs-auto-body notes.
 
 Definitions of all terms used across architecture, components, rendering, validation, and PDF export.
 
@@ -136,11 +136,22 @@ Compose wrapper that draws grid and delegates to renderer.
 Rectangular torque-transfer slot (a cut feature), owned by a host component.
 
 Current state:
-- Supported on `Taper` (taper-hosted), including keyway length and a spooned flag.
+- Supported on `Taper` (SET-referenced offset) and `Body` (AFT/FWD end-referenced offset),
+  each with keyway length and a spooned flag. Open (offset 0) or floating (offset > 0).
+- Body-hosted keyways serve intermediate shafts with fitted couplings that end on a plain body.
+- **Keyways 180° apart:** `ShaftSpec.keyways180Apart` — a drawing note that the shaft's keyways
+  are clocked 180° from each other. The aft-most keyway (measurement datum) stays solid; every
+  other keyway renders as a hidden feature (dashed, no void fill), plus a footer note.
 
-Shelved (non-goal, per `docs/ROADMAP.md` v1.0):
-- Body-hosted keyways — no marine propeller shaft use case identified.
+Non-goal:
 - Keyways will never exist as standalone components.
+
+### Explicit vs auto body
+An **explicit** body is a stored `ShaftSpec.bodies` entry — a first-class, non-negotiable
+component (collides, hard-blocks overlapping adds/moves, never split). An **auto body** is
+derived at resolve time (never stored) to fill unoccupied spans; it is fluid and flows around
+every component. Promote an auto body to explicit by editing a field or ticking "Make editable
+body" on its carousel card.
 
 ### Pilot Diameter (future)
 Centering diameter for couplings.

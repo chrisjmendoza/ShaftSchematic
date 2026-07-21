@@ -53,12 +53,30 @@ Components
 
 **Bodies describe raw shaft material** between sacred components. They are excluded from collision detection and from new-component default-start calculations.
 
-#### Body Split / Merge (automatic)
+#### Explicit vs auto bodies (2026-07-21)
 
-Bodies are **independent spec entities** — each has its own UUID, position, length, and `diaMm`. The engine manages split/merge automatically:
+Stored `ShaftSpec.bodies` are all **explicit** — first-class, non-negotiable components.
+**Auto-bodies** are derived at resolve time (never stored) to fill gaps and remain fluid.
+
+- **Explicit bodies collide** (`collidingIds` includes body↔taper/thread/liner/body) → red
+  card + blocked PDF export. Nothing may be added or moved onto an explicit body
+  (`bodyOverlapErrorMm` / `nonBodyOverlapErrorMm` hard-block the Add dialogs and carousel
+  start/length fields). Because overlaps can't land, explicit bodies are never split.
+- **Auto-bodies stay fluid** — they flow around every component via `deriveAutoBodies`, and
+  are how you shape a shaft. Promote one to explicit with the "Make editable body" checkbox
+  (or Add Body) to lock a span / add a keyway.
+- **Liner ↔ body boundary negotiation** (`linerBodyBoundaryAdjust`): a liner length edit that
+  moves a shared edge with an abutting explicit body offers to shorten it (overlap) or grow
+  it (gap) — the auto-body "filling", but confirmed, since the explicit body can't split.
+
+#### Body Split / Merge (legacy fragments)
+
+The split/merge engine below still heals bodies fragmented by older builds, but the
+non-negotiable rule above means new overlapping adds no longer fragment an explicit body:
 
 - **On add** (taper / liner / in-shaft thread): any body whose span overlaps the new component is removed and replaced with up to two fragment bodies — one on each side of the new component. Each fragment gets a new UUID and inherits the parent's `diaMm`.
 - **On delete**: the engine searches for a body whose right edge aligns with the deleted component's start (within 0.5 mm) and a body whose left edge aligns with its end. If both are found they merge into one body spanning the entire region; the merged diameter is `max(leftDiaMm, rightDiaMm)`. If only one side exists (component was at a shaft boundary), that body expands to fill the freed span.
+- **Keyway carry**: body-hosted keyways survive split/merge by absolute position — `carryBodyKeyway` re-anchors `keywayOffsetFromEndMm` to the surviving fragment's referenced face, and drops the keyway when a cut passes through its span. A merged body keeps at most one keyway (left fragment's preferred).
 
 The user can adjust the merged body's diameter manually after a merge.
 
@@ -71,6 +89,17 @@ data class Body(
     override val startFromAftMm: Float = 0f,
     override val lengthMm: Float = 0f,
     val diaMm: Float = 0f,
+    // Keyway is a cut feature owned by the host component (0 values = "no keyway").
+    // Body keyways serve intermediate shafts with fitted couplings, where the shaft
+    // ends on a plain body that carries the keyway.
+    val keywayWidthMm: Float = 0f,
+    val keywayDepthMm: Float = 0f,
+    val keywayLengthMm: Float = 0f,
+    // Axial distance from the referenced end face (keywayEnd) to the keyway slot.
+    // 0 = open keyway (starts at the face); > 0 = floating (rounded both ends).
+    val keywayOffsetFromEndMm: Float = 0f,
+    val keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,  // which face the offset is measured from
+    val keywaySpooned: Boolean = false,
     val label: String? = null,  // optional user-defined display label; not used for geometry
 ) : Segment
 Taper
@@ -97,18 +126,29 @@ data class Taper(
 ) : Segment
 
 Keyways are features, not standalone components.
-They are currently taper-associated and cannot exist without a host.
+They are hosted on **Tapers** (offset from the SET face) or **Bodies** (offset from the
+AFT/FWD end face selected by `keywayEnd`) and cannot exist without a host.
+(Body-hosted keyways were un-shelved 2026-07-20 — intermediate shafts with fitted
+couplings carry keyways in end bodies.)
 
-Body-hosted keyways are **shelved** — see `docs/ROADMAP.md` v1.0 "Non-goals": no marine
-propeller shaft use case has been identified. Do not plan against this landing.
-
-Keyway invariants (hosted feature):
+Keyway invariants (hosted feature, both hosts):
 - keywayLengthMm >= 0
-- keywayOffsetFromSetMm >= 0
-- keywayOffsetFromSetMm + keywayLengthMm <= host component length
+- reference offset (keywayOffsetFromSetMm / keywayOffsetFromEndMm) >= 0
+- reference offset + keywayLengthMm <= host component length
 Derived:
 val Taper.hasKeyway: Boolean get() = keywayWidthMm > 0f && keywayDepthMm > 0f && keywayLengthMm > 0f
+val Body.hasKeyway:  Boolean get() = keywayWidthMm > 0f && keywayDepthMm > 0f && keywayLengthMm > 0f
+val Body.keywayAbsSpanMm(): Pair<Float, Float>?  // absolute AFT-origin span of the slot
 val Taper.maxDiaMm get() = max(startDiaMm, endDiaMm)
+
+Spec-level keyway note:
+- ShaftSpec.keyways180Apart: Boolean (default false) — the shaft's keyways are clocked
+  180° apart. Meaningful only when spec.keywayCount() >= 2 (UI + PDF gate on that).
+- ShaftSpec.hiddenKeywayHostIds(): Set<String> — when the flag is set, the aft-most
+  keyway (smallest absolute center, the measurement datum) stays solid; every other
+  keyway's host id is returned so the renderer/PDF draw it as a hidden feature (dashed,
+  no void fill). No geometric effect — pure drawing classification.
+- Taper.keywayAbsSpanMm(): Pair<Float, Float>?  // absolute AFT-origin span (for clocking)
 Threads
 @Serializable
 data class Threads(

@@ -53,6 +53,8 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 	ASCII-capable field + colon-aware filtering for the rate path
 - Coupler bolt slots — reference overlay for muff-coupling bolt cutouts; new `CouplerBoltSlot` model type + `ShaftSpec.couplerBoltSlots` list, add-chooser entry, add dialog, carousel card; row of `count` cutouts at `spacingMm` pitch drawn straddling the shaft outline (mirrored top/bottom) in preview and all three PDFs; AFT/FWD authored reference (default FWD); pure reference — excluded from OAL/coverage, collision, and body split/merge; dimension rail toggle present but deferred (not drawn in v1)
 - Taper keyway drawing (open + floating) — plan-view schematic convention, mill-cutter arc, white fill
+- Body keyways — keyways now host on bodies too (AFT/FWD end reference, open + floating), for intermediate shafts with fitted couplings that end on a plain body; survive body split/merge by absolute position
+- Keyways 180° apart — spec-level clocking note; renders the far-side (non-aft-most) keyway as hidden dashed lines and prints a footer note; aft-most keyway stays solid as the measurement datum
 - Shared signing config — single debug.keystore, all machines update-install without data wipe
 - Selection highlight — single thin ring, seeded on file load
 - Warning badge system — yellow per-component chips, 3-state free-to-end badge
@@ -66,6 +68,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - OAL include-thread fix — bracket spans SET-to-SET (excluded) or shaft-end-to-SET (included); label always equals typed OAL
 - Unsaved-changes guard — "Save / Discard / Cancel" dialog when New or Open is triggered with unsaved work; dirty state tracks spec + metadata fields against last save or load
 - Component collision detection — global overlap scan across all non-excluded components; both colliding parties show red error chip; PDF export and preview blocked until collisions are resolved
+- Explicit bodies as non-negotiable components — stored bodies now collide (body↔taper/thread/liner/body), block overlapping adds/moves, and are never split; auto-bodies (derived) stay fluid fillers. Auto-body card gains a "Make editable body" checkbox; a liner length edit at a shared body edge negotiates (shorten/grow the abutting explicit body) instead of overrunning it
 
 ---
 
@@ -104,7 +107,6 @@ Feature-flag items; not required for 1.0 but structurally compatible:
 - CNC G-code generation
 - Finite element stress calculations
 - BOM / machining tables
-- Body keyway (shelved — no marine propeller shaft use case identified)
 
 ---
 

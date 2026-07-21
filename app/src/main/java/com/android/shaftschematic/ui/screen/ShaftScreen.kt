@@ -224,7 +224,10 @@ fun ShaftScreen(
     onClearPendingAddPosition: () -> Unit = {},
 
     // Adds (all mm)
-    onAddBody: (Float, Float, Float) -> Unit,
+    onAddBody: (startMm: Float, lengthMm: Float, diaMm: Float,
+                keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
+                keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
+                keywaySpooned: Boolean) -> Unit,
     onAddTaper: (Float, Float, Float, Float, String, Float, Float, Float, Float, Boolean) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean, isAftEnd: Boolean) -> Unit,
     onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
@@ -233,6 +236,7 @@ fun ShaftScreen(
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
+    onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
@@ -240,6 +244,7 @@ fun ShaftScreen(
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+    onUpdateLinerWithBodyBoundary: (linerIndex: Int, startMm: Float, lengthMm: Float, odMm: Float, bodyIndex: Int, bodyStartMm: Float, bodyLengthMm: Float) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
@@ -247,6 +252,7 @@ fun ShaftScreen(
     onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
 
+    onSetKeyways180Apart: (Boolean) -> Unit,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
     onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
 
@@ -729,9 +735,14 @@ fun ShaftScreen(
                     edgeArrowWidthDp = componentArrowWidthDp,
                     showComponentDebugLabels = showComponentDebugLabels,
                     selectedComponentId = selectedComponentId,
-                    onAddBody = onAddBody,
+                    // Auto-body promotion adds a plain body; keyways are added later
+                    // via the promoted card's keyway fields.
+                    onAddBody = { s, l, d ->
+                        onAddBody(s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false)
+                    },
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateBodyLabel = onUpdateBodyLabel,
+                    onUpdateBodyKeyway = onUpdateBodyKeyway,
                     onUpdateTaper = snappedTaperUpdater,
                     onUpdateTaperLabel = onUpdateTaperLabel,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
@@ -739,12 +750,14 @@ fun ShaftScreen(
                     onUpdateThread = snappedThreadUpdater,
                     onUpdateThreadLabel = onUpdateThreadLabel,
                     onUpdateLiner = snappedLinerUpdater,
+                    onUpdateLinerWithBodyBoundary = onUpdateLinerWithBodyBoundary,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
                     onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
                     onUpdateCouplerBoltSlotLabel = onUpdateCouplerBoltSlotLabel,
                     onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
                     onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
+                    onSetKeyways180Apart = onSetKeyways180Apart,
 
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
                     onSetThreadEndPosition = onSetThreadEndPosition,
@@ -885,9 +898,10 @@ fun ShaftScreen(
                         spec = spec,
                         initialStartMm = tapAddStartMm,
                         initialLengthMm = tapAddGapMm,
-                        onSubmit = { s, l, d ->
+                        onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, opposed ->
                             tapAddBodyOpen = false
-                            onAddBody(s, l, d)
+                            onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned)
+                            onSetKeyways180Apart(opposed)
                         },
                         onCancel = { tapAddBodyOpen = false }
                     )
@@ -915,9 +929,10 @@ fun ShaftScreen(
                         overallIsManual = overallIsManual,
                         initialStartMm = tapAddStartMm,
                         initialLengthMm = tapAddGapMm,
-                        onSubmit = { s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned ->
+                        onSubmit = { s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned, opposed ->
                             tapAddTaperOpen = false
                             onAddTaper(s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned)
+                            onSetKeyways180Apart(opposed)
                         },
                         onCancel = { tapAddTaperOpen = false }
                     )

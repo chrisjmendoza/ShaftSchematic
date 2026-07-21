@@ -18,6 +18,10 @@ import kotlinx.serialization.Serializable
  * @property liners Outer sleeves/liners.
  * @property couplerBoltSlots Radial muff-coupler bolt cutouts (reference features; never
  *           affect OAL/coverage). Optional — defaults empty for back-compat.
+ * @property keyways180Apart Annotation that the shaft's keyways are clocked 180° apart
+ *           from each other (e.g. body keyway opposite the taper keyway on an
+ *           intermediate shaft). Pure drawing note — no geometric effect. Only
+ *           meaningful when the shaft has ≥ 2 keyways. Defaults false for back-compat.
  */
 @Serializable
 data class ShaftSpec(
@@ -27,7 +31,31 @@ data class ShaftSpec(
     val threads: List<Threads> = emptyList(),
     val liners: List<Liner> = emptyList(),
     val couplerBoltSlots: List<CouplerBoltSlot> = emptyList(),
+    val keyways180Apart: Boolean = false,
 )
+
+/** Number of keyways defined across all components (tapers + bodies). */
+fun ShaftSpec.keywayCount(): Int =
+    tapers.count { it.hasKeyway } + bodies.count { it.hasKeyway }
+
+/**
+ * Host component IDs whose keyway should render as **hidden lines** (far-side, dashed).
+ *
+ * Applies only when [keyways180Apart] is set and the shaft has ≥ 2 keyways. The keyway
+ * nearest the AFT face (smallest absolute center) is the shop measurement datum, so it
+ * stays solid (near side); every other keyway is on the far side and renders hidden.
+ * Empty otherwise — no clocking note, or too few keyways to be meaningful.
+ */
+fun ShaftSpec.hiddenKeywayHostIds(): Set<String> {
+    if (!keyways180Apart) return emptySet()
+    val centers = buildList {
+        tapers.forEach { t -> t.keywayAbsSpanMm()?.let { add(t.id to (it.first + it.second) * 0.5f) } }
+        bodies.forEach { b -> b.keywayAbsSpanMm()?.let { add(b.id to (it.first + it.second) * 0.5f) } }
+    }
+    if (centers.size < 2) return emptySet()
+    val nearId = centers.minByOrNull { it.second }!!.first
+    return centers.asSequence().map { it.first }.filterNot { it == nearId }.toSet()
+}
 
 /**
  * Basic non-overlap validation: checks non-negative fields and that each segment is within

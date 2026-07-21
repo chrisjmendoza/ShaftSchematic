@@ -22,8 +22,8 @@ Target hardware: Android 8.0+ (API 28), Target SDK 36.
 
 ## Current Status (v1.1.1 — Stable)
 
-The core feature set is **shipped and working**: modeling (bodies, tapers with keyways
-and auto-rate, threads with OAL exclusion, liners, coupler bolt slots), live preview,
+The core feature set is **shipped and working**: modeling (bodies with keyways, tapers
+with keyways and auto-rate, threads with OAL exclusion, liners, coupler bolt slots), live preview,
 validation (blocking + warnings), three PDF documents (shaft drawing, runout sheet,
 wear document), internal library with autosave and backup/restore, and full settings.
 
@@ -77,12 +77,14 @@ A `ShaftSpec` is the root aggregate:
 
 | Component | Description |
 |---|---|
-| `Body` | Constant-diameter cylinder. Fields: `diaMm`, `startFromAftMm`, `lengthMm`. |
-| `Taper` | Linear diameter transition. Fields: `startDiaMm` / `endDiaMm`, `lengthMm`, `taperRateText`. Keyway hosted: `keywayWidthMm`, `keywayDepthMm`, `keywayLengthMm`, `keywayOffsetFromSetMm`, `keywaySpooned`. |
+| `Body` | Constant-diameter cylinder. Fields: `diaMm`, `startFromAftMm`, `lengthMm`. Keyway hosted (end-referenced): `keywayWidthMm`, `keywayDepthMm`, `keywayLengthMm`, `keywayOffsetFromEndMm`, `keywayEnd` (AFT/FWD), `keywaySpooned`. Explicit bodies are non-negotiable (collide, never split). |
+| `Taper` | Linear diameter transition. Fields: `startDiaMm` / `endDiaMm`, `lengthMm`, `taperRateText`. Keyway hosted (SET-referenced): `keywayWidthMm`, `keywayDepthMm`, `keywayLengthMm`, `keywayOffsetFromSetMm`, `keywaySpooned`. |
 | `Threads` | Threaded segment. Fields: `majorDiaMm`, pitch (`pitchMm` + `tpi`), `excludeFromOAL`. |
 | `Liner` | Outer sleeve. Fields: `odMm`, anchor reference (`LinerAnchor`), authored direction. |
 
-All axial positions are measured **AFT → FWD**. `ShaftSpec.validate()` checks non-negative values and segment bounds; it does not test for overlaps (by design — overlaps are valid for liners over bodies).
+`ShaftSpec` also carries `keyways180Apart` — a drawing note that the shaft's keyways are clocked 180° apart (far-side keyway renders hidden/dashed).
+
+All axial positions are measured **AFT → FWD**. `ShaftSpec.validate()` checks non-negative values and segment bounds; it does not test for overlaps — overlap enforcement lives in collision detection (`collidingIds()`), separate from `validate()`. A liner over an *auto*-body is fine; an overlap of an *explicit* body is hard-blocked.
 
 ---
 
@@ -182,5 +184,5 @@ $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 - **Single-page PDF only** — multi-page PDF is explicitly out of scope through v1.0.
 - **No pixel math in ViewModel** — VM is the geometry authority; UI passes raw mm coordinates.
 - **Auto bodies never persisted** — when the resolved pipeline is complete, auto-generated bodies exist only in the derived view layer.
-- **Overlaps are valid** — liners intentionally overlap bodies; `validate()` only checks bounds, not intersections.
+- **Overlaps** — `validate()` only checks bounds, not intersections; overlap enforcement is `collidingIds()`. Liners over *auto*-bodies are fine, but explicit bodies are non-negotiable: any overlap of one is hard-blocked and blocks export.
 - **Committed-on-blur inputs** — numeric fields do not mutate VM state while the user is typing.

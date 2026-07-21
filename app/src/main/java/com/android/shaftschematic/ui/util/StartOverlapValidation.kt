@@ -1,6 +1,8 @@
 package com.android.shaftschematic.ui.util
 
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.bodyOverlapErrorMm
+import com.android.shaftschematic.model.nonBodyOverlapErrorMm
 import com.android.shaftschematic.ui.order.ComponentKind
 
 enum class CollisionGroup { LINER, THREAD }
@@ -20,6 +22,17 @@ fun startOverlapErrorMm(
     startMm: Float,
 ): String? {
     if (startMm < 0f) return "Must be ≥ 0"
+
+    // Explicit bodies are non-negotiable walls: nothing may move onto one (coupler bolt
+    // slots are reference cutouts and are exempt). A body being moved also may not cross
+    // any other component. Liner *length* edits negotiate at a shared body edge instead —
+    // that path does not run this start validator.
+    if (selfKind != ComponentKind.COUPLER_BOLT_SLOT) {
+        spec.bodyOverlapErrorMm(selfId, startMm, selfLengthMm)?.let { return it }
+        if (selfKind == ComponentKind.BODY) {
+            spec.nonBodyOverlapErrorMm(selfId, startMm, selfLengthMm)?.let { return it }
+        }
+    }
 
     val group = selfKind.collisionGroup() ?: return null
 

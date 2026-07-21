@@ -161,7 +161,11 @@ Keyway (taper-hosted feature):
 
 Missing keyway data is valid (all keyway fields may be 0/false).
 
-TODO: Body keyway validation not yet implemented.
+Keyway (body-hosted feature — same rules referenced from the body's AFT/FWD end face):
+- keywayWidthMm / keywayDepthMm / keywayLengthMm / keywayOffsetFromEndMm ≥ 0 (blocking, `Body.isValid`)
+- keywayOffsetFromEndMm + keywayLengthMm ≤ body.lengthMm (blocking, `Body.isValid`)
+- `keywayEnd` (AFT | FWD) selects the referenced face; offset 0 = open at that face.
+- Spoon is optional, non-blocking, and ignored for floating keyways (offset > 0).
 
 ### Taper Rate Behavior
 Superseded by the Auto/Manual rate-mode system — authoritative contract in the
@@ -259,19 +263,32 @@ Coupler bolt slots are **excluded from all collision detection** (`collisionGrou
 
 Overlaps **never** block validation.
 
-### 5.1 Body Overlaps — Not Stored, Not Checked
+### 5.1 Explicit bodies are non-negotiable (2026-07-21)
 
-Bodies **never overlap sacred components in the stored spec**. When a sacred component is placed the engine automatically splits any overlapping body into fragments on either side (see DATA_MODEL.md §Component Priority). When a sacred component is deleted adjacent body fragments merge back.
+Explicit (stored) bodies are first-class, rigid components — **not** fillers. `collidingIds()`
+flags an explicit body overlapping a taper, non-excluded thread, liner, or another body
+(red card + blocked PDF export). Nothing may be added or moved onto an explicit body:
+`bodyOverlapErrorMm` hard-blocks the Add dialogs and the carousel start/length fields (and
+`nonBodyOverlapErrorMm` blocks a *body* being moved onto any other component). Because
+overlapping adds are refused, explicit bodies are never split.
 
-Because the split/merge is handled proactively at add/delete time, the following pairs are never in an overlapping state in the spec at rest and are excluded from all collision detection:
+Auto-bodies (derived at resolve time, never stored) stay fluid and flow around every
+component — they never reach `collidingIds` and are how a shaft is shaped.
+
+The one exception is the **liner ↔ body boundary negotiation** (`linerBodyBoundaryAdjust`):
+a liner length edit at a shared edge with an abutting explicit body offers to shorten/grow
+that body (confirm/cancel) instead of hard-blocking.
+
+Checked body pairs:
 
 - Body ↔ Taper
 - Body ↔ Liner
-- Body ↔ Thread (in-shaft only; excluded threads live outside the envelope)
+- Body ↔ Thread (non-excluded only; excluded threads live outside the envelope)
+- Body ↔ Body
 
 ### 5.2 Sacred-Component Overlaps — Warning Shown
 
-The following pairs are checked by `collidingIds()`. A non-blocking warning ("Overlaps another component") is shown in the carousel card when detected:
+The following pairs are also checked by `collidingIds()`. A warning ("Overlaps another component") is shown in the carousel card when detected:
 - Taper ↔ Taper
 - Taper ↔ Thread (non-excluded only)
 - Taper ↔ Liner
@@ -298,7 +315,7 @@ collisions or bounds violations are found, a confirmation dialog appears
 | Taper collision | overlaps any existing Taper | always |
 | Thread collision | overlaps any existing non-excluded Thread | always |
 | Liner collision | overlaps any existing Liner | always |
-| Body collision | — | **never** (bodies auto-split) |
+| Body overlap (hard block) | overlaps any explicit Body | always — refuses the add (`bodyOverlapErrorMm`), not "Add Anyway" |
 | Excluded thread | — | **skipped** (outside shaft span by design) |
 | Coupler bolt slot | — | **never** (`collisionGroup()` → null) |
 

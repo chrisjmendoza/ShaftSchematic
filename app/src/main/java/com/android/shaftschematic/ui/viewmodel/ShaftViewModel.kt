@@ -960,11 +960,36 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ────────────────────────────────────────────────────────────────────────────
 
     // Bodies
-    fun addBodyAt(startMm: Float, lengthMm: Float, diaMm: Float) {
+    fun addBodyAt(
+        startMm: Float,
+        lengthMm: Float,
+        diaMm: Float,
+        keywayWidthMm: Float = 0f,
+        keywayDepthMm: Float = 0f,
+        keywayLengthMm: Float = 0f,
+        keywayOffsetFromEndMm: Float = 0f,
+        keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,
+        keywaySpooned: Boolean = false,
+    ) {
         val id = newId()
         _spec.update { s ->
             orderAdd(ComponentKind.BODY, id)
-            s.copy(bodies = listOf(Body(id, startMm, max(0f, lengthMm), max(0f, diaMm))) + s.bodies)
+            s.copy(
+                bodies = listOf(
+                    Body(
+                        id = id,
+                        startFromAftMm = startMm,
+                        lengthMm = max(0f, lengthMm),
+                        diaMm = max(0f, diaMm),
+                        keywayWidthMm = max(0f, keywayWidthMm),
+                        keywayDepthMm = max(0f, keywayDepthMm),
+                        keywayLengthMm = max(0f, keywayLengthMm),
+                        keywayOffsetFromEndMm = max(0f, keywayOffsetFromEndMm),
+                        keywayEnd = keywayEnd,
+                        keywaySpooned = keywaySpooned,
+                    )
+                ) + s.bodies
+            )
         }
         rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
         ensureOverall()
@@ -990,6 +1015,38 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
         }
         ensureOverall()
+    }
+
+    /** Edit a body's keyway in place (mirrors [updateTaperKeyway]). All params in mm. */
+    fun updateBodyKeyway(
+        index: Int,
+        widthMm: Float,
+        depthMm: Float,
+        lengthMm: Float,
+        offsetFromEndMm: Float,
+        end: LinerAuthoredReference,
+        spooned: Boolean,
+    ) = _spec.update { s ->
+        if (index !in s.bodies.indices) s else {
+            val old = s.bodies[index]
+            s.copy(
+                bodies = s.bodies.toMutableList().also { list ->
+                    list[index] = old.copy(
+                        keywayWidthMm = max(0f, widthMm),
+                        keywayDepthMm = max(0f, depthMm),
+                        keywayLengthMm = max(0f, lengthMm),
+                        keywayOffsetFromEndMm = max(0f, offsetFromEndMm),
+                        keywayEnd = end,
+                        keywaySpooned = spooned,
+                    )
+                }
+            )
+        }
+    }
+
+    /** Set the drawing note that the shaft's keyways are clocked 180° apart. */
+    fun setKeyways180Apart(enabled: Boolean) = _spec.update { s ->
+        if (s.keyways180Apart == enabled) s else s.copy(keyways180Apart = enabled)
     }
 
     /**
@@ -1433,6 +1490,39 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         if (index in _spec.value.liners.indices) {
             rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
         }
+        ensureOverall()
+    }
+
+    /**
+     * Apply a liner geometry change together with a negotiated adjacent-body adjustment
+     * (shorten or grow), atomically. The new body geometry comes from
+     * [ShaftSpec.linerBodyBoundaryAdjust]; explicit bodies are never split, so this
+     * re-abuts the shared edge instead. See docs/COMPONENT_CONTRACT.md.
+     */
+    fun updateLinerWithBodyBoundary(
+        linerIndex: Int,
+        startMm: Float,
+        lengthMm: Float,
+        odMm: Float,
+        bodyIndex: Int,
+        bodyStartMm: Float,
+        bodyLengthMm: Float,
+    ) = _spec.update { s ->
+        if (linerIndex !in s.liners.indices || bodyIndex !in s.bodies.indices) return@update s
+        val len = max(0f, lengthMm)
+        val od = max(0f, odMm)
+        val oldLiner = s.liners[linerIndex]
+        val oldBody = s.bodies[bodyIndex]
+        s.copy(
+            liners = s.liners.toMutableList().also {
+                it[linerIndex] = oldLiner.withPhysical(startMmPhysical = startMm, lengthMm = len, odMm = od)
+            },
+            bodies = s.bodies.toMutableList().also {
+                it[bodyIndex] = oldBody.copy(startFromAftMm = bodyStartMm, lengthMm = max(0f, bodyLengthMm))
+            }
+        )
+    }.also {
+        if (linerIndex in _spec.value.liners.indices) rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
         ensureOverall()
     }
 

@@ -80,9 +80,30 @@ Features:
   - Never coexist with auto bodies in the same region
 
 **Rule:** Manual body components promote over auto bodies in any overlapping span. This
-promotion is live today: the carousel's auto-body card calls `promoteIfNeeded()`
-(`ComponentCarousel.kt`) the moment the user edits Start/Length/Ø, which persists the section
-as a real `Body` in `ShaftSpec`. Viewing an auto-body card without editing it never promotes it.
+promotion is live today: the carousel's auto-body card promotes on an explicit user action —
+editing Start/Length/Ø, **or** ticking "Make editable body" — via `promoteIfNeeded()`
+(`ComponentCarousel.kt`), persisting the section as a real `Body` in `ShaftSpec`. Viewing an
+auto-body card without acting never promotes it.
+
+### Explicit bodies are non-negotiable (2026-07-21)
+
+An explicit (stored) body is a first-class, rigid component — treated like a taper/liner:
+
+- It **collides** — `collidingIds` flags body↔taper/thread/liner/body overlaps (red card +
+  blocked PDF export). Abutting edges are fine.
+- Nothing may be **added or moved onto** it: `bodyOverlapErrorMm` (and `nonBodyOverlapErrorMm`
+  for a moving body) hard-block the Add dialogs and carousel start/length fields.
+- It is **never split**. Overlapping adds can't land, so no fragmentation occurs. Shape the
+  fluid auto-body regions instead; lock a span to explicit when it's final.
+- **Consequence:** a tapered/threaded end sits over an auto-body core, not an explicit body.
+
+**Liner ↔ body boundary negotiation:** editing a liner's length so it moves a shared edge with
+an abutting explicit body prompts (`linerBodyBoundaryAdjust`, applied by
+`ShaftViewModel.updateLinerWithBodyBoundary`): if the liner grows into the body, offer to
+shorten it; if it pulls away leaving a gap, offer to grow it. This restores the auto-body
+"filling" behaviour for an explicit body without ever splitting it. The body keeps its far
+edge; its shared edge follows the liner. Scope: liner **length** edits vs the edge-adjacent
+body only.
 
 ---
 
@@ -98,19 +119,43 @@ as a real `Body` in `ShaftSpec`. Viewing an auto-body card without editing it ne
 ## 4) Keyway Feature
 
 - Keyways are **features**, not components.
-- Currently supported on **Tapers** (taper-hosted).
-- Body-hosted keyways are **shelved** (non-goal) — see `docs/ROADMAP.md` v1.0 "Non-goals":
-  "Body keyway (shelved — no marine propeller shaft use case identified)". Not planned; do not
-  build against an expectation that this will land.
+- Supported on **Tapers** (taper-hosted) and **Bodies** (body-hosted). Body keyways were
+  un-shelved 2026-07-20: intermediate shafts with fitted couplings carry keyways in plain
+  cylindrical bodies at the shaft ends (the shaft can simply end on a body).
 - Keyways will **never** exist as standalone components.
+- At most **one keyway per host** component; a shaft has as many keyways as it has
+  keyway-bearing hosts.
 
-Keyway attributes (host-owned, `model/Taper.kt`):
+Keyway attributes (host-owned, `model/Taper.kt` / `model/Body.kt`):
 - `length` (stored as `keywayLengthMm`)
 - `width` (stored as `keywayWidthMm`)
 - `depth` (stored as `keywayDepthMm`)
-- `offset from SET` (stored as `keywayOffsetFromSetMm`; 0 = open keyway at the SET face, > 0 =
-  floating keyway inset from SET)
+- reference offset:
+  - Taper: `keywayOffsetFromSetMm` — measured from the SET face
+  - Body: `keywayOffsetFromEndMm` — measured from the referenced end face, with
+    `keywayEnd` (AFT | FWD) selecting which face
+  - In both: 0 = open keyway at the referenced face, > 0 = floating keyway inset from it
 - `spoon flag` (stored as `keywaySpooned` — there is no `keywayHasSpoon` alias)
+
+Body keyways survive body split/merge by **absolute position**: `carryBodyKeyway`
+(`model/ShaftSpecExtensions.kt`) re-anchors the offset to the surviving fragment's face,
+and drops the keyway if a cut passes through it.
+
+### Keyways 180° apart
+
+`ShaftSpec.keyways180Apart` states the shaft's keyways are clocked 180° from each other.
+It is only meaningful when `spec.keywayCount() >= 2`; UI surfaces the toggle only then,
+and the PDF prints "Keyways 180° apart" in the footer's middle column under the same
+condition.
+
+**Hidden-line rendering.** When the flag is set (≥ 2 keyways), the keyway nearest the AFT
+face — the shop's measurement datum — stays **solid** (near side); every other keyway is
+drawn as a **hidden feature**: dashed outline (`HIDDEN_DASH_ON`/`HIDDEN_DASH_OFF` =
+6/4 px) with **no** white void fill, since the near surface is unbroken in a plan view.
+`ShaftSpec.hiddenKeywayHostIds()` is the single source of this classification — it returns
+the host IDs to draw hidden, and both `ShaftRenderer` (preview) and `ShaftPdfComposer`
+(export) consume it, so the two surfaces never diverge. This is the standard drafting
+convention for a feature on the far side of the part; the footer note stays as well.
 
 ---
 

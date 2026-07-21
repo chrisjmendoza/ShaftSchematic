@@ -13,6 +13,8 @@ import com.android.shaftschematic.pdf.dim.*
 import com.android.shaftschematic.pdf.notes.*
 import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_OFF
+import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_ON
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
@@ -213,7 +215,15 @@ fun composeShaftPdf(
     } else {
         drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect, bodyFill)
     }
-    drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill)
+    // Keyways 180° apart: far-side keyways render hidden (dashed, no fill); aft-most
+    // stays solid. Empty unless the flag is set.
+    val hiddenKeywayIds = spec.hiddenKeywayHostIds()
+    // Body keyways — drawn from model bodies (resolved fragments and center-break
+    // compression keep true end faces, so the slot lands at its physical position).
+    spec.bodies.filter { it.hasKeyway }.forEach { b ->
+        drawKeywayNotchBodyPdf(c, b, ::xAt, cy, outline, hidden = b.id in hiddenKeywayIds)
+    }
+    drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill, hiddenKeywayIds)
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill)
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill(), bodies = bodiesForPdf)
@@ -745,6 +755,7 @@ private fun drawTapers(
     rPx: (Float) -> Float,
     outline: Paint,
     fill: Paint? = null,
+    hiddenKeywayIds: Set<String> = emptySet(),
 ) {
     tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
@@ -767,7 +778,7 @@ private fun drawTapers(
         c.drawLine(x1, top1, x1, bot1, outline)
 
         if (t.hasKeyway) {
-            drawKeywayNotchPdf(c, t, x0, x1, top0, top1, cy, outline)
+            drawKeywayNotchPdf(c, t, x0, x1, top0, top1, cy, outline, hidden = t.id in hiddenKeywayIds)
         }
     }
 }
@@ -780,6 +791,7 @@ internal fun drawKeywayNotchPdf(
     @Suppress("UNUSED_PARAMETER") top1: Float,
     cy: Float,
     outline: Paint,
+    hidden: Boolean = false,
 ) {
     if (x1 == x0 || t.keywayWidthMm <= 0f) return
 
@@ -791,10 +803,60 @@ internal fun drawKeywayNotchPdf(
     // Scale mm → pt using the taper's own pixel span (avoids needing ptPerMm).
     val ptPerMm = if (t.lengthMm > 0f) kotlin.math.abs(x1 - x0) / t.lengthMm else 1f
 
-    val halfW       = (t.keywayWidthMm * ptPerMm) / 2f
-    val kwSetX      = setX + dir * t.keywayOffsetFromSetMm * ptPerMm
-    val kwLetX      = kwSetX + dir * t.keywayLengthMm * ptPerMm
-    val isOpen      = t.keywayOffsetFromSetMm < 0.01f
+    drawKeywaySlotPdf(c, setX, dir, ptPerMm, t.keywayWidthMm, t.keywayOffsetFromSetMm, t.keywayLengthMm, cy, outline, hidden)
+}
+
+/**
+ * Body-hosted keyway (intermediate shafts with fitted couplings). Same plan-view slot
+ * as the taper keyway, referenced from the body's AFT or FWD end face.
+ */
+internal fun drawKeywayNotchBodyPdf(
+    c: Canvas,
+    b: Body,
+    xAt: (Float) -> Float,
+    cy: Float,
+    outline: Paint,
+    hidden: Boolean = false,
+) {
+    if (b.keywayWidthMm <= 0f || b.lengthMm <= 0f) return
+    val x0 = xAt(b.startFromAftMm)
+    val x1 = xAt(b.startFromAftMm + b.lengthMm)
+    if (x1 == x0) return
+
+    val aftRef = b.keywayEnd == LinerAuthoredReference.AFT
+    val refX = if (aftRef) x0 else x1
+    val farX = if (aftRef) x1 else x0
+    val dir  = if (farX > refX) 1f else -1f
+    val ptPerMm = kotlin.math.abs(x1 - x0) / b.lengthMm
+
+    drawKeywaySlotPdf(c, refX, dir, ptPerMm, b.keywayWidthMm, b.keywayOffsetFromEndMm, b.keywayLengthMm, cy, outline, hidden)
+}
+
+/**
+ * Shared keyway slot geometry. [refX] is the referenced face (SET face for tapers,
+ * AFT/FWD end face for bodies); [dir] is +1 when the slot extends rightward from it.
+ * offset ≈ 0 = open at the referenced face; > 0 = floating (mill arcs both ends).
+ *
+ * [hidden] draws the slot as a far-side feature (keyways 180° apart): dashed outline and
+ * **no** white void fill (the near surface is unbroken). Dash matches the preview
+ * renderer (`HIDDEN_DASH_ON`/`HIDDEN_DASH_OFF`).
+ */
+private fun drawKeywaySlotPdf(
+    c: Canvas,
+    refX: Float,
+    dir: Float,
+    ptPerMm: Float,
+    widthMm: Float,
+    offsetMm: Float,
+    lengthMm: Float,
+    cy: Float,
+    outline: Paint,
+    hidden: Boolean = false,
+) {
+    val halfW       = (widthMm * ptPerMm) / 2f
+    val kwSetX      = refX + dir * offsetMm * ptPerMm
+    val kwLetX      = kwSetX + dir * lengthMm * ptPerMm
+    val isOpen      = offsetMm < 0.01f
 
     val letArcCx    = kwLetX - dir * halfW
     val letArcStart = if (dir > 0) 270f else 90f
@@ -810,25 +872,33 @@ internal fun drawKeywayNotchPdf(
     val lineRight = max(lineNear, lineFar)
 
     // ── White fill (keyway is a void in the material) ──
+    // Far-side (hidden) keyways aren't cut into the near surface, so they get no fill.
     // Inset from the SET face by one stroke-width so the taper end-face line keeps
     // its full thickness where it meets the keyway fill.
-    val strokeW   = outline.strokeWidth
-    val fillNear  = if (isOpen) kwSetX + dir * strokeW else setArcCx
-    val fillLeft  = min(fillNear, letArcCx)
-    val fillRight = max(fillNear, letArcCx)
-    val whiteFill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.FILL
-        color = android.graphics.Color.WHITE
+    if (!hidden) {
+        val strokeW   = outline.strokeWidth
+        val fillNear  = if (isOpen) kwSetX + dir * strokeW else setArcCx
+        val fillLeft  = min(fillNear, letArcCx)
+        val fillRight = max(fillNear, letArcCx)
+        val whiteFill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.FILL
+            color = android.graphics.Color.WHITE
+        }
+        c.drawRect(fillLeft, cy - halfW, fillRight, cy + halfW, whiteFill)
+        c.drawArc(letOval, letArcStart, 180f, false, whiteFill)
+        if (!isOpen) c.drawArc(setOval, setArcStart, 180f, false, whiteFill)
     }
-    c.drawRect(fillLeft, cy - halfW, fillRight, cy + halfW, whiteFill)
-    c.drawArc(letOval, letArcStart, 180f, false, whiteFill)
-    if (!isOpen) c.drawArc(setOval, setArcStart, 180f, false, whiteFill)
 
-    // ── Outline strokes on top ──
-    c.drawLine(lineLeft, cy - halfW, lineRight, cy - halfW, outline)
-    c.drawLine(lineLeft, cy + halfW, lineRight, cy + halfW, outline)
-    c.drawArc(letOval, letArcStart, 180f, false, outline)
-    if (!isOpen) c.drawArc(setOval, setArcStart, 180f, false, outline)
+    // ── Outline strokes on top (dashed for hidden far-side keyways) ──
+    val stroke = if (hidden) {
+        android.graphics.Paint(outline).apply {
+            pathEffect = android.graphics.DashPathEffect(floatArrayOf(HIDDEN_DASH_ON, HIDDEN_DASH_OFF), 0f)
+        }
+    } else outline
+    c.drawLine(lineLeft, cy - halfW, lineRight, cy - halfW, stroke)
+    c.drawLine(lineLeft, cy + halfW, lineRight, cy + halfW, stroke)
+    c.drawArc(letOval, letArcStart, 180f, false, stroke)
+    if (!isOpen) c.drawArc(setOval, setArcStart, 180f, false, stroke)
     // Open keyway: shaft face end-line already closes the SET end.
 }
 
@@ -1002,6 +1072,11 @@ private fun drawFooter(
             c.drawText(ellipsizeToWidth("Body: $label", text, midMaxW), midX, y, text); y += lh
         }
 
+        // Keyway clocking note — only meaningful with ≥ 2 keyways on the shaft.
+        if (spec.keyways180Apart && spec.keywayCount() >= 2) {
+            c.drawText(ellipsizeToWidth("Keyways 180° apart", text, midMaxW), midX, y, text); y += lh
+        }
+
         project.side.printableLabelOrNull()?.let { pos ->
             y += lh * 0.35f
             val posPaint = Paint(text).apply {
@@ -1084,6 +1159,20 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
         getFwdEndThread(spec)?.let { th ->
             fwd += "Thread: ${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtPitch(th.pitchMm, unit)} × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}"
         }
+    }
+
+    // Body-hosted keyways (fitted couplings on intermediate shafts): list in the column
+    // matching the keyway's physical half of the shaft.
+    fun bodyKwLine(b: Body): String {
+        val spoon = if (b.keywaySpooned) " (spooned)" else ""
+        return "Body KW: ${formatLenWithUnit(b.keywayWidthMm.toDouble(), unit)} × " +
+            "${formatLenWithUnit(b.keywayDepthMm.toDouble(), unit)} × " +
+            "${formatLenWithUnit(b.keywayLengthMm.toDouble(), unit)}$spoon"
+    }
+    spec.bodies.filter { it.hasKeyway }.forEach { b ->
+        val span = b.keywayAbsSpanMm() ?: return@forEach
+        val centerMm = (span.first + span.second) * 0.5f
+        if (centerMm <= spec.overallLengthMm * 0.5f) aft += bodyKwLine(b) else fwd += bodyKwLine(b)
     }
 
     return FooterColumns(aftLines = aft, fwdLines = fwd)
