@@ -1,5 +1,6 @@
 package com.android.shaftschematic.doc
 
+import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearRecord
@@ -66,6 +67,15 @@ object ShaftDocCodec {
          */
         @SerialName("wear_record")
         val wearRecord: WearRecord = WearRecord(),
+        /**
+         * Per-station runout (TIR) readings — value + high-spot marker per bubble. Absent in
+         * older files → default empty set. Additive + defaulted: no version bump needed. Orphan
+         * readings (station no longer exists) are dropped at the render layer, not here — station
+         * identity depends on resolved components + count overrides the codec doesn't have. See
+         * `docs/RunoutBubbleEditor_PLAN.md` and `model/RunoutReading.kt`.
+         */
+        @SerialName("runout_readings")
+        val runoutReadings: RunoutReadings = RunoutReadings(),
     )
 
     enum class Format { ENVELOPE_V1, LEGACY_SPEC }
@@ -82,6 +92,7 @@ object ShaftDocCodec {
         val spec: ShaftSpec,
         val runoutConfig: RunoutConfig,
         val wearRecord: WearRecord,
+        val runoutReadings: RunoutReadings,
     )
 
     private val json = Json {
@@ -121,6 +132,11 @@ object ShaftDocCodec {
                             normalizedSpec.liners.any { it.id == spot.linerId }
                         }
                     ),
+                    // Runout readings pass through untouched: orphan pruning happens at the
+                    // render layer (station identity needs resolved components + count overrides,
+                    // which we don't have here). Stale entries are harmless — the bubble lookup
+                    // simply misses them. See model/RunoutReading.kt.
+                    runoutReadings = doc.runoutReadings,
                 )
             }
 
@@ -138,6 +154,7 @@ object ShaftDocCodec {
             spec = legacy,
             runoutConfig = RunoutConfig(),
             wearRecord = WearRecord(),
+            runoutReadings = RunoutReadings(),
         )
     }
 }

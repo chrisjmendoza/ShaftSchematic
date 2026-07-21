@@ -21,7 +21,8 @@
 - Let the user set TIR orientation (Looking AFT / Looking FORWARD / Not set).
 - Let the user override the station count per component (bodies, tapers, liners).
 - Render a live canvas preview of the shaft with runout bubbles.
-- Export a hand-fill-in PDF runout sheet via SAF.
+- **Tap a bubble to record its TIR value + high-spot marker** — see "Runout Bubble Editor" below.
+- Export a fill-in PDF runout sheet via SAF (any recorded values/markers are printed in place).
 - Preview the PDF in-app via `PdfPreviewOverlay` with a Tune options sheet.
 
 ### WearRoute
@@ -115,6 +116,53 @@ the safety net, and the spot's card shows a small warning icon + "Extends past l
 re-measure" text instead, driven by the separate non-blocking `isWearSpotStaleOverrun(...)`
 classifier. `ShaftViewModel.addWearSpot`'s default 25.4mm (1in) band length is clamped to the
 liner's own length so the default is never rejected on a tiny liner.
+
+---
+
+## Runout Bubble Editor (interactive value + high-spot, 2026-07-21)
+
+Tapping a bubble on the `RunoutRoute` preview opens `RunoutBubbleDialog` — a "zoom-in" on that one
+bubble for recording its TIR reading and high-spot direction. Both are optional and independent.
+
+**Data model** (`model/RunoutReading.kt`, reference-only): `RunoutReading(componentId, stationIndex,
+valueMm?, highSpotHalfHours?)` in a `RunoutReadings` set, stored in the document envelope
+(`ShaftDocCodec.ShaftDocV1.runoutReadings`, `@SerialName("runout_readings")`) beside `RunoutConfig`
+and `WearRecord` — never inside `ShaftSpec`. Owned by `ShaftViewModel._runoutReadings` with
+`setRunoutReading` / `clearRunoutReading`; wired into the autosave combine, snapshot restore, JSON
+import/export, and `newDocument` exactly like `runoutConfig`/`wearRecord`.
+
+- **Value**: canonical mm. Entered/shown in the active unit via `util/formatRunoutValue` (4 dp inches
+  / 3 dp mm, trailing zeros stripped) and parsed back to mm on Save — unit conversion only at the edge.
+- **High spot**: `highSpotHalfHours` ∈ `[0, 23]`, **30-minute clock ticks** (Chris's hand
+  convention), 0 = 12 o'clock, clockwise, 15° each. Snapped from the free drag angle by
+  `snapToClockTick`.
+- **Identity / orphans**: keyed by `(componentId, stationIndex)`, where `stationIndex` is the
+  station's ordinal within its component (assigned by `collectRunoutStations`, carried on
+  `RunoutStationX`/`PlacedRunoutBubble`). Changing a component's station count can leave a reading
+  whose index no longer maps to a live station — it is simply not drawn (render-time lookup misses)
+  and pruned on the next edit. No decode-time drop (station identity needs resolved components +
+  overrides, which the codec lacks).
+
+**Dialog interaction** (`RunoutBubbleDialog.kt`): a large bubble Canvas with 24 clock ticks, cardinal
+labels (12/3/6/9), and the keyway slot. Two `pointerInput`s (tap + `detectDragGestures`) map the
+touch via `markerTickFromTouch` → `bubbleAngleDeg` → `snapToClockTick`, but **only when the touch is
+on the ring band** (`isOnRingBand`); off-ring touches and the hollow centre (which hosts the value
+field) are ignored. The marker follows the finger until release. Three buttons: **Clear** (reset the
+working marker + value in place — the marker-removal affordance), **Cancel** (discard, close),
+**Save** (persist via `setRunoutReading`, close; saving with neither value nor marker removes the
+reading). Working state seeds from the stored reading, so reopening shows saved data until edited.
+
+**Canvas tap → dialog** (`RunoutRoute`): `computeRunoutPreview` (a `Density` extension) hoists the
+shared plan so the renderer and the tap handler compute identical geometry. The tap handler inverts
+the preview's `graphicsLayer` zoom/pan (scale about the centre pivot, then translate — read live via
+`rememberUpdatedState` so the gesture detector isn't re-keyed on every zoom) to map the tap into plan
+space, then `pickBubbleAt` (generous tolerance for the small on-screen bubbles) selects the bubble.
+
+**Rendering** (both draw sites, in lockstep): the recorded value is drawn centred in the circle and
+the high-spot marker as a **short red dash straddling the rim** at the tick angle
+(`clockTickRimOffset`) — no radial line, so the centred value stays legible (matches the hand sheets). The
+pure clock/hit-test math lives in `geom/RunoutReadingMath.kt` (shared by `ui.screen` and `pdf` with
+no `pdf → ui` dependency); value formatting in `util/RunoutValueFormat.kt`.
 
 ---
 
@@ -501,7 +549,9 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
 - The PDF page is U.S. Letter landscape (792 × 612 pt).
 - Canvas preview and PDF share one placement engine (`geom/RunoutBubbleLayout.kt`) so they are identical by construction — never re-implement placement in a renderer.
 - Bubbles never touch each other; leader lines never enter a bubble or cross another leader (engine-verified; see the algorithm section).
-- Keyway reference marker — an open square notch straddling the rim at 12-o'clock (key-at-top-centre convention, like the hand-drawn sheets) — appears on every bubble in BOTH the PDF and the canvas preview.
+- Keyway reference cutout — an **open-topped keyway slot** at 12-o'clock (the top arc is broken across the slot mouth; two walls descend into the circle with a bottom connector), replacing the older protruding square notch. Nothing extends past the rim. Drawn identically in BOTH the PDF (`drawRunoutBubbleRingPdf`) and the canvas preview (`drawRunoutBubbleRing`).
+- **Runout readings are reference-only** (like coupler bolt slots / wear spots): a per-station TIR value + high-spot marker that never affect OAL/`coverageEndMm`, body resolution, collision, or the Free-to-End badge. Both are optional and independent; a sheet exports fine with neither. See "Runout Bubble Editor".
+- Any recorded value/marker is drawn identically in BOTH draw sites (the two must stay in lockstep — `RunoutRoute.drawRunoutMarkers` ⇔ `RunoutPdfComposer.drawPlacedBubbles`).
 - OAL arrows bracket the SET-to-SET span, not the full `overallLengthMm`.
 - The preview bitmap is rendered at 2× raster scale for sharpness on high-density displays.
 - Temp PDF files used for preview rendering are deleted after rasterisation.
@@ -510,9 +560,10 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
 
 ## Future Options
 
-- User-selectable keyway reference angle.
 - Multiple orientation diagrams on one sheet (e.g., Looking AFT + Looking FWD side-by-side).
 - Printable measurement table rows below each bubble.
+- User-selectable keyway reference angle (the cutout is currently fixed at 12 o'clock; the high-spot
+  marker is already fully user-placed).
 - Severity rating / dye-pen pass-fail digitization and photos on wear spots (explicitly out of
   scope for the liner wear feature — see `docs/LinerWearAreas_Proposal.md` §1).
 - Wear on bodies/tapers, not just liners (see the proposal's §10.5 open question).

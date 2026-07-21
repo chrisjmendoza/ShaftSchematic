@@ -6,6 +6,38 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-21
+
+### feat: interactive runout bubbles — tap to record TIR value + high-spot marker
+
+Digitizes the hand-filled runout bubble. Tapping a bubble on the Runout tab opens a "zoom-in"
+editor (`ui/screen/RunoutBubbleDialog.kt`) to record that station's TIR reading and high-spot
+direction; both print on the preview and PDF export. Both are optional — a sheet still exports
+blank. See `docs/RunoutBubbleEditor_PLAN.md` and the "Runout Bubble Editor" section of
+`docs/RunoutSheet.md`.
+
+- **Model/persistence:** `model/RunoutReading.kt` (`RunoutReading`/`RunoutReadings`) — reference-only
+  (never affects OAL/coverage/collision/Free-to-End, like coupler bolt slots / wear spots). Additive
+  `runout_readings` envelope field (no version bump); keyed by `(componentId, stationIndex)` with
+  render-layer orphan handling. Wired through `ShaftViewModel` (`setRunoutReading`/`clearRunoutReading`,
+  autosave combine, snapshot/import/export/new-doc) and `AutosaveManager.SessionSnapshot`.
+- **High spot:** placed by tapping/dragging the ring; snaps to **30-minute clock ticks** (0–23,
+  12 o'clock = 0, clockwise). Off-ring touches do nothing. Pure math in `geom/RunoutReadingMath.kt`
+  (`snapToClockTick`, `bubbleAngleDeg`, `clockTickRimOffset`, `isOnRingBand`, `pickBubbleAt`).
+- **Value:** canonical mm, entered/shown in the active unit (`util/formatRunoutValue`), parsed on Save.
+- **Rendering (both draw sites, lockstep):** value centred in the circle + a short red high-spot
+  **dash straddling the rim** (no radial line — keeps the value legible), in
+  `RunoutRoute.drawRunoutMarkers` and `RunoutPdfComposer.drawPlacedBubbles` (`composeRunoutPdf`
+  gained a `runoutReadings` param).
+- **Keyway cutout:** the protruding square notch is replaced by an **open-topped keyway slot** cut into
+  the top of the circle (top arc broken across the slot mouth; nothing protrudes past the rim), drawn
+  identically on canvas and PDF.
+- **Engine:** `stationIndex` added to `RunoutStationX`/`PlacedRunoutBubble` for stable bubble identity.
+- Tests: `RunoutReadingTest` (model + codec round-trip / orphan pass-through), `RunoutReadingMathTest`
+  (clock snap, angle↔rim round-trip, ring band, bubble pick). Suite green.
+
+---
+
 ## 2026-07-18
 
 ### feat: wear PDF rendering modes — liners-only page at 3+ wear liners

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.WearRecord
@@ -44,6 +45,9 @@ object AutosaveManager {
         // Added 2026-07-18 (liner wear areas Phase 1): absent in older drafts; default
         // empty record keeps them decodable.
         val wearRecord: WearRecord = WearRecord(),
+        // Added 2026-07-21 (runout bubble editor): per-station TIR value + high-spot marker.
+        // Absent in older drafts; default empty set keeps them decodable.
+        val runoutReadings: RunoutReadings = RunoutReadings(),
     )
 
     suspend fun autosave(context: Context, snapshot: SessionSnapshot) {

@@ -366,6 +366,44 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutConfig.update { it.copy(tirDirection = direction) }
     }
 
+    // ── Runout per-station readings (bubble value + high-spot marker) ──────────
+    // Reference-only data, same posture as _wearRecord below: plain state updates, no
+    // geometry side effects. Keyed by (componentId, stationIndex). Both fields optional;
+    // an entry with neither value nor marker is dropped by RunoutReadings.withReading.
+    // See docs/RunoutBubbleEditor_PLAN.md and model/RunoutReading.kt.
+
+    private val _runoutReadings = MutableStateFlow(RunoutReadings())
+    val runoutReadings: StateFlow<RunoutReadings> = _runoutReadings.asStateFlow()
+
+    /**
+     * Upsert the runout reading for a bubble identified by [componentId] + [stationIndex].
+     * [valueMm] is canonical mm (UI converts from the active unit before calling);
+     * [highSpotHalfHours] is a clock tick in `[0, 23]` (0 = 12 o'clock). Passing both as null
+     * clears the reading (the empty entry is not stored).
+     */
+    fun setRunoutReading(
+        componentId: String,
+        stationIndex: Int,
+        valueMm: Float?,
+        highSpotHalfHours: Int?,
+    ) {
+        _runoutReadings.update { readings ->
+            readings.withReading(
+                RunoutReading(
+                    componentId = componentId,
+                    stationIndex = stationIndex,
+                    valueMm = valueMm,
+                    highSpotHalfHours = highSpotHalfHours?.let { ((it % 24) + 24) % 24 },
+                )
+            )
+        }
+    }
+
+    /** Remove the runout reading for a bubble. No-op if none recorded. */
+    fun clearRunoutReading(componentId: String, stationIndex: Int) {
+        _runoutReadings.update { it.without(componentId, stationIndex) }
+    }
+
     // ── Liner wear inspection record ──────────────────────────────────────────
     // Persisted alongside the spec in the .shaft file, same as runoutConfig above.
     // Reference-only data: plain state updates, no geometry side effects, no
@@ -534,9 +572,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Flow.combine overload for >5 flows returns Array<Any?>
         combine(
             spec, unit, shaftPosition, customer, vessel, jobNumber, notes,
-            runoutConfig, unitLocked, overallIsManual, wearRecord
+            runoutConfig, unitLocked, overallIsManual, wearRecord, runoutReadings
         ) { values: Array<Any?> ->
-            check(values.size == 11) { "Autosave combine expected 11 values, got ${values.size}" }
+            check(values.size == 12) { "Autosave combine expected 12 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -549,6 +587,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val locked = values[8] as Boolean
             val manual = values[9] as Boolean
             val wear = values[10] as WearRecord
+            val readings = values[11] as RunoutReadings
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -562,6 +601,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 unitLocked = locked,
                 overallIsManual = manual,
                 wearRecord = wear,
+                runoutReadings = readings,
             )
         }
                 .debounce(1500)
@@ -879,6 +919,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _notes.value = snapshot.notes
         _runoutConfig.value = snapshot.runoutConfig
         _wearRecord.value = snapshot.wearRecord
+        _runoutReadings.value = snapshot.runoutReadings
         // Restore unitLocked before any defaultUnitFlow emission can overwrite the
         // draft's unit, and overallIsManual so a manually-set OAL isn't auto-resized.
         _unitLocked.value = snapshot.unitLocked
@@ -1861,6 +1902,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             spec = _spec.value,
             runoutConfig = _runoutConfig.value,
             wearRecord = _wearRecord.value,
+            runoutReadings = _runoutReadings.value,
         )
     )
 
@@ -1887,6 +1929,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutConfig.value = decoded.runoutConfig
         // Already orphan-filtered against decoded.spec.liners inside ShaftDocCodec.decode().
         _wearRecord.value = decoded.wearRecord
+        _runoutReadings.value = decoded.runoutReadings
 
         // Derive OAL mode from the document instead of leaking the previous session's
         // flag: an authored OAL beyond the content end must be treated as manual, or
@@ -1926,6 +1969,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _shaftPosition.value = ShaftPosition.OTHER
         _runoutConfig.value = RunoutConfig()
         _wearRecord.value = WearRecord()
+        _runoutReadings.value = RunoutReadings()
         _notes.value = ""
         _overallIsManual.value = false
 
