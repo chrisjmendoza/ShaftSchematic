@@ -365,6 +365,26 @@ fun ComponentWearDetailOverlay(
                     }
                 }
 
+                // ── Shaft-direction reference: AFT is drawn at the left, FWD at the right
+                // (same convention as the schematic / wear PDF), so the machinist can orient the
+                // broken-out segment relative to the shaft.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "← AFT",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "FWD →",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
                 // ── Pit controls ─────────────────────────────────────────────
                 Row(
                     modifier = Modifier.fillMaxWidth(),

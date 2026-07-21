@@ -27,8 +27,9 @@ readings). See the "Wear Pits" section of `docs/RunoutSheet.md`.
   pits). Tapping opens `ComponentWearDetailOverlay` (`ui/screen/LinerWearDetail.kt`, generalized from
   the liner-only overlay — a rect for body/liner, a trapezoid for a taper). Explicit **Add X /
   Remove X** tool chips + a **Clear all pits** button so a stray tap can't place or delete by
-  accident; a **Small / Large** brush. Liners keep the full wear-band editor plus pits; bodies and
-  tapers get pits only. `ShaftViewModel` gained `addWearPit`/`updateWearPitSize`/`removeWearPit`.
+  accident; a **Small / Large** brush. A **← AFT / FWD →** caption under the drawn box shows the
+  shaft-direction reference. Liners keep the full wear-band editor plus pits; bodies and tapers get
+  pits only. `ShaftViewModel` gained `addWearPit`/`updateWearPitSize`/`removeWearPit`.
 - **Wear PDF:** X's drawn at true axial + across position on the main profile (`drawWearPitsOnProfile`,
   taper Ø interpolated at the pit) and on the detail strips.
 - **Wear PDF layout change:** the shaft profile is now **always drawn on top**. The old strips-only

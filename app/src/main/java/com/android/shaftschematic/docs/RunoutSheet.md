@@ -154,11 +154,14 @@ component (body/taper/liner) as a tap target and badges each with its total reco
 (spots + pits). A tap opens `ComponentWearDetailOverlay` (`LinerWearDetail.kt`, generalized from the
 liner-only overlay): it breaks the tapped component out of the shaft (S-curve stubs) and draws it
 enlarged — a rect for a body/liner, a trapezoid for a taper (`componentEdgeDias` +
-`radiusLocalPx`). **Liners** still get the full wear-band editor (`WearSpotCard`s, dimension rail);
-**bodies/tapers** get pits only. Pit interaction on the detail canvas: **tap bare metal to drop an
-X** at the current brush size (a Small/Large chip); **tap an existing X to remove it**. The tap
-handler and the Canvas renderer share one layout (`computeSegDetailLayout`) so a tapped X removes
-exactly the X that was drawn (`pickPitAt` from `geom/WearPitMath.kt`, generous touch pad).
+`radiusLocalPx`). A **← AFT / FWD →** caption under the drawn box gives the shaft-direction
+reference (AFT drawn left, FWD right — the schematic/PDF convention). **Liners** still get the full
+wear-band editor (`WearSpotCard`s, dimension rail); **bodies/tapers** get pits only. Pit interaction
+uses **explicit tool chips** so a stray tap can't edit by accident: **Add X** (tap places at the
+current Small/Large brush), **Remove X** (tap deletes the X hit; a miss is a no-op), and a **Clear
+all pits** button. The tap handler and the Canvas renderer share one layout
+(`computeSegDetailLayout`) so a tapped X removes exactly the X that was drawn (`pickPitAt` from
+`geom/WearPitMath.kt`, generous touch pad).
 
 **Rendering** (all draw sites, in lockstep — same crossed-line construction, same small:large
 ratio; only the destination units and API differ, exactly like the runout marker):
