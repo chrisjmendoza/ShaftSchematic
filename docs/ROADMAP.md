@@ -68,7 +68,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - OAL include-thread fix — bracket spans SET-to-SET (excluded) or shaft-end-to-SET (included); label always equals typed OAL
 - Unsaved-changes guard — "Save / Discard / Cancel" dialog when New or Open is triggered with unsaved work; dirty state tracks spec + metadata fields against last save or load
 - Component collision detection — global overlap scan across all non-excluded components; both colliding parties show red error chip; PDF export and preview blocked until collisions are resolved
-- Explicit bodies as non-negotiable components — stored bodies now collide (body↔taper/thread/liner/body), block overlapping adds/moves, and are never split; auto-bodies (derived) stay fluid fillers. Auto-body card gains a "Make editable body" checkbox; a liner length edit at a shared body edge negotiates (shorten/grow the abutting explicit body) instead of overrunning it
+- Body engine refinements — auto-body card gains a "Make editable body" checkbox; a keyed body is never split (stays one whole card); `mergeBodiesAround` won't merge across a component still occupying the freed span (no phantom long bodies). (Bodies remain fluid fillers and do not collide — a brief "non-negotiable bodies" experiment was reverted 2026-07-21 because it flagged normal body-under-sleeve as errors.)
 
 ---
 

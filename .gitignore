@@ -70,3 +70,6 @@ captures/
 # =======================================
 .DS_Store
 Thumbs.db
+
+# Kotlin compiler session/build artifacts
+.kotlin/

@@ -1,6 +1,6 @@
 # Glossary
 Version: v0.5.x
-Last updated: 2026-07-21 — Keyway entry: body-hosted keyways now shipped (were shelved); added keyways-180°-apart and explicit-vs-auto-body notes.
+Last updated: 2026-07-21 — Keyway entry: body-hosted keyways now shipped (were shelved); added keyways-180°-apart notes; corrected explicit-vs-auto-body entry after the "non-negotiable bodies" revert (bodies are fluid fillers, never collide).
 
 Definitions of all terms used across architecture, components, rendering, validation, and PDF export.
 
@@ -147,11 +147,14 @@ Non-goal:
 - Keyways will never exist as standalone components.
 
 ### Explicit vs auto body
-An **explicit** body is a stored `ShaftSpec.bodies` entry — a first-class, non-negotiable
-component (collides, hard-blocks overlapping adds/moves, never split). An **auto body** is
-derived at resolve time (never stored) to fill unoccupied spans; it is fluid and flows around
-every component. Promote an auto body to explicit by editing a field or ticking "Make editable
-body" on its carousel card.
+An **explicit** body is a stored `ShaftSpec.bodies` entry; an **auto body** is derived at
+resolve time (never stored) to fill unoccupied spans. Both are fluid base material / fillers:
+bodies never collide (`collidingIds()` checks only sacred taper/thread/liner pairs), and a
+sacred component added over a plain body splits it (`splitBodiesAround`) — a body that has a
+keyway stays whole and is trimmed for drawing instead. Promote an auto body to explicit by
+editing a field or ticking "Make editable body" on its carousel card. (The "explicit bodies are
+non-negotiable" experiment was reverted 2026-07-21 — it raised false collision warnings on
+normal drafts.)
 
 ### Pilot Diameter (future)
 Centering diameter for couplings.

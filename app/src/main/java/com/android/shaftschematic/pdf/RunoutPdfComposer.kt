@@ -550,7 +550,8 @@ private fun drawPlacedBubbles(
     val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.BLACK
-        textSize = r * 0.85f
+        // Printed value sits small inside the (larger) circle, leaving room to hand-write.
+        textSize = r * 0.60f
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
     }
@@ -665,7 +666,7 @@ private const val TIR_LINE_HEIGHT_PT = 20f  // Space for TIR direction line at b
 
 // Bubble geometry — sized to hold hand-written decimal readings (e.g. .016)
 // Row spacing and leader routing are derived from these by geom/RunoutBubbleLayout.kt.
-private const val BUBBLE_RADIUS_PT      = 20f  // 40 pt ≈ 0.55 inch diameter (readable, not too large)
+private const val BUBBLE_RADIUS_PT      = 23f  // 46 pt ≈ 0.64 inch diameter (roomy to hand-write a value in)
 private const val BUBBLE_MIN_GAP_PT     = 5f   // Minimum clear distance between circle edges
 private const val SHORT_LEADER_PT       = 18f  // Deepest shaft surface → top of bubble row 0
 private const val KEYWAY_SQUARE_SIZE_PT = 7f   // Open square notch straddling the rim at 12-o'clock

@@ -86,13 +86,14 @@ fun ShaftSpec.findRightNeighbor(anchor: ComponentKey): ComponentKey? {
  *
  * Checked pairs:
  *  Taper–Taper, Taper–Thread, Taper–Liner,
- *  Thread–Thread, Thread–Liner, Liner–Liner,
- *  Body–Taper, Body–Thread, Body–Liner, Body–Body.
+ *  Thread–Thread, Thread–Liner, Liner–Liner.
  *
- * Bodies (all stored bodies are explicit) are **non-negotiable, first-class components**:
- * nothing may overlap them. (Auto-bodies are derived, not stored, so they never appear
- * here — they remain the fluid fillers that flow around everything.) Abutting edges are
- * allowed via [eps]. Excluded threads ([Threads.excludeFromOAL] = true) are skipped.
+ * Bodies are intentionally **excluded** from collision. A body legitimately runs under a
+ * liner (a sleeve over the shaft) or up against a taper — the resolve layer trims the drawn
+ * body around those components, so the *stored* body can span across them without being a
+ * real conflict. Flagging that (from the raw stored spans) produced false "Overlaps Body N"
+ * warnings against bodies that aren't even drawn there. Excluded threads
+ * ([Threads.excludeFromOAL] = true) are skipped.
  */
 fun ShaftSpec.collidingIds(): Set<String> {
     val eps = 1e-3f
@@ -140,145 +141,7 @@ fun ShaftSpec.collidingIds(): Set<String> {
         }
     }
 
-    // Bodies vs everything (bodies are non-negotiable).
-    for (b in bodies) {
-        for (t in tapers) if (overlaps(b.startFromAftMm, b.lengthMm, t.startFromAftMm, t.lengthMm)) {
-            result += b.id; result += t.id
-        }
-        for (th in activeThreads) if (overlaps(b.startFromAftMm, b.lengthMm, th.startFromAftMm, th.lengthMm)) {
-            result += b.id; result += th.id
-        }
-        for (ln in liners) if (overlaps(b.startFromAftMm, b.lengthMm, ln.startFromAftMm, ln.lengthMm)) {
-            result += b.id; result += ln.id
-        }
-    }
-    for (i in bodies.indices) for (j in i + 1 until bodies.size) {
-        val a = bodies[i]; val b = bodies[j]
-        if (overlaps(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {
-            result += a.id; result += b.id
-        }
-    }
-
     return result
-}
-
-/**
- * Non-negotiable overlap check for a **proposed** span (an add, or a move/resize) against
- * the shaft's explicit bodies. Returns a human-readable error, or null when the span
- * clears every body. Abutting an edge is allowed. Pass the component's own id as [selfId]
- * so a body isn't tested against itself.
- *
- * This is the hard-block backing the rule "nothing may overlap an explicit body." Coupler
- * bolt slots are reference cutouts and must not call this.
- */
-fun ShaftSpec.bodyOverlapErrorMm(selfId: String?, startMm: Float, lengthMm: Float): String? {
-    if (lengthMm <= 0f) return null
-    val eps = 1e-3f
-    val end = startMm + lengthMm
-    val hitIndex = bodies.indexOfFirst { b ->
-        b.id != selfId &&
-            startMm < b.startFromAftMm + b.lengthMm - eps &&
-            end > b.startFromAftMm + eps
-    }
-    if (hitIndex < 0) return null
-    val label = bodies[hitIndex].label?.takeIf { it.isNotBlank() } ?: "Body ${hitIndex + 1}"
-    return "Overlaps $label"
-}
-
-/**
- * Overlap check for a proposed span against the shaft's tapers, active threads, and liners
- * (everything except bodies). Companion to [bodyOverlapErrorMm]; used when adding/moving a
- * **body**, which — being non-negotiable — may not cross any other component either.
- * Returns a human-readable error, or null when clear.
- */
-fun ShaftSpec.nonBodyOverlapErrorMm(selfId: String?, startMm: Float, lengthMm: Float): String? {
-    if (lengthMm <= 0f) return null
-    val eps = 1e-3f
-    val end = startMm + lengthMm
-    fun hits(s: Float, l: Float): Boolean = startMm < s + l - eps && end > s + eps
-
-    tapers.forEachIndexed { i, t ->
-        if (t.id != selfId && hits(t.startFromAftMm, t.lengthMm)) return "Overlaps Taper ${i + 1}"
-    }
-    threads.filter { !it.excludeFromOAL }.forEachIndexed { i, th ->
-        if (th.id != selfId && hits(th.startFromAftMm, th.lengthMm)) return "Overlaps Thread ${i + 1}"
-    }
-    liners.forEachIndexed { i, ln ->
-        if (ln.id != selfId && hits(ln.startFromAftMm, ln.lengthMm)) return "Overlaps Liner ${i + 1}"
-    }
-    return null
-}
-
-/**
- * A proposed adjustment to an explicit body so it keeps abutting a liner whose length just
- * changed — the "filling" behaviour of an auto-body, but negotiated (confirm/cancel) so an
- * explicit, non-splittable body is never silently overrun.
- *
- * @property shorten true = the liner grew into the body (offer to shorten it); false = the
- *   liner pulled away and left a gap (offer to grow the body to fill).
- */
-data class LinerBodyBoundary(
-    val bodyIndex: Int,
-    val bodyId: String,
-    val bodyLabel: String,
-    val shorten: Boolean,
-    val deltaMm: Float,
-    val newBodyStartMm: Float,
-    val newBodyLengthMm: Float,
-)
-
-/**
- * Detect whether a liner geometry change from [oldStartMm]/[oldLengthMm] to
- * [newStartMm]/[newLengthMm] moves a shared edge with an **explicit** body that abutted it,
- * and how to re-abut that body. Returns null when no abutting body is affected, or when the
- * liner would swallow the body whole (that stays a hard collision, not a boundary nudge).
- *
- * The moved liner edge and the body's shared edge track together: the body keeps its far
- * edge and its near edge follows the liner. This single formula covers both directions —
- * extending shortens the body, retracting grows it.
- */
-fun ShaftSpec.linerBodyBoundaryAdjust(
-    linerId: String,
-    oldStartMm: Float,
-    oldLengthMm: Float,
-    newStartMm: Float,
-    newLengthMm: Float,
-): LinerBodyBoundary? {
-    val adjTol = 0.5f   // edge-adjacency tolerance (matches body merge eps)
-    val eps = 1e-3f
-    val oldEnd = oldStartMm + oldLengthMm
-    val newEnd = newStartMm + newLengthMm
-
-    fun bodyLabel(i: Int) = bodies[i].label?.takeIf { it.isNotBlank() } ?: "Body ${i + 1}"
-
-    fun build(i: Int, newBodyStart: Float, newBodyEnd: Float, delta: Float, shorten: Boolean): LinerBodyBoundary? {
-        val len = newBodyEnd - newBodyStart
-        if (len <= eps) return null   // liner swallows the body — a hard collision, not a nudge
-        if (delta <= eps) return null
-        return LinerBodyBoundary(
-            bodyIndex = i, bodyId = bodies[i].id, bodyLabel = bodyLabel(i),
-            shorten = shorten, deltaMm = delta,
-            newBodyStartMm = newBodyStart, newBodyLengthMm = len,
-        )
-    }
-
-    // FWD edge moved: body abutting the liner's old FWD edge (body.start ≈ oldEnd).
-    if (kotlin.math.abs(newEnd - oldEnd) > eps) {
-        val i = bodies.indexOfFirst { kotlin.math.abs(it.startFromAftMm - oldEnd) < adjTol }
-        if (i >= 0) {
-            val bEnd = bodies[i].startFromAftMm + bodies[i].lengthMm
-            return build(i, newEnd, bEnd, kotlin.math.abs(newEnd - oldEnd), shorten = newEnd > oldEnd)
-        }
-    }
-    // AFT edge moved: body abutting the liner's old AFT edge (body.end ≈ oldStart).
-    if (kotlin.math.abs(newStartMm - oldStartMm) > eps) {
-        val i = bodies.indexOfFirst { kotlin.math.abs(it.startFromAftMm + it.lengthMm - oldStartMm) < adjTol }
-        if (i >= 0) {
-            val bStart = bodies[i].startFromAftMm
-            return build(i, bStart, newStartMm, kotlin.math.abs(newStartMm - oldStartMm), shorten = newStartMm < oldStartMm)
-        }
-    }
-    return null
 }
 
 /**
@@ -557,6 +420,13 @@ fun ShaftSpec.splitBodiesAround(
             newBodies += body
             continue
         }
+        // Light protection: a keyed body is never fragmented — it stays one whole card (its
+        // keyway needs the full body). The resolve layer still trims it around the component
+        // for drawing, so this only affects the stored representation, not the picture.
+        if (body.hasKeyway) {
+            newBodies += body
+            continue
+        }
         removedIds += body.id
         // Left fragment: from body start up to where the component begins
         if (compStart > bodyStart + eps) {
@@ -610,6 +480,21 @@ fun ShaftSpec.mergeBodiesAround(
     val newBodies  = bodies.toMutableList()
 
     if (bodyA != null && bodyB != null) {
+        // Only merge A→B across the freed span if nothing else still occupies it. If another
+        // component overlapped the removed one (stacked), merging straight across would span
+        // the survivor and manufacture a long phantom body — so skip the merge and let
+        // auto-bodies fill whatever is actually free.
+        val gapEps = 1e-3f
+        val gapStart = bodyA.startFromAftMm + bodyA.lengthMm
+        val gapEnd = bodyB.startFromAftMm
+        fun occupiesGap(s: Float, l: Float): Boolean = s < gapEnd - gapEps && s + l > gapStart + gapEps
+        val gapClear =
+            tapers.none { occupiesGap(it.startFromAftMm, it.lengthMm) } &&
+            threads.filter { !it.excludeFromOAL }.none { occupiesGap(it.startFromAftMm, it.lengthMm) } &&
+            liners.none { occupiesGap(it.startFromAftMm, it.lengthMm) } &&
+            bodies.none { it.id != bodyA.id && it.id != bodyB.id && occupiesGap(it.startFromAftMm, it.lengthMm) }
+        if (!gapClear) return BodySplitResult(this, emptyList(), emptyList())
+
         newBodies -= bodyA
         newBodies -= bodyB
         removedIds += listOf(bodyA.id, bodyB.id)

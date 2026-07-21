@@ -11,6 +11,12 @@ package com.android.shaftschematic.util
 fun formatRunoutValue(valueMm: Float, unit: UnitSystem): String {
     val display = unit.fromMillimeters(valueMm.toDouble())
     val decimals = if (unit == UnitSystem.INCHES) 4 else 3
-    val s = "%.${decimals}f".format(display)
-    return s.trimEnd('0').trimEnd('.').ifEmpty { "0" }
+    val trimmed = "%.${decimals}f".format(display).trimEnd('0').trimEnd('.').ifEmpty { "0" }
+    // Drop the leading zero before the decimal (0.003 → .003, -0.003 → -.003) so the value
+    // fits the bubble better — matches how a machinist hand-writes a TIR reading.
+    return when {
+        trimmed.startsWith("0.")  -> trimmed.substring(1)
+        trimmed.startsWith("-0.") -> "-" + trimmed.substring(2)
+        else -> trimmed
+    }
 }

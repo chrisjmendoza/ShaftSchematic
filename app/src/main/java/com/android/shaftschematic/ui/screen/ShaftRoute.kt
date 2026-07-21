@@ -207,7 +207,6 @@ fun ShaftRoute(
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateThreadLabel = { i, label   -> vm.updateThreadLabel(i, label) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
-        onUpdateLinerWithBodyBoundary = { li, s, l, od, bi, bs, bl -> vm.updateLinerWithBodyBoundary(li, s, l, od, bi, bs, bl) },
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
         onUpdateCouplerBoltSlot = { i, s, dia, cnt, sp, thru, dep -> vm.updateCouplerBoltSlot(i, s, dia, cnt, sp, thru, dep) },

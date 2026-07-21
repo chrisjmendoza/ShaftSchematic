@@ -1,6 +1,6 @@
 # ShaftSchematic Data Model
 Version: v0.5.x
-Last updated: 2026-07-18 — component field listings corrected to match `model/*.kt` (Body/Taper/Threads/Liner gained fields since this was last accurate); fixed nonexistent `keywayHasSpoon` alias; body keyway marked shelved; removed a garbled duplicate tail section.
+Last updated: 2026-07-21 — reverted "explicit bodies are non-negotiable" (false collision warnings on normal drafts); bodies are the fluid base again (no collision, plain bodies split around sacred components, keyed bodies protected). 2026-07-18 — component field listings corrected to match `model/*.kt`; fixed nonexistent `keywayHasSpoon` alias; removed a garbled duplicate tail section.
 
 ## Overview
 The data model defines all immutable geometric entities that compose a shaft schematic. All measurements are stored in **millimeters** (`Float`). No rendering or UI logic is present in this layer.
@@ -53,29 +53,29 @@ Components
 
 **Bodies describe raw shaft material** between sacred components. They are excluded from collision detection and from new-component default-start calculations.
 
-#### Explicit vs auto bodies (2026-07-21)
+#### Explicit vs auto bodies (reverted 2026-07-21)
 
-Stored `ShaftSpec.bodies` are all **explicit** — first-class, non-negotiable components.
-**Auto-bodies** are derived at resolve time (never stored) to fill gaps and remain fluid.
+Both stored `ShaftSpec.bodies` (**explicit**) and derived **auto-bodies** are fluid base
+material / fillers. (The "explicit bodies are non-negotiable" experiment was reverted — it
+raised false collision warnings on normal drafts.)
 
-- **Explicit bodies collide** (`collidingIds` includes body↔taper/thread/liner/body) → red
-  card + blocked PDF export. Nothing may be added or moved onto an explicit body
-  (`bodyOverlapErrorMm` / `nonBodyOverlapErrorMm` hard-block the Add dialogs and carousel
-  start/length fields). Because overlaps can't land, explicit bodies are never split.
-- **Auto-bodies stay fluid** — they flow around every component via `deriveAutoBodies`, and
-  are how you shape a shaft. Promote one to explicit with the "Make editable body" checkbox
-  (or Add Body) to lock a span / add a keyway.
-- **Liner ↔ body boundary negotiation** (`linerBodyBoundaryAdjust`): a liner length edit that
-  moves a shared edge with an abutting explicit body offers to shorten it (overlap) or grow
-  it (gap) — the auto-body "filling", but confirmed, since the explicit body can't split.
+- **Bodies do not collide.** `collidingIds()` checks only taper/thread/liner pairs
+  (sacred-vs-sacred), never bodies. A body legitimately runs under a liner and up against a
+  taper; the resolve layer (`subtractBodiesAgainstNonBodies`) trims the *drawn* body around
+  those components, so a stored body span crossing them is not a conflict.
+- **No hard-block on adds/moves over a body.** The removed `bodyOverlapErrorMm` /
+  `nonBodyOverlapErrorMm` helpers and the liner↔body "boundary negotiation"
+  (`linerBodyBoundaryAdjust` / `updateLinerWithBodyBoundary`) no longer exist.
+- **Auto-bodies** (derived at resolve via `deriveAutoBodies`, never stored) flow around every
+  component. Promote one to explicit with the "Make editable body" checkbox (or Add Body) to
+  lock a span / add a keyway.
 
-#### Body Split / Merge (legacy fragments)
+#### Body Split / Merge
 
-The split/merge engine below still heals bodies fragmented by older builds, but the
-non-negotiable rule above means new overlapping adds no longer fragment an explicit body:
+The split/merge engine keeps plain bodies flowing around sacred components:
 
-- **On add** (taper / liner / in-shaft thread): any body whose span overlaps the new component is removed and replaced with up to two fragment bodies — one on each side of the new component. Each fragment gets a new UUID and inherits the parent's `diaMm`.
-- **On delete**: the engine searches for a body whose right edge aligns with the deleted component's start (within 0.5 mm) and a body whose left edge aligns with its end. If both are found they merge into one body spanning the entire region; the merged diameter is `max(leftDiaMm, rightDiaMm)`. If only one side exists (component was at a shaft boundary), that body expands to fill the freed span.
+- **On add** (taper / liner / in-shaft thread): any plain body whose span overlaps the new component is removed and replaced with up to two fragment bodies — one on each side of the new component. Each fragment gets a new UUID and inherits the parent's `diaMm`. **A body that has a keyway is never split** — it stays one whole card (keyway intact) and the resolve layer trims it for drawing instead.
+- **On delete**: `mergeBodiesAround` searches for a body whose right edge aligns with the deleted component's start (within 0.5 mm) and a body whose left edge aligns with its end. If both are found they merge into one body spanning the entire region; the merged diameter is `max(leftDiaMm, rightDiaMm)`. If only one side exists (component was at a shaft boundary), that body expands to fill the freed span. **Engine guard:** the merge is refused when another component still occupies the freed span, preventing a long phantom body.
 - **Keyway carry**: body-hosted keyways survive split/merge by absolute position — `carryBodyKeyway` re-anchors `keywayOffsetFromEndMm` to the surviving fragment's referenced face, and drops the keyway when a cut passes through its span. A merged body keeps at most one keyway (left fragment's preferred).
 
 The user can adjust the merged body's diameter manually after a merge.

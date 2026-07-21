@@ -1534,39 +1534,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         ensureOverall()
     }
 
-    /**
-     * Apply a liner geometry change together with a negotiated adjacent-body adjustment
-     * (shorten or grow), atomically. The new body geometry comes from
-     * [ShaftSpec.linerBodyBoundaryAdjust]; explicit bodies are never split, so this
-     * re-abuts the shared edge instead. See docs/COMPONENT_CONTRACT.md.
-     */
-    fun updateLinerWithBodyBoundary(
-        linerIndex: Int,
-        startMm: Float,
-        lengthMm: Float,
-        odMm: Float,
-        bodyIndex: Int,
-        bodyStartMm: Float,
-        bodyLengthMm: Float,
-    ) = _spec.update { s ->
-        if (linerIndex !in s.liners.indices || bodyIndex !in s.bodies.indices) return@update s
-        val len = max(0f, lengthMm)
-        val od = max(0f, odMm)
-        val oldLiner = s.liners[linerIndex]
-        val oldBody = s.bodies[bodyIndex]
-        s.copy(
-            liners = s.liners.toMutableList().also {
-                it[linerIndex] = oldLiner.withPhysical(startMmPhysical = startMm, lengthMm = len, odMm = od)
-            },
-            bodies = s.bodies.toMutableList().also {
-                it[bodyIndex] = oldBody.copy(startFromAftMm = bodyStartMm, lengthMm = max(0f, bodyLengthMm))
-            }
-        )
-    }.also {
-        if (linerIndex in _spec.value.liners.indices) rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
-        ensureOverall()
-    }
-
     fun updateLinerAuthoredReference(index: Int, reference: LinerAuthoredReference) = _spec.update { s ->
         if (index !in s.liners.indices) s else {
             val old = s.liners[index]

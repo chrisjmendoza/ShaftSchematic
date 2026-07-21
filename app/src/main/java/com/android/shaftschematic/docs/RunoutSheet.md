@@ -164,6 +164,13 @@ the high-spot marker as a **short red dash straddling the rim** at the tick angl
 pure clock/hit-test math lives in `geom/RunoutReadingMath.kt` (shared by `ui.screen` and `pdf` with
 no `pdf → ui` dependency); value formatting in `util/RunoutValueFormat.kt`.
 
+Bubble sizing (tuned 2026-07-21 from a printed sheet): the circle is roomy enough to hand-write a
+value in (`BUBBLE_RADIUS_PT = 23` ≈ 0.64 in dia; on-screen `radius = 7.dp`), and the printed value
+sits small inside it (`textSize = r * 0.60`). `formatRunoutValue` **drops the leading zero** before
+the decimal (`0.003 → .003`, `-0.003 → -.003`) so the value fits and reads like a hand-written TIR.
+Keep the radius and the `0.60` text ratio identical in both draw sites (`RunoutRoute.drawRunoutMarkers`
+⇔ `RunoutPdfComposer.drawPlacedBubbles`).
+
 ---
 
 ## Bubble Placement Algorithm (RunoutRoute only)

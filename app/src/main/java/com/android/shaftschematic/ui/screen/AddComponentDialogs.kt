@@ -38,9 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SlotAuthoredReference
-import com.android.shaftschematic.model.bodyOverlapErrorMm
 import com.android.shaftschematic.model.keywayCount
-import com.android.shaftschematic.model.nonBodyOverlapErrorMm
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.util.collectAddWarnings
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
@@ -124,7 +122,8 @@ fun AddBodyDialog(
     var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
     var dia by remember(unit, d.bodyDiaMm) { mutableStateOf(toDisplayString(max(1f, d.bodyDiaMm), unit)) }
 
-    // Keyway — all optional (blank = 0); mirrors the body carousel card.
+    // Keyway — gated behind a checkbox (fields hidden until turned on); mirrors the body card.
+    var kwEnabled by remember { mutableStateOf(false) }
     var kwWidth   by remember { mutableStateOf("") }
     var kwDepth   by remember { mutableStateOf("") }
     var kwLength  by remember { mutableStateOf("") }
@@ -137,20 +136,15 @@ fun AddBodyDialog(
     val lengthMm = toMmOrNull(length, unit) ?: -1f
     val diaMm = toMmOrNull(dia, unit) ?: -1f
 
-    val kwW = toMmOrNull(kwWidth,  unit) ?: 0f
-    val kwD = toMmOrNull(kwDepth,  unit) ?: 0f
-    val kwL = toMmOrNull(kwLength, unit) ?: 0f
-    val kwO = toMmOrNull(kwOffset, unit) ?: 0f
+    // Keyway values only count when the Keyway checkbox is on.
+    val kwW = if (kwEnabled) toMmOrNull(kwWidth,  unit) ?: 0f else 0f
+    val kwD = if (kwEnabled) toMmOrNull(kwDepth,  unit) ?: 0f else 0f
+    val kwL = if (kwEnabled) toMmOrNull(kwLength, unit) ?: 0f else 0f
+    val kwO = if (kwEnabled) toMmOrNull(kwOffset, unit) ?: 0f else 0f
     val isFloating = kwO > 0f
     // Same condition as the carousel card's switch: it appears once the shaft will
     // have ≥ 2 keyways (≥ 1 existing plus the one being defined here).
-    val show180Toggle = spec.keywayCount() >= 1 && kwW > 0f && kwD > 0f && kwL > 0f
-
-    // A new explicit body is non-negotiable: it may not overlap any existing component.
-    val overlapError = if (startMm >= 0f && lengthMm > 0f) {
-        spec.bodyOverlapErrorMm(null, startMm, lengthMm)
-            ?: spec.nonBodyOverlapErrorMm(null, startMm, lengthMm)
-    } else null
+    val show180Toggle = kwEnabled && spec.keywayCount() >= 1 && kwW > 0f && kwD > 0f && kwL > 0f
 
     val scroll = rememberScrollState()
 
@@ -159,53 +153,63 @@ fun AddBodyDialog(
         title = { Text("Add Body") },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
-                CommitNumField("Start (${abbr(unit)})", start, errorText = overlapError) { start = it }
+                CommitNumField("Start (${abbr(unit)})", start) { start = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Length (${abbr(unit)})", length) { length = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Diameter (${abbr(unit)})", dia) { dia = it }
                 Spacer(Modifier.height(12.dp))
-                Text("Keyway (optional)", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("KW from:", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    DirectionChip("AFT", selected = !kwFwd) { kwFwd = false }
-                    DirectionChip("FWD", selected =  kwFwd) { kwFwd = true  }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    CommitNumField("KW W (${abbr(unit)})", kwWidth,
-                        modifier = Modifier.weight(1f)) { kwWidth = it }
-                    Text("×", style = MaterialTheme.typography.titleMedium)
-                    CommitNumField("KW D (${abbr(unit)})", kwDepth,
-                        modifier = Modifier.weight(1f)) { kwDepth = it }
-                }
-                Spacer(Modifier.height(8.dp))
-                CommitNumField("KW L (${abbr(unit)})", kwLength) { kwLength = it }
-                Spacer(Modifier.height(8.dp))
-                CommitNumField("KW Offset from ${if (kwFwd) "FWD" else "AFT"} (${abbr(unit)})", kwOffset) { kwOffset = it }
-                Spacer(Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        if (isFloating) "Keyway spooned (N/A — floating)" else "Keyway spooned",
-                        modifier = Modifier.weight(1f),
-                        color = if (isFloating) MaterialTheme.colorScheme.onSurfaceVariant
-                                else MaterialTheme.colorScheme.onSurface
+                    Text("Keyway", modifier = Modifier.weight(1f))
+                    androidx.compose.material3.Checkbox(
+                        checked = kwEnabled,
+                        onCheckedChange = { kwEnabled = it }
                     )
-                    Switch(
-                        checked = kwSpooned && !isFloating,
-                        enabled = !isFloating,
-                        onCheckedChange = { if (!isFloating) kwSpooned = it }
-                    )
+                }
+                if (kwEnabled) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("KW from:", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        DirectionChip("AFT", selected = !kwFwd) { kwFwd = false }
+                        DirectionChip("FWD", selected =  kwFwd) { kwFwd = true  }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        CommitNumField("KW W (${abbr(unit)})", kwWidth,
+                            modifier = Modifier.weight(1f)) { kwWidth = it }
+                        Text("×", style = MaterialTheme.typography.titleMedium)
+                        CommitNumField("KW D (${abbr(unit)})", kwDepth,
+                            modifier = Modifier.weight(1f)) { kwDepth = it }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    CommitNumField("KW L (${abbr(unit)})", kwLength) { kwLength = it }
+                    Spacer(Modifier.height(8.dp))
+                    CommitNumField("KW Offset from ${if (kwFwd) "FWD" else "AFT"} (${abbr(unit)})", kwOffset) { kwOffset = it }
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            if (isFloating) "Keyway spooned (N/A — floating)" else "Keyway spooned",
+                            modifier = Modifier.weight(1f),
+                            color = if (isFloating) MaterialTheme.colorScheme.onSurfaceVariant
+                                    else MaterialTheme.colorScheme.onSurface
+                        )
+                        Switch(
+                            checked = kwSpooned && !isFloating,
+                            enabled = !isFloating,
+                            onCheckedChange = { if (!isFloating) kwSpooned = it }
+                        )
+                    }
                 }
                 if (show180Toggle) {
                     Row(
@@ -219,7 +223,7 @@ fun AddBodyDialog(
             }
         },
         confirmButton = {
-            val ok = startMm >= 0f && lengthMm > 0f && diaMm > 0f && overlapError == null
+            val ok = startMm >= 0f && lengthMm > 0f && diaMm > 0f
             Button(enabled = ok, onClick = {
                 onSubmit(
                     startMm, lengthMm, diaMm,
@@ -674,11 +678,6 @@ fun AddTaperDialog(
         startEntered
     }
 
-    // Hard block: a taper may not overlap an explicit body (non-negotiable). Other
-    // overlaps (taper/thread/liner) stay soft "Add Anyway" warnings below.
-    val bodyBlock = if (physStartMm >= 0f && lengthMm > 0f)
-        spec.bodyOverlapErrorMm(null, physStartMm, lengthMm) else null
-
     // Pre-submit collision / bounds warning state.
     var warningLines by remember { mutableStateOf(emptyList<String>()) }
     var warningAction by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -730,8 +729,7 @@ fun AddTaperDialog(
                 }
                 CommitNumField(
                     "Start from ${if (isFwd) "FWD" else "AFT"} (${abbr(unit)})",
-                    if (isFwd) startFwd else startAft,
-                    errorText = bodyBlock
+                    if (isFwd) startFwd else startAft
                 ) { if (isFwd) startFwd = it else startAft = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Length (${abbr(unit)})", length) { length = it }
@@ -814,7 +812,7 @@ fun AddTaperDialog(
             }
             val canResolveDiameters = hasBothEnds ||
                 (hasExactlyOneEnd && !autoRate && parseTaperRateText(rateText, allowAmbiguousBareOne = false) != null)
-            val ok = physStartMm >= 0f && lengthMm > 0f && rateModeValid && canResolveDiameters && bodyBlock == null
+            val ok = physStartMm >= 0f && lengthMm > 0f && rateModeValid && canResolveDiameters
             Button(
                 enabled = ok,
                 onClick = {

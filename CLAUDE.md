@@ -73,17 +73,19 @@ only on an **explicit user action**: editing one of their fields, or ticking the
 `promoteIfNeeded()`. Both paths guard on the same `promoted` state so promotion fires
 once. See `ComponentCarousel.kt`.
 
-### Explicit bodies are non-negotiable components
-A stored (`ShaftSpec.bodies`) body is explicit and rigid — like a taper/liner, **not** a
-filler. It participates in `collidingIds()` (red card + blocked PDF export), and nothing
-may be added or moved onto it (`bodyOverlapErrorMm` / `nonBodyOverlapErrorMm` hard-block
-the Add dialogs and carousel start/length fields). Explicit bodies are **never split** —
-overlapping adds can't land, so no fragmentation happens. Auto-bodies (derived, unstored)
-stay fluid and flow around everything. Do not re-add bodies to `splitBodiesAround` on
-overlap, and do not exclude bodies from `collidingIds` again. The one exception is the
-**liner ↔ body boundary negotiation** (`linerBodyBoundaryAdjust` /
-`updateLinerWithBodyBoundary`): a liner length edit at a shared body edge offers to
-shorten/grow that body instead of blocking. See `docs/COMPONENT_CONTRACT.md`.
+### Bodies are fillers, not collision participants
+Bodies (stored `ShaftSpec.bodies`) are the shaft's fluid base. A body legitimately runs
+**under a liner** (a sleeve over the shaft) and **up against a taper**; the resolve layer
+(`subtractBodiesAgainstNonBodies`) trims the *drawn* body around those components, so a
+*stored* body span that crosses them is **not** a conflict. Therefore bodies are
+**excluded from `collidingIds()`** — do not re-add them. (An earlier "non-negotiable
+bodies" experiment flagged those normal overlaps as errors and referenced bodies by a
+stored-list index that didn't match the drawn cards — false "Overlaps Body N" warnings.
+Reverted 2026-07-21.) Adding a taper/thread/liner over a body **splits** it as before
+(`splitBodiesAround`), **except** a body that has a keyway, which is never fragmented
+(light protection — it stays one whole card, keyway intact). On delete, `mergeBodiesAround`
+rejoins flanking fragments but **never merges across a component still occupying the gap**
+(that would manufacture a long phantom body).
 
 ### Free-to-End badge suppression
 The badge is hidden when there are no precision components (tapers, non-excluded threads,

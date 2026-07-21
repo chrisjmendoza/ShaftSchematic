@@ -220,6 +220,25 @@ class BodySplitMergeTest {
     }
 
     @Test
+    fun `merge - does not merge across a component still occupying the gap`() {
+        // 2026-07-21 guard: bl ends at 200, br starts at 350, but a liner still sits at
+        // 250..300 between them (it had overlapped the just-removed component). Merging
+        // bl..br would span the surviving liner and manufacture a long phantom body — so
+        // the merge is skipped and the spec is left unchanged.
+        resetIds()
+        val left  = Body(id = "bl", startFromAftMm = 0f,   lengthMm = 200f, diaMm = 60f)
+        val right = Body(id = "br", startFromAftMm = 350f, lengthMm = 150f, diaMm = 60f)
+        val liner = Liner(id = "ln", startFromAftMm = 250f, lengthMm = 50f, odMm = 70f)
+        val spec = ShaftSpec(overallLengthMm = 600f, bodies = listOf(left, right), liners = listOf(liner))
+
+        val result = spec.mergeBodiesAround(200f, 350f, ::nextId)
+
+        assertEquals("no merge — both fragments remain", 2, result.spec.bodies.size)
+        assertTrue(result.removedIds.isEmpty())
+        assertTrue(result.addedIds.isEmpty())
+    }
+
+    @Test
     fun `merge - looser eps absorbs float drift from split-remove cycle`() {
         resetIds()
         // Simulate slight float drift: right body starts at 350.0003 instead of exactly 350

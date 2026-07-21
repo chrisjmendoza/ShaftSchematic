@@ -123,43 +123,34 @@ class BodyKeywayTest {
 
     // ── carry across splitBodiesAround ───────────────────────────────────────
 
-    @Test fun `split keeps AFT keyway on the left fragment`() {
-        // Body 0..400, open AFT keyway 0..100. Taper inserted at 200..300.
-        val spec = ShaftSpec(overallLengthMm = 400f, bodies = listOf(keyedBody(kwLength = 100f)))
+    @Test fun `a keyed body is never split - it stays one whole card`() {
+        // Light protection (2026-07-21): a body with a keyway is not fragmented when a
+        // component is inserted over it. It stays whole (keyway intact); the resolve layer
+        // still trims it around the component for drawing.
+        val body = keyedBody(kwLength = 100f)
+        val spec = ShaftSpec(overallLengthMm = 400f, bodies = listOf(body))
         var n = 0
         val result = spec.splitBodiesAround(200f, 300f) { "id${n++}" }
 
-        val left = result.spec.bodies.first { it.startFromAftMm == 0f }
-        val right = result.spec.bodies.first { it.startFromAftMm == 300f }
-        assertTrue(left.hasKeyway)
-        assertEquals(0f, left.keywayOffsetFromEndMm, 1e-3f)
-        assertFalse(right.hasKeyway)
+        assertEquals(1, result.spec.bodies.size)
+        val whole = result.spec.bodies.single()
+        assertEquals(body.id, whole.id)                 // same body, not a new fragment
+        assertEquals(0f, whole.startFromAftMm, 1e-3f)
+        assertEquals(400f, whole.lengthMm, 1e-3f)
+        assertTrue(whole.hasKeyway)
+        assertTrue(result.addedIds.isEmpty())
+        assertTrue(result.removedIds.isEmpty())
     }
 
-    @Test fun `split keeps FWD keyway on the right fragment with re-anchored offset`() {
-        // Body 0..400, keyway referenced from FWD face, offset 20, length 60 → abs 320..380.
-        val spec = ShaftSpec(
-            overallLengthMm = 400f,
-            bodies = listOf(keyedBody(kwLength = 60f, kwOffset = 20f, kwEnd = LinerAuthoredReference.FWD)),
-        )
+    @Test fun `a plain (unkeyed) body still splits into fragments`() {
+        // Regression guard: non-keyed bodies keep the normal split-around behavior.
+        val spec = ShaftSpec(overallLengthMm = 400f, bodies = listOf(body(startMm = 0f, lengthMm = 400f)))
         var n = 0
-        val result = spec.splitBodiesAround(100f, 200f) { "id${n++}" }
+        val result = spec.splitBodiesAround(200f, 300f) { "id${n++}" }
 
-        val right = result.spec.bodies.first { it.startFromAftMm == 200f }
-        assertTrue(right.hasKeyway)
-        // Right fragment keeps the original FWD face, so the offset is unchanged.
-        assertEquals(20f, right.keywayOffsetFromEndMm, 1e-3f)
-        assertEquals(LinerAuthoredReference.FWD, right.keywayEnd)
-        val left = result.spec.bodies.first { it.startFromAftMm == 0f }
-        assertFalse(left.hasKeyway)
-    }
-
-    @Test fun `split drops keyway when the cut passes through it`() {
-        // Open AFT keyway 0..300; taper inserted at 100..200 cuts through it.
-        val spec = ShaftSpec(overallLengthMm = 400f, bodies = listOf(keyedBody(kwLength = 300f)))
-        var n = 0
-        val result = spec.splitBodiesAround(100f, 200f) { "id${n++}" }
-        assertTrue(result.spec.bodies.none { it.hasKeyway })
+        assertEquals(2, result.spec.bodies.size)
+        assertTrue(result.spec.bodies.any { it.startFromAftMm == 0f && it.lengthMm == 200f })
+        assertTrue(result.spec.bodies.any { it.startFromAftMm == 300f && it.lengthMm == 100f })
     }
 
     // ── carry across mergeBodiesAround ───────────────────────────────────────

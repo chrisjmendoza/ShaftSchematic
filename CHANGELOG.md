@@ -8,6 +8,28 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-21
 
+### fix: revert "non-negotiable bodies" — it flagged normal body-under-sleeve as collisions
+
+The 2026-07-21 "explicit bodies are non-negotiable" change was wrong for real drafts. A body
+legitimately runs under a liner (a sleeve over the shaft) and up against a taper; the resolve
+layer trims the *drawn* body around those, but the collision check read the *raw stored*
+bodies and flagged those normal overlaps as errors — labeling them by a stored-list index
+("Overlaps Body 1") that didn't match any drawn card, and blocking PDF export.
+
+- **Reverted:** bodies are out of `collidingIds()` again; removed the `bodyOverlapErrorMm` /
+  `nonBodyOverlapErrorMm` hard-blocks from the Add dialogs and carousel start/length fields;
+  removed the liner↔body boundary negotiation. No stored body data is touched — the fix is
+  purely in the check, so every explicit body and typed value is preserved.
+- **Kept (engine correctness):** `mergeBodiesAround` now **refuses to merge across a component
+  still occupying the freed span** (that could manufacture a long phantom body on delete);
+  and a **keyed body is never split** (light protection — stays one whole card, keyway intact;
+  plain bodies split as before).
+- **Kept (feature):** body keyways, the 180° hidden-line clocking, and the "Make editable
+  body" checkbox all remain. Body/AddBody keyway inputs are now **gated behind a "Keyway"
+  checkbox** so they only appear when turned on.
+- Tests: reverted CollidingIds/StartOverlap body cases, replaced BodyCollisionTest, added
+  merge-across-guard + keyed-split-skip tests; suite green (612).
+
 ### feat: interactive runout bubbles — tap to record TIR value + high-spot marker
 
 Digitizes the hand-filled runout bubble. Tapping a bubble on the Runout tab opens a "zoom-in"
@@ -33,8 +55,10 @@ blank. See `docs/RunoutBubbleEditor_PLAN.md` and the "Runout Bubble Editor" sect
   the top of the circle (top arc broken across the slot mouth; nothing protrudes past the rim), drawn
   identically on canvas and PDF.
 - **Engine:** `stationIndex` added to `RunoutStationX`/`PlacedRunoutBubble` for stable bubble identity.
-- Tests: `RunoutReadingTest` (model + codec round-trip / orphan pass-through), `RunoutReadingMathTest`
-  (clock snap, angle↔rim round-trip, ring band, bubble pick). Suite green.
+- **Bubble sizing (tuned from a printed sheet):** circle enlarged (`BUBBLE_RADIUS_PT` 20 → 23 ≈ 0.64 in
+  dia; on-screen 6 → 7 dp), printed value text shrunk (`r * 0.85` → `r * 0.60`), and
+  `formatRunoutValue` now drops the leading zero (`0.003 → .003`) — more room to hand-write the value.
+- Tests: `RunoutReadingTest`, `RunoutReadingMathTest`, `RunoutValueFormatTest` (leading-zero + trim). Suite green.
 
 ### feat: explicit bodies are non-negotiable components (+ auto-body promotion, liner boundary negotiation)
 

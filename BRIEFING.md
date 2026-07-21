@@ -1,7 +1,7 @@
 # ShaftSchematic — Project Briefing
 
 **Generated:** 2026-05-03  
-**Last updated:** 2026-07-18  
+**Last updated:** 2026-07-21 — reverted "explicit bodies are non-negotiable"; bodies are fluid fillers again (no collision, plain bodies split around sacred components)  
 **Current Version:** 1.1.1  
 **Series:** v0.5.x — runout/wear docs, line thickness, OAL fix
 
@@ -77,14 +77,14 @@ A `ShaftSpec` is the root aggregate:
 
 | Component | Description |
 |---|---|
-| `Body` | Constant-diameter cylinder. Fields: `diaMm`, `startFromAftMm`, `lengthMm`. Keyway hosted (end-referenced): `keywayWidthMm`, `keywayDepthMm`, `keywayLengthMm`, `keywayOffsetFromEndMm`, `keywayEnd` (AFT/FWD), `keywaySpooned`. Explicit bodies are non-negotiable (collide, never split). |
+| `Body` | Constant-diameter cylinder. Fields: `diaMm`, `startFromAftMm`, `lengthMm`. Keyway hosted (end-referenced): `keywayWidthMm`, `keywayDepthMm`, `keywayLengthMm`, `keywayOffsetFromEndMm`, `keywayEnd` (AFT/FWD), `keywaySpooned`. Bodies are the fluid base: plain bodies split around sacred components, keyed bodies stay whole, and bodies never collide. |
 | `Taper` | Linear diameter transition. Fields: `startDiaMm` / `endDiaMm`, `lengthMm`, `taperRateText`. Keyway hosted (SET-referenced): `keywayWidthMm`, `keywayDepthMm`, `keywayLengthMm`, `keywayOffsetFromSetMm`, `keywaySpooned`. |
 | `Threads` | Threaded segment. Fields: `majorDiaMm`, pitch (`pitchMm` + `tpi`), `excludeFromOAL`. |
 | `Liner` | Outer sleeve. Fields: `odMm`, anchor reference (`LinerAnchor`), authored direction. |
 
 `ShaftSpec` also carries `keyways180Apart` — a drawing note that the shaft's keyways are clocked 180° apart (far-side keyway renders hidden/dashed).
 
-All axial positions are measured **AFT → FWD**. `ShaftSpec.validate()` checks non-negative values and segment bounds; it does not test for overlaps — overlap enforcement lives in collision detection (`collidingIds()`), separate from `validate()`. A liner over an *auto*-body is fine; an overlap of an *explicit* body is hard-blocked.
+All axial positions are measured **AFT → FWD**. `ShaftSpec.validate()` checks non-negative values and segment bounds; it does not test for overlaps — overlap enforcement lives in collision detection (`collidingIds()`), separate from `validate()`. `collidingIds()` checks only sacred pairs (taper/thread/liner); bodies are fluid base material and never collide (a liner legitimately runs over a body).
 
 ---
 
@@ -184,5 +184,5 @@ $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 - **Single-page PDF only** — multi-page PDF is explicitly out of scope through v1.0.
 - **No pixel math in ViewModel** — VM is the geometry authority; UI passes raw mm coordinates.
 - **Auto bodies never persisted** — when the resolved pipeline is complete, auto-generated bodies exist only in the derived view layer.
-- **Overlaps** — `validate()` only checks bounds, not intersections; overlap enforcement is `collidingIds()`. Liners over *auto*-bodies are fine, but explicit bodies are non-negotiable: any overlap of one is hard-blocked and blocks export.
+- **Overlaps** — `validate()` only checks bounds, not intersections; overlap enforcement is `collidingIds()`, which flags only sacred pairs (taper/thread/liner). Bodies are fluid base material and never collide; a sacred component added over a plain body splits it, while a keyed body stays whole.
 - **Committed-on-blur inputs** — numeric fields do not mutate VM state while the user is typing.

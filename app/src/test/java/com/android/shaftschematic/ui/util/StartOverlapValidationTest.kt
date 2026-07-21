@@ -13,9 +13,9 @@ import org.junit.Test
 class StartOverlapValidationTest {
 
     @Test
-    fun `thread overlapping an explicit body is rejected`() {
-        // 2026-07-21: explicit bodies are non-negotiable — a thread (like a taper) may not
-        // overlap one. A threaded end uses a fluid auto-body core, not an explicit body.
+    fun `thread start at 0 is allowed even if body spans from 0`() {
+        // Bodies are not obstacles for the start validator — a body runs under/against other
+        // components normally, so a thread at the AFT end over a body is fine.
         val sixteenInchesMm = 16f * 25.4f
         val spec = ShaftSpec(
             overallLengthMm = 1000f,
@@ -30,13 +30,11 @@ class StartOverlapValidationTest {
             startMm = 0f,
         )
 
-        assertEquals("Overlaps Body 1", err)
+        assertNull(err)
     }
 
     @Test
-    fun `thread start at 0 is allowed when only a taper spans from 0`() {
-        // Tapers are not bodies; a new thread overlapping a taper stays a soft warning, not
-        // a hard start-field block. startOverlapErrorMm only hard-blocks body overlaps here.
+    fun `thread start at 0 is allowed even if a taper spans from 0`() {
         val sixteenInchesMm = 16f * 25.4f
         val spec = ShaftSpec(
             overallLengthMm = 1000f,
@@ -130,24 +128,12 @@ class StartOverlapValidationTest {
     }
 
     @Test
-    fun `moving a component onto an explicit body is rejected for body and taper kinds`() {
-        // 2026-07-21: bodies are non-negotiable, so a taper OR another body moved onto one
-        // is hard-blocked (previously bodies/tapers had no collision group and always passed).
+    fun `bodies and tapers have no collision group and always pass`() {
         val spec = ShaftSpec(
             overallLengthMm = 1000f,
             bodies = listOf(Body(id = "b1", startFromAftMm = 0f, lengthMm = 1000f, diaMm = 80f))
         )
-        assertEquals("Overlaps Body 1", startOverlapErrorMm(spec, "new", ComponentKind.BODY, 500f, 0f))
-        assertEquals("Overlaps Body 1", startOverlapErrorMm(spec, "new", ComponentKind.TAPER, 500f, 0f))
-    }
-
-    @Test
-    fun `a taper clear of any body passes the start validator`() {
-        val spec = ShaftSpec(
-            overallLengthMm = 1000f,
-            bodies = listOf(Body(id = "b1", startFromAftMm = 0f, lengthMm = 300f, diaMm = 80f))
-        )
-        // Taper at 400..600 clears the body at 0..300 (tapers don't hard-block against tapers).
-        assertNull(startOverlapErrorMm(spec, "new", ComponentKind.TAPER, 200f, 400f))
+        assertNull(startOverlapErrorMm(spec, "new", ComponentKind.BODY, 500f, 0f))
+        assertNull(startOverlapErrorMm(spec, "new", ComponentKind.TAPER, 500f, 0f))
     }
 }

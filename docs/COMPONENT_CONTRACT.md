@@ -1,6 +1,6 @@
 # Component vs Feature Contract
 Version: v0.5.x
-Last updated: 2026-07-18 — manual bodies documented as current/persisted (was "future"); body keyway support marked shelved per ROADMAP.md.
+Last updated: 2026-07-21 — reverted "explicit bodies are non-negotiable" (it raised false collision warnings on normal drafts); bodies are the fluid base again — they don't collide, and plain bodies split around sacred components while keyed bodies are protected.
 
 This document is **normative**.
 It defines what constitutes a **component** versus a **feature** in ShaftSchematic.
@@ -85,25 +85,29 @@ editing Start/Length/Ø, **or** ticking "Make editable body" — via `promoteIfN
 (`ComponentCarousel.kt`), persisting the section as a real `Body` in `ShaftSpec`. Viewing an
 auto-body card without acting never promotes it.
 
-### Explicit bodies are non-negotiable (2026-07-21)
+### Explicit bodies are the fluid base (reverted 2026-07-21)
 
-An explicit (stored) body is a first-class, rigid component — treated like a taper/liner:
+An explicit (stored) body is the shaft's base material / filler — **not** a rigid
+collider. The "explicit bodies are non-negotiable" experiment was reverted because it
+raised false collision warnings on normal drafts.
 
-- It **collides** — `collidingIds` flags body↔taper/thread/liner/body overlaps (red card +
-  blocked PDF export). Abutting edges are fine.
-- Nothing may be **added or moved onto** it: `bodyOverlapErrorMm` (and `nonBodyOverlapErrorMm`
-  for a moving body) hard-block the Add dialogs and carousel start/length fields.
-- It is **never split**. Overlapping adds can't land, so no fragmentation occurs. Shape the
-  fluid auto-body regions instead; lock a span to explicit when it's final.
-- **Consequence:** a tapered/threaded end sits over an auto-body core, not an explicit body.
+- A body does **not** participate in collision detection. `collidingIds()` checks only
+  taper/thread/liner pairs (sacred-vs-sacred), never bodies. A body legitimately runs
+  UNDER a liner (a sleeve over the shaft) and UP AGAINST a taper.
+- There is **no** hard-block on adding or moving a sacred component over a body. Adding a
+  taper/thread/liner over a plain body **splits** the body (`splitBodiesAround`) as it
+  always did. The `bodyOverlapErrorMm` / `nonBodyOverlapErrorMm` helpers and the
+  liner↔body "boundary negotiation" (`linerBodyBoundaryAdjust` /
+  `updateLinerWithBodyBoundary`) no longer exist.
+- The resolve layer (`subtractBodiesAgainstNonBodies`) trims the *drawn* body around
+  overlapping components, so a *stored* body span crossing a liner/taper is not a conflict.
 
-**Liner ↔ body boundary negotiation:** editing a liner's length so it moves a shared edge with
-an abutting explicit body prompts (`linerBodyBoundaryAdjust`, applied by
-`ShaftViewModel.updateLinerWithBodyBoundary`): if the liner grows into the body, offer to
-shorten it; if it pulls away leaving a gap, offer to grow it. This restores the auto-body
-"filling" behaviour for an explicit body without ever splitting it. The body keeps its far
-edge; its shared edge follows the liner. Scope: liner **length** edits vs the edge-adjacent
-body only.
+**Light protection (kept):** a body that HAS A KEYWAY is never split — it stays one whole
+card (keyway intact) and the resolve layer still trims it for drawing. Plain (unkeyed)
+bodies split as before.
+
+**Engine guard (kept):** on delete, `mergeBodiesAround` refuses to merge two flanking
+bodies across a component that still occupies the freed span, preventing a long phantom body.
 
 ---
 

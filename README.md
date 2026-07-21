@@ -9,7 +9,7 @@ This tool is built for machinists, shipyards, repair techs, and engineering team
 Real-Time Shaft Modeling
 
 - Bodies (with keyways), tapers (with keyways and auto taper-rate calculation), threads (with OAL include/exclude), liners, and coupler bolt slots (reference-only cutouts). Keyways can be clocked 180° apart — the far-side one renders as hidden dashed lines
-- Explicit bodies are first-class, non-negotiable components (collide, never split); derived auto-bodies stay fluid and fill unoccupied spans
+- Bodies are the fluid base material: plain bodies split around tapers/threads/liners, keyed bodies stay whole; derived auto-bodies fill unoccupied spans. Bodies never participate in collision detection
 - Resolved-component pipeline: auto-bodies fill unoccupied spans in the preview without being persisted
 - Live preview with grid, centerline, and component labels; tap-to-add at position
 - Preview colors configurable via Settings (presets + Custom theme palette), Black/White Only drafting mode
@@ -19,7 +19,7 @@ Editing Workflow
 
 - Component carousel with edit cards; Add dialogs mirror the carousel cards control-for-control
 - Unit switching (mm / inch) at the UI edge only — the model is always canonical millimeters
-- Validation: blocking errors (dialogs, badges, export gate — including any overlap of an explicit body, and overlaps among sacred components) and non-blocking warnings (free-to-end badge)
+- Validation: blocking errors (dialogs, badges, export gate) and non-blocking warnings (overlaps among sacred components, free-to-end badge). Bodies are fillers and never collide
 - Delete with multi-step Undo; undo/redo history menu
 
 Documents

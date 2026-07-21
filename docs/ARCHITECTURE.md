@@ -1,6 +1,6 @@
 # ShaftSchematic Architecture
 Version: v0.5.x
-Last updated: 2026-07-18 — resolved-component pipeline documented as shipped (was "planned"); PDF export corrected to a separate drawing path from the preview renderer; removed the nonexistent "Overall" dimension label claim.
+Last updated: 2026-07-21 — reverted "explicit bodies are non-negotiable" in the ViewModel layer notes (bodies are fluid fillers again, no collision, plain bodies split around sacred components). 2026-07-18 — resolved-component pipeline documented as shipped; PDF export corrected to a separate drawing path; removed the nonexistent "Overall" dimension label claim.
 
 ## Overview
 ShaftSchematic is an MVVM-based Android application designed to create accurate, dimensionally consistent shaft schematics for marine propulsion work. The system is built around a strict separation of responsibilities:
@@ -66,18 +66,20 @@ Resolved component pipeline (shipped):
 - Auto bodies must never define measurement references or snapping anchors.
 - Manual OAL seeds a base auto body spanning 0 → OAL; derived OAL does not
   (`deriveAutoBodies(overallLengthMm = if (overallIsManual) spec.overallLengthMm else 0f, …)`).
-- **Explicit vs auto bodies (2026-07-21):** stored `ShaftSpec.bodies` are explicit,
-  non-negotiable components — they participate in `collidingIds()` (red card + blocked export),
-  a sacred add/move that would overlap one is hard-blocked (`bodyOverlapErrorMm` /
-  `nonBodyOverlapErrorMm`), and they are **never split**. Auto-bodies (derived, unstored) stay
-  fluid fillers. Consequence: taper/thread ends sit over an auto-body core, not an explicit body.
+- **Explicit vs auto bodies (reverted 2026-07-21):** both stored `ShaftSpec.bodies` (explicit)
+  and derived auto-bodies are fluid base material / fillers. Bodies **do not** collide —
+  `collidingIds()` checks only taper/thread/liner pairs (sacred-vs-sacred). There is no
+  hard-block on adding/moving a component over a body; the removed `bodyOverlapErrorMm` /
+  `nonBodyOverlapErrorMm` helpers no longer exist. (The "explicit bodies are non-negotiable"
+  experiment was reverted — it raised false collision warnings on normal drafts.)
+- **Body split/merge:** adding a taper/thread/liner over a plain body splits it
+  (`splitBodiesAround`); a body that has a keyway is never split (kept whole, trimmed for
+  drawing by `subtractBodiesAgainstNonBodies`). On delete, `mergeBodiesAround` heals flanking
+  bodies but refuses to merge across a component still occupying the freed span (phantom-body guard).
 - Manual (explicit) body components promote over auto bodies in overlapping spans: the carousel
   card for an auto body (`ComponentCarousel.kt`) calls `promoteIfNeeded()` on the first field edit
   **or when the user ticks "Make editable body"**, which invokes `onAddBody(...)` to persist a real
   `Body` — see the "Auto-body promotion" invariant in `CLAUDE.md`.
-- A liner **length** edit that moves a shared edge with an abutting explicit body negotiates
-  (`linerBodyBoundaryAdjust` / `ShaftViewModel.updateLinerWithBodyBoundary`): shorten the body on
-  overlap, or grow it to fill a gap — the auto-body "filling", confirmed, without splitting.
 
 Liner authored reference:
 - Liners store authored reference (AFT/FWD) as metadata.

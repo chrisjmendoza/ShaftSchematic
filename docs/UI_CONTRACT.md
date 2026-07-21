@@ -1,6 +1,6 @@
 # UI Contract
 Version: v0.5.x
-Last updated: 2026-07-18 — §5.2 "Planned Preview Tap + Implicit Bodies" documented as shipped and merged into §3.1.1 (also fixes broken section numbering, a 5.2 appearing before 5.1); §§3.2–3.6 trimmed to summaries pointing at the more current in-source `AddComponentDialogs.md`.
+Last updated: 2026-07-21 — §3.1.4 corrected after the "non-negotiable bodies" revert: bodies are fluid fillers (no collision, plain bodies split around sacred components, keyed bodies protected); removed `bodyOverlapErrorMm`/liner↔body-negotiation references. 2026-07-18 — §5.2 "Planned Preview Tap + Implicit Bodies" documented as shipped and merged into §3.1.1 (also fixes broken section numbering, a 5.2 appearing before 5.1); §§3.2–3.6 trimmed to summaries pointing at the more current in-source `AddComponentDialogs.md`.
 
 ## Purpose
 This document defines all UI interaction rules, screen behaviors, dialog behavior, input handling, and UI–ViewModel boundaries.  
@@ -115,18 +115,21 @@ When any `add*At` function completes in the ViewModel, `selectedComponentId` is 
 
 ### 3.1.4 Explicit vs auto bodies in the Carousel
 
-Bodies are independent spec entities; the carousel shows **one card per stored body**. As of
-2026-07-21, stored bodies are **explicit and non-negotiable**: a sacred component may not be
-added or moved onto one (hard-blocked via `bodyOverlapErrorMm`), so explicit bodies are **never
-split**. Auto-bodies (derived, unstored) remain fluid and flow around every component — they get
-"Body (auto)" cards and can be promoted to explicit (field edit or "Make editable body").
+Bodies are independent spec entities; the carousel shows **one card per stored body**. Both
+stored (explicit) and derived (auto) bodies are fluid base material / fillers. A sacred
+component added or moved over a plain body **splits** it (`splitBodiesAround`) — there is no
+hard-block, and bodies never raise collision warnings. A body that has a keyway is never split:
+it stays one whole card (keyway intact) and the resolve layer trims it for drawing. Auto-bodies
+(derived, unstored) get "Body (auto)" cards and can be promoted to explicit (field edit or
+"Make editable body").
 
-The one exception is the **liner ↔ body boundary negotiation**: editing a liner's length so it
-moves a shared edge with an abutting explicit body raises a confirm dialog to shorten the body
-(overlap) or grow it to fill (gap) — `linerBodyBoundaryAdjust` / `updateLinerWithBodyBoundary`.
+(The "explicit bodies are non-negotiable" experiment was reverted 2026-07-21 — it raised false
+collision warnings on normal drafts. The `bodyOverlapErrorMm` / `nonBodyOverlapErrorMm` hard
+blocks and the liner↔body boundary negotiation `linerBodyBoundaryAdjust` /
+`updateLinerWithBodyBoundary` no longer exist.)
 
-(Legacy body fragments from older builds still merge back on delete — `max(left.diaMm,
-right.diaMm)` — but new overlapping adds no longer fragment an explicit body.)
+On delete, flanking bodies merge back — `max(left.diaMm, right.diaMm)` — but `mergeBodiesAround`
+refuses to merge across a component still occupying the freed span (phantom-body guard).
 
 ### 3.1.5 Direction Chip (AFT / FWD Toggle)
 

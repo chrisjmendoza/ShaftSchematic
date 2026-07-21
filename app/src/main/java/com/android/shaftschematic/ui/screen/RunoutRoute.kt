@@ -564,7 +564,7 @@ private fun Density.computeRunoutPreview(
 ): RunoutPreview {
     val marginPx = 12.dp.toPx()
     val bubbleGeom = RunoutBubbleGeometry(
-        radius = 6.dp.toPx(),
+        radius = 7.dp.toPx(),
         minGap = 5.dp.toPx(),
         shortLeader = 5.dp.toPx(),
         contentLeft = 0f,
@@ -664,7 +664,8 @@ private fun DrawScope.drawRunoutMarkers(
             val txt = com.android.shaftschematic.util.formatRunoutValue(valueMm, unit)
             val style = androidx.compose.ui.text.TextStyle(
                 color = markerColor,
-                fontSize = with(this) { (r * 0.9f).toSp() },
+                // Small value inside the (larger) circle — lockstep with the PDF bubble.
+                fontSize = with(this) { (r * 0.60f).toSp() },
             )
             val measured = textMeasurer.measure(txt, style)
             drawText(

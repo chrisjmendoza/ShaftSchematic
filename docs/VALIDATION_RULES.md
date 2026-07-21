@@ -1,6 +1,6 @@
 # Validation Rules  
 Version: v0.5.x
-Last updated: 2026-07-18 — §2.3 numeric "safety filters" (NaN/Infinity/>100000 rejection) were never implemented; removed the false claim. Validation is not ViewModel-only (overlap/bounds checks live in `ui/util/StartOverlapValidation.kt`, called from Compose UI). Negative-start rejection is a dialog-level Submit gate, not a ViewModel rejection; `ShaftSpec.validate()` exists but is dead code. §6 export gate corrected to what `blockingExportError()` actually checks.
+Last updated: 2026-07-21 — reverted "explicit bodies are non-negotiable" (§5.1): bodies never collide, no hard-block on adds/moves over a body, plain bodies split around sacred components (keyed bodies protected); removed `bodyOverlapErrorMm`/`nonBodyOverlapErrorMm`/liner↔body negotiation references. 2026-07-18 — §2.3 numeric "safety filters" (NaN/Infinity/>100000 rejection) were never implemented; removed the false claim. Validation is not ViewModel-only (overlap/bounds checks live in `ui/util/StartOverlapValidation.kt`, called from Compose UI). Negative-start rejection is a dialog-level Submit gate, not a ViewModel rejection; `ShaftSpec.validate()` exists but is dead code. §6 export gate corrected to what `blockingExportError()` actually checks.
 
 ## Purpose
 This document defines all validation behavior used by ShaftSchematic.  
@@ -263,28 +263,22 @@ Coupler bolt slots are **excluded from all collision detection** (`collisionGrou
 
 Overlaps **never** block validation.
 
-### 5.1 Explicit bodies are non-negotiable (2026-07-21)
+### 5.1 Bodies do not collide (reverted 2026-07-21)
 
-Explicit (stored) bodies are first-class, rigid components — **not** fillers. `collidingIds()`
-flags an explicit body overlapping a taper, non-excluded thread, liner, or another body
-(red card + blocked PDF export). Nothing may be added or moved onto an explicit body:
-`bodyOverlapErrorMm` hard-blocks the Add dialogs and the carousel start/length fields (and
-`nonBodyOverlapErrorMm` blocks a *body* being moved onto any other component). Because
-overlapping adds are refused, explicit bodies are never split.
+Bodies are the shaft's fluid base material / fillers — **not** colliders. (The "explicit
+bodies are non-negotiable" experiment was reverted because it raised false collision warnings
+on normal drafts.) `collidingIds()` checks only taper/thread/liner pairs (sacred-vs-sacred),
+never bodies. A body legitimately runs under a liner and up against a taper; the resolve layer
+(`subtractBodiesAgainstNonBodies`) trims the *drawn* body around those components, so a stored
+body span crossing them is not a conflict.
 
-Auto-bodies (derived at resolve time, never stored) stay fluid and flow around every
-component — they never reach `collidingIds` and are how a shaft is shaped.
+There is **no** hard-block on adding or moving a component over a body. Adding a
+taper/thread/liner over a plain body **splits** it (`splitBodiesAround`) as it always did; a
+body that has a keyway is never split (it stays one whole card and is trimmed for drawing). The
+removed `bodyOverlapErrorMm` / `nonBodyOverlapErrorMm` helpers and the liner↔body "boundary
+negotiation" (`linerBodyBoundaryAdjust` / `updateLinerWithBodyBoundary`) no longer exist.
 
-The one exception is the **liner ↔ body boundary negotiation** (`linerBodyBoundaryAdjust`):
-a liner length edit at a shared edge with an abutting explicit body offers to shorten/grow
-that body (confirm/cancel) instead of hard-blocking.
-
-Checked body pairs:
-
-- Body ↔ Taper
-- Body ↔ Liner
-- Body ↔ Thread (non-excluded only; excluded threads live outside the envelope)
-- Body ↔ Body
+No body pair is checked for collision — the checks below are all sacred-vs-sacred.
 
 ### 5.2 Sacred-Component Overlaps — Warning Shown
 
@@ -315,7 +309,7 @@ collisions or bounds violations are found, a confirmation dialog appears
 | Taper collision | overlaps any existing Taper | always |
 | Thread collision | overlaps any existing non-excluded Thread | always |
 | Liner collision | overlaps any existing Liner | always |
-| Body overlap (hard block) | overlaps any explicit Body | always — refuses the add (`bodyOverlapErrorMm`), not "Add Anyway" |
+| Body overlap | — | **never** — a body is fluid base material; a sacred add over a plain body just splits it (`splitBodiesAround`) |
 | Excluded thread | — | **skipped** (outside shaft span by design) |
 | Coupler bolt slot | — | **never** (`collisionGroup()` → null) |
 
