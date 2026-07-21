@@ -48,6 +48,19 @@ add them to `coverageEndMm`, `ensureOverall`, body-split/merge, or overlap valid
 They are resolved as `ResolvedCouplerBoltSlot` *after* body resolution so they stay out
 of auto-body/subtraction geometry. See `docs/CouplerBoltSlot.md`.
 
+### Runout readings are reference features
+Per-station runout readings (`RunoutReadings` in the doc envelope — a TIR value + high-spot
+clock marker per bubble) are **reference-only**, same posture as coupler bolt slots and wear
+spots. They **never** affect `coverageEndMm`/OAL, body resolution, collision, or the
+Free-to-End badge, and live outside `ShaftSpec`. Both fields are optional; a sheet exports
+fine with neither. Keyed by `(componentId, stationIndex)` with render-layer orphan handling
+(a reading whose station no longer exists is simply not drawn). The value + high-spot marker
+and the keyway cutout must be drawn **identically in both bubble draw sites** —
+`RunoutRoute.drawRunoutMarkers` (canvas) and `RunoutPdfComposer.drawPlacedBubbles` (PDF).
+Pure clock/hit-test math lives in `geom/RunoutReadingMath.kt` (shared, no `pdf → ui` dep);
+value formatting in `util/RunoutValueFormat.kt`. See `docs/RunoutSheet.md` (Runout Bubble
+Editor) and `docs/RunoutBubbleEditor_PLAN.md`.
+
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus
 was gained. A tap-and-leave with no edit must be a no-op. This prevents spurious

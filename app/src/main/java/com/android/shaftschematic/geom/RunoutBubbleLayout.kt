@@ -110,11 +110,18 @@ data class RunoutComponentSpan(
     val lengthMm: Float,
 )
 
-/** One measurement station: which component it belongs to, its axial mm, and its output-space x. */
+/**
+ * One measurement station: which component it belongs to, its axial mm, and its output-space x.
+ *
+ * @property stationIndex 0-based ordinal of this station within its component (AFT→FWD order,
+ *   assigned by [collectRunoutStations]). Stable key for attaching a [com.android.shaftschematic.model.RunoutReading]
+ *   to a bubble — travels with the station through the plan's stationX sort.
+ */
 data class RunoutStationX(
     val componentId: String,
     val stationMm: Float,
     val stationX: Float,
+    val stationIndex: Int = 0,
 )
 
 /**
@@ -138,8 +145,8 @@ fun collectRunoutStations(
             lengthMm = span.lengthMm,
             count = count,
             useEdgeInset = span.kind != RunoutComponentKind.BODY,
-        ).forEach { mm ->
-            out.add(RunoutStationX(span.id, mm, xAtMm(mm)))
+        ).forEachIndexed { idx, mm ->
+            out.add(RunoutStationX(span.id, mm, xAtMm(mm), stationIndex = idx))
         }
     }
     return out
@@ -197,6 +204,8 @@ data class PlacedRunoutBubble(
     val bubbleCenterY: Float,
     val row: Int,
     val leader: List<LeaderVertex>,
+    /** 0-based ordinal of this bubble's station within its component — see [RunoutStationX.stationIndex]. */
+    val stationIndex: Int = 0,
 )
 
 /**
@@ -479,6 +488,7 @@ class RunoutBubblePlan internal constructor(
                 bubbleCenterY = centerY[i],
                 row = rows[i],
                 leader = paths[i],
+                stationIndex = stations[i].stationIndex,
             )
         }
         return RunoutBubbleResult(bubbles, unresolved)

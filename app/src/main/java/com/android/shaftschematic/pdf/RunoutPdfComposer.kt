@@ -11,6 +11,7 @@ import com.android.shaftschematic.geom.PlacedRunoutBubble
 import com.android.shaftschematic.geom.RunoutBubbleGeometry
 import com.android.shaftschematic.geom.RunoutComponentKind
 import com.android.shaftschematic.geom.RunoutComponentSpan
+import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -21,10 +22,13 @@ import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.formatRunoutValue
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.asin
+import kotlin.math.cos
 import kotlin.math.min
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -96,6 +100,7 @@ fun composeRunoutPdf(
     pdfPrefs: PdfPrefs = PdfPrefs(),
     resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
+    runoutReadings: RunoutReadings = RunoutReadings(),
 ) {
     val c = page.canvas
     c.drawColor(Color.WHITE)
@@ -251,7 +256,7 @@ fun composeRunoutPdf(
         anchorY = shaftCy + shaftHalfPt,
         surfaceYAtMm = { mm -> shaftCy + shaftOuterRPxAt(mm) },
     )
-    drawPlacedBubbles(c, bubbleResult.bubbles, outline)
+    drawPlacedBubbles(c, bubbleResult.bubbles, outline, runoutReadings, unit)
 
     // ── Draw TIR direction line ───────────────────────────────────────────────
     drawTirLine(c, text, contentLeft, contentRight, tirY, config.tirDirection)
@@ -522,37 +527,89 @@ private fun drawTapersForRunout(
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * Draw all placed runout bubbles with their leader polylines.
+ * Draw all placed runout bubbles: leader polylines, the circle with a keyway cutout at 12
+ * o'clock, and — when recorded in [readings] — the TIR value (centred, formatted in [unit]) and
+ * the high-spot marker (radial line + rim dot).
  *
- * Placement comes from the shared engine (`geom/RunoutBubbleLayout.kt`), which
- * guarantees bubbles never touch and leaders never enter a bubble or cross each other.
- * A leader polyline is either a straight station→bubble diagonal (2 vertices) or a
- * dogleg with a vertical drop (3 vertices) when the straight route would collide.
+ * Placement comes from the shared engine (`geom/RunoutBubbleLayout.kt`), which guarantees bubbles
+ * never touch and leaders never enter a bubble or cross each other. A leader polyline is either a
+ * straight station→bubble diagonal (2 vertices) or a dogleg with a vertical drop (3 vertices) when
+ * the straight route would collide.
+ *
+ * The keyway cutout and marker geometry mirror the on-screen canvas
+ * (`RunoutRoute.drawRunoutMarkers` / `drawRunoutBubbleRing`) so preview and export are identical.
  */
 private fun drawPlacedBubbles(
     c: Canvas,
     bubbles: List<PlacedRunoutBubble>,
     outline: Paint,
+    readings: RunoutReadings,
+    unit: UnitSystem,
 ) {
-    val notchBlank = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    val r = BUBBLE_RADIUS_PT
+    val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.WHITE
+        color = Color.BLACK
+        textSize = r * 0.85f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
     }
+    val highSpot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(198, 40, 40) // red — the high spot, per shop convention
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = outline.strokeWidth * 1.7f
+    }
+
     for (b in bubbles) {
         // Leader polyline from the shaft surface to the top of the circle.
         b.leader.zipWithNext { p, q -> c.drawLine(p.x, p.y, q.x, q.y, outline) }
 
-        // Circle (blank — space for hand-written TIR value)
-        c.drawCircle(b.bubbleX, b.bubbleCenterY, BUBBLE_RADIUS_PT, outline)
+        // Ring with keyway cutout at 12 o'clock (top arc broken across an open-topped slot).
+        drawRunoutBubbleRingPdf(c, b.bubbleX, b.bubbleCenterY, r, outline)
 
-        // Keyway reference marker: open square notch straddling the rim at 12-o'clock —
-        // key-at-top-centre as the angular reference, matching the hand-drawn sheets.
-        // The white fill blanks the rim (and leader tip) inside the notch first.
-        val sq = KEYWAY_SQUARE_SIZE_PT
-        val top = b.bubbleCenterY - BUBBLE_RADIUS_PT - sq * 0.6f
-        c.drawRect(b.bubbleX - sq * 0.5f, top, b.bubbleX + sq * 0.5f, top + sq, notchBlank)
-        c.drawRect(b.bubbleX - sq * 0.5f, top, b.bubbleX + sq * 0.5f, top + sq, outline)
+        val reading = readings.find(b.componentId, b.stationIndex)
+        // TIR value, centred in the circle.
+        reading?.valueMm?.let { valueMm ->
+            val txt = formatRunoutValue(valueMm, unit)
+            val fm = valuePaint.fontMetrics
+            val baseline = b.bubbleCenterY - (fm.ascent + fm.descent) / 2f
+            c.drawText(txt, b.bubbleX, baseline, valuePaint)
+        }
+        // High-spot marker: a short dash straddling the rim at the clock position (no radial
+        // line — it would crowd the centred value). Matches the hand-drawn shop convention.
+        reading?.highSpotHalfHours?.let { tick ->
+            val (ux, uy) = clockTickRimOffset(tick, 1f)
+            val inner = r * 0.70f
+            val outer = r * 1.30f
+            c.drawLine(
+                b.bubbleX + ux * inner, b.bubbleCenterY + uy * inner,
+                b.bubbleX + ux * outer, b.bubbleCenterY + uy * outer, highSpot,
+            )
+        }
     }
+}
+
+/**
+ * Draw a runout bubble ring with a keyway cutout at 12 o'clock: the top arc is broken across the
+ * slot mouth and an open-topped slot descends into the circle (key-at-top shop convention). Shared
+ * geometry with the on-screen `RunoutRoute.drawRunoutBubbleRing`.
+ */
+private fun drawRunoutBubbleRingPdf(c: Canvas, cx: Float, cy: Float, r: Float, outline: Paint) {
+    val slotHalf = r * 0.22f
+    val slotDepth = r * 0.42f
+    val gapDeg = Math.toDegrees(asin((slotHalf / r).coerceIn(0f, 1f).toDouble())).toFloat()
+
+    // Arc everywhere except the gap at the top (top = -90° in the drawArc convention).
+    val oval = RectF(cx - r, cy - r, cx + r, cy + r)
+    c.drawArc(oval, -90f + gapDeg, 360f - 2f * gapDeg, false, outline)
+
+    // Slot: two verticals descending from the gap edges + a bottom connector.
+    val topY = cy - r * cos(Math.toRadians(gapDeg.toDouble())).toFloat()
+    val botY = topY + slotDepth
+    c.drawLine(cx - slotHalf, topY, cx - slotHalf, botY, outline)
+    c.drawLine(cx + slotHalf, topY, cx + slotHalf, botY, outline)
+    c.drawLine(cx - slotHalf, botY, cx + slotHalf, botY, outline)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
