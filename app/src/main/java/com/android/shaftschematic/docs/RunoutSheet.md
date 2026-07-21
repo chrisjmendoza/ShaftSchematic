@@ -578,6 +578,8 @@ PdfPreviewOverlay(
 
 When `optionsSheet` is non-null, a **Tune** icon appears in the overlay toolbar. Tapping it opens a `ModalBottomSheet` (skips partial expansion) containing the composable.
 
+**Rotation:** the app is locked to portrait, but the runout/wear sheets are landscape, so — like the schematic `PdfPreviewScreen` — the overlay unlocks rotation while open (`DisposableEffect` sets `SCREEN_ORIENTATION_UNSPECIFIED`, restoring `SCREEN_ORIENTATION_PORTRAIT` on dismiss). Turning the device landscape then lets the letterboxed `ContentScale.Fit` preview fill the width.
+
 Both routes pass `RunoutWearOptionsSheet` as the lambda:
 
 | Control | Bound to |

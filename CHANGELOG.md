@@ -8,6 +8,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-21
 
+### feat: rotate the runout & wear PDF previews to landscape
+
+The runout and wear documents are landscape, but their in-app preview (`PdfPreviewOverlay`) was
+letterboxed in the portrait-locked app. It now unlocks device rotation while open (restoring
+portrait on dismiss), matching the schematic `PdfPreviewScreen` — turn the device sideways and the
+`ContentScale.Fit` preview fills the width. Both routes share the one overlay, so this covers both.
+
 ### feat: wear pits (X markers) on bodies, tapers & liners; 2-column wear-strip grid
 
 Digitizes the hand-drawn pit / dye-penetrant "X": tap a body, taper, or liner on the Wear tab
