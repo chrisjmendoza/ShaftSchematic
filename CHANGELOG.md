@@ -21,7 +21,7 @@ readings). See the "Wear Pits" section of `docs/RunoutSheet.md`.
   **resolved component id** so a pit can sit on a liner, taper, or body (explicit or auto); orphans
   are skipped at the render layer (auto-body/taper ids aren't known to the codec), same posture as
   runout readings. Stored as component-local `axialMm` (from the AFT edge) + a visual `acrossFrac`.
-- **Shared math:** `geom/WearPitMath.kt` — X sizing (large arm = small × 1.7, a *symbol* size not the
+- **Shared math:** `geom/WearPitMath.kt` — X sizing (large arm = small × 2, a *symbol* size not the
   pit's true Ø), across-fraction clamping, and pit hit-testing. Drawn identically in all sites.
 - **UI:** the Wear overview now tints **every** body/taper/liner as a tap target (badge = spots +
   pits). Tapping opens `ComponentWearDetailOverlay` (`ui/screen/LinerWearDetail.kt`, generalized from

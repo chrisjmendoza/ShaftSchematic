@@ -554,7 +554,7 @@ private fun pitCenterPx(
 }
 
 /** Base half-arm (dp) of a SMALL pit "X" on the detail canvas; LARGE scales by the shared ratio. */
-private const val PIT_SMALL_HALF_DP = 9f
+private const val PIT_SMALL_HALF_DP = 4.5f
 
 private fun componentWearTitle(spec: ShaftSpec, rc: ResolvedComponent): String = when (rc) {
     is ResolvedLiner -> buildLinerTitleById(spec)[rc.id] ?: "Liner"

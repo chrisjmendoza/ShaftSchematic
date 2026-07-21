@@ -461,10 +461,10 @@ private fun drawWearBandsOnProfile(
 }
 
 /** SMALL pit half-arm (pt) on the main shaft profile; LARGE scales by the shared ratio. */
-private const val WEAR_PIT_SMALL_HALF_PROFILE_PT = 3.4f
+private const val WEAR_PIT_SMALL_HALF_PROFILE_PT = 1.7f
 
 /** SMALL pit half-arm (pt) on a broken-out detail strip (zoomed, so a touch larger). */
-private const val WEAR_PIT_SMALL_HALF_STRIP_PT = 5.0f
+private const val WEAR_PIT_SMALL_HALF_STRIP_PT = 2.5f
 
 /**
  * Pit "X" markers on the MAIN shaft profile, at each pit's true axial + across position. A pit

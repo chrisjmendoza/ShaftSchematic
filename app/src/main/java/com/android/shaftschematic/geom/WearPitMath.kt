@@ -24,7 +24,7 @@ import com.android.shaftschematic.model.PitSize
  * marks a bigger hole, matching the hand convention. Symbol-space only; a pit's true diameter is
  * not modelled.
  */
-const val PIT_LARGE_TO_SMALL_RATIO = 1.7f
+const val PIT_LARGE_TO_SMALL_RATIO = 2.0f
 
 /** Comfortable interior band for [com.android.shaftschematic.model.WearPit.acrossFrac] so the X stays on the metal. */
 const val PIT_ACROSS_MIN = 0.08f

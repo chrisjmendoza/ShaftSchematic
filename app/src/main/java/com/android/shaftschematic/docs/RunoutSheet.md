@@ -140,7 +140,7 @@ no autosave/snapshot/import/`newDocument` plumbing changed; it all rides `WearRe
 - **`acrossFrac`** ∈ interior band (`clampPitAcrossFrac`, `[0.08, 0.92]`) places the X vertically
   within the drawn segment (`0` = top outline, `1` = bottom) — purely visual.
 - **`size`** = `SMALL` | `LARGE`, a **symbol** size (how big the X is drawn), not the pit's true
-  diameter. `LARGE` arm = `SMALL` arm × `PIT_LARGE_TO_SMALL_RATIO` (1.7).
+  diameter. `LARGE` arm = `SMALL` arm × `PIT_LARGE_TO_SMALL_RATIO` (2.0 — small is half of large).
 - **Orphans** (component no longer resolves): skipped at the **render layer**, not pruned at decode
   — auto-body/taper ids aren't known to the codec, same as runout readings. (Wear spots ARE pruned
   at decode, against the liner list — pits are deliberately not.)
@@ -163,12 +163,12 @@ exactly the X that was drawn (`pickPitAt` from `geom/WearPitMath.kt`, generous t
 **Rendering** (all draw sites, in lockstep — same crossed-line construction, same small:large
 ratio; only the destination units and API differ, exactly like the runout marker):
 - **Canvas detail:** `LinerWearDetail.kt`'s `drawPitX` (Compose `DrawScope`), base half-arm
-  `PIT_SMALL_HALF_DP` (9dp).
+  `PIT_SMALL_HALF_DP` (4.5dp; large 9dp).
 - **PDF main profile:** `WearPdfComposer.drawWearPitsOnProfile` — X at each pit's true axial +
   across position, taper diameter interpolated at the pit's axial. Base half-arm
-  `WEAR_PIT_SMALL_HALF_PROFILE_PT` (3.4pt). The shaft profile is always drawn now (see "Wear PDF
+  `WEAR_PIT_SMALL_HALF_PROFILE_PT` (1.7pt; large 3.4pt). The shaft profile is always drawn now (see "Wear PDF
   Rendering Modes"), so body/taper pits always have a whole-shaft view.
-- **PDF detail strip:** liner pits also drawn on the broken-out strip (base half-arm 5.0pt),
+- **PDF detail strip:** liner pits also drawn on the broken-out strip (base half-arm 2.5pt; large 5.0pt),
   reinforcing the profile pits at the strip's larger scale.
 
 ---
