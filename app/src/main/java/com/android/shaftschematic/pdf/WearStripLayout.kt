@@ -646,6 +646,15 @@ fun buildLinerAnchorLabel(spec: ShaftSpec, liner: Liner, sets: SetPositions, uni
     return "${datum.labelTop} FROM $setWord"
 }
 
+/**
+ * Which SET a liner's wear-strip anchor dimension is measured from ([LinerAnchor.AFT_SET] vs
+ * [LinerAnchor.FWD_SET]), or `null` if the liner has no resolvable dimension. Used to align the
+ * strip title (left for AFT-referenced, right for FWD-referenced) as a direction cue — same source
+ * (`mapToLinerDimsForPdf`) as [buildLinerAnchorLabel]'s `FROM ... S.E.T.` text, so the two agree.
+ */
+fun linerAnchorForPdf(spec: ShaftSpec, liner: Liner): LinerAnchor? =
+    mapToLinerDimsForPdf(spec, PdfTieringMode.AUTO).firstOrNull { it.id == liner.id }?.anchor
+
 /** Min-Ø reading label, or `null` when unrecorded (`minDiaMm == 0`) — never printed in that case. */
 fun formatMinDiaLabelOrNull(minDiaMm: Float, unit: UnitSystem): String? =
     if (minDiaMm > 0f) "⌀${formatDiaWithUnit(minDiaMm.toDouble(), unit)}" else null

@@ -388,6 +388,7 @@ under the same name for the same shaft.
 - Shaft centre is `(midTop + midBot) / 2` where `midTop = headerBottom + WEAR_HEADER_GAP_PT` and `midBot = notesY − WEAR_NOTES_GAP_PT`. It is independent of the OAL line position and sits at exactly the page centre for the default margins.
 - OAL dimension line is computed **after** the horizontal scale factor (`ptPerMm`) is known: `oalLineY = shaftCy − rPx(maxBodyDia) − WEAR_OAL_ABOVE_SHAFT_PT`. This anchors it well above the actual drawn shaft top (raised 90 pt, same convention as the runout sheet) rather than at a fixed offset from the header.
 - Witness (extension) lines are drawn at `x0` and `x1` from just above the shaft top up through the dimension line, matching standard engineering drawing convention.
+- **Direction reference** (`drawWearDirectionRef`, 2026-07-21): "← AFT" (left) and "FWD →" (right) drawn just below the shaft's bottom edge so a shop reader can orient the whole sheet (AFT drawn left, FWD right — the SET/schematic convention).
 - Notes row is anchored at `contentBot − WEAR_NOTES_BOTTOM_OFFSET_PT`, independent of shaft size.
 
 **Layout constants (`WearPdfComposer.kt`):**
@@ -487,7 +488,9 @@ let anything render past the strip's bottom edge. Each strip draws:
 - One anchor-from-SET label per strip (`buildLinerAnchorLabel`) — the digitized form of
   the shop sketch's "110 FROM CPLG S.E.T." line. It reuses `mapToLinerDimsForPdf` +
   `LinerSpanBuilder.buildLinerSpans` verbatim, so the number always matches the liner
-  dimension shown on the main schematic PDF.
+  dimension shown on the main schematic PDF. The **title is aligned to match the measurement
+  direction** as a visual cue (2026-07-21): a FWD-SET-referenced strip right-aligns its title,
+  an AFT-SET-referenced one left-aligns it (`linerAnchorForPdf` → `LinerAnchor`).
 
 **Dimension rail (2026-07-18 rework)** — replaces the original per-spot "AFT edge → band
 start" / "band start → band end" text rows with one standard chained dimension rail below

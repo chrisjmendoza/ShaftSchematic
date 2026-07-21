@@ -218,6 +218,10 @@ fun composeWearPdf(
         drawWearPitsOnProfile(c, wearRecord.pits, resolvedComponents, shaftCy, ::xAt, ::rPx, pitPaint)
     }
 
+    // Shaft-direction reference so anyone reading the sheet knows the layout: AFT is drawn at the
+    // left, FWD at the right (the schematic/SET convention).
+    drawWearDirectionRef(c, text, contentLeft, contentRight, shaftCy + rPx(maxDiaMm), profileBottom)
+
     // ── Per-liner detail strips ─────────────────────────────────────────────
     onPage.forEachIndexed { i, group ->
         val cell = stripCells[i]
@@ -310,6 +314,28 @@ private fun drawWearOalLine(
     else "OAL: ${"%.2f".format(oalMm)} mm"
     val lw = text.measureText(label)
     c.drawText(label, (x0 + x1) * 0.5f - lw * 0.5f, oalLineY - 4f, text)
+}
+
+/**
+ * "← AFT" (left) and "FWD →" (right) direction labels under the shaft profile, so a shop reader
+ * can orient the whole document. Drawn just below the shaft's bottom edge, clamped inside the
+ * profile band. Matches the app-wide convention (AFT drawn left, FWD right) and the in-app wear
+ * detail overlay's caption.
+ */
+private fun drawWearDirectionRef(
+    c: Canvas,
+    text: Paint,
+    left: Float,
+    right: Float,
+    shaftBottomY: Float,
+    bandBottom: Float,
+) {
+    val p = Paint(text)
+    val y = (shaftBottomY + p.textSize + 12f).coerceAtMost(bandBottom - 2f)
+    p.textAlign = Paint.Align.LEFT
+    c.drawText("← AFT", left, y, p)
+    p.textAlign = Paint.Align.RIGHT
+    c.drawText("FWD →", right, y, p)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -548,7 +574,15 @@ private fun drawWearDetailStrip(
     val title = (ln.label?.takeIf { it.isNotBlank() } ?: "Liner") + " — " +
         buildLinerAnchorLabel(docSpec, ln, setPositions, unit)
     val titleBaselineY = (stripTop + titleText.textSize).coerceAtMost(stripBottom)
-    c.drawText(ellipsizeToWidth(title, titleText, contentRight - contentLeft), contentLeft, titleBaselineY, titleText)
+    // Direction cue: a FWD-SET-referenced title is right-aligned (toward the FWD end drawn on the
+    // right), an AFT-SET-referenced one stays left-aligned — mirrors the measurement direction.
+    val titleFit = ellipsizeToWidth(title, titleText, contentRight - contentLeft)
+    if (linerAnchorForPdf(docSpec, ln) == LinerAnchor.FWD_SET) {
+        titleText.textAlign = Paint.Align.RIGHT
+        c.drawText(titleFit, contentRight, titleBaselineY, titleText)
+    } else {
+        c.drawText(titleFit, contentLeft, titleBaselineY, titleText)
+    }
 
     val sortedSpots = group.spots.sortedBy { it.startMm }
     val inner = computeWearStripInnerLayout(

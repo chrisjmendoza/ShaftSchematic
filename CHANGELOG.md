@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-21
 
+### feat: AFT/FWD direction reference on the wear document + direction-aligned strip titles
+
+So anyone in the shop can orient the printed wear sheet: "← AFT" and "FWD →" are drawn under the
+shaft profile (`drawWearDirectionRef`, AFT left / FWD right — the SET/schematic convention). Each
+detail strip's title is also aligned to match its measurement direction — a FWD-SET-referenced
+strip right-aligns its title, an AFT-SET-referenced one left-aligns it (`linerAnchorForPdf`). (The
+earlier AFT/FWD caption was added to the in-app detail *overlay*; this puts it on the exported PDF.)
+
 ### feat: rotate the runout & wear PDF previews to landscape
 
 The runout and wear documents are landscape, but their in-app preview (`PdfPreviewOverlay`) was
