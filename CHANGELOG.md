@@ -8,6 +8,37 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-21
 
+### feat: wear pits (X markers) on bodies, tapers & liners; 2-column wear-strip grid
+
+Digitizes the hand-drawn pit / dye-penetrant "X": tap a body, taper, or liner on the Wear tab
+to open it enlarged, then mark pits as small or large X's. The X's print at true position on the
+wear-document PDF. Fourth reference-only feature (like coupler bolt slots / wear spots / runout
+readings). See the "Wear Pits" section of `docs/RunoutSheet.md`.
+
+- **Model/persistence:** `WearPit`/`PitSize` in `WearRecord.pits` (`model/WearSpot.kt`) — stored in
+  the **existing** `wear_record` envelope field, so no new autosave/snapshot/import plumbing.
+  Reference-only (never affects OAL/coverage/body resolution/collision/Free-to-End). Keyed by the
+  **resolved component id** so a pit can sit on a liner, taper, or body (explicit or auto); orphans
+  are skipped at the render layer (auto-body/taper ids aren't known to the codec), same posture as
+  runout readings. Stored as component-local `axialMm` (from the AFT edge) + a visual `acrossFrac`.
+- **Shared math:** `geom/WearPitMath.kt` — X sizing (large arm = small × 1.7, a *symbol* size not the
+  pit's true Ø), across-fraction clamping, and pit hit-testing. Drawn identically in all sites.
+- **UI:** the Wear overview now tints **every** body/taper/liner as a tap target (badge = spots +
+  pits). Tapping opens `ComponentWearDetailOverlay` (`ui/screen/LinerWearDetail.kt`, generalized from
+  the liner-only overlay — a rect for body/liner, a trapezoid for a taper). Explicit **Add X /
+  Remove X** tool chips + a **Clear all pits** button so a stray tap can't place or delete by
+  accident; a **Small / Large** brush. Liners keep the full wear-band editor plus pits; bodies and
+  tapers get pits only. `ShaftViewModel` gained `addWearPit`/`updateWearPitSize`/`removeWearPit`.
+- **Wear PDF:** X's drawn at true axial + across position on the main profile (`drawWearPitsOnProfile`,
+  taper Ø interpolated at the pit) and on the detail strips.
+- **Wear PDF layout change:** the shaft profile is now **always drawn on top**. The old strips-only
+  mode (3+ wear liners dropped the profile) is replaced by `WearPdfMode.GRID` — the detail strips lay
+  out in a **2-column grid** (two side by side, third on the next row) so they take ~2 rows and the
+  profile (with its body/taper pits) always stays visible. New `computeWearStripGridLayout` reuses the
+  existing vertical-layout math by row count. Modes: 0 → `PROFILE_FORM`, 1 → `COMBINED`, 2+ → `GRID`.
+- Tests: `geom/WearPitMathTest`, pit round-trip + orphan-survival cases in `WearRecordPersistenceTest`,
+  grid-layout tests replacing the strips-only tests in `WearStripLayoutTest`. Suite green.
+
 ### fix: revert "non-negotiable bodies" — it flagged normal body-under-sleeve as collisions
 
 The 2026-07-21 "explicit bodies are non-negotiable" change was wrong for real drafts. A body
