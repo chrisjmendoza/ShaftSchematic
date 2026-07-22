@@ -6,6 +6,33 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-22
+
+### feat: spooned keyways draw an enlarged circle at the closed end
+
+`keywaySpooned` (already on `Taper`/`Body`, and already surfaced in the add-dialogs, carousel, and
+PDF footer text) now actually **draws**. A spooned **open** keyway keeps the normal keyway —
+full-length walls and the mill semicircle at the closed (LET) end — and **adds** an enlarged circle
+around that end, matching the shop/CAD "spooned" convention. The mill semicircle stays as an inner
+reference line inside the circle. Ignored for floating keyways (the toggle is already disabled there).
+
+- **Shared math:** new `geom/KeywaySpoonMath.kt` — `keywaySpoonBowl(...)` resolves the circle
+  (radius, centre, wall-tangent point, major-arc sweep). Two tunable drawing constants:
+  `SPOON_BOWL_WIDTH_RATIO = 2.4` (diameter ÷ slot width) and `SPOON_BOWL_LET_SHIFT_RATIO = 0.5`
+  (how far the centre sits back from the LET tip, so the mill end runs ~¾ through the circle). Pure,
+  no `pdf → ui` dep — same posture as `WearPitMath`/`RunoutReadingMath`.
+- **Draw sites:** the circle is drawn **identically** in both keyway draw sites —
+  `ShaftRenderer.drawKeywaySlot` (canvas) and `ShaftPdfComposer.drawKeywaySlotPdf` (PDF) — as two
+  additive draws (a white disc into the void fill, the major arc onto the outline); the non-spooned
+  path is untouched.
+- **Docs/tests:** CLAUDE.md invariant, corrected `Taper`/`Body` docstrings, new `KeywaySpoonMathTest`.
+
+### feat: reset button on the runout shaft preview
+
+The runout tab's live shaft/bubble preview gains a "Reset view" Refresh button (top-right), mirroring
+the schematic drawing preview's control — it returns the pinch-zoom/pan to `scale 1 / offset 0`
+(`RunoutRoute.kt`).
+
 ## 2026-07-21
 
 ### feat: AFT/FWD direction reference on the wear document + direction-aligned strip titles

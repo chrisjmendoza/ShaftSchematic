@@ -28,14 +28,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
@@ -368,6 +371,25 @@ fun RunoutRoute(
                             draw(spec, preview.layout, previewOpts, textMeasurer, resolvedComponents)
                         }
                         drawRunoutMarkers(preview.bubbles, preview.geom, runoutReadings, unit, textMeasurer)
+                    }
+
+                    // Compact reset control (top-right) — mirrors the schematic preview.
+                    IconButton(
+                        onClick = {
+                            previewScale  = 1f
+                            previewOffset = Offset.Zero
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(40.dp)
+                            .background(Color.White.copy(alpha = 0.6f), CircleShape),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = "Reset view",
+                            tint = Color.Black.copy(alpha = 0.8f),
+                        )
                     }
                 }
                 Text(

@@ -8,6 +8,7 @@ import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.END_EPS_MM
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.keywaySpoonBowl
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.pdf.dim.*
 import com.android.shaftschematic.pdf.notes.*
@@ -803,7 +804,7 @@ internal fun drawKeywayNotchPdf(
     // Scale mm → pt using the taper's own pixel span (avoids needing ptPerMm).
     val ptPerMm = if (t.lengthMm > 0f) kotlin.math.abs(x1 - x0) / t.lengthMm else 1f
 
-    drawKeywaySlotPdf(c, setX, dir, ptPerMm, t.keywayWidthMm, t.keywayOffsetFromSetMm, t.keywayLengthMm, cy, outline, hidden)
+    drawKeywaySlotPdf(c, setX, dir, ptPerMm, t.keywayWidthMm, t.keywayOffsetFromSetMm, t.keywayLengthMm, cy, outline, hidden, t.keywaySpooned)
 }
 
 /**
@@ -829,7 +830,7 @@ internal fun drawKeywayNotchBodyPdf(
     val dir  = if (farX > refX) 1f else -1f
     val ptPerMm = kotlin.math.abs(x1 - x0) / b.lengthMm
 
-    drawKeywaySlotPdf(c, refX, dir, ptPerMm, b.keywayWidthMm, b.keywayOffsetFromEndMm, b.keywayLengthMm, cy, outline, hidden)
+    drawKeywaySlotPdf(c, refX, dir, ptPerMm, b.keywayWidthMm, b.keywayOffsetFromEndMm, b.keywayLengthMm, cy, outline, hidden, b.keywaySpooned)
 }
 
 /**
@@ -852,11 +853,17 @@ private fun drawKeywaySlotPdf(
     cy: Float,
     outline: Paint,
     hidden: Boolean = false,
+    spooned: Boolean = false,
 ) {
     val halfW       = (widthMm * ptPerMm) / 2f
     val kwSetX      = refX + dir * offsetMm * ptPerMm
     val kwLetX      = kwSetX + dir * lengthMm * ptPerMm
     val isOpen      = offsetMm < 0.01f
+
+    // Spooned (open keyways only): keep the normal keyway (full-length walls + mill semicircle) and
+    // ADD an enlarged circle around the closed (LET) end — the mill end stays as an inner reference
+    // line inside the bowl. Floating keyways ignore the flag. Mirrors the canvas renderer.
+    val bowl = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(kwLetX, dir, halfW) else null
 
     val letArcCx    = kwLetX - dir * halfW
     val letArcStart = if (dir > 0) 270f else 90f
@@ -887,6 +894,8 @@ private fun drawKeywaySlotPdf(
         c.drawRect(fillLeft, cy - halfW, fillRight, cy + halfW, whiteFill)
         c.drawArc(letOval, letArcStart, 180f, false, whiteFill)
         if (!isOpen) c.drawArc(setOval, setArcStart, 180f, false, whiteFill)
+        // Spoon bowl void: the enlarged disc around the LET end (its SET-side overlaps the slot).
+        if (bowl != null) c.drawCircle(bowl.cx, cy, bowl.radius, whiteFill)
     }
 
     // ── Outline strokes on top (dashed for hidden far-side keyways) ──
@@ -897,8 +906,16 @@ private fun drawKeywaySlotPdf(
     } else outline
     c.drawLine(lineLeft, cy - halfW, lineRight, cy - halfW, stroke)
     c.drawLine(lineLeft, cy + halfW, lineRight, cy + halfW, stroke)
+    // Inner mill semicircle — the standard rounded end (kept as a reference line inside the bowl).
     c.drawArc(letOval, letArcStart, 180f, false, stroke)
     if (!isOpen) c.drawArc(setOval, setArcStart, 180f, false, stroke)
+    // Spoon bowl: the enlarged circle's major arc around the far side.
+    if (bowl != null) {
+        val bowlOval = android.graphics.RectF(
+            bowl.cx - bowl.radius, cy - bowl.radius, bowl.cx + bowl.radius, cy + bowl.radius,
+        )
+        c.drawArc(bowlOval, bowl.arcStartDeg, bowl.arcSweepDeg, false, stroke)
+    }
     // Open keyway: shaft face end-line already closes the SET end.
 }
 

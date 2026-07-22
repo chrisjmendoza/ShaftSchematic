@@ -77,6 +77,18 @@ Pure clock/hit-test math lives in `geom/RunoutReadingMath.kt` (shared, no `pdf �
 value formatting in `util/RunoutValueFormat.kt`. See `docs/RunoutSheet.md` (Runout Bubble
 Editor) and `docs/RunoutBubbleEditor_PLAN.md`.
 
+### Spooned keyways are a draw-only variant
+`keywaySpooned` (on `Taper` and `Body`) is a **drawing** flag — it changes nothing in the model,
+resolve, OAL, collision, or footer geometry (only the footer *text* gains `(spooned)`). A spooned
+**open** keyway keeps the normal keyway (full-length walls + mill semicircle) and **adds** an
+enlarged circle around the closed (LET) end — the mill semicircle stays as an inner reference line
+inside the bowl. It is **ignored for floating keyways** (offset > 0) — the UI disables the toggle
+there. The bowl must be drawn **identically in both keyway draw sites** —
+`ShaftRenderer.drawKeywaySlot` (canvas) and `ShaftPdfComposer.drawKeywaySlotPdf` (PDF). Pure bowl
+math (radius, wall tangent, major-arc sweep) lives in `geom/KeywaySpoonMath.kt` (shared, no
+`pdf → ui` dep); the single `SPOON_BOWL_WIDTH_RATIO` constant sizes it. Same posture as the wear-pit
+"X" and runout-marker draw-both-sites rules.
+
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus
 was gained. A tap-and-leave with no edit must be a no-op. This prevents spurious

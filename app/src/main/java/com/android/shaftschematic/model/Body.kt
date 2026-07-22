@@ -21,8 +21,9 @@ import java.util.UUID
  * @property keywayEnd Which body end face the keyway is referenced from (AFT or FWD).
  *   Intermediate shafts with fitted couplings carry keyways at a shaft end that is a
  *   plain cylindrical body — this picks the face the offset is measured from.
- * @property keywaySpooned Whether the open-keyway entry at the end face has a spooned
- *   lead-in. Ignored when [keywayOffsetFromEndMm] > 0 (floating keyways have no open face).
+ * @property keywaySpooned Whether the open keyway's closed (LET) end is spooned — an enlarged
+ *   circle drawn around the mill end (which stays as an inner reference line).
+ *   Ignored when [keywayOffsetFromEndMm] > 0 (floating keyways have no open end to reference).
  */
 @Serializable
 data class Body(

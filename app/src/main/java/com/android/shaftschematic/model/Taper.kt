@@ -19,8 +19,9 @@ import kotlin.math.max
  * @property keywayOffsetFromSetMm Axial distance from SET face to the start of the keyway slot.
  *   0 = open keyway (starts at SET face, open-ended there).
  *   > 0 = floating keyway (inset from SET, rounded at both ends).
- * @property keywaySpooned Whether the open-keyway entry at the SET face has a spooned lead-in.
- *   Ignored when [keywayOffsetFromSetMm] > 0 (floating keyways have no open face).
+ * @property keywaySpooned Whether the open keyway's closed (LET) end is spooned — an enlarged
+ *   circle drawn around the mill end (which stays as an inner reference line).
+ *   Ignored when [keywayOffsetFromSetMm] > 0 (floating keyways have no open end to reference).
  */
 @Serializable
 data class Taper(

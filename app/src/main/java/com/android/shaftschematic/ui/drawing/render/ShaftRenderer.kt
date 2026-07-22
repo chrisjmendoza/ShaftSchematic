@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.TextMeasurer
+import com.android.shaftschematic.geom.keywaySpoonBowl
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
@@ -677,6 +678,7 @@ private fun DrawScope.drawKeywayNotch(
         offsetMm = t.keywayOffsetFromSetMm,
         lengthMm = t.keywayLengthMm,
         L = L, outline = outline, outlineW = outlineW, hidden = hidden,
+        spooned = t.keywaySpooned,
     )
 }
 
@@ -707,6 +709,7 @@ private fun DrawScope.drawKeywayNotchBody(
         offsetMm = b.keywayOffsetFromEndMm,
         lengthMm = b.keywayLengthMm,
         L = L, outline = outline, outlineW = outlineW, hidden = hidden,
+        spooned = b.keywaySpooned,
     )
 }
 
@@ -729,6 +732,7 @@ private fun DrawScope.drawKeywaySlot(
     outline: Color,
     outlineW: Float,
     hidden: Boolean = false,
+    spooned: Boolean = false,
 ) {
     val cy   = L.centerlineYPx
 
@@ -739,6 +743,11 @@ private fun DrawScope.drawKeywaySlot(
     val kwLetX   = kwSetX + dir * kwLenPx
     val isOpen   = offsetMm < 0.01f
 
+    // Spooned (open keyways only): keep the normal keyway (full-length walls + mill semicircle) and
+    // ADD an enlarged circle around the closed (LET) end — the mill end stays as an inner reference
+    // line inside the bowl. Floating keyways ignore the flag.
+    val bowl = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(kwLetX, dir, halfW) else null
+
     // Arc center is halfW inward from the LET face (concave mill-cut profile).
     val letArcCx    = kwLetX - dir * halfW
     val letArcStart = if (dir > 0) 270f else 90f
@@ -747,7 +756,7 @@ private fun DrawScope.drawKeywaySlot(
     val setArcCx    = kwSetX + dir * halfW
     val setArcStart = if (dir > 0) 90f else 270f
 
-    // Straight lines run from the SET side to the arc centre.
+    // Straight lines run from the SET side to the mill arc centre (unchanged by the spoon).
     val lineNear  = if (isOpen) kwSetX else setArcCx
     val lineFar   = letArcCx
     val lineLeft  = min(lineNear, lineFar)
@@ -778,6 +787,10 @@ private fun DrawScope.drawKeywaySlot(
                 topLeft = Offset(setArcCx - halfW, cy - halfW), size = letArcBox
             )
         }
+        // Spoon bowl void: the enlarged disc around the LET end (its SET-side overlaps the slot).
+        if (bowl != null) {
+            drawCircle(color = Color.White, radius = bowl.radius, center = Offset(bowl.cx, cy))
+        }
     }
 
     // ── Outline strokes on top (dashed for hidden far-side keyways) ──
@@ -785,6 +798,7 @@ private fun DrawScope.drawKeywaySlot(
     drawLine(outline, Offset(lineLeft, cy - halfW), Offset(lineRight, cy - halfW), strokeWidth = outlineW, pathEffect = dash)
     drawLine(outline, Offset(lineLeft, cy + halfW), Offset(lineRight, cy + halfW), strokeWidth = outlineW, pathEffect = dash)
 
+    // Inner mill semicircle — the standard rounded end (kept as a reference line inside the bowl).
     drawArc(
         color = outline,
         startAngle = letArcStart, sweepAngle = 180f, useCenter = false,
@@ -796,6 +810,17 @@ private fun DrawScope.drawKeywaySlot(
             color = outline,
             startAngle = setArcStart, sweepAngle = 180f, useCenter = false,
             topLeft = Offset(setArcCx - halfW, cy - halfW), size = letArcBox,
+            style = Stroke(width = outlineW, pathEffect = dash)
+        )
+    }
+    // Spoon bowl: the enlarged circle's major arc around the far side (the walls run through
+    // its SET-facing mouth to the inner mill end).
+    if (bowl != null) {
+        drawArc(
+            color = outline,
+            startAngle = bowl.arcStartDeg, sweepAngle = bowl.arcSweepDeg, useCenter = false,
+            topLeft = Offset(bowl.cx - bowl.radius, cy - bowl.radius),
+            size = androidx.compose.ui.geometry.Size(bowl.radius * 2f, bowl.radius * 2f),
             style = Stroke(width = outlineW, pathEffect = dash)
         )
     }
