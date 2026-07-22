@@ -99,6 +99,18 @@ a second row via `geom/DiameterCalloutLayout.kt` (pure, unit-tested), the same t
 posture as runout bubbles. PDF-only — no on-screen canvas equivalent, so no draw-both-sites
 rule applies. See `docs/PDF_EXPORT.md` §5.3.
 
+### Dimension values seat in a break in the line
+`PdfDimensionRenderer.drawSpan` draws each dimension line as **two stubs**
+(`xa→gapLeft`, `gapRight→xb`) with the value seated in the gap, vertically centered on the
+line — not floating above a continuous line. The gap (label width + 2·`textPad`) is cut
+**only** when both stubs can host an inward arrowhead — the same `canFitInwardArrows`
+predicate that chooses arrow direction — so inline spans always get inward arrows. Short
+spans, or a label colliding with one already placed on the rail, **fall back** to the
+original style (continuous line, label above at `textAboveDy`, bounded bump). Do not
+reintroduce always-above label placement. The top OAL rail uses the same `drawSpan`, so it
+breaks too. PDF-only — the on-screen preview rasterizes the real PDF, so there is no separate
+draw path and no canvas equivalent to keep in sync. See `docs/PDF_EXPORT.md` §5.4.
+
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus
 was gained. A tap-and-leave with no edit must be a no-op. This prevents spurious

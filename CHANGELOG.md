@@ -8,6 +8,26 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-22
 
+### feat: dimension values now seated in a break in the dimension line
+
+Schematic PDF dimension lines (`PdfDimensionRenderer`) draw their value **inside a break
+in the line** — the drafting convention `|←—— 237 1/2" ——→|` — instead of floating above a
+continuous line:
+
+- **Inline path.** The main dimension line is drawn as two stubs with the value centered in
+  the gap between them, vertically centered on the line. Eligibility reuses the existing
+  `canFitInwardArrows` predicate, so an inline span always gets inward-pointing arrows that
+  line up with the value.
+- **Fallback path.** Short spans, and any label that would collide with one already placed
+  on that rail, revert to the original look: continuous line, label floating above with the
+  existing bump-on-collision loop, and outward arrows.
+- **Top OAL rail included** — `drawTop`/`drawOnRail` share the same `drawSpan`, so the top
+  OAL line gets the same break treatment as the numbered component rails.
+- **PDF + preview, no canvas twin.** Applies to both the exported PDF and the on-screen PDF
+  preview (the preview rasterizes the real PDF through the same composer/renderer path).
+  The on-screen schematic canvas has no horizontal dimension rails, so there's no
+  draw-both-sites counterpart to update. Docs: `docs/PDF_EXPORT.md` §5.4.
+
 ### feat: schematic diameter callouts — below the shaft, 3-decimal, two-tier
 
 On-shaft Ø callouts on the schematic PDF were cleaned up per shop-print convention:
