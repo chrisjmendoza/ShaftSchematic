@@ -188,8 +188,9 @@ and `WearRecord` — never inside `ShaftSpec`. Owned by `ShaftViewModel._runoutR
 `setRunoutReading` / `clearRunoutReading`; wired into the autosave combine, snapshot restore, JSON
 import/export, and `newDocument` exactly like `runoutConfig`/`wearRecord`.
 
-- **Value**: canonical mm. Entered/shown in the active unit via `util/formatRunoutValue` (4 dp inches
-  / 3 dp mm, trailing zeros stripped) and parsed back to mm on Save — unit conversion only at the edge.
+- **Value**: canonical mm. Entered/shown in the active unit via `util/formatRunoutValue` (fixed
+  **3 dp / thousandths in both units, trailing zeros kept** so every bubble reads at the same
+  precision — `.010` stays `.010`) and parsed back to mm on Save — unit conversion only at the edge.
 - **High spot**: `highSpotHalfHours` ∈ `[0, 23]`, **30-minute clock ticks** (Chris's hand
   convention), 0 = 12 o'clock, clockwise, 15° each. Snapped from the free drag angle by
   `snapToClockTick`.
@@ -223,8 +224,9 @@ no `pdf → ui` dependency); value formatting in `util/RunoutValueFormat.kt`.
 
 Bubble sizing (tuned 2026-07-21 from a printed sheet): the circle is roomy enough to hand-write a
 value in (`BUBBLE_RADIUS_PT = 23` ≈ 0.64 in dia; on-screen `radius = 7.dp`), and the printed value
-sits small inside it (`textSize = r * 0.60`). `formatRunoutValue` **drops the leading zero** before
-the decimal (`0.003 → .003`, `-0.003 → -.003`) so the value fits and reads like a hand-written TIR.
+sits small inside it (`textSize = r * 0.60`). `formatRunoutValue` shows a **fixed 3 decimals
+(thousandths), trailing zeros kept** (`.010`, not `.01`), and **drops the leading zero** before
+the decimal (`0.010 → .010`, `-0.003 → -.003`) so the value fits and reads like a hand-written TIR.
 Keep the radius and the `0.60` text ratio identical in both draw sites (`RunoutRoute.drawRunoutMarkers`
 ⇔ `RunoutPdfComposer.drawPlacedBubbles`).
 

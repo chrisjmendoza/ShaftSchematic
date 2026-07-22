@@ -4,9 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * [formatRunoutValue] display rules: unit conversion at the edge, trailing-zero trim, and the
- * dropped leading zero before the decimal (so a TIR value fits the runout bubble and reads like
- * a hand-written shop value).
+ * [formatRunoutValue] display rules: unit conversion at the edge, fixed 3-decimal (thousandths)
+ * precision with trailing zeros kept, and the dropped leading zero before the decimal (so a TIR
+ * value fits the runout bubble and reads like a hand-written shop value).
  */
 class RunoutValueFormatTest {
 
@@ -19,12 +19,19 @@ class RunoutValueFormatTest {
         assertEquals(".003", formatRunoutValue(0.0762f, UnitSystem.INCHES))
     }
 
-    @Test fun `value at or above one keeps its integer part`() {
-        assertEquals("1.5", formatRunoutValue(1.5f, UnitSystem.MILLIMETERS))
+    @Test fun `trailing zeros are kept to three decimals`() {
+        // The reported case: .010 must stay .010, not shrink to .01.
+        assertEquals(".010", formatRunoutValue(0.010f, UnitSystem.MILLIMETERS))
+        // 0.254 mm == 0.010 in
+        assertEquals(".010", formatRunoutValue(0.254f, UnitSystem.INCHES))
     }
 
-    @Test fun `zero stays zero`() {
-        assertEquals("0", formatRunoutValue(0f, UnitSystem.MILLIMETERS))
+    @Test fun `value at or above one keeps its integer part with three decimals`() {
+        assertEquals("1.500", formatRunoutValue(1.5f, UnitSystem.MILLIMETERS))
+    }
+
+    @Test fun `zero prints three decimals`() {
+        assertEquals(".000", formatRunoutValue(0f, UnitSystem.MILLIMETERS))
     }
 
     @Test fun `negative sub-one value keeps the sign and drops the zero`() {
