@@ -222,6 +222,10 @@ fun composeWearPdf(
     // left, FWD at the right (the schematic/SET convention).
     drawWearDirectionRef(c, text, contentLeft, contentRight, shaftCy + rPx(maxDiaMm), profileBottom)
 
+    // Liner names centered under their span on the main profile — a reference tying each wear band
+    // to its broken-out (zoomed) strip below. Only the liners that get a strip on this page.
+    drawWearLinerNamesOnProfile(c, onPage, shaftCy + rPx(maxDiaMm), profileBottom, contentLeft, contentRight, ::xAt, text)
+
     // ── Per-liner detail strips ─────────────────────────────────────────────
     onPage.forEachIndexed { i, group ->
         val cell = stripCells[i]
@@ -336,6 +340,39 @@ private fun drawWearDirectionRef(
     c.drawText("← AFT", left, y, p)
     p.textAlign = Paint.Align.RIGHT
     c.drawText("FWD →", right, y, p)
+}
+
+/**
+ * Liner names centered under their span on the MAIN profile — a lightweight reference tying each
+ * wear band to its broken-out (zoomed) strip below, so a reader can match "this band on the shaft"
+ * to "that strip". Shares the row with the "← AFT" / "FWD →" direction labels: each name is
+ * centered on its liner span but clamped clear of those edge-anchored labels. Uses the same name
+ * (`label` or "Liner") the strip title shows, so the two always read the same.
+ */
+private fun drawWearLinerNamesOnProfile(
+    c: Canvas,
+    groups: List<WearLinerGroup>,
+    shaftBottomY: Float,
+    bandBottom: Float,
+    contentLeft: Float,
+    contentRight: Float,
+    xAt: (Float) -> Float,
+    text: Paint,
+) {
+    if (groups.isEmpty()) return
+    val p = Paint(text).apply { textAlign = Paint.Align.CENTER }
+    val y = (shaftBottomY + p.textSize + 12f).coerceAtMost(bandBottom - 2f)
+    // Reserve the edge zones where "← AFT" / "FWD →" sit (drawn with the same [text] size).
+    val loX = contentLeft + text.measureText("← AFT") + 10f
+    val hiX = contentRight - text.measureText("FWD →") - 10f
+    if (hiX <= loX) return
+    groups.forEach { g ->
+        val ln = g.liner
+        if (ln.lengthMm <= 0f) return@forEach
+        val name = ln.label?.takeIf { it.isNotBlank() } ?: "Liner"
+        val cx = ((xAt(ln.startFromAftMm) + xAt(ln.startFromAftMm + ln.lengthMm)) * 0.5f).coerceIn(loX, hiX)
+        c.drawText(ellipsizeToWidth(name, p, hiX - loX), cx, y, p)
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -457,10 +494,12 @@ private fun drawWearShaftProfile(
 // WearStripLayoutTest. The functions below only do the Canvas drawing.
 
 /**
- * Thin hatched bands on the MAIN shaft profile for every liner with recorded wear
- * spots, at their true axial position — "visible but not dominant" (proposal
- * §6.2). Bands are clamped to the liner's own span for rendering; the underlying
- * [WearSpot] data is never mutated.
+ * Thin vertical-line bands on the MAIN shaft profile for every liner with recorded wear
+ * spots, at their true axial position — "visible but not dominant" (proposal §6.2). The band
+ * is filled with **vertical** strokes (2026-07-22, matching how the shop marks wear areas by
+ * hand — see the reference sketch); the broken-out detail strips keep the diagonal hatch.
+ * Bands are clamped to the liner's own span for rendering; the underlying [WearSpot] data is
+ * never mutated.
  */
 private fun drawWearBandsOnProfile(
     c: Canvas,
@@ -471,7 +510,7 @@ private fun drawWearBandsOnProfile(
     outline: Paint,
 ) {
     if (groups.isEmpty()) return
-    val bandHatch = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.5f; alpha = 120 }
+    val bandLines = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.5f; alpha = 120 }
     groups.forEach { g ->
         val ln = g.liner
         if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
@@ -481,7 +520,7 @@ private fun drawWearBandsOnProfile(
             if (clamp.lengthMm <= 0f) return@forEach
             val x0 = xAt(ln.startFromAftMm + clamp.startMm)
             val x1 = xAt(ln.startFromAftMm + clamp.startMm + clamp.lengthMm)
-            drawHatchBand(c, x0, x1, top, bot, bandHatch, pitchPt = 6f)
+            drawVerticalBand(c, x0, x1, top, bot, bandLines, pitchPt = 6f)
         }
     }
 }
@@ -573,16 +612,8 @@ private fun drawWearDetailStrip(
     val titleText = Paint(text).apply { textSize = (text.textSize - 1f).coerceAtLeast(7f) }
     val title = (ln.label?.takeIf { it.isNotBlank() } ?: "Liner") + " — " +
         buildLinerAnchorLabel(docSpec, ln, setPositions, unit)
-    val titleBaselineY = (stripTop + titleText.textSize).coerceAtMost(stripBottom)
-    // Direction cue: a FWD-SET-referenced title is right-aligned (toward the FWD end drawn on the
-    // right), an AFT-SET-referenced one stays left-aligned — mirrors the measurement direction.
-    val titleFit = ellipsizeToWidth(title, titleText, contentRight - contentLeft)
-    if (linerAnchorForPdf(docSpec, ln) == LinerAnchor.FWD_SET) {
-        titleText.textAlign = Paint.Align.RIGHT
-        c.drawText(titleFit, contentRight, titleBaselineY, titleText)
-    } else {
-        c.drawText(titleFit, contentLeft, titleBaselineY, titleText)
-    }
+    // The title + liner-anchor dimension is drawn LAST, at the bottom of the strip (swapped with the
+    // dimension rail 2026-07-22 to match the hand-marked sheet). See the title block near the end.
 
     val sortedSpots = group.spots.sortedBy { it.startMm }
     val inner = computeWearStripInnerLayout(
@@ -641,11 +672,13 @@ private fun drawWearDetailStrip(
             c.drawLine(x0, top, x0, bot, dimPaint); c.drawLine(x1, top, x1, bot, dimPaint)
         }
 
-        // Min-Ø reading, printed just above the band (skipped when unrecorded).
+        // Min-Ø reading, printed just below the band (skipped when unrecorded). Below — not above —
+        // now that the dimension rail sits above the cylinder; the headroom below the cylinder keeps
+        // it clear of the title.
         formatMinDiaLabelOrNull(spot.minDiaMm, unit)?.let { label ->
             val lw = dimText.measureText(label)
             val lx = (((x0 + x1) * 0.5f) - lw * 0.5f).coerceIn(contentLeft, contentRight - lw)
-            val ly = (top - 3f).coerceIn(inner.cylTop, inner.cylBottom)
+            val ly = (bot + dimText.textSize).coerceAtMost(stripBottom)
             c.drawText(label, lx, ly, dimText)
         }
     }
@@ -663,18 +696,29 @@ private fun drawWearDetailStrip(
         }
     }
 
-    // Chained dimension rail below the cylinder (2026-07-18 dimension-rail rework, see
-    // "Wear Detail Strips" in docs/RunoutSheet.md): liner AFT edge → first band start, each
-    // band's own length, inter-band gaps, and the trailing remainder to the liner FWD edge —
-    // standard witness-line/arrowed-span/centered-label rail convention, replacing the old
-    // per-spot offset/length text rows.
+    // Chained dimension rail ABOVE the cylinder (rail/title swapped 2026-07-22 to match the
+    // hand-marked sheet; see "Wear Detail Strips" in docs/RunoutSheet.md): liner AFT edge → first
+    // band start, each band's own length, inter-band gaps, and the trailing remainder to the liner
+    // FWD edge — standard witness-line/arrowed-span/centered-label rail convention.
     val railSpans = buildWearStripRailSpans(ln.lengthMm, clampedBands, unit)
     val railLayout = layoutWearStripRail(
         railSpans,
         xAtStripMm = { mm -> xAtStrip(aftMm + mm) },
         labelWidthPt = { s -> dimText.measureText(s) },
     )
-    drawWearStripRail(c, dim, dimText, railLayout, inner.cylBottom, inner.railY, inner.railLabelRows)
+    drawWearStripRail(c, dim, dimText, railLayout, inner.cylTop, inner.railY, inner.railLabelRows)
+
+    // Title + liner-anchor dimension, drawn LAST at the BOTTOM of the strip. Direction cue: a
+    // FWD-SET-referenced title right-aligns (toward the FWD end drawn on the right), an
+    // AFT-SET-referenced one stays left-aligned — mirrors the measurement direction.
+    val titleBaselineY = (stripBottom - 2f).coerceAtLeast(inner.cylBottom + titleText.textSize)
+    val titleFit = ellipsizeToWidth(title, titleText, contentRight - contentLeft)
+    if (linerAnchorForPdf(docSpec, ln) == LinerAnchor.FWD_SET) {
+        titleText.textAlign = Paint.Align.RIGHT
+        c.drawText(titleFit, contentRight, titleBaselineY, titleText)
+    } else {
+        c.drawText(titleFit, contentLeft, titleBaselineY, titleText)
+    }
 }
 
 /**
@@ -689,7 +733,7 @@ private fun drawWearStripRail(
     dim: Paint,
     dimText: Paint,
     layout: List<WearRailSpanLayout>,
-    cylBottom: Float,
+    cylTop: Float,
     railY: Float,
     maxLabelRows: Int,
 ) {
@@ -699,9 +743,11 @@ private fun drawWearStripRail(
     val rowStepPt = dimText.textSize + 3f
     val witnessExt = 3f
 
+    // The rail sits ABOVE the cylinder: witness lines run up from the cylinder top past the rail
+    // line, and the span labels stack downward from the rail line toward the cylinder.
     layout.forEach { s ->
-        c.drawLine(s.x0Pt, cylBottom, s.x0Pt, railY + witnessExt, dim)
-        c.drawLine(s.x1Pt, cylBottom, s.x1Pt, railY + witnessExt, dim)
+        c.drawLine(s.x0Pt, cylTop, s.x0Pt, railY - witnessExt, dim)
+        c.drawLine(s.x1Pt, cylTop, s.x1Pt, railY - witnessExt, dim)
         c.drawLine(s.x0Pt, railY, s.x1Pt, railY, dim)
 
         val dirLeft = if (s.arrowInward) 1f else -1f
@@ -713,14 +759,29 @@ private fun drawWearStripRail(
 
         val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
         if (row >= 0) {
-            val ly = railY - labelGapPt - row * rowStepPt
+            val ly = railY + labelGapPt + dimText.textSize + row * rowStepPt
             val lw = dimText.measureText(s.label)
             c.drawText(s.label, s.labelCxPt - lw * 0.5f, ly, dimText)
         }
     }
 }
 
-/** Diagonal hatch fill clipped to `[x0,x1] × [top,bot]` — shared by the profile bands and strip bands. */
+/**
+ * Vertical-line fill across `[x0,x1] × [top,bot]` — the wear-band mark on the MAIN profile, matching
+ * how the shop marks wear areas by hand (vertical strokes, not diagonal hatch). Evenly spaced at
+ * [pitchPt], with both band edges drawn so the span reads closed.
+ */
+private fun drawVerticalBand(c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, pitchPt: Float) {
+    if (x1 <= x0) return
+    var vx = x0
+    while (vx < x1) {
+        c.drawLine(vx, top, vx, bot, paint)
+        vx += pitchPt
+    }
+    c.drawLine(x1, top, x1, bot, paint)
+}
+
+/** Diagonal hatch fill clipped to `[x0,x1] × [top,bot]` — used by the broken-out detail strips. */
 private fun drawHatchBand(c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, pitchPt: Float) {
     if (x1 <= x0) return
     val saved = c.save()

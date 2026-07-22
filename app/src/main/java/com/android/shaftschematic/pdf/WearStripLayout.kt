@@ -348,31 +348,32 @@ const val WEAR_RAIL_MAX_LABEL_ROWS = 2
 data class WearStripInnerLayout(
     val cylTop: Float,
     val cylBottom: Float,
-    /** Y coordinate of the strip's single chained dimension-rail line. */
+    /** Y coordinate of the strip's single chained dimension-rail line (drawn ABOVE the cylinder). */
     val railY: Float,
-    /** How many of [WEAR_RAIL_MAX_LABEL_ROWS] stacked label rows actually fit above [railY]
-     *  without crossing [cylBottom] — 0 in a pathologically short strip (the rail line still
-     *  draws, but no label is placed on it). */
+    /** How many of [WEAR_RAIL_MAX_LABEL_ROWS] stacked label rows actually fit between [railY] and
+     *  [cylTop] — 0 in a pathologically short strip (the rail line still draws, but no label is
+     *  placed on it). */
     val railLabelRows: Int,
 )
 
 /**
- * Splits one strip's vertical band `[stripTop, stripBottom]` into a liner-cylinder
- * region and the single chained dimension rail below it — the strip-local
- * analogue of [computeWearVerticalLayout].
+ * Splits one strip's vertical band `[stripTop, stripBottom]` into the single chained
+ * dimension rail (at the TOP), the liner-cylinder region (middle), and the title
+ * (at the BOTTOM) — the strip-local analogue of [computeWearVerticalLayout].
+ * (The rail and title were swapped 2026-07-22 to match how the shop marks the sheet
+ * by hand: dimensions above the shaft, the liner title/anchor below it.)
  *
- * [titleHeightPt] is the space the title text line itself consumes (its own
- * height from `stripTop` down to its baseline); [labelHeadroomPt] is then an
- * EXTRA, explicit gap reserved below that, before the cylinder starts, so a label
- * drawn just above the cylinder never ends up crowding the title (see
- * [WEAR_STRIP_LABEL_HEADROOM_PT]'s KDoc for the defect this fixes).
+ * [titleHeightPt] is the space the title text line itself consumes (its own line
+ * height); [labelHeadroomPt] is then an EXTRA, explicit gap reserved above the title,
+ * just below the cylinder, so the title never crowds the cylinder or a min-Ø reading
+ * (see [WEAR_STRIP_LABEL_HEADROOM_PT]'s KDoc for the defect this fixes).
  *
  * The rail's own vertical budget is now a FIXED [maxLabelRows] × [rowHeightPt] —
  * not proportional to how many wear spots the liner has, since the rail is always
  * one chained line no matter how many spans it's divided into (2026-07-18
  * dimension-rail rework; the old contract multiplied the row budget by spot
- * count). Guarantees `cylTop <= cylBottom <= railY <= stripBottom` for ANY input,
- * including pathological ones (e.g. a very large-diameter liner on a very short
+ * count). Guarantees `stripTop <= railY <= cylTop <= cylBottom <= stripBottom` for ANY
+ * input, including pathological ones (e.g. a very large-diameter liner on a very short
  * strip, where the preferred cylinder + rail sizes don't fit together): the
  * cylinder shrinks first, and once it hits zero height, [railLabelRows] drops
  * toward zero (labels omitted, not drawn) rather than letting anything overflow
@@ -387,15 +388,17 @@ fun computeWearStripInnerLayout(
     labelHeadroomPt: Float = WEAR_STRIP_LABEL_HEADROOM_PT,
     maxLabelRows: Int = WEAR_RAIL_MAX_LABEL_ROWS,
 ): WearStripInnerLayout {
-    val cylTop = (stripTop + titleHeightPt + labelHeadroomPt)
+    // Title sits at the BOTTOM (its own height + an explicit headroom gap reserved just below the
+    // cylinder); the chained rail sits ABOVE the cylinder (fixed maxLabelRows budget at the top).
+    val cylBottom = (stripBottom - titleHeightPt - labelHeadroomPt)
         .coerceIn(stripTop, stripBottom.coerceAtLeast(stripTop))
-    val available = (stripBottom - cylTop).coerceAtLeast(0f)
+    val available = (cylBottom - stripTop).coerceAtLeast(0f)
     val railBudgetH = maxLabelRows.coerceAtLeast(0) * rowHeightPt
     val cylH = (available - railBudgetH).coerceIn(0f, available)
-    val cylBottom = cylTop + cylH
-    val remainingForRail = (stripBottom - cylBottom).coerceAtLeast(0f)
+    val cylTop = cylBottom - cylH
+    val remainingForRail = (cylTop - stripTop).coerceAtLeast(0f)
     val railLabelRows = (remainingForRail / rowHeightPt).toInt().coerceIn(0, maxLabelRows)
-    val railY = cylBottom + railLabelRows * rowHeightPt
+    val railY = cylTop - railLabelRows * rowHeightPt
     return WearStripInnerLayout(cylTop, cylBottom, railY, railLabelRows)
 }
 

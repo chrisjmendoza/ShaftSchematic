@@ -456,10 +456,16 @@ layouts (see "Wear PDF Rendering Modes" above for how each positions the strips)
   line ("+N more liner(s) with wear spots ..., page limit 3") in a reserved band just
   above the notes area. Revisit if/when `composeWearPdf` grows multi-page support.
 
-**Main profile** — liners with ≥1 wear spot get thin hatched bands (`drawWearBandsOnProfile`)
-at their true axial position, clamped to the liner span (`clampWearBandToLiner`), drawn
-after the profile's own liner outlines. Visible but not dominant — same alpha/weight
-convention as the thread hatch already on this page.
+**Main profile** — liners with ≥1 wear spot get thin **vertical-line** bands
+(`drawWearBandsOnProfile` → `drawVerticalBand`) at their true axial position, clamped to the
+liner span (`clampWearBandToLiner`), drawn after the profile's own liner outlines. Visible but
+not dominant — same alpha/weight/pitch as the old diagonal hatch, only the stroke orientation
+changed (2026-07-22, to match how the shop marks wear areas by hand — the vertical tick style
+in the reference sketch). The broken-out detail strips still use the diagonal hatch
+(`drawHatchBand`). Each wear liner's **name** is also printed centered under its span
+(`drawWearLinerNamesOnProfile`, 2026-07-22), sharing the row with the "← AFT / FWD →" labels
+(clamped clear of them) — a lightweight reference tying each band to its broken-out strip, using
+the same name the strip title shows.
 
 **Vertical page split** — `computeWearVerticalLayout` splits the profile band into a
 (possibly shrunk) main-profile region followed by up to 3 stacked strips. The profile
@@ -473,18 +479,21 @@ always lands exactly on the reserved area's bottom edge.
 **Per-strip layout** — `computeWearStripHorizontalLayout` centers a break-out liner
 (scaled `ptPerMm` local to the strip, capped/floored so very short/long liners don't
 explode/vanish) between two fixed-width neighbor stubs; `computeWearStripInnerLayout`
-then splits the strip's own vertical band into a title row, the liner cylinder, and the
-single chained dimension rail below it (see "Dimension rail" below) — the cylinder
+then splits the strip's own vertical band into the single chained dimension rail (top), the
+liner cylinder, and the title row (bottom) (see "Dimension rail" below) — the cylinder
 shrinks first, and if a pathological input leaves no room at all, the rail's label rows
 drop toward zero (the rail line still draws; labels are simply not placed) rather than
-let anything render past the strip's bottom edge. Each strip draws:
+let anything render past the strip's bottom edge. (The rail and title were **swapped**
+2026-07-22 — dimensions above the shaft, the liner title/anchor below it — to match how the
+shop marks the sheet by hand.) Each strip draws:
 - Neighbor stubs at the resolved diameter abutting the liner (`neighborDiaMmAtAft` /
   `neighborDiaMmAtFwd`, falling back to the liner's own OD when there's no neighbor),
   broken out with the standard S-curve edge (`BreakSymbol.drawBreakEdge`).
-- Hatched wear bands on the liner at strip-local scale, clamped the same way as the
-  main-profile bands, plus a min-Ø reading printed just above each band — omitted
+- Hatched wear bands on the liner at strip-local scale (diagonal hatch, unlike the
+  main-profile bands' vertical lines), clamped the same way, plus a min-Ø reading printed
+  just **below** each band (moved below when the rail moved above, 2026-07-22) — omitted
   entirely when `minDiaMm == 0` (unrecorded).
-- One chained dimension rail below the cylinder (see "Dimension rail" below).
+- One chained dimension rail above the cylinder (see "Dimension rail" below).
 - One anchor-from-SET label per strip (`buildLinerAnchorLabel`) — the digitized form of
   the shop sketch's "110 FROM CPLG S.E.T." line. It reuses `mapToLinerDimsForPdf` +
   `LinerSpanBuilder.buildLinerSpans` verbatim, so the number always matches the liner
@@ -492,10 +501,11 @@ let anything render past the strip's bottom edge. Each strip draws:
   direction** as a visual cue (2026-07-21): a FWD-SET-referenced strip right-aligns its title,
   an AFT-SET-referenced one left-aligns it (`linerAnchorForPdf` → `LinerAnchor`).
 
-**Dimension rail (2026-07-18 rework)** — replaces the original per-spot "AFT edge → band
-start" / "band start → band end" text rows with one standard chained dimension rail below
-the liner cylinder, following the same witness-line/arrowed-span/centered-label
-convention the main schematic uses (`pdf/render/PdfDimensionRenderer.kt`):
+**Dimension rail (2026-07-18 rework; moved above the cylinder 2026-07-22)** — replaces the
+original per-spot "AFT edge → band start" / "band start → band end" text rows with one standard
+chained dimension rail **above** the liner cylinder, following the same
+witness-line/arrowed-span/centered-label convention the main schematic uses
+(`pdf/render/PdfDimensionRenderer.kt`):
 - `buildWearStripRailSpans` (`pdf/WearStripLayout.kt`) walks the liner's clamped wear
   bands aft → fwd and builds the ordered chain: liner AFT edge → first band start, each
   band's own length, the gap between consecutive bands, and the trailing remainder to the
@@ -514,14 +524,14 @@ convention the main schematic uses (`pdf/render/PdfDimensionRenderer.kt`):
   short bands/gaps whose label is wider than the span itself.
   `PdfDimensionRenderer` itself isn't reused directly: it's built around the schematic's
   multi-tier DATUM/LOCAL rail stacking (spans that overlap in x get assigned different
-  rails) and draws its rails ABOVE the shaft outline, whereas a wear strip's rail is a
-  single flat chain of never-overlapping spans BELOW the liner cylinder — different enough
-  on both the tiering model and the draw direction that the minimal shared idea (label
-  centering, arrow direction, collision-bump) is replicated as small pure functions in
-  `WearStripLayout.kt` instead of bending that renderer's API to a shape it wasn't built
-  for.
+  rails), whereas a wear strip's rail is a single flat chain of never-overlapping spans —
+  different enough on the tiering model that the minimal shared idea (label centering, arrow
+  direction, collision-bump) is replicated as small pure functions in `WearStripLayout.kt`
+  instead of bending that renderer's API to a shape it wasn't built for. (Both now draw the
+  rail above the cylinder/outline.)
 - The rail's own vertical budget is now FIXED — `WEAR_RAIL_MAX_LABEL_ROWS` (2) stacked
-  label rows reserved above the rail line, regardless of how many wear spots the liner
+  label rows reserved between the rail line and the cylinder top (they stack downward from
+  the rail line toward the cylinder), regardless of how many wear spots the liner
   has (the rail is always one chained line no matter how many spans it's divided into;
   the old per-spot row budget scaled with spot count, which no longer applies).
   `computeWearStripInnerLayout` no longer takes a `spotCount` parameter. `WearPdfComposer`'s

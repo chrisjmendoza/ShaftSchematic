@@ -302,15 +302,18 @@ class WearStripLayoutTest {
 
     @Test
     fun `inner layout fits the cylinder and the full rail row budget in an ordinary strip`() {
+        val stripTop = 100f
+        val stripBottom = stripTop + 15f + WEAR_STRIP_LABEL_HEADROOM_PT + 40f + 2 * WEAR_STRIP_ROW_HEIGHT_PT
         val inner = computeWearStripInnerLayout(
-            stripTop = 100f, stripBottom = 100f + 15f + WEAR_STRIP_LABEL_HEADROOM_PT + 40f + 2 * WEAR_STRIP_ROW_HEIGHT_PT,
-            titleHeightPt = 15f,
+            stripTop = stripTop, stripBottom = stripBottom, titleHeightPt = 15f,
         )
-        assertTrue(inner.cylTop >= 100f)
-        assertTrue(inner.cylBottom <= inner.railY + 1e-3f)
+        // Rail sits ABOVE the cylinder (railY <= cylTop), title below (cylBottom below).
+        assertTrue(inner.railY >= stripTop - 1e-3f)
+        assertTrue(inner.railY <= inner.cylTop + 1e-3f)
         assertTrue(inner.cylBottom > inner.cylTop)
+        assertTrue(inner.cylBottom <= stripBottom + 1e-3f)
         assertEquals(WEAR_RAIL_MAX_LABEL_ROWS, inner.railLabelRows)
-        assertEquals(inner.cylBottom + inner.railLabelRows * WEAR_STRIP_ROW_HEIGHT_PT, inner.railY, 1e-3f)
+        assertEquals(inner.cylTop - inner.railLabelRows * WEAR_STRIP_ROW_HEIGHT_PT, inner.railY, 1e-3f)
     }
 
     @Test
@@ -322,7 +325,8 @@ class WearStripLayoutTest {
         assertTrue("cylTop must not exceed stripBottom", inner.cylTop <= 103f + 1e-3f)
         assertTrue("cylBottom must not exceed stripBottom", inner.cylBottom <= 103f + 1e-3f)
         assertTrue("cylBottom must not be before cylTop", inner.cylBottom >= inner.cylTop)
-        assertTrue("railY must not exceed stripBottom", inner.railY <= 103f + 1e-3f)
+        assertTrue("railY must not fall below stripTop", inner.railY >= 100f - 1e-3f)
+        assertTrue("railY must sit at or above the cylinder top", inner.railY <= inner.cylTop + 1e-3f)
         assertTrue("no room means no label rows fit", inner.railLabelRows == 0)
     }
 
@@ -335,26 +339,30 @@ class WearStripLayoutTest {
         val titleH = 15f
         val rowH = WEAR_STRIP_ROW_HEIGHT_PT
         val stripTop = 0f
-        val cylTopExpected = stripTop + titleH + WEAR_STRIP_LABEL_HEADROOM_PT
-        val stripBottom = cylTopExpected + 20f // between 1 row (13pt) and the full 2-row (26pt) budget
+        // After reserving the title (+ headroom) at the bottom, the space left above the cylinder is
+        // between 1 and 2 rail rows: the cylinder collapses to zero first, then the rail drops from
+        // its full budget to a single row.
+        val stripBottom = titleH + WEAR_STRIP_LABEL_HEADROOM_PT + 20f // 20pt left for cyl + rail
         val inner = computeWearStripInnerLayout(stripTop, stripBottom, titleH, rowHeightPt = rowH)
-        assertEquals(cylTopExpected, inner.cylTop, 1e-3f)
+        val cylBottomExpected = stripBottom - titleH - WEAR_STRIP_LABEL_HEADROOM_PT
+        assertEquals(cylBottomExpected, inner.cylBottom, 1e-3f)
         assertEquals("cylinder squeezed to zero height", inner.cylTop, inner.cylBottom, 1e-3f)
         assertEquals(1, inner.railLabelRows)
-        assertTrue(inner.railY <= stripBottom + 1e-3f)
+        assertTrue(inner.railY >= stripTop - 1e-3f)
+        assertTrue(inner.railY <= inner.cylTop + 1e-3f)
     }
 
     // ── computeWearStripInnerLayout — label headroom (2026-07-18 SVG review, defect 2) ──
 
     @Test
-    fun `label headroom is reserved between the title and the cylinder top`() {
+    fun `label headroom is reserved between the cylinder and the title`() {
         // titleHeightPt here stands in for the title text's own line height (no
         // ad hoc fudge folded in) — the headroom must appear as an explicit,
-        // separate gap on top of that, not be absorbed into it.
+        // separate gap between the cylinder bottom and the title, not be absorbed into it.
         val inner = computeWearStripInnerLayout(
             stripTop = 100f, stripBottom = 300f, titleHeightPt = 9f,
         )
-        assertEquals(100f + 9f + WEAR_STRIP_LABEL_HEADROOM_PT, inner.cylTop, 1e-3f)
+        assertEquals(300f - 9f - WEAR_STRIP_LABEL_HEADROOM_PT, inner.cylBottom, 1e-3f)
     }
 
     @Test
@@ -362,10 +370,12 @@ class WearStripLayoutTest {
         val inner = computeWearStripInnerLayout(
             stripTop = 0f, stripBottom = 12f, titleHeightPt = 9f,
         )
-        assertTrue("cylTop must not exceed stripBottom even though title+headroom alone exceed it",
-            inner.cylTop <= 12f + 1e-3f)
+        assertTrue("cylBottom must not fall below stripTop even though title+headroom exceed the strip",
+            inner.cylBottom >= 0f - 1e-3f)
         assertTrue(inner.cylBottom >= inner.cylTop)
-        assertTrue(inner.railY <= 12f + 1e-3f)
+        assertTrue("cylTop must not fall below stripTop", inner.cylTop >= 0f - 1e-3f)
+        assertTrue(inner.railY >= 0f - 1e-3f)
+        assertTrue(inner.railY <= inner.cylTop + 1e-3f)
     }
 
     // ── buildWearStripRailSpans (2026-07-18 dimension-rail rework) ────────────────────────

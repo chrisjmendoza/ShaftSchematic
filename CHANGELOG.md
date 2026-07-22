@@ -8,6 +8,27 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-22
 
+### feat: wear document — dimensions above the shaft, vertical wear marks
+
+Two tweaks so the wear document reads like the hand-marked sheet:
+
+- **Liner detail strips: rail and title swapped.** The chained dimension rail now draws **above**
+  the liner cylinder (witness lines up, span labels stacking down toward it) and the liner
+  title + "…FROM CPLG S.E.T." anchor draws **below** it. The min-Ø reading follows to just below
+  each band, clear of the rail. `computeWearStripInnerLayout` reserves the rail's row budget at the
+  top and the title (+ headroom) at the bottom now; its guarantee is
+  `stripTop ≤ railY ≤ cylTop ≤ cylBottom ≤ stripBottom` (`WearStripLayout.kt`,
+  `WearPdfComposer.kt`). Layout tests updated.
+- **Main profile wear areas as vertical lines.** On the full-shaft profile the wear band is now
+  filled with **vertical** strokes (`drawVerticalBand`) instead of diagonal hatch — same weight,
+  alpha, and pitch, only the orientation changed, matching how the shop marks wear areas by hand.
+  The broken-out detail strips keep the diagonal hatch.
+- **Liner names on the main profile.** Each wear liner's name is now printed centered under its
+  span on the main profile (`drawWearLinerNamesOnProfile`), sharing the row with the "← AFT / FWD →"
+  labels (clamped clear of them). It's a lightweight reference tying each band to its broken-out
+  strip — chosen over boxed zoom callouts, which don't scale to 3 liners. Uses the same name the
+  strip title shows.
+
 ### feat: spooned keyways draw an enlarged circle at the closed end
 
 `keywaySpooned` (already on `Taper`/`Body`, and already surfaced in the add-dialogs, carousel, and
