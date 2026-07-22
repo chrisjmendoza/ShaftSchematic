@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-22
 
+### fix: runout bubble values keep three decimals (thousandths)
+
+`formatRunoutValue` now shows a **fixed 3 decimal places in both units with trailing zeros
+kept**, so a TIR reading of `.010` stays `.010` instead of shrinking to `.01`. Previously
+inches used 4 dp and both units stripped trailing zeros, which made bubble values read at
+inconsistent widths. The leading-zero drop (`0.010 → .010`) and thousandths resolution match
+how a machinist hand-writes a TIR reading. Shared by the bubble dialog, on-screen preview, and
+PDF composer, so every surface renders identically. Docs: `docs/RunoutSheet.md`.
+
 ### feat: dimension values now seated in a break in the dimension line
 
 Schematic PDF dimension lines (`PdfDimensionRenderer`) draw their value **inside a break
