@@ -24,13 +24,13 @@ class BodyOdCalloutsTest {
     // ── Single body ───────────────────────────────────────────────────────────
 
     @Test
-    fun `single body produces one callout above`() {
+    fun `single body produces one callout below`() {
         val body = Body(startFromAftMm = 100f, lengthMm = 400f, diaMm = 127f)
         val calls = buildBodyOdCallouts(listOf(body))
 
         assertEquals(1, calls.size)
         assertEquals(127.0, calls[0].valueMm, 0.001)
-        assertEquals(LeaderSide.ABOVE, calls[0].side)
+        assertEquals(LeaderSide.BELOW, calls[0].side)
     }
 
     @Test
@@ -69,36 +69,27 @@ class BodyOdCalloutsTest {
         assertTrue(diameters.contains(152.0))
     }
 
-    @Test
-    fun `two distinct ODs alternate sides ABOVE then BELOW`() {
-        // Sorted descending by OD: 152 first (ABOVE), 127 second (BELOW)
-        val b1 = Body(startFromAftMm = 0f,   lengthMm = 300f, diaMm = 127f)
-        val b2 = Body(startFromAftMm = 400f, lengthMm = 200f, diaMm = 152f)
-        val calls = buildBodyOdCallouts(listOf(b1, b2))
-
-        val larger  = calls.first { it.valueMm == 152.0 }
-        val smaller = calls.first { it.valueMm == 127.0 }
-        assertEquals(LeaderSide.ABOVE, larger.side)
-        assertEquals(LeaderSide.BELOW, smaller.side)
-    }
+    // ── All callouts hang BELOW; overlap is resolved by tiering, not side flips ─
 
     @Test
-    fun `three distinct ODs cycle ABOVE BELOW ABOVE`() {
-        val bodies = listOf(
-            Body(startFromAftMm = 0f,    lengthMm = 200f, diaMm = 100f),
-            Body(startFromAftMm = 300f,  lengthMm = 200f, diaMm = 130f),
-            Body(startFromAftMm = 600f,  lengthMm = 200f, diaMm = 160f),
+    fun `all callouts are BELOW regardless of count`() {
+        val one = buildBodyOdCallouts(
+            listOf(Body(startFromAftMm = 0f, lengthMm = 200f, diaMm = 100f))
         )
-        val calls = buildBodyOdCallouts(bodies)
-
-        assertEquals(3, calls.size)
-        // Descending OD order: 160 (ABOVE), 130 (BELOW), 100 (ABOVE)
-        val by160 = calls.first { it.valueMm == 160.0 }
-        val by130 = calls.first { it.valueMm == 130.0 }
-        val by100 = calls.first { it.valueMm == 100.0 }
-        assertEquals(LeaderSide.ABOVE, by160.side)
-        assertEquals(LeaderSide.BELOW, by130.side)
-        assertEquals(LeaderSide.ABOVE, by100.side)
+        val two = buildBodyOdCallouts(
+            listOf(
+                Body(startFromAftMm = 0f,   lengthMm = 300f, diaMm = 127f),
+                Body(startFromAftMm = 400f, lengthMm = 200f, diaMm = 152f),
+            )
+        )
+        val three = buildBodyOdCallouts(
+            listOf(
+                Body(startFromAftMm = 0f,   lengthMm = 200f, diaMm = 100f),
+                Body(startFromAftMm = 300f, lengthMm = 200f, diaMm = 130f),
+                Body(startFromAftMm = 600f, lengthMm = 200f, diaMm = 160f),
+            )
+        )
+        assertTrue((one + two + three).all { it.side == LeaderSide.BELOW })
     }
 
     // ── OD value accuracy ─────────────────────────────────────────────────────

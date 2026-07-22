@@ -8,6 +8,28 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-22
 
+### feat: schematic diameter callouts — below the shaft, 3-decimal, two-tier
+
+On-shaft Ø callouts on the schematic PDF were cleaned up per shop-print convention:
+
+- **Three decimals, not four.** The diameter label now uses the footer's `formatDiaWithUnit`
+  (≤3 decimals / thousandths, trailing zeros trimmed) instead of the old raw `%.4f`, so a Ø5"
+  body reads `Ø 5"` — identical to the footer's "Body:" line.
+- **Moved below the shaft.** Body OD callouts no longer alternate above/below; every callout —
+  body and liner — hangs below the shaft where there's clear room.
+- **Liners now get callouts too.** New `buildLinerOdCallouts` mirrors `buildBodyOdCallouts`: one
+  label per unique OD, anchored at the center of the longest segment carrying it. Same-size
+  segments collapse to a single label; differing sizes each get their own. Bodies and liners are
+  **separate OD groups** — a Ø5" liner and a Ø5" body produce two independent callouts.
+- **Overlap check / two-level writing.** New pure, JVM-tested `geom/DiameterCalloutLayout.kt`
+  (`assignTiers` — greedy interval coloring, `MAX_TIERS = 2`, `MIN_GAP = 4f`) bumps
+  horizontally-close labels onto a second row, the same two-tier posture as the runout bubbles.
+  Body and liner labels are tiered together so a liner label never crashes into a body label.
+  `DiameterLeaderRenderer` measures label widths, reads back the tier, and draws at
+  `shaftBottomY + leaderRise + tier × tierStep`.
+- **Tests:** new `geom/DiameterCalloutLayoutTest.kt` (tier math), new `pdf/LinerOdCalloutsTest.kt`,
+  and `pdf/BodyOdCalloutsTest.kt` updated to the all-BELOW behavior. Docs: `docs/PDF_EXPORT.md` §5.3.
+
 ### feat: wear document — dimensions above the shaft, vertical wear marks
 
 Two tweaks so the wear document reads like the hand-marked sheet:

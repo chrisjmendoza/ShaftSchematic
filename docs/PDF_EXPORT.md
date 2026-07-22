@@ -1,6 +1,6 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-07-18 — fixed page orientation (landscape, not portrait); clarified preview/PDF as separate drawing paths (named the three fit functions); replaced the "no display compression" invariant with the actual round-stock S-break behavior; fixed the AUDIT.md path.
+Last updated: 2026-07-22 — added §5.3 On-Shaft Diameter Callouts (body/liner OD leaders now all-BELOW, ≤3-decimal formatting, two-tier stacking); previously 2026-07-18 fixed page orientation (landscape, not portrait), clarified preview/PDF as separate drawing paths (named the three fit functions), replaced the "no display compression" invariant with the actual round-stock S-break behavior, fixed the AUDIT.md path.
 
 ## Purpose
 Defines the **single-page** PDF export process.  
@@ -119,6 +119,31 @@ The OAL label always equals `spec.overallLengthMm` — the user's typed value. T
 - **Included**: bracket spans shaft AFT end → FWD SET (thread grouped inside the bracket).
 
 The label is passed as an explicit `labelMm` override to `oalSpan()` so it is always the typed OAL regardless of bracket width. Component dimension rails always reference SET positions.
+
+---
+
+# 5.3 On-Shaft Diameter Callouts
+
+Body OD and liner OD each get a leader-line "Ø" callout hanging **BELOW** the shaft
+(`buildBodyOdCallouts` / `buildLinerOdCallouts` in `ShaftPdfComposer.kt`, drawn by
+`pdf/notes/DiameterLeaderRenderer.kt`). Body callouts previously alternated above/below;
+they are now all-BELOW, same as liners.
+
+- **Grouping:** one callout per unique OD, anchored at the horizontal center of the
+  *longest* segment carrying that OD. Bodies group by `Body.diaMm`; liners group by
+  `Liner.odMm`. Bodies and liners are **separate groups** — a liner OD is never merged
+  with a body OD even when the values match numerically.
+- **Formatting:** labels use `formatDiaWithUnit` (≤3 decimals, trailing zeros trimmed),
+  the same convention as the footer's "Ø" text — not the old raw 4-decimal formatting.
+- **Two-tier stacking:** horizontally-close labels stack onto a second row instead of
+  overlapping, the same posture as the runout bubbles' two-row layout (see
+  `RunoutSheet.md`). Tier assignment is pure, JVM-tested math in
+  `geom/DiameterCalloutLayout.kt` (`assignTiers` — greedy left-to-right interval
+  coloring, capped at `MAX_TIERS = 2`, `MIN_GAP = 4f` pt clearance); the renderer only
+  measures label widths and reads back the tier.
+- **PDF-only:** there is no on-screen canvas diameter leader, so the "draw identically
+  in both sites" rule that applies to coupler bolt slots / wear pits / runout markers
+  does not apply here.
 
 ---
 

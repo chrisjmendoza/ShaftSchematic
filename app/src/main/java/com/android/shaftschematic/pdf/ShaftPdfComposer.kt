@@ -318,9 +318,9 @@ fun composeShaftPdf(
         renderer.drawTop(c, oalSpan(oalAft, oalFwd, unit, labelMm = spec.overallLengthMm.toDouble()), true)
     }
 
-    // --- body Ø callouts: one leader per unique body OD ---
+    // --- Ø callouts below the shaft: one leader per unique body OD and per unique liner OD ---
     run {
-        val calls = buildBodyOdCallouts(bodiesForPdf)
+        val calls = buildBodyOdCallouts(bodiesForPdf) + buildLinerOdCallouts(spec.liners)
         if (calls.isNotEmpty()) {
             val leaderText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
@@ -1200,8 +1200,10 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * One [DiaCallout] per unique body OD, anchored at the center of the longest
- * body with that diameter.  Multiple ODs alternate ABOVE/BELOW to prevent overlap.
+ * One [DiaCallout] per unique body OD, anchored at the center of the longest body with
+ * that diameter. All callouts hang BELOW the shaft; horizontally-close labels are stacked
+ * onto a second row by the renderer ([DiameterLeaderRenderer] / [DiameterCalloutLayout]),
+ * so no side alternation is needed here.
  */
 internal fun buildBodyOdCallouts(bodies: List<Body>): List<DiaCallout> =
     bodies
@@ -1209,13 +1211,28 @@ internal fun buildBodyOdCallouts(bodies: List<Body>): List<DiaCallout> =
         .groupBy { it.diaMm }
         .entries
         .sortedByDescending { it.key }
-        .mapIndexed { idx, (diaMm, group) ->
-            val anchor = group.maxByOrNull { it.lengthMm } ?: return@mapIndexed null
+        .mapNotNull { (diaMm, group) ->
+            val anchor = group.maxByOrNull { it.lengthMm } ?: return@mapNotNull null
             val centerMm = (anchor.startFromAftMm + anchor.lengthMm * 0.5).toDouble()
-            val side = if (idx % 2 == 0) LeaderSide.ABOVE else LeaderSide.BELOW
-            DiaCallout(xMm = centerMm, valueMm = diaMm.toDouble(), side = side)
+            DiaCallout(xMm = centerMm, valueMm = diaMm.toDouble(), side = LeaderSide.BELOW)
         }
-        .filterNotNull()
+
+/**
+ * Liner mirror of [buildBodyOdCallouts]: one [DiaCallout] per unique liner OD, anchored at
+ * the center of the longest liner with that OD, all BELOW the shaft. Bodies and liners are
+ * separate groups — a liner OD is never deduped against a body OD.
+ */
+internal fun buildLinerOdCallouts(liners: List<Liner>): List<DiaCallout> =
+    liners
+        .filter { it.odMm > 0f }
+        .groupBy { it.odMm }
+        .entries
+        .sortedByDescending { it.key }
+        .mapNotNull { (odMm, group) ->
+            val anchor = group.maxByOrNull { it.lengthMm } ?: return@mapNotNull null
+            val centerMm = (anchor.startFromAftMm + anchor.lengthMm * 0.5).toDouble()
+            DiaCallout(xMm = centerMm, valueMm = odMm.toDouble(), side = LeaderSide.BELOW)
+        }
 
 private data class LetSetResult(val let: Float, val set: Float, val letFace: String, val setFace: String)
 

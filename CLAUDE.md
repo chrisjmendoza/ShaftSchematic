@@ -89,6 +89,16 @@ math (radius, wall tangent, major-arc sweep) lives in `geom/KeywaySpoonMath.kt` 
 `pdf → ui` dep); the single `SPOON_BOWL_WIDTH_RATIO` constant sizes it. Same posture as the wear-pit
 "X" and runout-marker draw-both-sites rules.
 
+### Diameter callouts are BELOW-only, tiered, and footer-formatted
+On-shaft diameter callouts (body OD, liner OD — `buildBodyOdCallouts`/`buildLinerOdCallouts`
+in `ShaftPdfComposer.kt`) all hang **BELOW** the shaft; do not reintroduce above/below
+alternation. Labels use `formatDiaWithUnit` (≤3 decimals, trailing zeros trimmed) to match the
+footer's "Ø" text — never the raw 4-decimal format. Bodies and liners are **separate OD
+groups** — a liner OD is never deduped against a body OD. Horizontally-close labels stack onto
+a second row via `geom/DiameterCalloutLayout.kt` (pure, unit-tested), the same two-tier
+posture as runout bubbles. PDF-only — no on-screen canvas equivalent, so no draw-both-sites
+rule applies. See `docs/PDF_EXPORT.md` §5.3.
+
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus
 was gained. A tap-and-leave with no edit must be a no-op. This prevents spurious
