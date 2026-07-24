@@ -125,6 +125,16 @@ class TaperRateTest {
         assertEquals(0f, end, 1e-4f)
     }
 
+    @Test fun derive_negativeLength_diametersUnchanged() {
+        // Slope derivation is inert at length <= 0 (TODO §2.1 Item A): a negative length
+        // must return the raw diameters, same as the zero-length case.
+        val (start, end) = ShaftViewModel.deriveTaperDiameters(
+            startDiaMm = 100f, endDiaMm = 0f, lengthMm = -240f, rateText = "1:12"
+        )
+        assertEquals(100f, start, 1e-4f)
+        assertEquals(0f, end, 1e-4f)
+    }
+
     @Test fun derive_resultClampedToZero() {
         // Very steep rate on a FWD taper can drive the derived end negative → clamp to 0
         val (_, end) = ShaftViewModel.deriveTaperDiameters(

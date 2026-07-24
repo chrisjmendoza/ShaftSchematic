@@ -142,4 +142,62 @@ class TaperRateAutoTest {
             manualTaperRateWarning(rateText = "1:12", lengthMm = 16f, setDiaMm = 4f, letDiaMm = 0f)
         )
     }
+
+    // ─────────────────────────────────────────────
+    // Slope semantics are inert at length <= 0 (TODO §2.1 Item A).
+    // Rate/derivation only makes sense with a real, positive length; at length 0 or negative
+    // the geometry-aware checks must stay silent. Pure-syntax messages (unparseable text,
+    // ambiguous bare "1") intentionally still fire regardless of length.
+    // ─────────────────────────────────────────────
+
+    @Test
+    fun `autoTaperRateText returns null at negative length`() {
+        assertNull(autoTaperRateText(lengthMm = -16f, setDiaMm = 4f, letDiaMm = 5f))
+    }
+
+    @Test
+    fun `manualTaperRateWarning is inert at zero length`() {
+        // All diameters present and the rate clearly mismatches geometry, but with no length
+        // there is no slope to compare against — no warning.
+        assertNull(
+            manualTaperRateWarning(rateText = "1:12", lengthMm = 0f, setDiaMm = 4f, letDiaMm = 5f)
+        )
+    }
+
+    @Test
+    fun `manualTaperRateWarning is inert at negative length`() {
+        assertNull(
+            manualTaperRateWarning(rateText = "1:12", lengthMm = -16f, setDiaMm = 4f, letDiaMm = 5f)
+        )
+    }
+
+    @Test
+    fun `manualTaperRateBlockingMessage does not prompt for rate at zero length`() {
+        // One end missing + blank rate would prompt "Enter a taper rate…" — but only when
+        // length > 0. At length 0 there's nothing to derive, so no prompt.
+        assertNull(
+            manualTaperRateBlockingMessage(rateText = "", lengthMm = 0f, setDiaMm = 100f, letDiaMm = 0f)
+        )
+    }
+
+    @Test
+    fun `manualTaperRateBlockingMessage does not prompt for rate at negative length`() {
+        assertNull(
+            manualTaperRateBlockingMessage(rateText = "", lengthMm = -100f, setDiaMm = 100f, letDiaMm = 0f)
+        )
+    }
+
+    @Test
+    fun `manualTaperRateBlockingMessage still flags bad syntax at zero length`() {
+        // Pure-syntax guards are length-independent by design: ambiguous "1" and unparseable
+        // text still surface even when length is 0.
+        assertEquals(
+            "Use a full ratio or fraction; `1` is ambiguous",
+            manualTaperRateBlockingMessage(rateText = "1", lengthMm = 0f, setDiaMm = 100f, letDiaMm = 120f)
+        )
+        assertEquals(
+            "Enter a ratio, fraction, or decimal",
+            manualTaperRateBlockingMessage(rateText = "xyz", lengthMm = 0f, setDiaMm = 100f, letDiaMm = 120f)
+        )
+    }
 }

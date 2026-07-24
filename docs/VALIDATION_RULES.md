@@ -1,6 +1,8 @@
 # Validation Rules  
 Version: v0.5.x
-Last updated: 2026-07-21 — reverted "explicit bodies are non-negotiable" (§5.1): bodies never collide, no hard-block on adds/moves over a body, plain bodies split around sacred components (keyed bodies protected); removed `bodyOverlapErrorMm`/`nonBodyOverlapErrorMm`/liner↔body negotiation references. 2026-07-18 — §2.3 numeric "safety filters" (NaN/Infinity/>100000 rejection) were never implemented; removed the false claim. Validation is not ViewModel-only (overlap/bounds checks live in `ui/util/StartOverlapValidation.kt`, called from Compose UI). Negative-start rejection is a dialog-level Submit gate, not a ViewModel rejection; `ShaftSpec.validate()` exists but is dead code. §6 export gate corrected to what `blockingExportError()` actually checks.
+Last updated: 2026-07-24 — §3.3 noted that taper slope validation/derivation is inert at
+`lengthMm <= 0` (guarded in `TaperRateAuto.kt` / `deriveTaperDiameters`; pinned by unit
+tests). 2026-07-21 — reverted "explicit bodies are non-negotiable" (§5.1): bodies never collide, no hard-block on adds/moves over a body, plain bodies split around sacred components (keyed bodies protected); removed `bodyOverlapErrorMm`/`nonBodyOverlapErrorMm`/liner↔body negotiation references. 2026-07-18 — §2.3 numeric "safety filters" (NaN/Infinity/>100000 rejection) were never implemented; removed the false claim. Validation is not ViewModel-only (overlap/bounds checks live in `ui/util/StartOverlapValidation.kt`, called from Compose UI). Negative-start rejection is a dialog-level Submit gate, not a ViewModel rejection; `ShaftSpec.validate()` exists but is dead code. §6 export gate corrected to what `blockingExportError()` actually checks.
 
 ## Purpose
 This document defines all validation behavior used by ShaftSchematic.  
@@ -178,6 +180,12 @@ in-source `TaperRate.md` and `AddComponentDialogs.md`. In brief:
 - Missing both SET and LET with no usable rate → **blocking**.
 - Bare `1` is blocked as ambiguous; common-rate snapping uses a 3% tolerance
   (confirmed product decision).
+- Slope validation/derivation (`autoTaperRate`, `manualTaperRateWarning`, and
+  `manualTaperRateBlockingMessage`'s derive-prompt) is inert at `lengthMm <= 0` — no
+  rate is computed or demanded for a zero/negative-length taper. Pure-syntax checks
+  (e.g. rejecting an ambiguous bare `"1"`) are independent of length and still fire
+  regardless. Same guard applies to `ShaftViewModel.deriveTaperDiameters`. Pinned by
+  unit tests in `TaperRateAutoTest.kt`/`TaperRateTest.kt` (2026-07-24).
 
 Non-blocking warnings:
 - Extremely steep tapers *(planned — not yet implemented)*

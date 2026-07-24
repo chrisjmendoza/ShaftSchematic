@@ -8,6 +8,24 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-24
 
+### fix(validation): free-to-end badge OAL=0 fallback + taper slope inert-length test lock-in
+
+`FreeToEndBadge` (`ShaftScreen.kt`) now gets its value from a new pure helper,
+`freeToEndSignedMm(spec)` (`ui/util/FreeToEndBadgeMath.kt`). When `overallLengthMm == 0`
+(manual-OAL mode, no length entered yet) it falls back to `lastOccupiedEndMm()` — the same
+fallback the preview's `safeSpec` uses — so the badge reads `0` instead of a phantom red
+negative "oversized" value. A genuinely oversized shaft (OAL > 0, components running past
+the end) still goes negative/red as before; suppression and visibility rules are unchanged.
+Covered by new `FreeToEndBadgeMathTest.kt` (5 cases).
+
+Also confirmed and pinned with tests (no production code changed) that taper slope
+validation/derivation — `autoTaperRate`, `manualTaperRateWarning`,
+`manualTaperRateBlockingMessage`'s derive-prompt, and `ShaftViewModel.deriveTaperDiameters`
+— is already inert at `lengthMm <= 0`; pure-syntax checks like the ambiguous bare `"1"`
+correctly still fire regardless of length. New pinning tests in `TaperRateAutoTest.kt` and
+`TaperRateTest.kt`. Docs: `docs/FreeToEndBadge.md` (v1.3), `docs/VALIDATION_RULES.md` §3.3,
+`TODO.md` §2.1.
+
 ### docs: refresh TODO.md — sync shipped work, bump "Last updated"
 
 `TODO.md` had drifted behind several merged features. Body keyways are un-shelved (removed

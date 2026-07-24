@@ -130,6 +130,7 @@ import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.util.buildThreadTitleById
 import com.android.shaftschematic.ui.util.bodyWarningMessage
+import com.android.shaftschematic.ui.util.freeToEndSignedMm
 import com.android.shaftschematic.ui.util.linerWarningMessage
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.taperWarningMessage
@@ -1425,8 +1426,7 @@ private fun FreeToEndBadge(
     unit: UnitSystem,
     modifier: Modifier = Modifier
 ) {
-    val endMm = lastOccupiedEndMm(spec)
-    val freeSignedMm = spec.overallLengthMm - endMm
+    val freeSignedMm = freeToEndSignedMm(spec)
     val isOversized = freeSignedMm < 0f
     val isSnug = !isOversized && freeSignedMm < 10f
 

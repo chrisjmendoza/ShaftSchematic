@@ -64,8 +64,8 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 ### 2.1 Remaining Validation Items
 
 - [x] Taper on-blur field validation — rate derivation errors (missing both diameters with no rate, derived diameter < 0) shown inline on the field
-- [ ] Validate taper slope only when `lengthMm > 0` (currently deferred)
-- [ ] `freeToEndMm` badge: use `safeSpec` when `overallLengthMm == 0` (preview-mode edge case)
+- [x] Validate taper slope only when `lengthMm > 0` — confirmed already inert at `lengthMm <= 0` across `autoTaperRate`/`manualTaperRateWarning`/`manualTaperRateBlockingMessage`/`deriveTaperDiameters`; pinning tests added 2026-07-24, no production change needed
+- [x] `freeToEndMm` badge: use `safeSpec` when `overallLengthMm == 0` — new `freeToEndSignedMm(spec)` helper (`ui/util/FreeToEndBadgeMath.kt`) falls back to `lastOccupiedEndMm()`, wired into `FreeToEndBadge` 2026-07-24
 
 ### 2.2 Unimplemented Warning Rules (VALIDATION_RULES.md §3–4)
 
@@ -83,7 +83,6 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 - [ ] **Liner shoulders** — aft/fwd shoulder length fields, stepped shoulder rendering in preview and PDF
 - [ ] **Fiberglass body segments** — model flag, dark fill / hatch pattern, label. Reference: `assets/20251022_172641.jpg`
-- [ ] **`freeToEndMm` safeSpec** — preview-mode OAL=0 behavior (`§3.1`)
 
 ---
 
