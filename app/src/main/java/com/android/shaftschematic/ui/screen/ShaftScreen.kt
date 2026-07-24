@@ -1,7 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
 import android.util.Log
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +27,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -90,8 +88,6 @@ import com.android.shaftschematic.geom.computeOalWindow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -112,9 +108,7 @@ import com.android.shaftschematic.model.MM_PER_IN
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
-import com.android.shaftschematic.model.lastOccupiedEndMm
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
-import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.input.NumericInputField
 import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
@@ -129,12 +123,9 @@ import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.util.buildThreadTitleById
-import com.android.shaftschematic.ui.util.freeToEndSignedMm
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
-import com.android.shaftschematic.ui.viewmodel.SnapConfig
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
-import com.android.shaftschematic.ui.viewmodel.snapPositionMm
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
@@ -1112,111 +1103,6 @@ private fun ShaftPositionDropdown(
     }
 }
 
-/* ───────────────── Preview ───────────────── */
-
-@Composable
-private fun PreviewCard(
-    showGrid: Boolean,
-    spec: ShaftSpec,
-    resolvedComponents: List<ResolvedComponent>,
-    unit: UnitSystem,
-    overallIsManual: Boolean,
-    devOptionsEnabled: Boolean,
-    showOalInPreviewBox: Boolean,
-    // NEW: explicit preview controls
-    highlightEnabled: Boolean,
-    highlightId: String?,
-    onTapComponentId: ((String) -> Unit)?,
-    onTapAtMm: ((Float) -> Unit)? = null,
-    showRenderLayoutDebugOverlay: Boolean,
-    showRenderOalMarkers: Boolean,
-    previewOutline: PreviewColorSetting,
-    previewBodyFill: PreviewColorSetting,
-    previewTaperFill: PreviewColorSetting,
-    previewLinerFill: PreviewColorSetting,
-    previewThreadFill: PreviewColorSetting,
-    previewThreadHatch: PreviewColorSetting,
-    previewBlackWhiteOnly: Boolean,
-    lineThicknessScale: Float = 1.0f,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier,
-        shape = RectangleShape,
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Box(Modifier.fillMaxSize().background(Color.Transparent)) {
-            // Direct render: pass grid + highlight to the renderer
-            ShaftDrawing(
-                spec = spec,
-                resolvedComponents = resolvedComponents,
-                unit = unit,
-                showGrid = showGrid,
-                blackWhiteOnly = previewBlackWhiteOnly,
-                previewOutline = previewOutline,
-                previewBodyFill = previewBodyFill,
-                previewTaperFill = previewTaperFill,
-                previewLinerFill = previewLinerFill,
-                previewThreadFill = previewThreadFill,
-                previewThreadHatch = previewThreadHatch,
-                lineThicknessScale = lineThicknessScale,
-                highlightEnabled = highlightEnabled && (highlightId != null),
-                highlightId = highlightId,
-                onTapComponentId = onTapComponentId,
-                onTapAtMm = onTapAtMm,
-                showLayoutDebugOverlay = showRenderLayoutDebugOverlay,
-                showOalMarkers = showRenderOalMarkers
-            )
-
-            Column(
-                modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                if (devOptionsEnabled && showOalInPreviewBox) {
-                    PreviewOalBadge(
-                        spec = spec,
-                        unit = unit,
-                        overallIsManual = overallIsManual,
-                    )
-                }
-
-                if (overallIsManual) {
-                    FreeToEndBadge(
-                        spec = spec,
-                        unit = unit,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PreviewOalBadge(
-    spec: ShaftSpec,
-    unit: UnitSystem,
-    overallIsManual: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val effectiveOalMm = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec).oalMm.toFloat() }
-    val displayOalMm = if (overallIsManual) spec.overallLengthMm else effectiveOalMm
-
-    Surface(
-        tonalElevation = 2.dp,
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-        modifier = modifier
-    ) {
-        Text(
-            text = "OAL: ${formatDisplay(displayOalMm, unit)} ${abbr(unit)}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
-}
-
-
 /* ───────────────── Shared composables & helpers ───────────────── */
 
 
@@ -1411,153 +1297,9 @@ internal fun parseFractionOrDecimal(input: String): Float? {
     return t.toFloatOrNull()
 }
 
-/** Latest occupied end position along the shaft (mm) from all components. */
-private fun lastOccupiedEndMm(spec: ShaftSpec): Float = spec.lastOccupiedEndMm()
-
-/* ───────────────── Free-to-End badge ───────────────── */
-
-@Composable
-private fun FreeToEndBadge(
-    spec: ShaftSpec,
-    unit: UnitSystem,
-    modifier: Modifier = Modifier
-) {
-    val freeSignedMm = freeToEndSignedMm(spec)
-    val isOversized = freeSignedMm < 0f
-    val isSnug = !isOversized && freeSignedMm < 10f
-
-    // When there are no precision components (tapers/liners/threads), auto-bodies always fill
-    // visually to OAL, so the badge would mislead the user into thinking there's uncovered
-    // shaft. Only suppress in the non-oversized case — oversized is always a red warning.
-    val hasPrecisionComponents = spec.tapers.isNotEmpty() ||
-        spec.threads.any { !it.excludeFromOAL } ||
-        spec.liners.isNotEmpty()
-    if (!isOversized && !hasPrecisionComponents) return
-
-    val bg = when {
-        isOversized -> MaterialTheme.colorScheme.errorContainer
-        isSnug      -> MaterialTheme.colorScheme.tertiaryContainer
-        else        -> MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-    }
-    val fg = when {
-        isOversized -> MaterialTheme.colorScheme.onErrorContainer
-        isSnug      -> MaterialTheme.colorScheme.onTertiaryContainer
-        else        -> MaterialTheme.colorScheme.onSurface
-    }
-
-    Surface(
-        tonalElevation = if (isOversized) 3.dp else 2.dp,
-        shape = RoundedCornerShape(8.dp),
-        color = bg,
-        modifier = modifier
-    ) {
-        Text(
-            text = "Free to end: ${formatDisplay(freeSignedMm, unit)} ${abbr(unit)}",
-            style = MaterialTheme.typography.labelSmall,
-            color = fg,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
-}
-
 private const val OAL_EPS_MM: Double = 1e-3
 
 internal fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) (MM_PER_IN / tpi.toDouble()).toFloat() else 0f
-
-/** Defaults for new components (mm). */
-private data class AddDefaults(val startMm: Float, val lastDiaMm: Float)
-private fun computeAddDefaults(spec: ShaftSpec): AddDefaults {
-    // Bodies are fillers; excluded threads sit outside the shaft envelope.
-    // Only sacred components (tapers, non-excluded threads, liners) drive the default start position.
-    var end = 0f
-    spec.tapers.forEach  { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.threads.filter { !it.excludeFromOAL }.forEach { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-    spec.liners.forEach  { end = maxOf(end, it.startFromAftMm + it.lengthMm) }
-
-    var dia = 50f
-    spec.liners.firstOrNull  { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.odMm }
-    spec.threads.filter { !it.excludeFromOAL }.firstOrNull { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.majorDiaMm }
-    spec.tapers.firstOrNull  { it.startFromAftMm + it.lengthMm == end }?.let { dia = it.endDiaMm }
-    if (dia == 50f && spec.bodies.isNotEmpty()) dia = spec.bodies.first().diaMm
-
-    return AddDefaults(startMm = end, lastDiaMm = dia)
-}
-
-/* ───────────────── Snap helpers ───────────────── */
-
-private fun applySnappedBodyUpdate(
-    onUpdate: (Int, Float, Float, Float) -> Unit,
-    index: Int,
-    rawStartMm: Float,
-    rawEndMm: Float,
-    diaMm: Float,
-    anchors: List<Float>,
-    config: SnapConfig = SnapConfig()
-) {
-    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
-    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
-    onUpdate(index, snappedStart, lengthMm, diaMm)
-}
-
-private fun applySnappedTaperUpdate(
-    onUpdate: (Int, Float, Float, Float, Float, String) -> Unit,
-    index: Int,
-    rawStartMm: Float,
-    rawEndMm: Float,
-    startDiaMm: Float,
-    endDiaMm: Float,
-    rateText: String = "",
-    anchors: List<Float>,
-    config: SnapConfig = SnapConfig()
-) {
-    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
-    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
-    onUpdate(index, snappedStart, lengthMm, startDiaMm, endDiaMm, rateText)
-}
-
-private fun applySnappedThreadUpdate(
-    onUpdate: (Int, Float, Float, Float, Float) -> Unit,
-    index: Int,
-    rawStartMm: Float,
-    rawEndMm: Float,
-    majorDiaMm: Float,
-    pitchMm: Float,
-    anchors: List<Float>,
-    config: SnapConfig = SnapConfig()
-) {
-    // Only snap the start; preserve the original length. Snapping both start and end
-    // independently can silently resize the thread when the raw end happens to land
-    // near a snap anchor (e.g., a 99mm thread moved to start=0 could snap its end to
-    // the 100mm body anchor, unexpectedly extending it to 100mm).
-    val snappedStart = snapPositionMm(rawStartMm, anchors, config)
-    val lengthMm = (rawEndMm - rawStartMm).coerceAtLeast(0f)
-    onUpdate(index, snappedStart, lengthMm, majorDiaMm, pitchMm)
-}
-
-private fun applySnappedLinerUpdate(
-    onUpdate: (Int, Float, Float, Float) -> Unit,
-    index: Int,
-    rawStartMm: Float,
-    rawEndMm: Float,
-    odMm: Float,
-    anchors: List<Float>,
-    config: SnapConfig = SnapConfig()
-) {
-    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
-    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
-    onUpdate(index, snappedStart, lengthMm, odMm)
-}
-
-private fun snapBounds(
-    rawStartMm: Float,
-    rawEndMm: Float,
-    anchors: List<Float>,
-    config: SnapConfig
-): Pair<Float, Float> {
-    val snappedStart = snapPositionMm(rawStartMm, anchors, config)
-    val snappedEnd = snapPositionMm(rawEndMm, anchors, config)
-    return snappedStart to snappedEnd
-}
 
 /* ───────────────── Click helper ───────────────── */
 

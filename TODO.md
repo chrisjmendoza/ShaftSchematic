@@ -54,8 +54,9 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 
 **Remaining refactor work (lower priority — defer until ShaftScreen grows again):**
 
-- [ ] Extract preview panel into `ShaftPreviewPanel.kt`
-- [ ] Extract ViewModel event wiring into `ShaftScreenController.kt`
+- [x] Extract preview panel into `ShaftPreviewPanel.kt` — pure move 2026-07-24
+- [x] Extract ViewModel event wiring into `ShaftScreenController.kt` — pure move 2026-07-24
+- [ ] Controller owns all VM-side intents (composables stateless) — design work, not a pure move
 
 ---
 

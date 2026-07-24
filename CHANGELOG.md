@@ -8,6 +8,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-24
 
+### refactor: extract ShaftPreviewPanel.kt + ShaftScreenController.kt from ShaftScreen.kt
+
+- **`ui/screen/ShaftPreviewPanel.kt`** (189 lines): `PreviewCard` (now `internal`),
+  `PreviewOalBadge` (private), `FreeToEndBadge` (private) + its `lastOccupiedEndMm`
+  wrapper (internal) — moved verbatim from `ShaftScreen.kt`.
+- **`ui/screen/ShaftScreenController.kt`** (107 lines): `AddDefaults` +
+  `computeAddDefaults` (internal), `applySnapped{Body,Taper,Thread,Liner}Update`
+  (internal), `snapBounds` (private) — moved verbatim from `ShaftScreen.kt`.
+- Pure code-motion, zero behavior change, full unit test suite green. `ShaftScreen.kt`
+  1452 → 1314 lines. Shared format helpers (`abbr`, `disp`, `formatDisplay`,
+  `toMmOrNull`, `parseFractionOrDecimal`, `tpiToPitchMm`) and the dialogs/menus stay in
+  `ShaftScreen.kt`. The fuller "controller owns all VM-side intents, composables
+  stateless" redesign remains open (`TODO.md` §1).
+
 ### chore: dead-code sweep — snap-era leftovers, dead imports, tiering audit
 
 Read-only audit + deletion pass targeting zero-production-reference code; full unit test suite

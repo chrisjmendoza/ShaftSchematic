@@ -1,7 +1,8 @@
-# Free-to-End Badge – Contract (v1.3)
+# Free-to-End Badge – Contract (v1.4)
 
 ## Computation
-The `FreeToEndBadge` composable (`ShaftScreen.kt`) gets its signed value from the pure
+The `FreeToEndBadge` composable (`ui/screen/ShaftPreviewPanel.kt` — moved from
+`ShaftScreen.kt` 2026-07-24, pure code move) gets its signed value from the pure
 helper `freeToEndSignedMm(spec)` (`ui/util/FreeToEndBadgeMath.kt`):
 `freeSignedMm = effectiveOalMm - lastOccupiedEndMm(spec)` — mm only, **not clamped**.
 `effectiveOalMm` is `spec.overallLengthMm`, **except** when that is exactly `0f`
