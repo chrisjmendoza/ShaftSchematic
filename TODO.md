@@ -96,7 +96,12 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 - [x] Standardize confirm/cancel patterns across all Add dialogs
 - [x] Standardize commit-on-blur across all fields
-- [ ] Remove leftover legacy length-editing utilities
+- [x] Remove leftover legacy length-editing utilities — 2026-07-24 dead-code sweep: deleted
+  snap-era test-only helpers (`snapForwardFromOrdered`/`snapFromOrigin`/`shiftAllBy`/
+  `findLeftNeighbor` in `ShaftSpecExtensions.kt` + their 4 test cases) and dead imports
+  (`threadWarningMessage` in `ShaftScreen.kt`, `snapForwardFromOrdered` in `ShaftViewModel.kt`);
+  live `snapForwardFrom` untouched. The `parseFractionOrDecimal`/`toMmOrNull` duplication remains
+  — tracked separately in `NumberField.md`.
 
 ### 4.2 Build Tooling (`§5.3`)
 
@@ -105,7 +110,10 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 ### 4.3 Post-Tiering Cleanup (LOW, deferred to v0.5.x)
 
-- [ ] Audit tiering-related helpers for dead or redundant code
+- [x] Audit tiering-related helpers for dead or redundant code — audited 2026-07-24; only the
+  unused `kind` default parameter on `DeterministicTierAssigner.assign` was deletable (every
+  caller already passed it explicitly; parameter is now required). The unreachable
+  `geom.SpanKind.OAL` defensive path was kept as contract documentation (OAL spans never tier).
 - [ ] Add optional debug overlay showing tier origin and measurement reference (preview only)
 
 ---

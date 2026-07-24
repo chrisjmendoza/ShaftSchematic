@@ -8,6 +8,35 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-24
 
+### chore: dead-code sweep — snap-era leftovers, dead imports, tiering audit
+
+Read-only audit + deletion pass targeting zero-production-reference code; full unit test suite
+stayed green throughout.
+
+**Deleted:**
+- `ShaftSpec.findRightNeighbor` (`model/ShaftSpecExtensions.kt`) — fully dead, no references
+  anywhere.
+- Snap-era test-only helpers superseded when the per-update snap cascade was removed
+  pre-auto-body: `snapForwardFromOrdered`, `snapFromOrigin`, `shiftAllBy`, `findLeftNeighbor`
+  (`ShaftSpecExtensions.kt`), plus their 4 test cases in `ShaftSpecSnapExtensionsTest.kt`. Live
+  `snapForwardFrom` (still used by `ShaftViewModel.kt`) is untouched.
+- Dead imports: `threadWarningMessage` in `ShaftScreen.kt`, `snapForwardFromOrdered` in
+  `ShaftViewModel.kt`.
+- Unused `kind` default parameter on `DeterministicTierAssigner.assign` (every caller already
+  passed it explicitly; the parameter is now required).
+
+**Kept deliberately (not dead code):**
+- `ShaftSpec.validate()` — no production caller, but test-only and load-bearing in
+  `SampleShaftAssetsTest` (bundled-sample sanity checks). `docs/VALIDATION_RULES.md`'s two stale
+  "dead code" claims (§1.1, §3.1) corrected to "test-only".
+- The unreachable `geom.SpanKind.OAL` defensive path in `DeterministicTierAssigner` — documents
+  the OAL-never-tiers contract; removal would be a coordinated API change, not a dead-code
+  delete.
+- `ui.screen.parseFractionOrDecimal`/`toMmOrNull` vs `util.Parsing` duplication — both live;
+  consolidation is already tracked in `NumberField.md`.
+
+Docs: `docs/VALIDATION_RULES.md` §1.1/§3.1, `TODO.md` §4.1/§4.3. No production behavior changed.
+
 ### feat(validation): §3–4 non-blocking warning rules
 
 Implemented the five warning rules in `docs/VALIDATION_RULES.md` §3–4 that were previously

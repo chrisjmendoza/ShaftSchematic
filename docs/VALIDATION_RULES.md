@@ -1,6 +1,9 @@
 # Validation Rules  
 Version: v0.5.x
-Last updated: 2026-07-24 — §3.2/§3.3/§3.5/§4.3: the five warning rules flagged
+Last updated: 2026-07-24 — corrected two stale "`ShaftSpec.validate()` is dead code" claims
+(§1.1, §3.1): it is not called by production code, but it **is** exercised by unit tests
+(`ShaftSpecTest`, `SampleShaftAssetsTest` bundled-sample sanity checks) — test-only, kept
+deliberately (confirmed in the 2026-07-24 dead-code sweep, not deleted). 2026-07-24 — §3.2/§3.3/§3.5/§4.3: the five warning rules flagged
 "(planned — not yet implemented)" are now implemented in `ui/util/ComponentWarnings.kt`
 (`bodyWarningMessages`, `taperWarningMessages`, `linerWarningMessages`, `specWarningMessages`).
 All five are pure, non-blocking, and rules see only **stored** components (auto-bodies are
@@ -50,7 +53,9 @@ UI-level gate on the *add* flow. The ViewModel's `update*()` functions (`updateB
 `updateTaper`, `updateThread`, `updateLiner` in `ShaftViewModel.kt`) do **not** reject or clamp
 a negative `startFromAftMm` on commit; they only clamp `lengthMm`/diameter fields to
 `max(0f, …)`. `ShaftSpec.validate()` (`model/ShaftSpec.kt`) implements the stricter bounds check
-described in this document, but it is **dead code** — nothing in the app calls it.
+described in this document. Nothing in the app calls it in production, but it is **test-only** —
+exercised by `ShaftSpecTest`/`SampleShaftAssetsTest` — and is kept deliberately; it is not dead
+code.
 
 ---
 
@@ -137,8 +142,9 @@ a hard block today:
   overlap/bounds checks in §5 for what actually runs (`startOverlapErrorMm` in
   `ui/util/StartOverlapValidation.kt`).
 - `model/ShaftSpec.kt` does define `fun ShaftSpec.validate(): Boolean` implementing the fuller
-  bounds check described in this document, but it is **dead code** — no caller invokes it
-  anywhere in the app.
+  bounds check described in this document. No production caller invokes it — it is **test-only**,
+  exercised by `ShaftSpecTest` and `SampleShaftAssetsTest` (bundled-sample sanity checks) — and is
+  kept deliberately (confirmed in the 2026-07-24 dead-code sweep, not deleted).
 
 ---
 

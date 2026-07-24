@@ -27,7 +27,7 @@ object DeterministicTierAssigner {
         spans: List<T>,
         startMm: (T) -> Double,
         endMm: (T) -> Double,
-        kind: (T) -> SpanKind = { SpanKind.LOCAL },
+        kind: (T) -> SpanKind,
     ): List<Tiered<T>> {
         if (spans.isEmpty()) return emptyList()
 

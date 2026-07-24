@@ -131,7 +131,6 @@ import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.util.buildThreadTitleById
 import com.android.shaftschematic.ui.util.freeToEndSignedMm
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
-import com.android.shaftschematic.ui.util.threadWarningMessage
 import com.android.shaftschematic.ui.viewmodel.SnapConfig
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
