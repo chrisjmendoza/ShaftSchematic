@@ -79,7 +79,9 @@ Editor) and `docs/RunoutBubbleEditor_PLAN.md`.
 
 ### Spooned keyways are a draw-only variant
 `keywaySpooned` (on `Taper` and `Body`) is a **drawing** flag — it changes nothing in the model,
-resolve, OAL, collision, or footer geometry (only the footer *text* gains `(spooned)`). A spooned
+resolve, OAL, collision, or footer geometry (only the footer *text* gains `(spooned)` plus a
+`SPOONED_KW_NOTE` line under the KW spec: KW length runs to the base of the spoon, where the
+mill ends). A spooned
 **open** keyway keeps the normal keyway (full-length walls + mill semicircle) and **adds** an
 enlarged circle around the closed (LET) end — the mill semicircle stays as an inner reference line
 inside the bowl. It is **ignored for floating keyways** (offset > 0) — the UI disables the toggle

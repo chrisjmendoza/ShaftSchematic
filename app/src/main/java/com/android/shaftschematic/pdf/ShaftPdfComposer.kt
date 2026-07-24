@@ -1120,6 +1120,13 @@ internal data class FooterColumns(
 )
 
 /**
+ * Reader note printed directly under a spooned keyway's footer spec line: the stated KW
+ * length runs to the base of the spoon bowl (where the mill cut ends), not to the tip
+ * of the spoon.
+ */
+internal const val SPOONED_KW_NOTE = "KW length to base of spoon (mill end)"
+
+/**
  * Builds the exact left/right footer text lines that [drawFooter] will render.
  * Exposed for JVM unit tests so we can validate end-feature detection without
  * depending on Android Canvas/PdfDocument runtime.
@@ -1144,6 +1151,7 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
                 } else {
                     "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}$spoon"
                 }
+                if (tp.keywaySpooned) aft += SPOONED_KW_NOTE
             }
         }
     }
@@ -1169,6 +1177,7 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
                 } else {
                     "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}$spoon"
                 }
+                if (tp.keywaySpooned) fwd += SPOONED_KW_NOTE
             }
         }
     }
@@ -1189,7 +1198,9 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
     spec.bodies.filter { it.hasKeyway }.forEach { b ->
         val span = b.keywayAbsSpanMm() ?: return@forEach
         val centerMm = (span.first + span.second) * 0.5f
-        if (centerMm <= spec.overallLengthMm * 0.5f) aft += bodyKwLine(b) else fwd += bodyKwLine(b)
+        val col = if (centerMm <= spec.overallLengthMm * 0.5f) aft else fwd
+        col += bodyKwLine(b)
+        if (b.keywaySpooned) col += SPOONED_KW_NOTE
     }
 
     return FooterColumns(aftLines = aft, fwdLines = fwd)

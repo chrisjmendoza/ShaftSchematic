@@ -6,6 +6,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-24
+
+### feat: spooned-keyway footer note
+
+When a keyway is spooned, the schematic PDF footer now prints a reader note directly under
+that keyway's spec line — `KW length to base of spoon (mill end)` — so a reader knows the
+stated KW length runs to the base of the spoon bowl (where the mill cut ends), not to the tip
+of the spoon. Applies to taper and body keyways (`SPOONED_KW_NOTE` in
+`buildFooterEndColumns`, `ShaftPdfComposer.kt`); non-spooned keyways are unchanged. Covered
+by `SpoonedKeywayFooterNoteTest`.
+
+---
+
 ## 2026-07-22
 
 ### fix: runout bubble values keep three decimals (thousandths)
