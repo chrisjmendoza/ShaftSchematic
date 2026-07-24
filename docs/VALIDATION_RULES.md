@@ -1,6 +1,10 @@
 # Validation Rules  
 Version: v0.5.x
-Last updated: 2026-07-24 — §3.3 noted that taper slope validation/derivation is inert at
+Last updated: 2026-07-24 — §3.2/§3.3/§3.5/§4.3: the five warning rules flagged
+"(planned — not yet implemented)" are now implemented in `ui/util/ComponentWarnings.kt`
+(`bodyWarningMessages`, `taperWarningMessages`, `linerWarningMessages`, `specWarningMessages`).
+All five are pure, non-blocking, and rules see only **stored** components (auto-bodies are
+invisible to them); thresholds are tunable named constants pending Chris's review. 2026-07-24 — §3.3 noted that taper slope validation/derivation is inert at
 `lengthMm <= 0` (guarded in `TaperRateAuto.kt` / `deriveTaperDiameters`; pinned by unit
 tests). 2026-07-21 — reverted "explicit bodies are non-negotiable" (§5.1): bodies never collide, no hard-block on adds/moves over a body, plain bodies split around sacred components (keyed bodies protected); removed `bodyOverlapErrorMm`/`nonBodyOverlapErrorMm`/liner↔body negotiation references. 2026-07-18 — §2.3 numeric "safety filters" (NaN/Infinity/>100000 rejection) were never implemented; removed the false claim. Validation is not ViewModel-only (overlap/bounds checks live in `ui/util/StartOverlapValidation.kt`, called from Compose UI). Negative-start rejection is a dialog-level Submit gate, not a ViewModel rejection; `ShaftSpec.validate()` exists but is dead code. §6 export gate corrected to what `blockingExportError()` actually checks.
 
@@ -144,7 +148,14 @@ a hard block today:
 
 Non-blocking warning:
 - Zero-length body *(implemented)*
-- Diameter discontinuity vs neighbors *(planned — not yet implemented)*
+- Diameter discontinuity vs neighbors *(implemented, 2026-07-24)* — `bodyWarningMessages(spec, body)`
+  in `ui/util/ComponentWarnings.kt`. Fires when a stored body's face abuts another stored body's
+  face within `ADJACENCY_EPS_MM = 0.5f` mm (either end, either direction), both diameters are
+  `> 0`, and `max(diaMm) / min(diaMm) > BODY_STEP_WARN_RATIO` (`1.5f`, strict — a ratio of exactly
+  `1.5` is silent). Auto-bodies are not considered (stored `spec.bodies` only). Message: "Large Ø
+  step vs adjacent body", shown on the affected body's carousel card (joined with any other
+  warning for that card via `"; "`). `BODY_STEP_WARN_RATIO` and `ADJACENCY_EPS_MM` are named
+  constants pending Chris's review.
 
 ---
 
@@ -189,7 +200,15 @@ in-source `TaperRate.md` and `AddComponentDialogs.md`. In brief:
 
 Non-blocking warnings:
 - Extremely steep tapers *(planned — not yet implemented)*
-- Large mismatch with adjacent body diameter *(planned — not yet implemented)*
+- Large mismatch with adjacent body diameter *(implemented, 2026-07-24)* —
+  `taperWarningMessages(spec, taper)` in `ui/util/ComponentWarnings.kt`. For each taper face
+  (SET and LET) with a `> 0` diameter, if a stored body face lands within `ADJACENCY_EPS_MM =
+  0.5f` mm of that taper face and the body's diameter is `> 0`, the relative mismatch
+  `|taperFaceDia − bodyDia| / bodyDia` is compared against `TAPER_BODY_MISMATCH_WARN_FRAC`
+  (`0.10f`, strict — exactly 10% is silent). Auto-bodies are not considered (stored `spec.bodies`
+  only). Message: "Ø differs from adjacent body by >10%", shown on the taper's carousel card
+  (joined with any other warning for that card via `"; "`). `TAPER_BODY_MISMATCH_WARN_FRAC` and
+  `ADJACENCY_EPS_MM` are named constants pending Chris's review.
 
 ---
 
@@ -221,7 +240,14 @@ Required:
 - endFromAftMm ≤ overallLengthMm (blocking)
 
 Non-blocking warnings:
-- odMm < underlying shaft diameter *(planned — not yet implemented)*
+- odMm < underlying shaft diameter *(implemented, 2026-07-24)* —
+  `linerWarningMessages(spec, liner)` in `ui/util/ComponentWarnings.kt`. Fires when the liner's
+  axial span has a positive-length overlap (`overlapLenMm > 0`) with a stored body whose
+  `diaMm > 0`, and `liner.odMm < body.diaMm − 0.001f` (the `0.001f` slack absorbs float
+  round-trip noise; anything at or above it is silent — not a strict-inequality boundary in the
+  same sense as the ratio/fraction thresholds elsewhere). Auto-bodies are not considered (stored
+  `spec.bodies` only). Message: "Liner OD smaller than shaft Ø beneath it", shown on the liner's
+  carousel card (joined with any other warning for that card via `"; "`).
 - Very thin liner vs body diameter *(planned — not yet implemented)*
 
 ---
@@ -261,9 +287,23 @@ Coupler bolt slots are **excluded from all collision detection** (`collisionGrou
 ### 4.3 Full-Spec Non-Blocking Warnings
 - Component overlaps (machinist may intend) *(implemented)*
 - Rapid diameter changes *(planned — not yet implemented)*
-- Tiny segments (e.g., < 1 mm) *(planned — not yet implemented)*
+- Tiny segments (e.g., < 1 mm) *(implemented, 2026-07-24 — spec-level count)* —
+  `specWarningMessages(spec)` in `ui/util/ComponentWarnings.kt` counts stored components with
+  length in `(0, SHORT_SEGMENT_MM]` (`SHORT_SEGMENT_MM = 1f` mm) across bodies, tapers, liners,
+  and non-excluded threads (excluded threads are skipped, matching §3.1/§5.2's treatment of
+  them as outside the envelope), and emits `"$tiny segments shorter than 1 mm"` when the count
+  is `> 0`. This is in addition to the existing **component-level** short-segment check already
+  folded into `bodyWarningMessages`/`taperWarningMessages`/`linerWarningMessages`/
+  `threadWarningMessage` (same `SHORT_SEGMENT_MM` threshold, one message per affected card).
+  `specWarningMessages` is pure and unit-tested but **not yet wired to any UI surface** — where
+  it should render (badge, banner, elsewhere) is an open UX decision for Chris.
 - Free-to-end space < 10 mm *(implemented)*
-- Zero-body coverage (no explicit bodies in `ShaftSpec`; auto bodies are derived and do not satisfy this warning) *(planned — not yet implemented)*
+- Zero-body coverage (no explicit bodies in `ShaftSpec`; auto bodies are derived and do not
+  satisfy this warning) *(implemented, 2026-07-24 — computed only, not yet surfaced)* —
+  `specWarningMessages(spec)` emits `"No explicit bodies — shaft body is all auto-fill"` when
+  `spec.bodies` is empty and at least one taper, liner, or non-excluded thread exists
+  (`hasAnyNonBodyComponent`). Like the tiny-segment count above, this is pure and unit-tested
+  but **not yet wired to any UI surface** — same open UX decision.
 
 ---
 

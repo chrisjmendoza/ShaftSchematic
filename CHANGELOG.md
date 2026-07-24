@@ -8,6 +8,37 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-24
 
+### feat(validation): §3–4 non-blocking warning rules
+
+Implemented the five warning rules in `docs/VALIDATION_RULES.md` §3–4 that were previously
+marked "planned — not yet implemented", as pure functions in `ui/util/ComponentWarnings.kt`.
+All are non-blocking and see only **stored** components — auto-bodies stay invisible to them,
+and `blockingExportError()` (the PDF export gate) is untouched.
+
+Carousel-card-level (wired into `ComponentCarousel.kt`, joined with `"; "` when a card has more
+than one):
+- **§3.2 body Ø step** — stored bodies abutting within `ADJACENCY_EPS_MM = 0.5f` mm, both
+  diameters `> 0`, warn when `max/min diameter ratio > 1.5` (`BODY_STEP_WARN_RATIO`, strict —
+  exactly `1.5` is silent).
+- **§3.3 taper face vs abutting body** — warn when
+  `|taperFaceDia − bodyDia| / bodyDia > 0.10` (`TAPER_BODY_MISMATCH_WARN_FRAC`, strict).
+- **§3.5 liner OD vs overlapping body** — warn when `liner.odMm < body.diaMm − 0.001f` on a
+  liner span that positively overlaps a stored body.
+
+New signatures: `bodyWarningMessages(spec, body)`, `taperWarningMessages(spec, taper)`,
+`linerWarningMessages(spec, liner)` — `threadWarningMessage(thread)` is unchanged.
+
+Computed-only, awaiting a UI-surface decision — `specWarningMessages(spec)`:
+- **§4.3 tiny segments** — count of stored components (bodies/tapers/liners/non-excluded
+  threads) with length in `(0, 1] mm`.
+- **§4.3 zero-body coverage** — flags when `spec.bodies` is empty but at least one
+  taper/liner/non-excluded thread exists.
+
+Thresholds (`ADJACENCY_EPS_MM`, `SHORT_SEGMENT_MM`, `BODY_STEP_WARN_RATIO`,
+`TAPER_BODY_MISMATCH_WARN_FRAC`) are named constants chosen as engineering defaults, flagged
+for Chris's review. 24 new tests in `ComponentWarningsTest.kt`. Docs:
+`docs/VALIDATION_RULES.md` §3.2/§3.3/§3.5/§4.3, `TODO.md` §2.2.
+
 ### fix(validation): free-to-end badge OAL=0 fallback + taper slope inert-length test lock-in
 
 `FreeToEndBadge` (`ShaftScreen.kt`) now gets its value from a new pure helper,

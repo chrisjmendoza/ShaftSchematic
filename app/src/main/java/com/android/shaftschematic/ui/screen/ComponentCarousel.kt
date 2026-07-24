@@ -71,14 +71,14 @@ import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.ResolvedThread
-import com.android.shaftschematic.ui.util.bodyWarningMessage
+import com.android.shaftschematic.ui.util.bodyWarningMessages
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.util.buildThreadTitleById
-import com.android.shaftschematic.ui.util.linerWarningMessage
+import com.android.shaftschematic.ui.util.linerWarningMessages
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
-import com.android.shaftschematic.ui.util.taperWarningMessage
+import com.android.shaftschematic.ui.util.taperWarningMessages
 import com.android.shaftschematic.ui.util.threadWarningMessage
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
@@ -510,7 +510,7 @@ internal fun ComponentPagerCard(
                 },
                 debugText = if (showComponentDebugLabels) "id=${b.id} • startMm=${f1(b.startFromAftMm)} • endMm=${f1(b.startFromAftMm + b.lengthMm)}" else null,
                 errorMessage = if (b.id in collidingComponentIds) "Overlaps another component" else null,
-                warningMessage = bodyWarningMessage(b),
+                warningMessage = bodyWarningMessages(spec, b).joinToString("; ").ifEmpty { null },
                 componentId = b.id, componentKind = ComponentKind.BODY,
                 outerPaddingHorizontal = outerPaddingHorizontal,
                 onRemove = {
@@ -674,7 +674,7 @@ internal fun ComponentPagerCard(
                 },
                 debugText = if (showComponentDebugLabels) "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}" else null,
                 errorMessage = if (t.id in collidingComponentIds) "Overlaps another component" else null,
-                warningMessage = taperWarningMessage(t),
+                warningMessage = taperWarningMessages(spec, t).joinToString("; ").ifEmpty { null },
                 componentId = t.id, componentKind = ComponentKind.TAPER,
                 outerPaddingHorizontal = outerPaddingHorizontal,
                 onRemove = {
@@ -1026,7 +1026,7 @@ internal fun ComponentPagerCard(
                 debugText = if (showComponentDebugLabels) "id=${ln.id} • startMm=${f1(ln.startFromAftMm)} • endMm=${f1(ln.startFromAftMm + ln.lengthMm)}" else null,
                 errorMessage = startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm)
                     ?: if (ln.id in collidingComponentIds) "Overlaps another component" else null,
-                warningMessage = linerWarningMessage(ln),
+                warningMessage = linerWarningMessages(spec, ln).joinToString("; ").ifEmpty { null },
                 componentId = ln.id, componentKind = ComponentKind.LINER,
                 outerPaddingHorizontal = outerPaddingHorizontal,
                 onRemove = {

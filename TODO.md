@@ -71,11 +71,15 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 
 These are defined in the contract but not yet computed. Lower priority — add when working in adjacent areas:
 
-- [ ] §3.2 Body: diameter discontinuity vs adjacent body
-- [ ] §3.3 Taper: large mismatch with adjacent body diameter
-- [ ] §3.5 Liner: `odMm < underlying shaft body diameter`
-- [ ] §4.3 Spec: tiny segments < 1 mm *(partially done — warning exists but only checks component-level, not spec-level)*
-- [ ] §4.3 Spec: zero-body coverage warning
+- [x] §3.2 Body: diameter discontinuity vs adjacent body — `bodyWarningMessages` (`ui/util/ComponentWarnings.kt`), shown on the body's carousel card
+- [x] §3.3 Taper: large mismatch with adjacent body diameter — `taperWarningMessages`, shown on the taper's carousel card
+- [x] §3.5 Liner: `odMm < underlying shaft body diameter` — `linerWarningMessages`, shown on the liner's carousel card
+- [x] §4.3 Spec: tiny segments < 1 mm — spec-level count now exists via `specWarningMessages(spec)` (component-level check was already done; this adds the spec-wide count)
+- [x] §4.3 Spec: zero-body coverage warning — also via `specWarningMessages(spec)`
+- [ ] Decide UI surface for spec-level warnings (`specWarningMessages`) — UX decision. Both the
+  tiny-segment count and zero-body-coverage message are computed and unit-tested but not wired
+  to any screen (badge, banner, or elsewhere); the five carousel-card-level warnings above are
+  already live.
 
 ---
 
