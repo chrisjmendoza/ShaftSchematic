@@ -8,6 +8,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-24
 
+### docs: refresh TODO.md — sync shipped work, bump "Last updated"
+
+`TODO.md` had drifted behind several merged features. Body keyways are un-shelved (removed
+from the non-goals list) since they shipped; added shipped rows for the runout bubble editor,
+spooned keyways, diameter callouts, dim-value-in-break, and the spooned-KW footer note.
+"Last updated" bumped to 2026-07-24. No code changes.
+
 ### feat: spooned-keyway footer note
 
 When a keyway is spooned, the schematic PDF footer now prints a reader note directly under

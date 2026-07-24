@@ -1,13 +1,13 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**  
-**Last updated: 2026-07-18**
+**Last updated: 2026-07-24**
 
 Tasks are ordered by priority. Completed series are collapsed to a single summary line to keep this readable.
 
 ---
 
-## 0. Current System State (updated 2026-05-30)
+## 0. Current System State (updated 2026-07-24)
 
 | Area | Status |
 |---|---|
@@ -34,6 +34,11 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 | Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes; resolved-component geometry (2026-07-18) |
 | Liner wear areas | ✅ Built 2026-07-18 (all 4 phases + input spec: SET/liner-edge references, blocking span validation, PDF detail strips with dimension rails) — awaiting Chris's on-device verification. See `docs/LinerWearAreas_BuildLog_2026-07-18.md` |
 | Wear pits (X markers) | ✅ Built 2026-07-21 — small/large pit "X"s on bodies, tapers & liners (tap to open a segment; explicit Add X / Remove X / Clear all tools); drawn on the wear PDF profile + strips. Wear PDF now keeps the shaft profile always on top with a 2-column detail-strip grid. See CHANGELOG + "Wear Pits" in `docs/RunoutSheet.md`. Awaiting on-device verification |
+| Body keyways | ✅ Built 2026-07-20 — taper-style keyway on bodies (open + floating), 180°-apart hidden-line toggle, auto-body "Make editable body" promotion; split/merge carry keeps keyway at absolute position |
+| Runout bubble editor | ✅ Built 2026-07-21 — tap a bubble to record TIR value + high-spot clock marker; open-topped keyway cutout in the bubble; drawn identically on canvas + PDF |
+| Spooned keyways | ✅ Built 2026-07-22 — draw-only enlarged bowl at the closed (LET) end of an open keyway; footer note "KW length to base of spoon" added 2026-07-24 |
+| Diameter callouts (schematic PDF) | ✅ Built 2026-07-22 — on-shaft Ø callouts below the shaft, 3-decimal, two-tier stacking, liners included as a separate OD group |
+| Dimension values in a break | ✅ Built 2026-07-22 — PDF dimension lines seat the value in a gap in the line with inward arrows; short/colliding spans fall back to label-above |
 | Line thickness control | ✅ Slider 50%–200% in Settings, DataStore-persisted, affects preview + PDF |
 | OAL include-thread toggle | ✅ PDF OAL span now extends to shaft ends when thread marked included |
 | Resolved component pipeline | ✅ Wired into schematic screen/PDF + runout & wear documents (2026-07-18) |
@@ -79,10 +84,6 @@ These are defined in the contract but not yet computed. Lower priority — add w
 - [ ] **Liner shoulders** — aft/fwd shoulder length fields, stepped shoulder rendering in preview and PDF
 - [ ] **Fiberglass body segments** — model flag, dark fill / hatch pattern, label. Reference: `assets/20251022_172641.jpg`
 - [ ] **`freeToEndMm` safeSpec** — preview-mode OAL=0 behavior (`§3.1`)
-
-### Shelved (Not Required for Marine Propeller Shafts)
-
-- ~~Body keyway support~~ — shelved; no shop use case identified
 
 ---
 
@@ -153,7 +154,6 @@ These are defined in the contract but not yet computed. Lower priority — add w
 - Stress analysis or deflection math
 - Non-linear scaling modes
 - Cloud sync or AI features
-- Body keyway (shelved)
 
 ---
 
