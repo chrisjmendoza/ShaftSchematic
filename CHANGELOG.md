@@ -8,6 +8,105 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-24
 
+### refactor: extract ShaftPreviewPanel.kt + ShaftScreenController.kt from ShaftScreen.kt
+
+- **`ui/screen/ShaftPreviewPanel.kt`** (189 lines): `PreviewCard` (now `internal`),
+  `PreviewOalBadge` (private), `FreeToEndBadge` (private) + its `lastOccupiedEndMm`
+  wrapper (internal) — moved verbatim from `ShaftScreen.kt`.
+- **`ui/screen/ShaftScreenController.kt`** (107 lines): `AddDefaults` +
+  `computeAddDefaults` (internal), `applySnapped{Body,Taper,Thread,Liner}Update`
+  (internal), `snapBounds` (private) — moved verbatim from `ShaftScreen.kt`.
+- Pure code-motion, zero behavior change, full unit test suite green. `ShaftScreen.kt`
+  1452 → 1314 lines. Shared format helpers (`abbr`, `disp`, `formatDisplay`,
+  `toMmOrNull`, `parseFractionOrDecimal`, `tpiToPitchMm`) and the dialogs/menus stay in
+  `ShaftScreen.kt`. The fuller "controller owns all VM-side intents, composables
+  stateless" redesign remains open (`TODO.md` §1).
+
+### chore: dead-code sweep — snap-era leftovers, dead imports, tiering audit
+
+Read-only audit + deletion pass targeting zero-production-reference code; full unit test suite
+stayed green throughout.
+
+**Deleted:**
+- `ShaftSpec.findRightNeighbor` (`model/ShaftSpecExtensions.kt`) — fully dead, no references
+  anywhere.
+- Snap-era test-only helpers superseded when the per-update snap cascade was removed
+  pre-auto-body: `snapForwardFromOrdered`, `snapFromOrigin`, `shiftAllBy`, `findLeftNeighbor`
+  (`ShaftSpecExtensions.kt`), plus their 4 test cases in `ShaftSpecSnapExtensionsTest.kt`. Live
+  `snapForwardFrom` (still used by `ShaftViewModel.kt`) is untouched.
+- Dead imports: `threadWarningMessage` in `ShaftScreen.kt`, `snapForwardFromOrdered` in
+  `ShaftViewModel.kt`.
+- Unused `kind` default parameter on `DeterministicTierAssigner.assign` (every caller already
+  passed it explicitly; the parameter is now required).
+
+**Kept deliberately (not dead code):**
+- `ShaftSpec.validate()` — no production caller, but test-only and load-bearing in
+  `SampleShaftAssetsTest` (bundled-sample sanity checks). `docs/VALIDATION_RULES.md`'s two stale
+  "dead code" claims (§1.1, §3.1) corrected to "test-only".
+- The unreachable `geom.SpanKind.OAL` defensive path in `DeterministicTierAssigner` — documents
+  the OAL-never-tiers contract; removal would be a coordinated API change, not a dead-code
+  delete.
+- `ui.screen.parseFractionOrDecimal`/`toMmOrNull` vs `util.Parsing` duplication — both live;
+  consolidation is already tracked in `NumberField.md`.
+
+Docs: `docs/VALIDATION_RULES.md` §1.1/§3.1, `TODO.md` §4.1/§4.3. No production behavior changed.
+
+### feat(validation): §3–4 non-blocking warning rules
+
+Implemented the five warning rules in `docs/VALIDATION_RULES.md` §3–4 that were previously
+marked "planned — not yet implemented", as pure functions in `ui/util/ComponentWarnings.kt`.
+All are non-blocking and see only **stored** components — auto-bodies stay invisible to them,
+and `blockingExportError()` (the PDF export gate) is untouched.
+
+Carousel-card-level (wired into `ComponentCarousel.kt`, joined with `"; "` when a card has more
+than one):
+- **§3.2 body Ø step** — stored bodies abutting within `ADJACENCY_EPS_MM = 0.5f` mm, both
+  diameters `> 0`, warn when `max/min diameter ratio > 1.5` (`BODY_STEP_WARN_RATIO`, strict —
+  exactly `1.5` is silent).
+- **§3.3 taper face vs abutting body** — warn when
+  `|taperFaceDia − bodyDia| / bodyDia > 0.10` (`TAPER_BODY_MISMATCH_WARN_FRAC`, strict).
+- **§3.5 liner OD vs overlapping body** — warn when `liner.odMm < body.diaMm − 0.001f` on a
+  liner span that positively overlaps a stored body.
+
+New signatures: `bodyWarningMessages(spec, body)`, `taperWarningMessages(spec, taper)`,
+`linerWarningMessages(spec, liner)` — `threadWarningMessage(thread)` is unchanged.
+
+Computed-only, awaiting a UI-surface decision — `specWarningMessages(spec)`:
+- **§4.3 tiny segments** — count of stored components (bodies/tapers/liners/non-excluded
+  threads) with length in `(0, 1] mm`.
+- **§4.3 zero-body coverage** — flags when `spec.bodies` is empty but at least one
+  taper/liner/non-excluded thread exists.
+
+Thresholds (`ADJACENCY_EPS_MM`, `SHORT_SEGMENT_MM`, `BODY_STEP_WARN_RATIO`,
+`TAPER_BODY_MISMATCH_WARN_FRAC`) are named constants chosen as engineering defaults, flagged
+for Chris's review. 24 new tests in `ComponentWarningsTest.kt`. Docs:
+`docs/VALIDATION_RULES.md` §3.2/§3.3/§3.5/§4.3, `TODO.md` §2.2.
+
+### fix(validation): free-to-end badge OAL=0 fallback + taper slope inert-length test lock-in
+
+`FreeToEndBadge` (`ShaftScreen.kt`) now gets its value from a new pure helper,
+`freeToEndSignedMm(spec)` (`ui/util/FreeToEndBadgeMath.kt`). When `overallLengthMm == 0`
+(manual-OAL mode, no length entered yet) it falls back to `lastOccupiedEndMm()` — the same
+fallback the preview's `safeSpec` uses — so the badge reads `0` instead of a phantom red
+negative "oversized" value. A genuinely oversized shaft (OAL > 0, components running past
+the end) still goes negative/red as before; suppression and visibility rules are unchanged.
+Covered by new `FreeToEndBadgeMathTest.kt` (5 cases).
+
+Also confirmed and pinned with tests (no production code changed) that taper slope
+validation/derivation — `autoTaperRate`, `manualTaperRateWarning`,
+`manualTaperRateBlockingMessage`'s derive-prompt, and `ShaftViewModel.deriveTaperDiameters`
+— is already inert at `lengthMm <= 0`; pure-syntax checks like the ambiguous bare `"1"`
+correctly still fire regardless of length. New pinning tests in `TaperRateAutoTest.kt` and
+`TaperRateTest.kt`. Docs: `docs/FreeToEndBadge.md` (v1.3), `docs/VALIDATION_RULES.md` §3.3,
+`TODO.md` §2.1.
+
+### docs: refresh TODO.md — sync shipped work, bump "Last updated"
+
+`TODO.md` had drifted behind several merged features. Body keyways are un-shelved (removed
+from the non-goals list) since they shipped; added shipped rows for the runout bubble editor,
+spooned keyways, diameter callouts, dim-value-in-break, and the spooned-KW footer note.
+"Last updated" bumped to 2026-07-24. No code changes.
+
 ### feat: spooned-keyway footer note
 
 When a keyway is spooned, the schematic PDF footer now prints a reader note directly under

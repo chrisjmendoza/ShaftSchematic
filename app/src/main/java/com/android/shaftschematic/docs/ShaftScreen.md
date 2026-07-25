@@ -4,7 +4,7 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.9 (2026-07-18)
+Version: v0.10 (2026-07-24)
 
 ---
 
@@ -31,7 +31,9 @@ Responsibilities
   - New / Open / Save / Export-PDF action icons
   - Overflow menu (⋮) → Settings, Clear All, etc.
 
-- **Preview Card:**  
+- **Preview Card:** (`PreviewCard`, `PreviewOalBadge`, `FreeToEndBadge` — all in
+  `ui/screen/ShaftPreviewPanel.kt`, extracted from `ShaftScreen.kt` 2026-07-24, pure
+  code move, no behavior change)
   - Fixed preview area rendering the shaft via `ShaftDrawing(...)`  
   - Optional grid overlay (user setting)  
   - Transparent or theme-color background (user selectable)  
@@ -85,6 +87,11 @@ Notes
 - `ComponentCard` handles its own remove button; callers simply supply `onRemove = { … }`.  
 - Persistence, serialization, and other business logic live strictly in the ViewModel.  
 - Scaffold uses system-bar insets only; FAB uses `WindowInsets.ime.union(WindowInsets.navigationBars)`.
+- `computeAddDefaults()` and the `applySnapped{Body,Taper,Thread,Liner}Update` snap-apply
+  wrappers live in `ui/screen/ShaftScreenController.kt` (extracted from `ShaftScreen.kt`
+  2026-07-24, pure code move). Shared format helpers (`abbr`, `disp`, `formatDisplay`,
+  `toMmOrNull`, `parseFractionOrDecimal`, `tpiToPitchMm`) and the dialogs/menus remain in
+  `ShaftScreen.kt`.
 
 ---
 
@@ -100,6 +107,14 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.10 (2026-07-24)**
+- **Preview panel + controller extraction:** `PreviewCard`/`PreviewOalBadge`/
+  `FreeToEndBadge` moved to new file `ui/screen/ShaftPreviewPanel.kt`;
+  `computeAddDefaults`/`applySnapped{Body,Taper,Thread,Liner}Update`/`snapBounds` moved
+  to new file `ui/screen/ShaftScreenController.kt`. Pure code-motion, zero behavior
+  change; `ShaftScreen.kt` 1452 → 1314 lines. Shared format helpers and dialogs/menus
+  stay in `ShaftScreen.kt`.
+
 **v0.9 (2026-07-18)**
 - **Doc sweep corrections:** ordering invariant updated to resolved-pipeline physical
   order (newest-on-top superseded — see `ComponentsOrdering.md` v1.2); header row

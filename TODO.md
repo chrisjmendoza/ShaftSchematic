@@ -1,13 +1,13 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**  
-**Last updated: 2026-07-18**
+**Last updated: 2026-07-24**
 
 Tasks are ordered by priority. Completed series are collapsed to a single summary line to keep this readable.
 
 ---
 
-## 0. Current System State (updated 2026-05-30)
+## 0. Current System State (updated 2026-07-24)
 
 | Area | Status |
 |---|---|
@@ -34,6 +34,11 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 | Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes; resolved-component geometry (2026-07-18) |
 | Liner wear areas | ✅ Built 2026-07-18 (all 4 phases + input spec: SET/liner-edge references, blocking span validation, PDF detail strips with dimension rails) — awaiting Chris's on-device verification. See `docs/LinerWearAreas_BuildLog_2026-07-18.md` |
 | Wear pits (X markers) | ✅ Built 2026-07-21 — small/large pit "X"s on bodies, tapers & liners (tap to open a segment; explicit Add X / Remove X / Clear all tools); drawn on the wear PDF profile + strips. Wear PDF now keeps the shaft profile always on top with a 2-column detail-strip grid. See CHANGELOG + "Wear Pits" in `docs/RunoutSheet.md`. Awaiting on-device verification |
+| Body keyways | ✅ Built 2026-07-20 — taper-style keyway on bodies (open + floating), 180°-apart hidden-line toggle, auto-body "Make editable body" promotion; split/merge carry keeps keyway at absolute position |
+| Runout bubble editor | ✅ Built 2026-07-21 — tap a bubble to record TIR value + high-spot clock marker; open-topped keyway cutout in the bubble; drawn identically on canvas + PDF |
+| Spooned keyways | ✅ Built 2026-07-22 — draw-only enlarged bowl at the closed (LET) end of an open keyway; footer note "KW length to base of spoon" added 2026-07-24 |
+| Diameter callouts (schematic PDF) | ✅ Built 2026-07-22 — on-shaft Ø callouts below the shaft, 3-decimal, two-tier stacking, liners included as a separate OD group |
+| Dimension values in a break | ✅ Built 2026-07-22 — PDF dimension lines seat the value in a gap in the line with inward arrows; short/colliding spans fall back to label-above |
 | Line thickness control | ✅ Slider 50%–200% in Settings, DataStore-persisted, affects preview + PDF |
 | OAL include-thread toggle | ✅ PDF OAL span now extends to shaft ends when thread marked included |
 | Resolved component pipeline | ✅ Wired into schematic screen/PDF + runout & wear documents (2026-07-18) |
@@ -49,8 +54,9 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 
 **Remaining refactor work (lower priority — defer until ShaftScreen grows again):**
 
-- [ ] Extract preview panel into `ShaftPreviewPanel.kt`
-- [ ] Extract ViewModel event wiring into `ShaftScreenController.kt`
+- [x] Extract preview panel into `ShaftPreviewPanel.kt` — pure move 2026-07-24
+- [x] Extract ViewModel event wiring into `ShaftScreenController.kt` — pure move 2026-07-24
+- [ ] Controller owns all VM-side intents (composables stateless) — design work, not a pure move
 
 ---
 
@@ -59,18 +65,22 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 ### 2.1 Remaining Validation Items
 
 - [x] Taper on-blur field validation — rate derivation errors (missing both diameters with no rate, derived diameter < 0) shown inline on the field
-- [ ] Validate taper slope only when `lengthMm > 0` (currently deferred)
-- [ ] `freeToEndMm` badge: use `safeSpec` when `overallLengthMm == 0` (preview-mode edge case)
+- [x] Validate taper slope only when `lengthMm > 0` — confirmed already inert at `lengthMm <= 0` across `autoTaperRate`/`manualTaperRateWarning`/`manualTaperRateBlockingMessage`/`deriveTaperDiameters`; pinning tests added 2026-07-24, no production change needed
+- [x] `freeToEndMm` badge: use `safeSpec` when `overallLengthMm == 0` — new `freeToEndSignedMm(spec)` helper (`ui/util/FreeToEndBadgeMath.kt`) falls back to `lastOccupiedEndMm()`, wired into `FreeToEndBadge` 2026-07-24
 
 ### 2.2 Unimplemented Warning Rules (VALIDATION_RULES.md §3–4)
 
 These are defined in the contract but not yet computed. Lower priority — add when working in adjacent areas:
 
-- [ ] §3.2 Body: diameter discontinuity vs adjacent body
-- [ ] §3.3 Taper: large mismatch with adjacent body diameter
-- [ ] §3.5 Liner: `odMm < underlying shaft body diameter`
-- [ ] §4.3 Spec: tiny segments < 1 mm *(partially done — warning exists but only checks component-level, not spec-level)*
-- [ ] §4.3 Spec: zero-body coverage warning
+- [x] §3.2 Body: diameter discontinuity vs adjacent body — `bodyWarningMessages` (`ui/util/ComponentWarnings.kt`), shown on the body's carousel card
+- [x] §3.3 Taper: large mismatch with adjacent body diameter — `taperWarningMessages`, shown on the taper's carousel card
+- [x] §3.5 Liner: `odMm < underlying shaft body diameter` — `linerWarningMessages`, shown on the liner's carousel card
+- [x] §4.3 Spec: tiny segments < 1 mm — spec-level count now exists via `specWarningMessages(spec)` (component-level check was already done; this adds the spec-wide count)
+- [x] §4.3 Spec: zero-body coverage warning — also via `specWarningMessages(spec)`
+- [ ] Decide UI surface for spec-level warnings (`specWarningMessages`) — UX decision. Both the
+  tiny-segment count and zero-body-coverage message are computed and unit-tested but not wired
+  to any screen (badge, banner, or elsewhere); the five carousel-card-level warnings above are
+  already live.
 
 ---
 
@@ -78,11 +88,6 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 - [ ] **Liner shoulders** — aft/fwd shoulder length fields, stepped shoulder rendering in preview and PDF
 - [ ] **Fiberglass body segments** — model flag, dark fill / hatch pattern, label. Reference: `assets/20251022_172641.jpg`
-- [ ] **`freeToEndMm` safeSpec** — preview-mode OAL=0 behavior (`§3.1`)
-
-### Shelved (Not Required for Marine Propeller Shafts)
-
-- ~~Body keyway support~~ — shelved; no shop use case identified
 
 ---
 
@@ -92,7 +97,12 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 - [x] Standardize confirm/cancel patterns across all Add dialogs
 - [x] Standardize commit-on-blur across all fields
-- [ ] Remove leftover legacy length-editing utilities
+- [x] Remove leftover legacy length-editing utilities — 2026-07-24 dead-code sweep: deleted
+  snap-era test-only helpers (`snapForwardFromOrdered`/`snapFromOrigin`/`shiftAllBy`/
+  `findLeftNeighbor` in `ShaftSpecExtensions.kt` + their 4 test cases) and dead imports
+  (`threadWarningMessage` in `ShaftScreen.kt`, `snapForwardFromOrdered` in `ShaftViewModel.kt`);
+  live `snapForwardFrom` untouched. The `parseFractionOrDecimal`/`toMmOrNull` duplication remains
+  — tracked separately in `NumberField.md`.
 
 ### 4.2 Build Tooling (`§5.3`)
 
@@ -101,7 +111,10 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 ### 4.3 Post-Tiering Cleanup (LOW, deferred to v0.5.x)
 
-- [ ] Audit tiering-related helpers for dead or redundant code
+- [x] Audit tiering-related helpers for dead or redundant code — audited 2026-07-24; only the
+  unused `kind` default parameter on `DeterministicTierAssigner.assign` was deletable (every
+  caller already passed it explicitly; parameter is now required). The unreachable
+  `geom.SpanKind.OAL` defensive path was kept as contract documentation (OAL spans never tier).
 - [ ] Add optional debug overlay showing tier origin and measurement reference (preview only)
 
 ---
@@ -153,7 +166,6 @@ These are defined in the contract but not yet computed. Lower priority — add w
 - Stress analysis or deflection math
 - Non-linear scaling modes
 - Cloud sync or AI features
-- Body keyway (shelved)
 
 ---
 
