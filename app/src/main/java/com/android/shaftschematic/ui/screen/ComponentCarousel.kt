@@ -122,6 +122,7 @@ internal fun ComponentCarouselPager(
     showComponentDebugLabels: Boolean,
     selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
+    onSetAutoBodyDia: (Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
@@ -255,6 +256,7 @@ internal fun ComponentCarouselPager(
                     outerPaddingHorizontal = componentCardPadding,
                     showComponentDebugLabels = showComponentDebugLabels,
                     onAddBody = onAddBody,
+                    onSetAutoBodyDia = onSetAutoBodyDia,
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
@@ -362,6 +364,7 @@ internal fun ComponentPagerCard(
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
     onAddBody: (Float, Float, Float) -> Unit,
+    onSetAutoBodyDia: (Float) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
@@ -409,9 +412,11 @@ internal fun ComponentPagerCard(
         // ── Body ──────────────────────────────────────────────────────────────
         is ResolvedBody -> {
             if (component.source == ResolvedComponentSource.AUTO) {
-                // Auto-body fields are derived from the resolve layer and shown read-only
-                // (greyed). They are NOT editable — the ONLY way to change an auto-body is to
-                // make it explicit via the checkbox below, after which it edits like any body.
+                // Auto-body Start/Length are derived from the resolve layer and shown
+                // read-only (greyed); making the body explicit via the checkbox is the only
+                // way to control its position. The Ø field IS editable: it sets the single
+                // bare-shaft Ø (ShaftSpec.autoBodyDiaMm) shared by ALL auto spans — one
+                // piece of stock — without promoting or touching positioning.
                 val startMm  = component.startMmPhysical
                 val lengthMm = component.endMmPhysical - component.startMmPhysical
                 val diaMm    = component.diaMm
@@ -459,7 +464,9 @@ internal fun ComponentPagerCard(
                     }
                     CommitNum("Start (${abbr(unit)})", disp(startMm, unit), enabled = false) { }
                     CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit), enabled = false) { }
-                    CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit), enabled = false) { }
+                    CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit)) { s ->
+                        toMmOrNull(s, unit)?.let { onSetAutoBodyDia(it) }
+                    }
                 }
                 return
             }

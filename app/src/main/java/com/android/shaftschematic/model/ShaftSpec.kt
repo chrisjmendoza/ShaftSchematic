@@ -22,6 +22,11 @@ import kotlinx.serialization.Serializable
  *           from each other (e.g. body keyway opposite the taper keyway on an
  *           intermediate shaft). Pure drawing note — no geometric effect. Only
  *           meaningful when the shaft has ≥ 2 keyways. Defaults false for back-compat.
+ * @property autoBodyDiaMm User-set bare-shaft diameter applied to ALL auto-body spans (mm).
+ *           The shaft between explicit components is one piece of stock, so a single value
+ *           covers every auto span. 0 = unset → each span derives its Ø from neighbors as
+ *           before. Affects drawn diameter only — auto-span positioning stays derived.
+ *           Defaults 0 for back-compat.
  */
 @Serializable
 data class ShaftSpec(
@@ -32,6 +37,7 @@ data class ShaftSpec(
     val liners: List<Liner> = emptyList(),
     val couplerBoltSlots: List<CouplerBoltSlot> = emptyList(),
     val keyways180Apart: Boolean = false,
+    val autoBodyDiaMm: Float = 0f,
 )
 
 /** Number of keyways defined across all components (tapers + bodies). */

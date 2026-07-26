@@ -217,6 +217,7 @@ fun ShaftScreen(
                 keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                 keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
                 keywaySpooned: Boolean) -> Unit,
+    onSetAutoBodyDia: (Float) -> Unit,
     onAddTaper: (Float, Float, Float, Float, String, Float, Float, Float, Float, Boolean) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean, isAftEnd: Boolean) -> Unit,
     onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
@@ -731,6 +732,7 @@ fun ShaftScreen(
                     onAddBody = { s, l, d ->
                         onAddBody(s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false)
                     },
+                    onSetAutoBodyDia = onSetAutoBodyDia,
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
