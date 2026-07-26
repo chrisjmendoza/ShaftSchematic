@@ -85,6 +85,11 @@ fun composeShaftPdf(
     val pageW = page.info.pageWidth.toFloat()
     val pageH = page.info.pageHeight.toFloat()
 
+    // Blank-draft (write-in) mode: keep drawing + layout, blank every value. The footer band
+    // grows and its lines space out because handwriting is larger than printed text.
+    val blank = effectiveOptions.blankValues
+    val footerBlockPt = if (blank) FOOTER_BLOCK_BLANK_PT else FOOTER_BLOCK_PT
+
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
         "compose start: page=${page.info.pageWidth}x${page.info.pageHeight}pt filename=$filename unit=$unit oalMm=${"%.3f".format(spec.overallLengthMm)}" +
             " parts(bodies=${spec.bodies.size}, tapers=${spec.tapers.size}, threads=${spec.threads.size}, liners=${spec.liners.size})"
@@ -94,7 +99,7 @@ fun composeShaftPdf(
         PAGE_MARGIN_PT,
         PAGE_MARGIN_PT + TOP_TEXT_PAD_PT,
         pageW - PAGE_MARGIN_PT,
-        pageH - PAGE_MARGIN_PT - FOOTER_BLOCK_PT
+        pageH - PAGE_MARGIN_PT - footerBlockPt
     )
 
     // PDF-only guard: a shaft with exactly one Body and no other detail components.
@@ -179,7 +184,7 @@ fun composeShaftPdf(
     val minCy = geomRect.top + halfHeightPx
     val maxCy = min(
         geomRect.bottom - halfHeightPx,
-        pageH - PAGE_MARGIN_PT - FOOTER_BLOCK_PT - INFO_GAP_PT - halfHeightPx
+        pageH - PAGE_MARGIN_PT - footerBlockPt - INFO_GAP_PT - halfHeightPx
     )
     val desiredCy = pageH * 0.5f + SHAFT_DOWN_PT
     val cy = if (minCy <= maxCy) desiredCy.coerceIn(minCy, maxCy) else (geomRect.top + geomRect.bottom) * 0.5f
@@ -303,7 +308,9 @@ fun composeShaftPdf(
             textPaint = dimText,
             objectTopY = yTopOfShaft,
             contentTopPx = geomRect.top,
-            objectClearance = 6f
+            objectClearance = 6f,
+            blankLabels = blank,
+            blankLabelWidthPx = BLANK_DIM_GAP_PT
         )
 
         assignments.forEach { rs ->
@@ -332,7 +339,8 @@ fun composeShaftPdf(
                 shaftTopY = yTopOfShaft,
                 shaftBottomY = cy + (maxDiaMm * 0.5f) * ptPerMm,
                 linePaint = dim,
-                textPaint = leaderText
+                textPaint = leaderText,
+                blankValues = blank
             )
             leader.draw(c, calls, unit)
         }
@@ -372,10 +380,10 @@ fun composeShaftPdf(
         )
 
         val infoTop = cy + halfHeightPx + INFO_GAP_PT
-        val infoBottom = min(infoTop + FOOTER_BLOCK_PT, pageH - PAGE_MARGIN_PT)
+        val infoBottom = min(infoTop + footerBlockPt, pageH - PAGE_MARGIN_PT)
         val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
 
-        drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg)
+        drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg, blankValues = blank)
     }
 }
 
@@ -407,6 +415,10 @@ private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
 private const val COMPONENT_LABEL_OFFSET_PT = 32f
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
 private const val FOOTER_BLOCK_PT = 96f
+// Blank drafts reserve a taller footer band: line spacing opens up for handwriting.
+private const val FOOTER_BLOCK_BLANK_PT = 150f
+private const val FOOTER_LINE_FACTOR = 1.35f
+private const val FOOTER_LINE_FACTOR_BLANK = 1.8f
 
 private fun drawComponentLabelsPdf(
     canvas: Canvas,
@@ -1048,12 +1060,23 @@ private fun drawFooter(
     filename: String,
     appVersion: String,
     text: Paint,
-    cfg: FooterConfig
+    cfg: FooterConfig,
+    blankValues: Boolean = false
 ) {
     val top = rect.top + 6f
-    val lh = text.textSize * 1.35f
+    val lh = text.textSize * (if (blankValues) FOOTER_LINE_FACTOR_BLANK else FOOTER_LINE_FACTOR)
 
-    val cols = buildFooterEndColumns(spec, unit, cfg)
+    val cols = buildFooterEndColumns(spec, unit, cfg, blankValues)
+
+    // Blank drafts: any line that ends with ":" (or a bare "Ø") is a label whose value gets
+    // hand-written — draw a writing rule after it instead of a printed value.
+    fun drawFooterLine(line: String, x: Float, y: Float, maxW: Float) {
+        if (blankValues && (line.endsWith(":") || line.endsWith("Ø"))) {
+            drawLabelWithRule(c, line, x, y, text, ruleWidth = BLANK_RULE_PT, maxRight = x + maxW)
+        } else {
+            c.drawText(ellipsizeToWidth(line, text, maxW), x, y, text)
+        }
+    }
 
     val leftX  = rect.left
     val midX   = rect.left + rect.width() * 0.40f
@@ -1070,7 +1093,7 @@ private fun drawFooter(
     run {
         var y = top
         cols.aftLines.forEach { line ->
-            c.drawText(ellipsizeToWidth(line, text, leftMaxW), leftX, y, text)
+            drawFooterLine(line, leftX, y, leftMaxW)
             y += lh
         }
     }
@@ -1078,29 +1101,44 @@ private fun drawFooter(
     // Middle (Work order) — left-aligned at 1/3 mark
     run {
         var y = top
-        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        c.drawText(ellipsizeToWidth("Customer: ${project.customer}", text, midMaxW), midX, y, text); y += lh
-        c.drawText(ellipsizeToWidth("Vessel: ${project.vessel}", text, midMaxW),     midX, y, text); y += lh
-        c.drawText(ellipsizeToWidth("Job #: ${project.jobNumber}", text, midMaxW),   midX, y, text); y += lh
-        c.drawText("Date: $date",                   midX, y, text); y += lh
-
-        if (cfg.bodyDiasMm.isNotEmpty()) {
-            val label = cfg.bodyDiasMm.joinToString(", ") { "Ø ${formatDiaWithUnit(it.toDouble(), unit)}" }
-            c.drawText(ellipsizeToWidth("Body: $label", text, midMaxW), midX, y, text); y += lh
-        }
-
-        // Keyway clocking note — only meaningful with ≥ 2 keyways on the shaft.
-        if (spec.keyways180Apart && spec.keywayCount() >= 2) {
-            c.drawText(ellipsizeToWidth("Keyways 180° apart", text, midMaxW), midX, y, text); y += lh
-        }
-
-        project.side.printableLabelOrNull()?.let { pos ->
-            y += lh * 0.35f
-            val posPaint = Paint(text).apply {
-                textSize = text.textSize * 1.20f
-                isFakeBoldText = true
+        if (blankValues) {
+            // Job info is hand-written on a blank draft — a fresh date, a different vessel.
+            drawFooterLine("Customer:", midX, y, midMaxW); y += lh
+            drawFooterLine("Vessel:",   midX, y, midMaxW); y += lh
+            drawFooterLine("Job #:",    midX, y, midMaxW); y += lh
+            drawFooterLine("Date:",     midX, y, midMaxW); y += lh
+            if (cfg.bodyDiasMm.isNotEmpty()) {
+                drawFooterLine("Body: Ø", midX, y, midMaxW); y += lh
             }
-            c.drawText(pos, midX, y, posPaint)
+            if (spec.keyways180Apart && spec.keywayCount() >= 2) {
+                c.drawText(ellipsizeToWidth("Keyways 180° apart", text, midMaxW), midX, y, text); y += lh
+            }
+            drawFooterLine("Side:", midX, y, midMaxW)
+        } else {
+            val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            c.drawText(ellipsizeToWidth("Customer: ${project.customer}", text, midMaxW), midX, y, text); y += lh
+            c.drawText(ellipsizeToWidth("Vessel: ${project.vessel}", text, midMaxW),     midX, y, text); y += lh
+            c.drawText(ellipsizeToWidth("Job #: ${project.jobNumber}", text, midMaxW),   midX, y, text); y += lh
+            c.drawText("Date: $date",                   midX, y, text); y += lh
+
+            if (cfg.bodyDiasMm.isNotEmpty()) {
+                val label = cfg.bodyDiasMm.joinToString(", ") { "Ø ${formatDiaWithUnit(it.toDouble(), unit)}" }
+                c.drawText(ellipsizeToWidth("Body: $label", text, midMaxW), midX, y, text); y += lh
+            }
+
+            // Keyway clocking note — only meaningful with ≥ 2 keyways on the shaft.
+            if (spec.keyways180Apart && spec.keywayCount() >= 2) {
+                c.drawText(ellipsizeToWidth("Keyways 180° apart", text, midMaxW), midX, y, text); y += lh
+            }
+
+            project.side.printableLabelOrNull()?.let { pos ->
+                y += lh * 0.35f
+                val posPaint = Paint(text).apply {
+                    textSize = text.textSize * 1.20f
+                    isFakeBoldText = true
+                }
+                c.drawText(pos, midX, y, posPaint)
+            }
         }
     }
 
@@ -1108,7 +1146,7 @@ private fun drawFooter(
     run {
         var y = top
         cols.fwdLines.forEach { line ->
-            c.drawText(ellipsizeToWidth(line, text, rightMaxW), rightX, y, text)
+            drawFooterLine(line, rightX, y, rightMaxW)
             y += lh
         }
     }
@@ -1131,59 +1169,62 @@ internal const val SPOONED_KW_NOTE = "KW length to base of spoon (mill end)"
  * Exposed for JVM unit tests so we can validate end-feature detection without
  * depending on Android Canvas/PdfDocument runtime.
  */
-internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: FooterConfig): FooterColumns {
+internal fun buildFooterEndColumns(
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    cfg: FooterConfig,
+    blankValues: Boolean = false
+): FooterColumns {
     val ends = detectEndFeatures(spec)
     val taperSides = selectFooterTapers(spec)
+
+    // Blank drafts keep every LABEL (so the writer knows what goes where) and drop the value;
+    // drawFooter turns the trailing ":" into a writing rule.
+    fun line(label: String, value: () -> String): String =
+        if (blankValues) label else "$label ${value()}"
+
+    fun taperLines(tp: Taper): List<String> = buildList {
+        val ls = letSet(tp)
+        add(line("Rate:") { tp.taperRateText.trim().ifEmpty { rate1toN(tp) } })
+        add(line("L.E.T. (${ls.letFace}):") { formatDiaWithUnit(ls.let.toDouble(), unit) })
+        add(line("S.E.T. (${ls.setFace}):") { formatDiaWithUnit(ls.set.toDouble(), unit) })
+        add(line("Length:") { formatLenWithUnit(tp.lengthMm.toDouble(), unit) })
+        if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
+            val spoon = if (tp.keywaySpooned) " (spooned)" else ""
+            add(line("KW:") {
+                if (tp.keywayLengthMm > 0f) {
+                    "${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayLengthMm.toDouble(), unit)}$spoon"
+                } else {
+                    "${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}$spoon"
+                }
+            })
+            if (tp.keywaySpooned) add(SPOONED_KW_NOTE)
+        }
+    }
 
     val aft = mutableListOf<String>()
     if (cfg.showAftTaper) {
         taperSides.aft?.let { tp ->
-            val ls = letSet(tp)
             aft += "AFT Taper"
-            aft += "Rate: ${tp.taperRateText.trim().ifEmpty { rate1toN(tp) }}"
-            aft += "L.E.T. (${ls.letFace}): ${formatDiaWithUnit(ls.let.toDouble(), unit)}"
-            aft += "S.E.T. (${ls.setFace}): ${formatDiaWithUnit(ls.set.toDouble(), unit)}"
-            aft += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
-            if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
-                val spoon = if (tp.keywaySpooned) " (spooned)" else ""
-                aft += if (tp.keywayLengthMm > 0f) {
-                    "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayLengthMm.toDouble(), unit)}$spoon"
-                } else {
-                    "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}$spoon"
-                }
-                if (tp.keywaySpooned) aft += SPOONED_KW_NOTE
-            }
+            aft += taperLines(tp)
         }
     }
     if (cfg.showAftThread && ends.aftThread) {
         getAftEndThread(spec)?.let { th ->
-            aft += "Thread: ${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtPitch(th.pitchMm, unit)} × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}"
+            aft += line("Thread:") { "${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtPitch(th.pitchMm, unit)} × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}" }
         }
     }
 
     val fwd = mutableListOf<String>()
     if (cfg.showFwdTaper) {
         taperSides.fwd?.let { tp ->
-            val ls = letSet(tp)
             fwd += "FWD Taper"
-            fwd += "Rate: ${tp.taperRateText.trim().ifEmpty { rate1toN(tp) }}"
-            fwd += "L.E.T. (${ls.letFace}): ${formatDiaWithUnit(ls.let.toDouble(), unit)}"
-            fwd += "S.E.T. (${ls.setFace}): ${formatDiaWithUnit(ls.set.toDouble(), unit)}"
-            fwd += "Length: ${formatLenWithUnit(tp.lengthMm.toDouble(), unit)}"
-            if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
-                val spoon = if (tp.keywaySpooned) " (spooned)" else ""
-                fwd += if (tp.keywayLengthMm > 0f) {
-                    "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayLengthMm.toDouble(), unit)}$spoon"
-                } else {
-                    "KW: ${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}$spoon"
-                }
-                if (tp.keywaySpooned) fwd += SPOONED_KW_NOTE
-            }
+            fwd += taperLines(tp)
         }
     }
     if (cfg.showFwdThread && ends.fwdThread) {
         getFwdEndThread(spec)?.let { th ->
-            fwd += "Thread: ${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtPitch(th.pitchMm, unit)} × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}"
+            fwd += line("Thread:") { "${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtPitch(th.pitchMm, unit)} × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}" }
         }
     }
 
@@ -1191,9 +1232,11 @@ internal fun buildFooterEndColumns(spec: ShaftSpec, unit: UnitSystem, cfg: Foote
     // matching the keyway's physical half of the shaft.
     fun bodyKwLine(b: Body): String {
         val spoon = if (b.keywaySpooned) " (spooned)" else ""
-        return "Body KW: ${formatLenWithUnit(b.keywayWidthMm.toDouble(), unit)} × " +
-            "${formatLenWithUnit(b.keywayDepthMm.toDouble(), unit)} × " +
-            "${formatLenWithUnit(b.keywayLengthMm.toDouble(), unit)}$spoon"
+        return line("Body KW:") {
+            "${formatLenWithUnit(b.keywayWidthMm.toDouble(), unit)} × " +
+                "${formatLenWithUnit(b.keywayDepthMm.toDouble(), unit)} × " +
+                "${formatLenWithUnit(b.keywayLengthMm.toDouble(), unit)}$spoon"
+        }
     }
     spec.bodies.filter { it.hasKeyway }.forEach { b ->
         val span = b.keywayAbsSpanMm() ?: return@forEach

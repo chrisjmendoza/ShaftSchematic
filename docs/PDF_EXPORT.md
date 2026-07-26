@@ -181,6 +181,47 @@ are drawn seated **inside a break in the line** — the hand-drafting convention
 
 ---
 
+# 5.5 Blank Drafts (write-in mode) & Direct Print
+
+**Blank drafts** (`PdfExportOptions.blankValues`, plus a `blankValues` parameter on
+`composeRunoutPdf`/`composeWearPdf`) print the full drawing and form layout with every
+VALUE blanked so the sheet can be filled in by hand in the field — e.g. reusing a
+similar shaft's layout for a new inspection, or stocking blank forms where phones
+aren't allowed.
+
+Rules (shared helpers in `pdf/BlankFormText.kt`):
+
+- **Dimension lines** still cut their break, at a fixed writable width
+  (`BLANK_DIM_GAP_PT`), but draw no value text — the gap is the write-in spot. Same
+  eligibility/fallback logic as §5.4; label *bounds* are still reserved so gaps on the
+  same rail never overlap. `labelBottom` (SET names) are identifiers and still print.
+- **Ø leader callouts** print `Ø` + a writing rule instead of the value.
+- **Schematic footer** keeps every label (`Rate:`, `L.E.T. (…):`, `KW:`, `Customer:` …)
+  followed by a writing rule (`BLANK_RULE_PT`); the bold STBD/PORT stamp becomes a
+  `Side:` rule. Lines space out (`FOOTER_LINE_FACTOR_BLANK` = 1.8 vs 1.35) and the
+  footer band grows (`FOOTER_BLOCK_BLANK_PT` = 150 pt vs 96 pt) because handwriting is
+  larger than print. `buildFooterEndColumns(blankValues = true)` returns label-only
+  lines — same count and order as standard, no digits (JVM-tested in
+  `BlankDraftFooterTest`).
+- **Runout sheet**: header labels get rules, the OAL prints `OAL:` + rule, recorded TIR
+  values / high-spot ticks are not drawn (bubbles remain — they ARE the write-in
+  circles), and the TIR-direction line always prints as a fill-in blank.
+- **Wear document**: header + OAL blank the same way, and recorded wear (bands, pit X's,
+  detail strips) is omitted — the print is a fresh inspection form. Recorded data in the
+  app is never touched; blanking is render-only.
+- The blank toggle is **session-only, never persisted** (schematic:
+  `ShaftViewModel.pdfBlankDraft`, runout/wear: local screen state) — a forgotten sticky
+  toggle would silently blank every future export. Blank exports get a `_BlankDraft`
+  filename suffix.
+
+**Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
+`PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print
+framework — Print buttons live on the PDF preview top bar and the runout/wear screens.
+A print and an export of the same document are composed by the same call and are
+therefore identical.
+
+---
+
 # 6. PDF Rendering Invariants
 
 1. Export is **single page** only.

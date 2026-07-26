@@ -15,6 +15,10 @@ import kotlin.math.min
  * is drawn as two stubs [xa..gapLeft] and [gapRight..xb] with the value vertically centered on
  * the line in the gap. Short spans (or a label colliding with one already on the rail) fall back
  * to a continuous line with the label floating above it.
+ *
+ * Blank-draft mode ([blankLabels]): the break is still cut — at a fixed writable width — but no
+ * value text is drawn, leaving the gap as a hand-write-in spot. Bottom labels (SET names) are
+ * identifiers, not values, and still print.
  */
 class PdfDimensionRenderer(
     private val pageX: (Double) -> Float,   // mm → page X
@@ -32,7 +36,9 @@ class PdfDimensionRenderer(
     private val arrowSize: Float = 5f,      // arrowhead half-size
     private val textPad: Float = 6f,        // left/right text padding inside a span
     private val minGap: Float = 8f,         // reserved for future use; do not shift horizontally
-    private val lineAdvance: Float = 10f    // reserved for future use; do not shift horizontally
+    private val lineAdvance: Float = 10f,   // reserved for future use; do not shift horizontally
+    private val blankLabels: Boolean = false, // blank-draft: cut the break, draw no value text
+    private val blankLabelWidthPx: Float = 46f
 ) {
     private val labelBoundsByRail = mutableMapOf<Int, MutableList<RectF>>()
 
@@ -65,7 +71,7 @@ class PdfDimensionRenderer(
 
         // ---- label metrics + horizontal center (computed before the line so we can break it) ----
         val label = span.labelTop
-        val w = textPaint.measureText(label)
+        val w = if (blankLabels) blankLabelWidthPx else textPaint.measureText(label)
         val mid = (xa + xb) * 0.5f
 
         // keep label center inside [xa+pad+w/2, xb-pad-w/2]
@@ -137,6 +143,7 @@ class PdfDimensionRenderer(
     }
 
     private fun drawLabelAtBounds(canvas: Canvas, label: String, bounds: RectF, fm: Paint.FontMetrics) {
+        if (blankLabels) return  // the gap itself is the write-in spot; bounds are still reserved
         val baseline = bounds.top - fm.ascent
         val prevAlign = textPaint.textAlign
         textPaint.textAlign = Paint.Align.CENTER

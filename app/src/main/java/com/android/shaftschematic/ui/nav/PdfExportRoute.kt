@@ -59,6 +59,7 @@ fun PdfExportRoute(
 
     val openAfterExport by vm.openPdfAfterExport.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
+    val pdfBlankDraft by vm.pdfBlankDraft.collectAsState()
 
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
@@ -84,7 +85,8 @@ fun PdfExportRoute(
                                 jobNumber = jobNumber,
                                 customer = customer,
                                 vessel = vessel,
-                                shaftPosition = shaftPosition
+                                shaftPosition = shaftPosition,
+                                blankDraft = pdfBlankDraft
                             )
                         val project = ProjectInfo(
                             customer = customer,
@@ -106,7 +108,7 @@ fun PdfExportRoute(
                                 appVersion = appVersionFromContext(ctx),
                                 filename = filename,
                                 pdfPrefs = vm.currentPdfPrefs,
-                                options = PdfExportOptions(mode = pdfExportMode),
+                                options = PdfExportOptions(mode = pdfExportMode, blankValues = pdfBlankDraft),
                                 resolvedComponents = vm.resolvedComponents.value,
                                 lineThicknessScale = vm.lineThicknessScale.value
                             )
@@ -165,7 +167,8 @@ fun PdfExportRoute(
                         jobNumber = jobNumber,
                         customer = customer,
                         vessel = vessel,
-                        shaftPosition = shaftPosition
+                        shaftPosition = shaftPosition,
+                        blankDraft = pdfBlankDraft
                     )
                 )
             }
@@ -226,7 +229,8 @@ private fun defaultFilename(
     jobNumber: String,
     customer: String,
     vessel: String,
-    shaftPosition: ShaftPosition
+    shaftPosition: ShaftPosition,
+    blankDraft: Boolean = false
 ): String {
     val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
     val suggested = DocumentNaming.suggestedBaseName(
@@ -235,7 +239,8 @@ private fun defaultFilename(
         vessel = vessel,
         suffix = shaftPosition.printableLabelOrNull()
     )
-    return (suggested ?: "Shaft_$stamp") + ".pdf"
+    val blankSuffix = if (blankDraft) "_BlankDraft" else ""
+    return (suggested ?: "Shaft_$stamp") + blankSuffix + ".pdf"
 }
 
 private fun appVersionFromContext(context: Context): String {

@@ -8,6 +8,31 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-26
 
+### feat(pdf): blank drafts (write-in mode) + direct print for all three documents
+
+- **Blank draft (write-in) mode** for the schematic, runout sheet, and wear document:
+  the full drawing, dimension lines, and form layout print unchanged, but every VALUE
+  (dimension numbers, Ø callouts, footer specs, job info, date, OAL, TIR readings,
+  recorded wear) is replaced by a writable blank — reuse a similar shaft's layout on a
+  new job, or stock blank forms for phone-free inspections. On-device request.
+  - Dimension lines still cut their in-line break (fixed `BLANK_DIM_GAP_PT` width) with
+    no text — the gap is the write-in spot. Footer/header labels get writing rules
+    (`pdf/BlankFormText.kt`); the STBD/PORT stamp becomes a `Side:` rule.
+  - Schematic footer lines space out for handwriting (`FOOTER_LINE_FACTOR_BLANK` 1.8 vs
+    1.35) and the footer band grows (150 pt vs 96 pt).
+  - Runout keeps its bubbles (they are the write-in circles) but drops recorded TIR
+    values/high spots; the TIR-direction line always prints as a fill-in blank. Wear
+    prints as a fresh form (no recorded bands/pits/strips). Render-only — recorded data
+    is never modified.
+  - Toggles: PDF preview options sheet (schematic, session-only VM state — deliberately
+    not persisted) and on the runout/wear screens. Blank exports get a `_BlankDraft`
+    filename suffix.
+- **Direct print** (`util/PdfPrint.kt`): Print buttons on the PDF preview top bar and
+  the runout/wear screens hand the exact same composer call to the Android print
+  framework (US Letter landscape) — no export-to-PDF-then-open-then-print detour.
+- Tests: `BlankDraftFooterTest` (labels kept in order, zero digits, body-KW label,
+  standard output unchanged). Docs: `docs/PDF_EXPORT.md` §5.5.
+
 ### test: Export-PDF gate extracted to pure logic; stale androidTest removed
 
 - `EditorTopBarExportPdfTest` (androidTest) had rotted — its `ShaftScreen` call site was

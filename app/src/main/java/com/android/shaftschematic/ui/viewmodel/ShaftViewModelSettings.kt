@@ -87,6 +87,11 @@ fun ShaftViewModel.setPdfExportMode(mode: PdfExportMode, persist: Boolean = true
     }
 }
 
+/** Session-only (never persisted) — see the [ShaftViewModel] property KDoc. */
+fun ShaftViewModel.setPdfBlankDraft(enabled: Boolean) {
+    _pdfBlankDraft.value = enabled
+}
+
 // ── Preview / rendering preferences ──────────────────────────────────────────
 
 fun ShaftViewModel.setPreviewBlackWhiteOnly(enabled: Boolean, persist: Boolean = true) {

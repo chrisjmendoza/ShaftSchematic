@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
@@ -71,7 +72,9 @@ import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
+import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.printShaftPdfPage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -114,6 +117,7 @@ fun PdfPreviewScreen(
     val spec by vm.spec.collectAsState()
     val unit by vm.unit.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
+    val pdfBlankDraft by vm.pdfBlankDraft.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
@@ -129,7 +133,9 @@ fun PdfPreviewScreen(
     val project = remember(customer, vessel, shaftPosition, jobNumber) {
         ProjectInfo(customer = customer, vessel = vessel, side = shaftPosition, jobNumber = jobNumber)
     }
-    val options = remember(pdfExportMode) { PdfExportOptions(mode = pdfExportMode) }
+    val options = remember(pdfExportMode, pdfBlankDraft) {
+        PdfExportOptions(mode = pdfExportMode, blankValues = pdfBlankDraft)
+    }
 
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -225,6 +231,43 @@ fun PdfPreviewScreen(
                             contentDescription = "Reset zoom"
                         )
                     }
+                    IconButton(onClick = {
+                        val baseName = DocumentNaming.suggestedBaseName(
+                            jobNumber = jobNumber,
+                            customer = customer,
+                            vessel = vessel,
+                            suffix = shaftPosition.printableLabelOrNull(),
+                        ) ?: "Shaft Schematic"
+                        val jobName = if (pdfBlankDraft) "$baseName (blank draft)" else baseName
+                        // Snapshot state on the UI thread; onWrite runs on a binder thread.
+                        val specSnapshot = spec
+                        val unitSnapshot = unit
+                        val projectSnapshot = project
+                        val optionsSnapshot = options
+                        val resolvedSnapshot = resolvedComponents.takeIf { it.isNotEmpty() }
+                        val prefsSnapshot = vm.currentPdfPrefs
+                        val thicknessSnapshot = lineThicknessScale
+                        val versionSnapshot = appVersionName(ctx)
+                        printShaftPdfPage(ctx, jobName) { page ->
+                            composeShaftPdf(
+                                page = page,
+                                spec = specSnapshot,
+                                unit = unitSnapshot,
+                                project = projectSnapshot,
+                                appVersion = versionSnapshot,
+                                filename = "$jobName.pdf",
+                                pdfPrefs = prefsSnapshot,
+                                options = optionsSnapshot,
+                                resolvedComponents = resolvedSnapshot,
+                                lineThicknessScale = thicknessSnapshot,
+                            )
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Filled.Print,
+                            contentDescription = "Print"
+                        )
+                    }
                     IconButton(onClick = onExport) {
                         Icon(
                             imageVector = Icons.Outlined.PictureAsPdf,
@@ -307,6 +350,7 @@ fun PdfPreviewScreen(
                 pdfShadedBodies = pdfShadedBodies,
                 pdfShadedTapers = pdfShadedTapers,
                 pdfShadedLiners = pdfShadedLiners,
+                pdfBlankDraft = pdfBlankDraft,
             )
         }
     }
@@ -402,6 +446,7 @@ private fun PdfOptionsSheet(
     pdfShadedBodies: Boolean,
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
+    pdfBlankDraft: Boolean,
 ) {
     Column(
         Modifier
@@ -409,6 +454,26 @@ private fun PdfOptionsSheet(
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
         Text("PDF Options", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(12.dp))
+
+        // ── Blank draft (write-in) ───────────────────────────────────────────
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(
+                checked = pdfBlankDraft,
+                onCheckedChange = { vm.setPdfBlankDraft(it) },
+            )
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Prints the drawing with all values blanked for handwriting. Not saved — resets each session.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
         Spacer(Modifier.height(12.dp))
 
         // ── Labels ───────────────────────────────────────────────────────────

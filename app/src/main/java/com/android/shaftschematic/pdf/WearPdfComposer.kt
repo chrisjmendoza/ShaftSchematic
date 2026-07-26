@@ -86,11 +86,18 @@ fun composeWearPdf(
     resolvedComponents: List<ResolvedComponent>? = null,
     wearRecord: WearRecord = WearRecord(),
     lineThicknessScale: Float = 1.0f,
+    /**
+     * Blank-draft (write-in) mode: header job info and the OAL value are blanked, and any
+     * recorded wear (bands, pits, detail strips) is omitted — the sheet prints as a fresh
+     * inspection form for hand annotation.
+     */
+    blankValues: Boolean = false,
 ) {
     val c = page.canvas
     c.drawColor(Color.WHITE)
 
     val docSpec = spec.withResolvedBodies(resolvedComponents)
+    val effectiveRecord = if (blankValues) WearRecord() else wearRecord
 
     val pageW = page.info.pageWidth.toFloat()
     val pageH = page.info.pageHeight.toFloat()
@@ -157,7 +164,7 @@ fun composeWearPdf(
     // Liners with ≥1 wear spot, aft→fwd. GRID mode (2+ wear liners) shows up to 4 in a 2-column
     // grid; the single-column path (0-1 liners) uses the smaller cap. The shaft profile is ALWAYS
     // drawn on top now (2026-07-21) — the old strips-only mode that dropped it is gone.
-    val wearGroups = collectWearLinerGroups(docSpec.liners, wearRecord)
+    val wearGroups = collectWearLinerGroups(docSpec.liners, effectiveRecord)
     val wearMode   = determineWearPdfMode(wearGroups.size)
     val maxPerPage = if (wearMode == WearPdfMode.GRID) WEAR_STRIP_GRID_MAX_PER_PAGE else WEAR_STRIP_MAX_PER_PAGE
     val stripSelection = selectWearStripsForPage(wearGroups, maxPerPage)
@@ -165,7 +172,7 @@ fun composeWearPdf(
     val overflowNoteH  = if (stripSelection.overflow.isNotEmpty()) WEAR_OVERFLOW_NOTE_HEIGHT_PT else 0f
 
     // ── Header (always drawn) ───────────────────────────────────────────────
-    drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, unit, spec.overallLengthMm)
+    drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, unit, spec.overallLengthMm, blankValues)
 
     // The profile's minimum height also protects the actual drawn shaft radius — ptPerMm is a
     // purely horizontal (SET-to-SET) scale, so a wide/short shaft's true diameter could otherwise
@@ -207,7 +214,7 @@ fun composeWearPdf(
 
     // Label rule: the printed OAL is always the user's typed OAL (same as the main schematic); the
     // arrows below bracket the drawn SET-to-SET span.
-    drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox, unit, spec.overallLengthMm)
+    drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox, unit, spec.overallLengthMm, blankValues)
     drawWearShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
 
@@ -215,7 +222,7 @@ fun composeWearPdf(
     // clamp to the liner span for rendering only; the stored data is never touched.
     drawWearBandsOnProfile(c, wearGroups, shaftCy, ::xAt, ::rPx, outline)
     if (resolvedComponents != null) {
-        drawWearPitsOnProfile(c, wearRecord.pits, resolvedComponents, shaftCy, ::xAt, ::rPx, pitPaint)
+        drawWearPitsOnProfile(c, effectiveRecord.pits, resolvedComponents, shaftCy, ::xAt, ::rPx, pitPaint)
     }
 
     // Shaft-direction reference so anyone reading the sheet knows the layout: AFT is drawn at the
@@ -232,7 +239,7 @@ fun composeWearPdf(
         drawWearDetailStrip(
             c, docSpec, group, cell.top, cell.bottom, cell.left, cell.right,
             unit, setPositions, text, outline, dim,
-            linerPits = wearRecord.pits.filter { it.componentId == group.liner.id },
+            linerPits = effectiveRecord.pits.filter { it.componentId == group.liner.id },
         )
     }
     if (stripSelection.overflow.isNotEmpty()) {
@@ -256,31 +263,47 @@ private fun drawWearHeader(
     project: ProjectInfo,
     unit: UnitSystem,
     oalMm: Float,
+    blankValues: Boolean = false,
 ) {
     val ts = text.textSize
-    val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-    val oalDisplay = if (unit == UnitSystem.INCHES) {
-        "${"%.4f".format(oalMm / 25.4f)}\""
-    } else {
-        "${"%.2f".format(oalMm)} mm"
-    }
-    val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
-
-    val line1 = buildString {
-        if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
-        if (project.vessel.isNotBlank())   append("Vessel: ${project.vessel}   ")
-        if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
-        append("Date: $date$side")
-    }
-    val line2 = "OAL: $oalDisplay  —  WEAR / INSPECTION RECORD"
 
     fun centeredX(str: String): Float =
         ((left + right - text.measureText(str)) * 0.5f).coerceAtLeast(left)
 
-    val line1Fit = ellipsizeToWidth(line1, text, right - left)
-    val line2Fit = ellipsizeToWidth(line2, text, right - left)
-    c.drawText(line1Fit, centeredX(line1Fit), top + ts, text)
-    c.drawText(line2Fit, centeredX(line2Fit), top + ts + ts * 1.4f, text)
+    if (blankValues) {
+        // Blank draft: all job-info labels print with writing rules; the OAL is written in.
+        var x = left
+        listOf("Customer:", "Vessel:", "Job #:", "Date:", "Side:").forEach { label ->
+            x = drawLabelWithRule(c, label, x, top + ts, text, maxRight = right)
+        }
+        val line2 = "OAL:"
+        val line2W = text.measureText(line2) + 4f + BLANK_RULE_PT +
+            text.measureText("  —  WEAR / INSPECTION RECORD")
+        val startX = ((left + right - line2W) * 0.5f).coerceAtLeast(left)
+        val afterRule = drawLabelWithRule(c, line2, startX, top + ts + ts * 1.4f, text, maxRight = right)
+        c.drawText("—  WEAR / INSPECTION RECORD", afterRule - 8f, top + ts + ts * 1.4f, text)
+    } else {
+        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val oalDisplay = if (unit == UnitSystem.INCHES) {
+            "${"%.4f".format(oalMm / 25.4f)}\""
+        } else {
+            "${"%.2f".format(oalMm)} mm"
+        }
+        val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
+
+        val line1 = buildString {
+            if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
+            if (project.vessel.isNotBlank())   append("Vessel: ${project.vessel}   ")
+            if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
+            append("Date: $date$side")
+        }
+        val line2 = "OAL: $oalDisplay  —  WEAR / INSPECTION RECORD"
+
+        val line1Fit = ellipsizeToWidth(line1, text, right - left)
+        val line2Fit = ellipsizeToWidth(line2, text, right - left)
+        c.drawText(line1Fit, centeredX(line1Fit), top + ts, text)
+        c.drawText(line2Fit, centeredX(line2Fit), top + ts + ts * 1.4f, text)
+    }
 
     val ruleY = top + WEAR_HEADER_HEIGHT_PT
     c.drawLine(left, ruleY, right, ruleY, Paint(text).apply {
@@ -297,6 +320,7 @@ private fun drawWearOalLine(
     x0: Float, x1: Float,
     oalLineY: Float, shaftTopY: Float,
     unit: UnitSystem, oalMm: Float,
+    blankValues: Boolean = false,
 ) {
     val arrowLen    = 8f
     val witnessGap  = 3f   // gap between shaft edge and witness line start
@@ -313,11 +337,17 @@ private fun drawWearOalLine(
     c.drawLine(x1, oalLineY, x1 - arrowLen, oalLineY - arrowLen * 0.4f, dim)
     c.drawLine(x1, oalLineY, x1 - arrowLen, oalLineY + arrowLen * 0.4f, dim)
 
-    // Label centred above the dimension line
-    val label = if (unit == UnitSystem.INCHES) "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
-    else "OAL: ${"%.2f".format(oalMm)} mm"
-    val lw = text.measureText(label)
-    c.drawText(label, (x0 + x1) * 0.5f - lw * 0.5f, oalLineY - 4f, text)
+    // Label centred above the dimension line (blank draft: "OAL:" + writing rule)
+    if (blankValues) {
+        val label = "OAL:"
+        val totalW = text.measureText(label) + 4f + BLANK_RULE_PT
+        drawLabelWithRule(c, label, (x0 + x1) * 0.5f - totalW * 0.5f, oalLineY - 4f, text)
+    } else {
+        val label = if (unit == UnitSystem.INCHES) "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
+        else "OAL: ${"%.2f".format(oalMm)} mm"
+        val lw = text.measureText(label)
+        c.drawText(label, (x0 + x1) * 0.5f - lw * 0.5f, oalLineY - 4f, text)
+    }
 }
 
 /**
