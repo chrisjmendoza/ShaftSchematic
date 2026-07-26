@@ -82,24 +82,6 @@ class SegmentTest {
     }
 
     @Test
-    fun `Threads hasPitch returns true when pitchMm is positive`() {
-        val thread = Threads(pitchMm = 2.5f)
-        assertTrue(thread.hasPitch)
-    }
-
-    @Test
-    fun `Threads hasPitch returns true when tpi is positive`() {
-        val thread = Threads(pitchMm = 0f, tpi = 10f)
-        assertTrue(thread.hasPitch)
-    }
-
-    @Test
-    fun `Threads hasPitch returns false when both are zero or null`() {
-        val thread = Threads(pitchMm = 0f, tpi = null)
-        assertFalse(thread.hasPitch)
-    }
-
-    @Test
     fun `Liner isValid returns true for valid liner`() {
         val liner = Liner(startFromAftMm = 0f, lengthMm = 100f, odMm = 60f)
         assertTrue(liner.isValid(200f))

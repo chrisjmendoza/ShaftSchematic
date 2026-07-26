@@ -18,7 +18,6 @@ data class DimSpan(
     val x2Mm: Double,
     val labelTop: String,
     val kind: SpanKind = SpanKind.LOCAL,
-    val labelBottom: String? = null
 )
 
 data class RailSpan(val rail: Int, val span: DimSpan)
@@ -70,7 +69,6 @@ private fun dedupeExactSpans(spans: List<DimSpan>): List<DimSpan> {
         val a: Long,
         val b: Long,
         val labelTop: String,
-        val labelBottom: String?
     )
 
     fun prefer(a: SpanKind, b: SpanKind): SpanKind {
@@ -89,7 +87,7 @@ private fun dedupeExactSpans(spans: List<DimSpan>): List<DimSpan> {
     for (s in spans) {
         val lo = minOf(s.x1Mm, s.x2Mm)
         val hi = maxOf(s.x1Mm, s.x2Mm)
-        val key = Key(q(lo), q(hi), s.labelTop, s.labelBottom)
+        val key = Key(q(lo), q(hi), s.labelTop)
 
         val existing = byKey[key]
         if (existing == null) {

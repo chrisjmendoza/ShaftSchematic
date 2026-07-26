@@ -2,7 +2,6 @@ package com.android.shaftschematic.ui.drawing.render
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -11,7 +10,6 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.text.TextMeasurer
 import com.android.shaftschematic.geom.keywaySpoonBowl
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.LinerAuthoredReference
@@ -47,7 +45,7 @@ import kotlin.math.min
  * Notes
  * • Colors/line widths come from [RenderOptions].
  * • Keep allocations low in hot paths. Paths are reused per element and scoped.
- * • Highlight outline: when enabled & an ID matches, we paint a two-ring under-stroke (glow + edge)
+ * • Highlight outline: when enabled & an ID matches, we paint a glow under-stroke,
  *   then the normal stroke on top. When highlight is off, visuals are identical to legacy.
  */
 /**
@@ -101,13 +99,11 @@ object ShaftRenderer {
      * @param spec    Shaft model values in **mm**
      * @param layout  Output of ShaftLayout (geometry→canvas mapping)
      * @param opts    Visual knobs (line widths, colors, highlight, threads)
-     * @param textMeasurer reserved for future labels (not used here)
      */
     fun DrawScope.draw(
         spec: ShaftSpec,
         layout: ShaftLayout.Result,
         opts: RenderOptions,
-        textMeasurer: TextMeasurer,
         components: List<ResolvedComponent>? = null,
     ) {
         val L = from(layout)
@@ -122,17 +118,13 @@ object ShaftRenderer {
         val linerFill    = Color(opts.linerFillColor)
         val threadFill   = Color(opts.threadFillColor)
         val flankColor   = Color(opts.threadHatchColor)
-        val useUnified   = (opts.threadStyle == ThreadStyle.UNIFIED)
 
         // ───────── Highlight (resolved; no-ops if disabled) ─────────
         val hiEnabled  = opts.highlightEnabled
         val hiId       = opts.highlightId
         val hiGlowCol  = opts.highlightGlowColor
-        val hiEdgeCol  = opts.highlightEdgeColor
         val hiGlowA    = opts.highlightGlowAlpha
-        val hiEdgeA    = opts.highlightEdgeAlpha
         val hiGlowDx   = opts.highlightGlowExtraPx
-        val hiEdgeDx   = opts.highlightEdgeExtraPx
 
         val resolvedBodies = components
             ?.filterIsInstance<ResolvedBody>()
@@ -157,8 +149,7 @@ object ShaftRenderer {
                         topLeft = topLeft,
                         size = size,
                         baseStrokePx = outlineW,
-                        glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA,
-                        edgeColor = hiEdgeCol, edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                        glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                     )
                 }
 
@@ -183,8 +174,7 @@ object ShaftRenderer {
                     topLeft = topLeft,
                     size = size,
                     baseStrokePx = outlineW,
-                    glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA,
-                    edgeColor = hiEdgeCol, edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                    glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                 )
             }
 
@@ -228,8 +218,7 @@ object ShaftRenderer {
                     drawHighlightStroke(
                         path = path,
                         baseStrokePx = outlineW,
-                        glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA,
-                        edgeColor = hiEdgeCol, edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                        glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                     )
                 }
 
@@ -266,8 +255,7 @@ object ShaftRenderer {
                 drawHighlightStroke(
                     path = path,
                     baseStrokePx = outlineW,
-                    glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA,
-                    edgeColor = hiEdgeCol, edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                    glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                 )
             }
 
@@ -312,39 +300,19 @@ object ShaftRenderer {
                         topLeft = Offset(left, top),
                         size = size,
                         baseStrokePx = outlineW,
-                        glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA,
-                        edgeColor = hiEdgeCol, edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                        glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                     )
                 }
 
-                if (useUnified) {
-                    val railStroke  = if (opts.threadStrokePx > 0f) opts.threadStrokePx else max(1f, outlineW)
-                    val flankStroke = if (opts.threadStrokePx > 0f) opts.threadStrokePx else max(1f, dimW)
-                    val flankCol    = if (opts.threadUseHatchColor) flankColor else outline
-
-                    drawUnifiedThread(
-                        startXPx = left,
-                        lengthPx = lengthPx,
-                        majorRadiusPx = majorR,
-                        minorRadiusPx = minorR,
-                        pitchPx = pitchPx,
-                        outlineColor = outline,
-                        flankColor = flankCol,
-                        railStrokePx = railStroke,
-                        flankStrokePx = flankStroke
-                    )
-                } else {
-                    // Legacy diagonal hatch (kept for quick reversion)
-                    drawThreadHatch(
-                        leftPx = left,
-                        topPx = top,
-                        rightPx = right,
-                        bottomPx = cy + majorR,
-                        pxPerMm = L.pxPerMm,
-                        pitchMm = th.pitchMm,
-                        color = flankColor
-                    )
-                }
+                drawThreadHatch(
+                    leftPx = left,
+                    topPx = top,
+                    rightPx = right,
+                    bottomPx = cy + majorR,
+                    pxPerMm = L.pxPerMm,
+                    pitchMm = th.pitchMm,
+                    color = flankColor
+                )
 
                 // Envelope on top
                 drawRect(color = outline, topLeft = Offset(left, top), size = size, style = Stroke(width = outlineW))
@@ -375,39 +343,19 @@ object ShaftRenderer {
                     topLeft = Offset(left, top),
                     size = size,
                     baseStrokePx = outlineW,
-                    glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA,
-                    edgeColor = hiEdgeCol, edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                    glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                 )
             }
 
-            if (useUnified) {
-                val railStroke  = if (opts.threadStrokePx > 0f) opts.threadStrokePx else max(1f, outlineW)
-                val flankStroke = if (opts.threadStrokePx > 0f) opts.threadStrokePx else max(1f, dimW)
-                val flankCol    = if (opts.threadUseHatchColor) flankColor else outline
-
-                drawUnifiedThread(
-                    startXPx = left,
-                    lengthPx = lengthPx,
-                    majorRadiusPx = majorR,
-                    minorRadiusPx = minorR,
-                    pitchPx = pitchPx,
-                    outlineColor = outline,
-                    flankColor = flankCol,
-                    railStrokePx = railStroke,
-                    flankStrokePx = flankStroke
-                )
-            } else {
-                // Legacy diagonal hatch (kept for quick reversion)
-                drawThreadHatch(
-                    leftPx = left,
-                    topPx = top,
-                    rightPx = right,
-                    bottomPx = cy + majorR,
-                    pxPerMm = L.pxPerMm,
-                    pitchMm = th.pitchMm,
-                    color = flankColor
-                )
-            }
+            drawThreadHatch(
+                leftPx = left,
+                topPx = top,
+                rightPx = right,
+                bottomPx = cy + majorR,
+                pxPerMm = L.pxPerMm,
+                pitchMm = th.pitchMm,
+                color = flankColor
+            )
 
             // Envelope on top
                 drawRect(color = outline, topLeft = Offset(left, top), size = size, style = Stroke(width = outlineW))
@@ -435,8 +383,7 @@ object ShaftRenderer {
                         topLeft = topLeft,
                         size = size,
                         baseStrokePx = outlineW,
-                        glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA,
-                        edgeColor = hiEdgeCol, edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                        glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                     )
                 }
 
@@ -461,8 +408,7 @@ object ShaftRenderer {
                     topLeft = topLeft,
                     size = size,
                     baseStrokePx = outlineW,
-                    glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA,
-                    edgeColor = hiEdgeCol, edgeDx = hiEdgeDx, edgeAlpha = hiEdgeA
+                    glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                 )
             }
 
@@ -550,39 +496,6 @@ object ShaftRenderer {
         }
     }
 
-    /** Unified thread profile: rails in outline color, flanks in hatch (or outline) color. */
-    private fun DrawScope.drawUnifiedThread(
-        startXPx: Float,
-        lengthPx: Float,
-        majorRadiusPx: Float,
-        minorRadiusPx: Float,
-        pitchPx: Float,
-        outlineColor: Color,
-        flankColor: Color,
-        railStrokePx: Float,
-        flankStrokePx: Float,
-    ) {
-        if (lengthPx <= 0f || pitchPx <= 0f || majorRadiusPx <= 0f) return
-
-        val cy = size.center.y
-        val crestY = cy - majorRadiusPx
-        val rootY  = cy - minorRadiusPx
-        val endX   = startXPx + lengthPx
-
-        // Rails
-        drawLine(outlineColor, Offset(startXPx, crestY), Offset(endX, crestY), railStrokePx)
-        drawLine(outlineColor, Offset(startXPx, rootY),  Offset(endX, rootY),  railStrokePx)
-
-        // Flanks (pitch-spaced sawtooth)
-        var x = startXPx
-        while (x <= endX + 0.5f) {
-            val xm = min(x + pitchPx * 0.5f, endX)
-            val x1 = min(x + pitchPx,         endX)
-            drawLine(flankColor, Offset(x,  crestY), Offset(xm, rootY),  flankStrokePx)
-            drawLine(flankColor, Offset(xm, rootY),  Offset(x1, crestY), flankStrokePx)
-            x += pitchPx
-        }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -594,7 +507,7 @@ private fun isHighlighted(enabled: Boolean, selectedId: Any?, candidateId: Any?)
     enabled && selectedId != null && candidateId != null && selectedId == candidateId
 
 /**
- * Paint a two-ring under-stroke (glow + crisp edge). Call this *before* the normal stroke.
+ * Paint the glow under-stroke. Call this *before* the normal stroke.
  * The base stroke width remains your existing outline weight.
  */
 private fun DrawScope.drawHighlightStroke(
@@ -603,9 +516,6 @@ private fun DrawScope.drawHighlightStroke(
     glowColor: Color,
     glowDx: Float,
     glowAlpha: Float,
-    edgeColor: Color,
-    edgeDx: Float,
-    edgeAlpha: Float,
 ) {
     // Single selection ring — outer glow only. The inner white edge ring was removed
     // because it created a distracting double-box appearance.
@@ -623,9 +533,6 @@ private fun DrawScope.drawHighlightStrokeRect(
     glowColor: Color,
     glowDx: Float,
     glowAlpha: Float,
-    edgeColor: Color,
-    edgeDx: Float,
-    edgeAlpha: Float,
 ) {
     // Single selection ring — outer glow only.
     drawRect(

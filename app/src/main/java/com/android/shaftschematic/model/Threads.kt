@@ -61,7 +61,7 @@ data class Threads(
     fun normalized(): Threads {
         val pitch = when {
             pitchMm > 0f -> pitchMm
-            (tpi ?: 0f) > 0f -> 25.4f / (tpi ?: 1f)
+            (tpi ?: 0f) > 0f -> 25.4f / tpi!!
             else -> pitchMm
         }
         val tpiVal = when {
@@ -72,8 +72,6 @@ data class Threads(
         return copy(pitchMm = pitch, tpi = tpiVal)
     }
 
-    /** True if a usable pitch is available (either metric or imperial). */
-    val hasPitch: Boolean get() = pitchMm > 0f || (tpi ?: 0f) > 0f
 }
 
 /**

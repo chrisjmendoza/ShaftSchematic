@@ -548,18 +548,6 @@ internal fun selectFooterTapers(spec: ShaftSpec): FooterTapers {
     return FooterTapers(aft = sorted.first(), fwd = sorted.last())
 }
 
-internal fun computeBodyOnlyPtPerMm(spec: ShaftSpec, geomWidthPt: Float): Float {
-    // Explicit guards: avoid divide-by-zero / infinity scaling.
-    // In pathological specs, fall back to a safe 1mm baseline.
-    val overallMm = if (spec.overallLengthMm > 0f) spec.overallLengthMm else 1f
-    val maxDiaMmRaw = spec.maxOuterDiaMm()
-    val maxDiaMm = if (maxDiaMmRaw > 0f) maxDiaMmRaw else 1f
-
-    val byWidth = geomWidthPt / overallMm
-    val byTargetHeight = BODY_ONLY_TARGET_HEIGHT_PT / maxDiaMm
-    return min(byWidth, byTargetHeight)
-}
-
 internal fun computeDetailPtPerMm(spec: ShaftSpec, geomWidthPt: Float, geomHeightPt: Float): Float {
     // Same target-height behavior as body-only, but also never exceed the available content height.
     val overallMm = if (spec.overallLengthMm > 0f) spec.overallLengthMm else 1f
@@ -570,18 +558,6 @@ internal fun computeDetailPtPerMm(spec: ShaftSpec, geomWidthPt: Float, geomHeigh
     val byTargetHeight = BODY_ONLY_TARGET_HEIGHT_PT / maxDiaMm
     val byGeomHeight = geomHeightPt / maxDiaMm
     return requireFinite("ptPerMm", min(byWidth, min(byTargetHeight, byGeomHeight)).coerceAtLeast(1e-6f))
-}
-
-internal fun computePdfPtPerMmFitAxes(spec: ShaftSpec, geomWidthPt: Float, geomHeightPt: Float): Float {
-    // Explicit guards: prevent divide-by-zero / infinity scaling.
-    val overallMm = spec.overallLengthMm.takeIf { it > 0f } ?: 1f
-    val maxDiaMmRaw = spec.maxOuterDiaMm()
-    val maxDiaMm = maxDiaMmRaw.takeIf { it > 0f } ?: 1f
-
-    val byWidth = geomWidthPt / overallMm
-    val byHeight = geomHeightPt / maxDiaMm
-
-    return requireFinite("ptPerMm", min(byWidth, byHeight).coerceAtLeast(1e-6f))
 }
 
 private fun requireFinite(name: String, v: Float): Float {
@@ -1308,12 +1284,6 @@ private fun rate1toN(t: Taper): String =
         exactDecimals = 3,
     ) ?: "—"
 
-private fun fmtLen(unit: UnitSystem, mm: Float): String = when (unit.name.uppercase(Locale.US)) {
-    "MILLIMETERS", "MM" -> String.format(Locale.US, "%.1f mm", mm)
-    "INCHES", "IN" -> String.format(Locale.US, "%.3f", mm / MM_PER_IN).trimEnd('0').trimEnd('.') + "\""
-    else -> String.format(Locale.US, "%.1f mm", mm)
-}
-
 private fun tpiFromPitch(pitchMm: Float): Float = if (pitchMm > 0f) MM_PER_IN / pitchMm else 0f
 private fun fmtTpi(tpi: Float): String {
     val i = tpi.toInt()
@@ -1372,24 +1342,6 @@ private fun hasAftThread(spec: ShaftSpec): Boolean =
 private fun hasFwdThread(spec: ShaftSpec): Boolean {
     val oal = spec.overallLengthMm
     return spec.threads.any { (it.startFromAftMm + it.lengthMm) >= (oal - 0.5f) } // thread touches FWD end
-}
-
-private fun hasAftTaper(spec: ShaftSpec): Boolean =
-    spec.tapers.any { tp ->
-        // touches AFT end if its start is near 0 OR it spans across 0
-        val start = tp.startFromAftMm.toDouble()
-        val end   = (tp.startFromAftMm + tp.lengthMm).toDouble()
-        start <= END_EPS_MM || (start < 0.0 && end > 0.0)
-    }
-
-private fun hasFwdTaper(spec: ShaftSpec): Boolean {
-    val oal = spec.overallLengthMm.toDouble()
-    return spec.tapers.any { tp ->
-        val start = tp.startFromAftMm.toDouble()
-        val end   = (tp.startFromAftMm + tp.lengthMm).toDouble()
-        // touches FWD end if its end is near OAL OR it spans across OAL
-        abs(end - oal) <= END_EPS_MM || (start < oal && end > oal)
-    }
 }
 
 // --- End-feature presence detection -----------------------------------------

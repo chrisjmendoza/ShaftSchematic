@@ -63,7 +63,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.ExperimentalTextApi
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.WearRecord
@@ -72,7 +71,6 @@ import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
-import com.android.shaftschematic.ui.drawing.render.ThreadStyle
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
@@ -113,7 +111,6 @@ import java.io.File
 @Composable
 fun WearRoute(
     vm: ShaftViewModel,
-    onExportWear: () -> Unit = {},
     onOpenSidebar: () -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
@@ -209,12 +206,10 @@ fun WearRoute(
     val badgeColor     = MaterialTheme.colorScheme.primary
     val badgeTextArgb  = MaterialTheme.colorScheme.onPrimary.toArgb()
     val previewShape   = MaterialTheme.shapes.medium
-    val textMeasurer   = rememberTextMeasurer()
 
     val transparentArgb = Color.Transparent.toArgb()
     val previewOpts = remember(outlineArgb, bodyFillArgb, hatchArgb) {
         RenderOptions(
-            showGrid            = false,
             outlineColor        = outlineArgb,
             outlineWidthPx      = 1.5f,
             bodyFillColor       = bodyFillArgb,
@@ -222,9 +217,6 @@ fun WearRoute(
             linerFillColor      = transparentArgb, // liner tint drawn separately as tap affordance
             threadFillColor     = 0x00000000,
             threadHatchColor    = hatchArgb,
-            threadStyle         = ThreadStyle.HATCH,
-            threadUseHatchColor = true,
-            threadStrokePx      = 0f,
         )
     }
 
@@ -307,7 +299,7 @@ fun WearRoute(
                             resolvedComponents = resolvedComponents,
                         )
                         with(ShaftRenderer) {
-                            draw(spec, layout, previewOpts, textMeasurer, resolvedComponents)
+                            draw(spec, layout, previewOpts, resolvedComponents)
                         }
                         drawWearAffordances(
                             layout = layout,

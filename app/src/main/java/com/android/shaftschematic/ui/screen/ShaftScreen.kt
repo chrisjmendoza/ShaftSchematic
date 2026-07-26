@@ -1,19 +1,14 @@
 package com.android.shaftschematic.ui.screen
 
-import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,7 +23,6 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -39,9 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Menu
@@ -60,7 +52,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -74,9 +65,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -89,14 +78,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.android.shaftschematic.geom.computeOalWindow
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
@@ -113,25 +95,11 @@ import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
-import com.android.shaftschematic.ui.input.NumericInputField
-import com.android.shaftschematic.ui.input.taperSetLetMapping
-import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.order.ComponentKey
-import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
-import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
-import com.android.shaftschematic.ui.resolved.ResolvedLiner
-import com.android.shaftschematic.ui.resolved.ResolvedTaper
-import com.android.shaftschematic.ui.resolved.ResolvedThread
-import com.android.shaftschematic.ui.util.buildBodyTitleById
-import com.android.shaftschematic.ui.util.buildLinerTitleById
-import com.android.shaftschematic.ui.util.buildTaperTitleById
-import com.android.shaftschematic.ui.util.buildThreadTitleById
 import com.android.shaftschematic.ui.util.exportPdfGate
-import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
-import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
 import kotlinx.coroutines.launch
@@ -160,8 +128,6 @@ fun ShaftScreen(
     resetNonce: Int,
     // Ordering (from VM via Route)
     componentOrder: List<ComponentKey> = emptyList(),
-    onMoveComponentUp: (String) -> Unit = {},      // reserved for future Move UI
-    onMoveComponentDown: (String) -> Unit = {},    // reserved for future Move UI
 
     // State
     spec: ShaftSpec,
@@ -172,7 +138,6 @@ fun ShaftScreen(
     resolvedComponents: List<ResolvedComponent> = emptyList(),
     unit: UnitSystem,
     overallIsManual: Boolean,
-    unitLocked: Boolean,
     customer: String,
     vessel: String,
     jobNumber: String,
@@ -202,8 +167,6 @@ fun ShaftScreen(
     sessionAddDefaults: SessionAddDefaults,
 
     // Setters
-    onSetUnit: (UnitSystem) -> Unit,
-    onToggleGrid: (Boolean) -> Unit,
     onSetCustomer: (String) -> Unit,
     onSetVessel: (String) -> Unit,
     onSetJobNumber: (String) -> Unit,
@@ -245,7 +208,6 @@ fun ShaftScreen(
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
-    onUpdateCouplerBoltSlotLabel: (Int, String?) -> Unit,
     onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
 
@@ -291,9 +253,6 @@ fun ShaftScreen(
 
 ) {
     key(resetNonce) {
-    var highlightId by rememberSaveable { mutableStateOf<String?>(null) }
-
-
     var addThreadOpen by rememberSaveable { mutableStateOf(false) }
     var addThreadStartMm by rememberSaveable { mutableFloatStateOf(0f) }
 
@@ -776,7 +735,6 @@ fun ShaftScreen(
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
                     onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
-                    onUpdateCouplerBoltSlotLabel = onUpdateCouplerBoltSlotLabel,
                     onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
                     onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
                     onSetKeyways180Apart = onSetKeyways180Apart,
@@ -1153,35 +1111,6 @@ private fun ShaftPositionDropdown(
 
 
 @Composable
-private fun ExpandableSection(
-    title: String,
-    initiallyExpanded: Boolean,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
-    Card(
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickableWithoutRipple { expanded = !expanded }
-            ) {
-                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null)
-            }
-            if (expanded) {
-                Spacer(Modifier.height(8.dp))
-                content()
-            }
-        }
-    }
-}
-
-@Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun ProjectInfoBottomSheet(
     customer: String,
@@ -1346,15 +1275,3 @@ internal fun parseFractionOrDecimal(input: String): Float? {
 private const val OAL_EPS_MM: Double = 1e-3
 
 internal fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) (MM_PER_IN / tpi.toDouble()).toFloat() else 0f
-
-/* ───────────────── Click helper ───────────────── */
-
-private fun Modifier.clickableWithoutRipple(
-    enabled: Boolean = true,
-    onClick: () -> Unit
-): Modifier = clickable(
-    enabled = enabled,
-    indication = null,
-    interactionSource = null,
-    onClick = onClick
-)

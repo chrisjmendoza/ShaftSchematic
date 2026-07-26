@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.text.ExperimentalTextApi
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.model.ShaftSpec
@@ -45,7 +44,6 @@ import com.android.shaftschematic.ui.drawing.render.GridRenderer.drawAdaptiveSha
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
-import com.android.shaftschematic.ui.drawing.render.ThreadStyle
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
@@ -112,10 +110,7 @@ fun ShaftDrawing(
     onTapAtMm: ((Float) -> Unit)? = null,
     modifier: Modifier = Modifier.fillMaxSize()
 ) {
-    // Stable text measurer (expensive object)
-    val textMeasurer = rememberTextMeasurer()
-
-    // Theme-derived highlight glow color (edge stays white for contrast)
+    // Theme-derived highlight glow color
     val themeGlow: Color = MaterialTheme.colorScheme.primary
     val debugMarkerColor: Color = MaterialTheme.colorScheme.error
 
@@ -144,36 +139,25 @@ fun ShaftDrawing(
         taperFill, previewTaperFill, threadFill, previewThreadFill, threadHatch,
         highlightEnabled, highlightId, themeGlow,
     ) { RenderOptions(
-        // Grid is drawn in this composable; renderer's internal grid stays off.
-        showGrid = false,
-        gridUseInches = (unit == UnitSystem.INCHES),
-
         // Visual tuning (retain prior look)
         paddingPx = 16,
-        textSizePx = 22f,
         outlineColor = outlineColor.toArgb(),
         outlineWidthPx = 2f * lineThicknessScale.coerceIn(0.5f, 2.0f),
         bodyFillColor = bodyFill.copy(alpha = fillAlpha(previewBodyFill.preset, fallback = 0.10f)).toArgb(),
         linerFillColor = linerFill.copy(alpha = fillAlpha(previewLinerFill.preset, fallback = 0.16f)).toArgb(),
         taperFillColor = taperFill.copy(alpha = fillAlpha(previewTaperFill.preset, fallback = 0.14f)).toArgb(),
 
-        // Threads (preview uses legacy hatch style)
-        threadStyle = ThreadStyle.HATCH,      // ← legacy look restored
-        threadUseHatchColor = true,
+        // Threads (legacy hatch look)
         threadFillColor = threadFill.copy(alpha = fillAlpha(previewThreadFill.preset, fallback = 0.10f)).toArgb(),
         threadHatchColor = threadHatch.toArgb(),
-        threadStrokePx = 0f,
 
-        // Highlight preset (obvious: colored glow + white edge)
+        // Highlight preset (obvious: colored glow)
         highlightEnabled = highlightEnabled,
         highlightId = highlightId,
         highlightGlowColor = themeGlow,
-        highlightEdgeColor = Color.White,
         // slightly louder defaults so it’s unmistakable in testing
         highlightGlowAlpha = 0.75f,
-        highlightEdgeAlpha = 1.0f,
         highlightGlowExtraPx = 12f,
-        highlightEdgeExtraPx = 6f
     ) }
 
     // Preview-safe spec: if OAL is zero but parts exist, extend to last occupied end.
@@ -328,7 +312,6 @@ fun ShaftDrawing(
                         spec = safeSpec,
                         layout = layout,
                         opts = options,
-                        textMeasurer = textMeasurer,
                         components = resolvedComponents.takeIf { it.isNotEmpty() }
                     )
                 }

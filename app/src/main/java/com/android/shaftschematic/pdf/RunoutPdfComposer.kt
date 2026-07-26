@@ -136,8 +136,6 @@ fun composeRunoutPdf(
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         color = Color.BLACK
     }
-    val textSmall = Paint(text).apply { textSize = TEXT_PT - 2f }
-
     // ── Page regions ─────────────────────────────────────────────────────────
     val margin = PAGE_MARGIN_PT
     val contentLeft  = margin
@@ -237,7 +235,7 @@ fun composeRunoutPdf(
 
     // ── Draw header ───────────────────────────────────────────────────────────
     drawRunoutHeader(c, text, contentLeft, contentRight,
-        headerTop, headerHeight, spec, project, unit, drawSpanMm, blankValues)
+        headerTop, headerHeight, project, blankValues)
 
     // ── Draw OAL span line — raised well above the shaft, with witness lines ──
     // The arrows bracket the drawn SET-to-SET span, but the LABEL is always the typed
@@ -278,10 +276,8 @@ fun composeRunoutPdf(
 /**
  * Draw the job-info header strip at the top of the runout page.
  *
- * Format (single line):  Customer: ___  |  Vessel: ___  |  Job#: ___  |  Date  |  STBD/PORT  |  OAL: xx in
- *
- * The OAL is included here so the field crew can confirm which shaft they're working on
- * without referring back to the main schematic page.
+ * Format (single line):  Customer: ___  |  Vessel: ___  |  Job #: ___  |  Date  |  STBD/PORT
+ * (The OAL is drawn separately by the OAL span line, not in this header.)
  */
 private fun drawRunoutHeader(
     c: Canvas,
@@ -290,10 +286,7 @@ private fun drawRunoutHeader(
     right: Float,
     top: Float,
     height: Float,
-    spec: ShaftSpec,
     project: ProjectInfo,
-    unit: UnitSystem,
-    oalMm: Float,
     blankValues: Boolean = false,
 ) {
     val y = top + text.textSize + 2f

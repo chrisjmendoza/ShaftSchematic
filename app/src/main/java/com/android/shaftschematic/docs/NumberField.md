@@ -45,9 +45,8 @@ rejecting the edit:
 - `filterNumericInput(raw, allowNegative, allowFraction, allowColon = false)`:
   digits, one leading `-` (if allowed), one decimal separator, one `/` fraction slash
   and whitespace for `W N/D` (if allowed), and one `:` for ratio entry like `1:12`
-  when `allowColon = true` (taper rate text).
-- `filterDecimalPermissive(input, allowSign = false)`: simpler digit + single-`.`
-  filter; lets transient states like `"."`, `"1."` correct themselves.
+  when `allowColon = true` (taper rate text). This is the only typing filter (the
+  unused `filterDecimalPermissive` was deleted 2026-07-26).
 - Filters never enforce numeric validity (commit path does) and never block paste or
   select-all.
 

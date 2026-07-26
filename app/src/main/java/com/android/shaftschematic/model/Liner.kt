@@ -35,9 +35,7 @@ data class Liner(
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     @JsonNames("endFromAftMm", "endMmPhysical")
     val endMmPhysical: Float = 0f,
-) : Segment {
-    val startMmPhysical: Float get() = startFromAftMm
-}
+) : Segment
 
 /** Normalize to ensure endMmPhysical matches start + length. */
 fun Liner.normalized(): Liner {

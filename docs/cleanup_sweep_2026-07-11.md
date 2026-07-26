@@ -244,6 +244,13 @@ debounce, `RenderOptions` remember, theme wiring decision.
 **Wave 2 — deletion pass (a day):** everything in C-2 that is delete-only, plus the
 model-layer dead items in C-7. Zero behavior change, big readability payoff; run the full
 test suite after.
+> **STATUS 2026-07-26:** DONE on branch `chore/wave2-deletion-pass` (see CHANGELOG
+> "Wave 2 deletion pass"). Every candidate re-verified against current code first; the
+> old delete-undo subsystem (part of C-4/B-1) was already fully removed by the
+> 2026-07-26 SessionHistory undo/redo rework. Deliberately kept pending decisions:
+> componentOrder subsystem + moveComponentUp/Down, ui/theme, *Naming.kt shims
+> (repoint in Wave 3). UnitSystem.toMillimeters/fromMillimeters and SHAFT_MIME turned
+> out to be live (runout value entry / SAF export) — not deleted.
 
 **Wave 3 — shared-control and shared-profile extractions (a few days):** C-1 (PDF
 profile), C-5 (parity controls), C-6 (route plumbing), C-4 (VM generics). Each is

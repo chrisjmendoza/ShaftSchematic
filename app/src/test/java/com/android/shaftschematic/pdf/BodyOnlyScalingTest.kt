@@ -23,9 +23,11 @@ class BodyOnlyScalingTest {
         )
 
         val geomWidthPt = 500f
+        // Generous content height so the 1.25" target height stays the binding limit.
+        val geomHeightPt = 10_000f
 
         // Act
-        val ptPerMm = computeBodyOnlyPtPerMm(spec, geomWidthPt)
+        val ptPerMm = computeDetailPtPerMm(spec, geomWidthPt, geomHeightPt)
         val renderedHeightPt = spec.maxOuterDiaMm() * ptPerMm
 
         // Assert: diameter increases should not exceed the fixed target drawing height.
