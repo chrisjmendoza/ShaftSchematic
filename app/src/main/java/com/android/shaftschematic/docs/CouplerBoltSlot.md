@@ -92,7 +92,10 @@ through vs blind render identically.
 - `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through, depthMm, reference = FWD)`
   — newest-on-top; remembers session defaults; **no `ensureOverall()`**.
 - `updateCouplerBoltSlot(index, startMm, holeDiaMm, count, spacingMm, through, depthMm)`
-- `updateCouplerBoltSlotReference / updateCouplerBoltSlotLabel / updateCouplerBoltSlotShowRail`
+- `updateCouplerBoltSlotReference / updateCouplerBoltSlotShowRail`
+  (`updateCouplerBoltSlotLabel` was deleted 2026-07-26 — dead end-to-end; the slot card
+  has no title editor. Re-add it together with the card's editable title if slot
+  renaming ever ships.)
 - `removeCouplerBoltSlot(id)` — recoverable via the general session `undoEdit()` (see
   `ShaftViewModel.md`); no body merge.
 

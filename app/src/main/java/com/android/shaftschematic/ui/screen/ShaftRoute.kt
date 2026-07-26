@@ -35,7 +35,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun ShaftRoute(
     vm: ShaftViewModel,
-    onNavigateHome: () -> Unit,
     onNew: () -> Unit,
     onOpen: () -> Unit,
     onSave: () -> Unit,
@@ -91,7 +90,6 @@ fun ShaftRoute(
 
     val spec            by vm.spec.collectAsState()
     val unit            by vm.unit.collectAsState()
-    val unitLocked      by vm.unitLocked.collectAsState()
     val showGrid        by vm.showGrid.collectAsState()
     val previewBlackWhiteOnly by vm.previewBlackWhiteOnly.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -156,7 +154,6 @@ fun ShaftRoute(
         hasUnsavedChanges = hasUnsavedChanges,
         resolvedComponents = resolvedComponents,
         unit = unit,
-        unitLocked = unitLocked,
         overallIsManual = overallIsManual,
         customer = customer,
         vessel = vessel,
@@ -186,8 +183,6 @@ fun ShaftRoute(
         componentOrder = order,
 
         // model updates (unchanged)
-        onSetUnit = vm::setUnit,            // now used by Settings sheet
-        onToggleGrid = vm::setShowGrid,     // now used by Settings sheet
         onSetCustomer = vm::setCustomer,
         onSetVessel = vm::setVessel,
         onSetJobNumber = vm::setJobNumber,
@@ -218,7 +213,6 @@ fun ShaftRoute(
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
         onUpdateCouplerBoltSlot = { i, s, dia, cnt, sp, thru, dep -> vm.updateCouplerBoltSlot(i, s, dia, cnt, sp, thru, dep) },
-        onUpdateCouplerBoltSlotLabel = { i, label -> vm.updateCouplerBoltSlotLabel(i, label) },
         onUpdateCouplerBoltSlotReference = { i, ref -> vm.updateCouplerBoltSlotReference(i, ref) },
         onUpdateCouplerBoltSlotShowRail = { i, show -> vm.updateCouplerBoltSlotShowRail(i, show) },
 

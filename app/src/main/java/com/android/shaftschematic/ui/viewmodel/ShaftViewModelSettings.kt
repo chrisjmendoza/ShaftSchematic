@@ -4,7 +4,6 @@ import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.pdf.PdfExportMode
 import com.android.shaftschematic.settings.PdfTieringMode
-import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.launch
@@ -285,8 +284,4 @@ fun ShaftViewModel.unlockAchievement(id: String) {
     viewModelScope.launch {
         SettingsStore.unlockAchievement(getApplication(), id)
     }
-}
-
-fun ShaftViewModel.unlockAchievement(definition: Achievements.Definition) {
-    unlockAchievement(definition.id)
 }

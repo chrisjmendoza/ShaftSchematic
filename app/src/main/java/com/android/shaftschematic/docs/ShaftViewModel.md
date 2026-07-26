@@ -139,7 +139,7 @@ Change Log
   on every change (including document loads).
 
 **v0.5 (2026-07-11)**
-- Added coupler bolt-slot APIs: `addCouplerBoltSlotAt`, `updateCouplerBoltSlot` (+ `Reference`/`Label`/`ShowRail`), `removeCouplerBoltSlot`; undo via `LastDeleted.CouplerBoltSlot`. Slots never call `ensureOverall()` and never split bodies.
+- Added coupler bolt-slot APIs: `addCouplerBoltSlotAt`, `updateCouplerBoltSlot` (+ `Reference`/`Label`/`ShowRail`), `removeCouplerBoltSlot`. Slots never call `ensureOverall()` and never split bodies. (Historical note: delete-undo then went through `LastDeleted.CouplerBoltSlot`, since replaced by `SessionHistory`; the `Label` updater was deleted 2026-07-26 as dead.)
 
 **v0.4 (2026-06-19)**
 - `updateBody()`, `updateTaper()`, `updateLiner()`, `updateThread()` — removed `snapForwardFrom()` cascade. Editing a component now mutates only that component; other components' positions are completely untouched.

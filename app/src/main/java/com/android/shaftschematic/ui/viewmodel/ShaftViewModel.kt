@@ -76,11 +76,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         /** Returns the current PDF export preferences (PdfPrefs) from SettingsStore. */
         val currentPdfPrefs: PdfPrefs
             get() = SettingsStore.pdfPrefs
-    // Autosave restore state
-    private val _didRestoreAutosave = MutableStateFlow(false)
-    val didRestoreAutosave: StateFlow<Boolean> = _didRestoreAutosave.asStateFlow()
-    fun consumeDidRestoreAutosave() { _didRestoreAutosave.value = false }
-
     // Draft ring state (up to 3 unsaved sessions, newest-first). Replaces the single-slot
     // `_hasDraft` boolean. See docs/Autosave_Incident_2026-07-25.md.
     private val _drafts = MutableStateFlow<List<AutosaveManager.DraftEntry>>(emptyList())
@@ -132,7 +127,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         currentDraftId = entry.draftId
         _currentDocumentName.value = entry.documentName
         draftPersisted = true
-        _didRestoreAutosave.value = true
         // Session boundary: undo starts fresh from the restored draft.
         clearEditHistory()
     }
@@ -147,7 +141,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val wasCurrent = draftId == currentDraftId
             _drafts.value = withContext(Dispatchers.IO) { AutosaveManager.loadDrafts(getApplication()) }
             if (wasCurrent) {
-                _didRestoreAutosave.value = false
                 newDocument()
             }
         }
@@ -673,7 +666,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     currentDraftId = newest.draftId
                     _currentDocumentName.value = newest.documentName
                     draftPersisted = true
-                    _didRestoreAutosave.value = true
                     // Session boundary: undo must not cross back into the pre-restore blank.
                     clearEditHistory()
                 } catch (_: Exception) {}
@@ -1380,11 +1372,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         lengthMm = max(0f, lengthMm),
                         startDiaMm = max(0f, resolvedSet),
                         endDiaMm = max(0f, resolvedLet),
-                        keywayWidthMm = old.keywayWidthMm,
-                        keywayDepthMm = old.keywayDepthMm,
-                        keywayLengthMm = old.keywayLengthMm,
-                        keywaySpooned = old.keywaySpooned,
-                        taperRateText = rateText.ifBlank { old.taperRateText },
+                        taperRateText = effectiveRate,
                     )
                 }
             )
@@ -1839,19 +1827,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateCouplerBoltSlotLabel(index: Int, label: String?) = _spec.update { s ->
-        if (index !in s.couplerBoltSlots.indices) s else {
-            val old = s.couplerBoltSlots[index]
-            val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
-            if (old.label == normalized) return@update s
-            s.copy(
-                couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
-                    l[index] = old.copy(label = normalized)
-                }
-            )
-        }
-    }
-
     /** Remove a [CouplerBoltSlot] by id. Recoverable via [undoEdit] (spec + order together). */
     fun removeCouplerBoltSlot(id: String) {
         var removed = false
@@ -1887,30 +1862,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ────────────────────────────────────────────────────────────────────────────
 
     private fun newId(): String = UUID.randomUUID().toString()
-
-    // ────────────────────────────────────────────────────────────────────────────
-    // New document helper (choose unit, optionally lock)
-    // ────────────────────────────────────────────────────────────────────────────
-
-    /** Start a brand-new shaft using [unit] for UI; lock UI unit if [lockUnit] is true. */
-    fun newShaft(unit: UnitSystem, lockUnit: Boolean = true) {
-        clearEditHistory()
-        _spec.value = ShaftSpec()
-        _componentOrder.value = emptyList() // fresh doc → empty order list
-        _unitLocked.value = lockUnit
-        _customer.value = ""
-        _vessel.value = ""
-        _jobNumber.value = ""
-        _shaftPosition.value = ShaftPosition.OTHER
-        _notes.value = ""
-        setUnit(unit)
-        if (lockUnit) {
-            viewModelScope.launch {
-                val pref = if (unit == UnitSystem.INCHES) UnitPref.INCHES else UnitPref.MILLIMETERS
-                SettingsStore.setDefaultUnit(getApplication(), pref)
-            }
-        }
-    }
 
     // ────────────────────────────────────────────────────────────────────────────
     // Persistence — versioned JSON document (UI wires it to SAF)

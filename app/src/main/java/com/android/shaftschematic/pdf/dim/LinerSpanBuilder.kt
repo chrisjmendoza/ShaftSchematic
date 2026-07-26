@@ -37,7 +37,7 @@ fun buildLinerSpans(
                     ?: formatLenDim(ln.offsetFromSetMm, unit)
                 val localLabel = forcedRefMm?.let { formatLenDim(abs(end - it), unit) }
                     ?: formatLenDim(ln.lengthMm, unit)
-                add(DimSpan(sets.aftSETxMm, start, labelTop = datumLabel, kind = SpanKind.DATUM, labelBottom = null))
+                add(DimSpan(sets.aftSETxMm, start, labelTop = datumLabel, kind = SpanKind.DATUM))
                 add(DimSpan(start, end, labelTop = localLabel, kind = SpanKind.LOCAL))
             }
             LinerAnchor.FWD_SET -> {
@@ -47,7 +47,7 @@ fun buildLinerSpans(
                     ?: formatLenDim(ln.offsetFromSetMm, unit)
                 val localLabel = forcedRefMm?.let { formatLenDim(abs(aftEdge - it), unit) }
                     ?: formatLenDim(ln.lengthMm, unit)
-                add(DimSpan(sets.fwdSETxMm, fwdEdge, labelTop = datumLabel, kind = SpanKind.DATUM, labelBottom = null))
+                add(DimSpan(sets.fwdSETxMm, fwdEdge, labelTop = datumLabel, kind = SpanKind.DATUM))
                 add(DimSpan(fwdEdge, aftEdge, labelTop = localLabel, kind = SpanKind.LOCAL))
             }
         }

@@ -78,12 +78,10 @@ in / half out), mirrored top and bottom; local surface radius looked up from the
 covering component (falls back to max OD); fill from `RenderOptions.slotFillColor`.
 See `CouplerBoltSlot.md`.
 
-- Threads: unified profile (crest/root rails + pitch-spaced flanks); legacy diagonal
-  hatch helper (`drawThreadHatch`) remains available.
+- Threads: diagonal hatch (`drawThreadHatch`), pitch-spaced, clipped to the envelope.
+  (The unused "unified profile" path and `ThreadStyle` enum were deleted 2026-07-26.)
 - `centerlineYPx` is a **Y-reference for positioning geometry only** — the renderer
   never draws a visible centerline stroke.
-- Dead / unwired option: `RenderOptions.showCenterline` (default `true`) is never
-  read anywhere; treat as inert until wired or removed.
 - Performance: avoid allocations in hot paths except small Paths for tapers; no
   density/unit lookups inside draw scopes.
 
@@ -91,9 +89,11 @@ RenderOptions (styling config)
 ------------------------------
 Immutable view/style configuration — pixels/dp/colors only, never mm, no model data:
 line widths (`outlineWidthPx`, `dimLineWidthPx`), colors (outline, per-component
-fills, thread colors, slot fill), grid semantics (`showGrid`, `gridUseInches`,
-legend controls), highlight controls. Construct via `remember { RenderOptions(...) }`
-with ColorScheme accessed at construction, never inside draw lambdas.
+fills, thread hatch/fill, slot fill), and highlight (glow) controls. The dead grid /
+legend / text-size / edge-ring fields were deleted in the 2026-07-26 pass — the grid is
+drawn by `GridRenderer` from the composable layer, not via `RenderOptions`. Construct
+via `remember { RenderOptions(...) }` with ColorScheme accessed at construction, never
+inside draw lambdas.
 
 ---
 

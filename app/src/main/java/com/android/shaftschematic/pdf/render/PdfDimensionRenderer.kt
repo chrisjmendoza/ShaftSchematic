@@ -17,8 +17,7 @@ import kotlin.math.min
  * to a continuous line with the label floating above it.
  *
  * Blank-draft mode ([blankLabels]): the break is still cut — at a fixed writable width — but no
- * value text is drawn, leaving the gap as a hand-write-in spot. Bottom labels (SET names) are
- * identifiers, not values, and still print.
+ * value text is drawn, leaving the gap as a hand-write-in spot.
  */
 class PdfDimensionRenderer(
     private val pageX: (Double) -> Float,   // mm → page X
@@ -32,20 +31,12 @@ class PdfDimensionRenderer(
     private val railSafePaddingPx: Float = 6f,
     private val objectClearance: Float = 6f,
     private val textAboveDy: Float = 12f,   // fallback (label-above-line) baseline offset; primary path seats the label in the line break
-    private val textBelowDy: Float = 14f,
     private val arrowSize: Float = 5f,      // arrowhead half-size
     private val textPad: Float = 6f,        // left/right text padding inside a span
-    private val minGap: Float = 8f,         // reserved for future use; do not shift horizontally
-    private val lineAdvance: Float = 10f,   // reserved for future use; do not shift horizontally
     private val blankLabels: Boolean = false, // blank-draft: cut the break, draw no value text
     private val blankLabelWidthPx: Float = 46f
 ) {
     private val labelBoundsByRail = mutableMapOf<Int, MutableList<RectF>>()
-
-    init {
-        // Intentionally do not mutate textPaint defaults here.
-        // Alignment is set/restored locally when drawing labels.
-    }
 
     fun drawTop(canvas: Canvas, span: DimSpan, drawExtensions: Boolean = true) {
         drawSpan(canvas, railIndex = -1, span = span, y = topRailY, drawExtensions = drawExtensions)
@@ -117,14 +108,6 @@ class PdfDimensionRenderer(
             }
             drawLabelAtBounds(canvas, label, placedBounds, fm)
             existing += RectF(placedBounds)
-        }
-
-        // bottom label (e.g., SET name) stays under the rail for predictability
-        span.labelBottom?.let {
-            val prevAlign = textPaint.textAlign
-            textPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText(it, (xa + xb) * 0.5f, y + textBelowDy, textPaint)
-            textPaint.textAlign = prevAlign
         }
 
         // ---- arrowheads: inward by default, outward only when cramped ----

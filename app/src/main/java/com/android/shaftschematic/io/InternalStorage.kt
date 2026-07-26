@@ -87,10 +87,6 @@ object InternalStorage {
         return base + SHAFT_DOT_EXT
     }
 
-    /** Back-compat alias for older call sites/tests; now produces `.shaft`. */
-    @Deprecated("Use normalizeShaftDocName", ReplaceWith("normalizeShaftDocName(raw)"))
-    internal fun normalizeJsonName(raw: String): String? = normalizeShaftDocName(raw)
-
     fun save(ctx: Context, name: String, content: String) {
         require(name.endsWith(SHAFT_DOT_EXT, ignoreCase = true)) { "Name must end with $SHAFT_DOT_EXT" }
         VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") { "save name=$name chars=${content.length}" }

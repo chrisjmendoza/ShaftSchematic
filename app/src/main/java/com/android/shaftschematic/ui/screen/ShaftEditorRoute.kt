@@ -48,10 +48,6 @@ fun ShaftEditorRoute(
     onOpenDeveloperOptions: () -> Unit,
     /** Export the main shaft schematic PDF (goes to existing preview/SAF flow). */
     onExportPdf: () -> Unit,
-    /** Export the runout measurement sheet PDF (goes to SAF). */
-    onExportRunout: () -> Unit = {},
-    /** Export the shaft wear/inspection document PDF (goes to SAF). */
-    onExportWear: () -> Unit = {},
 ) {
     var activeTab by rememberSaveable { mutableStateOf(EditorTab.SCHEMATIC) }
     var sidebarOpen by rememberSaveable { mutableStateOf(false) }
@@ -75,7 +71,6 @@ fun ShaftEditorRoute(
         when (activeTab) {
             EditorTab.SCHEMATIC -> ShaftRoute(
                 vm = vm,
-                onNavigateHome = onNavigateHome,
                 onNew = onNew,
                 onOpen = onOpen,
                 onSave = onSave,
@@ -89,13 +84,11 @@ fun ShaftEditorRoute(
 
             EditorTab.RUNOUT -> RunoutRoute(
                 vm = vm,
-                onExportRunout = onExportRunout,
                 onOpenSidebar = { sidebarOpen = true },
             )
 
             EditorTab.WEAR -> WearRoute(
                 vm = vm,
-                onExportWear = onExportWear,
                 onOpenSidebar = { sidebarOpen = true },
             )
         }

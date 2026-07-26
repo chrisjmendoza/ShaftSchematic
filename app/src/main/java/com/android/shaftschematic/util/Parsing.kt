@@ -7,7 +7,6 @@ import kotlin.math.abs
  * Parses user input text into a canonical millimeter Double.
  *
  * Rules:
- * - Filters out non-numeric characters (via filterDecimalPermissive).
  * - Respects the provided UnitSystem (millimeters or inches).
  * - Empty or invalid input yields 0.0.
  *

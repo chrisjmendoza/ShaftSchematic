@@ -110,7 +110,6 @@ import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
-import com.android.shaftschematic.ui.drawing.render.ThreadStyle
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
@@ -142,7 +141,6 @@ private data class RunoutComponentEntry(
 @Composable
 fun RunoutRoute(
     vm: ShaftViewModel,
-    onExportRunout: () -> Unit = {},
     onOpenSidebar: () -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
@@ -241,7 +239,6 @@ fun RunoutRoute(
     val previewOpts = remember(outlineArgb, bodyFillArgb, linerFillArgb, hatchArgb,
                                pdfShadedBodies, pdfShadedTapers, pdfShadedLiners) {
         RenderOptions(
-            showGrid            = false,
             outlineColor        = outlineArgb,
             outlineWidthPx      = 1.5f,
             bodyFillColor       = if (pdfShadedBodies) bodyFillArgb  else transparentArgb,
@@ -249,9 +246,6 @@ fun RunoutRoute(
             linerFillColor      = if (pdfShadedLiners) linerFillArgb else transparentArgb,
             threadFillColor     = 0x00000000,
             threadHatchColor    = hatchArgb,
-            threadStyle         = ThreadStyle.HATCH,
-            threadUseHatchColor = true,
-            threadStrokePx      = 0f,
         )
     }
 
@@ -375,7 +369,7 @@ fun RunoutRoute(
                             spec, resolvedComponents, runoutConfig.componentOverrides,
                         )
                         with(ShaftRenderer) {
-                            draw(spec, preview.layout, previewOpts, textMeasurer, resolvedComponents)
+                            draw(spec, preview.layout, previewOpts, resolvedComponents)
                         }
                         drawRunoutMarkers(preview.bubbles, preview.geom, runoutReadings, unit, textMeasurer)
                     }

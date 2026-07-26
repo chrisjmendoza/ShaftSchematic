@@ -6,6 +6,72 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-26 (evening)
+
+### chore(cleanup): Wave 2 deletion pass — verified-dead code removed (no behavior change)
+
+Executes "Wave 2" of `docs/cleanup_sweep_2026-07-11.md` (C-2 delete-only items + C-7
+dead model items). Every candidate was re-verified against current code before
+deletion (two later sweeps had already taken some, and the 2026-07-26 undo/redo rework
+had already deleted the entire old delete-undo subsystem). Full JVM suite green.
+
+- **Files deleted**: `model/RendererAliases.kt`, `model/TaperDirection.kt` (shadowed by
+  the private enum in `TaperTitles.kt`), `model/ShaftSpecMigrations.kt`,
+  `ui/drawing/ReferenceEnd.kt`, `ui/screen/ComponentType.kt`.
+- **RenderOptions** pruned 40 → 15 fields: grid/legend block (GridRenderer hardcodes
+  its own values), `textSizePx`, `showCenterline`, `referenceEnd` (+ both dead
+  `ReferenceEnd` enums), the removed edge-ring highlight params
+  (`highlightEdgeColor/Alpha/ExtraPx`), and the unreachable `ThreadStyle.UNIFIED` path
+  (enum + `drawUnifiedThread` + `threadStyle`/`threadUseHatchColor`/`threadStrokePx`) —
+  every construction site already forced HATCH. Unused `textMeasurer` param dropped
+  from `ShaftRenderer.draw` (and the now-unneeded `rememberTextMeasurer()` in
+  ShaftDrawing/WearRoute).
+- **ViewModel**: deleted dead `newShaft()`, the write-only `didRestoreAutosave`
+  flag/getter/consumer, the caller-less `unlockAchievement(Definition)` overload, the
+  dead-end `updateCouplerBoltSlotLabel` (its 5-hop UI plumbing chain was never
+  invoked; the slot card has no title editor — noted in `docs/CouplerBoltSlot.md`),
+  and `updateTaper`'s no-op self-copies.
+- **Screens**: dead callback plumbing removed end-to-end (`onSetUnit`, `onToggleGrid`,
+  `unitLocked` param, `onMoveComponentUp/Down` screen params, `onNavigateHome` in
+  ShaftRoute, `onExportRunout`/`onExportWear` chains — both routes export locally via
+  SAF), the never-read `highlightId` local, `ExpandableSection` +
+  `clickableWithoutRipple`, and ~30 unused imports in `ShaftScreen.kt`.
+- **PDF**: `DimSpan.labelBottom` (never non-null) + its render branch and
+  `textBelowDy`/`minGap`/`lineAdvance` ctor params in `PdfDimensionRenderer`; dead
+  `computeBodyOnlyPtPerMm` (test retargeted at the live `computeDetailPtPerMm`),
+  `computePdfPtPerMmFitAxes`, `fmtLen`, `hasAftTaper`/`hasFwdTaper`, `textSmall`;
+  `drawRunoutHeader`'s unused `spec`/`unit`/`oalMm` params + stale "OAL in header" KDoc.
+- **Model/util**: `AddDefaultsConfig` reduced to the inch presets + live `BODY_DIA_MM`
+  (ten unit-aware helpers, `*_MM` twins, `TAPER_RATIO` deleted; `docs/Defaults.md`
+  v1.3), `Threads.hasPitch` (test-only; 3 tests removed), `Liner.startMmPhysical`
+  getter (serialization unaffected — `@SerialName` carries the JSON key), dead elvis in
+  `Threads.normalized()`, `filterDecimalPermissive`, deprecated
+  `InternalStorage.normalizeJsonName` alias.
+- **Deliberately NOT deleted** (open product decisions): the `componentOrder`
+  subsystem incl. `moveComponentUp/Down` (ComponentsOrdering.md contract question;
+  order participates in undo snapshots), `ui/theme` (theme-wiring decision), the
+  `ui/util/*Naming.kt` shims (repoint, don't delete — Wave 3).
+
+### docs: taper orientation discrepancy analysis (TODO §2.3)
+
+- Investigation written to `docs/TaperOrientation_Analysis_2026-07-26.md` — no code
+  change. Finding: three SET/LET conventions coexist (Add dialog keys the swap on the
+  measure-from toggle; derivation/labels key on the midpoint half; keyway placement
+  keys on diameter magnitude), so a taper added into the opposite half from its
+  measure-from direction stores SET at the wrong face — drawn backwards, card labels
+  swapped. Also: the Add path drops the FWD measuring reference (`authoredReference`
+  never set). Includes a 2-minute on-device repro recipe and recommended fixes
+  (re-key the dialog swap on the physical half + persist `authoredReference`), with a
+  data-repair option left as a product decision.
+
+### docs: multi-shaft-per-job feasibility plan
+
+- `docs/MultiShaftJob_Plan_2026-07-26.md` — architecture assessment for "two shafts
+  under one job number, selectable". Recommends derived job grouping over the existing
+  one-shaft-per-file format (no format change, no manifest) + an "Add shaft to this
+  job" flow and an in-editor sibling quick-switch; flags the pre-existing runout/wear
+  export-filename collision (missing position suffix) as Phase 0.
+
 ## 2026-07-26
 
 ### fix(warnings): removed the taper-vs-body Ø mismatch advisory
