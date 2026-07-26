@@ -47,10 +47,20 @@ missing from `AddThreadDialog` for several versions (restored 2026-06-23).
 | Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
 
 Matches `ComponentCarousel.kt` `ResolvedBody` explicit-body branch. The **auto-body**
-card intentionally shows only Start/Length/Ø — auto-bodies are derived and cannot host
-a keyway until promoted; that reduced card is not a parity violation. The 180°-apart
-toggle writes spec-level `ShaftSpec.keyways180Apart` (the card's switch appears when
-`spec.keywayCount() >= 2`, which is the same condition evaluated at add time).
+card intentionally shows only Start/Length/Ø (now disabled/greyed, derived values) — 
+auto-bodies are derived and cannot host a keyway until promoted; that reduced card is
+not a parity violation. The 180°-apart toggle writes spec-level
+`ShaftSpec.keyways180Apart` (the card's switch appears when `spec.keywayCount() >= 2`,
+which is the same condition evaluated at add time).
+
+The explicit-body card's **"Explicit body"** checkbox (checked; unchecking demotes back
+to auto-fill via a confirmation dialog) — and the auto-body card's own "Explicit body"
+checkbox (unchecked; the sole promotion path) — are **card-state, not add-time state**,
+the same posture as the coupler-bolt-slot card's deferred "show dimension rail" toggle.
+On both cards the checkbox row sits **above** the Start/Length/Ø fields so its position
+doesn't jump when checking it swaps the auto card for the explicit one.
+`AddBodyDialog` has no equivalent control: an Add dialog always creates an explicit body
+by definition, so there is nothing to toggle. This is intentional and not a parity gap.
 
 ### AddLinerDialog
 | Field / control | Condition |

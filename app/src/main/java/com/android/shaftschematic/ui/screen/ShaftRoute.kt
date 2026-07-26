@@ -40,6 +40,8 @@ fun ShaftRoute(
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onSaveAs: () -> Unit = {},
+    /** Close the current document (guarded for unsaved work) and return to Start. */
+    onCloseDocument: () -> Unit = {},
     onExportPdf: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
@@ -79,7 +81,7 @@ fun ShaftRoute(
                     )
 
                     if (result == SnackbarResult.ActionPerformed) {
-                        vm.undoLastDelete()
+                        vm.undoEdit()
                     }
                 }
             }
@@ -122,8 +124,8 @@ fun ShaftRoute(
     val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
     val editorResetNonce by vm.editorResetNonce.collectAsState()
 
-    val canUndoDeletes by vm.canUndoDeletes.collectAsState()
-    val canRedoDeletes by vm.canRedoDeletes.collectAsState()
+    val canUndo by vm.canUndo.collectAsState()
+    val canRedo by vm.canRedo.collectAsState()
 
     val sessionAddDefaults by vm.sessionAddDefaults.collectAsState()
     val pendingAddPositionMm by vm.pendingAddPositionMm.collectAsState()
@@ -231,6 +233,7 @@ fun ShaftRoute(
         onOpen = onOpen,
         onSave = onSave,
         onSaveAs = onSaveAs,
+        onCloseDocument = onCloseDocument,
         onExportPdf = onExportPdf,
         onOpenSettings = onOpenSettings,
         onSendFeedback = onSendFeedback,
@@ -238,10 +241,10 @@ fun ShaftRoute(
 
         devOptionsEnabled = devOptionsEnabled,
 
-        canUndo = canUndoDeletes,
-        canRedo = canRedoDeletes,
-        onUndo = vm::undoLastDelete,
-        onRedo = vm::redoLastDelete,
+        canUndo = canUndo,
+        canRedo = canRedo,
+        onUndo = vm::undoEdit,
+        onRedo = vm::redoEdit,
 
         sessionAddDefaults = sessionAddDefaults,
 

@@ -119,11 +119,19 @@ was gained. A tap-and-leave with no edit must be a no-op. This prevents spurious
 auto-body promotion and unnecessary ViewModel updates. See `NumberField.md`.
 
 ### Auto-body promotion
-Auto-body cards in the carousel (`ResolvedComponentSource.AUTO`) promote to real bodies
-only on an **explicit user action**: editing one of their fields, or ticking the
-**"Make editable body"** checkbox. Blur without a value change must not trigger
-`promoteIfNeeded()`. Both paths guard on the same `promoted` state so promotion fires
-once. See `ComponentCarousel.kt`.
+Auto-body cards in the carousel (`ResolvedComponentSource.AUTO`) show Start/Length/Ø as
+**disabled** (greyed, derived-value) fields — there is no field-edit promotion path.
+Promotion to a real body happens only on an **explicit user action**: ticking the
+**"Explicit body"** checkbox (relabeled from "Make editable body"). Checking it calls
+`onAddBody` with the auto-body's current derived Start/Length/Ø, guarded by a `promoted`
+state so it fires once. Explicit-body cards carry the same "Explicit body" checkbox,
+checked; unchecking opens an AlertDialog ("Make body automatic?", with an extra sentence
+when `body.hasKeyway` warning that the keyway will be lost) — confirming demotes via the
+existing `onRemoveBody(b.id)` pipeline (the resolve layer regenerates the auto-fill span);
+Cancel keeps it explicit. On **both** cards the checkbox row sits **above** the
+Start/Length/Ø fields, so it stays put when checking it swaps the card from auto to
+explicit. `testTag`s: `body_explicit_checkbox`, `body_demote_confirm`. See
+`ComponentCarousel.kt`.
 
 ### Bodies are fillers, not collision participants
 Bodies (stored `ShaftSpec.bodies`) are the shaft's fluid base. A body legitimately runs

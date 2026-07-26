@@ -27,14 +27,14 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 | Shared signing config | ✅ debug.keystore committed; all machines update-install |
 | Internal save/open | ✅ Working |
 | Backup & restore | ✅ Zip backup/restore via file picker, per-shaft import/export, pre-update snapshots (keep 3), Auto Backup rules; sample pruning made non-destructive (seed-hash ledger) |
-| Autosave / draft restore | ✅ Working |
+| Autosave / draft restore | ✅ Reworked 2026-07-25 — dirty-gated 3-entry draft ring (per-document identity) replaces the single always-overwriting slot that caused a data-loss incident; StartScreen shows an "Unsaved drafts" list. See `docs/Autosave_Incident_2026-07-25.md` |
 | ShaftScreen.kt | ✅ Carousel extracted to `ComponentCarousel.kt` (2322 → 1434 lines) |
 | Sidebar nav (3 tabs) | ✅ EditorSidebar + EditorTab + ShaftEditorRoute updated |
 | Runout drawing | ✅ RunoutPdfComposer, inline shaft preview, scrollable layout, collision-free alternating bubble layout via shared `geom/RunoutBubbleLayout.kt`; resolved-component geometry (2026-07-18) |
 | Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes; resolved-component geometry (2026-07-18) |
 | Liner wear areas | ✅ Built 2026-07-18 (all 4 phases + input spec: SET/liner-edge references, blocking span validation, PDF detail strips with dimension rails) — awaiting Chris's on-device verification. See `docs/LinerWearAreas_BuildLog_2026-07-18.md` |
 | Wear pits (X markers) | ✅ Built 2026-07-21 — small/large pit "X"s on bodies, tapers & liners (tap to open a segment; explicit Add X / Remove X / Clear all tools); drawn on the wear PDF profile + strips. Wear PDF now keeps the shaft profile always on top with a 2-column detail-strip grid. See CHANGELOG + "Wear Pits" in `docs/RunoutSheet.md`. Awaiting on-device verification |
-| Body keyways | ✅ Built 2026-07-20 — taper-style keyway on bodies (open + floating), 180°-apart hidden-line toggle, auto-body "Make editable body" promotion; split/merge carry keeps keyway at absolute position |
+| Body keyways | ✅ Built 2026-07-20 — taper-style keyway on bodies (open + floating), 180°-apart hidden-line toggle, auto-body promotion via the "Explicit body" checkbox (checkbox-only, reworked 2026-07-25); split/merge carry keeps keyway at absolute position |
 | Runout bubble editor | ✅ Built 2026-07-21 — tap a bubble to record TIR value + high-spot clock marker; open-topped keyway cutout in the bubble; drawn identically on canvas + PDF |
 | Spooned keyways | ✅ Built 2026-07-22 — draw-only enlarged bowl at the closed (LET) end of an open keyway; footer note "KW length to base of spoon" added 2026-07-24 |
 | Diameter callouts (schematic PDF) | ✅ Built 2026-07-22 — on-shaft Ø callouts below the shaft, 3-decimal, two-tier stacking, liners included as a separate OD group |
@@ -81,6 +81,25 @@ These are defined in the contract but not yet computed. Lower priority — add w
   tiny-segment count and zero-body-coverage message are computed and unit-tested but not wired
   to any screen (badge, banner, or elsewhere); the five carousel-card-level warnings above are
   already live.
+
+### 2.3 Bug Fixes (open)
+
+- [x] **§3.3 taper-vs-body warning false positive** (Chris, on-device 2026-07-25): FWD-end taper
+  with LET 7" abutting a 7" body (SET 6" at the tip) warned "Ø differs from adjacent body
+  by >10%". Root cause: `hasTaperBodyMismatch` (`ui/util/ComponentWarnings.kt`) mapped
+  `startDiaMm` → face at `startFromAftMm` and `endDiaMm` → far face, but for FWD-referenced
+  tapers the stored SET/LET pair can be swapped relative to axial position, so the rule read
+  the SET at the body-adjacent face. Fixed 2026-07-25 by `taperFaceDiametersMm` (physical
+  AFT/FWD face diameters via the SET-by-shaft-half convention, same magnitude-based SET
+  detection as the renderer); 4 regression tests added (`ComponentWarningsTest.kt`).
+- [ ] **Investigate renderer/storage taper orientation discrepancy** (discovered while fixing
+  the bug above, 2026-07-25, not fixed — out of scope): the Add-taper path stores
+  `startDiaMm = SET` regardless of shaft half, while the carousel edit path stores the pair
+  x-ordered — the two storage paths disagree for FWD tapers. `ShaftRenderer.kt` draws the
+  taper trapezoid strictly x-ordered (`startDiaMm` at the AFT face unconditionally, ~L214/252),
+  so an Add-path-created, never-edited FWD taper may **draw** with its small end at the body
+  face even though the SET/LET-by-shaft-half convention says otherwise. Needs on-device
+  confirmation, then a decision on the canonical storage order and a normalization pass.
 
 ---
 
@@ -141,7 +160,16 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 - [ ] Selection → contextual "Add near selected" defaults
 - [ ] Inline "Add here" buttons between components in list
-- [ ] Undo/redo architecture (needed before v1.0)
+- [x] Undo/redo architecture — session-scoped, done 2026-07-26: `SessionHistory<EditState>`
+  (`ui/viewmodel/SessionHistory.kt` + `ui/viewmodel/EditState.kt`) covers every drawing
+  edit (spec, wear record, runout readings, component order, OAL mode), 600 ms burst
+  coalescing, 50-step cap, cleared at session boundaries; replaces the old delete-only
+  undo. `undoEdit()`/`redoEdit()` on `ShaftViewModel`. See `docs/ShaftViewModel.md`.
+- [ ] Undo/redo follow-ups (future scope, not blocking v1.0): cross-session/persisted
+  undo history (currently in-memory, cleared on process death and at every
+  new/open/import boundary), and metadata (customer/vessel/job number/notes/shaft
+  position/unit) is deliberately excluded from the undoable state — revisit if that
+  becomes a complaint.
 - [ ] Preset library (common tapers, common shoulder patterns)
 - [ ] Dual-unit display (primary in, secondary mm in smaller text)
 - [ ] Quick inline mm ↔ in calculator in dialogs

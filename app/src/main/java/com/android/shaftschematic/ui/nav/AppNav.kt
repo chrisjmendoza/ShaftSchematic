@@ -3,7 +3,9 @@ package com.android.shaftschematic.ui.nav
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
@@ -21,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -57,11 +60,54 @@ import kotlinx.coroutines.withContext
 @Composable
 fun AppNav(vm: ShaftViewModel) {
     val nav = rememberNavController()
+    val appCtx = LocalContext.current
+    val appScope = rememberCoroutineScope()
+    val currentDocumentName by vm.currentDocumentName.collectAsState()
 
     // Continuation for the unsaved-changes dialog's "Save" path: when the user must first
     // name the document (saveLocal route), the intended action (New/Open) is stashed here
     // and resumed after a successful save. Cleared on cancel (unsaved work still present).
     val pendingPostSaveAction = remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    // Hoisted unsaved-changes guard shared by EVERY session-replacing entry point (Start's
+    // New/Open/Open-recent, the editor's New/Open, and Close Document). The action to run once
+    // the user resolves the prompt lives here at NavHost scope so a single dialog serves all
+    // routes and the saveLocal continuation (pendingPostSaveAction) works from anywhere.
+    var guardedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    // Run [action] immediately when the session is clean, else open the unsaved-changes dialog.
+    val runGuarded: (() -> Unit) -> Unit = { action ->
+        if (vm.hasUnsavedWork()) guardedAction = action else action()
+    }
+
+    guardedAction?.let { action ->
+        UnsavedChangesDialog(
+            onSave = {
+                guardedAction = null
+                val docName = currentDocumentName
+                if (docName != null) {
+                    // Known filename → quick-save, then continue the action.
+                    appScope.launch {
+                        withContext(Dispatchers.IO) {
+                            InternalStorage.save(appCtx, docName, vm.exportJson())
+                        }
+                        vm.markDocumentSaved()
+                        action()
+                    }
+                } else {
+                    // Needs a name → resume the action after the save screen.
+                    pendingPostSaveAction.value = action
+                    nav.navigate("saveLocal")
+                }
+            },
+            onDontSave = {
+                // Proceed without saving. The draft-ring entry stays as the safety net.
+                guardedAction = null
+                action()
+            },
+            onCancel = { guardedAction = null },
+        )
+    }
 
     NavHost(navController = nav, startDestination = "start") {
 
@@ -71,7 +117,7 @@ fun AppNav(vm: ShaftViewModel) {
             val scope = rememberCoroutineScope()
             val snackbarHostState = remember { SnackbarHostState() }
             val unit by vm.unit.collectAsState()
-            val hasDraft by vm.hasDraft.collectAsState(initial = false)
+            val drafts by vm.drafts.collectAsState()
             var recentFiles by remember { mutableStateOf(listOf<Pair<String, Long>>()) }
 
             LaunchedEffect(Unit) {
@@ -82,10 +128,12 @@ fun AppNav(vm: ShaftViewModel) {
                 Box(Modifier.padding(pad)) {
                     StartScreen(
                         onNew = {
-                            vm.newDocument()
-                            nav.navigate("editor")
+                            runGuarded {
+                                vm.newDocument()
+                                nav.navigate("editor")
+                            }
                         },
-                        onOpen = { nav.navigate("openLocal") },
+                        onOpen = { runGuarded { nav.navigate("openLocal") } },
                         onSettings = { nav.navigate("settings") },
                         onSendFeedback = {
                             val intent = FeedbackIntentFactory.create(
@@ -101,22 +149,27 @@ fun AppNav(vm: ShaftViewModel) {
                                 scope.launch { snackbarHostState.showSnackbar("No email app found.") }
                             }
                         },
-                        hasDraft = hasDraft,
-                        onContinueDraft = { nav.navigate("editor") },
-                        onDiscardDraft = { vm.discardDraft() },
+                        drafts = drafts,
+                        onContinueDraft = { draftId ->
+                            vm.continueDraft(draftId)
+                            nav.navigate("editor")
+                        },
+                        onDiscardDraft = { draftId -> vm.discardDraft(draftId) },
                         recentFiles = recentFiles,
                         onOpenRecent = { filename ->
-                            scope.launch {
-                                // importJson must be inside runCatching — it throws on
-                                // corrupt files and unsupported (newer) format versions.
-                                runCatching {
-                                    val text = withContext(Dispatchers.IO) { InternalStorage.load(ctx, filename) }
-                                    vm.importJson(text)
-                                }.onSuccess {
-                                    vm.setCurrentDocumentName(filename)
-                                    nav.navigate("editor")
-                                }.onFailure { e ->
-                                    snackbarHostState.showSnackbar(openFailureMessage(filename, e))
+                            runGuarded {
+                                scope.launch {
+                                    // importJson must be inside runCatching — it throws on
+                                    // corrupt files and unsupported (newer) format versions.
+                                    runCatching {
+                                        val text = withContext(Dispatchers.IO) { InternalStorage.load(ctx, filename) }
+                                        vm.importJson(text)
+                                    }.onSuccess {
+                                        vm.setCurrentDocumentName(filename)
+                                        nav.navigate("editor")
+                                    }.onFailure { e ->
+                                        snackbarHostState.showSnackbar(openFailureMessage(filename, e))
+                                    }
                                 }
                             }
                         }
@@ -129,62 +182,20 @@ fun AppNav(vm: ShaftViewModel) {
         composable("editor") {
             val ctx = LocalContext.current
             val scope = rememberCoroutineScope()
-            val currentDocumentName by vm.currentDocumentName.collectAsState()
-            var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-            if (pendingAction != null) {
-                AlertDialog(
-                    onDismissRequest = { pendingAction = null },
-                    title = { Text("Unsaved changes") },
-                    text = { Text("You have unsaved changes. Save before continuing?") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            val action = pendingAction
-                            pendingAction = null
-                            val docName = currentDocumentName
-                            if (docName != null) {
-                                // Known filename → quick-save, then continue the action.
-                                scope.launch {
-                                    withContext(Dispatchers.IO) {
-                                        InternalStorage.save(ctx, docName, vm.exportJson())
-                                    }
-                                    vm.markDocumentSaved()
-                                    action?.invoke()
-                                }
-                            } else {
-                                // Needs a name → resume the action after the save screen.
-                                pendingPostSaveAction.value = action
-                                nav.navigate("saveLocal")
-                            }
-                        }) { Text("Save") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = {
-                            val action = pendingAction
-                            pendingAction = null
-                            action?.invoke()
-                        }) { Text("Discard") }
-                    }
-                )
+            val goHome: () -> Unit = {
+                nav.navigate("start") {
+                    launchSingleTop = true
+                    popUpTo(nav.graph.startDestinationId) { inclusive = false }
+                }
             }
 
             ShaftEditorRoute(
                 vm = vm,
-                onNavigateHome = {
-                    nav.navigate("start") {
-                        launchSingleTop = true
-                        popUpTo(nav.graph.startDestinationId) { inclusive = false }
-                    }
-                },
-                onNew = {
-                    if (vm.hasUnsavedWork()) pendingAction = { vm.newDocument() }
-                    else vm.newDocument()
-                },
+                onNavigateHome = goHome,
+                onNew = { runGuarded { vm.newDocument() } },
                 // OPEN/SAVE = internal storage
-                onOpen = {
-                    if (vm.hasUnsavedWork()) pendingAction = { nav.navigate("openLocal") }
-                    else nav.navigate("openLocal")
-                },
+                onOpen = { runGuarded { nav.navigate("openLocal") } },
                 onSave = {
                     val docName = currentDocumentName
                     if (docName != null) {
@@ -199,6 +210,14 @@ fun AppNav(vm: ShaftViewModel) {
                     }
                 },
                 onSaveAs = { nav.navigate("saveLocal") },
+                // Close = reset to a blank doc and return home. Guarded so unsaved work prompts
+                // Save/Don't save/Cancel first (the draft ring keeps the work either way).
+                onCloseDocument = {
+                    runGuarded {
+                        vm.newDocument()
+                        goHome()
+                    }
+                },
                 onOpenSettings = { nav.navigate("settings") },
                 onOpenDeveloperOptions = { nav.navigate("developerOptions") },
                 // PDF EXPORT = show preview first, then SAF
@@ -273,4 +292,29 @@ fun AppNav(vm: ShaftViewModel) {
             PdfExportRoute(nav = nav, vm = vm) { nav.popBackStack() }
         }
     }
+}
+
+/**
+ * Shared "Unsaved changes" prompt for every session-replacing action (New, Open, Open recent,
+ * Close Document). Three choices: Save (persist then continue), Don't save (continue — the
+ * autosave draft ring keeps the work as a safety net, so this is not "Discard"), Cancel (stay).
+ */
+@Composable
+private fun UnsavedChangesDialog(
+    onSave: () -> Unit,
+    onDontSave: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Unsaved changes") },
+        text = { Text("You have unsaved changes. Save before continuing?") },
+        confirmButton = { TextButton(onClick = onSave) { Text("Save") } },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onDontSave) { Text("Don't save") }
+                TextButton(onClick = onCancel) { Text("Cancel") }
+            }
+        }
+    )
 }

@@ -34,6 +34,7 @@ import com.android.shaftschematic.util.parseToMm
 import com.android.shaftschematic.util.VerboseLog
 import android.util.Log
 import com.android.shaftschematic.data.AutosaveManager
+import com.android.shaftschematic.data.shouldWriteDraft
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -43,85 +44,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.math.max
 import kotlin.math.min
-
-// Internal payload used by Undo/Redo for deletes.
-// Not part of the public API; safe to change as the undo feature evolves.
-// Captures the exact spec + order before the delete so undo can restore
-// geometry that may have been temporarily re-snapped during delete.
-private sealed class LastDeleted {
-    abstract val id: String
-    abstract val kind: ComponentKind
-    abstract val orderIndex: Int
-    abstract val beforeSpec: ShaftSpec
-    abstract val beforeOrder: List<ComponentKey>
-
-    data class Body(
-        val value: com.android.shaftschematic.model.Body,
-        override val orderIndex: Int,
-        val listIndex: Int,
-        override val beforeSpec: ShaftSpec,
-        override val beforeOrder: List<ComponentKey>,
-    ) : LastDeleted() {
-        override val id: String get() = value.id
-        override val kind: ComponentKind get() = ComponentKind.BODY
-    }
-
-    data class Taper(
-        val value: com.android.shaftschematic.model.Taper,
-        override val orderIndex: Int,
-        val listIndex: Int,
-        override val beforeSpec: ShaftSpec,
-        override val beforeOrder: List<ComponentKey>,
-    ) : LastDeleted() {
-        override val id: String get() = value.id
-        override val kind: ComponentKind get() = ComponentKind.TAPER
-    }
-
-    data class Thread(
-        val value: com.android.shaftschematic.model.Threads,
-        override val orderIndex: Int,
-        val listIndex: Int,
-        override val beforeSpec: ShaftSpec,
-        override val beforeOrder: List<ComponentKey>,
-    ) : LastDeleted() {
-        override val id: String get() = value.id
-        override val kind: ComponentKind get() = ComponentKind.THREAD
-    }
-
-    data class Liner(
-        val value: com.android.shaftschematic.model.Liner,
-        override val orderIndex: Int,
-        val listIndex: Int,
-        override val beforeSpec: ShaftSpec,
-        override val beforeOrder: List<ComponentKey>,
-    ) : LastDeleted() {
-        override val id: String get() = value.id
-        override val kind: ComponentKind get() = ComponentKind.LINER
-    }
-
-    data class CouplerBoltSlot(
-        val value: com.android.shaftschematic.model.CouplerBoltSlot,
-        override val orderIndex: Int,
-        val listIndex: Int,
-        override val beforeSpec: ShaftSpec,
-        override val beforeOrder: List<ComponentKey>,
-    ) : LastDeleted() {
-        override val id: String get() = value.id
-        override val kind: ComponentKind get() = ComponentKind.COUPLER_BOLT_SLOT
-    }
-}
-
-/** Maximum number of delete steps tracked for undo/redo. */
-private const val MAX_DELETE_HISTORY = 10
 
 /**
  * File: ShaftViewModel.kt
@@ -147,32 +81,81 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     val didRestoreAutosave: StateFlow<Boolean> = _didRestoreAutosave.asStateFlow()
     fun consumeDidRestoreAutosave() { _didRestoreAutosave.value = false }
 
-    // Draft availability state
-    private val _hasDraft = MutableStateFlow(false)
-    val hasDraft: StateFlow<Boolean> = _hasDraft.asStateFlow()
+    // Draft ring state (up to 3 unsaved sessions, newest-first). Replaces the single-slot
+    // `_hasDraft` boolean. See docs/Autosave_Incident_2026-07-25.md.
+    private val _drafts = MutableStateFlow<List<AutosaveManager.DraftEntry>>(emptyList())
+    val drafts: StateFlow<List<AutosaveManager.DraftEntry>> = _drafts.asStateFlow()
+
+    /** Derived convenience: whether any draft exists (for Boolean-only callers). */
+    val hasDraft: StateFlow<Boolean> = _drafts
+        .map { it.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // Per-editing-session draft identity. Minted on construction, re-minted on newDocument()
+    // and importJson() so working on one document can never touch another's draft entry.
+    private var currentDraftId: String = UUID.randomUUID().toString()
+
+    // Full snapshot of the last saved-to-file / freshly-loaded state — the dirty gate's
+    // baseline. The autosave observer writes a draft only when the live snapshot differs.
+    private var savedSnapshot: AutosaveManager.SessionSnapshot? = null
+
+    // Whether currentDraftId currently has a persisted entry in the ring. Used to remove the
+    // entry exactly once on a dirty→clean transition (avoids hammering DataStore).
+    private var draftPersisted: Boolean = false
+
+    /** Build a snapshot of the current live session state (mirrors the autosave combine). */
+    private fun buildCurrentSnapshot(): AutosaveManager.SessionSnapshot =
+        AutosaveManager.SessionSnapshot(
+            shaftSpec = _spec.value,
+            unitSystem = _unit.value,
+            shaftPosition = _shaftPosition.value,
+            customer = _customer.value,
+            vessel = _vessel.value,
+            jobNumber = _jobNumber.value,
+            notes = _notes.value,
+            runoutConfig = _runoutConfig.value,
+            unitLocked = _unitLocked.value,
+            overallIsManual = _overallIsManual.value,
+            wearRecord = _wearRecord.value,
+            runoutReadings = _runoutReadings.value,
+        )
 
     /**
-     * Discard the current draft: clears autosave, resets VM to blank doc, and updates draft flags.
+     * Restore a specific draft into the editor (StartScreen picker). The session stays "dirty"
+     * (savedSnapshot is left as-is) so the draft is retained until an explicit save.
      */
-    fun discardDraft() {
+    fun continueDraft(draftId: String) {
+        val entry = _drafts.value.firstOrNull { it.draftId == draftId } ?: return
+        restoreSnapshot(entry.snapshot)
+        currentDraftId = entry.draftId
+        _currentDocumentName.value = entry.documentName
+        draftPersisted = true
+        _didRestoreAutosave.value = true
+        // Session boundary: undo starts fresh from the restored draft.
+        clearEditHistory()
+    }
+
+    /**
+     * Discard exactly one draft by [draftId]. If it is the current/restored session, also reset
+     * the editor to a blank document (mints a fresh draft identity).
+     */
+    fun discardDraft(draftId: String) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                AutosaveManager.clear(getApplication())
+            withContext(Dispatchers.IO) { AutosaveManager.removeDraft(getApplication(), draftId) }
+            val wasCurrent = draftId == currentDraftId
+            _drafts.value = withContext(Dispatchers.IO) { AutosaveManager.loadDrafts(getApplication()) }
+            if (wasCurrent) {
+                _didRestoreAutosave.value = false
+                newDocument()
             }
-            _hasDraft.value = false
-            _didRestoreAutosave.value = false
-            newDocument()
         }
     }
+
+    /** Discard the current session's draft (no-arg convenience for legacy callers). */
+    fun discardDraft() = discardDraft(currentDraftId)
     // ────────────────────────────────────────────────────────────────────────────
     // Unsaved-changes tracking + current document name
     // ────────────────────────────────────────────────────────────────────────────
-
-    private var _savedSpec: ShaftSpec = ShaftSpec()
-    private var _savedJobNumber: String = ""
-    private var _savedCustomer: String = ""
-    private var _savedVessel: String = ""
-    private var _savedNotes: String = ""
 
     // Filename (with .shaft extension) of the last save/open, or null when the document
     // has never been saved. Used to enable silent quick-save without reprompting for a name.
@@ -182,20 +165,22 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun setCurrentDocumentName(name: String?) { _currentDocumentName.value = name }
 
     fun markDocumentSaved() {
-        _savedSpec = _spec.value
-        _savedJobNumber = _jobNumber.value
-        _savedCustomer = _customer.value
-        _savedVessel = _vessel.value
-        _savedNotes = _notes.value
+        // Full-snapshot baseline shared by BOTH the autosave dirty gate and hasUnsavedWork():
+        // after a real save/load the session is "clean", so the observer stops writing (and
+        // removes) this session's draft, and no unsaved-changes prompt fires.
+        savedSnapshot = buildCurrentSnapshot()
     }
 
+    /**
+     * Whether the session differs from the last saved/loaded state. Uses the SAME full-snapshot
+     * comparison as the autosave dirty gate ([shouldWriteDraft]) so *every* tracked field —
+     * spec, metadata, position, unit-lock, OAL mode, wear record, runout readings/config —
+     * counts as unsaved work (an earlier partial comparison missed wear/runout edits, which is
+     * how the 2026-07-25 incident slipped guards). See docs/Autosave_Incident_2026-07-25.md.
+     */
     fun hasUnsavedWork(): Boolean {
         if (isSessionDefault()) return false
-        return _spec.value != _savedSpec ||
-               _jobNumber.value != _savedJobNumber ||
-               _customer.value != _savedCustomer ||
-               _vessel.value != _savedVessel ||
-               _notes.value != _savedNotes
+        return shouldWriteDraft(buildCurrentSnapshot(), savedSnapshot)
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -554,51 +539,106 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)
     val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
 
-    // Delete / Undo / Redo history (delete-only, v1.5)
-    private val deleteHistory = ArrayDeque<LastDeleted>()
-    private val redoHistory = ArrayDeque<LastDeleted>()
+    // ────────────────────────────────────────────────────────────────────────────
+    // Session-scoped Undo / Redo (v2) — covers ALL drawing-state edits, not just deletes.
+    //
+    // A single [SessionHistory] over [EditState] snapshots (spec + wear + runout + order +
+    // OAL mode). Snapshots are recorded centrally by a collector over those flows (see init),
+    // with time-based coalescing living in SessionHistory (a typing burst = one undo step).
+    // Undo/redo apply a restored EditState back onto the flows; the collector's re-emission
+    // is a no-op because SessionHistory.record ignores states equal to its current head
+    // (isRestoringHistory is a belt-and-suspenders guard around the application block).
+    // History is dropped at document/session boundaries (newShaft/importJson/newDocument/
+    // continueDraft and the autosave auto-restore).
+    // ────────────────────────────────────────────────────────────────────────────
+    private val editHistory = SessionHistory<EditState>()
 
-    // True while redoLastDelete() replays a delete through the public removeX APIs.
-    // A replayed delete must not clear redoHistory — only a fresh user delete starts
-    // a new branch. Single-threaded (all mutations on Main), so a plain flag suffices.
-    private var isRedoing = false
+    // Guards the collector while undo/redo applies a restored EditState to the flows so the
+    // restore does not itself get recorded as a new edit. Single-threaded (Main), so a plain
+    // flag suffices; SessionHistory's identical-state no-op is the authoritative backstop.
+    private var isRestoringHistory = false
 
-    // Expose whether deletes can be undone/redone for UI buttons.
-    private val _canUndoDeletes = MutableStateFlow(false)
-    val canUndoDeletes: StateFlow<Boolean> = _canUndoDeletes.asStateFlow()
+    private val _canUndo = MutableStateFlow(false)
+    val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
 
-    private val _canRedoDeletes = MutableStateFlow(false)
-    val canRedoDeletes: StateFlow<Boolean> = _canRedoDeletes.asStateFlow()
+    private val _canRedo = MutableStateFlow(false)
+    val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
 
-    private fun updateUndoRedoFlags() {
-        _canUndoDeletes.value = deleteHistory.isNotEmpty()
-        _canRedoDeletes.value = redoHistory.isNotEmpty()
+    /** Snapshot the current undoable slice of editor state. */
+    private fun currentEditState(): EditState = EditState(
+        spec = _spec.value,
+        wearRecord = _wearRecord.value,
+        runoutReadings = _runoutReadings.value,
+        componentOrder = _componentOrder.value,
+        overallIsManual = _overallIsManual.value,
+    )
+
+    private fun updateHistoryFlags() {
+        _canUndo.value = editHistory.canUndo
+        _canRedo.value = editHistory.canRedo
     }
 
-    private fun clearDeleteHistory() {
-        deleteHistory.clear()
-        redoHistory.clear()
-        updateUndoRedoFlags()
+    /** Drop all undo/redo history. Called at every document/session boundary. */
+    private fun clearEditHistory() {
+        editHistory.clear()
+        updateHistoryFlags()
+    }
+
+    /** Apply a restored [EditState] to every undoable flow without re-recording it. */
+    private fun applyEditState(e: EditState) {
+        isRestoringHistory = true
+        try {
+            _spec.value = e.spec
+            _wearRecord.value = e.wearRecord
+            _runoutReadings.value = e.runoutReadings
+            _componentOrder.value = e.componentOrder
+            _overallIsManual.value = e.overallIsManual
+        } finally {
+            isRestoringHistory = false
+        }
+    }
+
+    /** Undo the most recent edit step (spec / wear / runout / order / OAL mode). */
+    fun undoEdit() {
+        val restored = editHistory.undo(currentEditState()) ?: return
+        applyEditState(restored)
+        updateHistoryFlags()
+    }
+
+    /** Redo the most recently undone edit step. */
+    fun redoEdit() {
+        val restored = editHistory.redo(currentEditState()) ?: return
+        applyEditState(restored)
+        updateHistoryFlags()
     }
 
     // ────────────────────────────────────────────────────────────────────────────
     // Autosave and SettingsStore integration
     // ────────────────────────────────────────────────────────────────────────────
     init {
+        // Seed the dirty-gate baseline to the current (blank) session so a pristine, untouched
+        // start never writes a draft. markDocumentSaved()/importJson()/newDocument() reseat it.
+        savedSnapshot = buildCurrentSnapshot()
+
         // --- AUTOSAVE RESTORE + OBSERVER ---
         viewModelScope.launch {
-            val restored = withContext(Dispatchers.IO) {
-                AutosaveManager.restore(getApplication())
+            val loaded = withContext(Dispatchers.IO) {
+                AutosaveManager.loadDrafts(getApplication())
             }
-            if (restored != null) {
-                _hasDraft.value = true
-                _didRestoreAutosave.value = true
-            }
-            if (restored != null && isSessionDefault()) {
+            _drafts.value = loaded
+            val newest = loaded.firstOrNull()
+            // Auto-restore the newest draft only into a fresh/default session, same as before.
+            if (newest != null && isSessionDefault()) {
                 try {
-                    restoreSnapshot(restored)
+                    restoreSnapshot(newest.snapshot)
+                    currentDraftId = newest.draftId
+                    _currentDocumentName.value = newest.documentName
+                    draftPersisted = true
+                    _didRestoreAutosave.value = true
+                    // Session boundary: undo must not cross back into the pre-restore blank.
+                    clearEditHistory()
                 } catch (_: Exception) {}
-            } else if (restored != null) {
+            } else if (newest != null) {
                 VerboseLog.d(VerboseLog.Category.IO, "Autosave") {
                     "autosave restore skipped (session already initialized)"
                 }
@@ -644,7 +684,27 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 .debounce(1500)
                 .collectLatest { snapshot ->
                     try {
-                        AutosaveManager.autosave(getApplication(), snapshot)
+                        // Dirty gate: only persist a draft when the session differs from the last
+                        // saved/loaded state. A freshly-loaded pristine document (savedSnapshot ==
+                        // snapshot) can never overwrite an existing draft. When the state returns
+                        // to clean, remove this session's draft entry exactly once.
+                        if (shouldWriteDraft(snapshot, savedSnapshot)) {
+                            AutosaveManager.saveDraft(
+                                getApplication(),
+                                AutosaveManager.DraftEntry(
+                                    draftId = currentDraftId,
+                                    documentName = _currentDocumentName.value,
+                                    updatedAtEpochMs = System.currentTimeMillis(),
+                                    snapshot = snapshot,
+                                ),
+                            )
+                            draftPersisted = true
+                            _drafts.value = AutosaveManager.loadDrafts(getApplication())
+                        } else if (draftPersisted) {
+                            AutosaveManager.removeDraft(getApplication(), currentDraftId)
+                            draftPersisted = false
+                            _drafts.value = AutosaveManager.loadDrafts(getApplication())
+                        }
                     } catch (_: CancellationException) {
                         // ignore
                     } catch (_: Exception) {
@@ -658,6 +718,29 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 resolveComponents(s, isManual)
             }.collectLatest { resolved ->
                 _resolvedComponents.value = resolved
+            }
+        }
+
+        // --- SESSION UNDO/REDO RECORDER ---
+        // Central recording of every undoable edit. No debounce operator here on purpose —
+        // coalescing (bursts → one step) is SessionHistory's job, driven by the wall clock.
+        // The first emission seeds the history head; subsequent genuine changes become steps.
+        // Restores (undo/redo) re-emit the restored state, but SessionHistory.record no-ops it
+        // (equal to head) and isRestoringHistory guards the application block as well.
+        viewModelScope.launch {
+            combine(spec, wearRecord, runoutReadings, componentOrder, overallIsManual) {
+                s, wear, readings, order, manual ->
+                EditState(
+                    spec = s,
+                    wearRecord = wear,
+                    runoutReadings = readings,
+                    componentOrder = order,
+                    overallIsManual = manual,
+                )
+            }.collect { edit ->
+                if (isRestoringHistory) return@collect
+                editHistory.record(edit, System.currentTimeMillis())
+                updateHistoryFlags()
             }
         }
         // --- SETTINGSSTORE FLOWS AND MIGRATIONS ---
@@ -1130,14 +1213,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Remove a [Body] by its stable [id].
      *
-     * The removed component is pushed into the delete history and becomes
-     * undoable (multi-step, last-in-first-out).
+     * The removed body (spec + order) is recoverable via [undoEdit] — the central session
+     * history records the post-delete state, so undo restores both the spec and the row order.
      */
     fun removeBody(id: String) {
         Log.d("ShaftViewModel", "removeBody invoked for id=$id")
-        val specBefore = _spec.value
-        val orderBefore = _componentOrder.value
-        var deleted: LastDeleted.Body? = null
+        var removed = false
 
         _spec.update { s ->
             val idx = s.bodies.indexOfFirst { it.id == id }
@@ -1149,37 +1230,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
             }
-
-            val body = s.bodies[idx]
-            val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }.let { if (it < 0) 0 else it }
-
-            deleted = LastDeleted.Body(
-                value = body,
-                orderIndex = orderIdx,
-                listIndex = idx,
-                beforeSpec = specBefore,
-                beforeOrder = orderBefore
-            )
-
+            removed = true
             s.copy(
                 bodies = s.bodies.toMutableList().apply { removeAt(idx) }
             )
         }
 
-        deleted?.let { snapshot ->
+        if (removed) {
             // Remove from UI order AFTER spec update to avoid cross-state mutation
-            orderRemove(snapshot.id)
-
-            // Record into undo stack; clear redo history (new branch).
-            deleteHistory.addLast(snapshot)
-            if (deleteHistory.size > MAX_DELETE_HISTORY) {
-                deleteHistory.removeFirst()
-            }
-            if (!isRedoing) redoHistory.clear()
-
+            orderRemove(id)
             ensureOverall()
-            updateUndoRedoFlags()
-            emitDeletedSnack(snapshot.kind)
+            emitDeletedSnack(ComponentKind.BODY)
         }
     }
 
@@ -1309,12 +1370,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Remove a [Taper] by id with multi-step delete history support. */
+    /** Remove a [Taper] by id. Recoverable via [undoEdit] (spec + order restored together). */
     fun removeTaper(id: String) {
         Log.d("ShaftViewModel", "removeTaper invoked for id=$id")
-        val specBefore = _spec.value
-        val orderBefore = _componentOrder.value
-        var deleted: LastDeleted.Taper? = null
+        var removed = false
 
         _spec.update { s ->
             val idx = s.tapers.indexOfFirst { it.id == id }
@@ -1326,18 +1385,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
             }
+            removed = true
 
             val taper = s.tapers[idx]
-            val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }.let { if (it < 0) 0 else it }
-
-            deleted = LastDeleted.Taper(
-                value = taper,
-                orderIndex = orderIdx,
-                listIndex = idx,
-                beforeSpec = specBefore,
-                beforeOrder = orderBefore
-            )
-
             val afterRemoval = s.copy(tapers = s.tapers.toMutableList().apply { removeAt(idx) })
             val merge = afterRemoval.mergeBodiesAround(taper.startFromAftMm, taper.startFromAftMm + taper.lengthMm) { newId() }
             merge.removedIds.forEach { orderRemove(it) }
@@ -1345,18 +1395,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             merge.spec
         }
 
-        deleted?.let { snapshot ->
-            orderRemove(snapshot.id)
-
-            deleteHistory.addLast(snapshot)
-            if (deleteHistory.size > MAX_DELETE_HISTORY) {
-                deleteHistory.removeFirst()
-            }
-            if (!isRedoing) redoHistory.clear()
-
+        if (removed) {
+            orderRemove(id)
             ensureOverall()
-            updateUndoRedoFlags()
-            emitDeletedSnack(snapshot.kind)
+            emitDeletedSnack(ComponentKind.TAPER)
         }
     }
 
@@ -1463,12 +1505,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         ).syncExcludedThreadPositions()
     }
 
-    /** Remove a [Threads] segment by id with multi-step delete history support. */
+    /** Remove a [Threads] segment by id. Recoverable via [undoEdit] (spec + order together). */
     fun removeThread(id: String) {
         Log.d("ShaftViewModel", "removeThread invoked for id=$id")
-        val specBefore = _spec.value
-        val orderBefore = _componentOrder.value
-        var deleted: LastDeleted.Thread? = null
+        var removed = false
 
         _spec.update { s ->
             val idx = s.threads.indexOfFirst { it.id == id }
@@ -1480,19 +1520,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
             }
+            removed = true
 
             val thread = s.threads[idx]
-            val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }
-                .let { if (it < 0) 0 else it }
-
-            deleted = LastDeleted.Thread(
-                value = thread,
-                orderIndex = orderIdx,
-                listIndex = idx,
-                beforeSpec = specBefore,
-                beforeOrder = orderBefore
-            )
-
             val afterRemoval = s.copy(threads = s.threads.toMutableList().apply { removeAt(idx) })
             // Only merge bodies around in-shaft threads; excluded threads live outside the envelope.
             val merge = if (!thread.excludeFromOAL)
@@ -1503,21 +1533,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             merge.spec
         }
 
-        deleted?.let { snapshot ->
-            // Update cross-type order
-            orderRemove(snapshot.id)
-
-            // Push into undo stack, clear redo (new branch)
-            deleteHistory.addLast(snapshot)
-            if (deleteHistory.size > MAX_DELETE_HISTORY) {
-                deleteHistory.removeFirst()
-            }
-            if (!isRedoing) redoHistory.clear()
-
-            // Maintain coverage + flags and show snackbar
+        if (removed) {
+            // Update cross-type order, maintain coverage, and show the undo snackbar.
+            orderRemove(id)
             ensureOverall()
-            updateUndoRedoFlags()
-            emitDeletedSnack(snapshot.kind)
+            emitDeletedSnack(ComponentKind.THREAD)
         }
     }
 
@@ -1635,12 +1655,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Remove a [Liner] by id with multi-step delete history support. */
+    /** Remove a [Liner] by id. Recoverable via [undoEdit] (spec + order restored together). */
     fun removeLiner(id: String) {
         Log.d("ShaftViewModel", "removeLiner invoked for id=$id")
-        val specBefore = _spec.value
-        val orderBefore = _componentOrder.value
-        var deleted: LastDeleted.Liner? = null
+        var removed = false
 
         _spec.update { s ->
             val idx = s.liners.indexOfFirst { it.id == id }
@@ -1652,19 +1670,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 // NOTE: This should never happen during normal UI usage.
                 return@update s
             }
+            removed = true
 
             val liner = s.liners[idx]
-            val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }
-                .let { if (it < 0) 0 else it }
-
-            deleted = LastDeleted.Liner(
-                value = liner,
-                orderIndex = orderIdx,
-                listIndex = idx,
-                beforeSpec = specBefore,
-                beforeOrder = orderBefore
-            )
-
             val afterRemoval = s.copy(liners = s.liners.toMutableList().apply { removeAt(idx) })
             val merge = afterRemoval.mergeBodiesAround(liner.startFromAftMm, liner.startFromAftMm + liner.lengthMm) { newId() }
             merge.removedIds.forEach { orderRemove(it) }
@@ -1672,18 +1680,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             merge.spec
         }
 
-        deleted?.let { snapshot ->
-            orderRemove(snapshot.id)
-
-            deleteHistory.addLast(snapshot)
-            if (deleteHistory.size > MAX_DELETE_HISTORY) {
-                deleteHistory.removeFirst()
-            }
-            if (!isRedoing) redoHistory.clear()
-
+        if (removed) {
+            orderRemove(id)
             ensureOverall()
-            updateUndoRedoFlags()
-            emitDeletedSnack(snapshot.kind)
+            emitDeletedSnack(ComponentKind.LINER)
         }
     }
 
@@ -1790,43 +1790,22 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Remove a [CouplerBoltSlot] by id with multi-step delete history support. */
+    /** Remove a [CouplerBoltSlot] by id. Recoverable via [undoEdit] (spec + order together). */
     fun removeCouplerBoltSlot(id: String) {
-        val specBefore = _spec.value
-        val orderBefore = _componentOrder.value
-        var deleted: LastDeleted.CouplerBoltSlot? = null
+        var removed = false
 
         _spec.update { s ->
             val idx = s.couplerBoltSlots.indexOfFirst { it.id == id }
             if (idx < 0) return@update s
-
-            val slot = s.couplerBoltSlots[idx]
-            val orderIdx = _componentOrder.value.indexOfFirst { it.id == id }
-                .let { if (it < 0) 0 else it }
-
-            deleted = LastDeleted.CouplerBoltSlot(
-                value = slot,
-                orderIndex = orderIdx,
-                listIndex = idx,
-                beforeSpec = specBefore,
-                beforeOrder = orderBefore
-            )
-
+            removed = true
             // No body merge needed — slots never split bodies.
             s.copy(couplerBoltSlots = s.couplerBoltSlots.toMutableList().apply { removeAt(idx) })
         }
 
-        deleted?.let { snapshot ->
-            orderRemove(snapshot.id)
-
-            deleteHistory.addLast(snapshot)
-            if (deleteHistory.size > MAX_DELETE_HISTORY) {
-                deleteHistory.removeFirst()
-            }
-            if (!isRedoing) redoHistory.clear()
-
-            updateUndoRedoFlags()
-            emitDeletedSnack(snapshot.kind)
+        if (removed) {
+            orderRemove(id)
+            // Slots never affect OAL, so no ensureOverall() here.
+            emitDeletedSnack(ComponentKind.COUPLER_BOLT_SLOT)
         }
     }
 
@@ -1853,7 +1832,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Start a brand-new shaft using [unit] for UI; lock UI unit if [lockUnit] is true. */
     fun newShaft(unit: UnitSystem, lockUnit: Boolean = true) {
-        clearDeleteHistory()
+        clearEditHistory()
         _spec.value = ShaftSpec()
         _componentOrder.value = emptyList() // fresh doc → empty order list
         _unitLocked.value = lockUnit
@@ -2008,7 +1987,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun importJson(raw: String) {
         val decoded = runCatching { ShaftDocCodec.decode(raw) }.getOrElse { throw it }
 
-        clearDeleteHistory()
+        clearEditHistory()
+        // Each open is a fresh draft identity so this document's autosave upserts its own entry
+        // and cannot touch another document's draft. markDocumentSaved() below reseats the
+        // dirty-gate baseline to the just-loaded state (clean → no draft until edited).
+        currentDraftId = UUID.randomUUID().toString()
+        draftPersisted = false
         _spec.value = decoded.spec
         seedSessionAddDefaultsFromSpec(decoded.spec)
 
@@ -2046,7 +2030,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun newDocument() {
         _editorResetNonce.update { it + 1 }
-        clearDeleteHistory()
+        clearEditHistory()
+        // Fresh draft identity for the new blank session; markDocumentSaved() below reseats the
+        // dirty-gate baseline to blank (clean → no draft until edited).
+        currentDraftId = UUID.randomUUID().toString()
+        draftPersisted = false
 
         resetSessionAddDefaults()
 
@@ -2326,51 +2314,4 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 
-    /**
-        * Undo the most recent delete, if any.
-        *
-        * Restores the entire spec + component order snapshot that existed before the delete
-        * (including any geometry that may have been shifted by delete-time snapping).
-     */
-    fun undoLastDelete() {
-        val snapshot = deleteHistory.removeLastOrNull() ?: return
-
-        _spec.value = snapshot.beforeSpec
-        _componentOrder.value = snapshot.beforeOrder.toList()
-
-        redoHistory.addLast(snapshot)
-        if (redoHistory.size > MAX_DELETE_HISTORY) {
-            redoHistory.removeFirst()
-        }
-
-        ensureOverall()
-        ensureOrderCoversSpec()
-        updateUndoRedoFlags()
-    }
-
-    /**
-     * Redo the most recent undone delete, if any.
-     *
-     * Delegates to the public removeX APIs so redo reuses the same snap/logging logic
-     * as a normal delete (and intentionally records a fresh LastDeleted snapshot for
-     * subsequent undos).
-     */
-    fun redoLastDelete() {
-        val snapshot = redoHistory.removeLastOrNull() ?: return
-
-        isRedoing = true
-        try {
-            when (snapshot) {
-                is LastDeleted.Body -> removeBody(snapshot.id)
-                is LastDeleted.Taper -> removeTaper(snapshot.id)
-                is LastDeleted.Thread -> removeThread(snapshot.id)
-                is LastDeleted.Liner -> removeLiner(snapshot.id)
-                is LastDeleted.CouplerBoltSlot -> removeCouplerBoltSlot(snapshot.id)
-            }
-        } finally {
-            isRedoing = false
-        }
-
-        updateUndoRedoFlags()
-    }
 }

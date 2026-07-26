@@ -93,7 +93,8 @@ through vs blind render identically.
   — newest-on-top; remembers session defaults; **no `ensureOverall()`**.
 - `updateCouplerBoltSlot(index, startMm, holeDiaMm, count, spacingMm, through, depthMm)`
 - `updateCouplerBoltSlotReference / updateCouplerBoltSlotLabel / updateCouplerBoltSlotShowRail`
-- `removeCouplerBoltSlot(id)` — multi-step undo via `LastDeleted.CouplerBoltSlot`; no body merge.
+- `removeCouplerBoltSlot(id)` — recoverable via the general session `undoEdit()` (see
+  `ShaftViewModel.md`); no body merge.
 
 ---
 
@@ -108,3 +109,7 @@ toggle, and depth (only when blind). The carousel card additionally has the defe
 
 ## Change Log
 **v1.0 (2026-07-11)** — Initial contract. Feature implemented on `feature/coupler-bolt-slots`.
+
+**2026-07-26** — Slot deletion is now undone via the general session-scoped `undoEdit()`
+(`SessionHistory<EditState>` in `ShaftViewModel.md`), not the removed `LastDeleted`
+delete-only history. No behavior change to the slot itself.
