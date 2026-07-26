@@ -8,6 +8,28 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-26
 
+### fix(drafts): saved documents no longer linger as "Untitled draft" + editor document title bar
+
+- **Bug**: saving a draft (including confirming an overwrite in the Save dialog) left
+  its entry in the StartScreen **Unsaved drafts** list, showing as a stale
+  "Untitled draft" row even though the save succeeded. Root cause:
+  `markDocumentSaved()` only reseated the dirty baseline; the draft-ring removal lived
+  solely in the autosave observer's dirty→clean branch, which only runs on the *next*
+  state emission — save-then-navigate-home never produces one.
+- **Fix**: `markDocumentSaved()` now removes the session's draft-ring entry
+  immediately (gated on `draftPersisted`; `newDocument()`/`importJson()` clear that
+  flag first, so open/new still keeps the previous session's safety-net draft — the
+  "Don't save" path is unchanged). Existing stale rows clear on their next
+  continue-and-save or discard.
+- **feat(editor)**: document title strip above the editor action bar
+  (`testTag("editor_document_title")`), desktop-editor style: the saved file name
+  (extension stripped) or "Untitled draft", with a trailing ` *` while there are
+  unsaved changes — a live saved-vs-draft indicator. Backed by a new reactive
+  `ShaftViewModel.hasUnsavedChanges` flow sharing the exact full-snapshot comparison
+  used by the autosave dirty gate (`_savedSnapshot` var → `MutableStateFlow`, session
+  snapshot combine hoisted and shared with the observer).
+- Docs: `ShaftViewModel.md`, `ShaftScreen.md`, `Persistence.md`.
+
 ### fix(ci): version auto-increment — shallow clone froze every build at 1.3.321 (321)
 
 - **Bug**: `versionCode = versionBase(320) + git rev-list --count HEAD`, but the

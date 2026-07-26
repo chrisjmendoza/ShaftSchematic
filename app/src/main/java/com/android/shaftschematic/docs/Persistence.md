@@ -89,14 +89,24 @@ design: `docs/Autosave_Incident_2026-07-25.md`.
   overwrite another document's draft.
 - **Dirty gate (the incident's actual fix)**: `DraftRing.shouldWriteDraft(current,
   saved)` — the 1.5 s-debounced autosave observer writes a `DraftEntry` only when the
-  live session snapshot differs from `ShaftViewModel.savedSnapshot`, the last
-  saved/loaded baseline. A freshly-opened, untouched document can never clobber an
-  existing draft. `savedSnapshot` is seeded blank at construction and reseated by
-  `markDocumentSaved()` (all four explicit-save call sites route through it) and by
-  `importJson()`/`newDocument()`.
-- **Dirty → clean removal**: once the live snapshot matches `savedSnapshot` again
-  (e.g. right after an explicit save), the observer removes that session's draft
-  entry exactly once — saved work is not also listed as an unsaved draft.
+  live session snapshot differs from `ShaftViewModel._savedSnapshot`, the last
+  saved/loaded baseline (a `MutableStateFlow` since 2026-07-26, so the reactive
+  `hasUnsavedChanges` flag re-evaluates on save). A freshly-opened, untouched document
+  can never clobber an existing draft. The baseline is seeded blank at construction
+  and reseated by `markDocumentSaved()` (all four explicit-save call sites route
+  through it) and by `importJson()`/`newDocument()`.
+- **Explicit-save removal (2026-07-26 fix)**: `markDocumentSaved()` removes the
+  session's draft-ring entry **immediately**, gated on `draftPersisted`. Relying on
+  the observer's dirty→clean branch alone was a bug: that branch only runs on the
+  *next* combine emission, which never comes when the user saves and navigates away
+  without editing again — saved documents lingered on the StartScreen as stale
+  "Untitled draft" rows. `newDocument()`/`importJson()` drop `draftPersisted` to
+  `false` *before* calling `markDocumentSaved()`, so open/new still never deletes the
+  previous session's safety-net draft (the "Don't save" path keeps its draft).
+- **Dirty → clean removal (observer backstop)**: if the live snapshot returns to
+  matching the baseline while the session stays active (e.g. an edit is manually
+  reverted), the observer removes that session's draft entry exactly once — saved
+  work is not also listed as an unsaved draft.
 - **Ring mechanics** (`DraftRing.kt`, pure, unit-tested, no `Context`/DataStore
   dependency): `upsertDraft(list, entry, max = 3)` replaces-and-moves-to-front an
   existing `draftId`, otherwise inserts at front; eviction is strictly

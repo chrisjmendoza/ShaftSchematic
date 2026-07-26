@@ -1,6 +1,7 @@
 package com.android.shaftschematic.ui.screen
 
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -103,6 +105,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
+import com.android.shaftschematic.doc.stripShaftDocExtension
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.MM_PER_IN
@@ -162,6 +165,10 @@ fun ShaftScreen(
 
     // State
     spec: ShaftSpec,
+    /** Saved file name (with extension) of the current document, or null for an unsaved draft. */
+    documentName: String? = null,
+    /** True while the session differs from the last saved/loaded state (title-bar asterisk). */
+    hasUnsavedChanges: Boolean = false,
     resolvedComponents: List<ResolvedComponent> = emptyList(),
     unit: UnitSystem,
     overallIsManual: Boolean,
@@ -383,7 +390,30 @@ fun ShaftScreen(
             WindowInsetsSides.Horizontal
         ),
         topBar = {
+            Column(Modifier.background(MaterialTheme.colorScheme.surface)) {
+            // Document title strip — desktop-editor style: the current file name (or
+            // "Untitled draft") with a trailing asterisk while there are unsaved changes.
+            // Sits above the action bar, so it also makes the saved-vs-draft state visible.
+            Text(
+                text = buildString {
+                    append(documentName?.let(::stripShaftDocExtension) ?: "Untitled draft")
+                    if (hasUnsavedChanges) append(" *")
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .testTag("editor_document_title"),
+            )
             TopAppBar(
+                // Status-bar inset is consumed by the title strip above; the default TopAppBar
+                // insets would pad for it a second time.
+                windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
                     Text(
                         text = "Shaft Editor",
@@ -474,6 +504,7 @@ fun ShaftScreen(
                     )
                 }
             )
+            }
         },
     ) { inner ->
         Column(
