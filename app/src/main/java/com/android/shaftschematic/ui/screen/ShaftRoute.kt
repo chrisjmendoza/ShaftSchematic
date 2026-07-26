@@ -127,6 +127,9 @@ fun ShaftRoute(
     val canUndo by vm.canUndo.collectAsState()
     val canRedo by vm.canRedo.collectAsState()
 
+    val currentDocumentName by vm.currentDocumentName.collectAsState()
+    val hasUnsavedChanges by vm.hasUnsavedChanges.collectAsState()
+
     val sessionAddDefaults by vm.sessionAddDefaults.collectAsState()
     val pendingAddPositionMm by vm.pendingAddPositionMm.collectAsState()
     val pendingAddGapMm = pendingAddPositionMm?.let { vm.gapToNextAnchorMm(it) } ?: 50f
@@ -149,6 +152,8 @@ fun ShaftRoute(
     ShaftScreen(
         resetNonce = editorResetNonce,
         spec = spec,
+        documentName = currentDocumentName,
+        hasUnsavedChanges = hasUnsavedChanges,
         resolvedComponents = resolvedComponents,
         unit = unit,
         unitLocked = unitLocked,

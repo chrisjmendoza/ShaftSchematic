@@ -24,6 +24,14 @@ Invariants
 
 Responsibilities
 ----------------
+- **Document title strip** (above the TopAppBar, desktop-editor style;
+  `testTag("editor_document_title")`): shows the saved file name
+  (`ShaftViewModel.currentDocumentName`, extension stripped) or **"Untitled draft"**
+  when the session has never been saved, with a trailing ` *` while
+  `ShaftViewModel.hasUnsavedChanges` is true. This is the visible saved-vs-draft
+  indicator. The strip consumes the status-bar inset; the TopAppBar below it is given
+  `WindowInsets(0, 0, 0, 0)` so the inset is not applied twice.
+
 - **Header Row (TopAppBar):**  
   - Hamburger icon → opens the editor sidebar (Schematic / Runout / Wear tabs)
   - Undo/Redo history menu (`HistoryMenu`) — general session-scoped undo/redo

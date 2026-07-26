@@ -23,13 +23,26 @@ Responsibilities
   - `currentDraftId` — a UUID identifying this editing session's ring slot. Minted at
     construction; re-minted in `newDocument()` and `importJson()` so switching
     documents can never touch another document's draft entry.
-  - `savedSnapshot` — the dirty-gate baseline (last saved-to-file or freshly-loaded
-    full session snapshot). Seeded blank at construction; reseated by
-    `markDocumentSaved()` (all four explicit-save call sites go through it) and by
+  - `_savedSnapshot` — the dirty-gate baseline (last saved-to-file or freshly-loaded
+    full session snapshot), held in a `MutableStateFlow` so `hasUnsavedChanges`
+    re-evaluates the moment a save reseats it. Seeded blank at construction; reseated
+    by `markDocumentSaved()` (all four explicit-save call sites go through it) and by
     `importJson()`/`newDocument()`. The 1.5 s-debounced autosave observer writes a
-    `DraftEntry` only when the live snapshot differs from `savedSnapshot`
+    `DraftEntry` only when the live snapshot differs from the baseline
     (`shouldWriteDraft`), and removes this session's entry exactly once on the
     dirty→clean transition.
+  - `markDocumentSaved()` **also removes this session's draft-ring entry immediately**
+    (guarded by `draftPersisted`). The observer's dirty→clean removal only runs on the
+    *next* combine emission, which never comes when the user saves and navigates away
+    without editing again — before this, saved documents lingered on the StartScreen
+    as stale "Untitled draft" rows. `newDocument()`/`importJson()` drop
+    `draftPersisted` to `false` *before* calling `markDocumentSaved()`, so opening or
+    creating a document still never deletes the previous session's safety-net draft
+    (the "Don't save" path keeps its draft).
+  - `hasUnsavedChanges: StateFlow<Boolean>` — reactive companion to
+    `hasUnsavedWork()`: `combine(sessionSnapshotFlow, _savedSnapshot)` through
+    `shouldWriteDraft`, undebounced. Drives the editor document-title asterisk
+    (`ShaftScreen` title strip, `testTag("editor_document_title")`).
   - `hasUnsavedWork()` — returns `shouldWriteDraft(buildCurrentSnapshot(),
     savedSnapshot)`, the **same** full-snapshot comparison as the autosave dirty gate,
     so spec, metadata, position, unit-lock, OAL mode, wear record, and runout

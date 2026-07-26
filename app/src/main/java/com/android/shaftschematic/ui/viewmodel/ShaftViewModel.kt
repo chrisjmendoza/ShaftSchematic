@@ -97,7 +97,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     // Full snapshot of the last saved-to-file / freshly-loaded state — the dirty gate's
     // baseline. The autosave observer writes a draft only when the live snapshot differs.
-    private var savedSnapshot: AutosaveManager.SessionSnapshot? = null
+    // A StateFlow (not a plain var) so [hasUnsavedChanges] re-evaluates the moment a save
+    // reseats the baseline, not only on the next edit.
+    private val _savedSnapshot = MutableStateFlow<AutosaveManager.SessionSnapshot?>(null)
 
     // Whether currentDraftId currently has a persisted entry in the ring. Used to remove the
     // entry exactly once on a dirty→clean transition (avoids hammering DataStore).
@@ -164,11 +166,43 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setCurrentDocumentName(name: String?) { _currentDocumentName.value = name }
 
+    /**
+     * Reactive companion to [hasUnsavedWork]: true while the live session differs from the
+     * last saved/loaded baseline. Drives the editor's document-title dirty asterisk. Updated
+     * by the init-block combine; compares the same full snapshots as the autosave dirty gate.
+     */
+    private val _hasUnsavedChanges = MutableStateFlow(false)
+    val hasUnsavedChanges: StateFlow<Boolean> = _hasUnsavedChanges.asStateFlow()
+
     fun markDocumentSaved() {
         // Full-snapshot baseline shared by BOTH the autosave dirty gate and hasUnsavedWork():
         // after a real save/load the session is "clean", so the observer stops writing (and
         // removes) this session's draft, and no unsaved-changes prompt fires.
-        savedSnapshot = buildCurrentSnapshot()
+        _savedSnapshot.value = buildCurrentSnapshot()
+        // Remove this session's draft-ring entry NOW. The autosave observer only reaches its
+        // dirty→clean removal branch on the next combine emission, which never comes when the
+        // user saves and navigates away without another edit — that left saved documents
+        // sitting in "Unsaved drafts" as stale "Untitled draft" rows. newDocument()/importJson()
+        // drop draftPersisted to false *before* calling this, so an open/new never deletes the
+        // previous session's safety-net draft.
+        if (draftPersisted) {
+            draftPersisted = false
+            val idToRemove = currentDraftId
+            viewModelScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        AutosaveManager.removeDraft(getApplication(), idToRemove)
+                    }
+                    _drafts.value = withContext(Dispatchers.IO) {
+                        AutosaveManager.loadDrafts(getApplication())
+                    }
+                } catch (_: CancellationException) {
+                    // ignore
+                } catch (_: Exception) {
+                    // ignore
+                }
+            }
+        }
     }
 
     /**
@@ -180,7 +214,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun hasUnsavedWork(): Boolean {
         if (isSessionDefault()) return false
-        return shouldWriteDraft(buildCurrentSnapshot(), savedSnapshot)
+        return shouldWriteDraft(buildCurrentSnapshot(), _savedSnapshot.value)
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -623,7 +657,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     init {
         // Seed the dirty-gate baseline to the current (blank) session so a pristine, untouched
         // start never writes a draft. markDocumentSaved()/importJson()/newDocument() reseat it.
-        savedSnapshot = buildCurrentSnapshot()
+        _savedSnapshot.value = buildCurrentSnapshot()
 
         // --- AUTOSAVE RESTORE + OBSERVER ---
         viewModelScope.launch {
@@ -649,10 +683,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
-        viewModelScope.launch {
+        // Live full-session snapshot stream, shared by the (debounced) autosave observer and
+        // the (immediate) hasUnsavedChanges dirty flag.
         @Suppress("UNCHECKED_CAST")
         // Flow.combine overload for >5 flows returns Array<Any?>
-        combine(
+        val sessionSnapshotFlow = combine(
             spec, unit, shaftPosition, customer, vessel, jobNumber, notes,
             runoutConfig, unitLocked, overallIsManual, wearRecord, runoutReadings
         ) { values: Array<Any?> ->
@@ -686,6 +721,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 runoutReadings = readings,
             )
         }
+
+        // Reactive dirty flag for the document title bar: same full-snapshot comparison as the
+        // autosave dirty gate, but undebounced (the asterisk should track keystrokes) and also
+        // recomputed when a save reseats the baseline.
+        viewModelScope.launch {
+            combine(sessionSnapshotFlow, _savedSnapshot) { live, saved ->
+                shouldWriteDraft(live, saved)
+            }.collect { _hasUnsavedChanges.value = it }
+        }
+
+        viewModelScope.launch {
+            sessionSnapshotFlow
                 .debounce(1500)
                 .collectLatest { snapshot ->
                     try {
@@ -693,7 +740,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         // saved/loaded state. A freshly-loaded pristine document (savedSnapshot ==
                         // snapshot) can never overwrite an existing draft. When the state returns
                         // to clean, remove this session's draft entry exactly once.
-                        if (shouldWriteDraft(snapshot, savedSnapshot)) {
+                        if (shouldWriteDraft(snapshot, _savedSnapshot.value)) {
                             AutosaveManager.saveDraft(
                                 getApplication(),
                                 AutosaveManager.DraftEntry(
