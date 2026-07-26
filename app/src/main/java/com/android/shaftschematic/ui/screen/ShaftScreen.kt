@@ -124,6 +124,7 @@ import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.util.buildThreadTitleById
+import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
@@ -305,13 +306,11 @@ fun ShaftScreen(
     val topBarScope = rememberCoroutineScope()
 
     val collidingComponentIds = remember(spec) { spec.collidingIds() }
-    val exportPdfEnabled = (spec.bodies.isNotEmpty() || spec.tapers.isNotEmpty() ||
-        spec.threads.isNotEmpty() || spec.liners.isNotEmpty()) &&
-        collidingComponentIds.isEmpty()
-    val exportPdfDisabledMessage = if (collidingComponentIds.isNotEmpty())
-        "Fix component collisions before exporting."
-    else
-        "Please add at least 1 component before export is active."
+    val exportPdfGate = remember(spec, collidingComponentIds) {
+        exportPdfGate(spec, collidingComponentIds)
+    }
+    val exportPdfEnabled = exportPdfGate.enabled
+    val exportPdfDisabledMessage = exportPdfGate.disabledMessage
 
     val snapAnchors = remember(spec.overallLengthMm, spec.bodies, spec.tapers, spec.threads, spec.liners) { buildSnapAnchors(spec) }
 

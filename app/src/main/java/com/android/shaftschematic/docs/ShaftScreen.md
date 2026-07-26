@@ -31,7 +31,10 @@ Responsibilities
     covers every drawing edit (spec, wear, runout readings, component order, OAL
     mode). See `ShaftViewModel.md`.
   - Project-Info icon
-  - New / Open / Save / Export-PDF action icons
+  - New / Open / Save / Export-PDF action icons. Export-PDF is gated by
+    `ui/util/ExportPdfGate.kt` (pure, JVM-tested in `ExportPdfGateTest`): enabled only
+    with ≥ 1 real component (coupler bolt slots don't count) and no collisions; a tap
+    while disabled shows the gate's message as a snackbar.
   - Overflow menu (⋮) → Save As…, **Close Document** (testTag
     `overflow_close_document`; clean → closes to Start, dirty → shared unsaved-changes
     guard — see `Navigation.md`), Settings, Clear All, etc.
