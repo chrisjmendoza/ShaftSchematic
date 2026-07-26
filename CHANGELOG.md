@@ -6,6 +6,110 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-26
+
+### feat(editor): session-wide undo/redo — every drawing edit undoable (50 steps, burst coalescing)
+
+- **Replaces the old delete-only undo.** Every drawing-editor edit — not just
+  component deletes — is now undoable: geometry (spec), wear record (spots + pits),
+  runout readings, component order, and OAL manual/auto mode. Metadata
+  (customer/vessel/job number/notes/shaft position/unit) is deliberately excluded —
+  not undoable.
+- New `ui/viewmodel/SessionHistory.kt`: a generic, pure undo/redo history over any
+  snapshot type. Edits within a 600 ms window coalesce into one undo step (a typing
+  burst = one step), the stack caps at 50 (oldest evicted on overflow), redo clears
+  on any genuine new state, and an identical-to-head state is a no-op.
+- New `ui/viewmodel/EditState.kt`: the undoable snapshot (spec + wearRecord +
+  runoutReadings + componentOrder + overallIsManual).
+- `ShaftViewModel` records a central `EditState` snapshot off the combined flows
+  (guarded by `isRestoringHistory` so applying an undo/redo doesn't re-record
+  itself); new `undoEdit()`/`redoEdit()` + `canUndo`/`canRedo` `StateFlow`s. History
+  is cleared at every session boundary (`newShaft`/`newDocument`/`importJson`/
+  `continueDraft`/autosave auto-restore) so undo can never cross into another
+  document's state.
+- **Old delete-only machinery fully removed**: `LastDeleted`,
+  `deleteHistory`/`redoHistory`, `isRedoing`, `canUndoDeletes`/`canRedoDeletes`,
+  `undoLastDelete()`/`redoLastDelete()`, `clearDeleteHistory()`. `removeX()` methods
+  simplified (body-merge behavior preserved). The delete snackbar's "Undo" action and
+  the header-row `HistoryMenu` ("Undo"/"Redo") both now call the general
+  `undoEdit()`/`redoEdit()`.
+- 13 new/migrated tests: `SessionHistoryTest` (8), `ShaftViewModelUndoRedoTest` (3),
+  `ShaftViewModelRemoveTest` migrated (+2 delete-undo-via-`undoEdit` recovery tests);
+  full suite green.
+
+---
+
+## 2026-07-25
+
+### feat(ui): explicit-body checkbox — greyed auto-body fields, checkbox-only promotion, confirmed demotion
+
+- Auto-body cards (`ResolvedComponentSource.AUTO`) now show Start/Length/Ø as **disabled**
+  (greyed, derived-value) fields; the field-edit promotion path (`promoteIfNeeded`) is removed.
+- The sole promotion path is the "Explicit body" checkbox (relabeled from "Make editable
+  body", unchecked on the auto card) — checking it calls `onAddBody` with the auto-body's
+  current derived dims, guarded by a once-only `promoted` state.
+- Explicit-body cards carry the same checkbox, checked. Unchecking opens a "Make body
+  automatic?" confirmation dialog (extra sentence when the body has a keyway, warning it
+  will be lost); confirming demotes via the existing `onRemoveBody(b.id)` pipeline, which
+  the resolve layer regenerates as an auto-fill span. Cancel keeps the body explicit.
+- `testTag`s: `body_explicit_checkbox`, `body_demote_confirm`. `ComponentCarousel.kt`.
+
+### fix(validation): taper-vs-body warning reads the physical face diameter (FWD-taper false positive)
+
+- **Bug** (Chris, on-device): a FWD-end taper with LET matching an abutting body's Ø still
+  warned "Ø differs from adjacent body by >10%". The Add-taper path always stores
+  `startDiaMm = SET` regardless of shaft half, while the carousel edit path stores the pair
+  x-ordered — the naive face mapping read the SET, not the LET, at the body-adjacent face.
+- **Fix**: new private helper `taperFaceDiametersMm(taper, overallLengthMm)` in
+  `ComponentWarnings.kt` derives the physical (AFT face, FWD face) diameters — SET/LET by
+  magnitude, placed by the same SET-by-shaft-half convention as
+  `ShaftViewModel.taperSmallEndAtStart` — and `hasTaperBodyMismatch` now compares against
+  those instead of the raw stored fields. 4 regression tests added (FWD/AFT ×
+  matching/mismatching) in `ComponentWarningsTest.kt`. Thresholds unchanged.
+- **Follow-up logged, not fixed**: `ShaftRenderer.kt` draws the taper trapezoid strictly
+  x-ordered (`startDiaMm` at the AFT face unconditionally), so an Add-path-created,
+  never-edited FWD taper may **render** with its small end at the body face even though the
+  SET/LET-by-shaft-half convention says otherwise — a storage-order discrepancy between the
+  two Add/edit paths and the renderer that needs an on-device check and a canonical-order
+  decision. Tracked in `TODO.md` §2.3.
+
+### fix(autosave): draft history — dirty-gated 3-slot ring replaces single always-overwriting slot
+
+- **Root cause**: the single-slot autosave (`autosave_last_session`) wrote unconditionally
+  every 1.5 s debounce tick, including the write triggered by *loading* a document, so
+  reopening an edited-but-never-saved shaft let the pristine reload silently overwrite the
+  only copy of the edits within seconds. See `docs/Autosave_Incident_2026-07-25.md`.
+- **Dirty gate**: the autosave observer now writes a draft only when the live session
+  differs from the last saved/loaded baseline (`DraftRing.shouldWriteDraft`); a
+  freshly-loaded pristine document can never clobber anything again, and the entry is
+  removed on the dirty→clean transition (explicit save).
+- **3-entry ring, per-document identity**: `data/AutosaveManager.kt` v2 replaces the
+  single DataStore slot with `autosave_drafts`, a ring of up to 3 `DraftEntry` records
+  keyed by a per-session `draftId` minted on `newDocument()`/`importJson()`, so editing
+  one document can never touch another's draft. New pure `data/DraftRing.kt`
+  (`upsertDraft`, `shouldWriteDraft`).
+- **StartScreen drafts list**: the single "Continue Draft/Discard Draft" pair is replaced
+  by an "Unsaved drafts" card listing up to 3 (name or "Untitled draft", relative age,
+  tap to continue, X icon → confirm discard).
+- **Legacy migration**: any existing single-slot draft is transparently wrapped into the
+  new ring on first read, then the old key is removed.
+- **Full-snapshot `hasUnsavedWork()`**: the editor's unsaved-changes check now reuses the
+  same full-session comparison as the autosave dirty gate (`shouldWriteDraft`), so wear
+  records, runout readings/config, shaft position, unit-lock, and OAL mode all count as
+  unsaved work — previously only the spec + 4 metadata fields did, which is why the
+  incident's wear-mark edits went unguarded. Legacy per-field `_savedSpec`/`_savedJobNumber`/
+  `_savedCustomer`/`_savedVessel`/`_savedNotes` fields removed.
+- **Universal unsaved-changes guard**: a single `runGuarded` + shared `UnsavedChangesDialog`
+  at NavHost scope now gates every session-replacing action (Start's New/Open/Open-recent,
+  editor New/Open, Close Document) — "Save" reuses the save-then-continue flow from
+  anywhere, "Don't save" leaves the draft-ring entry intact as the safety net.
+- **Close Document**: new editor overflow-menu item — closes cleanly to Start when the
+  session is clean, otherwise routes through the same guard.
+- 19 new tests (`DraftRingTest` × 12, `AutosaveDraftSerializationTest` × 3,
+  `ShaftViewModelUnsavedWorkTest` × 4); full suite green (697).
+
+---
+
 ## 2026-07-24
 
 ### refactor: extract ShaftPreviewPanel.kt + ShaftScreenController.kt from ShaftScreen.kt

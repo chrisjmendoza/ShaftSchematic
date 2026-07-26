@@ -1,0 +1,91 @@
+package com.android.shaftschematic.ui.viewmodel
+
+import com.android.shaftschematic.data.AutosaveManager
+import com.android.shaftschematic.data.shouldWriteDraft
+import com.android.shaftschematic.model.RunoutReading
+import com.android.shaftschematic.model.RunoutReadings
+import com.android.shaftschematic.model.ShaftPosition
+import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.WearRecord
+import com.android.shaftschematic.model.WearSpot
+import com.android.shaftschematic.util.UnitSystem
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * `ShaftViewModel.hasUnsavedWork()` must be the SAME source of truth as the autosave draft
+ * dirty gate: it compares the full [AutosaveManager.SessionSnapshot] via [shouldWriteDraft]
+ * (with the `isSessionDefault()` short-circuit), so reference-only edits — wear records and
+ * runout readings — count as unsaved work. Before the 2026-07-25 fix it compared only
+ * spec + metadata, so wear/runout edits went unguarded (the incident's root gap).
+ *
+ * `ShaftViewModel` is an `AndroidViewModel` and is not instantiated in this JVM suite (same
+ * convention as `ShaftViewModelWearSpotTest`); this mirrors `hasUnsavedWork()`'s exact body
+ * and exercises the real [shouldWriteDraft] predicate + real snapshots.
+ */
+class ShaftViewModelUnsavedWorkTest {
+
+    // Exact mirror of ShaftViewModel.hasUnsavedWork().
+    private fun hasUnsavedWork(
+        current: AutosaveManager.SessionSnapshot,
+        saved: AutosaveManager.SessionSnapshot?,
+        isSessionDefault: Boolean,
+    ): Boolean {
+        if (isSessionDefault) return false
+        return shouldWriteDraft(current, saved)
+    }
+
+    // A non-default baseline (has geometry) so the isSessionDefault short-circuit is not in play.
+    private fun baseline(): AutosaveManager.SessionSnapshot =
+        AutosaveManager.SessionSnapshot(
+            shaftSpec = ShaftSpec(overallLengthMm = 300f),
+            unitSystem = UnitSystem.INCHES,
+            shaftPosition = ShaftPosition.PORT,
+            customer = "Acme",
+            vessel = "Tug",
+            jobNumber = "J-1",
+            notes = "",
+        )
+
+    @Test
+    fun `wear-record-only change is unsaved work`() {
+        val saved = baseline()
+        val current = saved.copy(
+            wearRecord = WearRecord(
+                spots = listOf(WearSpot(id = "s1", linerId = "ln1", startMm = 5f, lengthMm = 20f))
+            )
+        )
+        assertTrue(hasUnsavedWork(current, saved, isSessionDefault = false))
+    }
+
+    @Test
+    fun `runout-reading-only change is unsaved work`() {
+        val saved = baseline()
+        val current = saved.copy(
+            runoutReadings = RunoutReadings().withReading(
+                RunoutReading(componentId = "c1", stationIndex = 0, valueMm = 0.4f, highSpotHalfHours = 6)
+            )
+        )
+        assertTrue(hasUnsavedWork(current, saved, isSessionDefault = false))
+    }
+
+    @Test
+    fun `session clean after markDocumentSaved reports no unsaved work`() {
+        // markDocumentSaved() captures savedSnapshot = buildCurrentSnapshot(), so saved == current.
+        val current = baseline().copy(
+            wearRecord = WearRecord(
+                spots = listOf(WearSpot(id = "s1", linerId = "ln1", startMm = 5f, lengthMm = 20f))
+            )
+        )
+        val saved = current
+        assertFalse(hasUnsavedWork(current, saved, isSessionDefault = false))
+    }
+
+    @Test
+    fun `blank default session reports no unsaved work`() {
+        val blank = baseline().copy(shaftSpec = ShaftSpec(), customer = "", vessel = "", jobNumber = "")
+        // Even with a null baseline, the isSessionDefault short-circuit wins.
+        assertFalse(hasUnsavedWork(blank, saved = null, isSessionDefault = true))
+    }
+}

@@ -1,9 +1,11 @@
 # Persistence Contract (storage, doc format, units policy)
 
 Layer: I/O + doc codec  
-Files: `io/InternalStorage.kt`, `doc/ShaftDocCodec.kt`, `data/AutosaveManager.kt`  
-Version: v1.0 (2026-07-18) — consolidates the former `InternalStorage.md` and
-`Units.md`. Backup & restore design lives in `docs/BackupRestore_Strategy.md`
+Files: `io/InternalStorage.kt`, `doc/ShaftDocCodec.kt`, `data/AutosaveManager.kt`,
+`data/DraftRing.kt`  
+Version: v1.1 (2026-07-25) — adds the draft-ring autosave rewrite (was v1.0,
+2026-07-18, which consolidated the former `InternalStorage.md` and `Units.md`).
+Backup & restore design lives in `docs/BackupRestore_Strategy.md`
 (implementation: `io/ShaftBackup.kt`).
 
 ---
@@ -69,3 +71,51 @@ Do Nots
 
 **Goal:** a shop can open any file, freely switch units, and print/export in the
 desired unit without re-saving the document.
+
+---
+
+## Autosave / draft ring (`data/AutosaveManager.kt`, `data/DraftRing.kt`)
+
+Root cause and full writeup of the 2026-07-25 data-loss incident that motivated this
+design: `docs/Autosave_Incident_2026-07-25.md`.
+
+- **Storage**: one DataStore key, `autosave_drafts` — a JSON list of up to
+  `DEFAULT_DRAFT_RING_MAX` (3) `DraftEntry(draftId, documentName?, updatedAtEpochMs,
+  snapshot)`, newest-first. Replaces the old single-slot key `autosave_last_session`
+  (still read once, for migration — see below).
+- **Per-document identity**: `ShaftViewModel.currentDraftId` (a fresh UUID) is minted
+  at construction and re-minted in `newDocument()` and `importJson()`. Working on one
+  document's session can only ever upsert *that* document's ring entry — it can never
+  overwrite another document's draft.
+- **Dirty gate (the incident's actual fix)**: `DraftRing.shouldWriteDraft(current,
+  saved)` — the 1.5 s-debounced autosave observer writes a `DraftEntry` only when the
+  live session snapshot differs from `ShaftViewModel.savedSnapshot`, the last
+  saved/loaded baseline. A freshly-opened, untouched document can never clobber an
+  existing draft. `savedSnapshot` is seeded blank at construction and reseated by
+  `markDocumentSaved()` (all four explicit-save call sites route through it) and by
+  `importJson()`/`newDocument()`.
+- **Dirty → clean removal**: once the live snapshot matches `savedSnapshot` again
+  (e.g. right after an explicit save), the observer removes that session's draft
+  entry exactly once — saved work is not also listed as an unsaved draft.
+- **Ring mechanics** (`DraftRing.kt`, pure, unit-tested, no `Context`/DataStore
+  dependency): `upsertDraft(list, entry, max = 3)` replaces-and-moves-to-front an
+  existing `draftId`, otherwise inserts at front; eviction is strictly
+  oldest-by-`updatedAtEpochMs` (not list position), and only fires when the ring
+  would exceed `max`.
+- **Legacy migration**: `AutosaveManager.loadDrafts()` reads the old single-slot key
+  once; if it holds a decodable snapshot, it is wrapped as a `DraftEntry`
+  (`draftId = "legacy-migrated"`), merged into the ring, persisted, and the legacy
+  key deleted. One-time, transparent to callers.
+- **Restore-on-init**: same UX as before the rework — the newest draft auto-restores
+  into a default/blank session at startup (`ShaftViewModel.init`), never into an
+  already-initialized session.
+- **UI surface**: `ShaftViewModel.drafts: StateFlow<List<DraftEntry>>` (+ derived
+  `hasDraft`) backs the StartScreen "Unsaved drafts" card (up to 3 entries, tap to
+  `continueDraft(id)`, X icon → confirm → `discardDraft(id)`). See `Navigation.md`.
+
+Invariants (see the incident doc's "Invariants going forward" for the authoritative list)
+- A draft entry is written **only** for dirty (unsaved) sessions.
+- Opening/creating a document must never mutate another document's draft entry.
+- Explicit save removes the session's draft entry; discard removes exactly one entry.
+- Ring capacity 3; eviction strictly oldest-first, and only on insertion of a new
+  identity.

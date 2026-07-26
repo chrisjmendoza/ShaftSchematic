@@ -4,7 +4,7 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.10 (2026-07-24)
+Version: v0.11 (2026-07-26)
 
 ---
 
@@ -26,10 +26,15 @@ Responsibilities
 ----------------
 - **Header Row (TopAppBar):**  
   - Hamburger icon → opens the editor sidebar (Schematic / Runout / Wear tabs)
-  - Undo/Redo history menu (`HistoryMenu`)
+  - Undo/Redo history menu (`HistoryMenu`) — general session-scoped undo/redo
+    (`ShaftViewModel.undoEdit`/`redoEdit`, `canUndo`/`canRedo`), not delete-only;
+    covers every drawing edit (spec, wear, runout readings, component order, OAL
+    mode). See `ShaftViewModel.md`.
   - Project-Info icon
   - New / Open / Save / Export-PDF action icons
-  - Overflow menu (⋮) → Settings, Clear All, etc.
+  - Overflow menu (⋮) → Save As…, **Close Document** (testTag
+    `overflow_close_document`; clean → closes to Start, dirty → shared unsaved-changes
+    guard — see `Navigation.md`), Settings, Clear All, etc.
 
 - **Preview Card:** (`PreviewCard`, `PreviewOalBadge`, `FreeToEndBadge` — all in
   `ui/screen/ShaftPreviewPanel.kt`, extracted from `ShaftScreen.kt` 2026-07-24, pure
@@ -107,6 +112,13 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.11 (2026-07-26)**
+- **HistoryMenu is general undo/redo, not delete-only:** the header-row history menu now
+  wires to `ShaftViewModel.undoEdit()`/`redoEdit()` (session-scoped, covers every drawing
+  edit), replacing the old delete-only `undoLastDelete()`/`redoLastDelete()`. Menu item
+  labels stay "Undo"/"Redo"; the delete snackbar's "Undo" action also now calls
+  `undoEdit()`. See `ShaftViewModel.md`.
+
 **v0.10 (2026-07-24)**
 - **Preview panel + controller extraction:** `PreviewCard`/`PreviewOalBadge`/
   `FreeToEndBadge` moved to new file `ui/screen/ShaftPreviewPanel.kt`;

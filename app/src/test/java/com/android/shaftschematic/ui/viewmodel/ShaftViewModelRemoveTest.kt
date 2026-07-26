@@ -1,10 +1,12 @@
 package com.android.shaftschematic.ui.viewmodel
 
+import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.model.Liner
+import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.order.ComponentKey
 import org.junit.Assert.*
@@ -15,6 +17,13 @@ import org.junit.Test
  *
  * These tests verify the data model consistency when components are removed.
  * The critical fix: orderRemove must happen AFTER spec update, not during it.
+ *
+ * The former delete-only undo path is gone; recovery now flows through the general
+ * session undo/redo. The `delete + undoEdit` tests at the bottom are the migrated
+ * delete-undo cases — they assert that deleting a component then undoing restores
+ * BOTH the spec and the cross-type order, exercised through the real [SessionHistory]
+ * + [EditState] the ViewModel records (see ShaftViewModelUndoRedoTest for why the
+ * AndroidViewModel itself is not instantiated in this JVM suite).
  */
 class ShaftViewModelRemoveTest {
 
@@ -171,5 +180,65 @@ class ShaftViewModelRemoveTest {
 
         assertEquals(1, updatedSpec.bodies.size)
         assertEquals("b1", updatedSpec.bodies.first().id)
+    }
+
+    // ── Migrated delete-undo recovery (was delete-only undo; now general undo) ──────────
+
+    private fun editState(spec: ShaftSpec, order: List<ComponentKey>) = EditState(
+        spec = spec,
+        wearRecord = WearRecord(),
+        runoutReadings = RunoutReadings(),
+        componentOrder = order,
+        overallIsManual = false,
+    )
+
+    @Test
+    fun `deleting a body then undoEdit restores the body and its order`() {
+        val body1 = Body(id = "b1", startFromAftMm = 0f,   lengthMm = 100f, diaMm = 50f)
+        val body2 = Body(id = "b2", startFromAftMm = 100f, lengthMm = 100f, diaMm = 50f)
+        val order = listOf(
+            ComponentKey("b2", ComponentKind.BODY),
+            ComponentKey("b1", ComponentKind.BODY),
+        )
+        val before = editState(ShaftSpec(bodies = listOf(body1, body2)), order)
+
+        // removeBody("b1"): spec drops b1, orderRemove drops its key.
+        val afterSpec = before.spec.copy(bodies = listOf(body2))
+        val afterOrder = order.filterNot { it.id == "b1" }
+        val after = editState(afterSpec, afterOrder)
+
+        val h = SessionHistory<EditState>()
+        h.record(before, 1_000)      // recorder seeds pre-delete state
+        h.record(after, 2_000)       // delete is its own step (gap past window)
+
+        val restored = h.undo(after)!!
+        assertEquals("body restored in spec", 2, restored.spec.bodies.size)
+        assertTrue("deleted body id back in spec", restored.spec.bodies.any { it.id == "b1" })
+        assertEquals("order restored exactly", order, restored.componentOrder)
+    }
+
+    @Test
+    fun `deleting a taper then undoEdit restores the taper and its order position`() {
+        val body  = Body(id = "b1", startFromAftMm = 0f,   lengthMm = 100f, diaMm = 50f)
+        val taper = Taper(id = "t1", startFromAftMm = 100f, lengthMm = 50f, startDiaMm = 50f, endDiaMm = 30f)
+        val order = listOf(
+            ComponentKey("t1", ComponentKind.TAPER),
+            ComponentKey("b1", ComponentKind.BODY),
+        )
+        val before = editState(ShaftSpec(bodies = listOf(body), tapers = listOf(taper)), order)
+
+        val after = editState(
+            before.spec.copy(tapers = emptyList()),
+            order.filterNot { it.id == "t1" },
+        )
+
+        val h = SessionHistory<EditState>()
+        h.record(before, 1_000)
+        h.record(after, 2_000)
+
+        val restored = h.undo(after)!!
+        assertEquals("taper restored", 1, restored.spec.tapers.size)
+        assertEquals("t1", restored.spec.tapers.first().id)
+        assertEquals("order restored with taper at the head", order, restored.componentOrder)
     }
 }

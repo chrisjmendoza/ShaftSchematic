@@ -36,6 +36,7 @@ import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandLess
@@ -263,6 +264,8 @@ fun ShaftScreen(
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onSaveAs: () -> Unit = {},
+    /** Close the current document (guarded for unsaved work) and return to Start. */
+    onCloseDocument: () -> Unit = {},
     onExportPdf: () -> Unit,
     onOpenSettings: () -> Unit,
     onSendFeedback: () -> Unit,
@@ -463,6 +466,7 @@ fun ShaftScreen(
 
                     OverflowMenu(
                         onSaveAs = onSaveAs,
+                        onCloseDocument = onCloseDocument,
                         onOpenSettings = onOpenSettings,
                         onSendFeedback = onSendFeedback,
                         onOpenDeveloperOptions = onOpenDeveloperOptions,
@@ -970,7 +974,7 @@ private fun HistoryMenu(
             onDismissRequest = { expanded = false }
         ) {
             DropdownMenuItem(
-                text = { Text("Undo delete") },
+                text = { Text("Undo") },
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null) },
                 enabled = canUndo,
                 modifier = Modifier.testTag("history_undo_delete"),
@@ -980,7 +984,7 @@ private fun HistoryMenu(
                 }
             )
             DropdownMenuItem(
-                text = { Text("Redo delete") },
+                text = { Text("Redo") },
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null) },
                 enabled = canRedo,
                 modifier = Modifier.testTag("history_redo_delete"),
@@ -996,6 +1000,7 @@ private fun HistoryMenu(
 @Composable
 private fun OverflowMenu(
     onSaveAs: () -> Unit,
+    onCloseDocument: () -> Unit,
     onOpenSettings: () -> Unit,
     onSendFeedback: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
@@ -1022,6 +1027,15 @@ private fun OverflowMenu(
                 onClick = {
                     expanded = false
                     onSaveAs()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Close Document") },
+                leadingIcon = { Icon(Icons.Default.Close, contentDescription = null) },
+                modifier = Modifier.testTag("overflow_close_document"),
+                onClick = {
+                    expanded = false
+                    onCloseDocument()
                 }
             )
             DropdownMenuItem(

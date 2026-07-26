@@ -42,6 +42,8 @@ fun ShaftEditorRoute(
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onSaveAs: () -> Unit = {},
+    /** Close the current document (guarded for unsaved work) and return to Start. */
+    onCloseDocument: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
     /** Export the main shaft schematic PDF (goes to existing preview/SAF flow). */
@@ -78,6 +80,7 @@ fun ShaftEditorRoute(
                 onOpen = onOpen,
                 onSave = onSave,
                 onSaveAs = onSaveAs,
+                onCloseDocument = onCloseDocument,
                 onExportPdf = onExportPdf,
                 onOpenSettings = onOpenSettings,
                 onOpenDeveloperOptions = onOpenDeveloperOptions,
