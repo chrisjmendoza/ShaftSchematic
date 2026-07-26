@@ -50,6 +50,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -408,21 +409,19 @@ internal fun ComponentPagerCard(
         // ── Body ──────────────────────────────────────────────────────────────
         is ResolvedBody -> {
             if (component.source == ResolvedComponentSource.AUTO) {
-                var startMm  by remember(component.id) { mutableStateOf(component.startMmPhysical) }
-                var lengthMm by remember(component.id) { mutableStateOf(component.endMmPhysical - component.startMmPhysical) }
-                var diaMm    by remember(component.id) { mutableStateOf(component.diaMm) }
+                // Auto-body fields are derived from the resolve layer and shown read-only
+                // (greyed). They are NOT editable — the ONLY way to change an auto-body is to
+                // make it explicit via the checkbox below, after which it edits like any body.
+                val startMm  = component.startMmPhysical
+                val lengthMm = component.endMmPhysical - component.startMmPhysical
+                val diaMm    = component.diaMm
                 var promoted by remember(component.id) { mutableStateOf(false) }
-
-                fun promoteIfNeeded() {
-                    if (!promoted && startMm >= 0f && lengthMm > 0f && diaMm > 0f) {
-                        promoted = true; onAddBody(startMm, lengthMm, diaMm)
-                    }
-                }
 
                 // Explicit promotion via checkbox: turns this derived fill into a real,
                 // editable Body (needed to add a keyway to a line-shaft end span, or to
-                // lock the span in). Reuses the same promotion path as a field edit; the
-                // resulting Body carries the auto-body's current derived Start/Length/Ø.
+                // lock the span in). The resulting Body carries the auto-body's current
+                // derived Start/Length/Ø. This is the sole promotion path (field edits are
+                // disabled), guarded by `promoted` so it fires once.
                 fun promoteNow() {
                     if (!promoted && startMm >= 0f && lengthMm > 0f && diaMm > 0f) {
                         promoted = true; onAddBody(startMm, lengthMm, diaMm)
@@ -434,15 +433,9 @@ internal fun ComponentPagerCard(
                     debugText = if (showComponentDebugLabels) "id=${component.id} • startMm=${f1(component.startMmPhysical)} • endMm=${f1(component.endMmPhysical)}" else null,
                     outerPaddingHorizontal = outerPaddingHorizontal,
                 ) {
-                    CommitNum("Start (${abbr(unit)})", disp(startMm, unit)) { s ->
-                        toMmOrNull(s, unit)?.let { startMm = it; promoteIfNeeded() }
-                    }
-                    CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit)) { s ->
-                        toMmOrNull(s, unit)?.let { lengthMm = it; promoteIfNeeded() }
-                    }
-                    CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit)) { s ->
-                        toMmOrNull(s, unit)?.let { diaMm = it; promoteIfNeeded() }
-                    }
+                    CommitNum("Start (${abbr(unit)})", disp(startMm, unit), enabled = false) { }
+                    CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit), enabled = false) { }
+                    CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit), enabled = false) { }
                     Row(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                             .toggleable(
@@ -450,11 +443,12 @@ internal fun ComponentPagerCard(
                                 enabled = !promoted,
                                 role = androidx.compose.ui.semantics.Role.Checkbox,
                                 onValueChange = { checked -> if (checked) promoteNow() }
-                            ).padding(vertical = 4.dp),
+                            ).padding(vertical = 4.dp)
+                            .testTag("body_explicit_checkbox"),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "Make editable body",
+                            "Explicit body",
                             modifier = Modifier.weight(1f),
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -474,6 +468,7 @@ internal fun ComponentPagerCard(
             var editingBodyTitle by rememberSaveable(b.id) { mutableStateOf(false) }
             val bodyFocusRequester = remember { FocusRequester() }
             var bodyHasFocusedOnce by remember(b.id) { mutableStateOf(false) }
+            var showDemoteDialog by remember(b.id) { mutableStateOf(false) }
             ComponentCard(
                 title = computedBodyTitle,
                 titleContent = {
@@ -518,6 +513,48 @@ internal fun ComponentPagerCard(
                     onRemoveBody(b.id)
                 }
             ) {
+                // Explicit-body toggle (checked). Unchecking demotes this body back to an
+                // auto-fill span, but only after confirmation — the same trash/delete
+                // pipeline (onRemoveBody) does the removal, and the resolve layer regenerates
+                // the auto span. Guarded by a dialog so an accidental tap can't wipe stored size.
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .toggleable(
+                            value = true,
+                            role = androidx.compose.ui.semantics.Role.Checkbox,
+                            onValueChange = { checked -> if (!checked) showDemoteDialog = true }
+                        ).padding(vertical = 4.dp)
+                        .testTag("body_explicit_checkbox"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Explicit body", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
+                    androidx.compose.material3.Checkbox(checked = true, onCheckedChange = null)
+                }
+                if (showDemoteDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showDemoteDialog = false },
+                        title = { Text("Make body automatic?") },
+                        text = {
+                            Text(
+                                buildString {
+                                    append("This body's stored size will be replaced by the auto-fill span that regenerates from the surrounding components.")
+                                    if (b.hasKeyway) append(" Its keyway will be removed too.")
+                                }
+                            )
+                        },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(
+                                onClick = { showDemoteDialog = false; onRemoveBody(b.id) },
+                                modifier = Modifier.testTag("body_demote_confirm")
+                            ) { Text("Make automatic") }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { showDemoteDialog = false }) {
+                                Text("Cancel")
+                            }
+                        }
+                    )
+                }
                 CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit), validator = startValidator(b.id, ComponentKind.BODY, b.lengthMm)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateBody(idx, it, b.lengthMm, b.diaMm) }
                 }
