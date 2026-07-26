@@ -218,6 +218,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
 
+    // Blank-draft (write-in) export/print. Deliberately NOT persisted: a forgotten sticky
+    // toggle would silently blank every future export. Defaults off each session.
+    internal val _pdfBlankDraft = MutableStateFlow(false)
+    val pdfBlankDraft: StateFlow<Boolean> = _pdfBlankDraft.asStateFlow()
+
     internal val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
 

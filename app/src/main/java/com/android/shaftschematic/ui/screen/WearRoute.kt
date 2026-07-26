@@ -29,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
@@ -37,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,6 +80,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.buildOpenPdfIntent
+import com.android.shaftschematic.util.printShaftPdfPage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -129,6 +132,8 @@ fun WearRoute(
 
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
+    // Blank-draft (write-in) copy: outline + form layout, all values blanked for handwriting.
+    var blankDraft by rememberSaveable { mutableStateOf(false) }
     // Plain remember: an ImageBitmap is not saveable (crashes onSaveInstanceState),
     // and the LaunchedEffect below regenerates it anyway.
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -156,6 +161,7 @@ fun WearRoute(
                             resolvedComponents = resolvedComponents,
                             lineThicknessScale = lineThicknessScale,
                             wearRecord = wearRecord,
+                            blankValues = blankDraft,
                         )
                         doc.finishPage(page)
                         doc.writeTo(out)
@@ -171,7 +177,7 @@ fun WearRoute(
 
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   wearRecord) {
+                   wearRecord, blankDraft) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
@@ -186,6 +192,7 @@ fun WearRoute(
                 resolvedComponents = resolvedComponents,
                 lineThicknessScale = thicknessSnapshot,
                 wearRecord = wearRecord,
+                blankValues = blankDraft,
             )
         }
         previewBitmap = bmp?.asImageBitmap()
@@ -322,6 +329,20 @@ fun WearRoute(
 
             Spacer(Modifier.height(4.dp))
 
+            // ── Blank draft toggle ────────────────────────────────────────────
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Job info and OAL are blanked; recorded wear is omitted — a fresh form.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
             OutlinedButton(
                 onClick = { showPreview = true },
                 modifier = Modifier.fillMaxWidth(),
@@ -331,8 +352,42 @@ fun WearRoute(
                 Text("Preview Wear Document")
             }
 
+            // ── Print button ──────────────────────────────────────────────────
+            OutlinedButton(
+                onClick = {
+                    val jobName = buildWearFilename(customer, vessel, jobNumber, blankDraft)
+                        .removeSuffix(".pdf")
+                    // Snapshot state on the UI thread; onWrite runs on a binder thread.
+                    val specSnapshot = spec
+                    val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
+                        jobNumber = jobNumber, side = shaftPosition)
+                    val unitSnapshot = unit
+                    val prefsSnapshot = vm.currentPdfPrefs
+                    val resolvedSnapshot = resolvedComponents
+                    val thicknessSnapshot = lineThicknessScale
+                    val recordSnapshot = wearRecord
+                    val blankSnapshot = blankDraft
+                    printShaftPdfPage(ctx, jobName) { page ->
+                        composeWearPdf(
+                            page = page, spec = specSnapshot,
+                            project = projectSnapshot, unit = unitSnapshot,
+                            pdfPrefs = prefsSnapshot,
+                            resolvedComponents = resolvedSnapshot,
+                            lineThicknessScale = thicknessSnapshot,
+                            wearRecord = recordSnapshot,
+                            blankValues = blankSnapshot,
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.Print, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Print Wear Document")
+            }
+
             Button(
-                onClick = { launcher.launch(buildWearFilename(customer, vessel, jobNumber)) },
+                onClick = { launcher.launch(buildWearFilename(customer, vessel, jobNumber, blankDraft)) },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
@@ -351,7 +406,7 @@ fun WearRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(buildWearFilename(customer, vessel, jobNumber))
+                launcher.launch(buildWearFilename(customer, vessel, jobNumber, blankDraft))
             },
             optionsSheet = {
                 RunoutWearOptionsSheet(
@@ -385,9 +440,15 @@ fun WearRoute(
     }
 }
 
-private fun buildWearFilename(customer: String, vessel: String, jobNumber: String): String {
+private fun buildWearFilename(
+    customer: String,
+    vessel: String,
+    jobNumber: String,
+    blankDraft: Boolean = false,
+): String {
     val parts = listOf(customer, vessel, jobNumber).filter { it.isNotBlank() }
-    return "${if (parts.isNotEmpty()) parts.joinToString("_") else "WearDocument"}_wear.pdf"
+    val blankSuffix = if (blankDraft) "_BlankDraft" else ""
+    return "${if (parts.isNotEmpty()) parts.joinToString("_") else "WearDocument"}_wear$blankSuffix.pdf"
 }
 
 private fun openWearPdf(context: Context, uri: Uri) {
@@ -469,6 +530,7 @@ private fun renderWearBitmap(
     resolvedComponents: List<com.android.shaftschematic.ui.resolved.ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
     wearRecord: WearRecord = WearRecord(),
+    blankValues: Boolean = false,
 ): Bitmap? = runCatching {
     val tempFile = File.createTempFile("wear_preview_", ".pdf", context.cacheDir)
     val doc = PdfDocument()
@@ -477,7 +539,8 @@ private fun renderWearBitmap(
         val page = doc.startPage(pageInfo)
         composeWearPdf(page = page, spec = spec, project = project, unit = unit,
             pdfPrefs = pdfPrefs, resolvedComponents = resolvedComponents,
-            lineThicknessScale = lineThicknessScale, wearRecord = wearRecord)
+            lineThicknessScale = lineThicknessScale, wearRecord = wearRecord,
+            blankValues = blankValues)
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
     } finally {

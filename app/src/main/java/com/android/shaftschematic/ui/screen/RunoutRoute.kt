@@ -38,6 +38,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
@@ -55,6 +56,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -120,6 +122,7 @@ import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.buildOpenPdfIntent
+import com.android.shaftschematic.util.printShaftPdfPage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -162,6 +165,8 @@ fun RunoutRoute(
 
     val ctx = LocalContext.current
     var showPreview    by rememberSaveable { mutableStateOf(false) }
+    // Blank-draft (write-in) copy: geometry + form layout, all values blanked for handwriting.
+    var blankDraft     by rememberSaveable { mutableStateOf(false) }
     // Plain remember: an ImageBitmap is not saveable (crashes onSaveInstanceState),
     // and the LaunchedEffect below regenerates it anyway.
     var previewBitmap  by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -186,6 +191,7 @@ fun RunoutRoute(
                             resolvedComponents = resolvedComponents,
                             lineThicknessScale = lineThicknessScale,
                             runoutReadings = runoutReadings,
+                            blankValues = blankDraft,
                         )
                         doc.finishPage(page)
                         doc.writeTo(out)
@@ -201,7 +207,7 @@ fun RunoutRoute(
 
     LaunchedEffect(showPreview, spec, runoutConfig, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   runoutReadings) {
+                   runoutReadings, blankDraft) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot  = vm.currentPdfPrefs
@@ -216,6 +222,7 @@ fun RunoutRoute(
                 resolvedComponents = resolvedComponents,
                 lineThicknessScale = thicknessSnapshot,
                 runoutReadings = runoutReadings,
+                blankValues = blankDraft,
             )
         }
         previewBitmap = bmp?.asImageBitmap()
@@ -423,6 +430,20 @@ fun RunoutRoute(
 
             Spacer(Modifier.height(4.dp))
 
+            // ── Blank draft toggle ────────────────────────────────────────────
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Job info, OAL, and TIR values are blanked for handwriting.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
             // ── Preview button ────────────────────────────────────────────────
             OutlinedButton(
                 onClick = { showPreview = true },
@@ -433,9 +454,44 @@ fun RunoutRoute(
                 Text("Preview Runout Sheet")
             }
 
+            // ── Print button ──────────────────────────────────────────────────
+            OutlinedButton(
+                onClick = {
+                    val jobName = buildRunoutFilename(customer, vessel, jobNumber, blankDraft)
+                        .removeSuffix(".pdf")
+                    // Snapshot state on the UI thread; onWrite runs on a binder thread.
+                    val specSnapshot = spec
+                    val configSnapshot = runoutConfig
+                    val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
+                        jobNumber = jobNumber, side = shaftPosition)
+                    val unitSnapshot = unit
+                    val prefsSnapshot = vm.currentPdfPrefs
+                    val resolvedSnapshot = resolvedComponents
+                    val thicknessSnapshot = lineThicknessScale
+                    val readingsSnapshot = runoutReadings
+                    val blankSnapshot = blankDraft
+                    printShaftPdfPage(ctx, jobName) { page ->
+                        composeRunoutPdf(
+                            page = page, spec = specSnapshot, config = configSnapshot,
+                            project = projectSnapshot, unit = unitSnapshot,
+                            pdfPrefs = prefsSnapshot,
+                            resolvedComponents = resolvedSnapshot,
+                            lineThicknessScale = thicknessSnapshot,
+                            runoutReadings = readingsSnapshot,
+                            blankValues = blankSnapshot,
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.Print, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Print Runout Sheet")
+            }
+
             // ── Export button ─────────────────────────────────────────────────
             Button(
-                onClick = { launcher.launch(buildRunoutFilename(customer, vessel, jobNumber)) },
+                onClick = { launcher.launch(buildRunoutFilename(customer, vessel, jobNumber, blankDraft)) },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
@@ -455,7 +511,7 @@ fun RunoutRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(buildRunoutFilename(customer, vessel, jobNumber))
+                launcher.launch(buildRunoutFilename(customer, vessel, jobNumber, blankDraft))
             },
             optionsSheet = {
                 RunoutWearOptionsSheet(
@@ -753,9 +809,15 @@ private fun DrawScope.drawRunoutBubbleRing(center: Offset, r: Float, color: Colo
 // Private helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-private fun buildRunoutFilename(customer: String, vessel: String, jobNumber: String): String {
+private fun buildRunoutFilename(
+    customer: String,
+    vessel: String,
+    jobNumber: String,
+    blankDraft: Boolean = false,
+): String {
     val parts = listOf(customer, vessel, jobNumber).filter { it.isNotBlank() }
-    return "${if (parts.isNotEmpty()) parts.joinToString("_") else "RunoutSheet"}_runout.pdf"
+    val blankSuffix = if (blankDraft) "_BlankDraft" else ""
+    return "${if (parts.isNotEmpty()) parts.joinToString("_") else "RunoutSheet"}_runout$blankSuffix.pdf"
 }
 
 private fun openRunoutPdf(context: Context, uri: Uri) {
@@ -777,6 +839,7 @@ private fun renderRunoutBitmap(
     resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
     runoutReadings: RunoutReadings = RunoutReadings(),
+    blankValues: Boolean = false,
 ): Bitmap? = runCatching {
     val tempFile = File.createTempFile("runout_preview_", ".pdf", context.cacheDir)
     val doc = PdfDocument()
@@ -785,7 +848,8 @@ private fun renderRunoutBitmap(
         val page = doc.startPage(pageInfo)
         composeRunoutPdf(page = page, spec = spec, config = config, project = project, unit = unit,
             pdfPrefs = pdfPrefs, resolvedComponents = resolvedComponents,
-            lineThicknessScale = lineThicknessScale, runoutReadings = runoutReadings)
+            lineThicknessScale = lineThicknessScale, runoutReadings = runoutReadings,
+            blankValues = blankValues)
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
     } finally {

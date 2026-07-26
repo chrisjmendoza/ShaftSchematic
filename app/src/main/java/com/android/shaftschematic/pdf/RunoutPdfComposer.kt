@@ -101,6 +101,11 @@ fun composeRunoutPdf(
     resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
     runoutReadings: RunoutReadings = RunoutReadings(),
+    /**
+     * Blank-draft (write-in) mode: header job info, the OAL value, recorded TIR readings, and
+     * the TIR direction are all blanked so the whole sheet can be filled in by hand.
+     */
+    blankValues: Boolean = false,
 ) {
     val c = page.canvas
     c.drawColor(Color.WHITE)
@@ -232,7 +237,7 @@ fun composeRunoutPdf(
 
     // ── Draw header ───────────────────────────────────────────────────────────
     drawRunoutHeader(c, text, contentLeft, contentRight,
-        headerTop, headerHeight, spec, project, unit, drawSpanMm)
+        headerTop, headerHeight, spec, project, unit, drawSpanMm, blankValues)
 
     // ── Draw OAL span line — raised well above the shaft, with witness lines ──
     // The arrows bracket the drawn SET-to-SET span, but the LABEL is always the typed
@@ -245,6 +250,7 @@ fun composeRunoutPdf(
         aftShaftTopY = shaftCy - shaftOuterRPxAt(aftSetMm),
         fwdShaftTopY = shaftCy - shaftOuterRPxAt(fwdSetMm),
         unit = unit, oalMm = spec.overallLengthMm,
+        blankValues = blankValues,
     )
 
     // ── Draw shaft profile ────────────────────────────────────────────────────
@@ -256,10 +262,13 @@ fun composeRunoutPdf(
         anchorY = shaftCy + shaftHalfPt,
         surfaceYAtMm = { mm -> shaftCy + shaftOuterRPxAt(mm) },
     )
-    drawPlacedBubbles(c, bubbleResult.bubbles, outline, runoutReadings, unit)
+    // Blank drafts keep the bubbles (they ARE the write-in circles) but drop recorded values.
+    val effectiveReadings = if (blankValues) RunoutReadings() else runoutReadings
+    drawPlacedBubbles(c, bubbleResult.bubbles, outline, effectiveReadings, unit)
 
     // ── Draw TIR direction line ───────────────────────────────────────────────
-    drawTirLine(c, text, contentLeft, contentRight, tirY, config.tirDirection)
+    val effectiveTir = if (blankValues) TirDirection.UNSET else config.tirDirection
+    drawTirLine(c, text, contentLeft, contentRight, tirY, effectiveTir)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -285,23 +294,29 @@ private fun drawRunoutHeader(
     project: ProjectInfo,
     unit: UnitSystem,
     oalMm: Float,
+    blankValues: Boolean = false,
 ) {
     val y = top + text.textSize + 2f
-    val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-    val oalDisplay = if (unit == UnitSystem.INCHES) {
-        "${"%.4f".format(oalMm / 25.4f)}\""
-    } else {
-        "${"%.2f".format(oalMm)} mm"
-    }
-    val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
 
-    val headerText = buildString {
-        if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
-        if (project.vessel.isNotBlank())   append("Vessel: ${project.vessel}   ")
-        if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
-        append("Date: $date$side")
+    if (blankValues) {
+        // Blank draft: every job-info label prints with a writing rule, regardless of what
+        // the current document holds — the draft may be used on a different shaft.
+        var x = left
+        listOf("Customer:", "Vessel:", "Job #:", "Date:", "Side:").forEach { label ->
+            x = drawLabelWithRule(c, label, x, y, text, maxRight = right)
+        }
+    } else {
+        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
+
+        val headerText = buildString {
+            if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
+            if (project.vessel.isNotBlank())   append("Vessel: ${project.vessel}   ")
+            if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
+            append("Date: $date$side")
+        }
+        c.drawText(ellipsizeToWidth(headerText, text, right - left), left, y, text)
     }
-    c.drawText(ellipsizeToWidth(headerText, text, right - left), left, y, text)
 
     // Thin rule below header
     val ruleY = top + height
@@ -333,6 +348,7 @@ private fun drawOalSpanLine(
     fwdShaftTopY: Float,
     unit: UnitSystem,
     oalMm: Float,
+    blankValues: Boolean = false,
 ) {
     val arrowLen = 8f
     val witnessGap = 3f   // gap between shaft edge and witness line start
@@ -351,14 +367,20 @@ private fun drawOalSpanLine(
     c.drawLine(x1, y, x1 - arrowLen, y - arrowLen * 0.5f, dim)
     c.drawLine(x1, y, x1 - arrowLen, y + arrowLen * 0.5f, dim)
 
-    // OAL label centred above the line
-    val label = if (unit == UnitSystem.INCHES) {
-        "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
+    // OAL label centred above the line (blank draft: "OAL:" + writing rule)
+    if (blankValues) {
+        val label = "OAL:"
+        val totalW = text.measureText(label) + 4f + BLANK_RULE_PT
+        drawLabelWithRule(c, label, (x0 + x1) * 0.5f - totalW * 0.5f, y - 4f, text)
     } else {
-        "OAL: ${"%.2f".format(oalMm)} mm"
+        val label = if (unit == UnitSystem.INCHES) {
+            "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
+        } else {
+            "OAL: ${"%.2f".format(oalMm)} mm"
+        }
+        val lw = text.measureText(label)
+        c.drawText(label, (x0 + x1) * 0.5f - lw * 0.5f, y - 4f, text)
     }
-    val lw = text.measureText(label)
-    c.drawText(label, (x0 + x1) * 0.5f - lw * 0.5f, y - 4f, text)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

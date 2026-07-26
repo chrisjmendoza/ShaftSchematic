@@ -23,7 +23,10 @@ class DiameterLeaderRenderer(
     private val leaderRise: Float = 16f,
     private val leaderDogleg: Float = 14f,
     private val linePaint: Paint,
-    private val textPaint: Paint
+    private val textPaint: Paint,
+    /** Blank-draft mode: print "Ø" + a writable rule instead of the value. */
+    private val blankValues: Boolean = false,
+    private val blankRuleWidth: Float = 40f
 ) {
     /** Vertical distance between stacked BELOW-side rows. */
     private val tierStep: Float get() = textPaint.textSize * 1.4f
@@ -34,7 +37,7 @@ class DiameterLeaderRenderer(
         val footprints = below.map { call ->
             val anchorX = pageX(call.xMm)
             val labelLeft = anchorX + leaderDogleg
-            val labelRight = labelLeft + textPaint.measureText(label(call, unit))
+            val labelRight = labelLeft + labelWidth(call, unit)
             DiameterCalloutLayout.Footprint(left = anchorX, right = labelRight)
         }
         val tiers = DiameterCalloutLayout.assignTiers(footprints)
@@ -44,7 +47,10 @@ class DiameterLeaderRenderer(
     }
 
     private fun label(call: DiaCallout, unit: UnitSystem): String =
-        "Ø " + formatDiaWithUnit(call.valueMm, unit)
+        if (blankValues) "Ø" else "Ø " + formatDiaWithUnit(call.valueMm, unit)
+
+    private fun labelWidth(call: DiaCallout, unit: UnitSystem): Float =
+        textPaint.measureText(label(call, unit)) + if (blankValues) 4f + blankRuleWidth else 0f
 
     private fun drawOne(canvas: Canvas, call: DiaCallout, unit: UnitSystem, tier: Int) {
         val x = pageX(call.xMm)
@@ -64,6 +70,13 @@ class DiameterLeaderRenderer(
         canvas.drawLine(x, startY, x, kinkY, linePaint)
         canvas.drawLine(x, kinkY, textX, kinkY, linePaint)
 
-        canvas.drawText(label(call, unit), textX, textY, textPaint)
+        val lbl = label(call, unit)
+        canvas.drawText(lbl, textX, textY, textPaint)
+        if (blankValues) {
+            // Writable rule after the "Ø" so the machinist can pencil the measured OD in.
+            val ruleStart = textX + textPaint.measureText(lbl) + 4f
+            val rule = Paint(textPaint).apply { style = Paint.Style.STROKE; strokeWidth = 0.7f }
+            canvas.drawLine(ruleStart, textY + 2f, ruleStart + blankRuleWidth, textY + 2f, rule)
+        }
     }
 }
