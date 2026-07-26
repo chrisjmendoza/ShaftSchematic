@@ -208,26 +208,17 @@ in-source `TaperRate.md` and `AddComponentDialogs.md`. In brief:
 
 Non-blocking warnings:
 - Extremely steep tapers *(planned — not yet implemented)*
-- Large mismatch with adjacent body diameter *(implemented, 2026-07-24)* —
-  `taperWarningMessages(spec, taper)` in `ui/util/ComponentWarnings.kt`. For each taper face
-  (SET and LET) with a `> 0` diameter, if a stored body face lands within `ADJACENCY_EPS_MM =
-  0.5f` mm of that taper face and the body's diameter is `> 0`, the relative mismatch
-  `|taperFaceDia − bodyDia| / bodyDia` is compared against `TAPER_BODY_MISMATCH_WARN_FRAC`
-  (`0.10f`, strict — exactly 10% is silent). Auto-bodies are not considered (stored `spec.bodies`
-  only). Message: "Ø differs from adjacent body by >10%", shown on the taper's carousel card
-  (joined with any other warning for that card via `"; "`). `TAPER_BODY_MISMATCH_WARN_FRAC` and
-  `ADJACENCY_EPS_MM` are named constants pending Chris's review.
-- **Orientation fix (2026-07-25)**: the raw stored `startDiaMm`/`endDiaMm` are not a reliable
-  AFT→FWD face mapping — the carousel edit path stores them x-ordered, but the Add-taper path
-  always stores `startDiaMm = SET` regardless of shaft half, so a FWD-half taper's stored
-  `startDiaMm` can physically be at the FWD face. Reading it as the AFT face produced a false
-  ">10%" warning when a FWD taper's LET matched an abutting body. Fixed by a private helper,
-  `taperFaceDiametersMm(taper, overallLengthMm)`, that derives the physical (AFT face, FWD
-  face) diameter pair — SET is `min(startDiaMm, endDiaMm)`, LET the max, and SET is placed at
-  the start/AFT face or end/FWD face per `ShaftViewModel.taperSmallEndAtStart` (mirrors the
-  renderer's own magnitude-based SET detection). `hasTaperBodyMismatch` now compares against
-  these physical face diameters. Four regression tests added in `ComponentWarningsTest.kt`
-  (FWD/AFT × matching/mismatching abutting body). Thresholds unchanged.
+- Very short segment (< 1 mm) — `taperWarningMessages(spec, taper)` in
+  `ui/util/ComponentWarnings.kt`.
+- **Removed (2026-07-26): taper-vs-body Ø mismatch advisory** ("Ø differs from adjacent
+  body by >10%", implemented 2026-07-24, orientation-fixed 2026-07-25). Removed by user
+  request: the mismatch is directly visible in the drawing, and the rule kept misfiring on
+  FWD tapers even after the orientation fix because the two taper storage paths (Add dialog
+  stores `startDiaMm = SET` regardless of shaft half; carousel edit stores the pair
+  x-ordered) still disagree — see the open renderer/storage orientation item in `TODO.md`
+  §2.3. Do not reintroduce this advisory without resolving that discrepancy first. A
+  regression test in `ComponentWarningsTest.kt` pins that a large taper-vs-body Ø
+  difference produces no warning.
 
 ---
 

@@ -8,6 +8,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-26
 
+### fix(warnings): removed the taper-vs-body Ø mismatch advisory
+
+- Removed the "Ø differs from adjacent body by >10%" carousel-card warning
+  (`hasTaperBodyMismatch` + helpers in `ui/util/ComponentWarnings.kt`). Despite the
+  2026-07-25 orientation fix it still misfired on-device for a FWD taper whose LET
+  correctly matched the adjacent body Ø (the Add-dialog and carousel-edit storage
+  paths still disagree on SET/LET ordering — open item in `TODO.md` §2.3), and the
+  mismatch is visible in the drawing itself. Removed by user request rather than
+  re-fixed. Taper cards keep the very-short-segment advisory; body-step and liner-OD
+  warnings are unchanged. Regression test pins the no-warning behavior
+  (`ComponentWarningsTest.kt`); docs updated (`docs/VALIDATION_RULES.md` §3.3).
+
 ### fix(drafts): saved documents no longer linger as "Untitled draft" + editor document title bar
 
 - **Bug**: saving a draft (including confirming an overwrite in the Save dialog) left

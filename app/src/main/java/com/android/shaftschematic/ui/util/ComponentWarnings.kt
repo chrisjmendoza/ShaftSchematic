@@ -5,7 +5,6 @@ import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
-import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import kotlin.math.abs
 
 /**
@@ -28,9 +27,6 @@ private const val SHORT_SEGMENT_MM = 1f
 
 /** Adjacent-body Ø ratio (max/min) above which a discontinuity is flagged. */
 private const val BODY_STEP_WARN_RATIO = 1.5f
-
-/** Relative Ø mismatch between a taper face and an abutting body above which it is flagged. */
-private const val TAPER_BODY_MISMATCH_WARN_FRAC = 0.10f
 
 private const val SHORT_SEGMENT_MSG = "Very short segment (< 1 mm)"
 
@@ -62,13 +58,17 @@ fun bodyWarningMessages(spec: ShaftSpec, body: Body): List<String> {
 }
 
 /**
- * Advisory warnings for a stored [taper]. Includes the very-short-segment check plus
- * §3.3 large Ø mismatch vs an adjacent stored body.
+ * Advisory warnings for a stored [taper] — currently only the very-short-segment check.
+ *
+ * The former §3.3 taper-vs-body Ø mismatch advisory was removed (2026-07-26) by user
+ * request: the mismatch is visible in the drawing itself, and the rule kept misfiring on
+ * FWD tapers because the two storage paths (Add dialog vs carousel edit) disagree on
+ * SET/LET ordering. Do not reintroduce without resolving that discrepancy first
+ * (`TODO.md` §2.3).
  */
 fun taperWarningMessages(spec: ShaftSpec, taper: Taper): List<String> {
     val out = mutableListOf<String>()
     if (isShortSegment(taper.lengthMm)) out += SHORT_SEGMENT_MSG
-    if (hasTaperBodyMismatch(spec, taper)) out += "Ø differs from adjacent body by >10%"
     return out
 }
 
@@ -102,53 +102,6 @@ private fun hasAdjacentBodyStep(spec: ShaftSpec, body: Body): Boolean {
             maxOf(body.diaMm, other.diaMm) / minOf(body.diaMm, other.diaMm) > BODY_STEP_WARN_RATIO
     }
 }
-
-/** §3.3 — a taper face abuts a body face with a relative Ø mismatch > [TAPER_BODY_MISMATCH_WARN_FRAC]. */
-private fun hasTaperBodyMismatch(spec: ShaftSpec, taper: Taper): Boolean {
-    val (aftFaceDia, fwdFaceDia) = taperFaceDiametersMm(taper, spec.overallLengthMm)
-    val faces = listOf(
-        taper.startFromAftMm to aftFaceDia,
-        (taper.startFromAftMm + taper.lengthMm) to fwdFaceDia,
-    )
-    return faces.any { (facePos, faceDia) ->
-        faceDia > 0f && spec.bodies.any { body ->
-            body.diaMm > 0f &&
-                bodyFaceAbuts(body, facePos) &&
-                abs(faceDia - body.diaMm) / body.diaMm > TAPER_BODY_MISMATCH_WARN_FRAC
-        }
-    }
-}
-
-/**
- * Diameters physically at the taper's (AFT face, FWD face), independent of which stored field
- * holds the value.
- *
- * The stored `startDiaMm`/`endDiaMm` are **not** a reliable AFT→FWD mapping: the carousel edit
- * path stores them x-ordered, but the Add-taper path stores `startDiaMm = SET` (Small End of
- * Taper) regardless of shaft half — so for a FWD-end taper the stored `startDiaMm` can be the
- * SET even though the SET is physically at the far (FWD) face. Reading it as the AFT-face value
- * then raised a false ">10%" warning against a body that actually abuts the LET.
- *
- * Robust rule (mirrors the renderer's magnitude-based SET detection —
- * `ShaftRenderer.drawKeywayNotch`'s `setAtStart = startDiaMm <= endDiaMm` — combined with the
- * shaft-half SET placement of [ShaftViewModel.taperSmallEndAtStart]): SET is the smaller stored
- * diameter, LET the larger; SET sits on the start (AFT) face for an AFT-half taper and on the
- * end (FWD) face for a FWD-half taper. This yields the physically-correct face diameter for
- * both storage orderings.
- */
-private fun taperFaceDiametersMm(taper: Taper, overallLengthMm: Float): Pair<Float, Float> {
-    val setDia = minOf(taper.startDiaMm, taper.endDiaMm)
-    val letDia = maxOf(taper.startDiaMm, taper.endDiaMm)
-    val setAtStart = ShaftViewModel.taperSmallEndAtStart(
-        taper.startFromAftMm, taper.lengthMm, overallLengthMm,
-    )
-    return if (setAtStart) setDia to letDia else letDia to setDia
-}
-
-/** True when either end face of [body] lands within [ADJACENCY_EPS_MM] of [pos]. */
-private fun bodyFaceAbuts(body: Body, pos: Float): Boolean =
-    abs(body.startFromAftMm - pos) <= ADJACENCY_EPS_MM ||
-        abs(body.startFromAftMm + body.lengthMm - pos) <= ADJACENCY_EPS_MM
 
 /** §3.5 — [liner] overlaps a stored body whose Ø is larger than the liner OD. */
 private fun linerOdBelowUnderlyingBody(spec: ShaftSpec, liner: Liner): Boolean {
