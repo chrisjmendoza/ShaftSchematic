@@ -5,6 +5,7 @@ import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import kotlin.math.abs
 
 /**
@@ -104,9 +105,10 @@ private fun hasAdjacentBodyStep(spec: ShaftSpec, body: Body): Boolean {
 
 /** §3.3 — a taper face abuts a body face with a relative Ø mismatch > [TAPER_BODY_MISMATCH_WARN_FRAC]. */
 private fun hasTaperBodyMismatch(spec: ShaftSpec, taper: Taper): Boolean {
+    val (aftFaceDia, fwdFaceDia) = taperFaceDiametersMm(taper, spec.overallLengthMm)
     val faces = listOf(
-        taper.startFromAftMm to taper.startDiaMm,
-        (taper.startFromAftMm + taper.lengthMm) to taper.endDiaMm,
+        taper.startFromAftMm to aftFaceDia,
+        (taper.startFromAftMm + taper.lengthMm) to fwdFaceDia,
     )
     return faces.any { (facePos, faceDia) ->
         faceDia > 0f && spec.bodies.any { body ->
@@ -115,6 +117,32 @@ private fun hasTaperBodyMismatch(spec: ShaftSpec, taper: Taper): Boolean {
                 abs(faceDia - body.diaMm) / body.diaMm > TAPER_BODY_MISMATCH_WARN_FRAC
         }
     }
+}
+
+/**
+ * Diameters physically at the taper's (AFT face, FWD face), independent of which stored field
+ * holds the value.
+ *
+ * The stored `startDiaMm`/`endDiaMm` are **not** a reliable AFT→FWD mapping: the carousel edit
+ * path stores them x-ordered, but the Add-taper path stores `startDiaMm = SET` (Small End of
+ * Taper) regardless of shaft half — so for a FWD-end taper the stored `startDiaMm` can be the
+ * SET even though the SET is physically at the far (FWD) face. Reading it as the AFT-face value
+ * then raised a false ">10%" warning against a body that actually abuts the LET.
+ *
+ * Robust rule (mirrors the renderer's magnitude-based SET detection —
+ * `ShaftRenderer.drawKeywayNotch`'s `setAtStart = startDiaMm <= endDiaMm` — combined with the
+ * shaft-half SET placement of [ShaftViewModel.taperSmallEndAtStart]): SET is the smaller stored
+ * diameter, LET the larger; SET sits on the start (AFT) face for an AFT-half taper and on the
+ * end (FWD) face for a FWD-half taper. This yields the physically-correct face diameter for
+ * both storage orderings.
+ */
+private fun taperFaceDiametersMm(taper: Taper, overallLengthMm: Float): Pair<Float, Float> {
+    val setDia = minOf(taper.startDiaMm, taper.endDiaMm)
+    val letDia = maxOf(taper.startDiaMm, taper.endDiaMm)
+    val setAtStart = ShaftViewModel.taperSmallEndAtStart(
+        taper.startFromAftMm, taper.lengthMm, overallLengthMm,
+    )
+    return if (setAtStart) setDia to letDia else letDia to setDia
 }
 
 /** True when either end face of [body] lands within [ADJACENCY_EPS_MM] of [pos]. */

@@ -1,6 +1,8 @@
 # Validation Rules  
 Version: v0.5.x
-Last updated: 2026-07-24 — corrected two stale "`ShaftSpec.validate()` is dead code" claims
+Last updated: 2026-07-25 — §3.3 taper-vs-body mismatch now compares the *physical* face
+diameter (`taperFaceDiametersMm`, SET-by-shaft-half convention) instead of the raw stored
+`startDiaMm`/`endDiaMm`, fixing a false positive on FWD-half tapers. 2026-07-24 — corrected two stale "`ShaftSpec.validate()` is dead code" claims
 (§1.1, §3.1): it is not called by production code, but it **is** exercised by unit tests
 (`ShaftSpecTest`, `SampleShaftAssetsTest` bundled-sample sanity checks) — test-only, kept
 deliberately (confirmed in the 2026-07-24 dead-code sweep, not deleted). 2026-07-24 — §3.2/§3.3/§3.5/§4.3: the five warning rules flagged
@@ -215,6 +217,17 @@ Non-blocking warnings:
   only). Message: "Ø differs from adjacent body by >10%", shown on the taper's carousel card
   (joined with any other warning for that card via `"; "`). `TAPER_BODY_MISMATCH_WARN_FRAC` and
   `ADJACENCY_EPS_MM` are named constants pending Chris's review.
+- **Orientation fix (2026-07-25)**: the raw stored `startDiaMm`/`endDiaMm` are not a reliable
+  AFT→FWD face mapping — the carousel edit path stores them x-ordered, but the Add-taper path
+  always stores `startDiaMm = SET` regardless of shaft half, so a FWD-half taper's stored
+  `startDiaMm` can physically be at the FWD face. Reading it as the AFT face produced a false
+  ">10%" warning when a FWD taper's LET matched an abutting body. Fixed by a private helper,
+  `taperFaceDiametersMm(taper, overallLengthMm)`, that derives the physical (AFT face, FWD
+  face) diameter pair — SET is `min(startDiaMm, endDiaMm)`, LET the max, and SET is placed at
+  the start/AFT face or end/FWD face per `ShaftViewModel.taperSmallEndAtStart` (mirrors the
+  renderer's own magnitude-based SET detection). `hasTaperBodyMismatch` now compares against
+  these physical face diameters. Four regression tests added in `ComponentWarningsTest.kt`
+  (FWD/AFT × matching/mismatching abutting body). Thresholds unchanged.
 
 ---
 
