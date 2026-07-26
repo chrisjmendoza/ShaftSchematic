@@ -57,6 +57,8 @@ The explicit-body card's **"Explicit body"** checkbox (checked; unchecking demot
 to auto-fill via a confirmation dialog) — and the auto-body card's own "Explicit body"
 checkbox (unchecked; the sole promotion path) — are **card-state, not add-time state**,
 the same posture as the coupler-bolt-slot card's deferred "show dimension rail" toggle.
+On both cards the checkbox row sits **above** the Start/Length/Ø fields so its position
+doesn't jump when checking it swaps the auto card for the explicit one.
 `AddBodyDialog` has no equivalent control: an Add dialog always creates an explicit body
 by definition, so there is nothing to toggle. This is intentional and not a parity gap.
 

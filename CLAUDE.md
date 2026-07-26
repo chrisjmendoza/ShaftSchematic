@@ -128,7 +128,9 @@ state so it fires once. Explicit-body cards carry the same "Explicit body" check
 checked; unchecking opens an AlertDialog ("Make body automatic?", with an extra sentence
 when `body.hasKeyway` warning that the keyway will be lost) — confirming demotes via the
 existing `onRemoveBody(b.id)` pipeline (the resolve layer regenerates the auto-fill span);
-Cancel keeps it explicit. `testTag`s: `body_explicit_checkbox`, `body_demote_confirm`. See
+Cancel keeps it explicit. On **both** cards the checkbox row sits **above** the
+Start/Length/Ø fields, so it stays put when checking it swaps the card from auto to
+explicit. `testTag`s: `body_explicit_checkbox`, `body_demote_confirm`. See
 `ComponentCarousel.kt`.
 
 ### Bodies are fillers, not collision participants

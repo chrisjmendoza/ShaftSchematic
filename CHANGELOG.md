@@ -8,6 +8,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-26
 
+### fix(ui): explicit-body checkbox no longer jumps on promotion
+
+- On the auto-body carousel card, the "Explicit body" checkbox row now sits **above**
+  the greyed Start/Length/Ø fields — the same position it has on the explicit-body
+  card — so it no longer jumps from below the fields to above them when checked
+  (Chris, on-device: "disorienting"). Behavior unchanged; `ComponentCarousel.kt`.
+
 ### feat(editor): session-wide undo/redo — every drawing edit undoable (50 steps, burst coalescing)
 
 - **Replaces the old delete-only undo.** Every drawing-editor edit — not just

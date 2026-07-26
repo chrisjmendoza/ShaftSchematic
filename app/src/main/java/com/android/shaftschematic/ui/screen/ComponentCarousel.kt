@@ -433,9 +433,8 @@ internal fun ComponentPagerCard(
                     debugText = if (showComponentDebugLabels) "id=${component.id} • startMm=${f1(component.startMmPhysical)} • endMm=${f1(component.endMmPhysical)}" else null,
                     outerPaddingHorizontal = outerPaddingHorizontal,
                 ) {
-                    CommitNum("Start (${abbr(unit)})", disp(startMm, unit), enabled = false) { }
-                    CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit), enabled = false) { }
-                    CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit), enabled = false) { }
+                    // Checkbox sits ABOVE the fields, matching its position on the
+                    // explicit-body card, so it doesn't jump when checked.
                     Row(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                             .toggleable(
@@ -458,6 +457,9 @@ internal fun ComponentPagerCard(
                             onCheckedChange = null
                         )
                     }
+                    CommitNum("Start (${abbr(unit)})", disp(startMm, unit), enabled = false) { }
+                    CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit), enabled = false) { }
+                    CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit), enabled = false) { }
                 }
                 return
             }
