@@ -8,12 +8,49 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-26
 
+### test: Export-PDF gate extracted to pure logic; stale androidTest removed
+
+- `EditorTopBarExportPdfTest` (androidTest) had rotted — its `ShaftScreen` call site was
+  dozens of parameters behind and broke androidTest compilation. The behavior it covered
+  is worth keeping, so the enable/message logic moved to `ui/util/ExportPdfGate.kt`
+  (pure) and is now JVM-tested in `ExportPdfGateTest` (no-components message,
+  enabled-with-component, collision message, slots-only stays disabled). The stale
+  androidTest is deleted; `:app:compileDebugAndroidTestKotlin` compiles again.
+
+### feat(ui): auto-body Ø editable — single bare-shaft diameter for all auto spans
+
+- Auto-body carousel cards unlock the **Ø** field (Start/Length stay disabled/derived;
+  positioning remains automatic unless the body is made explicit). On-device request.
+- Typing a Ø sets `ShaftSpec.autoBodyDiaMm` — one user-set bare-shaft diameter shared by
+  **all** auto spans (the shaft between components is one piece of stock). It wins over
+  neighbor derivation (`resolveAutoBodyDia`) and the `normalizeBodies` diameter-continuity
+  carry; 0/legacy docs keep the fully derived behavior. Editing Ø does **not** promote
+  the card — the explicit-body checkbox stays the sole promotion path.
+- New `ShaftViewModel.setAutoBodyDiaMm`; spec field is back-compat (defaults 0, rides the
+  existing spec serialization, undo/redo via `EditState` for free).
+- Tests: `AutoBodyDiaOverrideTest` (override on all spans, wins over neighbor Ø, unset
+  keeps derivation, positioning untouched, JSON roundtrip + legacy decode).
+
+### fix(pdf): nested FWD-anchored datum spans no longer cross lower dimension lines
+
+- **Bug** (on-device report): with liners measured from FWD, the datum to the aft liner
+  (57⅛″) landed on a lower rail than the nested datum to the fwd liner (22⅛″), so the
+  22⅛″ span's extension line cut straight through the 57⅛″ dimension line.
+- Root cause: `DeterministicTierAssigner` sorted DATUM spans by start ascending. FWD
+  chains share their **end** (the FWD SET), not their start, so in AUTO tiering mode
+  (raw x-space) the *containing* span sorted first and took the lower rail.
+- Fix: DATUM spans now sort by **length ascending** (then start), so nested chains stack
+  inner→outer whichever end they share. Shorter-first guarantees a containing span always
+  lands above a contained one (any tier blocked for the inner is blocked for the outer).
+- Regression tests: nested FWD-datum ordering + a full repro of the on-device shaft with
+  a no-extension-line-crossing invariant check (`DeterministicTierAssignerTest`).
+
 ### fix(ui): explicit-body checkbox no longer jumps on promotion
 
 - On the auto-body carousel card, the "Explicit body" checkbox row now sits **above**
   the greyed Start/Length/Ø fields — the same position it has on the explicit-body
   card — so it no longer jumps from below the fields to above them when checked
-  (Chris, on-device: "disorienting"). Behavior unchanged; `ComponentCarousel.kt`.
+  (on-device report: "disorienting"). Behavior unchanged; `ComponentCarousel.kt`.
 
 ### feat(editor): session-wide undo/redo — every drawing edit undoable (50 steps, burst coalescing)
 
@@ -63,7 +100,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ### fix(validation): taper-vs-body warning reads the physical face diameter (FWD-taper false positive)
 
-- **Bug** (Chris, on-device): a FWD-end taper with LET matching an abutting body's Ø still
+- **Bug** (on-device report): a FWD-end taper with LET matching an abutting body's Ø still
   warned "Ø differs from adjacent body by >10%". The Add-taper path always stores
   `startDiaMm = SET` regardless of shaft half, while the carousel edit path stores the pair
   x-ordered — the naive face mapping read the SET, not the LET, at the body-adjacent face.
@@ -190,7 +227,7 @@ Computed-only, awaiting a UI-surface decision — `specWarningMessages(spec)`:
 
 Thresholds (`ADJACENCY_EPS_MM`, `SHORT_SEGMENT_MM`, `BODY_STEP_WARN_RATIO`,
 `TAPER_BODY_MISMATCH_WARN_FRAC`) are named constants chosen as engineering defaults, flagged
-for Chris's review. 24 new tests in `ComponentWarningsTest.kt`. Docs:
+for user review. 24 new tests in `ComponentWarningsTest.kt`. Docs:
 `docs/VALIDATION_RULES.md` §3.2/§3.3/§3.5/§4.3, `TODO.md` §2.2.
 
 ### fix(validation): free-to-end badge OAL=0 fallback + taper slope inert-length test lock-in
@@ -521,7 +558,7 @@ proposal's §10 were resolved and are logged there.
   with tint affordance + spot-count badges.
 - **Detail overlay:** full-screen break-out liner (S-curve stubs, eye outward), hatched
   wear bands with per-spot dimension rails, editable spot cards (commit-on-blur).
-- **Input spec (Chris):** per-spot "Measure From" — AFT SET / FWD SET / Liner AFT /
+- **Input spec (user):** per-spot "Measure From" — AFT SET / FWD SET / Liner AFT /
   Liner FWD (canonical storage unchanged; display projection only) — and **blocking
   in-span validation** (start or start+length outside the liner rejects the commit
   inline); stale overruns (liner shortened later) warn + render clamped, never block.

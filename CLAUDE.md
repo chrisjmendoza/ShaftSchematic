@@ -119,8 +119,12 @@ was gained. A tap-and-leave with no edit must be a no-op. This prevents spurious
 auto-body promotion and unnecessary ViewModel updates. See `NumberField.md`.
 
 ### Auto-body promotion
-Auto-body cards in the carousel (`ResolvedComponentSource.AUTO`) show Start/Length/Ø as
-**disabled** (greyed, derived-value) fields — there is no field-edit promotion path.
+Auto-body cards in the carousel (`ResolvedComponentSource.AUTO`) show Start/Length as
+**disabled** (greyed, derived-value) fields — there is no field-edit promotion path. The
+**Ø field is editable** and sets the single bare-shaft Ø (`ShaftSpec.autoBodyDiaMm`,
+0 = unset → derive from neighbors) shared by **all** auto spans — one piece of stock. It
+wins over neighbor derivation, never affects auto-span positioning, and does **not**
+promote the card.
 Promotion to a real body happens only on an **explicit user action**: ticking the
 **"Explicit body"** checkbox (relabeled from "Make editable body"). Checking it calls
 `onAddBody` with the auto-body's current derived Start/Length/Ø, guarded by a `promoted`

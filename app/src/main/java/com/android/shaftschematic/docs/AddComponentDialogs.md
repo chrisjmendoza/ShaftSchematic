@@ -47,7 +47,8 @@ missing from `AddThreadDialog` for several versions (restored 2026-06-23).
 | Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
 
 Matches `ComponentCarousel.kt` `ResolvedBody` explicit-body branch. The **auto-body**
-card intentionally shows only Start/Length/Ø (now disabled/greyed, derived values) — 
+card intentionally shows only Start/Length/Ø — Start/Length disabled/greyed (derived),
+Ø editable (sets the shared bare-shaft `ShaftSpec.autoBodyDiaMm` without promoting) —
 auto-bodies are derived and cannot host a keyway until promoted; that reduced card is
 not a parity violation. The 180°-apart toggle writes spec-level
 `ShaftSpec.keyways180Apart` (the card's switch appears when `spec.keywayCount() >= 2`,

@@ -9,8 +9,14 @@ enum class SpanKind { DATUM, LOCAL, OAL }
  * Deterministic tier assignment for axial dimension spans (mm-space).
  *
  * Rules implemented:
- * - Order by kind first (LOCAL before DATUM), then by start ascending (AFT→FWD).
- * - Within DATUM spans with equal start, shorter spans first so offsets stair-step outward.
+ * - Order by kind first (LOCAL before DATUM); LOCAL by start ascending (AFT→FWD).
+ * - DATUM spans order by length ascending (then start), so nested datum chains stack
+ *   inner→outer no matter which end they share (AFT chains share their start, FWD chains
+ *   share their end). A span that contains another must sit on a higher tier — otherwise
+ *   the inner span's extension lines cut through the outer span's dimension line.
+ *   Shorter-first guarantees this: every tier blocked for the inner span is also blocked
+ *   for the outer (anything overlapping the inner overlaps the outer), and the inner's own
+ *   tier blocks the outer, so the outer always lands above.
  * - DATUM spans may not overlap any span on the same tier.
  * - LOCAL spans may overlap other LOCAL spans on the same tier, but may not overlap DATUM
  *   spans on the same tier.
@@ -58,11 +64,18 @@ object DeterministicTierAssigner {
                 val k = kindOrder(a.kind) - kindOrder(b.kind)
                 if (k != 0) return@sortedWith k
 
+                if (a.kind == SpanKind.DATUM) {
+                    // Shorter datums first: nested chains stack inner→outer regardless of
+                    // which end they share, keeping extension lines out of lower rails.
+                    val len = (a.end - a.start).compareTo(b.end - b.start)
+                    if (len != 0) return@sortedWith len
+                }
+
                 val s = a.start.compareTo(b.start)
                 if (s != 0) return@sortedWith s
 
                 val e = when (a.kind) {
-                    SpanKind.DATUM -> a.end.compareTo(b.end) // shorter first
+                    SpanKind.DATUM -> a.end.compareTo(b.end)
                     SpanKind.LOCAL -> b.end.compareTo(a.end) // longer first
                     SpanKind.OAL -> 0
                 }

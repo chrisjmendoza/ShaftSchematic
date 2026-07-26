@@ -191,7 +191,7 @@ import/export, and `newDocument` exactly like `runoutConfig`/`wearRecord`.
 - **Value**: canonical mm. Entered/shown in the active unit via `util/formatRunoutValue` (fixed
   **3 dp / thousandths in both units, trailing zeros kept** so every bubble reads at the same
   precision — `.010` stays `.010`) and parsed back to mm on Save — unit conversion only at the edge.
-- **High spot**: `highSpotHalfHours` ∈ `[0, 23]`, **30-minute clock ticks** (Chris's hand
+- **High spot**: `highSpotHalfHours` ∈ `[0, 23]`, **30-minute clock ticks** (the shop's hand
   convention), 0 = 12 o'clock, clockwise, 15° each. Snapped from the free drag angle by
   `snapToClockTick`.
 - **Identity / orphans**: keyed by `(componentId, stationIndex)`, where `stationIndex` is the
@@ -407,7 +407,7 @@ under the same name for the same shaft.
 
 ### Wear PDF Rendering Modes (2026-07-21 — profile always on top)
 
-The **shaft profile is always drawn on top** of the wear document now (2026-07-21, Chris's
+The **shaft profile is always drawn on top** of the wear document now (2026-07-21, user
 request): body/taper pit "X"s live on the whole-shaft profile, so it must stay visible. The
 detail strips below pick their layout from `determineWearPdfMode(collectWearLinerGroups(
 docSpec.liners, wearRecord).size)` — a pure function of how many liners have ≥1 recorded,

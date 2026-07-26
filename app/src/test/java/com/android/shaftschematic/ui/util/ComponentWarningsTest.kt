@@ -122,7 +122,7 @@ class ComponentWarningsTest {
     }
 
     // ── Regression: FWD-end taper stored SET-in-startDiaMm (Add-taper path). ──────
-    // Chris's on-device case: FWD taper, SET at the shaft tip, LET (equal to the body Ø)
+    // On-device case: FWD taper, SET at the shaft tip, LET (equal to the body Ø)
     // abutting the body at the taper's AFT face. The naive "startDiaMm at the AFT face"
     // mapping read the SET (152.4) there and raised a false >10% warning; the physical
     // AFT face is the LET (177.8), which matches the body.

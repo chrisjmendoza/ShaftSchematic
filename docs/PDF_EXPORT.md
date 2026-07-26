@@ -207,6 +207,11 @@ are drawn seated **inside a break in the line** — the hand-drafting convention
 - AUTO preserves per-component anchor/proximity behavior.
 - Tiering affects rail stacking only and never changes numeric values.
 - Units are passed explicitly and never derived from tiering or measurement reference.
+- DATUM spans tier shortest-first (`DeterministicTierAssigner`), so nested datum chains
+  stack inner→outer regardless of which end they share (AFT chains share their start,
+  FWD chains share their end). A span that contains another must sit on a higher rail —
+  otherwise the inner span's extension lines would cut through the outer span's
+  dimension line (2026-07-26 liner-datum bug).
 
 ---
 

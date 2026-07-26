@@ -1116,6 +1116,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         if (s.overallLengthMm < minOverall) s.withNewOal(minOverall) else s
     }
 
+    /**
+     * Set the bare-shaft Ø used by ALL auto-body spans (mm). The shaft between explicit
+     * components is one piece of stock, so a single value covers every auto span; editing
+     * any auto-body card updates them all. Values ≤ 0 clear back to derived behavior.
+     * Positioning of auto spans is unaffected.
+     */
+    fun setAutoBodyDiaMm(valueMm: Float) {
+        _spec.update { it.copy(autoBodyDiaMm = max(0f, valueMm)) }
+    }
+
     // ────────────────────────────────────────────────────────────────────────────
     // Component add/update/remove — newest on top (all params in mm)
     // ────────────────────────────────────────────────────────────────────────────

@@ -124,6 +124,7 @@ import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.util.buildThreadTitleById
+import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
@@ -217,6 +218,7 @@ fun ShaftScreen(
                 keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                 keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
                 keywaySpooned: Boolean) -> Unit,
+    onSetAutoBodyDia: (Float) -> Unit,
     onAddTaper: (Float, Float, Float, Float, String, Float, Float, Float, Float, Boolean) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean, isAftEnd: Boolean) -> Unit,
     onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
@@ -304,13 +306,11 @@ fun ShaftScreen(
     val topBarScope = rememberCoroutineScope()
 
     val collidingComponentIds = remember(spec) { spec.collidingIds() }
-    val exportPdfEnabled = (spec.bodies.isNotEmpty() || spec.tapers.isNotEmpty() ||
-        spec.threads.isNotEmpty() || spec.liners.isNotEmpty()) &&
-        collidingComponentIds.isEmpty()
-    val exportPdfDisabledMessage = if (collidingComponentIds.isNotEmpty())
-        "Fix component collisions before exporting."
-    else
-        "Please add at least 1 component before export is active."
+    val exportPdfGate = remember(spec, collidingComponentIds) {
+        exportPdfGate(spec, collidingComponentIds)
+    }
+    val exportPdfEnabled = exportPdfGate.enabled
+    val exportPdfDisabledMessage = exportPdfGate.disabledMessage
 
     val snapAnchors = remember(spec.overallLengthMm, spec.bodies, spec.tapers, spec.threads, spec.liners) { buildSnapAnchors(spec) }
 
@@ -731,6 +731,7 @@ fun ShaftScreen(
                     onAddBody = { s, l, d ->
                         onAddBody(s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false)
                     },
+                    onSetAutoBodyDia = onSetAutoBodyDia,
                     onUpdateBody = snappedBodyUpdater,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,

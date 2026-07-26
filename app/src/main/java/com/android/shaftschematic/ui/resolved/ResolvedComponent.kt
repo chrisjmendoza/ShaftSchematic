@@ -81,13 +81,14 @@ fun resolveComponents(spec: ShaftSpec, overallIsManual: Boolean): List<ResolvedC
     val explicit = resolveExplicitComponents(spec)
     val autoBodies = deriveAutoBodies(
         overallLengthMm = if (overallIsManual) spec.overallLengthMm else 0f,
-        explicitComponents = explicit
+        explicitComponents = explicit,
+        overrideDiaMm = spec.autoBodyDiaMm
     )
     val merged = (explicit + autoBodies).sortedWith(
         compareBy<ResolvedComponent>({ it.startMmPhysical }, { it.typeSortKey() })
     )
     val subtracted = subtractBodiesAgainstNonBodies(merged)
-    val bodiesAndFeatures = normalizeBodies(subtracted)
+    val bodiesAndFeatures = normalizeBodies(subtracted, overrideDiaMm = spec.autoBodyDiaMm)
 
     // Coupler bolt slots are overlays: resolved separately and appended so they never enter
     // auto-body/subtraction geometry, then merged back in physical order for the carousel.
@@ -161,16 +162,23 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
 
 /**
  * Derive auto body segments from explicit component spans.
+ *
+ * [overrideDiaMm] > 0 is the user-set bare-shaft Ø ([ShaftSpec.autoBodyDiaMm]): it wins
+ * over all neighbor derivation for every auto span. 0 keeps the derived behavior.
  */
 fun deriveAutoBodies(
     overallLengthMm: Float,
-    explicitComponents: List<ResolvedComponent>
+    explicitComponents: List<ResolvedComponent>,
+    overrideDiaMm: Float = 0f
 ): List<ResolvedComponent> {
     val explicit = explicitComponents
         .filter { it.source == ResolvedComponentSource.EXPLICIT }
         .sortedBy { it.startMmPhysical }
 
     data class Span(val start: Float, val end: Float)
+
+    fun autoDia(startMm: Float): Float =
+        if (overrideDiaMm > 0f) overrideDiaMm else resolveAutoBodyDia(startMm, explicit)
 
     if (explicit.isEmpty()) {
         if (overallLengthMm <= 0f) return emptyList()
@@ -181,7 +189,7 @@ fun deriveAutoBodies(
                 source = ResolvedComponentSource.AUTO,
                 startMmPhysical = 0f,
                 endMmPhysical = overallLengthMm,
-                diaMm = resolveAutoBodyDia(0f, explicit)
+                diaMm = autoDia(0f)
             )
         )
     }
@@ -207,7 +215,7 @@ fun deriveAutoBodies(
         val length = span.end - span.start
         if (length <= 0f) return@mapNotNull null
 
-        val dia = resolveAutoBodyDia(span.start, explicit)
+        val dia = autoDia(span.start)
         val id = autoBodyId(span.start, span.end)
         ResolvedBody(
             id = id,
@@ -325,7 +333,10 @@ private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>):
     )
 }
 
-private fun normalizeBodies(components: List<ResolvedComponent>): List<ResolvedComponent> {
+private fun normalizeBodies(
+    components: List<ResolvedComponent>,
+    overrideDiaMm: Float = 0f
+): List<ResolvedComponent> {
     if (components.isEmpty()) return components
 
     data class BodyAccum(
@@ -352,7 +363,13 @@ private fun normalizeBodies(components: List<ResolvedComponent>): List<ResolvedC
 
     fun startAccum(comp: ResolvedBody): BodyAccum {
         val isExplicit = comp.source == ResolvedComponentSource.EXPLICIT
-        val dia = if (isExplicit) comp.diaMm else (lastMergedDia ?: comp.diaMm)
+        // With a user-set bare-shaft Ø, auto spans keep it — no diameter continuity
+        // carried over from a flanking explicit body.
+        val dia = when {
+            isExplicit -> comp.diaMm
+            overrideDiaMm > 0f -> comp.diaMm
+            else -> lastMergedDia ?: comp.diaMm
+        }
         return BodyAccum(
             start = comp.startMmPhysical,
             end = comp.endMmPhysical,
