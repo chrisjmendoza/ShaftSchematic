@@ -8,6 +8,22 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-07-26
 
+### fix(ci): version auto-increment — shallow clone froze every build at 1.3.321 (321)
+
+- **Bug**: `versionCode = versionBase(320) + git rev-list --count HEAD`, but the
+  distribute workflow's `actions/checkout@v4` step used the default **shallow clone
+  (depth 1)**, so the commit count was always 1 in CI. Every Firebase App Distribution
+  upload — each a genuinely newer build — was labelled the duplicate version
+  **1.3.321 (321)**. (The `versionBase` floor added earlier was a workaround for this
+  same symptom without fixing the cause.)
+- **Fix**: `fetch-depth: 0` on the checkout step (`.github/workflows/distribute.yml`),
+  so CI sees full history and the version now increments automatically with every
+  commit. First post-fix build jumps forward to ~1.3.634 — installed devices update
+  normally.
+- **Guard**: `app/build.gradle.kts` now fails the build (`GradleException`) when
+  `CI=true` and `git rev-parse --is-shallow-repository` reports true, so a future
+  shallow checkout breaks loudly instead of silently uploading duplicates again.
+
 ### feat(pdf): blank drafts (write-in mode) + direct print for all three documents
 
 - **Blank draft (write-in) mode** for the schematic, runout sheet, and wear document:

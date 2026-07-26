@@ -17,8 +17,24 @@ val gitCount: Int = try {
     }.standardOutput.asText.get().trim().toInt()
 } catch (_: Exception) { 1 }
 
-// Manual version floor. gitCount alone can shrink (shallow CI clones count 1;
-// git absent falls back to 1), which distribution channels reject as a downgrade.
+// A shallow clone reports a commit count of 1, which silently freezes the version
+// at versionBase + 1 for every distributed build. CI must check out with
+// fetch-depth: 0 (see .github/workflows/distribute.yml); fail loudly if it didn't.
+val isShallowClone: Boolean = try {
+    providers.exec {
+        commandLine("git", "rev-parse", "--is-shallow-repository")
+    }.standardOutput.asText.get().trim() == "true"
+} catch (_: Exception) { false }
+
+if (isShallowClone && System.getenv("CI") == "true") {
+    throw GradleException(
+        "Shallow git clone in CI: versionCode would be stuck at versionBase + 1. " +
+            "Use fetch-depth: 0 in the checkout step."
+    )
+}
+
+// Manual version floor. gitCount alone can shrink (git absent falls back to 1),
+// which distribution channels reject as a downgrade.
 // Bump this when a distributed build must supersede all previously installed ones.
 val versionBase = 320
 
