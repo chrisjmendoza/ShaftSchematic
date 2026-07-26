@@ -96,14 +96,16 @@ These are defined in the contract but not yet computed. Lower priority — add w
   the adjacent body Ø), so the taper-vs-body mismatch check was **removed entirely** by
   user request — the difference is visible in the drawing itself. See
   `docs/VALIDATION_RULES.md` §3.3; a regression test now pins the no-warning behavior.
-- [ ] **Investigate renderer/storage taper orientation discrepancy** (discovered while fixing
-  the bug above, 2026-07-25, not fixed — out of scope): the Add-taper path stores
-  `startDiaMm = SET` regardless of shaft half, while the carousel edit path stores the pair
-  x-ordered — the two storage paths disagree for FWD tapers. `ShaftRenderer.kt` draws the
-  taper trapezoid strictly x-ordered (`startDiaMm` at the AFT face unconditionally, ~L214/252),
-  so an Add-path-created, never-edited FWD taper may **draw** with its small end at the body
-  face even though the SET/LET-by-shaft-half convention says otherwise. Needs on-device
-  confirmation, then a decision on the canonical storage order and a normalization pass.
+- [ ] **Taper orientation discrepancy — analysis done 2026-07-26, fix decision pending.**
+  Full investigation in `docs/TaperOrientation_Analysis_2026-07-26.md` (includes a 2-minute
+  on-device repro). Confirmed in code: the Add dialog keys its SET/LET swap on the
+  **measure-from toggle**, while derivation/labels use the **midpoint half** and keyway
+  placement uses **diameter magnitude** — a taper added into the opposite half from its
+  measure-from direction stores SET at the wrong face (drawn backwards, card labels
+  swapped). Also: the Add path never persists `authoredReference` (FWD measuring frame
+  lost on reopen). Recommended: re-key the dialog swap on the physical half + thread the
+  toggle into `addTaperAt`; data-repair normalization is a product decision (would rewrite
+  stored docs and forecloses reversed tapers).
 
 ---
 
@@ -162,6 +164,12 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 ## 6. Backlog (v0.5.x+)
 
+- [ ] **Multi-shaft per job number** (Chris, 2026-07-26): sometimes two shafts share one
+  job number; want to select between them. Feasibility + phased architecture plan in
+  `docs/MultiShaftJob_Plan_2026-07-26.md` (recommends derived job grouping over
+  single-shaft files — no file-format change; Phase 0 fixes the existing runout/wear
+  export-filename collision for same-job shafts). Awaiting Chris's answers to the plan's
+  6 product questions before building.
 - [ ] Selection → contextual "Add near selected" defaults
 - [ ] Inline "Add here" buttons between components in list
 - [x] Undo/redo architecture — session-scoped, done 2026-07-26: `SessionHistory<EditState>`
