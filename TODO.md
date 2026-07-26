@@ -92,6 +92,10 @@ These are defined in the contract but not yet computed. Lower priority — add w
   the SET at the body-adjacent face. Fixed 2026-07-25 by `taperFaceDiametersMm` (physical
   AFT/FWD face diameters via the SET-by-shaft-half convention, same magnitude-based SET
   detection as the renderer); 4 regression tests added (`ComponentWarningsTest.kt`).
+  **Superseded 2026-07-26**: the advisory still misfired on-device (LET correctly matching
+  the adjacent body Ø), so the taper-vs-body mismatch check was **removed entirely** by
+  user request — the difference is visible in the drawing itself. See
+  `docs/VALIDATION_RULES.md` §3.3; a regression test now pins the no-warning behavior.
 - [ ] **Investigate renderer/storage taper orientation discrepancy** (discovered while fixing
   the bug above, 2026-07-25, not fixed — out of scope): the Add-taper path stores
   `startDiaMm = SET` regardless of shaft half, while the carousel edit path stores the pair

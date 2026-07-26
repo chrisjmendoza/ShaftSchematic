@@ -17,7 +17,6 @@ import org.junit.Test
 class ComponentWarningsTest {
 
     private val STEP = "Large Ø step vs adjacent body"
-    private val MISMATCH = "Ø differs from adjacent body by >10%"
     private val LINER_UNDER = "Liner OD smaller than shaft Ø beneath it"
     private val SHORT = "Very short segment (< 1 mm)"
     private val NO_BODIES = "No explicit bodies — shaft body is all auto-fill"
@@ -78,89 +77,23 @@ class ComponentWarningsTest {
         assertTrue(bodyWarningMessages(spec, a).contains(SHORT))
     }
 
-    /* ── §3.3 Taper large mismatch vs adjacent body ─────────────────────────── */
+    /* ── §3.3 Taper warnings ────────────────────────────────────────────────── */
 
     @Test
-    fun `taper mismatch warns when face dia differs from abutting body`() {
+    fun `taper short segment warns`() {
+        val taper = Taper(startFromAftMm = 0f, lengthMm = 0.5f, startDiaMm = 80f, endDiaMm = 60f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, tapers = listOf(taper))
+        assertTrue(taperWarningMessages(spec, taper).contains(SHORT))
+    }
+
+    // Pins the 2026-07-26 removal of the taper-vs-body Ø mismatch advisory: a large
+    // face-vs-body Ø difference is visible in the drawing and must NOT produce a warning.
+    @Test
+    fun `taper adjacent body dia mismatch produces no warning`() {
         val body = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = 100f)
         val taper = Taper(startFromAftMm = 100f, lengthMm = 100f, startDiaMm = 80f, endDiaMm = 60f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), tapers = listOf(taper))
-        assertTrue(taperWarningMessages(spec, taper).contains(MISMATCH))
-    }
-
-    @Test
-    fun `taper mismatch silent below fraction threshold`() {
-        val body = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = 100f)
-        val taper = Taper(startFromAftMm = 100f, lengthMm = 100f, startDiaMm = 92f, endDiaMm = 92f)
-        val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), tapers = listOf(taper))
-        assertFalse(taperWarningMessages(spec, taper).contains(MISMATCH))
-    }
-
-    @Test
-    fun `taper mismatch silent exactly at 10 percent`() {
-        val body = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = 100f)
-        val taper = Taper(startFromAftMm = 100f, lengthMm = 100f, startDiaMm = 90f, endDiaMm = 90f)
-        val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), tapers = listOf(taper))
-        assertFalse(taperWarningMessages(spec, taper).contains(MISMATCH))
-    }
-
-    @Test
-    fun `taper mismatch silent when not adjacent to body`() {
-        val body = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = 100f)
-        // taper starts well past the body's FWD face
-        val taper = Taper(startFromAftMm = 300f, lengthMm = 100f, startDiaMm = 40f, endDiaMm = 40f)
-        val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), tapers = listOf(taper))
-        assertFalse(taperWarningMessages(spec, taper).contains(MISMATCH))
-    }
-
-    @Test
-    fun `taper mismatch skips zero-dia body sentinel`() {
-        val body = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = 0f)
-        val taper = Taper(startFromAftMm = 100f, lengthMm = 100f, startDiaMm = 80f, endDiaMm = 60f)
-        val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), tapers = listOf(taper))
-        assertFalse(taperWarningMessages(spec, taper).contains(MISMATCH))
-    }
-
-    // ── Regression: FWD-end taper stored SET-in-startDiaMm (Add-taper path). ──────
-    // On-device case: FWD taper, SET at the shaft tip, LET (equal to the body Ø)
-    // abutting the body at the taper's AFT face. The naive "startDiaMm at the AFT face"
-    // mapping read the SET (152.4) there and raised a false >10% warning; the physical
-    // AFT face is the LET (177.8), which matches the body.
-
-    @Test
-    fun `fwd taper stored SET-first does not warn when LET matches abutting body`() {
-        // 126 in ≈ 3200.4 mm modelled directly in mm.
-        val body = Body(startFromAftMm = 2400f, lengthMm = 500f, diaMm = 177.8f) // 7"
-        // FWD taper occupying the FWD half: SET (6") stored in startDiaMm, LET (7") in endDiaMm.
-        val taper = Taper(startFromAftMm = 2900f, lengthMm = 300f, startDiaMm = 152.4f, endDiaMm = 177.8f)
-        val spec = ShaftSpec(overallLengthMm = 3200f, bodies = listOf(body), tapers = listOf(taper))
-        assertFalse(taperWarningMessages(spec, taper).contains(MISMATCH))
-    }
-
-    @Test
-    fun `aft taper mirror does not warn when LET matches abutting body`() {
-        // AFT-half taper: SET (6") at the AFT tip, LET (7") at the FWD face abutting the body.
-        val taper = Taper(startFromAftMm = 0f, lengthMm = 300f, startDiaMm = 152.4f, endDiaMm = 177.8f)
-        val body = Body(startFromAftMm = 300f, lengthMm = 500f, diaMm = 177.8f)
-        val spec = ShaftSpec(overallLengthMm = 3200f, bodies = listOf(body), tapers = listOf(taper))
-        assertFalse(taperWarningMessages(spec, taper).contains(MISMATCH))
-    }
-
-    @Test
-    fun `fwd taper still warns when abutting-face LET genuinely mismatches body`() {
-        val body = Body(startFromAftMm = 2400f, lengthMm = 500f, diaMm = 177.8f)
-        // LET = 203.2 mm (8") physically at the AFT face abutting the body → |203.2−177.8|/177.8 ≈ 14%.
-        val taper = Taper(startFromAftMm = 2900f, lengthMm = 300f, startDiaMm = 152.4f, endDiaMm = 203.2f)
-        val spec = ShaftSpec(overallLengthMm = 3200f, bodies = listOf(body), tapers = listOf(taper))
-        assertTrue(taperWarningMessages(spec, taper).contains(MISMATCH))
-    }
-
-    @Test
-    fun `aft taper still warns when abutting-face LET genuinely mismatches body`() {
-        val taper = Taper(startFromAftMm = 0f, lengthMm = 300f, startDiaMm = 152.4f, endDiaMm = 203.2f)
-        val body = Body(startFromAftMm = 300f, lengthMm = 500f, diaMm = 177.8f)
-        val spec = ShaftSpec(overallLengthMm = 3200f, bodies = listOf(body), tapers = listOf(taper))
-        assertTrue(taperWarningMessages(spec, taper).contains(MISMATCH))
+        assertTrue(taperWarningMessages(spec, taper).isEmpty())
     }
 
     /* ── §3.5 Liner OD below underlying body ────────────────────────────────── */
