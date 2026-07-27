@@ -29,8 +29,11 @@ Responsibilities
     by `markDocumentSaved()` (all four explicit-save call sites go through it) and by
     `importJson()`/`newDocument()`. The 1.5 s-debounced autosave observer writes a
     `DraftEntry` only when the live snapshot differs from the baseline
-    (`shouldWriteDraft`), and removes this session's entry exactly once on the
-    dirty→clean transition.
+    (`shouldWriteDraft`) **and** the session is not factory-default
+    (`SessionSnapshot.isDefaultSession()`, `DraftRing.kt` — blocks the phantom blank
+    draft the async unit-preference restore used to create on empty-ring launches),
+    and removes this session's entry exactly once on the dirty→clean transition
+    (which also cleans up previously-persisted phantoms).
   - `markDocumentSaved()` **also removes this session's draft-ring entry immediately**
     (guarded by `draftPersisted`). The observer's dirty→clean removal only runs on the
     *next* combine emission, which never comes when the user saves and navigates away

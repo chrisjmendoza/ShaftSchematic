@@ -72,6 +72,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.ResolvedThread
+import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
 import com.android.shaftschematic.ui.util.bodyWarningMessages
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
@@ -103,6 +104,37 @@ internal data class RowRef(
     val component: ResolvedComponent,
     val explicitIndex: Int? = null
 )
+
+/**
+ * Pair every resolved component with the index of the stored component it edits
+ * (`null` for auto-bodies, which have no stored row).
+ *
+ * A stored body trimmed around a taper/thread/liner resolves into several rows whose ids
+ * carry a fragment suffix (`"<id>#2"`, …); they all edit the SAME stored body, so bodies
+ * are looked up by their base id. Only bodies are ever fragmented.
+ *
+ * Pure function so the mapping is unit-testable outside composition.
+ */
+internal fun buildCarouselRows(
+    spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>,
+): List<RowRef> {
+    val bodyIdx   = spec.bodies.withIndex().associate { it.value.id to it.index }
+    val taperIdx  = spec.tapers.withIndex().associate { it.value.id to it.index }
+    val threadIdx = spec.threads.withIndex().associate { it.value.id to it.index }
+    val linerIdx  = spec.liners.withIndex().associate { it.value.id to it.index }
+    val slotIdx   = spec.couplerBoltSlots.withIndex().associate { it.value.id to it.index }
+    return resolvedComponents.map { comp ->
+        val index = when (comp) {
+            is ResolvedBody   -> bodyIdx[resolvedBodyBaseId(comp.id)]
+            is ResolvedTaper  -> taperIdx[comp.id]
+            is ResolvedThread -> threadIdx[comp.id]
+            is ResolvedLiner  -> linerIdx[comp.id]
+            is ResolvedCouplerBoltSlot -> slotIdx[comp.id]
+        }
+        RowRef(component = comp, explicitIndex = index)
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ComponentCarouselPager
@@ -155,21 +187,7 @@ internal fun ComponentCarouselPager(
     val threadTitleById = remember(spec)                           { buildThreadTitleById(spec) }
 
     val rowsSorted = remember(spec, resolvedComponents) {
-        val bodyIdx   = spec.bodies.withIndex().associate { it.value.id to it.index }
-        val taperIdx  = spec.tapers.withIndex().associate { it.value.id to it.index }
-        val threadIdx = spec.threads.withIndex().associate { it.value.id to it.index }
-        val linerIdx  = spec.liners.withIndex().associate { it.value.id to it.index }
-        val slotIdx   = spec.couplerBoltSlots.withIndex().associate { it.value.id to it.index }
-        resolvedComponents.mapNotNull { comp ->
-            val index = when (comp) {
-                is ResolvedBody   -> bodyIdx[comp.id]
-                is ResolvedTaper  -> taperIdx[comp.id]
-                is ResolvedThread -> threadIdx[comp.id]
-                is ResolvedLiner  -> linerIdx[comp.id]
-                is ResolvedCouplerBoltSlot -> slotIdx[comp.id]
-            }
-            RowRef(component = comp, explicitIndex = index)
-        }
+        buildCarouselRows(spec, resolvedComponents)
     }
 
     val pageCount  = rowsSorted.size.coerceAtLeast(1)
@@ -184,19 +202,29 @@ internal fun ComponentCarouselPager(
     var pagerScrollStartedByUser by remember { mutableStateOf(false) }
     var pagerStartPage           by remember { mutableStateOf<Int?>(null) }
 
-    // Seed selection and scroll on initial load only (nothing selected yet).
-    // When components are added to an already-populated carousel we don't auto-jump —
-    // the selection-following effect below handles repositioning without the fighting
-    // scrollToPage / animateScrollToPage conflict that caused visible jumping.
-    LaunchedEffect(rowsSorted.size) {
-        if (rowsSorted.isNotEmpty() && selectedComponentId == null) {
-            val newPage = rowsSorted.size - 1
-            pagerState.scrollToPage(newPage)
-            onSelectComponentById(rowsSorted.getOrNull(newPage)?.component?.id)
+    val rowIds = remember(rowsSorted) { rowsSorted.map { it.component.id } }
+
+    // Seed selection on open (nothing selected → FIRST card, the AFT-most component) and
+    // self-heal an orphaned selection (id no longer resolves — auto-body ids are
+    // position-derived and regenerate on every edit) by adopting the current page WITHOUT
+    // scrolling. Keyed on rows + selection, not rows.size: a document open that lands on
+    // the same row count must still seed, and a stale seed from the open-time race (rows
+    // update a frame after the selection clears) heals itself on the next emission.
+    // When components are added we still don't auto-jump — the VM selects the new id, which
+    // resolves, so the action is NONE and the selection-following effect repositions.
+    LaunchedEffect(rowsSorted, selectedComponentId) {
+        when (seedSelectionAction(rowsSorted.size, selectedComponentId, carouselTargetIndex(rowIds, selectedComponentId))) {
+            SeedAction.SEED_FIRST -> {
+                pagerState.scrollToPage(0)
+                onSelectComponentById(rowsSorted.firstOrNull()?.component?.id)
+            }
+            SeedAction.ADOPT_CURRENT -> {
+                val page = pagerState.currentPage.coerceIn(0, rowsSorted.lastIndex)
+                onSelectComponentById(rowsSorted.getOrNull(page)?.component?.id)
+            }
+            SeedAction.NONE -> Unit
         }
     }
-
-    val rowIds = remember(rowsSorted) { rowsSorted.map { it.component.id } }
 
     // Follow programmatic selection changes.
     LaunchedEffect(selectedComponentId, rowsSorted) {

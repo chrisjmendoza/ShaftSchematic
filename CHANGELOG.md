@@ -6,6 +6,128 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-26 (later still)
+
+### fix: phantom blank drafts on launch; swipe selection bricked by orphaned ids
+
+Two on-device reports from branch testing.
+
+- **fix(autosave): phantom blank "Untitled draft" on app open.** The dirty-gate baseline
+  is seeded synchronously at ViewModel init (blank spec, unit = mm default); the async
+  settings restore then flips the unit preference (inches), making the untouched blank
+  session "dirty" — 1.5 s later the observer persisted a blank draft. Only bites when the
+  draft ring is empty (a non-empty ring auto-restores its newest entry instead), which
+  became the common state once saves started clearing their ring entry. Fix: a
+  factory-default session never writes a draft — new pure predicate
+  `SessionSnapshot.isDefaultSession()` (`DraftRing.kt`, deliberately ignores unit/config
+  flips) gates the autosave observer and the title-bar dirty flag; the observer's
+  dirty→clean branch now also deletes existing phantoms on their next debounce tick.
+  `ShaftViewModel.isSessionDefault()` delegates to the same predicate. 6 new tests.
+- **fix(ui): orphaned selection bricked swipe-to-highlight.** `isUserInitiatedScroll`
+  treated a selection whose id no longer resolves to any carousel row (`selectedIndex ==
+  -1`) as "our own catch-up scroll", so swipe adoption never armed: swiping changed cards
+  but never updated the selection, and the preview highlight never followed until a
+  preview tap set a valid id. Orphans are routine — auto-body ids are position-derived
+  and regenerate on every edit (much more visible now that repaired drawings are all-auto),
+  and open/new carried the previous document's selection. Fix: an orphaned selection
+  counts as user-initiated (the follow effect never animates toward a missing row, so no
+  fight is possible), and `importJson`/`newDocument`/`restoreSnapshot` clear the selection
+  at the session boundary so the carousel's seed effect reselects. Pre-existing in the
+  inline logic since before the 6e4f19e extraction; not a regression from this branch's
+  fixes.
+- **feat(ui): the first component is highlighted on open.** The seed effect was keyed on
+  `rowsSorted.size`, so opening a document with the same row count as the previous one
+  never re-seeded, and an open-time race could seed a stale id. Replaced with a pure,
+  tested decision (`seedSelectionAction`, `CarouselSelectionSync.kt`): nothing selected →
+  seed + scroll to the **first** card (the AFT-most component — thread, taper, whatever
+  leads the shaft; per product decision the highlight defaults to the first item rather
+  than remembering a previous selection); selection orphaned → adopt the current page
+  **without scrolling** (highlight returns after auto-body id churn without yanking the
+  user off the card they're editing); live selection → leave alone. No highlight only
+  when the highlight toggle is off or the shaft has no components.
+
+Suite: 820 tests green.
+
+---
+
+## 2026-07-26 (later)
+
+### fix(ui): typed field commits are never snapped
+
+On-device (branch testing): editing a FWD taper's length from 12.0157" to 12" and
+blurring left the model — and the drawing — at 12.0157". The commit path routed through
+`applySnapped{Body,Taper,Thread,Liner}Update`, which snapped the recomputed start/end to
+component-edge anchors within ±1 mm (0.04"). The 12.0157"→12" edit moves the taper's
+start by exactly 0.4 mm, so the snap pulled it back to the adjacent body's edge and the
+length recomputed to its old value — the typed number was silently undone. Pre-existing
+(wired since 2025-12), not a regression from today's fixes; it only bites on edits
+smaller than the tolerance, which is exactly the "remove the fractional tail" case.
+
+- Carousel update callbacks are now wired directly; the four snap wrappers and the
+  `snapAnchors` plumbing are deleted. Typed values reach the ViewModel verbatim.
+- Tap-to-add snapping (`SnapUtils.kt`) is unchanged — snapping belongs to coarse
+  gestures, not typed numbers. A sub-mm gap left next to a resized component is real,
+  visible, and auto-filled; a silent revert is neither.
+- Invariant pinned in `CLAUDE.md` + `docs/ShaftScreen.md` (v0.12): do not reintroduce
+  snapping into typed-commit update paths — the companion to the 2026-06-19 removal of
+  the `snapForwardFrom` cascade from VM updates.
+
+---
+
+## 2026-07-26 (late)
+
+### fix: body-merge diameter rule, unique fragment ids, IME field coverage
+
+Root-caused an on-device report ("opened a saved file, every body was explicit with
+changed diameters"): between `89c49d0` (07-21) and the 07-26 fixes, the composition-commit
+bug (see the entry below) combined with the then-current promote-on-any-commit auto-body
+card, so **merely paging the carousel silently promoted every composed auto span to a
+stored Body** — diameters drifted via display-unit rounding plus the
+nearest-upstream-explicit-body derivation cascade. Current code has no mass-promotion path
+(checkbox-only, test-pinned); the remaining related defects are fixed here.
+
+- **fix(model): `mergeBodiesAround` no longer invents a diameter.** Deleting a component
+  between two bodies merged them with `diaMm = max(A, B)`, silently rewriting a stored
+  diameter. Now fragments merge only when their diameters already agree (< 0.001 mm);
+  otherwise both bodies stay and the freed span auto-fills. The split→merge round trip
+  still restores one body — split fragments inherit the parent Ø verbatim.
+  (`ShaftSpecExtensions.kt`; `BodySplitMergeTest` updated + 2 new cases.)
+- **fix(resolve): trimmed body fragments get unique resolved ids.** All fragments of a
+  stored body trimmed around a taper/thread/liner reused `body.id`, producing duplicate
+  `HorizontalPager` keys (a Lazy-layout crash) and duplicate `explicitIndex` rows —
+  reachable today via a keyway-bearing body (never split on add) with a component over it.
+  Fragment #1 keeps the stored id (wear-pit / runout / selection references intact);
+  later fragments get `"<id>#2"`, `"#3"`, … with `resolvedBodyBaseId()` for spec lookups.
+  Carousel maps rows via base id (`buildCarouselRows`, now pure + tested); `RunoutRoute`
+  strips the suffix so runout station keys are byte-identical to before.
+  (`ResolvedComponent.kt`, `ComponentCarousel.kt`, `RunoutRoute.kt`; new
+  `BodyFragmentIdTest` (6), `CarouselRowMappingTest` (4).)
+- **fix(ui): keyboard no longer covers the focused field.** Under edge-to-edge the IME
+  arrives as insets, and `imePadding()` sat *after* `verticalScroll` in the editor column —
+  padding the content, never shrinking the viewport, so Compose's keep-focused-child-in-view
+  had nothing to do. `imePadding()` now precedes `verticalScroll` in `ShaftScreen` (and is
+  added to `LinerWearDetail`, which had none), so the viewport shrinks and the focused
+  field auto-scrolls into view — including fields at the bottom of carousel cards. No
+  change to `NumericInputField`, `CAROUSEL_HEIGHT`, or the FAB insets. Contract updated in
+  `ShaftScreen.md`.
+- **docs: investigation/writeup cleanup.** Removed 7 dated one-off reports (deep audit,
+  cleanup/doc sweeps, loop/night-run logs, build log, instrumentation verification — all
+  in git history) and scrubbed dangling references; open items they contained were moved
+  into `TODO.md` (§2.1, §2.2, §2.3, §4.1b, §6). Kept: incident/proposal docs that contract
+  docs cite, and the two analyses awaiting product decisions.
+
+**Data advisory (no code change):** drawings **saved by builds distributed 2026-07-21 →
+2026-07-26** may carry auto-promoted explicit bodies (this report), or a spuriously pinned
+bare-shaft Ø from the one-day composition-commit window. Neither is auto-repairable — a
+promoted/pinned value is indistinguishable from a deliberate one. Manual repair: uncheck
+**"Explicit body"** on each wrongly-explicit card (auto-fill regenerates), then enter `0`
+in any auto-body Ø field to restore derive-from-neighbors. Tell for a pinned Ø: change a
+neighboring body's Ø and see whether the bare-shaft spans follow.
+
+Suite: 796 → 808 tests, all green.
+
+---
+
 ## 2026-07-26 (night)
 
 ### test: instrumentation burndown (TODO §5.2) + JVM Compose harness

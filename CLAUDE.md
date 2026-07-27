@@ -113,6 +113,23 @@ reintroduce always-above label placement. The top OAL rail uses the same `drawSp
 breaks too. PDF-only — the on-screen preview rasterizes the real PDF, so there is no separate
 draw path and no canvas equivalent to keep in sync. See `docs/PDF_EXPORT.md` §5.4.
 
+### Golden rule: user inputs are SACRED
+A value the user typed into a component field is kept **exactly as entered** — no system
+(snap, rounding, derivation, "helpful" adjustment) may rewrite it, no matter how small
+the edit (.001 counts). The user changes component values; components get put in their
+place; auto-bodies fill the gaps — that is the design. Derived values (auto OAL, auto
+rate text, auto-body spans) may move; authored values may not.
+
+Concretely: carousel update callbacks (`onUpdateBody/Taper/Thread/Liner`) receive
+committed field values **verbatim** — no snap-to-anchor on any typed-commit path. The removed
+`applySnapped{…}Update` wrappers (2026-07-26) snapped recomputed start/end to
+component-edge anchors (±1 mm) and silently rewrote typed values: shortening a
+FWD-referenced taper by less than the tolerance snapped its start back to the old
+boundary, undoing the edit entirely. Snapping is for coarse gestures only (tap-to-add,
+`ui/viewmodel/SnapUtils.kt`). Same posture as the 2026-06-19 removal of the
+`snapForwardFrom` cascade from ViewModel updates: positions are user-authored; nothing
+mutates them except a direct user action. See `docs/ShaftScreen.md`.
+
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus
 was gained. A tap-and-leave with no edit must be a no-op. This prevents spurious

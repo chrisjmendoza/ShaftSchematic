@@ -166,7 +166,25 @@ class BodySplitMergeTest {
     }
 
     @Test
-    fun `merge - merged body diameter is max of two fragments`() {
+    fun `merge - equal-diameter fragments merge and keep that diameter`() {
+        resetIds()
+        val left  = Body(id = "bl", startFromAftMm = 0f,   lengthMm = 200f, diaMm = 55f)
+        val right = Body(id = "br", startFromAftMm = 350f, lengthMm = 100f, diaMm = 55f)
+        val spec = ShaftSpec(overallLengthMm = 600f, bodies = listOf(left, right))
+
+        val result = spec.mergeBodiesAround(200f, 350f, ::nextId)
+
+        val merged = result.spec.bodies.single()
+        assertEquals("merged start = left start", 0f, merged.startFromAftMm, 0.001f)
+        assertEquals("merged end = right end", 450f, merged.startFromAftMm + merged.lengthMm, 0.001f)
+        assertEquals("shared diameter kept", 55f, merged.diaMm, 0.001f)
+    }
+
+    @Test
+    fun `merge - unequal-diameter fragments do not merge`() {
+        // A merge would have to invent a diameter (the old behavior took max(A, B)), silently
+        // rewriting a stored value the user typed. Two differing diameters mean two distinct
+        // stored sections, so both stay put and the freed span is auto-filled at resolve time.
         resetIds()
         val left  = Body(id = "bl", startFromAftMm = 0f,   lengthMm = 200f, diaMm = 55f)
         val right = Body(id = "br", startFromAftMm = 350f, lengthMm = 100f, diaMm = 60f)
@@ -174,7 +192,31 @@ class BodySplitMergeTest {
 
         val result = spec.mergeBodiesAround(200f, 350f, ::nextId)
 
-        assertEquals("max diameter preserved", 60f, result.spec.bodies[0].diaMm, 0.001f)
+        assertEquals("spec unchanged", spec.bodies, result.spec.bodies)
+        assertTrue("nothing removed", result.removedIds.isEmpty())
+        assertTrue("nothing added", result.addedIds.isEmpty())
+        assertEquals("left diameter untouched", 55f, result.spec.bodies[0].diaMm, 0.001f)
+        assertEquals("right diameter untouched", 60f, result.spec.bodies[1].diaMm, 0.001f)
+    }
+
+    @Test
+    fun `merge - unequal diameters leave a keyway on the aft fragment intact`() {
+        resetIds()
+        val left = Body(
+            id = "bl", startFromAftMm = 0f, lengthMm = 200f, diaMm = 55f,
+            keywayWidthMm = 12f, keywayDepthMm = 6f, keywayLengthMm = 80f,
+            keywayEnd = LinerAuthoredReference.AFT,
+        )
+        val right = Body(id = "br", startFromAftMm = 350f, lengthMm = 100f, diaMm = 60f)
+        val spec = ShaftSpec(overallLengthMm = 600f, bodies = listOf(left, right))
+
+        val result = spec.mergeBodiesAround(200f, 350f, ::nextId)
+
+        assertEquals("spec unchanged", spec.bodies, result.spec.bodies)
+        val keyed = result.spec.bodies.first { it.id == "bl" }
+        assertTrue("keyway intact", keyed.hasKeyway)
+        assertEquals(80f, keyed.keywayLengthMm, 0.001f)
+        assertEquals(200f, keyed.lengthMm, 0.001f)
     }
 
     @Test

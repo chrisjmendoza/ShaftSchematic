@@ -376,7 +376,13 @@ fun ShaftSpec.splitBodiesAround(
  *  - Body A whose right edge is within [MERGE_EPS] of [compStart]
  *  - Body B whose left  edge is within [MERGE_EPS] of [compEnd]
  *
- * The merged body spans A.start → B.end with diameter = max(A.diaMm, B.diaMm).
+ * The merged body spans A.start → B.end and keeps the diameter both fragments already
+ * share — the merge is **skipped** when the two diameters differ, because inventing one
+ * (previously `max(A, B)`) silently rewrites a stored diameter the user typed. Both bodies
+ * then stay put and the freed span is auto-filled by the resolve layer. The dominant
+ * round-trip case still restores a single body: [splitBodiesAround] fragments inherit the
+ * parent's [Body.diaMm] verbatim, so they always agree.
+ *
  * If only one side is found (component was at a shaft boundary), that body expands
  * to fill the freed span.
  */
@@ -412,6 +418,10 @@ fun ShaftSpec.mergeBodiesAround(
             bodies.none { it.id != bodyA.id && it.id != bodyB.id && occupiesGap(it.startFromAftMm, it.lengthMm) }
         if (!gapClear) return BodySplitResult(this, emptyList(), emptyList())
 
+        // Never invent a diameter: only fragments that already agree may be fused. Differing
+        // diameters mean these are two distinct stored sections, not two halves of one body.
+        if (abs(bodyA.diaMm - bodyB.diaMm) >= 1e-3f) return BodySplitResult(this, emptyList(), emptyList())
+
         newBodies -= bodyA
         newBodies -= bodyB
         removedIds += listOf(bodyA.id, bodyB.id)
@@ -421,7 +431,7 @@ fun ShaftSpec.mergeBodiesAround(
             id             = id,
             startFromAftMm = bodyA.startFromAftMm,
             lengthMm       = (bodyB.startFromAftMm + bodyB.lengthMm) - bodyA.startFromAftMm,
-            diaMm          = maxOf(bodyA.diaMm, bodyB.diaMm),
+            diaMm          = bodyA.diaMm,   // == bodyB.diaMm, guaranteed by the guard above
         )
         // A merged body has one keyway slot; prefer A's, fall back to B's.
         merged = carryBodyKeyway(bodyA, merged)

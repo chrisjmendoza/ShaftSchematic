@@ -38,7 +38,7 @@ Test coverage
 - `ui/input/BlurCommitPolicyTest` — the predicate, pure JVM.
 - `ui/input/NumericInputFieldBlurTest` — the predicate actually wired into the field:
   real focus/blur/IME events, re-focus baseline, invalid-input revert. Runs on the JVM
-  under Robolectric (see `docs/Instrumentation_Verification_2026-07-26.md`).
+  under Robolectric.
 
 Responsibilities
 - Maintain internal `text` state; select-all on focus for quick overwrite.

@@ -8,7 +8,7 @@ data model, validation, glossary, roadmap) live in `docs/` at the repo root.
 
 **v1.0 consolidation:** the pack was reorganized from 31 micro-docs down to the 16
 below — per-file API restatements were merged into subsystem contracts or deleted
-where they merely mirrored code. Details: `docs/doc_sweep_2026-07-18.md`.
+where they merely mirrored code. (Sweep record in git history.)
 
 ## Screen & editing
 

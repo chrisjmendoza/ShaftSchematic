@@ -17,7 +17,10 @@ Invariants
 - Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.
   **Exception:** the OAL field commits on every keystroke in manual mode (intentional —
   the preview updates live; see CLAUDE.md).  
-- IME padding is applied **only to the scrollable region**, not the entire screen.  
+- IME padding is applied **only to the scrollable region**, not the entire screen, and is
+  chained **before** `verticalScroll` so it shrinks the scroll viewport (not just the
+  content) — this lets Compose's focused-child-in-view behavior auto-scroll a focused
+  field clear of the keyboard.  
 - Renderer and layout layers are **mm-only** (no unit logic in rendering or layout).
 
 ---
@@ -92,6 +95,9 @@ Do Nots
 - Do **not** write model state inside the preview or renderer; render only.  
 - Do **not** pre-convert inches before calling formatters (avoids “3.937 in” bug).  
 - Do **not** apply IME padding globally; only the scrollable area should move.
+- Do **not** move `imePadding()` to after `verticalScroll` in the modifier chain — that pads
+  the scrolled content instead of shrinking the viewport, so the keyboard can cover a
+  focused field near the bottom without triggering auto-scroll.
 
 ---
 
@@ -103,11 +109,18 @@ Notes
 - `ComponentCard` handles its own remove button; callers simply supply `onRemove = { … }`.  
 - Persistence, serialization, and other business logic live strictly in the ViewModel.  
 - Scaffold uses system-bar insets only; FAB uses `WindowInsets.ime.union(WindowInsets.navigationBars)`.
-- `computeAddDefaults()` and the `applySnapped{Body,Taper,Thread,Liner}Update` snap-apply
-  wrappers live in `ui/screen/ShaftScreenController.kt` (extracted from `ShaftScreen.kt`
-  2026-07-24, pure code move). Shared format helpers (`abbr`, `disp`, `formatDisplay`,
-  `toMmOrNull`, `parseFractionOrDecimal`, `tpiToPitchMm`) and the dialogs/menus remain in
-  `ShaftScreen.kt`.
+- `computeAddDefaults()` lives in `ui/screen/ShaftScreenController.kt`. Shared format
+  helpers (`abbr`, `disp`, `formatDisplay`, `toMmOrNull`, `parseFractionOrDecimal`,
+  `tpiToPitchMm`) and the dialogs/menus remain in `ShaftScreen.kt`.
+- **Typed field commits are never snapped.** Carousel update callbacks
+  (`onUpdateBody/Taper/Thread/Liner`) receive the committed values verbatim. The old
+  `applySnapped{…}Update` wrappers (removed 2026-07-26) snapped the recomputed start/end
+  to component-edge anchors (±1 mm) and silently rewrote typed values — a taper-length
+  edit smaller than the tolerance was undone entirely (the start snapped back to the old
+  boundary and the length recomputed to its previous value). Snapping is reserved for
+  coarse gestures: tap-to-add (`ui/viewmodel/SnapUtils.kt`). Do not reintroduce snapping
+  into any typed-commit update path — same invariant as the 2026-06-19 removal of the
+  `snapForwardFrom` cascade from ViewModel updates.
 
 ---
 
@@ -123,6 +136,23 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.13 (2026-07-26)**
+- **First component highlighted on open (product decision):** with components present and
+  highlighting enabled, opening/creating a document seeds the selection to the FIRST
+  carousel card (AFT-most component) and scrolls to it — the highlight is visible
+  immediately, not only after a swipe or preview tap. An orphaned selection (id no longer
+  resolves — auto-body ids regenerate on every edit) self-heals by adopting the current
+  page without scrolling. Decisions are pure + pinned: `seedSelectionAction` and the
+  orphan arm of `isUserInitiatedScroll` in `CarouselSelectionSync.kt`.
+  `importJson`/`newDocument`/draft-restore clear the selection so the seed always runs on
+  a session boundary. No highlight only when the toggle is off or the shaft is empty.
+
+**v0.12 (2026-07-26)**
+- **Typed commits unsnapped:** removed the `applySnapped{Body,Taper,Thread,Liner}Update`
+  wrappers and the `snapAnchors` plumbing; carousel update callbacks are wired directly.
+  Field edits within ~1 mm of a component edge were being silently reverted (worst on
+  FWD-referenced taper length edits). Tap-to-add snapping unchanged.
+
 **v0.11 (2026-07-26)**
 - **HistoryMenu is general undo/redo, not delete-only:** the header-row history menu now
   wires to `ShaftViewModel.undoEdit()`/`redoEdit()` (session-scoped, covers every drawing
