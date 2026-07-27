@@ -118,6 +118,16 @@ draw path and no canvas equivalent to keep in sync. See `docs/PDF_EXPORT.md` §5
 was gained. A tap-and-leave with no edit must be a no-op. This prevents spurious
 auto-body promotion and unnecessary ViewModel updates. See `NumberField.md`.
 
+A commit also requires a **focus baseline**: `shouldCommitOnBlur`
+(`ui/input/BlurCommitPolicy.kt`) returns false when the captured-on-focus text is null,
+because Compose delivers an initial `onFocusChanged` with `isFocused = false` on attach.
+Do not restore a "null baseline → commit defensively" rule — that fired `onCommit` on
+every composition, and `rememberBodyDefaults` (unlike the dirty gate and undo history)
+does not dedup, so composing an explicit-body card rewrote the Add-Body length default —
+and worse, composing an **auto-body** card committed its displayed (derived) Ø into
+`ShaftSpec.autoBodyDiaMm`, pinning the bare-shaft Ø and marking the document dirty with no
+user edit. Fixed 2026-07-26, pinned by `BlurCommitPolicyTest` + `NumericInputFieldBlurTest`.
+
 ### Auto-body promotion
 Auto-body cards in the carousel (`ResolvedComponentSource.AUTO`) show Start/Length as
 **disabled** (greyed, derived-value) fields — there is no field-edit promotion path. The

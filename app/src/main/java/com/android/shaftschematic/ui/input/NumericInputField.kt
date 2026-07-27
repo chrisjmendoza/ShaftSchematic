@@ -119,10 +119,7 @@ fun NumericInputField(
             if (!f.isFocused) {
                 val captured = textWhenFocused
                 textWhenFocused = null
-                // Only commit if the user actually changed the value; a tap-and-leave
-                // with no edit should not trigger side-effectful onCommit callbacks
-                // (e.g. auto-body promotion).
-                if (captured == null || text.text != captured) {
+                if (shouldCommitOnBlur(captured, text.text)) {
                     commitOrRevert()
                 }
             }

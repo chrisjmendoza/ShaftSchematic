@@ -6,6 +6,61 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-26 (night)
+
+### test: instrumentation burndown (TODO §5.2) + JVM Compose harness
+
+Closes the testable half of the §5.2 instrumentation backlog and adds the harness the rest
+needs. Verification of what was already implemented is in
+`docs/Instrumentation_Verification_2026-07-26.md`. Suite: 719 → 796 tests, all green.
+
+- **fix(input): `NumericInputField` fired `onCommit` on every composition.** Found by the
+  new Compose test. Compose delivers an initial `onFocusChanged` with `isFocused = false`
+  when the modifier attaches; the blur branch treated that null focus-baseline as "commit
+  defensively" and fired. The spurious commit was absorbed by the dirty gate and undo
+  history (both compare state) wherever the commit was a genuine no-op. Two places it was
+  not:
+  - **Auto-body card (the serious one).** Its Ø field commits to
+    `ShaftSpec.autoBodyDiaMm` while displaying the *resolved* Ø — which, when
+    `autoBodyDiaMm == 0`, is the value derived from neighbors. So composing the card
+    wrote that derived value back as an explicit override, flipping the bare-shaft Ø from
+    derived to **pinned** (an override > 0 wins over neighbor derivation). That is a real
+    `ShaftSpec` change: it marks a freshly-opened document dirty with no user edit and
+    records an undo entry, and the auto spans stop tracking their neighbors afterward.
+  - **Explicit-body card.** `rememberBodyDefaults` is not state-compared, so composing the
+    card set `sessionAddDefaults.bodyLenMm` to that body's length, which prefills Length in
+    the next tap-to-add Add Body dialog (`ShaftScreen.kt:765`). `HorizontalPager` composes
+    pages ahead of the visible one, so the winning card need not have been on screen.
+    (`bodyDiaMm` is written too but never read — the dialog's Ø comes from
+    `rememberAddDialogDefaults`.)
+
+  `shouldCommitOnBlur` now requires a focus baseline, which covers every
+  `NumericInputField` call site at once. Contract in `NumberField.md` unchanged in intent;
+  this makes the code match it.
+- **Robolectric harness** — Compose UI tests now run on the JVM via `testDebugUnitTest`,
+  no device or emulator. Added `robolectric` + `testImplementation` of `ui-test-junit4`
+  and `testOptions { unitTests { isIncludeAndroidResources = true } }`. Replaces the
+  androidTest route that produced the rotted `EditorTopBarExportPdfTest` deleted earlier
+  today; tests assert against `testTag`s, not composable parameter lists.
+- **Pure extractions** (behavior-preserving), so the regression-prone logic is testable
+  without a UI harness at all:
+  - `ui/input/BlurCommitPolicy.kt` — `shouldCommitOnBlur`, out of the `onFocusChanged` lambda.
+  - `ui/screen/CarouselSelectionSync.kt` — `carouselTargetIndex`, `shouldAnimateToSelection`,
+    `isUserInitiatedScroll`, `shouldAdoptSwipeSelection`, out of the two carousel
+    `LaunchedEffect`s.
+  - `ui/screen/AddDialogGates.kt` — the five Add-dialog confirm-button `ok` expressions.
+  - `ui/viewmodel/SnapUtils.kt` — `snapToleranceMm`, `snapRawPositionMm(raw, spec, unit)`,
+    `gapToNextAnchorMm(spec, …)`; the `ShaftViewModel` methods now delegate, and the snap
+    tolerance constants moved out of the VM companion.
+- **New tests (77)**: `BlurCommitPolicyTest` (8), `NumericInputFieldBlurTest` (7,
+  Robolectric/Compose), `CarouselSelectionSyncTest` (16), `AddDialogGatesTest` (22),
+  `TapAddPositionTest` (17), `ShaftLayoutMappingTest` (7).
+- **Verified, not changed**: "carousel scrolls to selected after preview tap" works
+  end-to-end (on-device report confirmed in code) — it was unchecked only because §5.2
+  tracks tests, not features.
+
+---
+
 ## 2026-07-26 (evening)
 
 ### chore(cleanup): Wave 2 deletion pass — verified-dead code removed (no behavior change)

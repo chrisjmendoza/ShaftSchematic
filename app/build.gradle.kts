@@ -92,6 +92,13 @@ android {
     }
     // No composeOptions with Kotlin 2.x
 
+    testOptions {
+        unitTests {
+            // Robolectric needs real merged resources and a real manifest to inflate the
+            // host activity that Compose UI tests render into.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 kotlin {
@@ -140,6 +147,16 @@ dependencies {
 
     // --- Test
     testImplementation(libs.junit)
+
+    // Compose UI tests run on the JVM under Robolectric — no device, no emulator, so they
+    // run in CI alongside the plain unit tests. See `testOptions` below.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.junit)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    // ui-test-manifest (the empty ComponentActivity these tests host into) already comes in
+    // via debugImplementation above; testDebugUnitTest picks it up from the debug variant.
+
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**  
-**Last updated: 2026-07-24**
+**Last updated: 2026-07-26**
 
 Tasks are ordered by priority. Completed series are collapsed to a single summary line to keep this readable.
 
@@ -153,12 +153,55 @@ These are defined in the contract but not yet computed. Lower priority — add w
 - [x] LinerDimAdapter (9 cases), TaperDimSpan (2 cases), BlockingExportError (7 cases)
 - [x] StartOverlapValidation (10 cases), TaperKeyway (11 cases)
 
-### 5.2 Instrumentation (Open)
+### 5.2 Instrumentation (Done 2026-07-26)
 
-- [ ] Commit-on-blur correctness
-- [ ] Blocking-dialog behavior
-- [ ] Preview-tap → adds at correct position
-- [ ] Carousel scrolls to selected after tap in preview
+Verified, then built out — see `docs/Instrumentation_Verification_2026-07-26.md`. These were
+*tests to write*, not features to build: three of the four behaviors were already implemented
+and shipping (including the carousel scroll, confirmed from an on-device report). Suite went
+719 → 796 tests, all green.
+
+- [x] **Compose UI test harness** — Robolectric added (`robolectric = "4.16"`,
+  `testImplementation` of `ui-test-junit4`, `testOptions { unitTests {
+  isIncludeAndroidResources = true } }`). Compose tests now run on the JVM via
+  `testDebugUnitTest` — no device, no emulator, no opt-in flag. Tests assert against
+  `testTag`s, not composable parameter lists, which is what rotted the androidTest deleted
+  in `3ba9992`. androidTest source set untouched and still gated.
+- [x] Commit-on-blur correctness — `BlurCommitPolicyTest` (8, pure) +
+  `NumericInputFieldBlurTest` (7, Robolectric/Compose). Predicate extracted to
+  `ui/input/BlurCommitPolicy.kt`. **Found and fixed a real bug**: the field fired
+  `onCommit` on every composition (Compose's initial `isFocused = false` callback hit the
+  "no baseline → commit defensively" rule). Worst case: composing an **auto-body** card
+  committed its displayed (derived) Ø into `ShaftSpec.autoBodyDiaMm`, pinning the
+  bare-shaft Ø and marking a freshly-opened document dirty with no user edit. On explicit
+  bodies it silently reset the Add-Body length default. See `NumberField.md` and the
+  analysis doc.
+- [x] Blocking-dialog behavior — the five Add-dialog confirm gates extracted to
+  `ui/screen/AddDialogGates.kt` and covered by `AddDialogGatesTest` (22), on top of the 20
+  pre-existing pure tests for `blockingExportError` / `exportPdfGate` /
+  `startOverlapErrorMm`.
+- [x] Preview-tap → adds at correct position — `TapAddPositionTest` (17) over the snap +
+  gap math (now pure in `SnapUtils.kt`; the VM delegates) and `ShaftLayoutMappingTest` (7)
+  over the px ↔ mm round-trip that turns the tap into a position.
+- [x] Carousel scrolls to selected after tap in preview — behavior **confirmed working**
+  end-to-end in code; sync logic extracted to `ui/screen/CarouselSelectionSync.kt` and
+  covered by `CarouselSelectionSyncTest` (16).
+
+**Deliberately not covered:** no Compose test for `ComponentCarouselPager` (~35 params,
+almost all callbacks — that coupling is exactly what rotted the deleted androidTest) or the
+Add dialogs. Their logic is now pure and covered; a UI test there would mostly assert that
+Compose's `HorizontalPager` and Material3's `Button` work.
+
+- [ ] **Open: CI does not run the test suite.** `distribute.yml` runs only
+  `./gradlew assembleDebug`; `merge-on-green.yml` just automerges. So all 796 tests are
+  local-only, which blunts the point of picking Robolectric. Adding `testDebugUnitTest`
+  before the assemble step would gate distribution on green — natural to want, but it's a
+  release-pipeline policy change (a red test blocks a build), so it needs a decision.
+
+**Incidental finding (product question, not a defect):** the preview hit-test
+(`ShaftDrawing.kt:229-239`) covers Body/Taper/Thread/Liner but **not** `ResolvedCouplerBoltSlot`,
+so tapping a slot selects the body underneath it and a slot's carousel card is unreachable by
+tap. Plausibly deliberate — a slot always overlies something, and letting it win the hit-test
+would make that body untappable at the slot. Decide before changing.
 
 ---
 

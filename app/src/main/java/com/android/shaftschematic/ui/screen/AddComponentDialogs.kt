@@ -223,7 +223,7 @@ fun AddBodyDialog(
             }
         },
         confirmButton = {
-            val ok = startMm >= 0f && lengthMm > 0f && diaMm > 0f
+            val ok = bodyAddEnabled(startMm, lengthMm, diaMm)
             Button(enabled = ok, onClick = {
                 onSubmit(
                     startMm, lengthMm, diaMm,
@@ -331,7 +331,7 @@ fun AddLinerDialog(
             }
         },
         confirmButton = {
-            val ok = physStartMm >= 0f && lengthMm > 0f && odMm > 0f && startError == null
+            val ok = linerAddEnabled(physStartMm, lengthMm, odMm, startError)
             Button(enabled = ok, onClick = {
                 val ref = if (isFwd) LinerAuthoredReference.FWD else LinerAuthoredReference.AFT
                 val action = { onSubmit(physStartMm, lengthMm, odMm, ref) }
@@ -449,9 +449,9 @@ fun AddCouplerBoltSlotDialog(
             }
         },
         confirmButton = {
-            val ok = physStartMm >= 0f && holeDiaMm > 0f && count >= 1 &&
-                (count == 1 || spacingMm > 0f) && (through || depthMm > 0f) &&
-                boundsError == null
+            val ok = couplerBoltSlotAddEnabled(
+                physStartMm, holeDiaMm, count, spacingMm, through, depthMm, boundsError
+            )
             Button(enabled = ok, onClick = {
                 val ref = if (isFwd) SlotAuthoredReference.FWD else SlotAuthoredReference.AFT
                 onSubmit(
@@ -573,8 +573,7 @@ fun AddThreadDialog(
             }
         },
         confirmButton = {
-            val ok = (countInOal && startMm >= 0f || !countInOal) &&
-                     lengthMm > 0f && majorMm > 0f && tpi > 0f && startError == null
+            val ok = threadAddEnabled(countInOal, startMm, lengthMm, majorMm, tpi, startError)
             Button(enabled = ok, onClick = {
                 val excludeFromOAL = !countInOal
                 val action = { onSubmit(startMm, lengthMm, majorMm, tpi, excludeFromOAL, isAftEnd) }
@@ -805,14 +804,17 @@ fun AddTaperDialog(
             }
         },
         confirmButton = {
-            val rateModeValid = if (autoRate) {
-                autoRateIssue == null
-            } else {
-                manualRateBlock == null
-            }
-            val canResolveDiameters = hasBothEnds ||
-                (hasExactlyOneEnd && !autoRate && parseTaperRateText(rateText, allowAmbiguousBareOne = false) != null)
-            val ok = physStartMm >= 0f && lengthMm > 0f && rateModeValid && canResolveDiameters
+            val ok = taperAddEnabled(
+                physStartMm = physStartMm,
+                lengthMm = lengthMm,
+                autoRate = autoRate,
+                autoRateIssue = autoRateIssue,
+                manualRateBlock = manualRateBlock,
+                hasBothEnds = hasBothEnds,
+                hasExactlyOneEnd = hasExactlyOneEnd,
+                manualRateParses =
+                    parseTaperRateText(rateText, allowAmbiguousBareOne = false) != null
+            )
             Button(
                 enabled = ok,
                 onClick = {

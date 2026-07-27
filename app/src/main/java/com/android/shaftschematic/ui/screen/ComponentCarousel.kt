@@ -196,13 +196,16 @@ internal fun ComponentCarouselPager(
         }
     }
 
+    val rowIds = remember(rowsSorted) { rowsSorted.map { it.component.id } }
+
     // Follow programmatic selection changes.
     LaunchedEffect(selectedComponentId, rowsSorted) {
-        val targetIndex = selectedComponentId?.let { id ->
-            rowsSorted.indexOfFirst { it.component.id == id }
-        } ?: -1
-        if (targetIndex >= 0 &&
-            (pagerState.currentPage != targetIndex || pagerState.currentPageOffsetFraction != 0f)
+        val targetIndex = carouselTargetIndex(rowIds, selectedComponentId)
+        if (shouldAnimateToSelection(
+                targetIndex,
+                pagerState.currentPage,
+                pagerState.currentPageOffsetFraction
+            )
         ) {
             pagerState.animateScrollToPage(targetIndex)
         }
@@ -211,16 +214,14 @@ internal fun ComponentCarouselPager(
     // Detect user swipes and update selection accordingly.
     LaunchedEffect(pagerState.isScrollInProgress, selectedComponentId, rowsSorted) {
         if (pagerState.isScrollInProgress) {
-            val selectedIndex = selectedComponentId?.let { id ->
-                rowsSorted.indexOfFirst { it.component.id == id }
-            } ?: -1
-            if (selectedComponentId == null || selectedIndex == pagerState.currentPage) {
+            val selectedIndex = carouselTargetIndex(rowIds, selectedComponentId)
+            if (isUserInitiatedScroll(selectedComponentId, selectedIndex, pagerState.currentPage)) {
                 pagerScrollStartedByUser = true
                 pagerStartPage = pagerState.currentPage
             }
         } else if (pagerScrollStartedByUser) {
             val endPage = pagerState.currentPage
-            if (pagerStartPage != endPage) {
+            if (shouldAdoptSwipeSelection(pagerStartPage, endPage)) {
                 onSelectComponentById(rowsSorted.getOrNull(endPage)?.component?.id)
             }
             pagerScrollStartedByUser = false
