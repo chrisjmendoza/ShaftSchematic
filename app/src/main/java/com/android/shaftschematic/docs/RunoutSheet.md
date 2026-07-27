@@ -65,7 +65,16 @@ budget so a very short liner doesn't blow its drawn diameter off-canvas. Neighbo
 come from `resolvedComponents` at the diameter touching the liner, terminated at their *far* end
 with a Compose port of the pdf layer's S-curve break edge (`pdf/BreakSymbol.kt`'s math,
 redrawn with Compose `Path`/`DrawScope` rather than importing pdf code) — the edge touching the
-liner itself is a plain line (a real boundary, not a "cut"). Wear bands render as hatched/tinted
+liner itself is a plain line (a real boundary, not a "cut").
+
+**End-thread stubs (2026-07-26):** a neighbor **thread with nothing beyond it** is the shaft's
+threaded end, not a truncation — its stub gets a **flat outer edge + diagonal thread hatch**
+(`drawThreadStubHatch`, same "legacy look" convention as `ShaftRenderer.drawThreadHatch`, fixed
+8 px pitch since the stub is symbolic) instead of the S-break, which would misread as "shaft
+continues past here". Any other neighbor type keeps the break (the fixed-width stub genuinely
+truncates it), and no neighbor at all still means no stub — the component's own flat edge is the
+end. Overlay-only: the wear PDF's detail strips are liner strips, and a liner always has real
+material on both sides, so their break stubs are unchanged (no draw-both-sites obligation). Wear bands render as hatched/tinted
 rects at `clampWearBandToLiner` positions (visual clamp only; the underlying `WearSpot` is never
 mutated) with a small per-spot dimension rail below (offset from the liner's AFT edge, then band
 length, formatted via the existing `disp`/`abbr` helpers in the active unit). Spot cards below

@@ -90,7 +90,9 @@ import com.android.shaftschematic.util.UnitSystem
  *
  * A full-screen "zoom in" overlay on ONE component, broken out of the shaft (S-curve break edges
  * on short neighbor stubs, shop-sketch convention — see `pdf/BreakSymbol.kt` for the PDF-layer
- * original; this file replicates the visual in Compose without importing pdf code).
+ * original; this file replicates the visual in Compose without importing pdf code). Exception:
+ * a neighbor thread that ends the shaft is drawn as a flat-ended, thread-hatched stub — the
+ * shaft physically stops there, so a break edge would misread as "continues" (2026-07-26).
  *
  * Originally liner-only (`docs/LinerWearAreas_Proposal.md` Phase 3); generalized 2026-07-21 so a
  * **body** or **taper** can be opened the same way (the proposal's §10.5 "wear on bodies/tapers"
@@ -177,6 +179,23 @@ fun ComponentWearDetailOverlay(
         resolvedComponents
             .filter { it.id != component.id && it !is ResolvedCouplerBoltSlot && it.startMmPhysical >= component.endMmPhysical - eps }
             .minByOrNull { it.startMmPhysical }
+    }
+
+    // A neighbor thread with nothing beyond it IS the shaft end — the stub shows the whole
+    // remaining shaft, not a truncation, so it gets a flat outer edge + thread hatch instead of
+    // the S-curve break (which would wrongly read "shaft continues past here"). A neighbor of any
+    // other type keeps the break: the fixed-width stub genuinely truncates it.
+    val leftIsEndThread = remember(resolvedComponents, leftNeighbor) {
+        leftNeighbor is ResolvedThread && resolvedComponents.none {
+            it.id != leftNeighbor.id && it !is ResolvedCouplerBoltSlot &&
+                it.startMmPhysical < leftNeighbor.startMmPhysical - eps
+        }
+    }
+    val rightIsEndThread = remember(resolvedComponents, rightNeighbor) {
+        rightNeighbor is ResolvedThread && resolvedComponents.none {
+            it.id != rightNeighbor.id && it !is ResolvedCouplerBoltSlot &&
+                it.endMmPhysical > rightNeighbor.endMmPhysical + eps
+        }
     }
 
     // ── Theme colors captured here — the Canvas draw scope below must not read MaterialTheme ──
@@ -319,7 +338,9 @@ fun ComponentWearDetailOverlay(
                         drawPath(bodyPath, color = fillColor)
                         drawPath(bodyPath, color = outlineColor, style = Stroke(width = outlineWidthPx))
 
-                        // ── Neighbor stubs — real edge at the component, S-curve break at far end ──
+                        // ── Neighbor stubs — real edge at the component; far end is an S-curve
+                        // break, EXCEPT an end thread, which gets a flat edge + thread hatch
+                        // (the shaft physically ends there — see leftIsEndThread above) ──
                         if (leftNeighbor != null) {
                             val r = rPx(touchingDiaMm(leftNeighbor, neighborIsLeft = true))
                             val top = cy - r; val bot = cy + r
@@ -327,10 +348,15 @@ fun ComponentWearDetailOverlay(
                             drawLine(outlineColor, Offset(outerX, top), Offset(startPx, top), outlineWidthPx)
                             drawLine(outlineColor, Offset(outerX, bot), Offset(startPx, bot), outlineWidthPx)
                             drawLine(outlineColor, Offset(startPx, top), Offset(startPx, bot), outlineWidthPx)
-                            drawBreakEdgeCompose(
-                                x = outerX, yTop = top, yBot = bot, amplitude = r * 0.6f,
-                                color = outlineColor, strokeWidthPx = outlineWidthPx, eyeAtTop = true,
-                            )
+                            if (leftIsEndThread) {
+                                drawLine(outlineColor, Offset(outerX, top), Offset(outerX, bot), outlineWidthPx)
+                                drawThreadStubHatch(outerX, top, startPx, bot, outlineColor)
+                            } else {
+                                drawBreakEdgeCompose(
+                                    x = outerX, yTop = top, yBot = bot, amplitude = r * 0.6f,
+                                    color = outlineColor, strokeWidthPx = outlineWidthPx, eyeAtTop = true,
+                                )
+                            }
                         }
                         if (rightNeighbor != null) {
                             val r = rPx(touchingDiaMm(rightNeighbor, neighborIsLeft = false))
@@ -339,10 +365,15 @@ fun ComponentWearDetailOverlay(
                             drawLine(outlineColor, Offset(endPx, top), Offset(outerX, top), outlineWidthPx)
                             drawLine(outlineColor, Offset(endPx, bot), Offset(outerX, bot), outlineWidthPx)
                             drawLine(outlineColor, Offset(endPx, top), Offset(endPx, bot), outlineWidthPx)
-                            drawBreakEdgeCompose(
-                                x = outerX, yTop = top, yBot = bot, amplitude = r * 0.6f,
-                                color = outlineColor, strokeWidthPx = outlineWidthPx, eyeAtTop = false,
-                            )
+                            if (rightIsEndThread) {
+                                drawLine(outlineColor, Offset(outerX, top), Offset(outerX, bot), outlineWidthPx)
+                                drawThreadStubHatch(endPx, top, outerX, bot, outlineColor)
+                            } else {
+                                drawBreakEdgeCompose(
+                                    x = outerX, yTop = top, yBot = bot, amplitude = r * 0.6f,
+                                    color = outlineColor, strokeWidthPx = outlineWidthPx, eyeAtTop = false,
+                                )
+                            }
                         }
 
                         // ── Liner wear bands + per-spot dimension rail row (liners only) ──
@@ -833,6 +864,23 @@ private fun DrawScope.drawDimSegment(x0: Float, x1: Float, y: Float, label: Stri
     drawLine(lineColor, Offset(lo, y - tickH), Offset(lo, y + tickH), strokeWidth = 1f)
     drawLine(lineColor, Offset(hi, y - tickH), Offset(hi, y + tickH), strokeWidth = 1f)
     drawContext.canvas.nativeCanvas.drawText(label, (lo + hi) / 2f, y - 6f, paint)
+}
+
+/**
+ * Diagonal thread hatch clipped to a neighbor stub — same "legacy look" as
+ * `ShaftRenderer.drawThreadHatch`, at a fixed pitch (the stub is symbolic, not to scale). Used
+ * only for shaft-END thread stubs, which get a flat outer edge instead of an S-curve break.
+ */
+private fun DrawScope.drawThreadStubHatch(x0: Float, top: Float, x1: Float, bot: Float, color: Color) {
+    if (x1 <= x0 || bot <= top) return
+    val hatch = color.copy(alpha = 0.6f)
+    withTransform({ clipRect(x0, top, x1, bot) }) {
+        var hx = x0 + 4f
+        while (hx <= x1 + 4f) {
+            drawLine(hatch, Offset(hx - 4f, bot), Offset(hx + 4f, top), strokeWidth = 1f)
+            hx += 8f
+        }
+    }
 }
 
 /**
