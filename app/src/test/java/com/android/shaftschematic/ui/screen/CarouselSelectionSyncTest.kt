@@ -93,6 +93,47 @@ class CarouselSelectionSyncTest {
         assertTrue(isUserInitiatedScroll(selectedId = null, selectedIndex = NO_CAROUSEL_TARGET, currentPage = 0))
     }
 
+    // ── seedSelectionAction ─────────────────────────────────────────────────────
+
+    @Test
+    fun `no rows - nothing to seed or heal`() {
+        assertEquals(SeedAction.NONE, seedSelectionAction(rowCount = 0, selectedId = null, selectedIndex = NO_CAROUSEL_TARGET))
+        assertEquals(SeedAction.NONE, seedSelectionAction(rowCount = 0, selectedId = "stale", selectedIndex = NO_CAROUSEL_TARGET))
+    }
+
+    @Test
+    fun `nothing selected with rows present seeds the first card`() {
+        // Document open/new: highlight must appear immediately, not only after a swipe.
+        // First card = AFT-most component in physical order (product decision 2026-07-26).
+        assertEquals(SeedAction.SEED_FIRST, seedSelectionAction(rowCount = 3, selectedId = null, selectedIndex = NO_CAROUSEL_TARGET))
+    }
+
+    @Test
+    fun `orphaned selection adopts the current page`() {
+        // Auto-body ids regenerate on every edit; the highlight must come back without
+        // yanking the user off the card they are editing.
+        assertEquals(
+            SeedAction.ADOPT_CURRENT,
+            seedSelectionAction(rowCount = 3, selectedId = "auto_body_0.000_100.000", selectedIndex = NO_CAROUSEL_TARGET)
+        )
+    }
+
+    @Test
+    fun `live selection is left alone`() {
+        assertEquals(SeedAction.NONE, seedSelectionAction(rowCount = 3, selectedId = "taper-1", selectedIndex = 1))
+    }
+
+    @Test
+    fun `with an orphaned selection any scroll is the user`() {
+        // The selected id no longer resolves to any row (auto-body ids regenerate on every
+        // edit; opens carry stale ids). The follow effect never animates toward a missing
+        // row, so this scroll cannot be catch-up — treating it as ours bricked swipe
+        // adoption (and the preview highlight) until a preview tap set a valid id.
+        assertTrue(
+            isUserInitiatedScroll(selectedId = "auto_body_0.000_100.000", selectedIndex = NO_CAROUSEL_TARGET, currentPage = 1)
+        )
+    }
+
     // ── shouldAdoptSwipeSelection ────────────────────────────────────────────────
 
     @Test

@@ -202,19 +202,29 @@ internal fun ComponentCarouselPager(
     var pagerScrollStartedByUser by remember { mutableStateOf(false) }
     var pagerStartPage           by remember { mutableStateOf<Int?>(null) }
 
-    // Seed selection and scroll on initial load only (nothing selected yet).
-    // When components are added to an already-populated carousel we don't auto-jump —
-    // the selection-following effect below handles repositioning without the fighting
-    // scrollToPage / animateScrollToPage conflict that caused visible jumping.
-    LaunchedEffect(rowsSorted.size) {
-        if (rowsSorted.isNotEmpty() && selectedComponentId == null) {
-            val newPage = rowsSorted.size - 1
-            pagerState.scrollToPage(newPage)
-            onSelectComponentById(rowsSorted.getOrNull(newPage)?.component?.id)
+    val rowIds = remember(rowsSorted) { rowsSorted.map { it.component.id } }
+
+    // Seed selection on open (nothing selected → FIRST card, the AFT-most component) and
+    // self-heal an orphaned selection (id no longer resolves — auto-body ids are
+    // position-derived and regenerate on every edit) by adopting the current page WITHOUT
+    // scrolling. Keyed on rows + selection, not rows.size: a document open that lands on
+    // the same row count must still seed, and a stale seed from the open-time race (rows
+    // update a frame after the selection clears) heals itself on the next emission.
+    // When components are added we still don't auto-jump — the VM selects the new id, which
+    // resolves, so the action is NONE and the selection-following effect repositions.
+    LaunchedEffect(rowsSorted, selectedComponentId) {
+        when (seedSelectionAction(rowsSorted.size, selectedComponentId, carouselTargetIndex(rowIds, selectedComponentId))) {
+            SeedAction.SEED_FIRST -> {
+                pagerState.scrollToPage(0)
+                onSelectComponentById(rowsSorted.firstOrNull()?.component?.id)
+            }
+            SeedAction.ADOPT_CURRENT -> {
+                val page = pagerState.currentPage.coerceIn(0, rowsSorted.lastIndex)
+                onSelectComponentById(rowsSorted.getOrNull(page)?.component?.id)
+            }
+            SeedAction.NONE -> Unit
         }
     }
-
-    val rowIds = remember(rowsSorted) { rowsSorted.map { it.component.id } }
 
     // Follow programmatic selection changes.
     LaunchedEffect(selectedComponentId, rowsSorted) {

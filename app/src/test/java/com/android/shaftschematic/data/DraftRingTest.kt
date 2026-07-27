@@ -142,4 +142,52 @@ class DraftRingTest {
         )
         assertTrue(shouldWriteDraft(changed, base))
     }
+
+    // ── isDefaultSession (phantom-blank-draft gate) ──────────────────────────
+
+    private fun blankSnap(unit: UnitSystem = UnitSystem.MILLIMETERS): AutosaveManager.SessionSnapshot =
+        AutosaveManager.SessionSnapshot(
+            shaftSpec = ShaftSpec(),
+            unitSystem = unit,
+            shaftPosition = ShaftPosition.OTHER,
+            customer = "",
+            vessel = "",
+            jobNumber = "",
+            notes = "",
+        )
+
+    @Test
+    fun `blank session is default`() {
+        assertTrue(blankSnap().isDefaultSession())
+    }
+
+    @Test
+    fun `unit flip alone keeps a blank session default`() {
+        // The launch-time settings restore flips the unit preference on an untouched
+        // session; that must not count as user-authored content (phantom blank draft).
+        val flipped = blankSnap(unit = UnitSystem.INCHES)
+        assertTrue(flipped.isDefaultSession())
+        // ...even though the dirty comparison itself sees a difference:
+        assertTrue(shouldWriteDraft(flipped, blankSnap()))
+    }
+
+    @Test
+    fun `unit-lock and OAL-mode flips alone keep a blank session default`() {
+        assertTrue(blankSnap().copy(unitLocked = true, overallIsManual = true).isDefaultSession())
+    }
+
+    @Test
+    fun `any spec content makes the session non-default`() {
+        assertFalse(blankSnap().copy(shaftSpec = ShaftSpec(overallLengthMm = 100f)).isDefaultSession())
+        assertFalse(snap().isDefaultSession()) // has spec content + customer
+    }
+
+    @Test
+    fun `any project metadata makes the session non-default`() {
+        assertFalse(blankSnap().copy(customer = "acme").isDefaultSession())
+        assertFalse(blankSnap().copy(vessel = "MV Test").isDefaultSession())
+        assertFalse(blankSnap().copy(jobNumber = "814318").isDefaultSession())
+        assertFalse(blankSnap().copy(notes = "n").isDefaultSession())
+        assertFalse(blankSnap().copy(shaftPosition = ShaftPosition.STBD).isDefaultSession())
+    }
 }

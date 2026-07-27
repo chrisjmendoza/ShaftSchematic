@@ -54,3 +54,30 @@ fun shouldWriteDraft(
     current: AutosaveManager.SessionSnapshot,
     saved: AutosaveManager.SessionSnapshot?,
 ): Boolean = current != saved
+
+/**
+ * True when the snapshot is a factory-default session: empty spec and blank project
+ * metadata. Deliberately ignores unit, unit-lock, OAL mode, and runout config — those can
+ * differ from field defaults without any user-authored content (the async settings restore
+ * flips the unit preference on every launch). A default session holds nothing worth a
+ * draft, so the autosave observer must never persist one: with the pre-2026-07-26 gate
+ * (dirty comparison alone), launching with an empty draft ring on an inches-preference
+ * device seeded a mm baseline, the settings restore flipped the unit, and 1.5 s later a
+ * phantom blank "Untitled draft" appeared on the StartScreen.
+ */
+fun AutosaveManager.SessionSnapshot.isDefaultSession(): Boolean {
+    val specEmpty =
+        shaftSpec.overallLengthMm == 0f &&
+        shaftSpec.bodies.isEmpty() &&
+        shaftSpec.tapers.isEmpty() &&
+        shaftSpec.threads.isEmpty() &&
+        shaftSpec.liners.isEmpty() &&
+        shaftSpec.couplerBoltSlots.isEmpty()
+
+    return specEmpty &&
+        shaftPosition == com.android.shaftschematic.model.ShaftPosition.OTHER &&
+        customer.isBlank() &&
+        vessel.isBlank() &&
+        jobNumber.isBlank() &&
+        notes.isBlank()
+}

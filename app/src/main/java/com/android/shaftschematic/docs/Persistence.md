@@ -95,6 +95,15 @@ design: `docs/Autosave_Incident_2026-07-25.md`.
   can never clobber an existing draft. The baseline is seeded blank at construction
   and reseated by `markDocumentSaved()` (all four explicit-save call sites route
   through it) and by `importJson()`/`newDocument()`.
+- **Default-session gate (2026-07-26)**: the observer (and `hasUnsavedChanges`) also
+  require `!snapshot.isDefaultSession()` (`DraftRing.kt`) — a factory-default session
+  (empty spec, blank metadata) never writes a draft, no matter how it compares to the
+  baseline. The predicate deliberately ignores unit/unit-lock/OAL-mode/runout-config:
+  the async settings restore flips the unit preference after the baseline is seeded,
+  which used to persist a phantom blank "Untitled draft" on every empty-ring launch.
+  The observer's dirty→clean branch deletes previously-persisted phantoms on their
+  next debounce tick. Do not "fix" the phantom by seeding the baseline later — the
+  gate is the guarantee, not the seed timing.
 - **Explicit-save removal (2026-07-26 fix)**: `markDocumentSaved()` removes the
   session's draft-ring entry **immediately**, gated on `draftPersisted`. Relying on
   the observer's dirty→clean branch alone was a bug: that branch only runs on the

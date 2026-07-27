@@ -136,6 +136,17 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.13 (2026-07-26)**
+- **First component highlighted on open (product decision):** with components present and
+  highlighting enabled, opening/creating a document seeds the selection to the FIRST
+  carousel card (AFT-most component) and scrolls to it — the highlight is visible
+  immediately, not only after a swipe or preview tap. An orphaned selection (id no longer
+  resolves — auto-body ids regenerate on every edit) self-heals by adopting the current
+  page without scrolling. Decisions are pure + pinned: `seedSelectionAction` and the
+  orphan arm of `isUserInitiatedScroll` in `CarouselSelectionSync.kt`.
+  `importJson`/`newDocument`/draft-restore clear the selection so the seed always runs on
+  a session boundary. No highlight only when the toggle is off or the shaft is empty.
+
 **v0.12 (2026-07-26)**
 - **Typed commits unsnapped:** removed the `applySnapped{Body,Taper,Thread,Liner}Update`
   wrappers and the `snapAnchors` plumbing; carousel update callbacks are wired directly.

@@ -34,6 +34,7 @@ import com.android.shaftschematic.util.parseToMm
 import com.android.shaftschematic.util.VerboseLog
 import android.util.Log
 import com.android.shaftschematic.data.AutosaveManager
+import com.android.shaftschematic.data.isDefaultSession
 import com.android.shaftschematic.data.shouldWriteDraft
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
@@ -716,7 +717,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // recomputed when a save reseats the baseline.
         viewModelScope.launch {
             combine(sessionSnapshotFlow, _savedSnapshot) { live, saved ->
-                shouldWriteDraft(live, saved)
+                // A factory-default session is never "unsaved work", even when the async
+                // settings restore makes it differ from the seeded baseline (unit flip).
+                shouldWriteDraft(live, saved) && !live.isDefaultSession()
             }.collect { _hasUnsavedChanges.value = it }
         }
 
@@ -729,7 +732,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         // saved/loaded state. A freshly-loaded pristine document (savedSnapshot ==
                         // snapshot) can never overwrite an existing draft. When the state returns
                         // to clean, remove this session's draft entry exactly once.
-                        if (shouldWriteDraft(snapshot, _savedSnapshot.value)) {
+                        // A factory-default session never writes a draft: the async settings
+                        // restore flips the unit after the baseline is seeded, which made every
+                        // empty-ring launch persist a phantom blank "Untitled draft". The else-if
+                        // also removes an already-persisted phantom (restored on a later launch)
+                        // the first time its debounced snapshot arrives.
+                        if (shouldWriteDraft(snapshot, _savedSnapshot.value) && !snapshot.isDefaultSession()) {
                             AutosaveManager.saveDraft(
                                 getApplication(),
                                 AutosaveManager.DraftEntry(
@@ -1052,25 +1060,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- Autosave helpers: must be class members, not inside init ---
-    private fun isSessionDefault(): Boolean {
-        val s = _spec.value
-        val specEmpty =
-            s.overallLengthMm == 0f &&
-            s.bodies.isEmpty() &&
-            s.tapers.isEmpty() &&
-            s.threads.isEmpty() &&
-            s.liners.isEmpty() &&
-            s.couplerBoltSlots.isEmpty()
-
-        return specEmpty &&
-            _shaftPosition.value == ShaftPosition.OTHER &&
-            _customer.value.isBlank() &&
-            _vessel.value.isBlank() &&
-            _jobNumber.value.isBlank() &&
-            _notes.value.isBlank()
-    }
+    // Single definition of "factory-default session" — the pure predicate in DraftRing.kt,
+    // shared with the autosave observer and the hasUnsavedChanges flag.
+    private fun isSessionDefault(): Boolean = buildCurrentSnapshot().isDefaultSession()
 
     private fun restoreSnapshot(snapshot: AutosaveManager.SessionSnapshot) {
+        // Session boundary: a selection carried over from the previous content would be an
+        // orphaned id — no highlight, and (before the CarouselSelectionSync orphan fix)
+        // bricked swipe adoption. Clearing lets the carousel's seed effect reselect.
+        _selectedComponentId.value = null
         _spec.value = snapshot.shaftSpec
         _unit.value = snapshot.unitSystem
         _shaftPosition.value = snapshot.shaftPosition
@@ -2003,6 +2001,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // dirty-gate baseline to the just-loaded state (clean → no draft until edited).
         currentDraftId = UUID.randomUUID().toString()
         draftPersisted = false
+        // Session boundary: drop the previous document's selection (stale id = orphaned
+        // highlight); the carousel's seed effect reselects the last row of this document.
+        _selectedComponentId.value = null
         _spec.value = decoded.spec
         seedSessionAddDefaultsFromSpec(decoded.spec)
 
@@ -2047,6 +2048,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         draftPersisted = false
 
         resetSessionAddDefaults()
+
+        // Session boundary: no selection carries into a blank document (stale id would be
+        // an orphaned highlight).
+        _selectedComponentId.value = null
 
         val blankSpec = ShaftSpec()
         _spec.value = blankSpec

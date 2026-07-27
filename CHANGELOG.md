@@ -6,6 +6,50 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-26 (later still)
+
+### fix: phantom blank drafts on launch; swipe selection bricked by orphaned ids
+
+Two on-device reports from branch testing.
+
+- **fix(autosave): phantom blank "Untitled draft" on app open.** The dirty-gate baseline
+  is seeded synchronously at ViewModel init (blank spec, unit = mm default); the async
+  settings restore then flips the unit preference (inches), making the untouched blank
+  session "dirty" — 1.5 s later the observer persisted a blank draft. Only bites when the
+  draft ring is empty (a non-empty ring auto-restores its newest entry instead), which
+  became the common state once saves started clearing their ring entry. Fix: a
+  factory-default session never writes a draft — new pure predicate
+  `SessionSnapshot.isDefaultSession()` (`DraftRing.kt`, deliberately ignores unit/config
+  flips) gates the autosave observer and the title-bar dirty flag; the observer's
+  dirty→clean branch now also deletes existing phantoms on their next debounce tick.
+  `ShaftViewModel.isSessionDefault()` delegates to the same predicate. 6 new tests.
+- **fix(ui): orphaned selection bricked swipe-to-highlight.** `isUserInitiatedScroll`
+  treated a selection whose id no longer resolves to any carousel row (`selectedIndex ==
+  -1`) as "our own catch-up scroll", so swipe adoption never armed: swiping changed cards
+  but never updated the selection, and the preview highlight never followed until a
+  preview tap set a valid id. Orphans are routine — auto-body ids are position-derived
+  and regenerate on every edit (much more visible now that repaired drawings are all-auto),
+  and open/new carried the previous document's selection. Fix: an orphaned selection
+  counts as user-initiated (the follow effect never animates toward a missing row, so no
+  fight is possible), and `importJson`/`newDocument`/`restoreSnapshot` clear the selection
+  at the session boundary so the carousel's seed effect reselects. Pre-existing in the
+  inline logic since before the 6e4f19e extraction; not a regression from this branch's
+  fixes.
+- **feat(ui): the first component is highlighted on open.** The seed effect was keyed on
+  `rowsSorted.size`, so opening a document with the same row count as the previous one
+  never re-seeded, and an open-time race could seed a stale id. Replaced with a pure,
+  tested decision (`seedSelectionAction`, `CarouselSelectionSync.kt`): nothing selected →
+  seed + scroll to the **first** card (the AFT-most component — thread, taper, whatever
+  leads the shaft; per product decision the highlight defaults to the first item rather
+  than remembering a previous selection); selection orphaned → adopt the current page
+  **without scrolling** (highlight returns after auto-body id churn without yanking the
+  user off the card they're editing); live selection → leave alone. No highlight only
+  when the highlight toggle is off or the shaft has no components.
+
+Suite: 820 tests green.
+
+---
+
 ## 2026-07-26 (later)
 
 ### fix(ui): typed field commits are never snapped
