@@ -217,6 +217,11 @@ would make that body untappable at the slot. Decide before changing.
 - [ ] Compact wear-strip option: strips currently stretch the liner toward full content
   width for readability; a denser mode (don't stretch, natural/shared scale) would ease
   crowded 3-strip pages. Full-stretch reads well, so keep it the default.
+- [ ] **Runout sheet: tap-to-place bubble with leader line** (requested 2026-07-26): tap a
+  shaft location, then tap where the bubble should sit, and connect the two with a leader
+  line per the normal drawing convention — instead of (or in addition to) the current
+  auto-placed alternating bubble rows. Canvas + PDF must draw the leader identically
+  (draw-both-sites rule, same posture as the bubble value/high-spot marker).
 
 ---
 

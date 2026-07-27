@@ -6,6 +6,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-26 (wear detail)
+
+### feat(ui): threaded shaft ends drawn flat + hatched in the wear detail overlay
+
+On-device report: the AFT taper's wear-inspection view showed an S-curve break on its aft
+stub, implying the shaft continues — but the only thing aft of that taper is the end thread.
+
+- **`LinerWearDetail.kt`:** a neighbor **thread with nothing beyond it** now renders as a
+  flat-ended stub with a diagonal thread hatch (`drawThreadStubHatch`, same convention as
+  `ShaftRenderer.drawThreadHatch`) instead of the S-break. Any other neighbor keeps the
+  break (the fixed-width stub genuinely truncates it); no neighbor still means no stub
+  (the component's own flat edge — the already-correct FWD-taper case). Overlay-only: the
+  wear PDF's detail strips are liner strips with real material on both sides, unchanged.
+- **TODO:** added the runout-sheet tap-to-place bubble + leader line idea (Backlog §6).
+
 ## 2026-07-26 (later still)
 
 ### fix: phantom blank drafts on launch; swipe selection bricked by orphaned ids
