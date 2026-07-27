@@ -1,15 +1,16 @@
 package com.android.shaftschematic.ui.screen
 
 /**
- * ShaftScreenController — add-defaults + snap-update helpers backing ShaftScreen.
+ * ShaftScreenController — add-defaults helpers backing ShaftScreen.
  *
- * Non-composable helpers: `computeAddDefaults` and the snapped-update wrappers.
- * Extracted verbatim from ShaftScreen.kt 2026-07-24 — pure code move, no behavior change.
+ * Extracted from ShaftScreen.kt 2026-07-24. The applySnapped{Body,Taper,Thread,Liner}Update
+ * wrappers that lived here were removed 2026-07-26: they snapped typed field commits to
+ * component-edge anchors (±1 mm), silently rewriting values the user just entered (a
+ * sub-tolerance taper-length edit was undone entirely). Typed values are exact; snapping
+ * is reserved for coarse gestures (tap-to-add, `ui/viewmodel/SnapUtils.kt`).
  */
 
 import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.ui.viewmodel.SnapConfig
-import com.android.shaftschematic.ui.viewmodel.snapPositionMm
 
 /** Defaults for new components (mm). */
 internal data class AddDefaults(val startMm: Float, val lastDiaMm: Float)
@@ -28,80 +29,4 @@ internal fun computeAddDefaults(spec: ShaftSpec): AddDefaults {
     if (dia == 50f && spec.bodies.isNotEmpty()) dia = spec.bodies.first().diaMm
 
     return AddDefaults(startMm = end, lastDiaMm = dia)
-}
-
-/* ───────────────── Snap helpers ───────────────── */
-
-internal fun applySnappedBodyUpdate(
-    onUpdate: (Int, Float, Float, Float) -> Unit,
-    index: Int,
-    rawStartMm: Float,
-    rawEndMm: Float,
-    diaMm: Float,
-    anchors: List<Float>,
-    config: SnapConfig = SnapConfig()
-) {
-    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
-    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
-    onUpdate(index, snappedStart, lengthMm, diaMm)
-}
-
-internal fun applySnappedTaperUpdate(
-    onUpdate: (Int, Float, Float, Float, Float, String) -> Unit,
-    index: Int,
-    rawStartMm: Float,
-    rawEndMm: Float,
-    startDiaMm: Float,
-    endDiaMm: Float,
-    rateText: String = "",
-    anchors: List<Float>,
-    config: SnapConfig = SnapConfig()
-) {
-    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
-    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
-    onUpdate(index, snappedStart, lengthMm, startDiaMm, endDiaMm, rateText)
-}
-
-internal fun applySnappedThreadUpdate(
-    onUpdate: (Int, Float, Float, Float, Float) -> Unit,
-    index: Int,
-    rawStartMm: Float,
-    rawEndMm: Float,
-    majorDiaMm: Float,
-    pitchMm: Float,
-    anchors: List<Float>,
-    config: SnapConfig = SnapConfig()
-) {
-    // Only snap the start; preserve the original length. Snapping both start and end
-    // independently can silently resize the thread when the raw end happens to land
-    // near a snap anchor (e.g., a 99mm thread moved to start=0 could snap its end to
-    // the 100mm body anchor, unexpectedly extending it to 100mm).
-    val snappedStart = snapPositionMm(rawStartMm, anchors, config)
-    val lengthMm = (rawEndMm - rawStartMm).coerceAtLeast(0f)
-    onUpdate(index, snappedStart, lengthMm, majorDiaMm, pitchMm)
-}
-
-internal fun applySnappedLinerUpdate(
-    onUpdate: (Int, Float, Float, Float) -> Unit,
-    index: Int,
-    rawStartMm: Float,
-    rawEndMm: Float,
-    odMm: Float,
-    anchors: List<Float>,
-    config: SnapConfig = SnapConfig()
-) {
-    val (snappedStart, snappedEnd) = snapBounds(rawStartMm, rawEndMm, anchors, config)
-    val lengthMm = (snappedEnd - snappedStart).coerceAtLeast(0f)
-    onUpdate(index, snappedStart, lengthMm, odMm)
-}
-
-private fun snapBounds(
-    rawStartMm: Float,
-    rawEndMm: Float,
-    anchors: List<Float>,
-    config: SnapConfig
-): Pair<Float, Float> {
-    val snappedStart = snapPositionMm(rawStartMm, anchors, config)
-    val snappedEnd = snapPositionMm(rawEndMm, anchors, config)
-    return snappedStart to snappedEnd
 }

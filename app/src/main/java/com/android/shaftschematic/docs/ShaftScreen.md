@@ -109,11 +109,18 @@ Notes
 - `ComponentCard` handles its own remove button; callers simply supply `onRemove = { … }`.  
 - Persistence, serialization, and other business logic live strictly in the ViewModel.  
 - Scaffold uses system-bar insets only; FAB uses `WindowInsets.ime.union(WindowInsets.navigationBars)`.
-- `computeAddDefaults()` and the `applySnapped{Body,Taper,Thread,Liner}Update` snap-apply
-  wrappers live in `ui/screen/ShaftScreenController.kt` (extracted from `ShaftScreen.kt`
-  2026-07-24, pure code move). Shared format helpers (`abbr`, `disp`, `formatDisplay`,
-  `toMmOrNull`, `parseFractionOrDecimal`, `tpiToPitchMm`) and the dialogs/menus remain in
-  `ShaftScreen.kt`.
+- `computeAddDefaults()` lives in `ui/screen/ShaftScreenController.kt`. Shared format
+  helpers (`abbr`, `disp`, `formatDisplay`, `toMmOrNull`, `parseFractionOrDecimal`,
+  `tpiToPitchMm`) and the dialogs/menus remain in `ShaftScreen.kt`.
+- **Typed field commits are never snapped.** Carousel update callbacks
+  (`onUpdateBody/Taper/Thread/Liner`) receive the committed values verbatim. The old
+  `applySnapped{…}Update` wrappers (removed 2026-07-26) snapped the recomputed start/end
+  to component-edge anchors (±1 mm) and silently rewrote typed values — a taper-length
+  edit smaller than the tolerance was undone entirely (the start snapped back to the old
+  boundary and the length recomputed to its previous value). Snapping is reserved for
+  coarse gestures: tap-to-add (`ui/viewmodel/SnapUtils.kt`). Do not reintroduce snapping
+  into any typed-commit update path — same invariant as the 2026-06-19 removal of the
+  `snapForwardFrom` cascade from ViewModel updates.
 
 ---
 
@@ -129,6 +136,12 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.12 (2026-07-26)**
+- **Typed commits unsnapped:** removed the `applySnapped{Body,Taper,Thread,Liner}Update`
+  wrappers and the `snapAnchors` plumbing; carousel update callbacks are wired directly.
+  Field edits within ~1 mm of a component edge were being silently reverted (worst on
+  FWD-referenced taper length edits). Tap-to-add snapping unchanged.
+
 **v0.11 (2026-07-26)**
 - **HistoryMenu is general undo/redo, not delete-only:** the header-row history menu now
   wires to `ShaftViewModel.undoEdit()`/`redoEdit()` (session-scoped, covers every drawing

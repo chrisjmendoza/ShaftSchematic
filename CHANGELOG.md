@@ -6,6 +6,30 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-26 (later)
+
+### fix(ui): typed field commits are never snapped
+
+On-device (branch testing): editing a FWD taper's length from 12.0157" to 12" and
+blurring left the model — and the drawing — at 12.0157". The commit path routed through
+`applySnapped{Body,Taper,Thread,Liner}Update`, which snapped the recomputed start/end to
+component-edge anchors within ±1 mm (0.04"). The 12.0157"→12" edit moves the taper's
+start by exactly 0.4 mm, so the snap pulled it back to the adjacent body's edge and the
+length recomputed to its old value — the typed number was silently undone. Pre-existing
+(wired since 2025-12), not a regression from today's fixes; it only bites on edits
+smaller than the tolerance, which is exactly the "remove the fractional tail" case.
+
+- Carousel update callbacks are now wired directly; the four snap wrappers and the
+  `snapAnchors` plumbing are deleted. Typed values reach the ViewModel verbatim.
+- Tap-to-add snapping (`SnapUtils.kt`) is unchanged — snapping belongs to coarse
+  gestures, not typed numbers. A sub-mm gap left next to a resized component is real,
+  visible, and auto-filled; a silent revert is neither.
+- Invariant pinned in `CLAUDE.md` + `docs/ShaftScreen.md` (v0.12): do not reintroduce
+  snapping into typed-commit update paths — the companion to the 2026-06-19 removal of
+  the `snapForwardFrom` cascade from VM updates.
+
+---
+
 ## 2026-07-26 (late)
 
 ### fix: body-merge diameter rule, unique fragment ids, IME field coverage

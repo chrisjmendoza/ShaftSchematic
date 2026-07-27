@@ -99,7 +99,6 @@ import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
-import com.android.shaftschematic.ui.viewmodel.buildSnapAnchors
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
 import kotlinx.coroutines.launch
@@ -279,62 +278,13 @@ fun ShaftScreen(
     val exportPdfEnabled = exportPdfGate.enabled
     val exportPdfDisabledMessage = exportPdfGate.disabledMessage
 
-    val snapAnchors = remember(spec.overallLengthMm, spec.bodies, spec.tapers, spec.threads, spec.liners) { buildSnapAnchors(spec) }
-
-    val snappedBodyUpdater = remember(snapAnchors, onUpdateBody) {
-        { index: Int, startMm: Float, lengthMm: Float, diaMm: Float ->
-            applySnappedBodyUpdate(
-                onUpdate = onUpdateBody,
-                index = index,
-                rawStartMm = startMm,
-                rawEndMm = startMm + lengthMm,
-                diaMm = diaMm,
-                anchors = snapAnchors
-            )
-        }
-    }
-
-    val snappedTaperUpdater = remember(snapAnchors, onUpdateTaper) {
-        { index: Int, startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float, rateText: String ->
-            applySnappedTaperUpdate(
-                onUpdate = onUpdateTaper,
-                index = index,
-                rawStartMm = startMm,
-                rawEndMm = startMm + lengthMm,
-                startDiaMm = startDiaMm,
-                endDiaMm = endDiaMm,
-                rateText = rateText,
-                anchors = snapAnchors
-            )
-        }
-    }
-
-    val snappedThreadUpdater = remember(snapAnchors, onUpdateThread) {
-        { index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float ->
-            applySnappedThreadUpdate(
-                onUpdate = onUpdateThread,
-                index = index,
-                rawStartMm = startMm,
-                rawEndMm = startMm + lengthMm,
-                majorDiaMm = majorDiaMm,
-                pitchMm = pitchMm,
-                anchors = snapAnchors
-            )
-        }
-    }
-
-    val snappedLinerUpdater = remember(snapAnchors, onUpdateLiner) {
-        { index: Int, startMm: Float, lengthMm: Float, odMm: Float ->
-            applySnappedLinerUpdate(
-                onUpdate = onUpdateLiner,
-                index = index,
-                rawStartMm = startMm,
-                rawEndMm = startMm + lengthMm,
-                odMm = odMm,
-                anchors = snapAnchors
-            )
-        }
-    }
+    // NOTE (2026-07-26): typed field commits go to the update callbacks UNSNAPPED. The old
+    // applySnapped{Body,Taper,Thread,Liner}Update wrappers snapped the recomputed start/end
+    // to component-edge anchors (±1 mm), which silently rewrote values the user just typed —
+    // e.g. shortening a FWD-referenced taper by less than the tolerance moved its start by
+    // under 1 mm, and the snap pulled it straight back to the old boundary, undoing the edit.
+    // Snapping belongs to coarse gestures (tap-to-add) only; typed values are exact.
+    // Same posture as the 2026-06-19 removal of the snapForwardFrom cascade from VM updates.
 
     // Auto-sync overall when not manual
     LaunchedEffect(overallIsManual, spec.bodies, spec.tapers, spec.threads, spec.liners) {
@@ -723,16 +673,16 @@ fun ShaftScreen(
                         onAddBody(s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false)
                     },
                     onSetAutoBodyDia = onSetAutoBodyDia,
-                    onUpdateBody = snappedBodyUpdater,
+                    onUpdateBody = onUpdateBody,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
-                    onUpdateTaper = snappedTaperUpdater,
+                    onUpdateTaper = onUpdateTaper,
                     onUpdateTaperLabel = onUpdateTaperLabel,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateTaperReference = onUpdateTaperReference,
-                    onUpdateThread = snappedThreadUpdater,
+                    onUpdateThread = onUpdateThread,
                     onUpdateThreadLabel = onUpdateThreadLabel,
-                    onUpdateLiner = snappedLinerUpdater,
+                    onUpdateLiner = onUpdateLiner,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
                     onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
