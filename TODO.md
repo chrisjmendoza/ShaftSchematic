@@ -3,7 +3,8 @@
 **Version: v0.5.x Development Queue**  
 **Last updated: 2026-07-26**
 
-Tasks are ordered by priority. Completed series are collapsed to a single summary line to keep this readable.
+Tasks are ordered by priority. Completed series are collapsed to a single summary line to
+keep this readable — full detail lives in `CHANGELOG.md` and git history.
 
 ---
 
@@ -32,7 +33,7 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 | Sidebar nav (3 tabs) | ✅ EditorSidebar + EditorTab + ShaftEditorRoute updated |
 | Runout drawing | ✅ RunoutPdfComposer, inline shaft preview, scrollable layout, collision-free alternating bubble layout via shared `geom/RunoutBubbleLayout.kt`; resolved-component geometry (2026-07-18) |
 | Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes; resolved-component geometry (2026-07-18) |
-| Liner wear areas | ✅ Built 2026-07-18 (all 4 phases + input spec: SET/liner-edge references, blocking span validation, PDF detail strips with dimension rails) — awaiting Chris's on-device verification. See `docs/LinerWearAreas_BuildLog_2026-07-18.md` |
+| Liner wear areas | ✅ Built 2026-07-18 (all 4 phases + input spec: SET/liner-edge references, blocking span validation, PDF detail strips with dimension rails) — awaiting on-device verification. Build record in git history (`docs/LinerWearAreas_BuildLog_2026-07-18.md`) |
 | Wear pits (X markers) | ✅ Built 2026-07-21 — small/large pit "X"s on bodies, tapers & liners (tap to open a segment; explicit Add X / Remove X / Clear all tools); drawn on the wear PDF profile + strips. Wear PDF now keeps the shaft profile always on top with a 2-column detail-strip grid. See CHANGELOG + "Wear Pits" in `docs/RunoutSheet.md`. Awaiting on-device verification |
 | Body keyways | ✅ Built 2026-07-20 — taper-style keyway on bodies (open + floating), 180°-apart hidden-line toggle, auto-body promotion via the "Explicit body" checkbox (checkbox-only, reworked 2026-07-25); split/merge carry keeps keyway at absolute position |
 | Runout bubble editor | ✅ Built 2026-07-21 — tap a bubble to record TIR value + high-spot clock marker; open-topped keyway cutout in the bubble; drawn identically on canvas + PDF |
@@ -50,52 +51,42 @@ Tasks are ordered by priority. Completed series are collapsed to a single summar
 
 ## 1. Active Sprint — Refactor Complete (Carousel Phase)
 
-- [x] **Carousel extraction** — `ComponentCarouselPager`, `EdgeNavButton`, `ComponentPagerCard`, `ComponentCard` moved to `ui/screen/ComponentCarousel.kt`. Carousel-private helpers (`CommitNum`, `dispKw`, `fmtTrim`, `pitchMmToTpi`) moved with them. Shared helpers (`abbr`, `disp`, `formatDisplay`, `toMmOrNull`, `parseFractionOrDecimal`, `tpiToPitchMm`) made `internal` so both files can reach them. ShaftScreen.kt: 2322 → 1434 lines.
-
-**Remaining refactor work (lower priority — defer until ShaftScreen grows again):**
-
-- [x] Extract preview panel into `ShaftPreviewPanel.kt` — pure move 2026-07-24
-- [x] Extract ViewModel event wiring into `ShaftScreenController.kt` — pure move 2026-07-24
+- [x] Extractions done 2026-07 — carousel (`ComponentCarousel.kt`), preview panel
+  (`ShaftPreviewPanel.kt`), event wiring (`ShaftScreenController.kt`); details in CHANGELOG
 - [ ] Controller owns all VM-side intents (composables stateless) — design work, not a pure move
 
 ---
 
-## 2. Validation Enhancements (Next After Refactor)
+## 2. Validation Enhancements
 
 ### 2.1 Remaining Validation Items
 
-- [x] Taper on-blur field validation — rate derivation errors (missing both diameters with no rate, derived diameter < 0) shown inline on the field
-- [x] Validate taper slope only when `lengthMm > 0` — confirmed already inert at `lengthMm <= 0` across `autoTaperRate`/`manualTaperRateWarning`/`manualTaperRateBlockingMessage`/`deriveTaperDiameters`; pinning tests added 2026-07-24, no production change needed
-- [x] `freeToEndMm` badge: use `safeSpec` when `overallLengthMm == 0` — new `freeToEndSignedMm(spec)` helper (`ui/util/FreeToEndBadgeMath.kt`) falls back to `lastOccupiedEndMm()`, wired into `FreeToEndBadge` 2026-07-24
+- [x] 2026-07 items done — taper on-blur field validation; slope-guard pinning tests;
+  `freeToEndMm` safeSpec fallback (`freeToEndSignedMm`). Details in CHANGELOG
+- [ ] No numeric upper bound on inputs — documented as a gap in `VALIDATION_RULES.md` §2.3
+  (from the 2026-07-18 doc sweep); a fat-fingered 4700000 mm body is accepted silently
+- [ ] Export gate only checks thread/liner positions — taper overlaps never block export
+  (from the 2026-07-18 doc sweep)
 
-### 2.2 Unimplemented Warning Rules (VALIDATION_RULES.md §3–4)
+### 2.2 Warning Rules (VALIDATION_RULES.md §3–4)
 
-These are defined in the contract but not yet computed. Lower priority — add when working in adjacent areas:
-
-- [x] §3.2 Body: diameter discontinuity vs adjacent body — `bodyWarningMessages` (`ui/util/ComponentWarnings.kt`), shown on the body's carousel card
-- [x] §3.3 Taper: large mismatch with adjacent body diameter — `taperWarningMessages`, shown on the taper's carousel card
-- [x] §3.5 Liner: `odMm < underlying shaft body diameter` — `linerWarningMessages`, shown on the liner's carousel card
-- [x] §4.3 Spec: tiny segments < 1 mm — spec-level count now exists via `specWarningMessages(spec)` (component-level check was already done; this adds the spec-wide count)
-- [x] §4.3 Spec: zero-body coverage warning — also via `specWarningMessages(spec)`
+- [x] All five §3–4 warning rules computed + shown on carousel cards, 2026-07-24
+  (`ui/util/ComponentWarnings.kt`, `specWarningMessages`). §3.3 taper-vs-body mismatch
+  later removed by product decision — see §2.3
 - [ ] Decide UI surface for spec-level warnings (`specWarningMessages`) — UX decision. Both the
   tiny-segment count and zero-body-coverage message are computed and unit-tested but not wired
   to any screen (badge, banner, or elsewhere); the five carousel-card-level warnings above are
   already live.
+- [ ] Review the warning thresholds picked during the 2026-07-24 loop (1.5× adjacent-body
+  step, 0.5 mm adjacency eps in `ui/util/ComponentWarnings.kt`) — chosen without shop input;
+  sanity-check against real drawings. (Taper-mismatch 10% threshold is moot — that rule was
+  removed 2026-07-26.)
 
 ### 2.3 Bug Fixes (open)
 
-- [x] **§3.3 taper-vs-body warning false positive** (Chris, on-device 2026-07-25): FWD-end taper
-  with LET 7" abutting a 7" body (SET 6" at the tip) warned "Ø differs from adjacent body
-  by >10%". Root cause: `hasTaperBodyMismatch` (`ui/util/ComponentWarnings.kt`) mapped
-  `startDiaMm` → face at `startFromAftMm` and `endDiaMm` → far face, but for FWD-referenced
-  tapers the stored SET/LET pair can be swapped relative to axial position, so the rule read
-  the SET at the body-adjacent face. Fixed 2026-07-25 by `taperFaceDiametersMm` (physical
-  AFT/FWD face diameters via the SET-by-shaft-half convention, same magnitude-based SET
-  detection as the renderer); 4 regression tests added (`ComponentWarningsTest.kt`).
-  **Superseded 2026-07-26**: the advisory still misfired on-device (LET correctly matching
-  the adjacent body Ø), so the taper-vs-body mismatch check was **removed entirely** by
-  user request — the difference is visible in the drawing itself. See
-  `docs/VALIDATION_RULES.md` §3.3; a regression test now pins the no-warning behavior.
+- [x] §3.3 taper-vs-body Ø-mismatch advisory — fixed 2026-07-25, still misfired on-device,
+  **removed entirely 2026-07-26 by product decision** (the difference is visible in the
+  drawing itself; regression test pins the no-warning behavior). Do not reintroduce.
 - [ ] **Taper orientation discrepancy — analysis done 2026-07-26, fix decision pending.**
   Full investigation in `docs/TaperOrientation_Analysis_2026-07-26.md` (includes a 2-minute
   on-device repro). Confirmed in code: the Add dialog keys its SET/LET swap on the
@@ -106,6 +97,12 @@ These are defined in the contract but not yet computed. Lower priority — add w
   lost on reopen). Recommended: re-key the dialog swap on the physical half + thread the
   toggle into `addTaperAt`; data-repair normalization is a product decision (would rewrite
   stored docs and forecloses reversed tapers).
+- [ ] **OAL reload edge (low):** a file saved with manual OAL exactly equal to the content end
+  reloads as "auto" (`importJson` uses `> coverageEnd + 1e-3`), and the auto-sync effect then
+  keeps OAL glued to the content end — silently dropping a *leading* auto span (components not
+  starting at 0). Adds no bodies; changes the picture. Candidate fixes: also treat OAL as
+  manual when the first component starts > 0, or persist the manual flag in the doc envelope
+  (schema change). Found during the 2026-07-26 explicit-bodies investigation.
 
 ---
 
@@ -120,14 +117,20 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 ### 4.1 Dialog Cleanup (`§5.2`)
 
-- [x] Standardize confirm/cancel patterns across all Add dialogs
-- [x] Standardize commit-on-blur across all fields
-- [x] Remove leftover legacy length-editing utilities — 2026-07-24 dead-code sweep: deleted
-  snap-era test-only helpers (`snapForwardFromOrdered`/`snapFromOrigin`/`shiftAllBy`/
-  `findLeftNeighbor` in `ShaftSpecExtensions.kt` + their 4 test cases) and dead imports
-  (`threadWarningMessage` in `ShaftScreen.kt`, `snapForwardFromOrdered` in `ShaftViewModel.kt`);
-  live `snapForwardFrom` untouched. The `parseFractionOrDecimal`/`toMmOrNull` duplication remains
-  — tracked separately in `NumberField.md`.
+- [x] Done — confirm/cancel patterns and commit-on-blur standardized; legacy length-editing
+  utilities removed in the 2026-07-24 dead-code sweep. The `parseFractionOrDecimal` /
+  `toMmOrNull` duplication remains — tracked in `NumberField.md`
+
+### 4.1b Deferred Refactor Waves (from the 2026-07-11 cleanup sweep, report in git history)
+
+Waves 1–2 shipped (Wave 1 fixes 2026-07-11; Wave 2 deletion pass 2026-07-26, `ad5b198`). Remaining:
+
+- [ ] **Theme decision:** `ShaftSchematicTheme` exists but is never wired into `MainActivity`
+  (no dark mode). Wire it (one line, but needs a dark-mode visual check of preview colors —
+  PDF must stay theme-independent per §8) or delete `ui/theme`.
+- [ ] **Wave 3:** shared PDF profile-drawing helper across the three composers + parity
+  controls; ViewModel update-method generics
+- [ ] **Wave 4:** structural splits of the remaining oversized files
 
 ### 4.2 Build Tooling (`§5.3`)
 
@@ -136,10 +139,8 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 ### 4.3 Post-Tiering Cleanup (LOW, deferred to v0.5.x)
 
-- [x] Audit tiering-related helpers for dead or redundant code — audited 2026-07-24; only the
-  unused `kind` default parameter on `DeterministicTierAssigner.assign` was deletable (every
-  caller already passed it explicitly; parameter is now required). The unreachable
-  `geom.SpanKind.OAL` defensive path was kept as contract documentation (OAL spans never tier).
+- [x] Tiering helpers audited 2026-07-24 — one dead default parameter removed; unreachable
+  `SpanKind.OAL` path kept as contract documentation
 - [ ] Add optional debug overlay showing tier origin and measurement reference (preview only)
 
 ---
@@ -148,51 +149,22 @@ These are defined in the contract but not yet computed. Lower priority — add w
 
 ### 5.1 Unit (Complete)
 
-- [x] SnapEngine, freeToEndMm, taper rate parsing + derivation
-- [x] Thread pitch ↔ TPI, OAL exclusion, PDF footer end-feature detection
-- [x] LinerDimAdapter (9 cases), TaperDimSpan (2 cases), BlockingExportError (7 cases)
-- [x] StartOverlapValidation (10 cases), TaperKeyway (11 cases)
+- [x] Complete — SnapEngine, freeToEndMm, taper rates, thread pitch ↔ TPI, OAL exclusion,
+  PDF footer, LinerDimAdapter, TaperDimSpan, BlockingExportError, StartOverlapValidation,
+  TaperKeyway. Details in git history
 
 ### 5.2 Instrumentation (Done 2026-07-26)
 
-Verified, then built out — see `docs/Instrumentation_Verification_2026-07-26.md`. These were
-*tests to write*, not features to build: three of the four behaviors were already implemented
-and shipping (including the carousel scroll, confirmed from an on-device report). Suite went
-719 → 796 tests, all green.
-
-- [x] **Compose UI test harness** — Robolectric added (`robolectric = "4.16"`,
-  `testImplementation` of `ui-test-junit4`, `testOptions { unitTests {
-  isIncludeAndroidResources = true } }`). Compose tests now run on the JVM via
-  `testDebugUnitTest` — no device, no emulator, no opt-in flag. Tests assert against
-  `testTag`s, not composable parameter lists, which is what rotted the androidTest deleted
-  in `3ba9992`. androidTest source set untouched and still gated.
-- [x] Commit-on-blur correctness — `BlurCommitPolicyTest` (8, pure) +
-  `NumericInputFieldBlurTest` (7, Robolectric/Compose). Predicate extracted to
-  `ui/input/BlurCommitPolicy.kt`. **Found and fixed a real bug**: the field fired
-  `onCommit` on every composition (Compose's initial `isFocused = false` callback hit the
-  "no baseline → commit defensively" rule). Worst case: composing an **auto-body** card
-  committed its displayed (derived) Ø into `ShaftSpec.autoBodyDiaMm`, pinning the
-  bare-shaft Ø and marking a freshly-opened document dirty with no user edit. On explicit
-  bodies it silently reset the Add-Body length default. See `NumberField.md` and the
-  analysis doc.
-- [x] Blocking-dialog behavior — the five Add-dialog confirm gates extracted to
-  `ui/screen/AddDialogGates.kt` and covered by `AddDialogGatesTest` (22), on top of the 20
-  pre-existing pure tests for `blockingExportError` / `exportPdfGate` /
-  `startOverlapErrorMm`.
-- [x] Preview-tap → adds at correct position — `TapAddPositionTest` (17) over the snap +
-  gap math (now pure in `SnapUtils.kt`; the VM delegates) and `ShaftLayoutMappingTest` (7)
-  over the px ↔ mm round-trip that turns the tap into a position.
-- [x] Carousel scrolls to selected after tap in preview — behavior **confirmed working**
-  end-to-end in code; sync logic extracted to `ui/screen/CarouselSelectionSync.kt` and
-  covered by `CarouselSelectionSyncTest` (16).
-
-**Deliberately not covered:** no Compose test for `ComponentCarouselPager` (~35 params,
-almost all callbacks — that coupling is exactly what rotted the deleted androidTest) or the
-Add dialogs. Their logic is now pure and covered; a UI test there would mostly assert that
-Compose's `HorizontalPager` and Material3's `Button` work.
-
+- [x] Done — Robolectric JVM Compose harness added (`testDebugUnitTest`, no device; assert
+  against `testTag`s, never composable parameter lists); commit-on-blur, blocking-dialog
+  gates, tap-add position, and carousel selection sync all extracted pure + covered. Found
+  and fixed the `NumericInputField` composition-commit bug along the way. Suite 719 → 796.
+  Full detail: CHANGELOG "2026-07-26 (night)".
+  **Deliberately not covered** (decision, not a gap): no Compose test for
+  `ComponentCarouselPager` (~35 params, all callbacks — that coupling is what rotted the
+  deleted androidTest) or the Add dialogs; their logic is pure and covered.
 - [ ] **Open: CI does not run the test suite.** `distribute.yml` runs only
-  `./gradlew assembleDebug`; `merge-on-green.yml` just automerges. So all 796 tests are
+  `./gradlew assembleDebug`; `merge-on-green.yml` just automerges. So all tests are
   local-only, which blunts the point of picking Robolectric. Adding `testDebugUnitTest`
   before the assemble step would gate distribution on green — natural to want, but it's a
   release-pipeline policy change (a red test blocks a build), so it needs a decision.
@@ -207,19 +179,26 @@ would make that body untappable at the slot. Decide before changing.
 
 ## 6. Backlog (v0.5.x+)
 
-- [ ] **Multi-shaft per job number** (Chris, 2026-07-26): sometimes two shafts share one
+- [ ] **Multi-shaft per job number** (requested 2026-07-26): sometimes two shafts share one
   job number; want to select between them. Feasibility + phased architecture plan in
   `docs/MultiShaftJob_Plan_2026-07-26.md` (recommends derived job grouping over
   single-shaft files — no file-format change; Phase 0 fixes the existing runout/wear
-  export-filename collision for same-job shafts). Awaiting Chris's answers to the plan's
+  export-filename collision for same-job shafts). Awaiting answers to the plan's
   6 product questions before building.
+- [ ] **Carousel ordering product decision** (from the 2026-07-18 doc sweep):
+  `ComponentsOrdering.md` v1.1 LOCKED newest-on-top, but the carousel actually displays
+  resolved components in physical order and the ViewModel's newest-first `componentOrder` is
+  unused for display (doc updated to v1.2 describing reality). Decide: accept physical order
+  and remove the dangling `componentOrder` display plumbing, or restore newest-on-top as a
+  regression fix.
+- [ ] Title-strip follow-ups (from the 2026-07-25 night run; liked, not yet requested):
+  tappable title → Save As / rename; smarter untitled-draft row names on StartScreen (derive
+  from job/customer/vessel via `DocumentNaming.suggestedBaseName`); title strip on the
+  Runout/Wear tabs too.
 - [ ] Selection → contextual "Add near selected" defaults
 - [ ] Inline "Add here" buttons between components in list
-- [x] Undo/redo architecture — session-scoped, done 2026-07-26: `SessionHistory<EditState>`
-  (`ui/viewmodel/SessionHistory.kt` + `ui/viewmodel/EditState.kt`) covers every drawing
-  edit (spec, wear record, runout readings, component order, OAL mode), 600 ms burst
-  coalescing, 50-step cap, cleared at session boundaries; replaces the old delete-only
-  undo. `undoEdit()`/`redoEdit()` on `ShaftViewModel`. See `docs/ShaftViewModel.md`.
+- [x] Undo/redo architecture — session-scoped `SessionHistory`, done 2026-07-26; covers every
+  drawing edit, 600 ms coalescing, 50-step cap. See `docs/ShaftViewModel.md`
 - [ ] Undo/redo follow-ups (future scope, not blocking v1.0): cross-session/persisted
   undo history (currently in-memory, cleared on process death and at every
   new/open/import boundary), and metadata (customer/vessel/job number/notes/shaft
@@ -229,15 +208,15 @@ would make that body untappable at the slot. Decide before changing.
 - [ ] Dual-unit display (primary in, secondary mm in smaller text)
 - [ ] Quick inline mm ↔ in calculator in dialogs
 - [ ] Backup auto-mirror folder — user picks a SAF folder once in Settings (persisted URI); every internal save silently mirrors a copy there so the off-device backup is always current. Needs `takePersistableUriPermission` + careful URI-permission lifecycle handling (revoked permission, deleted folder). Originally Tier 3 of the 2026-05-27 backup plan; the shipped backup system covers Tiers 1–2.
-- [ ] "Indicated wear" rendering style for wear bands (Chris, 2026-07-18): match the shop
+- [ ] "Indicated wear" rendering style for wear bands (requested 2026-07-18): match the shop
   hand-sketch convention — squiggly/wavy lines along the liner top and bottom edges in
   the worn region, with straight lines depicting the wear on the liner face itself —
-  as an alternative/refinement to the current hatched bands. Chris has specific ideas;
+  as an alternative/refinement to the current hatched bands. Specific ideas exist;
   get a sketch/photo before building. Applies to detail strips + overlay (main-profile
   bands probably stay hatched at that scale).
 - [ ] Compact wear-strip option: strips currently stretch the liner toward full content
   width for readability; a denser mode (don't stretch, natural/shared scale) would ease
-  crowded 3-strip pages. Chris noted full-stretch reads well, so keep it the default.
+  crowded 3-strip pages. Full-stretch reads well, so keep it the default.
 
 ---
 
