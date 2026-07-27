@@ -72,6 +72,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.ResolvedThread
+import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
 import com.android.shaftschematic.ui.util.bodyWarningMessages
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
@@ -103,6 +104,37 @@ internal data class RowRef(
     val component: ResolvedComponent,
     val explicitIndex: Int? = null
 )
+
+/**
+ * Pair every resolved component with the index of the stored component it edits
+ * (`null` for auto-bodies, which have no stored row).
+ *
+ * A stored body trimmed around a taper/thread/liner resolves into several rows whose ids
+ * carry a fragment suffix (`"<id>#2"`, …); they all edit the SAME stored body, so bodies
+ * are looked up by their base id. Only bodies are ever fragmented.
+ *
+ * Pure function so the mapping is unit-testable outside composition.
+ */
+internal fun buildCarouselRows(
+    spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>,
+): List<RowRef> {
+    val bodyIdx   = spec.bodies.withIndex().associate { it.value.id to it.index }
+    val taperIdx  = spec.tapers.withIndex().associate { it.value.id to it.index }
+    val threadIdx = spec.threads.withIndex().associate { it.value.id to it.index }
+    val linerIdx  = spec.liners.withIndex().associate { it.value.id to it.index }
+    val slotIdx   = spec.couplerBoltSlots.withIndex().associate { it.value.id to it.index }
+    return resolvedComponents.map { comp ->
+        val index = when (comp) {
+            is ResolvedBody   -> bodyIdx[resolvedBodyBaseId(comp.id)]
+            is ResolvedTaper  -> taperIdx[comp.id]
+            is ResolvedThread -> threadIdx[comp.id]
+            is ResolvedLiner  -> linerIdx[comp.id]
+            is ResolvedCouplerBoltSlot -> slotIdx[comp.id]
+        }
+        RowRef(component = comp, explicitIndex = index)
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ComponentCarouselPager
@@ -155,21 +187,7 @@ internal fun ComponentCarouselPager(
     val threadTitleById = remember(spec)                           { buildThreadTitleById(spec) }
 
     val rowsSorted = remember(spec, resolvedComponents) {
-        val bodyIdx   = spec.bodies.withIndex().associate { it.value.id to it.index }
-        val taperIdx  = spec.tapers.withIndex().associate { it.value.id to it.index }
-        val threadIdx = spec.threads.withIndex().associate { it.value.id to it.index }
-        val linerIdx  = spec.liners.withIndex().associate { it.value.id to it.index }
-        val slotIdx   = spec.couplerBoltSlots.withIndex().associate { it.value.id to it.index }
-        resolvedComponents.mapNotNull { comp ->
-            val index = when (comp) {
-                is ResolvedBody   -> bodyIdx[comp.id]
-                is ResolvedTaper  -> taperIdx[comp.id]
-                is ResolvedThread -> threadIdx[comp.id]
-                is ResolvedLiner  -> linerIdx[comp.id]
-                is ResolvedCouplerBoltSlot -> slotIdx[comp.id]
-            }
-            RowRef(component = comp, explicitIndex = index)
-        }
+        buildCarouselRows(spec, resolvedComponents)
     }
 
     val pageCount  = rowsSorted.size.coerceAtLeast(1)

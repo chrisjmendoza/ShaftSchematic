@@ -119,7 +119,8 @@ import kotlinx.coroutines.launch
  * Contract / Invariants
  * • Canonical model units are millimeters (mm) — convert only at UI edge.
  * • No geometry-based resorting. When provided, UI renders strictly by componentOrder (IDs).
- * • IME safety: scroll area uses imePadding; FAB uses ime ∪ navigationBars insets.
+ * • IME safety: imePadding shrinks the scroll viewport (applied before verticalScroll) so
+ *   Compose auto-scrolls to keep the focused field in view; FAB uses ime ∪ navigationBars insets.
  * • No file I/O or routing here.
  */
 @Composable
@@ -515,11 +516,11 @@ fun ShaftScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .imePadding()
                     .verticalScroll(scroll)
                     .windowInsetsPadding(
                         WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
-                    )
-                    .imePadding(),
+                    ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Overall Length (auto vs manual — always show a value)

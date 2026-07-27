@@ -288,6 +288,23 @@ private fun ResolvedComponent.typeSortKey(): Int = when (type) {
     ResolvedComponentType.COUPLER_BOLT_SLOT -> 5
 }
 
+/**
+ * Separator between a stored body id and the fragment ordinal appended by
+ * [subtractBodiesAgainstNonBodies]. Cannot occur in a stored id (UUID) or an auto-body id
+ * (`auto_body_<start>_<end>`), so [resolvedBodyBaseId] is unambiguous.
+ */
+private const val BODY_FRAGMENT_ID_SEPARATOR = '#'
+
+/**
+ * The stored (spec) body id behind a resolved body id.
+ *
+ * A stored body trimmed around a taper/thread/liner resolves into several [ResolvedBody]
+ * rows; the first keeps the stored id and the rest get `"<id>#2"`, `"<id>#3"`, … so every
+ * resolved row is uniquely identifiable (carousel pager keys, selection, highlight).
+ * Anything that looks a fragment id back up in the spec must strip the suffix first.
+ */
+fun resolvedBodyBaseId(id: String): String = id.substringBefore(BODY_FRAGMENT_ID_SEPARATOR)
+
 private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>): List<ResolvedComponent> {
     if (components.isEmpty()) return components
 
@@ -318,10 +335,15 @@ private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>):
             }
         }
 
+        // Fragments stay in ascending-start order. The first keeps the source id so existing
+        // references (wear pits, runout readings, selection) still resolve to the primary
+        // fragment; later ones get a deterministic "#2", "#3", … suffix so no two resolved
+        // rows share an id (duplicate keys crash the carousel pager).
         fragments
             .filter { it.end - it.start > eps }
-            .map { span ->
+            .mapIndexed { i, span ->
                 body.copy(
+                    id = if (i == 0) body.id else "${body.id}$BODY_FRAGMENT_ID_SEPARATOR${i + 1}",
                     startMmPhysical = span.start,
                     endMmPhysical = span.end
                 )

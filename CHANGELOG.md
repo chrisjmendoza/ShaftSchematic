@@ -6,6 +6,60 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-26 (late)
+
+### fix: body-merge diameter rule, unique fragment ids, IME field coverage
+
+Root-caused an on-device report ("opened a saved file, every body was explicit with
+changed diameters"): between `89c49d0` (07-21) and the 07-26 fixes, the composition-commit
+bug (see the entry below) combined with the then-current promote-on-any-commit auto-body
+card, so **merely paging the carousel silently promoted every composed auto span to a
+stored Body** — diameters drifted via display-unit rounding plus the
+nearest-upstream-explicit-body derivation cascade. Current code has no mass-promotion path
+(checkbox-only, test-pinned); the remaining related defects are fixed here.
+
+- **fix(model): `mergeBodiesAround` no longer invents a diameter.** Deleting a component
+  between two bodies merged them with `diaMm = max(A, B)`, silently rewriting a stored
+  diameter. Now fragments merge only when their diameters already agree (< 0.001 mm);
+  otherwise both bodies stay and the freed span auto-fills. The split→merge round trip
+  still restores one body — split fragments inherit the parent Ø verbatim.
+  (`ShaftSpecExtensions.kt`; `BodySplitMergeTest` updated + 2 new cases.)
+- **fix(resolve): trimmed body fragments get unique resolved ids.** All fragments of a
+  stored body trimmed around a taper/thread/liner reused `body.id`, producing duplicate
+  `HorizontalPager` keys (a Lazy-layout crash) and duplicate `explicitIndex` rows —
+  reachable today via a keyway-bearing body (never split on add) with a component over it.
+  Fragment #1 keeps the stored id (wear-pit / runout / selection references intact);
+  later fragments get `"<id>#2"`, `"#3"`, … with `resolvedBodyBaseId()` for spec lookups.
+  Carousel maps rows via base id (`buildCarouselRows`, now pure + tested); `RunoutRoute`
+  strips the suffix so runout station keys are byte-identical to before.
+  (`ResolvedComponent.kt`, `ComponentCarousel.kt`, `RunoutRoute.kt`; new
+  `BodyFragmentIdTest` (6), `CarouselRowMappingTest` (4).)
+- **fix(ui): keyboard no longer covers the focused field.** Under edge-to-edge the IME
+  arrives as insets, and `imePadding()` sat *after* `verticalScroll` in the editor column —
+  padding the content, never shrinking the viewport, so Compose's keep-focused-child-in-view
+  had nothing to do. `imePadding()` now precedes `verticalScroll` in `ShaftScreen` (and is
+  added to `LinerWearDetail`, which had none), so the viewport shrinks and the focused
+  field auto-scrolls into view — including fields at the bottom of carousel cards. No
+  change to `NumericInputField`, `CAROUSEL_HEIGHT`, or the FAB insets. Contract updated in
+  `ShaftScreen.md`.
+- **docs: investigation/writeup cleanup.** Removed 7 dated one-off reports (deep audit,
+  cleanup/doc sweeps, loop/night-run logs, build log, instrumentation verification — all
+  in git history) and scrubbed dangling references; open items they contained were moved
+  into `TODO.md` (§2.1, §2.2, §2.3, §4.1b, §6). Kept: incident/proposal docs that contract
+  docs cite, and the two analyses awaiting product decisions.
+
+**Data advisory (no code change):** drawings **saved by builds distributed 2026-07-21 →
+2026-07-26** may carry auto-promoted explicit bodies (this report), or a spuriously pinned
+bare-shaft Ø from the one-day composition-commit window. Neither is auto-repairable — a
+promoted/pinned value is indistinguishable from a deliberate one. Manual repair: uncheck
+**"Explicit body"** on each wrongly-explicit card (auto-fill regenerates), then enter `0`
+in any auto-body Ø field to restore derive-from-neighbors. Tell for a pinned Ø: change a
+neighboring body's Ø and see whether the bare-shaft spans follow.
+
+Suite: 796 → 808 tests, all green.
+
+---
+
 ## 2026-07-26 (night)
 
 ### test: instrumentation burndown (TODO §5.2) + JVM Compose harness

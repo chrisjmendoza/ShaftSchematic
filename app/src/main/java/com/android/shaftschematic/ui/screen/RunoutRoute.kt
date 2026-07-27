@@ -115,6 +115,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
+import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
@@ -262,9 +263,12 @@ fun RunoutRoute(
             resolvedComponents.forEach { rc ->
                 when (rc) {
                     is ResolvedBody -> {
+                        // Fragments of one stored body carry suffixed ids ("<id>#2", …);
+                        // key off the base id so they collapse into a single row below.
+                        val baseId = resolvedBodyBaseId(rc.id)
                         val label = if (rc.source == ResolvedComponentSource.AUTO) "Body (auto)"
-                                    else bodyTitles[rc.id] ?: "Body"
-                        add(RunoutComponentEntry(rc.id, label, RunoutConfig.BODY_DEFAULT_COUNT, rc.startMmPhysical))
+                                    else bodyTitles[baseId] ?: "Body"
+                        add(RunoutComponentEntry(baseId, label, RunoutConfig.BODY_DEFAULT_COUNT, rc.startMmPhysical))
                     }
                     is ResolvedTaper ->
                         add(RunoutComponentEntry(rc.id, taperTitles[rc.id] ?: "Taper", RunoutConfig.TAPER_DEFAULT_COUNT, rc.startMmPhysical))
@@ -609,7 +613,9 @@ private fun runoutSpans(components: List<ResolvedComponent>): List<RunoutCompone
     components.mapNotNull { rc ->
         val lengthMm = rc.endMmPhysical - rc.startMmPhysical
         when (rc) {
-            is ResolvedBody  -> RunoutComponentSpan(rc.id, RunoutComponentKind.BODY,  rc.startMmPhysical, lengthMm)
+            // Body fragments keep the stored body's id here (suffix stripped) so runout
+            // station keys stay exactly as they were before fragment ids became unique.
+            is ResolvedBody  -> RunoutComponentSpan(resolvedBodyBaseId(rc.id), RunoutComponentKind.BODY,  rc.startMmPhysical, lengthMm)
             is ResolvedTaper -> RunoutComponentSpan(rc.id, RunoutComponentKind.TAPER, rc.startMmPhysical, lengthMm)
             is ResolvedLiner -> RunoutComponentSpan(rc.id, RunoutComponentKind.LINER, rc.startMmPhysical, lengthMm)
             else -> null

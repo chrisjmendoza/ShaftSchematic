@@ -17,7 +17,10 @@ Invariants
 - Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.
   **Exception:** the OAL field commits on every keystroke in manual mode (intentional —
   the preview updates live; see CLAUDE.md).  
-- IME padding is applied **only to the scrollable region**, not the entire screen.  
+- IME padding is applied **only to the scrollable region**, not the entire screen, and is
+  chained **before** `verticalScroll` so it shrinks the scroll viewport (not just the
+  content) — this lets Compose's focused-child-in-view behavior auto-scroll a focused
+  field clear of the keyboard.  
 - Renderer and layout layers are **mm-only** (no unit logic in rendering or layout).
 
 ---
@@ -92,6 +95,9 @@ Do Nots
 - Do **not** write model state inside the preview or renderer; render only.  
 - Do **not** pre-convert inches before calling formatters (avoids “3.937 in” bug).  
 - Do **not** apply IME padding globally; only the scrollable area should move.
+- Do **not** move `imePadding()` to after `verticalScroll` in the modifier chain — that pads
+  the scrolled content instead of shrinking the viewport, so the keyboard can cover a
+  focused field near the bottom without triggering auto-scroll.
 
 ---
 
