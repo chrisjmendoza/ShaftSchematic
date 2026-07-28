@@ -459,7 +459,7 @@ private fun openWearPdf(context: Context, uri: Uri) {
 /**
  * Draw a faint tint + border over every pit-eligible component (body, taper, liner — the tap
  * affordance) and a small count badge above any that already has recorded wear (spots + pits).
- * Purely a rendering overlay — reads [wearRecord] but never mutates it. Generalized 2026-07-21
+ * Purely a rendering overlay — reads [wearRecord] but never mutates it. Generalized
  * from the liner-only version so bodies/tapers are tappable for pits too.
  */
 private fun DrawScope.drawWearAffordances(

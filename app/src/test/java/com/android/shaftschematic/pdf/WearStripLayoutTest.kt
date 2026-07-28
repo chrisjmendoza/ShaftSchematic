@@ -29,7 +29,7 @@ class WearStripLayoutTest {
     private fun spot(linerId: String, startMm: Float = 0f, lengthMm: Float = 25f, minDiaMm: Float = 0f) =
         WearSpot(linerId = linerId, startMm = startMm, lengthMm = lengthMm, minDiaMm = minDiaMm)
 
-    // ── collectWearLinerGroups (2026-07-27: EVERY drawable liner gets a strip, spots or not) ──
+    // ── collectWearLinerGroups (EVERY drawable liner gets a strip, spots or not) ──
 
     @Test
     fun `liner with no spots still gets a strip with an empty spot list`() {
@@ -100,8 +100,8 @@ class WearStripLayoutTest {
         assertEquals(listOf("l4", "l5"), selection.overflow.map { it.liner.id })
     }
 
-    // ── determineWearPdfMode (2026-07-21 rule: 0 -> profile form, 1 -> combined, 2+ -> grid;
-    // the shaft profile is always kept on top. 2026-07-27: the count is the shaft's drawable
+    // ── determineWearPdfMode (rule: 0 -> profile form, 1 -> combined, 2+ -> grid;
+    // the shaft profile is always kept on top. The count is the shaft's drawable
     // LINER count, since every liner now gets a strip whether or not it has recorded wear) ──
 
     @Test
@@ -133,7 +133,7 @@ class WearStripLayoutTest {
 
     @Test
     fun `one liner with no recorded wear still resolves to the combined page`() {
-        // 2026-07-27: liners appear on the wear sheet regardless of recorded wear (normal shop
+        // Liners appear on the wear sheet regardless of recorded wear (normal shop
         // operating procedure) — a spotless liner used to fall back to the profile form.
         val liners = listOf(liner("a", 0f, 200f))
         val groups = collectWearLinerGroups(liners, WearRecord(spots = emptyList()))
@@ -229,7 +229,61 @@ class WearStripLayoutTest {
         }
     }
 
-    // ── computeWearStripGridLayout (WearPdfMode.GRID, 2026-07-21 — two strips per row) ─────────
+    // ── Profile-height preference / per-strip cap (device feedback) ────────────────
+
+    @Test
+    fun `preferred profile height gives the surplus to the strips`() {
+        val areaTop = 88f; val areaBottom = 524f
+        val layout = computeWearVerticalLayout(
+            areaTop, areaBottom, stripCount = 2,
+            preferredProfileHeightPt = 140f,  // well above the 70pt floor
+        )
+        assertEquals("profile shrinks to its preferred height",
+            140f, layout.profileBottom - layout.profileTop, 1e-3f)
+        // Nothing wasted: the strips absorbed everything the profile gave back.
+        assertEquals(areaBottom, layout.stripBottoms.last(), 1e-3f)
+        val perStrip = layout.stripBottoms[0] - layout.stripTops[0]
+        assertTrue("strips grew past their preferred height ($perStrip)",
+            perStrip > WEAR_STRIP_HEIGHT_PT + 1e-3f)
+    }
+
+    @Test
+    fun `preferred profile height never squeezes the profile below the minimum`() {
+        val layout = computeWearVerticalLayout(
+            areaTop = 88f, areaBottom = 524f, stripCount = 2,
+            preferredProfileHeightPt = 10f,  // absurdly small — the floor must win
+        )
+        assertEquals(WEAR_MIN_PROFILE_HEIGHT_PT, layout.profileBottom - layout.profileTop, 1e-3f)
+    }
+
+    @Test
+    fun `strip growth cap returns leftover height to the profile`() {
+        val areaTop = 88f; val areaBottom = 524f
+        val layout = computeWearVerticalLayout(
+            areaTop, areaBottom, stripCount = 1,
+            preferredProfileHeightPt = 100f,
+            maxStripHeightPt = 170f,
+        )
+        assertEquals("strip capped", 170f, layout.stripBottoms[0] - layout.stripTops[0], 1e-3f)
+        assertTrue("profile absorbed the overflow past the cap",
+            layout.profileBottom - layout.profileTop > 100f + 1e-3f)
+        assertEquals(areaBottom, layout.stripBottoms.last(), 1e-3f)
+    }
+
+    @Test
+    fun `default parameters reproduce the old absorb-all-slack layout`() {
+        val defaults = computeWearVerticalLayout(88f, 524f, stripCount = 3)
+        val explicit = computeWearVerticalLayout(
+            88f, 524f, stripCount = 3,
+            preferredProfileHeightPt = Float.MAX_VALUE,
+            maxStripHeightPt = Float.MAX_VALUE,
+        )
+        assertEquals(defaults.profileBottom, explicit.profileBottom, 1e-3f)
+        defaults.stripTops.forEachIndexed { i, t -> assertEquals(t, explicit.stripTops[i], 1e-3f) }
+        defaults.stripBottoms.forEachIndexed { i, b -> assertEquals(b, explicit.stripBottoms[i], 1e-3f) }
+    }
+
+    // ── computeWearStripGridLayout (WearPdfMode.GRID — two strips per row) ─────────
 
     private val gridLeft = 36f
     private val gridRight = 756f
@@ -287,6 +341,15 @@ class WearStripLayoutTest {
         }
     }
 
+    @Test
+    fun `grid layout forwards the profile preference`() {
+        val g = computeWearStripGridLayout(
+            88f, 524f, gridLeft, gridRight, stripCount = 2,  // 2 columns → one row
+            preferredProfileHeightPt = 140f,
+        )
+        assertEquals(140f, g.profileBottom - g.profileTop, 1e-3f)
+    }
+
     // ── computeWearStripHorizontalLayout ──────────────────────────────────────
 
     @Test
@@ -311,7 +374,7 @@ class WearStripLayoutTest {
         assertTrue(hLayout.linerRightPt > hLayout.linerLeftPt)
     }
 
-    // ── computeWearStripInnerLayout (2026-07-18 dimension-rail rework: fixed rail budget,
+    // ── computeWearStripInnerLayout (dimension-rail rework: fixed rail budget,
     // no longer proportional to spot count) ──────────────────────────────────────────────
 
     @Test
@@ -366,7 +429,7 @@ class WearStripLayoutTest {
         assertTrue(inner.railY <= inner.cylTop + 1e-3f)
     }
 
-    // ── computeWearStripInnerLayout — label headroom (2026-07-18 SVG review, defect 2) ──
+    // ── computeWearStripInnerLayout — label headroom (SVG review, defect 2) ──
 
     @Test
     fun `label headroom is reserved between the cylinder and the title`() {
@@ -392,7 +455,7 @@ class WearStripLayoutTest {
         assertTrue(inner.railY <= inner.cylTop + 1e-3f)
     }
 
-    // ── buildWearStripRailSpans (2026-07-18 dimension-rail rework) ────────────────────────
+    // ── buildWearStripRailSpans (dimension-rail rework) ────────────────────────
 
     private fun bands(vararg pairs: Pair<Float, Float>) = pairs.map { (s, l) -> WearBandClamp(s, l) }
 
@@ -426,9 +489,13 @@ class WearStripLayoutTest {
 
     @Test
     fun `no bands at all yields one full-length span - the spotless-liner and blank-template rail`() {
-        // A liner with no recorded wear (every liner gets a strip since 2026-07-27) and every
+        // A liner with no recorded wear (every liner gets a strip) and every
         // liner on the blank write-in template share this rail: a single span across the whole
-        // liner. The blank draft then draws it without its label (lines in, values out).
+        // liner. The span still exists in the PURE MATH — it anchors the x-positions of the two
+        // liner-edge witness bars — but the COMPOSER draws a band-less rail as
+        // those edge bars only: no spanning line, no arrowheads, no label (the full-length span
+        // would just re-state the liner's own length, and the rail measures distances to wear
+        // areas). Only DRAWING changed; buildWearStripRailSpans still returns the span.
         val spans = buildWearStripRailSpans(250f, emptyList(), UnitSystem.MILLIMETERS)
         assertEquals(1, spans.size)
         assertEquals(0f, spans[0].startMm, 1e-6f)
@@ -470,7 +537,7 @@ class WearStripLayoutTest {
         assertEquals(formatLenDim(120.0, UnitSystem.MILLIMETERS), spans[2].label)
     }
 
-    // ── layoutWearStripRail (2026-07-18 dimension-rail rework) ─────────────────────────────
+    // ── layoutWearStripRail (dimension-rail rework) ─────────────────────────────
 
     /** A cheap deterministic stand-in for `Paint.measureText` in these pure JVM tests. */
     private fun charWidth(s: String, ptPerChar: Float = 6f) = s.length * ptPerChar
@@ -537,7 +604,7 @@ class WearStripLayoutTest {
         }
     }
 
-    // ── computeWearStripRadii — common-factor scaling (2026-07-18 SVG review, defect 1) ──
+    // ── computeWearStripRadii — common-factor scaling (SVG review, defect 1) ──
 
     @Test
     fun `radii within budget are left unscaled`() {

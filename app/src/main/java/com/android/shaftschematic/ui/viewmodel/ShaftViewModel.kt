@@ -204,7 +204,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * comparison as the autosave dirty gate ([shouldWriteDraft]) so *every* tracked field —
      * spec, metadata, position, unit-lock, OAL mode, wear record, runout readings/config —
      * counts as unsaved work (an earlier partial comparison missed wear/runout edits, which is
-     * how the 2026-07-25 incident slipped guards). See docs/Autosave_Incident_2026-07-25.md.
+     * how the incident slipped guards). See docs/Autosave_Incident_2026-07-25.md.
      */
     fun hasUnsavedWork(): Boolean {
         if (isSessionDefault()) return false

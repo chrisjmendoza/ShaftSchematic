@@ -263,7 +263,7 @@ class BodySplitMergeTest {
 
     @Test
     fun `merge - does not merge across a component still occupying the gap`() {
-        // 2026-07-21 guard: bl ends at 200, br starts at 350, but a liner still sits at
+        // Guard: bl ends at 200, br starts at 350, but a liner still sits at
         // 250..300 between them (it had overlapped the just-removed component). Merging
         // bl..br would span the surviving liner and manufacture a long phantom body — so
         // the merge is skipped and the spec is left unchanged.

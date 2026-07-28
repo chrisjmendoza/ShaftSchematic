@@ -396,8 +396,8 @@ under the same name for the same shaft.
 
 **Key layout decisions:**
 - Header is split across two centred lines so long job-info strings don't overflow the 720 pt content width.
-- Shaft centre is `(midTop + midBot) / 2` where `midTop = headerBottom + WEAR_HEADER_GAP_PT` and `midBot = notesY − WEAR_NOTES_GAP_PT`. It is independent of the OAL line position and sits at exactly the page centre for the default margins.
-- OAL dimension line is computed **after** the horizontal scale factor (`ptPerMm`) is known: `oalLineY = shaftCy − rPx(maxBodyDia) − WEAR_OAL_ABOVE_SHAFT_PT`. This anchors it well above the actual drawn shaft top (raised 90 pt, same convention as the runout sheet) rather than at a fixed offset from the header.
+- Shaft centre is anchored under the profile band's OAL region — `profileTop + WEAR_OAL_TOP_REGION_PT + WEAR_OAL_ABOVE_SHAFT_PT + rPx(maxDia)` — plus half of any band slack, so a roomy band (0–1 strips, or strips capped at `WEAR_STRIP_HEIGHT_MAX_PT`) still reads centred while a snug one doesn't strand white space above the strips (2026-07-28; it used to be the band midpoint `(profileTop + profileBottom) / 2`).
+- OAL dimension line is computed **after** the horizontal scale factor (`ptPerMm`) is known: `oalLineY = shaftCy − rPx(maxBodyDia) − WEAR_OAL_ABOVE_SHAFT_PT`. This anchors it above the actual drawn shaft top (44 pt since 2026-07-28) rather than at a fixed offset from the header.
 - Witness (extension) lines are drawn at `x0` and `x1` from just above the shaft top up through the dimension line, matching standard engineering drawing convention.
 - **Direction reference** (`drawWearDirectionRef`, 2026-07-21): "← AFT" (left) and "FWD →" (right) drawn just below the shaft's bottom edge so a shop reader can orient the whole sheet (AFT drawn left, FWD right — the SET/schematic convention).
 - Notes row is anchored at `contentBot − WEAR_NOTES_BOTTOM_OFFSET_PT`, independent of shaft size.
@@ -408,7 +408,7 @@ under the same name for the same shaft.
 |---|---|---|
 | `WEAR_HEADER_HEIGHT_PT` | 36 | Two-line header block height (rule sits at this offset from `contentTop`) |
 | `WEAR_HEADER_GAP_PT` | 16 | Gap from header rule to drawing area top |
-| `WEAR_OAL_ABOVE_SHAFT_PT` | 90 | Gap from shaft top edge to OAL dimension line (parity with `RunoutPdfComposer.OAL_LINE_SPACE_PT`) |
+| `WEAR_OAL_ABOVE_SHAFT_PT` | 44 | Gap from shaft top edge to OAL dimension line. Reduced from 90 on 2026-07-28 (device feedback): 90 was inherited for parity with `RunoutPdfComposer.OAL_LINE_SPACE_PT`, from when the profile filled the page; on the strip-bearing wear sheet nothing occupies that band, so 44 clears the line + label and the rest of the height goes to the strips |
 | `WEAR_NOTES_BOTTOM_OFFSET_PT` | 24 | Distance of notes baseline above `contentBot` |
 | `WEAR_NOTES_GAP_PT` | 28 | Gap from drawing area bottom to notes baseline |
 
@@ -422,8 +422,8 @@ detail strips below pick their layout from `determineWearPdfMode(collectWearLine
 docSpec.liners, wearRecord).size)` — since 2026-07-27 that is a pure function of the shaft's
 **drawable liner count**: every liner with positive length and OD gets a strip, whether or
 not it has recorded wear (the shop's normal operating procedure — the sheet always shows all
-liners; a spotless liner's strip simply has no bands/min-Ø and a single full-length rail
-span). Orphan spots on a since-deleted liner are dropped by `collectWearLinerGroups`; pits
+liners; a spotless liner's strip simply has no bands/min-Ø and its rail shows edge witness bars
+only — a band-less rail draws no spanning length). Orphan spots on a since-deleted liner are dropped by `collectWearLinerGroups`; pits
 don't affect the mode:
 
 | Liners | Mode | Page shows |
@@ -435,11 +435,16 @@ don't affect the mode:
 **Blank draft (write-in) mode** (`blankValues = true`, 2026-07-27): the same page — profile
 AND every liner's zoomed strip — renders as a hand-fill template, mirroring the blank
 schematic's lines-in/values-out posture. Header job info and the OAL value become writing
-rules; recorded wear (bands, pits, min-Ø) is omitted; each strip's dimension rail draws its
-witness lines/spans/arrows but **no value labels**; the strip title's anchor value becomes a
+rules; recorded wear (bands, pits, min-Ø) is omitted; each strip's dimension rail shows **only the
+two liner-edge witness bars** — no spanning line, arrowheads, or labels, since a band-less rail's
+one span would merely re-state the liner's own length and the rail's job is dimensioning distances
+to wear areas (2026-07-28 device feedback); the strip title's anchor value becomes a
 writing rule followed by `WEAR_BLANK_ANCHOR_SUFFIX` ("FROM  AFT / FWD  S.E.T." — both directions
 print, the machinist circles one), always left-aligned since the write-in sheet doesn't presume a
-measurement direction.
+measurement direction. The blank header is taller (`WEAR_HEADER_HEIGHT_BLANK_PT` = 56 pt vs 36,
+rule lines `WEAR_HEADER_BLANK_LINE_GAP_PT` = 24 pt apart) for handwriting room; the space comes out
+of the profile→strips gap (`WEAR_STRIP_TOP_GAP_BLANK_PT` = 8 pt vs 18) per 2026-07-28 device
+feedback.
 
 This replaced the old strips-only mode (which dropped the profile at 3+ wear liners). Now that
 bodies/tapers can carry pits, keeping the shaft always visible matters more than giving the strips
@@ -500,8 +505,12 @@ never shrinks below `max(WEAR_MIN_PROFILE_HEIGHT_PT, 2×drawn-shaft-radius + mar
 folding in the actual radius matters because `ptPerMm` here is a purely horizontal
 (SET-to-SET) scale, so a short/wide shaft's true diameter isn't otherwise height-aware.
 When the preferred strip height doesn't fit, every strip shrinks together (never
-independently, never past the main profile). By construction the last strip's bottom
-always lands exactly on the reserved area's bottom edge.
+independently, never past the main profile). The profile band also no longer absorbs all
+leftover height — it shrinks toward a content-derived preferred height (OAL region + shaft
+diameter + names row, `preferredProfileHeightPt`) and the strips absorb the surplus, capped at
+`WEAR_STRIP_HEIGHT_MAX_PT` = 170 pt per strip with any remainder returning to the profile band,
+whose shaft is slack-centered (2026-07-28 device feedback: dead white between shaft and strips).
+By construction the last strip's bottom always lands exactly on the reserved area's bottom edge.
 
 **Per-strip layout** — `computeWearStripHorizontalLayout` centers a break-out liner
 (scaled `ptPerMm` local to the strip, capped/floored so very short/long liners don't

@@ -3,8 +3,8 @@ package com.android.shaftschematic.ui.screen
 /**
  * ShaftScreenController — add-defaults helpers backing ShaftScreen.
  *
- * Extracted from ShaftScreen.kt 2026-07-24. The applySnapped{Body,Taper,Thread,Liner}Update
- * wrappers that lived here were removed 2026-07-26: they snapped typed field commits to
+ * Extracted from ShaftScreen.kt. The applySnapped{Body,Taper,Thread,Liner}Update
+ * wrappers that lived here were removed: they snapped typed field commits to
  * component-edge anchors (±1 mm), silently rewriting values the user just entered (a
  * sub-tolerance taper-length edit was undone entirely). Typed values are exact; snapping
  * is reserved for coarse gestures (tap-to-add, `ui/viewmodel/SnapUtils.kt`).

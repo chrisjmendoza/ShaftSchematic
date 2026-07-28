@@ -4,7 +4,7 @@ package com.android.shaftschematic.ui.screen
  * ShaftPreviewPanel — preview drawing card + overlay badges.
  *
  * Houses the preview `Card`, the OAL badge, and the Free-to-End badge overlays.
- * Extracted verbatim from ShaftScreen.kt 2026-07-24 — pure code move, no behavior change.
+ * Extracted verbatim from ShaftScreen.kt — pure code move, no behavior change.
  */
 
 import androidx.compose.foundation.background

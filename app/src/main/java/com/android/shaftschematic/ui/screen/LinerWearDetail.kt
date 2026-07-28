@@ -92,9 +92,9 @@ import com.android.shaftschematic.util.UnitSystem
  * on short neighbor stubs, shop-sketch convention — see `pdf/BreakSymbol.kt` for the PDF-layer
  * original; this file replicates the visual in Compose without importing pdf code). Exception:
  * a neighbor thread that ends the shaft is drawn as a flat-ended, thread-hatched stub — the
- * shaft physically stops there, so a break edge would misread as "continues" (2026-07-26).
+ * shaft physically stops there, so a break edge would misread as "continues".
  *
- * Originally liner-only (`docs/LinerWearAreas_Proposal.md` Phase 3); generalized 2026-07-21 so a
+ * Originally liner-only (`docs/LinerWearAreas_Proposal.md` Phase 3); generalized so a
  * **body** or **taper** can be opened the same way (the proposal's §10.5 "wear on bodies/tapers"
  * open question). What the overlay offers depends on the component:
  * - **Liners** get the full liner-wear-band editor (hatched bands + per-spot dimension rail +
@@ -635,7 +635,7 @@ private fun WearSpotCard(
 ) {
     val reference = spot.authoredReference
 
-    // Stale-overrun classifier (Change 2, 2026-07-18 post-review spec): a spot recorded when
+    // Stale-overrun classifier (Change 2, post-review spec): a spot recorded when
     // the liner was longer can become out-of-span after the liner is shortened. This never
     // blocks — the canvas above already renders the safety-net clamp (`clampWearBandToLiner`)
     // — it only surfaces a warning so the machinist knows to re-measure.
@@ -670,7 +670,7 @@ private fun WearSpotCard(
                 }
             }
 
-            // "Measure from" — Start's authoring reference (Change 1, 2026-07-18 post-review
+            // "Measure from" — Start's authoring reference (Change 1, post-review
             // spec): AFT SET / FWD SET / Liner AFT / Liner FWD. Tapping a chip persists the
             // reference immediately (`onUpdateReference`) and re-projects the DISPLAYED Start
             // value only — canonical `spot.startMm` is untouched.
@@ -887,7 +887,7 @@ private fun DrawScope.drawThreadStubHatch(x0: Float, top: Float, x1: Float, bot:
  * Compose port of the pdf-layer `drawBreakEdge` S-curve convention (`pdf/BreakSymbol.kt`) — same
  * math, redrawn with Compose [Path]/[DrawScope]. [eyeAtTop] must be chosen so the eye's larger
  * "sweep" curve bulges into the **void** side of the break: left (AFT) stub = `true`, right (FWD)
- * stub = `false` (see the original derivation in the 2026-07-18 KDoc history).
+ * stub = `false` (see the original derivation in the KDoc history).
  */
 private fun DrawScope.drawBreakEdgeCompose(
     x: Float,

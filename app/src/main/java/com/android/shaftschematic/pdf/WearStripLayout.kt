@@ -29,13 +29,13 @@ import kotlin.math.abs
 // ──────────────────────────────────────────────────────────────────────────────
 
 /** One liner and the wear spots recorded against it (possibly empty — every liner
- *  gets a detail strip whether or not wear was recorded, 2026-07-27 shop procedure). */
+ *  gets a detail strip whether or not wear was recorded, per shop procedure). */
 data class WearLinerGroup(val liner: Liner, val spots: List<WearSpot>)
 
 /**
  * Builds one group per drawable liner (positive length AND OD — a degenerate liner
  * would only leave a blank grid cell), attaching whatever wear spots [wearRecord]
- * holds against it — **including liners with zero spots** (2026-07-27: every liner
+ * holds against it — **including liners with zero spots** (every liner
  * appears on the wear sheet regardless of recorded wear; that's the shop's normal
  * operating procedure, and the blank write-in template needs the strips too).
  * Sorted aft → fwd by the liner's physical start position, matching the proposal's
@@ -63,9 +63,9 @@ data class WearStripSelection(val onPage: List<WearLinerGroup>, val overflow: Li
 const val WEAR_STRIP_MAX_PER_PAGE = 3
 
 /**
- * Minimum number of liners (i.e. `collectWearLinerGroups(...).size` — every drawable liner since
- * 2026-07-27, with or without recorded wear) that switches the wear PDF from single-column stacked
- * strips to the **2-column grid** (2026-07-21, by design): with two or more strips the shaft
+ * Minimum number of liners (i.e. `collectWearLinerGroups(...).size` — every drawable liner,
+ * with or without recorded wear) that switches the wear PDF from single-column stacked
+ * strips to the **2-column grid** (by design): with two or more strips the shaft
  * profile must stay on top, and stacking them full-width would push it out — so from two strips up
  * they lay out side by side (two per row), keeping the profile above and its body/taper pit "X"s
  * visible. Below this (one liner) the single full-width strip below the profile is unchanged; see
@@ -83,14 +83,14 @@ enum class WearPdfMode {
      * 2+ liners: shaft profile on top (with body/taper/liner pits + liner bands) and the
      * detail strips laid out in a **2-column grid** below — two side by side, the third on the
      * next row, so the strips occupy only ~2 rows and the profile is always kept. Replaced the
-     * old strips-only mode (2026-07-21).
+     * old strips-only mode.
      */
     GRID,
 }
 
 /**
  * Resolves the wear PDF's rendering mode from how many liners get a detail strip
- * ([collectWearLinerGroups]'s result size — since 2026-07-27 that is EVERY drawable liner,
+ * ([collectWearLinerGroups]'s result size — that is EVERY drawable liner,
  * with or without recorded wear, so the mode is effectively a function of the shaft's liner
  * count). Pure rule so `WearPdfComposer` never has to re-derive the threshold inline:
  * `0` → [WearPdfMode.PROFILE_FORM], `1` → [WearPdfMode.COMBINED],
@@ -151,6 +151,16 @@ fun clampWearBandToLiner(spotStartMm: Float, spotLengthMm: Float, linerLengthMm:
 const val WEAR_STRIP_HEIGHT_PT = 108f
 const val WEAR_STRIP_GAP_PT = 14f
 const val WEAR_STRIP_TOP_GAP_PT = 18f
+
+/**
+ * Profile→strips gap on the BLANK write-in template (device feedback): the blank
+ * header grows to [WEAR_HEADER_HEIGHT_BLANK_PT in WearPdfComposer] for handwriting room, and
+ * most of that space is reclaimed here, between the shaft profile and the liner detail
+ * strips, rather than from the strips themselves. Normal (printed) sheets keep
+ * [WEAR_STRIP_TOP_GAP_PT].
+ */
+const val WEAR_STRIP_TOP_GAP_BLANK_PT = 8f
+
 const val WEAR_MIN_PROFILE_HEIGHT_PT = 70f
 
 data class WearVerticalLayout(
@@ -172,6 +182,15 @@ data class WearVerticalLayout(
  * By construction the last strip's bottom always equals `areaBottom -
  * reservedBottomPt` exactly, so nothing downstream needs its own bounds check to
  * stay inside `[areaTop, areaBottom]`.
+ *
+ * [preferredProfileHeightPt] is the caller's content-derived target for the profile band (OAL
+ * region + shaft diameter + names row, in `WearPdfComposer`): the band shrinks TOWARD it — never
+ * below [minProfileHeightPt] — and the strips absorb whatever height that frees, so the drawn
+ * liners get bigger instead of the band hoarding dead white (device feedback).
+ * [maxStripHeightPt] caps how far one strip may grow on that surplus; any height past the cap
+ * flows back to the profile band (whose shaft the composer slack-centers, so it degrades
+ * gracefully). Both default to [Float.MAX_VALUE], which reproduces the original
+ * profile-absorbs-all-slack behaviour exactly.
  */
 fun computeWearVerticalLayout(
     areaTop: Float,
@@ -182,6 +201,8 @@ fun computeWearVerticalLayout(
     preferredStripHeightPt: Float = WEAR_STRIP_HEIGHT_PT,
     stripGapPt: Float = WEAR_STRIP_GAP_PT,
     profileToStripsGapPt: Float = WEAR_STRIP_TOP_GAP_PT,
+    preferredProfileHeightPt: Float = Float.MAX_VALUE,
+    maxStripHeightPt: Float = Float.MAX_VALUE,
 ): WearVerticalLayout {
     if (stripCount <= 0) return WearVerticalLayout(areaTop, areaBottom, emptyList(), emptyList())
 
@@ -190,8 +211,22 @@ fun computeWearVerticalLayout(
     val gapsTotal = profileToStripsGapPt + (stripCount - 1).coerceAtLeast(0) * stripGapPt
     val desiredStripsH = stripCount * preferredStripHeightPt + gapsTotal
     val maxStripsH = (totalH - minProfileHeightPt).coerceAtLeast(0f)
-    val stripsH = desiredStripsH.coerceAtMost(maxStripsH)
-    val perStripH = ((stripsH - gapsTotal) / stripCount).coerceAtLeast(0f)
+    val stripsHPreferred = desiredStripsH.coerceAtMost(maxStripsH)
+    // Profile-height preference (device feedback): the profile band used to absorb ALL
+    // leftover height (shaft centered in it), stranding dead white between the shaft and the
+    // strips; now it shrinks toward preferredProfileHeightPt (never below minProfileHeightPt) and
+    // the strips absorb the surplus — bigger liner drawings instead of empty band.
+    val profileH = (totalH - stripsHPreferred)
+        .coerceAtMost(preferredProfileHeightPt)
+        .coerceAtLeast(minProfileHeightPt)
+    // Per-strip cap: a lone COMBINED strip must not balloon; anything past the cap flows back
+    // to the profile (whose shaft is slack-centered by the composer, so it degrades gracefully).
+    val stripsHUncapped = (totalH - profileH).coerceAtLeast(0f)
+    val perStripH = ((stripsHUncapped - gapsTotal) / stripCount)
+        .coerceAtLeast(0f)
+        .coerceAtMost(maxStripHeightPt)
+    // Tiny-page guard: gaps alone must never exceed the band (keeps profileBottom >= areaTop).
+    val stripsH = (perStripH * stripCount + gapsTotal).coerceAtMost(totalH)
 
     val profileBottom = usableBottom - stripsH
     val stripsTop = profileBottom + profileToStripsGapPt
@@ -231,10 +266,14 @@ data class WearStripGridLayout(
 /**
  * Lays [stripCount] detail strips into a [columns]-wide grid below a (shrunk) shaft-profile band,
  * so the profile is always kept on top and the strips occupy only `ceil(stripCount / columns)`
- * rows (2026-07-21, by design — see [WearPdfMode.GRID]). The vertical banding reuses
+ * rows (by design — see [WearPdfMode.GRID]). The vertical banding reuses
  * [computeWearVerticalLayout] with the ROW count (not the strip count), so the profile still never
  * shrinks below [minProfileHeightPt] and the "nothing wasted / nothing overflows" guarantee
  * carries over unchanged; each strip then takes its row's band and one column slot.
+ * [preferredProfileHeightPt] and [maxStripHeightPt] are forwarded straight through (per ROW, like
+ * the row height), so the grid shrinks its profile band toward the caller's content-derived target
+ * and lets the rows absorb the surplus exactly as the single-column path does — see
+ * [computeWearVerticalLayout]'s KDoc; the defaults preserve the old absorb-all-slack behaviour.
  *
  * Columns are equal-width across `[contentLeft, contentRight]` with a [colGapPt] gutter. A row
  * that isn't full (e.g. the lone third strip of three) is **centered**: its strips keep the same
@@ -254,6 +293,8 @@ fun computeWearStripGridLayout(
     rowGapPt: Float = WEAR_STRIP_GAP_PT,
     colGapPt: Float = WEAR_STRIP_COL_GAP_PT,
     profileToStripsGapPt: Float = WEAR_STRIP_TOP_GAP_PT,
+    preferredProfileHeightPt: Float = Float.MAX_VALUE,
+    maxStripHeightPt: Float = Float.MAX_VALUE,
 ): WearStripGridLayout {
     if (stripCount <= 0) return WearStripGridLayout(areaTop, areaBottom, emptyList())
     val cols = columns.coerceAtLeast(1)
@@ -266,6 +307,8 @@ fun computeWearStripGridLayout(
         preferredStripHeightPt = preferredRowHeightPt,
         stripGapPt = rowGapPt,
         profileToStripsGapPt = profileToStripsGapPt,
+        preferredProfileHeightPt = preferredProfileHeightPt,
+        maxStripHeightPt = maxStripHeightPt,
     )
 
     val contentW = (contentRight - contentLeft).coerceAtLeast(1f)
@@ -332,7 +375,7 @@ const val WEAR_STRIP_ROW_HEIGHT_PT = 13f
 
 /**
  * Extra vertical gap reserved between the title's own text line and the top of the
- * liner cylinder (2026-07-18 SVG review, defect 2). Before this existed, the
+ * liner cylinder (SVG review, defect 2). Before this existed, the
  * cylinder consumed the strip's whole remaining band right up against the title
  * with no headroom at all — a label pinned to the cylinder's top edge (the min-Ø
  * reading, see `WearPdfComposer.drawWearDetailStrip`) then landed only a few
@@ -342,7 +385,7 @@ const val WEAR_STRIP_LABEL_HEADROOM_PT = 11f
 
 /**
  * Stacked label positions reserved above a strip's chained dimension rail
- * (2026-07-18 dimension-rail rework — see "Wear Detail Strips" in
+ * (dimension-rail rework — see "Wear Detail Strips" in
  * `docs/RunoutSheet.md`) for the crowding fallback in [layoutWearStripRail]: row 0
  * is the base label position directly above the rail line, and this many rows
  * total are budgeted regardless of how many wear spots the liner has — unlike the
@@ -368,7 +411,7 @@ data class WearStripInnerLayout(
  * Splits one strip's vertical band `[stripTop, stripBottom]` into the single chained
  * dimension rail (at the TOP), the liner-cylinder region (middle), and the title
  * (at the BOTTOM) — the strip-local analogue of [computeWearVerticalLayout].
- * (The rail and title were swapped 2026-07-22 to match how the shop marks the sheet
+ * (The rail and title were swapped to match how the shop marks the sheet
  * by hand: dimensions above the shaft, the liner title/anchor below it.)
  *
  * [titleHeightPt] is the space the title text line itself consumes (its own line
@@ -378,8 +421,8 @@ data class WearStripInnerLayout(
  *
  * The rail's own vertical budget is now a FIXED [maxLabelRows] × [rowHeightPt] —
  * not proportional to how many wear spots the liner has, since the rail is always
- * one chained line no matter how many spans it's divided into (2026-07-18
- * dimension-rail rework; the old contract multiplied the row budget by spot
+ * one chained line no matter how many spans it's divided into (dimension-rail
+ * rework; the old contract multiplied the row budget by spot
  * count). Guarantees `stripTop <= railY <= cylTop <= cylBottom <= stripBottom` for ANY
  * input, including pathological ones (e.g. a very large-diameter liner on a very short
  * strip, where the preferred cylinder + rail sizes don't fit together): the
@@ -411,7 +454,7 @@ fun computeWearStripInnerLayout(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Dimension rail — chained spans below the liner cylinder (2026-07-18 rework)
+// Dimension rail — chained spans below the liner cylinder (rework)
 // ──────────────────────────────────────────────────────────────────────────────
 //
 // Replaces the old per-spot "AFT edge → band start" / "band start → band end" text rows
@@ -573,7 +616,7 @@ data class WearStripRadii(val linerRPt: Float, val aftRPt: Float, val fwdRPt: Fl
  * [maxRadiusPt] (the strip's vertical budget, typically half of
  * [computeWearStripInnerLayout]'s `cylBottom - cylTop`) — scales ALL THREE by the
  * SAME factor (`maxRadiusPt / largestRawRadius`) rather than capping each
- * independently (2026-07-18 SVG review, defect 1).
+ * independently (SVG review, defect 1).
  *
  * Independent capping (`min(raw, maxRadiusPt)` applied to each diameter on its
  * own) is wrong here: whenever the liner AND a neighbor both exceed the budget —

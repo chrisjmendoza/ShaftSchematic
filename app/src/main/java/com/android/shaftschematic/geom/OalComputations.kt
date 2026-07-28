@@ -42,7 +42,7 @@ private fun findFwdEndThread(spec: ShaftSpec, overallLengthMm: Double): com.andr
         .firstOrNull()
 }
 
-// NOTE: computeExcludedThreadLengths was removed 2026-07-11 (audit dead-code sweep) — it was
+// NOTE: computeExcludedThreadLengths was removed (audit dead-code sweep) — it was
 // production-dead since the immutable-OAL fix (docs/OAL_THREAD_BUG_ANALYSIS.md §6) and, after
 // syncExcludedThreadPositions() moved excluded threads outside 0..OAL, it could no longer
 // find them anyway (it matched threads at x≈0 / x≈OAL).

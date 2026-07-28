@@ -17,7 +17,7 @@ import org.junit.Test
  * `ShaftViewModel.hasUnsavedWork()` must be the SAME source of truth as the autosave draft
  * dirty gate: it compares the full [AutosaveManager.SessionSnapshot] via [shouldWriteDraft]
  * (with the `isSessionDefault()` short-circuit), so reference-only edits — wear records and
- * runout readings — count as unsaved work. Before the 2026-07-25 fix it compared only
+ * runout readings — count as unsaved work. Before the fix it compared only
  * spec + metadata, so wear/runout edits went unguarded (the incident's root gap).
  *
  * `ShaftViewModel` is an `AndroidViewModel` and is not instantiated in this JVM suite (same

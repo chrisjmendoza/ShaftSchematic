@@ -124,7 +124,7 @@ class BodyKeywayTest {
     // ── carry across splitBodiesAround ───────────────────────────────────────
 
     @Test fun `a keyed body is never split - it stays one whole card`() {
-        // Light protection (2026-07-21): a body with a keyway is not fragmented when a
+        // Light protection: a body with a keyway is not fragmented when a
         // component is inserted over it. It stays whole (keyway intact); the resolve layer
         // still trims it around the component for drawing.
         val body = keyedBody(kwLength = 100f)

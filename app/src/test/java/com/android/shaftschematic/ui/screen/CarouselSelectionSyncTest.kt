@@ -104,7 +104,7 @@ class CarouselSelectionSyncTest {
     @Test
     fun `nothing selected with rows present seeds the first card`() {
         // Document open/new: highlight must appear immediately, not only after a swipe.
-        // First card = AFT-most component in physical order (product decision 2026-07-26).
+        // First card = AFT-most component in physical order (product decision).
         assertEquals(SeedAction.SEED_FIRST, seedSelectionAction(rowCount = 3, selectedId = null, selectedIndex = NO_CAROUSEL_TARGET))
     }
 

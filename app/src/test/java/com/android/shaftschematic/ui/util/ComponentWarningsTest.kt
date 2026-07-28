@@ -86,7 +86,7 @@ class ComponentWarningsTest {
         assertTrue(taperWarningMessages(spec, taper).contains(SHORT))
     }
 
-    // Pins the 2026-07-26 removal of the taper-vs-body Ø mismatch advisory: a large
+    // Pins the removal of the taper-vs-body Ø mismatch advisory: a large
     // face-vs-body Ø difference is visible in the drawing and must NOT produce a warning.
     @Test
     fun `taper adjacent body dia mismatch produces no warning`() {

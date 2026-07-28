@@ -20,7 +20,7 @@ private val Context.dataStore by preferencesDataStore(name = "autosave_datastore
 /**
  * AutosaveManager — draft history (v2).
  *
- * The single-slot autosave (`autosave_last_session`) was replaced 2026-07-25 by a ring of up
+ * The single-slot autosave (`autosave_last_session`) was replaced by a ring of up
  * to [DEFAULT_DRAFT_RING_MAX] [DraftEntry] records under [DRAFTS_KEY]. Each editing session
  * owns a stable `draftId`, so opening/creating a document upserts only *its* entry and can
  * never clobber another document's draft. Legacy single-slot drafts migrate into the ring on
@@ -53,10 +53,10 @@ object AutosaveManager {
         val runoutConfig: RunoutConfig = RunoutConfig(),
         val unitLocked: Boolean = false,
         val overallIsManual: Boolean = false,
-        // Added 2026-07-18 (liner wear areas Phase 1): absent in older drafts; default
+        // Added (liner wear areas Phase 1): absent in older drafts; default
         // empty record keeps them decodable.
         val wearRecord: WearRecord = WearRecord(),
-        // Added 2026-07-21 (runout bubble editor): per-station TIR value + high-spot marker.
+        // Added (runout bubble editor): per-station TIR value + high-spot marker.
         // Absent in older drafts; default empty set keeps them decodable.
         val runoutReadings: RunoutReadings = RunoutReadings(),
     )
