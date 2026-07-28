@@ -136,9 +136,8 @@ Waves 1–2 shipped (Wave 1 fixes 2026-07-11; Wave 2 deletion pass 2026-07-26, `
 
 - [ ] Keep Gradle wrapper, AGP, and `libs.versions.toml` in sync
 - [ ] Isolate tooling updates into `chore(build)` commits
-- [ ] Bump `actions/checkout@v4` and `actions/setup-java@v4` to v5 in the Firebase
-  workflow — GitHub deprecation warning (Node 20 forced to Node 24) on every run since
-  2026-07-28
+- [x] Bump `actions/checkout` and `actions/setup-java` to v5 in the Firebase workflow —
+  done 2026-07-28, deprecation warning cleared
 
 ### 4.3 Post-Tiering Cleanup (LOW, deferred to v0.5.x)
 
