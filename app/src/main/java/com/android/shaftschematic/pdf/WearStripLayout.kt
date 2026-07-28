@@ -602,53 +602,37 @@ fun layoutWearStripRail(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Strip radii — one common scale factor for the liner + both neighbor stubs
+// Strip radii — liner fills the strip's vertical budget; stubs scale to it
 // ──────────────────────────────────────────────────────────────────────────────
 
 /** Scaled on-page radii (points) for one strip's liner cylinder and its two neighbor stubs. */
 data class WearStripRadii(val linerRPt: Float, val aftRPt: Float, val fwdRPt: Float)
 
 /**
- * Converts the liner's OD and its two neighbor diameters (mm) to strip-local radii
- * (points, at [ptPerMm]), then — if the LARGEST of the three would exceed
- * [maxRadiusPt] (the strip's vertical budget, typically half of
- * [computeWearStripInnerLayout]'s `cylBottom - cylTop`) — scales ALL THREE by the
- * SAME factor (`maxRadiusPt / largestRawRadius`) rather than capping each
- * independently.
+ * Strip-local radii (points): the liner cylinder always fills the strip's vertical budget
+ * ([maxRadiusPt]), so every strip on the page draws its liner at the SAME height — the
+ * strip's horizontal scale must never leak into cylinder height (on-device report: liners
+ * of different lengths rendered at visibly different heights). Length differences stay
+ * horizontal-only; liner OD differences are deliberately not height-encoded either (product
+ * decision — a shaft's liners don't differ enough in OD to warrant it).
  *
- * Independent capping (`min(raw, maxRadiusPt)` applied to each diameter on its
- * own) is wrong here: whenever the liner AND a neighbor both exceed the budget —
- * the common case for a large-bore liner fitted over a much smaller shaft body —
- * both get flattened to the identical capped radius, erasing the visible diameter
- * step between them (e.g. an 8.00in liner OD over a 7.00in shaft would render
- * with the SAME radius as the shaft it sits on, looking like a constant-diameter
- * cylinder). Scaling every radius in the strip by one common factor instead keeps
- * their ratios intact — the whole strip "zooms out" together, so the step stays
- * proportionally visible even though every radius shrank to fit.
+ * Neighbor stubs scale by their true diameter ratio to the liner, clamped to the liner's
+ * own radius so an oversized neighbor cannot overflow the cylinder band (liners are sleeves
+ * over the shaft, so neighbors are effectively always smaller in practice).
  *
- * When the largest raw radius already fits within [maxRadiusPt], the factor is 1
- * (a no-op) — strips that never needed capping render exactly as they did before
- * this function existed. Radii are floored at zero only (no separate
- * minimum-visibility floor exists elsewhere in this file to preserve); a
- * zero/negative [maxRadiusPt] collapses every radius to zero rather than
- * throwing, matching [computeWearStripInnerLayout]'s pathological-input
- * guarantees.
+ * Zero/negative [maxRadiusPt] or [linerOdMm] collapses every radius to zero rather than
+ * throwing, matching [computeWearStripInnerLayout]'s pathological-input guarantees.
  */
 fun computeWearStripRadii(
     linerOdMm: Float,
     aftDiaMm: Float,
     fwdDiaMm: Float,
-    ptPerMm: Float,
     maxRadiusPt: Float,
 ): WearStripRadii {
     val cap = maxRadiusPt.coerceAtLeast(0f)
-    val rawLiner = (linerOdMm * 0.5f) * ptPerMm
-    val rawAft = (aftDiaMm * 0.5f) * ptPerMm
-    val rawFwd = (fwdDiaMm * 0.5f) * ptPerMm
-    val maxRaw = maxOf(rawLiner, rawAft, rawFwd, 0f)
-    val scale = if (maxRaw > cap && maxRaw > 0f) cap / maxRaw else 1f
-    fun scaled(rawR: Float) = (rawR * scale).coerceAtLeast(0f)
-    return WearStripRadii(scaled(rawLiner), scaled(rawAft), scaled(rawFwd))
+    if (linerOdMm <= 0f || cap <= 0f) return WearStripRadii(0f, 0f, 0f)
+    fun stub(diaMm: Float) = (cap * (diaMm / linerOdMm)).coerceIn(0f, cap)
+    return WearStripRadii(cap, stub(aftDiaMm), stub(fwdDiaMm))
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

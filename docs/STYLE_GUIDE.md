@@ -18,6 +18,21 @@ This document defines the conventions for Kotlin, Compose, architectural boundar
 - Constants: `ALL_CAPS`
 - Files: One top-level class per file
 
+### Comment Conventions (2026-07-28)
+
+- **No date stamps in code comments.** The *when* belongs to git history and
+  `CHANGELOG.md`; comments carry the timeless *why*. ("(2026-07-21, by design)" → "(by
+  design)".)
+- **No prior-code narratives.** Comments describe current functionality and constraints
+  only — never what removed/replaced code did or which bug it caused. A new contributor
+  must never read about code that no longer exists. Load-bearing warnings keep the
+  constraint and its consequence in present/conditional tense: "doing X would cause Y",
+  not "the old X did Y and was removed".
+- Dates and history ARE welcome in `docs/*.md`, `CHANGELOG.md`, and commit messages —
+  that is the changelog layer. Citing a doc by filename (e.g.
+  `docs/Autosave_Incident_2026-07-25.md`) from a comment is fine.
+- Attribute user-driven changes neutrally ("on-device report"), never by name.
+
 ---
 
 # 2. Compose UI Style

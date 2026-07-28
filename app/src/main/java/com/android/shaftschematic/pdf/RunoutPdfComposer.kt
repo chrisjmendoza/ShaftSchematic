@@ -238,10 +238,11 @@ fun composeRunoutPdf(
         headerTop, headerHeight, project, blankValues)
 
     // ── Draw OAL span line — raised well above the shaft, with witness lines ──
-    // The arrows bracket the drawn SET-to-SET span, but the LABEL is always the typed
-    // OAL — same rule as the main schematic (the OAL number is sacred and never changes;
-    // see docs/OverallLength.md). Witness (extension) lines drop to the shaft's actual
-    // top edge at each SET face, matching the schematic/wear-document convention.
+    // The arrows bracket the drawn SET-to-SET span, and the printed label (bare value, no
+    // "OAL" prefix — position implies it) is always the typed OAL — same rule as the main
+    // schematic (the OAL number is sacred and never changes; see docs/OverallLength.md).
+    // Witness (extension) lines drop to the shaft's actual top edge at each SET face,
+    // matching the schematic/wear-document convention.
     val oalLineY = shaftCy - shaftHalfPt - OAL_LINE_SPACE_PT
     drawOalSpanLine(
         c, dim, text, contentLeft, contentRight, oalLineY,
@@ -351,8 +352,18 @@ private fun drawOalSpanLine(
     c.drawLine(x0, aftShaftTopY - witnessGap, x0, y - witnessExt, dim)
     c.drawLine(x1, fwdShaftTopY - witnessGap, x1, y - witnessExt, dim)
 
-    // Horizontal line
-    c.drawLine(x0, y, x1, y, dim)
+    if (blankValues) {
+        // Blank draft: no "OAL" label of any kind — the value is written by hand in a break cut
+        // mid-span, the same convention PdfDimensionRenderer uses for blank schematic dimension
+        // breaks (empty gap, no underline, no text). An end-to-end span already implies "OAL".
+        val mid = (x0 + x1) * 0.5f
+        val gapHalf = BLANK_DIM_GAP_PT * 0.5f
+        c.drawLine(x0, y, mid - gapHalf, y, dim)
+        c.drawLine(mid + gapHalf, y, x1, y, dim)
+    } else {
+        // Horizontal line
+        c.drawLine(x0, y, x1, y, dim)
+    }
     // Left arrowhead
     c.drawLine(x0, y, x0 + arrowLen, y - arrowLen * 0.5f, dim)
     c.drawLine(x0, y, x0 + arrowLen, y + arrowLen * 0.5f, dim)
@@ -360,12 +371,9 @@ private fun drawOalSpanLine(
     c.drawLine(x1, y, x1 - arrowLen, y - arrowLen * 0.5f, dim)
     c.drawLine(x1, y, x1 - arrowLen, y + arrowLen * 0.5f, dim)
 
-    // OAL label centred above the line (blank draft: "OAL:" + writing rule)
-    if (blankValues) {
-        val label = "OAL:"
-        val totalW = text.measureText(label) + 4f + BLANK_RULE_PT
-        drawLabelWithRule(c, label, (x0 + x1) * 0.5f - totalW * 0.5f, y - 4f, text)
-    } else {
+    // Printed: "OAL: value" centred above the line — the small printed prefix is a deliberate
+    // visual identifier (product decision); only handwriting surfaces omit it.
+    if (!blankValues) {
         val label = if (unit == UnitSystem.INCHES) {
             "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
         } else {

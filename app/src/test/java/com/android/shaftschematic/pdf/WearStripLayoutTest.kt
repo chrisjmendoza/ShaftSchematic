@@ -604,57 +604,54 @@ class WearStripLayoutTest {
         }
     }
 
-    // ── computeWearStripRadii — common-factor scaling ──
+    // ── computeWearStripRadii — uniform strip height ──
 
     @Test
-    fun `radii within budget are left unscaled`() {
-        val radii = computeWearStripRadii(
-            linerOdMm = 40f, aftDiaMm = 30f, fwdDiaMm = 35f, ptPerMm = 1f, maxRadiusPt = 100f,
+    fun `liner cylinder always fills the vertical budget regardless of scale or od`() {
+        // Strips of different liner lengths/ODs must render the liner at one common height.
+        val a = computeWearStripRadii(
+            linerOdMm = 140f, aftDiaMm = 120f, fwdDiaMm = 120f, maxRadiusPt = 31f,
         )
-        assertEquals(20f, radii.linerRPt, 1e-3f)
-        assertEquals(15f, radii.aftRPt, 1e-3f)
-        assertEquals(17.5f, radii.fwdRPt, 1e-3f)
+        val b = computeWearStripRadii(
+            linerOdMm = 80f, aftDiaMm = 60f, fwdDiaMm = 60f, maxRadiusPt = 31f,
+        )
+        assertEquals(31f, a.linerRPt, 1e-3f)
+        assertEquals(31f, b.linerRPt, 1e-3f)
     }
 
     @Test
-    fun `common-factor scaling preserves the liner-vs-neighbor radius ratio when over budget`() {
-        // Liner OD 200mm over a 175mm neighbor — same 8-over-7 ratio as the reviewed
-        // liner-OD-over-shaft-OD case that exposed the bug: independent capping
-        // (min(raw, budget) applied to each) would clamp BOTH to the same 18pt cap,
-        // rendering the liner and its neighbor at an identical radius and erasing
-        // the visible diameter step entirely.
+    fun `neighbor stubs keep their true diameter ratio to the liner`() {
         val radii = computeWearStripRadii(
-            linerOdMm = 200f, aftDiaMm = 175f, fwdDiaMm = 175f, ptPerMm = 1.66f, maxRadiusPt = 18f,
+            linerOdMm = 200f, aftDiaMm = 175f, fwdDiaMm = 10f, maxRadiusPt = 18f,
         )
-        assertEquals("liner (the largest raw radius) hits the budget exactly",
-            18f, radii.linerRPt, 1e-3f)
-        assertTrue("neighbor radius must stay proportionally smaller, not clamp to the same value",
-            radii.aftRPt < radii.linerRPt - 1f)
-        assertEquals(175f / 200f, radii.aftRPt / radii.linerRPt, 1e-3f)
-        assertEquals(radii.aftRPt, radii.fwdRPt, 1e-6f)
+        assertEquals(18f * (175f / 200f), radii.aftRPt, 1e-3f)
+        assertEquals(18f * (10f / 200f), radii.fwdRPt, 1e-3f)
     }
 
     @Test
-    fun `only the smaller neighbor is scaled down when just the liner is over budget`() {
-        // liner raw radius over budget, aft neighbor raw radius already under it —
-        // aft should render at its true size (scale only ever shrinks, never grows).
+    fun `a neighbor larger than the liner clamps to the liner radius`() {
         val radii = computeWearStripRadii(
-            linerOdMm = 200f, aftDiaMm = 10f, fwdDiaMm = 200f, ptPerMm = 1.66f, maxRadiusPt = 18f,
+            linerOdMm = 100f, aftDiaMm = 140f, fwdDiaMm = 100f, maxRadiusPt = 20f,
         )
-        assertEquals(18f, radii.linerRPt, 1e-3f)
-        val expectedAft = (10f * 0.5f * 1.66f) * (18f / (200f * 0.5f * 1.66f))
-        assertEquals(expectedAft, radii.aftRPt, 1e-3f)
-        assertEquals(radii.linerRPt, radii.fwdRPt, 1e-6f)
+        assertEquals(20f, radii.aftRPt, 1e-3f)
+        assertEquals(20f, radii.fwdRPt, 1e-3f)
     }
 
     @Test
-    fun `zero budget collapses all radii to zero without throwing`() {
-        val radii = computeWearStripRadii(
-            linerOdMm = 200f, aftDiaMm = 175f, fwdDiaMm = 175f, ptPerMm = 1.66f, maxRadiusPt = 0f,
+    fun `zero budget or zero od collapses all radii to zero without throwing`() {
+        val zeroBudget = computeWearStripRadii(
+            linerOdMm = 200f, aftDiaMm = 175f, fwdDiaMm = 175f, maxRadiusPt = 0f,
         )
-        assertEquals(0f, radii.linerRPt, 1e-6f)
-        assertEquals(0f, radii.aftRPt, 1e-6f)
-        assertEquals(0f, radii.fwdRPt, 1e-6f)
+        assertEquals(0f, zeroBudget.linerRPt, 1e-6f)
+        assertEquals(0f, zeroBudget.aftRPt, 1e-6f)
+        assertEquals(0f, zeroBudget.fwdRPt, 1e-6f)
+
+        val zeroOd = computeWearStripRadii(
+            linerOdMm = 0f, aftDiaMm = 175f, fwdDiaMm = 175f, maxRadiusPt = 20f,
+        )
+        assertEquals(0f, zeroOd.linerRPt, 1e-6f)
+        assertEquals(0f, zeroOd.aftRPt, 1e-6f)
+        assertEquals(0f, zeroOd.fwdRPt, 1e-6f)
     }
 
     // ── neighborDiaMmAtAft / neighborDiaMmAtFwd ───────────────────────────────

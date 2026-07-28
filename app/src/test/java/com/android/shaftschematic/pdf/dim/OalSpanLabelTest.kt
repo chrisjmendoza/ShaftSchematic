@@ -9,12 +9,14 @@ import org.junit.Test
 class OalSpanLabelTest {
 
     @Test
-    fun `OAL top dimension label is plain and unqualified`() {
+    fun `OAL top dimension label keeps the OAL prefix and no qualifiers`() {
         val span = oalSpan(x1Mm = 0.0, x2Mm = 1234.0, unit = UnitSystem.MILLIMETERS)
 
         assertEquals(0.0, span.x1Mm, 0.0)
         assertEquals(1234.0, span.x2Mm, 0.0)
 
+        // The small printed "OAL" prefix is a deliberate visual identifier (product
+        // decision); blank drafts drop label text at the renderer, not here.
         assertTrue(span.labelTop.startsWith("OAL "))
         assertFalse(span.labelTop.contains("(less", ignoreCase = true))
         assertFalse(span.labelTop.contains("SET-SET", ignoreCase = true))

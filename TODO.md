@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**  
-**Last updated: 2026-07-26**
+**Last updated: 2026-07-28**
 
 Tasks are ordered by priority. Completed series are collapsed to a single summary line to
 keep this readable — full detail lives in `CHANGELOG.md` and git history.
@@ -32,7 +32,7 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 | ShaftScreen.kt | ✅ Carousel extracted to `ComponentCarousel.kt` (2322 → 1434 lines) |
 | Sidebar nav (3 tabs) | ✅ EditorSidebar + EditorTab + ShaftEditorRoute updated |
 | Runout drawing | ✅ RunoutPdfComposer, inline shaft preview, scrollable layout, collision-free alternating bubble layout via shared `geom/RunoutBubbleLayout.kt`; resolved-component geometry (2026-07-18) |
-| Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes; resolved-component geometry (2026-07-18) |
+| Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes; resolved-component geometry (2026-07-18). Reworked 2026-07-28: every liner gets a detail strip (with or without wear), blank write-in template (circle-one AFT/FWD anchors, edge-bar rails), profile-band space reclaim, uniform strip heights, shared positional liner titles. On-device verified through the layout round |
 | Liner wear areas | ✅ Built 2026-07-18 (all 4 phases + input spec: SET/liner-edge references, blocking span validation, PDF detail strips with dimension rails) — awaiting on-device verification. Build record in git history (`docs/LinerWearAreas_BuildLog_2026-07-18.md`) |
 | Wear pits (X markers) | ✅ Built 2026-07-21 — small/large pit "X"s on bodies, tapers & liners (tap to open a segment; explicit Add X / Remove X / Clear all tools); drawn on the wear PDF profile + strips. Wear PDF now keeps the shaft profile always on top with a 2-column detail-strip grid. See CHANGELOG + "Wear Pits" in `docs/RunoutSheet.md`. Awaiting on-device verification |
 | Body keyways | ✅ Built 2026-07-20 — taper-style keyway on bodies (open + floating), 180°-apart hidden-line toggle, auto-body promotion via the "Explicit body" checkbox (checkbox-only, reworked 2026-07-25); split/merge carry keeps keyway at absolute position |
@@ -136,6 +136,9 @@ Waves 1–2 shipped (Wave 1 fixes 2026-07-11; Wave 2 deletion pass 2026-07-26, `
 
 - [ ] Keep Gradle wrapper, AGP, and `libs.versions.toml` in sync
 - [ ] Isolate tooling updates into `chore(build)` commits
+- [ ] Bump `actions/checkout@v4` and `actions/setup-java@v4` to v5 in the Firebase
+  workflow — GitHub deprecation warning (Node 20 forced to Node 24) on every run since
+  2026-07-28
 
 ### 4.3 Post-Tiering Cleanup (LOW, deferred to v0.5.x)
 

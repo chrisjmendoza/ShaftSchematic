@@ -16,6 +16,13 @@ Read the relevant doc before editing a subsystem. Key files:
 - `Model_Conventions.md` — model layer rules
 - `CouplerBoltSlot.md` — coupler bolt slot feature contract (reference-only cutouts)
 
+## Comment conventions
+No date stamps and no prior-code narratives in `.kt` comments — comments state current
+behavior and constraints only; git history, `CHANGELOG.md`, and `docs/*.md` own the
+*when* and the history. Load-bearing warnings keep constraint + consequence in
+present/conditional tense ("doing X would cause Y"). Attribute user-driven changes as
+"on-device report", never by name. See `docs/STYLE_GUIDE.md` §"Comment Conventions".
+
 ## Critical invariants — do not remove or weaken these
 
 ### Add dialogs must mirror carousel cards
