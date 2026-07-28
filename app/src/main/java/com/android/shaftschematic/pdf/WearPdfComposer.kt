@@ -837,7 +837,8 @@ private fun drawWearDetailStrip(
 
 /**
  * Draws one strip's chained dimension rail (`buildWearStripRailSpans`/`layoutWearStripRail` in
- * `WearStripLayout.kt`): witness lines from the cylinder edge down to the rail, an arrowed
+ * `WearStripLayout.kt`): witness lines from just above the cylinder edge up to the rail (a
+ * small clear gap at the liner, matching the main profile's OAL witness convention), an arrowed
  * dimension line per chained span, and each span's label — stacked onto whichever row
  * `layoutWearStripRail` assigned it, clamped to [maxLabelRows] (rows beyond the budget
  * `computeWearStripInnerLayout` actually fit for this strip are never drawn).
@@ -866,12 +867,15 @@ private fun drawWearStripRail(
     val labelGapPt = 2f
     val rowStepPt = dimText.textSize + 3f
     val witnessExt = 3f
+    val witnessGap = 3f   // gap between the liner's top edge and the witness line start — same
+                          // convention as the main profile's OAL witness lines (device feedback)
 
-    // The rail sits ABOVE the cylinder: witness lines run up from the cylinder top past the rail
-    // line, and the span labels stack downward from the rail line toward the cylinder.
+    // The rail sits ABOVE the cylinder: witness lines run up from just above the cylinder top
+    // past the rail line, and the span labels stack downward from the rail line toward the
+    // cylinder.
     layout.forEach { s ->
-        c.drawLine(s.x0Pt, cylTop, s.x0Pt, railY - witnessExt, dim)
-        c.drawLine(s.x1Pt, cylTop, s.x1Pt, railY - witnessExt, dim)
+        c.drawLine(s.x0Pt, cylTop - witnessGap, s.x0Pt, railY - witnessExt, dim)
+        c.drawLine(s.x1Pt, cylTop - witnessGap, s.x1Pt, railY - witnessExt, dim)
         // Band-less rail: witness bars only — no spanning line, arrows, or label (a label with no
         // span line under it would float, so this suppresses labels regardless of drawLabels).
         if (!drawSpanLines) return@forEach
