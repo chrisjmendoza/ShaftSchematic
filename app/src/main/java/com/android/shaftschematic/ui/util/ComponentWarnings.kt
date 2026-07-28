@@ -60,7 +60,7 @@ fun bodyWarningMessages(spec: ShaftSpec, body: Body): List<String> {
 /**
  * Advisory warnings for a stored [taper] — currently only the very-short-segment check.
  *
- * The former §3.3 taper-vs-body Ø mismatch advisory was removed (2026-07-26) by user
+ * The former §3.3 taper-vs-body Ø mismatch advisory was removed by user
  * request: the mismatch is visible in the drawing itself, and the rule kept misfiring on
  * FWD tapers because the two storage paths (Add dialog vs carousel edit) disagree on
  * SET/LET ordering. Do not reintroduce without resolving that discrepancy first

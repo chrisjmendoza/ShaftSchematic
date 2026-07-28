@@ -60,7 +60,7 @@ class WearRecordPersistenceTest {
 
     @Test
     fun `authoredReference round trips through the envelope without a version bump`() {
-        // 2026-07-18 post-review spec: WearSpot gains an additive, defaulted
+        // Post-review spec: WearSpot gains an additive, defaulted
         // `authoredReference` field — no envelope version bump, so the round trip must still
         // land on ENVELOPE_V1 and preserve the non-default reference exactly.
         val spot = WearSpot(

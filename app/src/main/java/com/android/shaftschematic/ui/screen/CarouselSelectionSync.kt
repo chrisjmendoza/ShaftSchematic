@@ -58,7 +58,7 @@ fun shouldAnimateToSelection(
  * catch-up. Without this arm, a selection whose id stopped resolving — an auto-body row
  * whose position-derived id regenerated after an edit, or a stale id carried across a
  * document open — bricked swipe adoption permanently: swiping changed cards but never
- * updated the selection, so the preview highlight never followed (fixed 2026-07-26).
+ * updated the selection, so the preview highlight never followed (fixed).
  */
 fun isUserInitiatedScroll(selectedId: String?, selectedIndex: Int, currentPage: Int): Boolean =
     selectedId == null || selectedIndex == NO_CAROUSEL_TARGET || selectedIndex == currentPage
@@ -77,7 +77,7 @@ enum class SeedAction {
     /**
      * Nothing selected: fresh document — scroll to and select the FIRST card (physical
      * order, so the AFT-most component: thread, taper, whatever leads the shaft). Product
-     * decision 2026-07-26: on open, the highlight defaults to the first item rather than
+     * decision: on open, the highlight defaults to the first item rather than
      * remembering or guessing a previous selection.
      */
     SEED_FIRST,

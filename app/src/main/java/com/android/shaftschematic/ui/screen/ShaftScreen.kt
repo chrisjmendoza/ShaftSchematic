@@ -278,13 +278,13 @@ fun ShaftScreen(
     val exportPdfEnabled = exportPdfGate.enabled
     val exportPdfDisabledMessage = exportPdfGate.disabledMessage
 
-    // NOTE (2026-07-26): typed field commits go to the update callbacks UNSNAPPED. The old
+    // NOTE: typed field commits go to the update callbacks UNSNAPPED. The old
     // applySnapped{Body,Taper,Thread,Liner}Update wrappers snapped the recomputed start/end
     // to component-edge anchors (±1 mm), which silently rewrote values the user just typed —
     // e.g. shortening a FWD-referenced taper by less than the tolerance moved its start by
     // under 1 mm, and the snap pulled it straight back to the old boundary, undoing the edit.
     // Snapping belongs to coarse gestures (tap-to-add) only; typed values are exact.
-    // Same posture as the 2026-06-19 removal of the snapForwardFrom cascade from VM updates.
+    // Same posture as the removal of the snapForwardFrom cascade from VM updates.
 
     // Auto-sync overall when not manual
     LaunchedEffect(overallIsManual, spec.bodies, spec.tapers, spec.threads, spec.liners) {

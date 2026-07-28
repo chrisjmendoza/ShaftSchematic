@@ -10,7 +10,7 @@ import org.junit.Test
 /**
  * Unit tests for the pure liner-wear math helpers in `LinerWearMath.kt`:
  * tap-x→liner selection (incl. the tie case), liner-local→px band mapping, clamping of a
- * wear spot that extends past its liner's current length, and (2026-07-18 post-review spec)
+ * wear spot that extends past its liner's current length, and (post-review spec)
  * the four "Measure from" reference conversions plus blocking in-span validation.
  *
  * See `docs/LinerWearAreas_Proposal.md` §2, §6.1, §7.

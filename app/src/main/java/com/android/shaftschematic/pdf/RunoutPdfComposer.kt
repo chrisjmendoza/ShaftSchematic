@@ -676,7 +676,7 @@ private const val TEXT_PT    = 10f
 private const val PAGE_MARGIN_PT   = 36f    // 0.5 in margins
 private const val HEADER_HEIGHT_PT = 22f    // Compact single-line header
 private const val OAL_GAP_PT       = 6f     // Gap from header rule to OAL line
-private const val OAL_LINE_SPACE_PT = 90f   // OAL line height above shaft top (≈1.25 in — raised so the dimension doesn't crowd the profile, 2026-07-18)
+private const val OAL_LINE_SPACE_PT = 90f   // OAL line height above shaft top (≈1.25 in — raised so the dimension doesn't crowd the profile)
 private const val TIR_LINE_HEIGHT_PT = 20f  // Space for TIR direction line at bottom
 
 // Bubble geometry — sized to hold hand-written decimal readings (e.g. .016)

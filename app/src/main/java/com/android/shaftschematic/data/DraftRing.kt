@@ -60,7 +60,7 @@ fun shouldWriteDraft(
  * metadata. Deliberately ignores unit, unit-lock, OAL mode, and runout config — those can
  * differ from field defaults without any user-authored content (the async settings restore
  * flips the unit preference on every launch). A default session holds nothing worth a
- * draft, so the autosave observer must never persist one: with the pre-2026-07-26 gate
+ * draft, so the autosave observer must never persist one: with the prior gate
  * (dirty comparison alone), launching with an empty draft ring on an inches-preference
  * device seeded a mm baseline, the settings restore flipped the unit, and 1.5 s later a
  * phantom blank "Untitled draft" appeared on the StartScreen.

@@ -11,7 +11,7 @@ import org.junit.Test
 /**
  * Tests for the liner wear-spot state operations (`ShaftViewModel.addWearSpot` /
  * `updateWearSpot` / `updateWearSpotReference` / `removeWearSpot`, Phase 1 of
- * docs/LinerWearAreas_Proposal.md §5, plus the 2026-07-18 post-review spec: the
+ * docs/LinerWearAreas_Proposal.md §5, plus the post-review spec: the
  * tiny-liner default-length clamp and the separate "Measure from" reference setter).
  *
  * These mirror what each function does inside `_wearRecord.update {}` — plain list
@@ -22,7 +22,7 @@ import org.junit.Test
  */
 class ShaftViewModelWearSpotTest {
 
-    // Mirrors ShaftViewModel.addWearSpot(linerId)'s defaults, incl. the 2026-07-18 clamp:
+    // Mirrors ShaftViewModel.addWearSpot(linerId)'s defaults, incl. the clamp:
     // the default 25.4mm (1in) length is clamped to the liner's own length for tiny liners.
     private fun addWearSpot(record: WearRecord, linerId: String, linerLengthMm: Float): WearRecord =
         record.copy(

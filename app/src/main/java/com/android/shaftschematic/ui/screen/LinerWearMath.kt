@@ -62,7 +62,7 @@ fun clampWearBandToLiner(spotStartMm: Float, spotLengthMm: Float, linerLengthMm:
 fun wearBandToPx(band: ClampedWearBandMm, linerOriginPx: Float, pxPerMm: Float): Pair<Float, Float> =
     (linerOriginPx + band.startMm * pxPerMm) to (linerOriginPx + band.endMm * pxPerMm)
 
-// ── Wear-spot "Measure from" reference conversion (post-review spec, 2026-07-18) ──
+// ── Wear-spot "Measure from" reference conversion (post-review spec) ──
 
 /**
  * Convert an entered "Start" value, authored against [reference], into the canonical

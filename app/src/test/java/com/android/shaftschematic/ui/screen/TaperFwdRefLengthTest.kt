@@ -8,7 +8,7 @@ import org.junit.Test
 /**
  * Tests for the taper-length update logic in ComponentCarousel's CommitNum("Length") handler.
  *
- * The fix (2026-06-22): when a taper uses FWD reference, editing the length must keep the
+ * The fix: when a taper uses FWD reference, editing the length must keep the
  * authored FWD end position fixed and slide the AFT start accordingly.  Before the fix,
  * startFromAftMm was passed through unchanged, drifting the taper toward the AFT end.
  *

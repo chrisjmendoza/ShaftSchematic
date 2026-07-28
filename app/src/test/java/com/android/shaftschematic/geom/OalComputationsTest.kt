@@ -147,7 +147,7 @@ class OalComputationsTest {
         assertEquals(0.0, win.measureStartMm, EPS_EXACT)
     }
 
-    // computeExcludedThreadLengths tests removed 2026-07-11 — the function was deleted
+    // computeExcludedThreadLengths tests removed — the function was deleted
     // (production-dead since the immutable-OAL fix; see OalComputations.kt note).
 
     // ─── computeSetPositionsInMeasureSpace ────────────────────────────────────
