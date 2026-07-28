@@ -6,6 +6,72 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-28 (wear document — all liners, write-in template, layout reclaim)
+
+Four rounds of on-device feedback in one day, all on the wear/inspection sheet.
+
+### feat(pdf): every liner gets a detail strip; blank write-in template keeps the drawing
+
+- **All liners always drawn** (normal shop operating procedure): `collectWearLinerGroups`
+  returns every drawable liner (positive length + OD) with a possibly-empty spot list, so
+  the page mode (`PROFILE_FORM`/`COMBINED`/`GRID`) is a function of the shaft's liner
+  count. A spotless liner's strip has no bands or min-Ø readings.
+- **Blank draft (write-in) keeps the strips**: previously it collapsed to profile-only.
+  Now the profile and every zoomed liner strip render with dimension lines kept and values
+  left out — the machinist fills the sheet in by hand after printing.
+- **Circle-one anchor titles**: blank strip titles read `<Liner> — ____ FROM  AFT / FWD
+  S.E.T.` (`WEAR_BLANK_ANCHOR_SUFFIX`) — both directions print, the machinist circles one;
+  always left-aligned since a write-in sheet doesn't presume a measurement direction.
+- **Shared positional liner titles**: all four wear-PDF draw sites (strip titles, names
+  under the profile, blank prefixes, overflow note) use `buildLinerTitleById` — custom
+  label wins, else AFT/MID/FWD defaults — identical names to the carousel and runout sheet.
+
+### fix(pdf): wear sheet spacing — blank header room, edge-bar rails, profile band reclaim
+
+- **Blank header** 36 → 56 pt with writing rules 24 pt apart (handwriting room); blank
+  profile→strips gap 18 → 8 pt pays for it. Printed header unchanged.
+- **Band-less rails show edge witness bars only** — every strip in blank mode, spotless
+  liners on the printed sheet. No spanning line/arrows/length value: rails measure
+  distances to wear areas, not each liner's OAL.
+- **Profile band reclaim**: the band shrinks toward a content-derived preferred height
+  (OAL region + shaft Ø + names row) instead of absorbing all leftover page height with
+  the shaft floating centered; strips grow into the freed space (≤ 170 pt each,
+  `WEAR_STRIP_HEIGHT_MAX_PT`), remainder returns to the band (shaft slack-centered,
+  clamped clear of the strips). OAL clearance above the shaft 90 → 44 pt.
+  New `preferredProfileHeightPt`/`maxStripHeightPt` params on
+  `computeWearVerticalLayout`/`computeWearStripGridLayout` (defaults preserve the
+  absorb-all-slack behavior, pinned by tests).
+
+### fix(pdf): uniform liner strip heights
+
+- Every strip's liner cylinder now fills the strip's fixed vertical budget, so all zoomed
+  liners on a page render at the **same height** — the per-strip horizontal scale
+  (length-derived) no longer leaks into cylinder height. Lengths keep their horizontal
+  proportions; liner OD differences are deliberately not height-encoded (product
+  decision). Neighbor stubs keep their true diameter ratio to the liner, clamped to the
+  liner radius. `computeWearStripRadii` rewritten (4-param), tests replaced.
+
+### fix(pdf): OAL out of the header; blank spans get a writable mid-span break
+
+- Header no longer carries OAL, on either the wear document's printed or blank header —
+  it duplicated the drawing's own end-to-end span. Blank header fields spread
+  edge-to-edge across the full content width for large handwriting, and the title
+  centers on line 2.
+- Blank OAL spans (wear + runout) cut an empty `BLANK_DIM_GAP_PT`-wide writable break
+  mid-span, dropping the old "OAL:" label + rule — the same convention the schematic's
+  dimension breaks already use. No "OAL" wording where handwriting goes.
+- Printed spans **keep** the small "OAL" prefix (product decision: print output is
+  compact and it reads as a nice visual identifier) — wear/runout OAL lines and the
+  schematic's `oalSpan()` top rail are unchanged in print.
+
+### chore: comment hygiene — no dates, no prior-code narratives
+
+- Removed date stamps (~90 across 27 files) and removed-code narratives (~65 sentences
+  across 28 files) from `.kt` comments. Comments now state current behavior and
+  constraints only; load-bearing warnings keep their consequence in present/conditional
+  tense ("doing X would cause Y"). History lives here and in `docs/*.md` — see
+  `docs/STYLE_GUIDE.md` §"Comment Conventions".
+
 ## 2026-07-26 (wear detail)
 
 ### feat(ui): threaded shaft ends drawn flat + hatched in the wear detail overlay

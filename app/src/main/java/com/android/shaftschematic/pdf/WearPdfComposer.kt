@@ -186,7 +186,7 @@ fun composeWearPdf(
     val overflowNoteH  = if (stripSelection.overflow.isNotEmpty()) WEAR_OVERFLOW_NOTE_HEIGHT_PT else 0f
 
     // ── Header (always drawn) ───────────────────────────────────────────────
-    drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, unit, spec.overallLengthMm, blankValues)
+    drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, blankValues)
 
     // The profile's minimum height also protects the actual drawn shaft radius — ptPerMm is a
     // purely horizontal (SET-to-SET) scale, so a wide/short shaft's true diameter could otherwise
@@ -251,8 +251,10 @@ fun composeWearPdf(
     val shaftTopApprox = shaftCy - rPx(maxDiaMm)
     val oalLineY = (shaftTopApprox - WEAR_OAL_ABOVE_SHAFT_PT).coerceAtLeast(profileTop + WEAR_TEXT_PT + 6f)
 
-    // Label rule: the printed OAL is always the user's typed OAL (same as the main schematic); the
-    // arrows below bracket the drawn SET-to-SET span.
+    // Label rule: the printed value is always the user's typed OAL (same as the main schematic),
+    // shown bare (no "OAL" prefix — the end-to-end span already implies it); the arrows below
+    // bracket the drawn SET-to-SET span. Blank draft: no label at all, just an empty writable
+    // break mid-span (drawWearOalLine).
     drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox, unit, spec.overallLengthMm, blankValues)
     drawWearShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
@@ -302,8 +304,6 @@ private fun drawWearHeader(
     right: Float,
     top: Float,
     project: ProjectInfo,
-    unit: UnitSystem,
-    oalMm: Float,
     blankValues: Boolean = false,
 ) {
     val ts = text.textSize
@@ -312,28 +312,23 @@ private fun drawWearHeader(
         ((left + right - text.measureText(str)) * 0.5f).coerceAtLeast(left)
 
     if (blankValues) {
-        // Blank draft: all job-info labels print with writing rules; the OAL is written in.
-        // The two rule lines sit further apart than the printed header's ts*1.4 so there is real
-        // room to write between them (device feedback).
+        // Blank draft: the five job-info fields spread edge-to-edge across the full content
+        // width with equal writing rules — handwriting room; the OAL belongs to the drawing's
+        // end-to-end span (drawWearOalLine), not the header, so it is never printed here.
         val line1Y = top + ts + 4f
         val line2Y = line1Y + WEAR_HEADER_BLANK_LINE_GAP_PT
+        val labels = listOf("Customer:", "Vessel:", "Job #:", "Date:", "Side:")
+        val labelsW = labels.map { text.measureText(it) }.sum()
+        // drawLabelWithRule inserts 4f label→rule and returns ruleEnd + 14f (inter-field gap).
+        val ruleW = ((right - left - labelsW - labels.size * 4f - (labels.size - 1) * 14f) / labels.size)
+            .coerceAtLeast(BLANK_RULE_PT * 0.5f)
         var x = left
-        listOf("Customer:", "Vessel:", "Job #:", "Date:", "Side:").forEach { label ->
-            x = drawLabelWithRule(c, label, x, line1Y, text, maxRight = right)
-        }
-        val line2 = "OAL:"
-        val line2W = text.measureText(line2) + 4f + BLANK_RULE_PT +
-            text.measureText("  —  WEAR / INSPECTION RECORD")
-        val startX = ((left + right - line2W) * 0.5f).coerceAtLeast(left)
-        val afterRule = drawLabelWithRule(c, line2, startX, line2Y, text, maxRight = right)
-        c.drawText("—  WEAR / INSPECTION RECORD", afterRule - 8f, line2Y, text)
+        labels.forEach { label -> x = drawLabelWithRule(c, label, x, line1Y, text, ruleWidth = ruleW, maxRight = right) }
+
+        val line2 = "WEAR / INSPECTION RECORD"
+        c.drawText(line2, centeredX(line2), line2Y, text)
     } else {
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val oalDisplay = if (unit == UnitSystem.INCHES) {
-            "${"%.4f".format(oalMm / 25.4f)}\""
-        } else {
-            "${"%.2f".format(oalMm)} mm"
-        }
         val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
 
         val line1 = buildString {
@@ -342,7 +337,9 @@ private fun drawWearHeader(
             if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
             append("Date: $date$side")
         }
-        val line2 = "OAL: $oalDisplay  —  WEAR / INSPECTION RECORD"
+        // The OAL belongs to the drawing's end-to-end span (drawWearOalLine); the header never
+        // repeats it.
+        val line2 = "WEAR / INSPECTION RECORD"
 
         val line1Fit = ellipsizeToWidth(line1, text, right - left)
         val line2Fit = ellipsizeToWidth(line2, text, right - left)
@@ -375,19 +372,26 @@ private fun drawWearOalLine(
     c.drawLine(x0, shaftTopY - witnessGap, x0, oalLineY - witnessExt, dim)
     c.drawLine(x1, shaftTopY - witnessGap, x1, oalLineY - witnessExt, dim)
 
-    // Dimension line with arrowheads
-    c.drawLine(x0, oalLineY, x1, oalLineY, dim)
+    if (blankValues) {
+        // Blank draft: no "OAL" label of any kind — the value is written by hand in a break cut
+        // mid-span, the same convention PdfDimensionRenderer uses for blank schematic dimension
+        // breaks (empty gap, no underline, no text). An end-to-end span already implies "OAL".
+        val mid = (x0 + x1) * 0.5f
+        val gapHalf = BLANK_DIM_GAP_PT * 0.5f
+        c.drawLine(x0, oalLineY, mid - gapHalf, oalLineY, dim)
+        c.drawLine(mid + gapHalf, oalLineY, x1, oalLineY, dim)
+    } else {
+        // Dimension line with arrowheads
+        c.drawLine(x0, oalLineY, x1, oalLineY, dim)
+    }
     c.drawLine(x0, oalLineY, x0 + arrowLen, oalLineY - arrowLen * 0.4f, dim)
     c.drawLine(x0, oalLineY, x0 + arrowLen, oalLineY + arrowLen * 0.4f, dim)
     c.drawLine(x1, oalLineY, x1 - arrowLen, oalLineY - arrowLen * 0.4f, dim)
     c.drawLine(x1, oalLineY, x1 - arrowLen, oalLineY + arrowLen * 0.4f, dim)
 
-    // Label centred above the dimension line (blank draft: "OAL:" + writing rule)
-    if (blankValues) {
-        val label = "OAL:"
-        val totalW = text.measureText(label) + 4f + BLANK_RULE_PT
-        drawLabelWithRule(c, label, (x0 + x1) * 0.5f - totalW * 0.5f, oalLineY - 4f, text)
-    } else {
+    // Printed: "OAL: value" centred above the dimension line — the small printed prefix is a
+    // deliberate visual identifier (product decision); only handwriting surfaces omit it.
+    if (!blankValues) {
         val label = if (unit == UnitSystem.INCHES) "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
         else "OAL: ${"%.2f".format(oalMm)} mm"
         val lw = text.measureText(label)
@@ -711,13 +715,13 @@ private fun drawWearDetailStrip(
     val cy = (inner.cylTop + inner.cylBottom) / 2f
     val rCap = ((inner.cylBottom - inner.cylTop) / 2f).coerceAtLeast(0f)
 
-    // Neighbor diameters resolved up front so the liner + both stubs can be scaled
-    // by ONE common factor (computeWearStripRadii) instead of each being capped to
-    // rCap independently — independent capping erases the liner-vs-neighbor
-    // diameter step whenever both exceed the budget (SVG review).
+    // Neighbor diameters resolved up front for the break-out stubs. The liner cylinder
+    // fills the strip's vertical budget at the same height in every strip (horizontal
+    // scale never affects height); stubs keep their true diameter ratio to the liner
+    // (computeWearStripRadii).
     val aftDia = neighborDiaMmAtAft(docSpec, aftMm) ?: ln.odMm
     val fwdDia = neighborDiaMmAtFwd(docSpec, fwdMm) ?: ln.odMm
-    val radii = computeWearStripRadii(ln.odMm, aftDia, fwdDia, ptPerMmStrip, rCap)
+    val radii = computeWearStripRadii(ln.odMm, aftDia, fwdDia, rCap)
 
     val linerR = radii.linerRPt
     val top = cy - linerR; val bot = cy + linerR

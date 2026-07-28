@@ -352,12 +352,15 @@ xAt(mm)    = contentLeft + (mm − aftSetMm) × ptPerMm
 
 **Layout (2026-07-18):** the runout sheet's OAL dimension line sits `OAL_LINE_SPACE_PT` = 90 pt (≈ 1.25 in) above the shaft top — raised so it doesn't crowd the profile — with witness (extension) lines dropping to the shaft's actual top edge at each SET face (gap 3 pt, extending 5 pt past the line), matching the schematic/wear-document convention.
 
-**Label rule (2026-07-11):** the printed OAL value is always the user's **typed OAL**
-(`spec.overallLengthMm`) — the same "OAL never changes" rule as the main schematic
-(`OverallLength.md`). The arrows still bracket the drawn SET-to-SET span; only the label
-uses the typed value. Previously these documents labeled the SET-to-SET distance "OAL",
-which meant the runout/wear sheets and the schematic could show two different numbers
-under the same name for the same shaft.
+**Label rule (2026-07-11; header/blank wording trimmed 2026-07-28):** the printed value is
+always the user's **typed OAL** (`spec.overallLengthMm`) — the same "OAL never changes" rule
+as the main schematic (`OverallLength.md`). The arrows still bracket the drawn SET-to-SET
+span; only the label uses the typed value. The printed label keeps its small `"OAL: "`
+prefix (product decision, 2026-07-28: compact print output reads well and the prefix is a
+nice visual identifier). Neither document's **header** repeats the OAL (it would just
+duplicate this span), and the blank/write-in variant of this line carries no label text at
+all — the machinist hand-writes the value in an empty break cut mid-span: see "Blank draft"
+below.
 
 ---
 
@@ -367,18 +370,21 @@ under the same name for the same shaft.
 
 ```
 ┌── header line 1: Customer / Vessel / Job # / Date / Side  (centred) ──────┐
-│── header line 2: OAL / "WEAR / INSPECTION RECORD"         (centred) ──────│
+│── header line 2: "WEAR / INSPECTION RECORD"                (centred) ──────│
 ├────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │                                                                             │
 │          [shaft profile — centred vertically, blank for hand annotation]   │
-│         |←──────────── OAL: nnn.nnnn" ────────────────────→|              │
+│         |←──────────────── nnn.nnnn" ─────────────────────→|              │
 │         |                                                   |  ← witness lines
 │   ══════╪═══════════════════════════════════════════════════╪══════         │
 │                                                                             │
 │   Dye pen inspection:  PASS □   FAIL □     Notes: ____________________    │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
+
+The header never carries the OAL (that would duplicate the drawing's own end-to-end
+dimension line below it) — see "Label rule" above.
 
 **Y positions on a 612 pt page (36 pt margin), for a typical 5 in / 127 mm shaft:**
 
@@ -432,10 +438,18 @@ don't affect the mode:
 | 1 | `COMBINED` | Shaft profile + wear bands, with one full-width detail strip below. |
 | 2+ | `GRID` | Shaft profile on top + the detail strips in a **2-column grid** below — two side by side, the third on the next row, so the strips take ~2 rows and the profile keeps the top. Up to `WEAR_STRIP_GRID_MAX_PER_PAGE` = 4 shown; "+N more" overflow note beyond. |
 
-**Blank draft (write-in) mode** (`blankValues = true`, 2026-07-27): the same page — profile
-AND every liner's zoomed strip — renders as a hand-fill template, mirroring the blank
-schematic's lines-in/values-out posture. Header job info and the OAL value become writing
-rules; recorded wear (bands, pits, min-Ø) is omitted; each strip's dimension rail shows **only the
+**Blank draft (write-in) mode** (`blankValues = true`, 2026-07-27; header/OAL reworked
+2026-07-28): the same page — profile AND every liner's zoomed strip — renders as a hand-fill
+template, mirroring the blank schematic's lines-in/values-out posture. The five header
+job-info fields (`Customer:` / `Vessel:` / `Job #:` / `Date:` / `Side:`) spread edge-to-edge
+across the full content width with equally sized writing rules (room for large handwriting,
+device feedback), and the title "WEAR / INSPECTION RECORD" centers on the second line — the
+header never carries an OAL field, printed or blank. The OAL dimension line itself keeps its
+witness lines and arrowheads but drops the "OAL:" label + rule entirely; instead the span line
+gets an empty `BLANK_DIM_GAP_PT`-wide break cut at mid-span — no underline, no text — the exact
+convention `PdfDimensionRenderer` uses for blank schematic dimension breaks, so the machinist
+writes the measured OAL directly into the gap. Recorded wear (bands, pits, min-Ø) is omitted;
+each strip's dimension rail shows **only the
 two liner-edge witness bars** — no spanning line, arrowheads, or labels, since a band-less rail's
 one span would merely re-state the liner's own length and the rail's job is dimensioning distances
 to wear areas (2026-07-28 device feedback); the strip title's anchor value becomes a
@@ -521,10 +535,18 @@ shrinks first, and if a pathological input leaves no room at all, the rail's lab
 drop toward zero (the rail line still draws; labels are simply not placed) rather than
 let anything render past the strip's bottom edge. (The rail and title were **swapped**
 2026-07-22 — dimensions above the shaft, the liner title/anchor below it — to match how the
-shop marks the sheet by hand.) Each strip draws:
+shop marks the sheet by hand.) The liner cylinder's radius always fills that vertical
+budget (`computeWearStripRadii`), so every strip on the page draws its liner at the SAME
+height regardless of the liner's length or OD — the strip's horizontal scale (`ptPerMm`,
+which varies per liner since it's length-derived) must never leak into cylinder height
+(on-device report: liners of different lengths were rendering at different heights).
+Length differences stay horizontal-only; liner OD differences are deliberately not
+height-encoded either (product decision). Each strip draws:
 - Neighbor stubs at the resolved diameter abutting the liner (`neighborDiaMmAtAft` /
   `neighborDiaMmAtFwd`, falling back to the liner's own OD when there's no neighbor),
-  broken out with the standard S-curve edge (`BreakSymbol.drawBreakEdge`).
+  scaled to their true diameter ratio against the liner and clamped to the liner's own
+  radius (an oversized neighbor can't overflow the cylinder band), broken out with the
+  standard S-curve edge (`BreakSymbol.drawBreakEdge`).
 - Hatched wear bands on the liner at strip-local scale (diagonal hatch, unlike the
   main-profile bands' vertical lines), clamped the same way, plus a min-Ø reading printed
   just **below** each band (moved below when the rail moved above, 2026-07-22) — omitted

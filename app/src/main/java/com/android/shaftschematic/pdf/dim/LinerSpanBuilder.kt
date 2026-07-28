@@ -61,5 +61,7 @@ fun buildLinerSpans(
  * regardless of bracket width.
  */
 fun oalSpan(x1Mm: Double, x2Mm: Double, unit: UnitSystem, labelMm: Double = x2Mm - x1Mm): DimSpan {
+    // Printed spans keep the small "OAL" prefix as a visual identifier (product decision);
+    // blank drafts never see it — the renderer cuts an empty break and drops label text.
     return DimSpan(x1Mm, x2Mm, labelTop = "OAL ${formatLenDim(labelMm, unit)}", kind = SpanKind.OAL)
 }

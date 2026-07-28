@@ -113,12 +113,21 @@ At 1.0 the output matches the current default thin weight. At 2.0 it matches the
 
 # 5.2 OAL Dimension Span
 
-The OAL label always equals `spec.overallLengthMm` — the user's typed value. The bracket **position** changes based on `excludeFromOAL`:
+The OAL span's label value always equals `spec.overallLengthMm` — the user's typed value.
+The bracket **position** changes based on `excludeFromOAL`:
 
 - **Excluded**: bracket spans AFT SET → FWD SET (threads outside the bracket).
 - **Included**: bracket spans shaft AFT end → FWD SET (thread grouped inside the bracket).
 
 The label is passed as an explicit `labelMm` override to `oalSpan()` so it is always the typed OAL regardless of bracket width. Component dimension rails always reference SET positions.
+
+**Label text (2026-07-28):** printed end-to-end spans keep their small `"OAL"` prefix —
+`oalSpan()` (`pdf/dim/LinerSpanBuilder.kt`) renders `"OAL " + formatLenDim(labelMm, unit)`,
+and the wear/runout OAL lines print `"OAL: value"` (product decision: compact print output
+reads well and the prefix is a nice visual identifier). Blank/write-in drafts drop the
+wording entirely — the renderer cuts an empty writable break mid-span and draws no label
+text (see `RunoutSheet.md` §"OAL Dimension Alignment" and the blank-draft sections), and
+the wear header never carries the OAL in either mode.
 
 ---
 
@@ -203,12 +212,18 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   larger than print. `buildFooterEndColumns(blankValues = true)` returns label-only
   lines — same count and order as standard, no digits (JVM-tested in
   `BlankDraftFooterTest`).
-- **Runout sheet**: header labels get rules, the OAL prints `OAL:` + rule, recorded TIR
-  values / high-spot ticks are not drawn (bubbles remain — they ARE the write-in
-  circles), and the TIR-direction line always prints as a fill-in blank.
-- **Wear document**: header + OAL blank the same way, and recorded wear (bands, pit X's,
-  detail strips) is omitted — the print is a fresh inspection form. Recorded data in the
-  app is never touched; blanking is render-only.
+- **Runout sheet**: header labels get rules; the OAL dimension line carries no label of any
+  kind (2026-07-28) — it cuts an empty `BLANK_DIM_GAP_PT`-wide break at mid-span instead,
+  the same convention as the dimension-line rule above, so the machinist writes the value
+  straight into the break. Recorded TIR values / high-spot ticks are not drawn (bubbles
+  remain — they ARE the write-in circles), and the TIR-direction line always prints as a
+  fill-in blank.
+- **Wear document**: header job-info fields spread edge-to-edge with equal writing rules
+  and the title centers on line 2 — the header never carries an OAL field, printed or
+  blank (2026-07-28). The OAL dimension line blanks the same way as the runout sheet's
+  (empty mid-span break, no label), and recorded wear (bands, pit X's, detail strips) is
+  omitted — the print is a fresh inspection form. Recorded data in the app is never
+  touched; blanking is render-only.
 - The blank toggle is **session-only, never persisted** (schematic:
   `ShaftViewModel.pdfBlankDraft`, runout/wear: local screen state) — a forgotten sticky
   toggle would silently blank every future export. Blank exports get a `_BlankDraft`
