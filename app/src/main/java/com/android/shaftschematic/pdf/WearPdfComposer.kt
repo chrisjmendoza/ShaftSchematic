@@ -65,7 +65,7 @@ import kotlin.math.min
  *                contract as `composeShaftPdf`/`composeRunoutPdf`.
  * @param wearRecord Recorded liner wear spots + pit "X" markers. The **shaft profile is always
  *                drawn on top** (so body/taper/liner pits stay visible); **every drawable liner
- *                gets a detail strip below, with or without recorded wear** (2026-07-27 — the
+ *                gets a detail strip below, with or without recorded wear** (the
  *                shop's normal operating procedure), the layout picked by a [WearPdfMode] from
  *                `determineWearPdfMode(collectWearLinerGroups(...).size)`:
  *                - **0 liners** ([WearPdfMode.PROFILE_FORM]) — profile only (still shows any
@@ -74,7 +74,7 @@ import kotlin.math.min
  *                  strip below.
  *                - **2+ liners** ([WearPdfMode.GRID]) — profile + a 2-column grid of detail
  *                  strips (two side by side, third on the next row), so the strips take ~2 rows and
- *                  the profile keeps the top of the page (2026-07-21, replacing the old strips-only
+ *                  the profile keeps the top of the page (replacing the old strips-only
  *                  mode). Up to [WEAR_STRIP_GRID_MAX_PER_PAGE] shown; the single-column path caps at
  *                  [WEAR_STRIP_MAX_PER_PAGE]. Any remainder is a "+N more" text note (see
  *                  `selectWearStripsForPage`'s KDoc for the single-page constraint).
@@ -95,7 +95,7 @@ fun composeWearPdf(
      * liner's zoomed detail strip still render, with the dimension lines kept and their values
      * left out (rail labels omitted, the anchor-from-SET value replaced by a writing rule with
      * "AFT / FWD" printed for circling one) so the sheet prints as a fresh inspection form the
-     * machinist fills in by hand (2026-07-27, matching the blank schematic's lines-in/values-out
+     * machinist fills in by hand (matching the blank schematic's lines-in/values-out
      * posture).
      */
     blankValues: Boolean = false,
@@ -144,7 +144,9 @@ fun composeWearPdf(
     val contentTop   = margin
     val contentBot   = pageH - margin
 
-    val headerBottom = contentTop + WEAR_HEADER_HEIGHT_PT
+    // The blank write-in header is taller (handwriting room for the rules, device
+    // feedback); the space it costs is reclaimed from the profile→strips gap below.
+    val headerBottom = contentTop + (if (blankValues) WEAR_HEADER_HEIGHT_BLANK_PT else WEAR_HEADER_HEIGHT_PT)
 
     // Notes anchored near the page bottom
     val notesY = contentBot - WEAR_NOTES_BOTTOM_OFFSET_PT
@@ -172,10 +174,10 @@ fun composeWearPdf(
     val maxDiaMm = (docSpec.maxOuterDiaMm().takeIf { it > 0f } ?: 50f).coerceAtLeast(20f)
 
     // ── Wear strip selection (pure — pdf/WearStripLayout.kt) ──────────────────
-    // EVERY drawable liner, aft→fwd, with or without recorded wear (2026-07-27 — normal shop
+    // EVERY drawable liner, aft→fwd, with or without recorded wear (normal shop
     // procedure; also what makes the blank write-in template render all zoomed strips). GRID mode
     // (2+ liners) shows up to 4 in a 2-column grid; the single-column path (0-1 liners) uses the
-    // smaller cap. The shaft profile is ALWAYS drawn on top (2026-07-21) — the old strips-only
+    // smaller cap. The shaft profile is ALWAYS drawn on top — the old strips-only
     // mode that dropped it is gone.
     val wearGroups = collectWearLinerGroups(docSpec.liners, effectiveRecord)
     val wearMode   = determineWearPdfMode(wearGroups.size)
@@ -192,6 +194,15 @@ fun composeWearPdf(
     // exceed a shrunk profile band.
     val minProfileHeightPt = maxOf(WEAR_MIN_PROFILE_HEIGHT_PT, 2f * rPx(maxDiaMm) + WEAR_PROFILE_RADIUS_MARGIN_PT)
 
+    // Content-derived profile height: OAL label region + OAL clearance + shaft + names row.
+    // The band shrinks toward this (never below minProfileHeightPt) and the strips absorb
+    // the reclaimed height (device feedback: dead white between shaft and strips).
+    val preferredProfileHeightPt = maxOf(
+        WEAR_OAL_TOP_REGION_PT + WEAR_OAL_ABOVE_SHAFT_PT + 2f * rPx(maxDiaMm) +
+            WEAR_PROFILE_NAMES_ROW_PT + WEAR_PROFILE_BOTTOM_PAD_PT,
+        minProfileHeightPt,
+    )
+
     // Vertical layout + per-strip cells depend on mode: GRID lays strips two-up (profile keeps the
     // top of the page); otherwise a single full-width column below the profile (0 strips = profile
     // only, unchanged). Both keep the shaft profile on top.
@@ -199,10 +210,16 @@ fun composeWearPdf(
     val profileBottom: Float
     val stripCells: List<WearStripCell>
     val overflowBandTop: Float
+    // The blank template's taller header is paid for here: its profile→strips gap shrinks
+    // (WEAR_STRIP_TOP_GAP_BLANK_PT) instead of the strips themselves getting shorter.
+    val profileToStripsGap = if (blankValues) WEAR_STRIP_TOP_GAP_BLANK_PT else WEAR_STRIP_TOP_GAP_PT
     if (wearMode == WearPdfMode.GRID) {
         val grid = computeWearStripGridLayout(
             midTopFull, midBotFull, contentLeft, contentRight, onPage.size,
             reservedBottomPt = overflowNoteH, minProfileHeightPt = minProfileHeightPt,
+            profileToStripsGapPt = profileToStripsGap,
+            preferredProfileHeightPt = preferredProfileHeightPt,
+            maxStripHeightPt = WEAR_STRIP_HEIGHT_MAX_PT,
         )
         profileTop = grid.profileTop; profileBottom = grid.profileBottom
         stripCells = grid.cells
@@ -211,6 +228,9 @@ fun composeWearPdf(
         val v = computeWearVerticalLayout(
             midTopFull, midBotFull, onPage.size,
             reservedBottomPt = overflowNoteH, minProfileHeightPt = minProfileHeightPt,
+            profileToStripsGapPt = profileToStripsGap,
+            preferredProfileHeightPt = preferredProfileHeightPt,
+            maxStripHeightPt = WEAR_STRIP_HEIGHT_MAX_PT,
         )
         profileTop = v.profileTop; profileBottom = v.profileBottom
         stripCells = onPage.indices.map { i ->
@@ -220,7 +240,14 @@ fun composeWearPdf(
     }
 
     // ── Shaft profile + OAL line (always) ─────────────────────────────────────
-    val shaftCy  = (profileTop + profileBottom) * 0.5f
+    // Anchor the shaft snugly under the OAL region instead of centering it in the band; when
+    // the band is larger than its content needs (0-1 strips, capped strip growth), the slack
+    // is split evenly so the roomy case still reads centered.
+    // Clamped so a squeezed band (huge shaft OD on a short page) keeps the shaft above the names row instead of overlapping the strips.
+    val profileSlack = ((profileBottom - profileTop) - preferredProfileHeightPt).coerceAtLeast(0f)
+    val shaftCy = (profileTop + WEAR_OAL_TOP_REGION_PT + WEAR_OAL_ABOVE_SHAFT_PT +
+        rPx(maxDiaMm) + profileSlack * 0.5f)
+        .coerceAtMost(profileBottom - rPx(maxDiaMm) - WEAR_PROFILE_NAMES_ROW_PT)
     val geomRect = RectF(contentLeft, profileTop, contentRight, profileBottom)
     val shaftTopApprox = shaftCy - rPx(maxDiaMm)
     val oalLineY = (shaftTopApprox - WEAR_OAL_ABOVE_SHAFT_PT).coerceAtLeast(profileTop + WEAR_TEXT_PT + 6f)
@@ -287,16 +314,20 @@ private fun drawWearHeader(
 
     if (blankValues) {
         // Blank draft: all job-info labels print with writing rules; the OAL is written in.
+        // The two rule lines sit further apart than the printed header's ts*1.4 so there is real
+        // room to write between them (device feedback).
+        val line1Y = top + ts + 4f
+        val line2Y = line1Y + WEAR_HEADER_BLANK_LINE_GAP_PT
         var x = left
         listOf("Customer:", "Vessel:", "Job #:", "Date:", "Side:").forEach { label ->
-            x = drawLabelWithRule(c, label, x, top + ts, text, maxRight = right)
+            x = drawLabelWithRule(c, label, x, line1Y, text, maxRight = right)
         }
         val line2 = "OAL:"
         val line2W = text.measureText(line2) + 4f + BLANK_RULE_PT +
             text.measureText("  —  WEAR / INSPECTION RECORD")
         val startX = ((left + right - line2W) * 0.5f).coerceAtLeast(left)
-        val afterRule = drawLabelWithRule(c, line2, startX, top + ts + ts * 1.4f, text, maxRight = right)
-        c.drawText("—  WEAR / INSPECTION RECORD", afterRule - 8f, top + ts + ts * 1.4f, text)
+        val afterRule = drawLabelWithRule(c, line2, startX, line2Y, text, maxRight = right)
+        c.drawText("—  WEAR / INSPECTION RECORD", afterRule - 8f, line2Y, text)
     } else {
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         val oalDisplay = if (unit == UnitSystem.INCHES) {
@@ -320,7 +351,7 @@ private fun drawWearHeader(
         c.drawText(line2Fit, centeredX(line2Fit), top + ts + ts * 1.4f, text)
     }
 
-    val ruleY = top + WEAR_HEADER_HEIGHT_PT
+    val ruleY = top + (if (blankValues) WEAR_HEADER_HEIGHT_BLANK_PT else WEAR_HEADER_HEIGHT_PT)
     c.drawLine(left, ruleY, right, ruleY, Paint(text).apply {
         style = Paint.Style.STROKE; strokeWidth = 0.5f
     })
@@ -543,7 +574,7 @@ private fun drawWearShaftProfile(
 /**
  * Thin vertical-line bands on the MAIN shaft profile for every liner with recorded wear
  * spots, at their true axial position — "visible but not dominant" (proposal §6.2). The band
- * is filled with **vertical** strokes (2026-07-22, matching how the shop marks wear areas by
+ * is filled with **vertical** strokes (matching how the shop marks wear areas by
  * hand — see the reference sketch); the broken-out detail strips keep the diagonal hatch.
  * Bands are clamped to the liner's own span for rendering; the underlying [WearSpot] data is
  * never mutated.
@@ -632,11 +663,14 @@ private fun drawWearPitX(c: Canvas, cx: Float, cy: Float, half: Float, paint: Pa
  * band when recorded, and the liner's anchor dimension from its nearer SET (the "110 FROM
  * CPLG S.E.T." line in the shop sketch this feature digitizes).
  *
- * A liner with no recorded wear (spots empty — every liner gets a strip since 2026-07-27)
- * degenerates cleanly: no bands, no min-Ø readings, and the rail is one full-length span
- * (the liner's own length). With [blankValues] the strip keeps all its dimension LINES but
- * drops the VALUES: rail labels are omitted and the anchor title's number becomes a writing
- * rule — the write-in template posture shared with the blank schematic.
+ * A liner with no recorded wear (spots empty — every liner gets a strip)
+ * degenerates cleanly: no bands, no min-Ø readings, and the band-less rail draws only the two
+ * liner-edge witness bars — no spanning line, arrowheads, or value, since that span would just
+ * re-state the liner's own length and the rail exists to measure distances to wear areas
+ * (device feedback). With [blankValues] the strip keeps its dimension LINES but drops
+ * the VALUES: rail labels are omitted and the anchor title's number becomes a writing rule — the
+ * write-in template posture shared with the blank schematic (and since a blank sheet has no
+ * bands, every blank strip's rail is witness-bars-only).
  */
 private fun drawWearDetailStrip(
     c: Canvas,
@@ -668,7 +702,7 @@ private fun drawWearDetailStrip(
     val title = linerTitle + " — " +
         buildLinerAnchorLabel(docSpec, ln, setPositions, unit)
     // The title + liner-anchor dimension is drawn LAST, at the bottom of the strip (swapped with the
-    // dimension rail 2026-07-22 to match the hand-marked sheet). See the title block near the end.
+    // dimension rail to match the hand-marked sheet). See the title block near the end.
 
     val sortedSpots = group.spots.sortedBy { it.startMm }
     val inner = computeWearStripInnerLayout(
@@ -681,7 +715,7 @@ private fun drawWearDetailStrip(
     // Neighbor diameters resolved up front so the liner + both stubs can be scaled
     // by ONE common factor (computeWearStripRadii) instead of each being capped to
     // rCap independently — independent capping erases the liner-vs-neighbor
-    // diameter step whenever both exceed the budget (2026-07-18 SVG review).
+    // diameter step whenever both exceed the budget (SVG review).
     val aftDia = neighborDiaMmAtAft(docSpec, aftMm) ?: ln.odMm
     val fwdDia = neighborDiaMmAtFwd(docSpec, fwdMm) ?: ln.odMm
     val radii = computeWearStripRadii(ln.odMm, aftDia, fwdDia, ptPerMmStrip, rCap)
@@ -701,7 +735,7 @@ private fun drawWearDetailStrip(
     // inverse of a centered compression break's shared-gap geometry — so eyeAtTop is the
     // opposite of the compression-break convention above: left/AFT stub void is to its left
     // (eyeAtTop = true), right/FWD stub void is to its right (eyeAtTop = false). See
-    // `LinerWearDetail.kt`'s `drawBreakEdgeCompose` KDoc (2026-07-18 device review fix).
+    // `LinerWearDetail.kt`'s `drawBreakEdgeCompose` KDoc (device review fix).
     val aftR = radii.aftRPt; val fwdR = radii.fwdRPt
     val stubLeftX = hLayout.linerLeftPt - hLayout.stubWidthPt
     val stubRightX = hLayout.linerRightPt + hLayout.stubWidthPt
@@ -751,7 +785,7 @@ private fun drawWearDetailStrip(
         }
     }
 
-    // Chained dimension rail ABOVE the cylinder (rail/title swapped 2026-07-22 to match the
+    // Chained dimension rail ABOVE the cylinder (rail/title swapped to match the
     // hand-marked sheet; see "Wear Detail Strips" in docs/RunoutSheet.md): liner AFT edge → first
     // band start, each band's own length, inter-band gaps, and the trailing remainder to the liner
     // FWD edge — standard witness-line/arrowed-span/centered-label rail convention.
@@ -761,10 +795,13 @@ private fun drawWearDetailStrip(
         xAtStripMm = { mm -> xAtStrip(aftMm + mm) },
         labelWidthPt = { s -> dimText.measureText(s) },
     )
-    // Blank draft: the rail's witness lines/spans/arrows still draw (lines stay), the value
-    // labels do not — the machinist writes the measured figures under the rail by hand.
+    // Blank draft: the rail's dimension lines still draw, the value labels do not — the machinist
+    // writes the measured figures under the rail by hand. And with no wear bands at all the rail
+    // has nothing to dimension, so only its liner-edge witness bars draw (device
+    // feedback — a full-length span would just re-state the liner's own length).
+    val hasWearBands = clampedBands.any { it.lengthMm > 0f }
     drawWearStripRail(c, dim, dimText, railLayout, inner.cylTop, inner.railY, inner.railLabelRows,
-        drawLabels = !blankValues)
+        drawLabels = !blankValues, drawSpanLines = hasWearBands)
 
     // Title + liner-anchor dimension, drawn LAST at the BOTTOM of the strip. Direction cue: a
     // FWD-SET-referenced title right-aligns (toward the FWD end drawn on the right), an
@@ -804,6 +841,11 @@ private fun drawWearDetailStrip(
  *
  * [drawLabels] = false (blank write-in draft) keeps every line and arrowhead but skips the
  * value labels — the lines-in/values-out template rule.
+ *
+ * [drawSpanLines] = false (a rail with no wear bands: every strip in blank write-in mode, and
+ * spotless liners on the printed sheet) keeps only the edge witness bars: the full-length span
+ * would just re-state the liner's own length, and the rail's job is measuring distances to wear
+ * areas, not each liner's OAL (device feedback).
  */
 private fun drawWearStripRail(
     c: Canvas,
@@ -814,6 +856,7 @@ private fun drawWearStripRail(
     railY: Float,
     maxLabelRows: Int,
     drawLabels: Boolean = true,
+    drawSpanLines: Boolean = true,
 ) {
     if (layout.isEmpty()) return
     val arrow = 4f
@@ -826,6 +869,9 @@ private fun drawWearStripRail(
     layout.forEach { s ->
         c.drawLine(s.x0Pt, cylTop, s.x0Pt, railY - witnessExt, dim)
         c.drawLine(s.x1Pt, cylTop, s.x1Pt, railY - witnessExt, dim)
+        // Band-less rail: witness bars only — no spanning line, arrows, or label (a label with no
+        // span line under it would float, so this suppresses labels regardless of drawLabels).
+        if (!drawSpanLines) return@forEach
         c.drawLine(s.x0Pt, railY, s.x1Pt, railY, dim)
 
         val dirLeft = if (s.arrowInward) 1f else -1f
@@ -939,8 +985,17 @@ private const val WEAR_TEXT_PT    = 10f
 private const val WEAR_MARGIN_PT  = 36f
 
 private const val WEAR_HEADER_HEIGHT_PT       = 36f   // 2-line header block height
+private const val WEAR_HEADER_HEIGHT_BLANK_PT = 56f   // blank write-in header: taller so the writing rules have hand-writing room (device feedback)
+private const val WEAR_HEADER_BLANK_LINE_GAP_PT = 24f // baseline gap between the two blank header rule lines (printed header keeps ts*1.4)
 private const val WEAR_HEADER_GAP_PT          = 16f   // gap from header rule to drawing area
-private const val WEAR_OAL_ABOVE_SHAFT_PT     = 90f   // gap from shaft top edge to OAL line (≈1.25 in — raised so the dimension doesn't crowd the profile; matches RunoutPdfComposer.OAL_LINE_SPACE_PT, 2026-07-18)
+private const val WEAR_OAL_ABOVE_SHAFT_PT     = 44f   // gap from shaft top edge to OAL line. Was 90 for parity with the runout sheet, back when the profile filled the page and needed that much clearance; on the strip-bearing wear sheet nothing occupies that band, so 44 keeps the dimension line + its label clear of the shaft and returns the rest of the height to the detail strips (device feedback)
+
+// Profile-band budget (device feedback): what the band actually needs, so it can
+// shrink toward that instead of absorbing every spare point as white space.
+private const val WEAR_PROFILE_NAMES_ROW_PT = 26f   // names/direction row reserved under the shaft bottom (drawWearDirectionRef's ts+12 offset + descender)
+private const val WEAR_PROFILE_BOTTOM_PAD_PT = 6f   // air under the names row before the strips gap
+private const val WEAR_OAL_TOP_REGION_PT = 18f      // OAL label + air above the dimension line at the top of the profile band (matches the oalLineY clamp floor ts + 6, plus label height)
+private const val WEAR_STRIP_HEIGHT_MAX_PT = 170f   // per-strip growth cap when the profile donates its slack
 private const val WEAR_NOTES_BOTTOM_OFFSET_PT = 24f   // notes baseline above contentBot
 private const val WEAR_NOTES_GAP_PT           = 28f   // gap from drawing area bottom to notes
 
