@@ -29,20 +29,38 @@ class WearStripLayoutTest {
     private fun spot(linerId: String, startMm: Float = 0f, lengthMm: Float = 25f, minDiaMm: Float = 0f) =
         WearSpot(linerId = linerId, startMm = startMm, lengthMm = lengthMm, minDiaMm = minDiaMm)
 
-    // ── collectWearLinerGroups ────────────────────────────────────────────────
+    // ── collectWearLinerGroups (2026-07-27: EVERY drawable liner gets a strip, spots or not) ──
 
     @Test
-    fun `liner with no spots gets no strip`() {
+    fun `liner with no spots still gets a strip with an empty spot list`() {
         val liners = listOf(liner("a", 0f, 200f))
         val groups = collectWearLinerGroups(liners, WearRecord(spots = emptyList()))
-        assertTrue(groups.isEmpty())
+        assertEquals(1, groups.size)
+        assertEquals("a", groups[0].liner.id)
+        assertTrue(groups[0].spots.isEmpty())
     }
 
     @Test
-    fun `orphan spot referencing missing liner is dropped`() {
+    fun `orphan spot referencing missing liner is dropped but the real liner keeps its strip`() {
         val liners = listOf(liner("a", 0f, 200f))
         val record = WearRecord(spots = listOf(spot(linerId = "ghost")))
-        assertTrue(collectWearLinerGroups(liners, record).isEmpty())
+        val groups = collectWearLinerGroups(liners, record)
+        assertEquals(1, groups.size)
+        assertEquals("a", groups[0].liner.id)
+        assertTrue("the ghost spot must not attach to a different liner", groups[0].spots.isEmpty())
+    }
+
+    @Test
+    fun `degenerate liners with zero length or zero OD get no strip`() {
+        // A zero-length/zero-OD liner can't be drawn (drawWearDetailStrip bails) — including it
+        // would only claim an empty grid cell.
+        val liners = listOf(
+            liner("ok", 0f, 200f),
+            liner("no-len", 300f, 0f),
+            liner("no-od", 400f, 100f, odMm = 0f),
+        )
+        val groups = collectWearLinerGroups(liners, WearRecord(spots = emptyList()))
+        assertEquals(listOf("ok"), groups.map { it.liner.id })
     }
 
     @Test
@@ -83,20 +101,21 @@ class WearStripLayoutTest {
     }
 
     // ── determineWearPdfMode (2026-07-21 rule: 0 -> profile form, 1 -> combined, 2+ -> grid;
-    // the shaft profile is always kept on top) ─────────────────────────────────────────────
+    // the shaft profile is always kept on top. 2026-07-27: the count is the shaft's drawable
+    // LINER count, since every liner now gets a strip whether or not it has recorded wear) ──
 
     @Test
-    fun `zero wear liners selects the profile form`() {
+    fun `zero liners selects the profile form`() {
         assertEquals(WearPdfMode.PROFILE_FORM, determineWearPdfMode(0))
     }
 
     @Test
-    fun `one wear liner selects the combined page`() {
+    fun `one liner selects the combined page`() {
         assertEquals(WearPdfMode.COMBINED, determineWearPdfMode(1))
     }
 
     @Test
-    fun `two or more wear liners select the grid`() {
+    fun `two or more liners select the grid`() {
         assertEquals(WearPdfMode.GRID, determineWearPdfMode(WEAR_STRIP_GRID_MIN_LINERS))
         assertEquals(WearPdfMode.GRID, determineWearPdfMode(2))
         assertEquals(WearPdfMode.GRID, determineWearPdfMode(3))
@@ -104,32 +123,27 @@ class WearStripLayoutTest {
     }
 
     @Test
-    fun `no recorded spots at all resolves to the profile form via collectWearLinerGroups`() {
+    fun `a shaft with no liners resolves to the profile form via collectWearLinerGroups`() {
         // composeWearPdf's mode is `determineWearPdfMode(collectWearLinerGroups(...).size)` — no
-        // separate pure function re-derives "are there any spots", it reuses the already-tested
+        // separate pure function re-derives the liner count, it reuses the already-tested
         // grouping/orphan-drop logic. Spelled out explicitly here for this feature's mode switch.
+        val groups = collectWearLinerGroups(emptyList(), WearRecord(spots = listOf(spot("ghost"))))
+        assertEquals(WearPdfMode.PROFILE_FORM, determineWearPdfMode(groups.size))
+    }
+
+    @Test
+    fun `one liner with no recorded wear still resolves to the combined page`() {
+        // 2026-07-27: liners appear on the wear sheet regardless of recorded wear (normal shop
+        // operating procedure) — a spotless liner used to fall back to the profile form.
         val liners = listOf(liner("a", 0f, 200f))
         val groups = collectWearLinerGroups(liners, WearRecord(spots = emptyList()))
-        assertEquals(WearPdfMode.PROFILE_FORM, determineWearPdfMode(groups.size))
+        assertEquals(WearPdfMode.COMBINED, determineWearPdfMode(groups.size))
     }
 
     @Test
-    fun `spots recorded only against since-deleted liners resolve to the profile form too`() {
-        // All three "wear liners" here are orphans (their liner no longer exists in the spec) —
-        // collectWearLinerGroups drops them, so the mode switch correctly falls back to the
-        // profile form instead of rendering a grid page with nothing on it.
-        val liners = listOf(liner("still-here", 0f, 200f))
-        val record = WearRecord(
-            spots = listOf(spot(linerId = "deleted-1"), spot(linerId = "deleted-2"), spot(linerId = "deleted-3")),
-        )
-        val groups = collectWearLinerGroups(liners, record)
-        assertEquals(WearPdfMode.PROFILE_FORM, determineWearPdfMode(groups.size))
-    }
-
-    @Test
-    fun `exactly two wear liners crosses into the grid`() {
+    fun `exactly two liners cross into the grid even when only one has wear`() {
         val liners = listOf(liner("a", 0f, 200f), liner("b", 300f, 200f))
-        val record = WearRecord(spots = listOf(spot("a"), spot("b")))
+        val record = WearRecord(spots = listOf(spot("a")))
         val groups = collectWearLinerGroups(liners, record)
         assertEquals(2, groups.size)
         assertEquals(WearPdfMode.GRID, determineWearPdfMode(groups.size))
@@ -411,6 +425,18 @@ class WearStripLayoutTest {
     }
 
     @Test
+    fun `no bands at all yields one full-length span - the spotless-liner and blank-template rail`() {
+        // A liner with no recorded wear (every liner gets a strip since 2026-07-27) and every
+        // liner on the blank write-in template share this rail: a single span across the whole
+        // liner. The blank draft then draws it without its label (lines in, values out).
+        val spans = buildWearStripRailSpans(250f, emptyList(), UnitSystem.MILLIMETERS)
+        assertEquals(1, spans.size)
+        assertEquals(0f, spans[0].startMm, 1e-6f)
+        assertEquals(250f, spans[0].endMm, 1e-6f)
+        assertEquals(formatLenDim(250.0, UnitSystem.MILLIMETERS), spans[0].label)
+    }
+
+    @Test
     fun `a zero-length band (fully clamped away) contributes no span of its own`() {
         val linerLen = 100f
         // What clampWearBandToLiner(spotStartMm=150, spotLengthMm=20, linerLengthMm=100) actually
@@ -617,6 +643,22 @@ class WearStripLayoutTest {
         val sets = SetPositions(aftSETxMm = 0.0, fwdSETxMm = 1000.0)
         val label = buildLinerAnchorLabel(spec, liner("ghost", 0f, 10f), sets, UnitSystem.MILLIMETERS)
         assertEquals("", label)
+    }
+
+    @Test
+    fun `anchor suffix wording matches the printed label for both SETs`() {
+        // The blank template prints a writing rule + this suffix where the value would go — the
+        // wording must be exactly what buildLinerAnchorLabel appends after the number.
+        assertEquals("FROM AFT S.E.T.", linerAnchorSuffix(com.android.shaftschematic.model.LinerAnchor.AFT_SET))
+        assertEquals("FROM FWD S.E.T.", linerAnchorSuffix(com.android.shaftschematic.model.LinerAnchor.FWD_SET))
+    }
+
+    @Test
+    fun `blank anchor suffix offers both directions for circling`() {
+        // The write-in template must not presume a direction — both print, machinist circles one.
+        assertTrue(WEAR_BLANK_ANCHOR_SUFFIX.contains("AFT / FWD"))
+        assertTrue(WEAR_BLANK_ANCHOR_SUFFIX.startsWith("FROM"))
+        assertTrue(WEAR_BLANK_ANCHOR_SUFFIX.endsWith("S.E.T."))
     }
 
     // ── formatMinDiaLabelOrNull ────────────────────────────────────────────────

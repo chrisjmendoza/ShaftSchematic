@@ -419,15 +419,27 @@ under the same name for the same shaft.
 The **shaft profile is always drawn on top** of the wear document now (2026-07-21, user
 request): body/taper pit "X"s live on the whole-shaft profile, so it must stay visible. The
 detail strips below pick their layout from `determineWearPdfMode(collectWearLinerGroups(
-docSpec.liners, wearRecord).size)` — a pure function of how many liners have ≥1 recorded,
-non-orphan wear *spot* (orphan spots on a since-deleted liner are already dropped by
-`collectWearLinerGroups`; pits don't affect the mode):
+docSpec.liners, wearRecord).size)` — since 2026-07-27 that is a pure function of the shaft's
+**drawable liner count**: every liner with positive length and OD gets a strip, whether or
+not it has recorded wear (the shop's normal operating procedure — the sheet always shows all
+liners; a spotless liner's strip simply has no bands/min-Ø and a single full-length rail
+span). Orphan spots on a since-deleted liner are dropped by `collectWearLinerGroups`; pits
+don't affect the mode:
 
-| Wear liners | Mode | Page shows |
+| Liners | Mode | Page shows |
 |---|---|---|
 | 0 | `PROFILE_FORM` | Shaft profile only (still prints any recorded pits). |
 | 1 | `COMBINED` | Shaft profile + wear bands, with one full-width detail strip below. |
 | 2+ | `GRID` | Shaft profile on top + the detail strips in a **2-column grid** below — two side by side, the third on the next row, so the strips take ~2 rows and the profile keeps the top. Up to `WEAR_STRIP_GRID_MAX_PER_PAGE` = 4 shown; "+N more" overflow note beyond. |
+
+**Blank draft (write-in) mode** (`blankValues = true`, 2026-07-27): the same page — profile
+AND every liner's zoomed strip — renders as a hand-fill template, mirroring the blank
+schematic's lines-in/values-out posture. Header job info and the OAL value become writing
+rules; recorded wear (bands, pits, min-Ø) is omitted; each strip's dimension rail draws its
+witness lines/spans/arrows but **no value labels**; the strip title's anchor value becomes a
+writing rule followed by `WEAR_BLANK_ANCHOR_SUFFIX` ("FROM  AFT / FWD  S.E.T." — both directions
+print, the machinist circles one), always left-aligned since the write-in sheet doesn't presume a
+measurement direction.
 
 This replaced the old strips-only mode (which dropped the profile at 3+ wear liners). Now that
 bodies/tapers can carry pits, keeping the shaft always visible matters more than giving the strips
@@ -456,16 +468,18 @@ layouts (see "Wear PDF Rendering Modes" above for how each positions the strips)
 
 **Selection & pagination** — `pdf/WearStripLayout.kt` (android-free, unit-tested directly,
 `WearStripLayoutTest`):
-- `collectWearLinerGroups` groups `wearRecord.spots` by liner, keeps only liners with ≥1
-  spot, sorted aft → fwd. Orphaned spots (stale `linerId`) are dropped defensively (the
-  authoritative drop is at decode time, `ShaftDocCodec`).
+- `collectWearLinerGroups` builds one group per **drawable liner** (positive length + OD),
+  attaching whatever spots `wearRecord` holds against it — including none (2026-07-27: every
+  liner gets a strip regardless of recorded wear), sorted aft → fwd. Orphaned spots (stale
+  `linerId`) are dropped defensively (the authoritative drop is at decode time,
+  `ShaftDocCodec`).
 - `selectWearStripsForPage` caps at `WEAR_STRIP_MAX_PER_PAGE` (3). Liners beyond that are
   **not** put on a second PDF page — `composeWearPdf` only ever receives a single
   caller-supplied `PdfDocument.Page` (every call site does one `startPage` /
   `finishPage`), and growing that into true multi-page output would mean changing the
   function's signature and every call site. Instead, overflow renders as one text note
-  line ("+N more liner(s) with wear spots ..., page limit 3") in a reserved band just
-  above the notes area. Revisit if/when `composeWearPdf` grows multi-page support.
+  line ("+N more liner(s): ...") in a reserved band just above the notes area. Revisit
+  if/when `composeWearPdf` grows multi-page support.
 
 **Main profile** — liners with ≥1 wear spot get thin **vertical-line** bands
 (`drawWearBandsOnProfile` → `drawVerticalBand`) at their true axial position, clamped to the
@@ -473,10 +487,12 @@ liner span (`clampWearBandToLiner`), drawn after the profile's own liner outline
 not dominant — same alpha/weight/pitch as the old diagonal hatch, only the stroke orientation
 changed (2026-07-22, to match how the shop marks wear areas by hand — the vertical tick style
 in the reference sketch). The broken-out detail strips still use the diagonal hatch
-(`drawHatchBand`). Each wear liner's **name** is also printed centered under its span
+(`drawHatchBand`). Each on-page liner's **name** is also printed centered under its span
 (`drawWearLinerNamesOnProfile`, 2026-07-22), sharing the row with the "← AFT / FWD →" labels
 (clamped clear of them) — a lightweight reference tying each band to its broken-out strip, using
-the same name the strip title shows.
+the same shared title the strip title shows: `buildLinerTitleById` (`util/LinerTitles.kt`) —
+custom label wins, else a positional AFT/MID/FWD default — identical names to the carousel
+cards and runout sheet.
 
 **Vertical page split** — `computeWearVerticalLayout` splits the profile band into a
 (possibly shrunk) main-profile region followed by up to 3 stacked strips. The profile

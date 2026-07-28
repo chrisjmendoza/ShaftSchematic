@@ -28,13 +28,18 @@ import kotlin.math.abs
 // Selection: which liners get a strip, aft → fwd, max N per page
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** One liner and the wear spots recorded against it (always non-empty). */
+/** One liner and the wear spots recorded against it (possibly empty — every liner
+ *  gets a detail strip whether or not wear was recorded, 2026-07-27 shop procedure). */
 data class WearLinerGroup(val liner: Liner, val spots: List<WearSpot>)
 
 /**
- * Groups [wearRecord]'s spots by liner, keeping only liners that are present in
- * [liners] AND have at least one spot. Sorted aft → fwd by the liner's physical
- * start position, matching the proposal's "order aft→fwd" rule (§10.4).
+ * Builds one group per drawable liner (positive length AND OD — a degenerate liner
+ * would only leave a blank grid cell), attaching whatever wear spots [wearRecord]
+ * holds against it — **including liners with zero spots** (2026-07-27: every liner
+ * appears on the wear sheet regardless of recorded wear; that's the shop's normal
+ * operating procedure, and the blank write-in template needs the strips too).
+ * Sorted aft → fwd by the liner's physical start position, matching the proposal's
+ * "order aft→fwd" rule (§10.4).
  *
  * Spots whose `linerId` doesn't match any liner in [liners] are silently dropped
  * here. The authoritative orphan-drop already happens at decode time
@@ -43,10 +48,11 @@ data class WearLinerGroup(val liner: Liner, val spots: List<WearSpot>)
  * PDF layout.
  */
 fun collectWearLinerGroups(liners: List<Liner>, wearRecord: WearRecord): List<WearLinerGroup> {
-    if (wearRecord.spots.isEmpty() || liners.isEmpty()) return emptyList()
+    if (liners.isEmpty()) return emptyList()
     val byLiner = wearRecord.spots.groupBy { it.linerId }
     return liners
-        .mapNotNull { ln -> byLiner[ln.id]?.takeIf { it.isNotEmpty() }?.let { WearLinerGroup(ln, it) } }
+        .filter { it.lengthMm > 0f && it.odMm > 0f }
+        .map { ln -> WearLinerGroup(ln, byLiner[ln.id].orEmpty()) }
         .sortedBy { it.liner.startFromAftMm }
 }
 
@@ -57,23 +63,24 @@ data class WearStripSelection(val onPage: List<WearLinerGroup>, val overflow: Li
 const val WEAR_STRIP_MAX_PER_PAGE = 3
 
 /**
- * Minimum number of liners with recorded wear (i.e. `collectWearLinerGroups(...).size`) that
- * switches the wear PDF from single-column stacked strips to the **2-column grid** (2026-07-21,
- * by design): with two or more strips the shaft profile must stay on top, and stacking them
- * full-width would push it out — so from two strips up they lay out side by side (two per row),
- * keeping the profile above and its body/taper pit "X"s visible. Below this (one wear liner) the
- * single full-width strip below the profile is unchanged; see [WearPdfMode].
+ * Minimum number of liners (i.e. `collectWearLinerGroups(...).size` — every drawable liner since
+ * 2026-07-27, with or without recorded wear) that switches the wear PDF from single-column stacked
+ * strips to the **2-column grid** (2026-07-21, by design): with two or more strips the shaft
+ * profile must stay on top, and stacking them full-width would push it out — so from two strips up
+ * they lay out side by side (two per row), keeping the profile above and its body/taper pit "X"s
+ * visible. Below this (one liner) the single full-width strip below the profile is unchanged; see
+ * [WearPdfMode].
  */
 const val WEAR_STRIP_GRID_MIN_LINERS = 2
 
 /** Which of the wear PDF's rendering modes applies — see [determineWearPdfMode]. */
 enum class WearPdfMode {
-    /** No recorded wear spots (or every spot's liner was deleted): the blank hand-marking form. */
+    /** The shaft has no liners at all: profile-only hand-marking form (still prints any pits). */
     PROFILE_FORM,
-    /** 1 wear liner: shaft profile + bands, with one full-width detail strip below. */
+    /** 1 liner: shaft profile + bands, with one full-width detail strip below. */
     COMBINED,
     /**
-     * 2+ wear liners: shaft profile on top (with body/taper/liner pits + liner bands) and the
+     * 2+ liners: shaft profile on top (with body/taper/liner pits + liner bands) and the
      * detail strips laid out in a **2-column grid** below — two side by side, the third on the
      * next row, so the strips occupy only ~2 rows and the profile is always kept. Replaced the
      * old strips-only mode (2026-07-21).
@@ -82,10 +89,11 @@ enum class WearPdfMode {
 }
 
 /**
- * Resolves the wear PDF's rendering mode from how many liners have recorded wear
- * ([collectWearLinerGroups]'s result size — already excludes liners with zero spots and orphaned
- * spots on a since-deleted liner). Pure rule so `WearPdfComposer` never has to re-derive the
- * threshold inline: `0` → [WearPdfMode.PROFILE_FORM], `1` → [WearPdfMode.COMBINED],
+ * Resolves the wear PDF's rendering mode from how many liners get a detail strip
+ * ([collectWearLinerGroups]'s result size — since 2026-07-27 that is EVERY drawable liner,
+ * with or without recorded wear, so the mode is effectively a function of the shaft's liner
+ * count). Pure rule so `WearPdfComposer` never has to re-derive the threshold inline:
+ * `0` → [WearPdfMode.PROFILE_FORM], `1` → [WearPdfMode.COMBINED],
  * `[WEAR_STRIP_GRID_MIN_LINERS]` or more → [WearPdfMode.GRID].
  */
 fun determineWearPdfMode(wearLinerGroupCount: Int): WearPdfMode = when {
@@ -645,9 +653,24 @@ fun buildLinerAnchorLabel(spec: ShaftSpec, liner: Liner, sets: SetPositions, uni
     val dim = mapToLinerDimsForPdf(spec, PdfTieringMode.AUTO).firstOrNull { it.id == liner.id } ?: return ""
     val datum = buildLinerSpans(listOf(dim), sets, unit, PdfTieringMode.AUTO)
         .firstOrNull { it.kind == SpanKind.DATUM } ?: return ""
-    val setWord = if (dim.anchor == LinerAnchor.AFT_SET) "AFT S.E.T." else "FWD S.E.T."
-    return "${datum.labelTop} FROM $setWord"
+    return "${datum.labelTop} ${linerAnchorSuffix(dim.anchor)}"
 }
+
+/**
+ * The anchor label's suffix ("FROM AFT S.E.T." / "FROM FWD S.E.T.") without the measured value —
+ * the blank write-in template prints a writing rule where [buildLinerAnchorLabel]'s number would
+ * go, followed by this suffix, so the two modes always use identical SET wording.
+ */
+fun linerAnchorSuffix(anchor: LinerAnchor): String =
+    "FROM " + if (anchor == LinerAnchor.AFT_SET) "AFT S.E.T." else "FWD S.E.T."
+
+/**
+ * Anchor suffix for the blank write-in template's strip titles: the measurement value is a
+ * writing rule and the direction is the machinist's call, so BOTH directions print with
+ * breathing room for circling one by hand ("circle one"), instead of presuming
+ * [linerAnchorSuffix]'s resolved AFT/FWD. Double spaces are deliberate circling room.
+ */
+const val WEAR_BLANK_ANCHOR_SUFFIX = "FROM  AFT / FWD  S.E.T."
 
 /**
  * Which SET a liner's wear-strip anchor dimension is measured from ([LinerAnchor.AFT_SET] vs
