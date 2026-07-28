@@ -378,7 +378,7 @@ fun ShaftSpec.splitBodiesAround(
  *
  * The merged body spans A.start → B.end and keeps the diameter both fragments already
  * share — the merge is **skipped** when the two diameters differ, because inventing one
- * (previously `max(A, B)`) silently rewrites a stored diameter the user typed. Both bodies
+ * would silently rewrite a stored diameter the user typed. Both bodies
  * then stay put and the freed span is auto-filled by the resolve layer. The dominant
  * round-trip case still restores a single body: [splitBodiesAround] fragments inherit the
  * parent's [Body.diaMm] verbatim, so they always agree.

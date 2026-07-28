@@ -14,7 +14,7 @@ import com.android.shaftschematic.util.UnitSystem
  *
  * BELOW-side callouts that would collide horizontally are stacked onto a second row via
  * [DiameterCalloutLayout] — the same two-tier posture the runout bubbles use. ABOVE-side
- * callouts (none produced today) keep the legacy single-row geometry.
+ * callouts (none produced today) use plain single-row geometry — no tiering.
  */
 class DiameterLeaderRenderer(
     private val pageX: (Double) -> Float,   // mm → page X

@@ -52,8 +52,8 @@ import kotlin.math.min
  *    up to [RunoutBubbleGeometry.leaderClearance] on top of `crossRowPitch`, split evenly
  *    across the slack-eligible gaps and capped so the total never exceeds the available
  *    span. This can only ever grow a gap, never shrink one below its geometric minimum, so
- *    it changes zero collision guarantees — it degrades to exactly the old behaviour the
- *    moment a row is tight (no free slack to spend).
+ *    it changes zero collision guarantees — it degrades to exactly the base minimum-pitch
+ *    layout the moment a row is tight (no free slack to spend).
  */
 
 // ─────────────────────────────────────────────────────────────────────────────

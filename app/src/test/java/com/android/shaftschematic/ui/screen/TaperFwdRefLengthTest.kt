@@ -142,18 +142,18 @@ class TaperFwdRefLengthTest {
         assertEquals("physStart moved toward AFT", 300f, newStart, 0.001f)
     }
 
-    // ── Regression: pre-fix behaviour would not satisfy these ────────────
+    // ── Regression guard: a naive implementation that always keeps startFromAftMm would fail these ────────────
 
     @Test
     fun `fwd ref - old fix would have failed by keeping startFromAftMm unchanged`() {
-        // Pre-fix: physStart was always returned as taper.startFromAftMm in both branches.
-        // That means FWD end would drift when length changes.
+        // A naive implementation that always returns taper.startFromAftMm here would let
+        // the FWD end drift when length changes.
         val oalMm = 300f
         val taper = Taper(startFromAftMm = 150f, lengthMm = 100f,
             startDiaMm = 60f, endDiaMm = 50f, authoredReference = LinerAuthoredReference.FWD)
         val newLen = 150f
 
-        val oldBehaviourStart = taper.startFromAftMm  // pre-fix: always use startFromAftMm
+        val oldBehaviourStart = taper.startFromAftMm  // naive alternative: always use startFromAftMm
         val oldFwdEnd = oldBehaviourStart + newLen     // 150 + 150 = 300 ≠ 250 (drifted)
 
         val fixedStart = physStartAfterLengthChange(taper, newLengthMm = newLen, oalMm = oalMm)

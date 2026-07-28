@@ -887,7 +887,7 @@ private fun DrawScope.drawThreadStubHatch(x0: Float, top: Float, x1: Float, bot:
  * Compose port of the pdf-layer `drawBreakEdge` S-curve convention (`pdf/BreakSymbol.kt`) — same
  * math, redrawn with Compose [Path]/[DrawScope]. [eyeAtTop] must be chosen so the eye's larger
  * "sweep" curve bulges into the **void** side of the break: left (AFT) stub = `true`, right (FWD)
- * stub = `false` (see the original derivation in the KDoc history).
+ * stub = `false`.
  */
 private fun DrawScope.drawBreakEdgeCompose(
     x: Float,

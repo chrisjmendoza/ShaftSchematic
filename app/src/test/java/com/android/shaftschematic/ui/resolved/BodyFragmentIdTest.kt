@@ -13,9 +13,9 @@ import org.junit.Test
  * Resolved body fragments must carry unique ids.
  *
  * A stored body overlapped by a taper/thread/liner is trimmed into several drawn fragments.
- * Every fragment used to reuse the stored id, so two carousel rows shared one id — duplicate
+ * Reusing the stored id for every fragment would make two carousel rows share one id — duplicate
  * `HorizontalPager` keys (a Lazy-layout key collision throws at runtime) and an ambiguous
- * resolved→stored mapping. Now the first fragment keeps the stored id (so wear pits, runout
+ * resolved→stored mapping. The first fragment keeps the stored id (so wear pits, runout
  * readings and selection still resolve to the primary fragment) and later fragments get a
  * deterministic `"#2"`, `"#3"`, … suffix.
  *

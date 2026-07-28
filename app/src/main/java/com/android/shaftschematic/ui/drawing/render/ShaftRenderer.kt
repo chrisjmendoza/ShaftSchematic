@@ -46,7 +46,7 @@ import kotlin.math.min
  * • Colors/line widths come from [RenderOptions].
  * • Keep allocations low in hot paths. Paths are reused per element and scoped.
  * • Highlight outline: when enabled & an ID matches, we paint a glow under-stroke,
- *   then the normal stroke on top. When highlight is off, visuals are identical to legacy.
+ *   then the normal stroke on top. When highlight is off, visuals are unaffected.
  */
 /**
  * Hidden-line dash for far-side (180°-apart) keyways, in px. Mirrored exactly in the PDF
@@ -517,8 +517,8 @@ private fun DrawScope.drawHighlightStroke(
     glowDx: Float,
     glowAlpha: Float,
 ) {
-    // Single selection ring — outer glow only. The inner white edge ring was removed
-    // because it created a distracting double-box appearance.
+    // Single selection ring — outer glow only. Do not add an inner white edge ring — it
+    // creates a distracting double-box appearance.
     drawPath(
         path = path,
         color = glowColor.copy(alpha = glowAlpha),

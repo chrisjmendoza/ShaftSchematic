@@ -134,7 +134,7 @@ class WearStripLayoutTest {
     @Test
     fun `one liner with no recorded wear still resolves to the combined page`() {
         // Liners appear on the wear sheet regardless of recorded wear (normal shop
-        // operating procedure) — a spotless liner used to fall back to the profile form.
+        // operating procedure).
         val liners = listOf(liner("a", 0f, 200f))
         val groups = collectWearLinerGroups(liners, WearRecord(spots = emptyList()))
         assertEquals(WearPdfMode.COMBINED, determineWearPdfMode(groups.size))
@@ -374,8 +374,8 @@ class WearStripLayoutTest {
         assertTrue(hLayout.linerRightPt > hLayout.linerLeftPt)
     }
 
-    // ── computeWearStripInnerLayout (dimension-rail rework: fixed rail budget,
-    // no longer proportional to spot count) ──────────────────────────────────────────────
+    // ── computeWearStripInnerLayout (dimension rail: fixed budget, independent of
+    // spot count) ──────────────────────────────────────────────
 
     @Test
     fun `inner layout fits the cylinder and the full rail row budget in an ordinary strip`() {
@@ -429,7 +429,7 @@ class WearStripLayoutTest {
         assertTrue(inner.railY <= inner.cylTop + 1e-3f)
     }
 
-    // ── computeWearStripInnerLayout — label headroom (SVG review, defect 2) ──
+    // ── computeWearStripInnerLayout — label headroom ──
 
     @Test
     fun `label headroom is reserved between the cylinder and the title`() {
@@ -455,7 +455,7 @@ class WearStripLayoutTest {
         assertTrue(inner.railY <= inner.cylTop + 1e-3f)
     }
 
-    // ── buildWearStripRailSpans (dimension-rail rework) ────────────────────────
+    // ── buildWearStripRailSpans (dimension rail) ────────────────────────
 
     private fun bands(vararg pairs: Pair<Float, Float>) = pairs.map { (s, l) -> WearBandClamp(s, l) }
 
@@ -604,7 +604,7 @@ class WearStripLayoutTest {
         }
     }
 
-    // ── computeWearStripRadii — common-factor scaling (SVG review, defect 1) ──
+    // ── computeWearStripRadii — common-factor scaling ──
 
     @Test
     fun `radii within budget are left unscaled`() {

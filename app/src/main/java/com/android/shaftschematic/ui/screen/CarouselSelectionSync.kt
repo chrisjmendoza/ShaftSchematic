@@ -11,7 +11,7 @@ package com.android.shaftschematic.ui.screen
  *  • selection changed externally (preview tap, add, delete) → scroll the pager to it
  *  • user swiped the pager → adopt the landed page as the selection
  *
- * They must not fight. An earlier version did, and produced visible jumping — see the comment
+ * They must not fight — if they do, the result is visible jumping. See the comment
  * above the initial-load effect in `ComponentCarousel.kt`.
  */
 
@@ -55,10 +55,10 @@ fun shouldAnimateToSelection(
  * An **orphaned** selection ([selectedIndex] == [NO_CAROUSEL_TARGET]) also counts as
  * user-initiated: the follow effect never animates toward a missing row
  * ([shouldAnimateToSelection] requires `targetIndex >= 0`), so the scroll cannot be our own
- * catch-up. Without this arm, a selection whose id stopped resolving — an auto-body row
- * whose position-derived id regenerated after an edit, or a stale id carried across a
- * document open — bricked swipe adoption permanently: swiping changed cards but never
- * updated the selection, so the preview highlight never followed (fixed).
+ * catch-up. Without this arm, a selection whose id stops resolving — an auto-body row
+ * whose position-derived id regenerates after an edit, or a stale id carried across a
+ * document open — would brick swipe adoption permanently: swiping would change cards but
+ * never update the selection, so the preview highlight would never follow.
  */
 fun isUserInitiatedScroll(selectedId: String?, selectedIndex: Int, currentPage: Int): Boolean =
     selectedId == null || selectedIndex == NO_CAROUSEL_TARGET || selectedIndex == currentPage
