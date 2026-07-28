@@ -63,6 +63,14 @@ Four rounds of on-device feedback in one day, all on the wear/inspection sheet.
 - Printed spans **keep** the small "OAL" prefix (product decision: print output is
   compact and it reads as a nice visual identifier) — wear/runout OAL lines and the
   schematic's `oalSpan()` top rail are unchanged in print.
+- Printed wear/runout OAL values now **seat in a break cut mid-span**, vertically centred
+  on the line — the schematic's value-in-a-break convention, kept consistent across
+  drawing outputs (previously the label floated above a continuous line). Short-span
+  fallback mirrors `PdfDimensionRenderer` (continuous line, label above).
+- The wear strips' **chained rail values** seat in breaks too: a label that fits inside
+  its span (the inward-arrow test) sits in the line's gap; overhanging labels for short
+  bands/gaps keep the stacked below-line fallback rows. Shared pad
+  `DIM_BREAK_TEXT_PAD_PT` (`BlankFormText.kt`) across all break sites.
 
 ### chore: comment hygiene — no dates, no prior-code narratives
 

@@ -372,31 +372,36 @@ private fun drawWearOalLine(
     c.drawLine(x0, shaftTopY - witnessGap, x0, oalLineY - witnessExt, dim)
     c.drawLine(x1, shaftTopY - witnessGap, x1, oalLineY - witnessExt, dim)
 
+    // Both modes cut a break mid-span — the schematic's dimension-value convention, kept
+    // consistent across drawing outputs. Blank: an empty writable gap (no wording where
+    // handwriting goes). Printed: the "OAL: value" label seats IN the gap, vertically
+    // centred on the line (the small printed prefix is a deliberate visual identifier).
+    val mid = (x0 + x1) * 0.5f
     if (blankValues) {
-        // Blank draft: no "OAL" label of any kind — the value is written by hand in a break cut
-        // mid-span, the same convention PdfDimensionRenderer uses for blank schematic dimension
-        // breaks (empty gap, no underline, no text). An end-to-end span already implies "OAL".
-        val mid = (x0 + x1) * 0.5f
         val gapHalf = BLANK_DIM_GAP_PT * 0.5f
         c.drawLine(x0, oalLineY, mid - gapHalf, oalLineY, dim)
         c.drawLine(mid + gapHalf, oalLineY, x1, oalLineY, dim)
     } else {
-        // Dimension line with arrowheads
-        c.drawLine(x0, oalLineY, x1, oalLineY, dim)
+        val label = if (unit == UnitSystem.INCHES) "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
+        else "OAL: ${"%.2f".format(oalMm)} mm"
+        val lw = text.measureText(label)
+        val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
+        if ((mid - gapHalf) - x0 >= arrowLen + 2f) {
+            c.drawLine(x0, oalLineY, mid - gapHalf, oalLineY, dim)
+            c.drawLine(mid + gapHalf, oalLineY, x1, oalLineY, dim)
+            val fm = text.fontMetrics
+            c.drawText(label, mid - lw * 0.5f, oalLineY - (fm.ascent + fm.descent) * 0.5f, text)
+        } else {
+            // Fallback for a span too short to host the break + inward arrows: continuous
+            // line, label above — mirrors PdfDimensionRenderer's fallback rule.
+            c.drawLine(x0, oalLineY, x1, oalLineY, dim)
+            c.drawText(label, mid - lw * 0.5f, oalLineY - 4f, text)
+        }
     }
     c.drawLine(x0, oalLineY, x0 + arrowLen, oalLineY - arrowLen * 0.4f, dim)
     c.drawLine(x0, oalLineY, x0 + arrowLen, oalLineY + arrowLen * 0.4f, dim)
     c.drawLine(x1, oalLineY, x1 - arrowLen, oalLineY - arrowLen * 0.4f, dim)
     c.drawLine(x1, oalLineY, x1 - arrowLen, oalLineY + arrowLen * 0.4f, dim)
-
-    // Printed: "OAL: value" centred above the dimension line — the small printed prefix is a
-    // deliberate visual identifier (product decision); only handwriting surfaces omit it.
-    if (!blankValues) {
-        val label = if (unit == UnitSystem.INCHES) "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
-        else "OAL: ${"%.2f".format(oalMm)} mm"
-        val lw = text.measureText(label)
-        c.drawText(label, (x0 + x1) * 0.5f - lw * 0.5f, oalLineY - 4f, text)
-    }
 }
 
 /**
@@ -839,9 +844,14 @@ private fun drawWearDetailStrip(
  * Draws one strip's chained dimension rail (`buildWearStripRailSpans`/`layoutWearStripRail` in
  * `WearStripLayout.kt`): witness lines from just above the cylinder edge up to the rail (a
  * small clear gap at the liner, matching the main profile's OAL witness convention), an arrowed
- * dimension line per chained span, and each span's label — stacked onto whichever row
- * `layoutWearStripRail` assigned it, clamped to [maxLabelRows] (rows beyond the budget
- * `computeWearStripInnerLayout` actually fit for this strip are never drawn).
+ * dimension line per chained span, and each span's label. A label that fits inside its own
+ * span (the inward-arrow test, which also guarantees stub room at [DIM_BREAK_TEXT_PAD_PT])
+ * **seats in a break cut in the span line**, vertically centred — the schematic's
+ * value-in-a-break convention, consistent across drawing outputs. A label wider than its
+ * span (short bands/gaps) falls back to the stacked below-line rows assigned by
+ * `layoutWearStripRail`, clamped to [maxLabelRows] (rows beyond the budget
+ * `computeWearStripInnerLayout` actually fit for this strip are never drawn) — break-seated
+ * labels can never collide with each other since chained spans are disjoint.
  *
  * [drawLabels] = false (blank write-in draft) keeps every line and arrowhead but skips the
  * value labels — the lines-in/values-out template rule.
@@ -879,7 +889,21 @@ private fun drawWearStripRail(
         // Band-less rail: witness bars only — no spanning line, arrows, or label (a label with no
         // span line under it would float, so this suppresses labels regardless of drawLabels).
         if (!drawSpanLines) return@forEach
-        c.drawLine(s.x0Pt, railY, s.x1Pt, railY, dim)
+
+        // Value-in-a-break when the label fits its span (arrowInward guarantees the break's
+        // stubs still have arrow room); otherwise a continuous line with the below-line
+        // fallback row — the schematic's drawSpan rule, mirrored.
+        val lw = dimText.measureText(s.label)
+        val seatsInBreak = drawLabels && s.arrowInward
+        if (seatsInBreak) {
+            val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
+            c.drawLine(s.x0Pt, railY, s.labelCxPt - gapHalf, railY, dim)
+            c.drawLine(s.labelCxPt + gapHalf, railY, s.x1Pt, railY, dim)
+            val fm = dimText.fontMetrics
+            c.drawText(s.label, s.labelCxPt - lw * 0.5f, railY - (fm.ascent + fm.descent) * 0.5f, dimText)
+        } else {
+            c.drawLine(s.x0Pt, railY, s.x1Pt, railY, dim)
+        }
 
         val dirLeft = if (s.arrowInward) 1f else -1f
         val dirRight = if (s.arrowInward) -1f else 1f
@@ -888,11 +912,12 @@ private fun drawWearStripRail(
         c.drawLine(s.x1Pt, railY, s.x1Pt + dirRight * arrow, railY - arrow * 0.5f, dim)
         c.drawLine(s.x1Pt, railY, s.x1Pt + dirRight * arrow, railY + arrow * 0.5f, dim)
 
-        val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
-        if (drawLabels && row >= 0) {
-            val ly = railY + labelGapPt + dimText.textSize + row * rowStepPt
-            val lw = dimText.measureText(s.label)
-            c.drawText(s.label, s.labelCxPt - lw * 0.5f, ly, dimText)
+        if (drawLabels && !seatsInBreak) {
+            val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
+            if (row >= 0) {
+                val ly = railY + labelGapPt + dimText.textSize + row * rowStepPt
+                c.drawText(s.label, s.labelCxPt - lw * 0.5f, ly, dimText)
+            }
         }
     }
 }

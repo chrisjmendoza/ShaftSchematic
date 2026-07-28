@@ -17,6 +17,15 @@ internal const val BLANK_RULE_PT = 70f
 /** Writable gap reserved inside a dimension-line break when the value is blanked (pt). */
 internal const val BLANK_DIM_GAP_PT = 46f
 
+/**
+ * Air between a printed dimension value and each line stub when it seats in its break
+ * (pt) — the wear/runout OAL lines and the wear strips' chained rails mimic the
+ * schematic's value-in-a-break convention so all drawing outputs read the same.
+ * `layoutWearStripRail`'s `textPadPt` default must stay equal to this: its inward-arrow
+ * fit test is what guarantees a break cut at this pad leaves stub room for the arrows.
+ */
+internal const val DIM_BREAK_TEXT_PAD_PT = 4f
+
 /** Rule sits slightly below the text baseline, like an underscore. */
 private const val RULE_DROP_PT = 2f
 

@@ -357,10 +357,13 @@ always the user's **typed OAL** (`spec.overallLengthMm`) — the same "OAL never
 as the main schematic (`OverallLength.md`). The arrows still bracket the drawn SET-to-SET
 span; only the label uses the typed value. The printed label keeps its small `"OAL: "`
 prefix (product decision, 2026-07-28: compact print output reads well and the prefix is a
-nice visual identifier). Neither document's **header** repeats the OAL (it would just
-duplicate this span), and the blank/write-in variant of this line carries no label text at
-all — the machinist hand-writes the value in an empty break cut mid-span: see "Blank draft"
-below.
+nice visual identifier) and **seats in a break cut mid-span, vertically centred on the
+line** — the same value-in-a-break convention as the schematic's dimension lines
+(`PdfDimensionRenderer.drawSpan`), so all drawing outputs read the same; a span too short
+for the break + inward arrows falls back to a continuous line with the label above.
+Neither document's **header** repeats the OAL (it would just duplicate this span), and the
+blank/write-in variant of this line carries no label text at all — the machinist
+hand-writes the value in an empty break cut mid-span: see "Blank draft" below.
 
 ---
 
@@ -580,6 +583,12 @@ witness-line/arrowed-span/centered-label convention the main schematic uses
   `PdfDimensionRenderer.canFitInwardArrows`); and a label is bumped to the next stacked row
   when it would otherwise overlap an already-placed label — the crowding fallback for
   short bands/gaps whose label is wider than the span itself.
+- **Drawing (2026-07-28)**: a label that fits inside its span (`arrowInward == true`, which
+  also guarantees the break's stubs keep arrow room at `DIM_BREAK_TEXT_PAD_PT`) **seats in
+  a break cut in the span line, vertically centred** — the schematic's value-in-a-break
+  convention, consistent across drawing outputs. Only overhanging labels use the stacked
+  below-line rows; break-seated labels can never collide since chained spans are disjoint.
+  The wear/runout end-to-end OAL lines follow the same rule.
   `PdfDimensionRenderer` itself isn't reused directly: it's built around the schematic's
   multi-tier DATUM/LOCAL rail stacking (spans that overlap in x get assigned different
   rails), whereas a wear strip's rail is a single flat chain of never-overlapping spans —
