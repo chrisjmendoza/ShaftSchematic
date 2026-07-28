@@ -231,8 +231,8 @@ class RunoutBubbleLayoutTest {
         // A narrow content window (160pt available) with 6 alternating-row stations needing
         // 5 * crossRowPitch(25) = 125pt minimum — only 35pt of slack, not the 5 * 8 = 40pt
         // the full leaderClearance spread would want. The widening must degrade to exactly
-        // what fits (7pt/gap, not 8), never compress, never collide — the same
-        // no-new-collisions guarantee the layout had before rule 7 existed.
+        // what fits (7pt/gap, not 8), never compress, never collide — the no-new-collisions
+        // guarantee must hold regardless of how much clearance-spread widening is applied.
         val tight = geom.copy(contentLeft = 0f, contentRight = 200f)
         val stations = List(6) { i -> RunoutStationX("c0", i * 20f, i * 20f + 10f) }
         val plan = planRunoutBubbles(stations, tight)
@@ -292,7 +292,7 @@ class RunoutBubbleLayoutTest {
     @Test
     fun `dense boundary between components holds all invariants`() {
         // Components meeting at a shared boundary with stations only ~15pt apart on page —
-        // the configuration that broke the old greedy algorithm (leader through bubble).
+        // a tight configuration where a leader could otherwise cross through a bubble.
         val stations = listOf(
             RunoutStationX("body1", 100f, 300f),
             RunoutStationX("body1", 120f, 315f),

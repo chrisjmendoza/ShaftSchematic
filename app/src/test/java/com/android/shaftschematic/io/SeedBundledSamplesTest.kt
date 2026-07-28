@@ -372,8 +372,8 @@ class SeedBundledSamplesTest {
             )
 
             // User opens the sample, edits it, and saves it back under the same
-            // name — even keeping the [SAMPLE] notes marker. This was the exact
-            // scenario that used to get silently deleted on update.
+            // name — even keeping the [SAMPLE] notes marker. This exact scenario must
+            // not be silently deleted on update.
             val userEdited = encodeDoc(
                 jobNumber = job, customer = customer, vessel = vessel,
                 position = position,

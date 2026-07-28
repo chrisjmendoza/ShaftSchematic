@@ -182,9 +182,9 @@ class BodySplitMergeTest {
 
     @Test
     fun `merge - unequal-diameter fragments do not merge`() {
-        // A merge would have to invent a diameter (the old behavior took max(A, B)), silently
-        // rewriting a stored value the user typed. Two differing diameters mean two distinct
-        // stored sections, so both stay put and the freed span is auto-filled at resolve time.
+        // A merge would have to invent a diameter, silently rewriting a stored value the user
+        // typed. Two differing diameters mean two distinct stored sections, so both stay put
+        // and the freed span is auto-filled at resolve time.
         resetIds()
         val left  = Body(id = "bl", startFromAftMm = 0f,   lengthMm = 200f, diaMm = 55f)
         val right = Body(id = "br", startFromAftMm = 350f, lengthMm = 100f, diaMm = 60f)

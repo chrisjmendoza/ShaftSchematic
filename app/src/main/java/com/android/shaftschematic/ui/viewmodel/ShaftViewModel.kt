@@ -77,8 +77,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         /** Returns the current PDF export preferences (PdfPrefs) from SettingsStore. */
         val currentPdfPrefs: PdfPrefs
             get() = SettingsStore.pdfPrefs
-    // Draft ring state (up to 3 unsaved sessions, newest-first). Replaces the single-slot
-    // `_hasDraft` boolean. See docs/Autosave_Incident_2026-07-25.md.
+    // Draft ring state (up to 3 unsaved sessions, newest-first). See
+    // docs/Autosave_Incident_2026-07-25.md.
     private val _drafts = MutableStateFlow<List<AutosaveManager.DraftEntry>>(emptyList())
     val drafts: StateFlow<List<AutosaveManager.DraftEntry>> = _drafts.asStateFlow()
 
@@ -203,8 +203,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * Whether the session differs from the last saved/loaded state. Uses the SAME full-snapshot
      * comparison as the autosave dirty gate ([shouldWriteDraft]) so *every* tracked field —
      * spec, metadata, position, unit-lock, OAL mode, wear record, runout readings/config —
-     * counts as unsaved work (an earlier partial comparison missed wear/runout edits, which is
-     * how the incident slipped guards). See docs/Autosave_Incident_2026-07-25.md.
+     * counts as unsaved work; a partial comparison risks missing wear/runout edits and letting
+     * unsaved work slip past the dirty gate. See docs/Autosave_Incident_2026-07-25.md.
      */
     fun hasUnsavedWork(): Boolean {
         if (isSessionDefault()) return false
@@ -657,7 +657,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
             _drafts.value = loaded
             val newest = loaded.firstOrNull()
-            // Auto-restore the newest draft only into a fresh/default session, same as before.
+            // Auto-restore the newest draft only into a fresh/default session.
             if (newest != null && isSessionDefault()) {
                 try {
                     restoreSnapshot(newest.snapshot)
@@ -733,10 +733,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         // snapshot) can never overwrite an existing draft. When the state returns
                         // to clean, remove this session's draft entry exactly once.
                         // A factory-default session never writes a draft: the async settings
-                        // restore flips the unit after the baseline is seeded, which made every
-                        // empty-ring launch persist a phantom blank "Untitled draft". The else-if
-                        // also removes an already-persisted phantom (restored on a later launch)
-                        // the first time its debounced snapshot arrives.
+                        // restore flips the unit after the baseline is seeded, which would
+                        // otherwise persist a phantom blank "Untitled draft" on every empty-ring
+                        // launch. The else-if also removes an already-persisted phantom (restored
+                        // on a later launch) the first time its debounced snapshot arrives.
                         if (shouldWriteDraft(snapshot, _savedSnapshot.value) && !snapshot.isDefaultSession()) {
                             AutosaveManager.saveDraft(
                                 getApplication(),
@@ -2037,7 +2037,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      *
      * Contract:
      * - Uses the same defaults as the app's start/new flow (blank spec, empty metadata).
-     * - Clears delete undo/redo history and resets cross-type component order.
+     * - Clears undo/redo history and resets cross-type component order.
      */
     fun newDocument() {
         _editorResetNonce.update { it + 1 }

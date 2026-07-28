@@ -82,8 +82,7 @@ enum class WearPdfMode {
     /**
      * 2+ liners: shaft profile on top (with body/taper/liner pits + liner bands) and the
      * detail strips laid out in a **2-column grid** below — two side by side, the third on the
-     * next row, so the strips occupy only ~2 rows and the profile is always kept. Replaced the
-     * old strips-only mode.
+     * next row, so the strips occupy only ~2 rows and the profile is always kept.
      */
     GRID,
 }
@@ -189,8 +188,8 @@ data class WearVerticalLayout(
  * liners get bigger instead of the band hoarding dead white (device feedback).
  * [maxStripHeightPt] caps how far one strip may grow on that surplus; any height past the cap
  * flows back to the profile band (whose shaft the composer slack-centers, so it degrades
- * gracefully). Both default to [Float.MAX_VALUE], which reproduces the original
- * profile-absorbs-all-slack behaviour exactly.
+ * gracefully). Both default to [Float.MAX_VALUE], so with no explicit caps the profile band
+ * absorbs all leftover height.
  */
 fun computeWearVerticalLayout(
     areaTop: Float,
@@ -212,10 +211,10 @@ fun computeWearVerticalLayout(
     val desiredStripsH = stripCount * preferredStripHeightPt + gapsTotal
     val maxStripsH = (totalH - minProfileHeightPt).coerceAtLeast(0f)
     val stripsHPreferred = desiredStripsH.coerceAtMost(maxStripsH)
-    // Profile-height preference (device feedback): the profile band used to absorb ALL
-    // leftover height (shaft centered in it), stranding dead white between the shaft and the
-    // strips; now it shrinks toward preferredProfileHeightPt (never below minProfileHeightPt) and
-    // the strips absorb the surplus — bigger liner drawings instead of empty band.
+    // Profile-height preference (device feedback): the profile band shrinks toward
+    // preferredProfileHeightPt (never below minProfileHeightPt) rather than absorbing all
+    // leftover height, so it doesn't strand dead white between the shaft and the strips —
+    // the strips absorb the surplus instead, for bigger liner drawings.
     val profileH = (totalH - stripsHPreferred)
         .coerceAtMost(preferredProfileHeightPt)
         .coerceAtLeast(minProfileHeightPt)
@@ -273,7 +272,8 @@ data class WearStripGridLayout(
  * [preferredProfileHeightPt] and [maxStripHeightPt] are forwarded straight through (per ROW, like
  * the row height), so the grid shrinks its profile band toward the caller's content-derived target
  * and lets the rows absorb the surplus exactly as the single-column path does — see
- * [computeWearVerticalLayout]'s KDoc; the defaults preserve the old absorb-all-slack behaviour.
+ * [computeWearVerticalLayout]'s KDoc; with no explicit caps, the defaults make the profile
+ * band absorb all leftover height.
  *
  * Columns are equal-width across `[contentLeft, contentRight]` with a [colGapPt] gutter. A row
  * that isn't full (e.g. the lone third strip of three) is **centered**: its strips keep the same
@@ -375,24 +375,24 @@ const val WEAR_STRIP_ROW_HEIGHT_PT = 13f
 
 /**
  * Extra vertical gap reserved between the title's own text line and the top of the
- * liner cylinder (SVG review, defect 2). Before this existed, the
- * cylinder consumed the strip's whole remaining band right up against the title
- * with no headroom at all — a label pinned to the cylinder's top edge (the min-Ø
- * reading, see `WearPdfComposer.drawWearDetailStrip`) then landed only a few
- * points below the title text, reading as crowded/overlapping.
+ * liner cylinder. Without this gap, the cylinder would consume the strip's whole
+ * remaining band right up against the title with no headroom at all — a label pinned
+ * to the cylinder's top edge (the min-Ø reading, see
+ * `WearPdfComposer.drawWearDetailStrip`) would then land only a few points below the
+ * title text, reading as crowded/overlapping.
  */
 const val WEAR_STRIP_LABEL_HEADROOM_PT = 11f
 
 /**
  * Stacked label positions reserved above a strip's chained dimension rail
- * (dimension-rail rework — see "Wear Detail Strips" in
+ * (dimension-rail — see "Wear Detail Strips" in
  * `docs/RunoutSheet.md`) for the crowding fallback in [layoutWearStripRail]: row 0
  * is the base label position directly above the rail line, and this many rows
- * total are budgeted regardless of how many wear spots the liner has — unlike the
- * old per-spot row budget this replaces, the chain is always ONE rail line, so the
- * reserved height no longer scales with spot count. A chain crowded enough to need
- * more rows than this clamps every excess label to the last available row (see
- * `WearPdfComposer.drawWearStripRail`) rather than overflow the strip.
+ * total are budgeted regardless of how many wear spots the liner has — the chain is
+ * always ONE rail line, so the reserved height does not scale with spot count. A
+ * chain crowded enough to need more rows than this clamps every excess label to the
+ * last available row (see `WearPdfComposer.drawWearStripRail`) rather than overflow
+ * the strip.
  */
 const val WEAR_RAIL_MAX_LABEL_ROWS = 2
 
@@ -411,19 +411,18 @@ data class WearStripInnerLayout(
  * Splits one strip's vertical band `[stripTop, stripBottom]` into the single chained
  * dimension rail (at the TOP), the liner-cylinder region (middle), and the title
  * (at the BOTTOM) — the strip-local analogue of [computeWearVerticalLayout].
- * (The rail and title were swapped to match how the shop marks the sheet
- * by hand: dimensions above the shaft, the liner title/anchor below it.)
+ * (The rail sits above the cylinder and the title below it, matching how the shop
+ * marks the sheet by hand: dimensions above the shaft, the liner title/anchor below it.)
  *
  * [titleHeightPt] is the space the title text line itself consumes (its own line
  * height); [labelHeadroomPt] is then an EXTRA, explicit gap reserved above the title,
  * just below the cylinder, so the title never crowds the cylinder or a min-Ø reading
- * (see [WEAR_STRIP_LABEL_HEADROOM_PT]'s KDoc for the defect this fixes).
+ * (see [WEAR_STRIP_LABEL_HEADROOM_PT]'s KDoc for what this prevents).
  *
- * The rail's own vertical budget is now a FIXED [maxLabelRows] × [rowHeightPt] —
+ * The rail's own vertical budget is a FIXED [maxLabelRows] × [rowHeightPt] —
  * not proportional to how many wear spots the liner has, since the rail is always
- * one chained line no matter how many spans it's divided into (dimension-rail
- * rework; the old contract multiplied the row budget by spot
- * count). Guarantees `stripTop <= railY <= cylTop <= cylBottom <= stripBottom` for ANY
+ * one chained line no matter how many spans it's divided into. Guarantees
+ * `stripTop <= railY <= cylTop <= cylBottom <= stripBottom` for ANY
  * input, including pathological ones (e.g. a very large-diameter liner on a very short
  * strip, where the preferred cylinder + rail sizes don't fit together): the
  * cylinder shrinks first, and once it hits zero height, [railLabelRows] drops
@@ -454,11 +453,10 @@ fun computeWearStripInnerLayout(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Dimension rail — chained spans below the liner cylinder (rework)
+// Dimension rail — chained spans below the liner cylinder
 // ──────────────────────────────────────────────────────────────────────────────
 //
-// Replaces the old per-spot "AFT edge → band start" / "band start → band end" text rows
-// with one standard chained dimension rail: liner AFT edge → first band start, each band's
+// One standard chained dimension rail: liner AFT edge → first band start, each band's
 // own length, the gap between consecutive bands, and the trailing remainder to the liner FWD
 // edge — the same witness-line/arrowed-span/centered-label convention the main schematic PDF
 // uses (`pdf/render/PdfDimensionRenderer.kt`). That renderer isn't reused directly: it's built
@@ -616,7 +614,7 @@ data class WearStripRadii(val linerRPt: Float, val aftRPt: Float, val fwdRPt: Fl
  * [maxRadiusPt] (the strip's vertical budget, typically half of
  * [computeWearStripInnerLayout]'s `cylBottom - cylTop`) — scales ALL THREE by the
  * SAME factor (`maxRadiusPt / largestRawRadius`) rather than capping each
- * independently (SVG review, defect 1).
+ * independently.
  *
  * Independent capping (`min(raw, maxRadiusPt)` applied to each diameter on its
  * own) is wrong here: whenever the liner AND a neighbor both exceed the budget —

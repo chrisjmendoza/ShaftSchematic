@@ -485,9 +485,10 @@ object InternalStorage {
      * their file: the hash no longer matches, so it is left alone and simply
      * dropped from the ledger (it is user data now, not ours).
      *
-     * Files that predate the ledger (or were seeded before this safety existed)
-     * are never deleted; they may linger alongside newer samples, which is the
-     * deliberate trade-off after seeded-name saves were silently lost on update.
+     * Files with no ledger entry (nothing recorded for that name) are never
+     * deleted; they may linger alongside newer samples. This is the deliberate
+     * trade-off that guarantees a seeded-name save is never deleted without proof
+     * its content still matches what was seeded.
      */
     private suspend fun prunePreviouslySeededBundledSamples(dir: File, settings: SampleSeedSettings): Int {
         val ledger = runCatching { settings.getSeededSampleHashes() }.getOrDefault(emptyMap())

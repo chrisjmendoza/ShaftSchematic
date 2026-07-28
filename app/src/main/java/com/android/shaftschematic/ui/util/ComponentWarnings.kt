@@ -60,11 +60,10 @@ fun bodyWarningMessages(spec: ShaftSpec, body: Body): List<String> {
 /**
  * Advisory warnings for a stored [taper] — currently only the very-short-segment check.
  *
- * The former §3.3 taper-vs-body Ø mismatch advisory was removed by user
- * request: the mismatch is visible in the drawing itself, and the rule kept misfiring on
- * FWD tapers because the two storage paths (Add dialog vs carousel edit) disagree on
- * SET/LET ordering. Do not reintroduce without resolving that discrepancy first
- * (`TODO.md` §2.3).
+ * A taper-vs-body Ø mismatch advisory is intentionally not included: the mismatch is
+ * already visible in the drawing itself, and the two storage paths (Add dialog vs carousel
+ * edit) disagree on SET/LET ordering for FWD tapers, which would make such a check misfire.
+ * Do not add one without resolving that discrepancy first (`TODO.md` §2.3).
  */
 fun taperWarningMessages(spec: ShaftSpec, taper: Taper): List<String> {
     val out = mutableListOf<String>()

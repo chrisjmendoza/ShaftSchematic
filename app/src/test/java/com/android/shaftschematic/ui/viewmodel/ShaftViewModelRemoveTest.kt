@@ -18,12 +18,11 @@ import org.junit.Test
  * These tests verify the data model consistency when components are removed.
  * The critical fix: orderRemove must happen AFTER spec update, not during it.
  *
- * The former delete-only undo path is gone; recovery now flows through the general
- * session undo/redo. The `delete + undoEdit` tests at the bottom are the migrated
- * delete-undo cases — they assert that deleting a component then undoing restores
- * BOTH the spec and the cross-type order, exercised through the real [SessionHistory]
- * + [EditState] the ViewModel records (see ShaftViewModelUndoRedoTest for why the
- * AndroidViewModel itself is not instantiated in this JVM suite).
+ * Recovery from a delete flows through the general session undo/redo. The
+ * `delete + undoEdit` tests at the bottom assert that deleting a component then
+ * undoing restores BOTH the spec and the cross-type order, exercised through the real
+ * [SessionHistory] + [EditState] the ViewModel records (see ShaftViewModelUndoRedoTest
+ * for why the AndroidViewModel itself is not instantiated in this JVM suite).
  */
 class ShaftViewModelRemoveTest {
 
@@ -182,7 +181,7 @@ class ShaftViewModelRemoveTest {
         assertEquals("b1", updatedSpec.bodies.first().id)
     }
 
-    // ── Migrated delete-undo recovery (was delete-only undo; now general undo) ──────────
+    // ── Delete-undo recovery (via general session undo) ──────────
 
     private fun editState(spec: ShaftSpec, order: List<ComponentKey>) = EditState(
         spec = spec,

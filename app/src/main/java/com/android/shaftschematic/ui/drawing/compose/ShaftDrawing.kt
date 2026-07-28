@@ -139,7 +139,7 @@ fun ShaftDrawing(
         taperFill, previewTaperFill, threadFill, previewThreadFill, threadHatch,
         highlightEnabled, highlightId, themeGlow,
     ) { RenderOptions(
-        // Visual tuning (retain prior look)
+        // Visual tuning
         paddingPx = 16,
         outlineColor = outlineColor.toArgb(),
         outlineWidthPx = 2f * lineThicknessScale.coerceIn(0.5f, 2.0f),

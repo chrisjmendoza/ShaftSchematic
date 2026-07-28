@@ -127,7 +127,7 @@ class CarouselSelectionSyncTest {
     fun `with an orphaned selection any scroll is the user`() {
         // The selected id no longer resolves to any row (auto-body ids regenerate on every
         // edit; opens carry stale ids). The follow effect never animates toward a missing
-        // row, so this scroll cannot be catch-up — treating it as ours bricked swipe
+        // row, so this scroll cannot be catch-up — treating it as ours would brick swipe
         // adoption (and the preview highlight) until a preview tap set a valid id.
         assertTrue(
             isUserInitiatedScroll(selectedId = "auto_body_0.000_100.000", selectedIndex = NO_CAROUSEL_TARGET, currentPage = 1)

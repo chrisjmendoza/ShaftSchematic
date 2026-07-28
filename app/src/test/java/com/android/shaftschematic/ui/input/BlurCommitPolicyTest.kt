@@ -44,8 +44,8 @@ class BlurCommitPolicyTest {
     @Test
     fun `an unfocused callback with no recorded focus does not commit`() {
         // Compose delivers an initial onFocusChanged with isFocused = false when the
-        // modifier attaches. With no baseline there is no edit to commit — treating this
-        // as a commit fired onCommit on every composition.
+        // modifier attaches. With no baseline there is no edit to commit — committing here
+        // would fire onCommit on every composition.
         assertFalse(shouldCommitOnBlur(capturedOnFocus = null, currentText = "12.5"))
         assertFalse(shouldCommitOnBlur(capturedOnFocus = null, currentText = ""))
     }

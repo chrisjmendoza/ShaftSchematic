@@ -147,9 +147,6 @@ class OalComputationsTest {
         assertEquals(0.0, win.measureStartMm, EPS_EXACT)
     }
 
-    // computeExcludedThreadLengths tests removed — the function was deleted
-    // (production-dead since the immutable-OAL fix; see OalComputations.kt note).
-
     // ─── computeSetPositionsInMeasureSpace ────────────────────────────────────
     // With measureStartMm = 0 always, SET positions are physical shaft coordinates.
 

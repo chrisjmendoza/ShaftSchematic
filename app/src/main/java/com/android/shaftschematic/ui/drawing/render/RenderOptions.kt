@@ -54,7 +54,7 @@ data class RenderOptions(
     /**
      * When true and [highlightId] matches a component, the renderer paints a glow
      * under-stroke before the normal outline, then draws the normal stroke on top.
-     * When false or when ids don't match, output is pixel-identical to legacy.
+     * When false or when ids don't match, the highlight has no effect on the drawn output.
      */
     val highlightEnabled: Boolean = false,
     /** Id of the selected component; type should match the ids carried by your segments. */
