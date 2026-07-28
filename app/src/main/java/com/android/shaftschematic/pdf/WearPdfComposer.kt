@@ -18,6 +18,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.buildLinerTitleById
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,13 +64,15 @@ import kotlin.math.min
  *                resolved bodies replace `spec.bodies` for the drawn profile — same
  *                contract as `composeShaftPdf`/`composeRunoutPdf`.
  * @param wearRecord Recorded liner wear spots + pit "X" markers. The **shaft profile is always
- *                drawn on top** (so body/taper/liner pits stay visible); the detail strips below
- *                pick a [WearPdfMode] from `determineWearPdfMode(collectWearLinerGroups(...).size)`:
- *                - **0 wear liners** ([WearPdfMode.PROFILE_FORM]) — profile only (still shows any
+ *                drawn on top** (so body/taper/liner pits stay visible); **every drawable liner
+ *                gets a detail strip below, with or without recorded wear** (2026-07-27 — the
+ *                shop's normal operating procedure), the layout picked by a [WearPdfMode] from
+ *                `determineWearPdfMode(collectWearLinerGroups(...).size)`:
+ *                - **0 liners** ([WearPdfMode.PROFILE_FORM]) — profile only (still shows any
  *                  recorded pits).
- *                - **1 wear liner** ([WearPdfMode.COMBINED]) — profile + one full-width detail
+ *                - **1 liner** ([WearPdfMode.COMBINED]) — profile + one full-width detail
  *                  strip below.
- *                - **2+ wear liners** ([WearPdfMode.GRID]) — profile + a 2-column grid of detail
+ *                - **2+ liners** ([WearPdfMode.GRID]) — profile + a 2-column grid of detail
  *                  strips (two side by side, third on the next row), so the strips take ~2 rows and
  *                  the profile keeps the top of the page (2026-07-21, replacing the old strips-only
  *                  mode). Up to [WEAR_STRIP_GRID_MAX_PER_PAGE] shown; the single-column path caps at
@@ -88,8 +91,12 @@ fun composeWearPdf(
     lineThicknessScale: Float = 1.0f,
     /**
      * Blank-draft (write-in) mode: header job info and the OAL value are blanked, and any
-     * recorded wear (bands, pits, detail strips) is omitted — the sheet prints as a fresh
-     * inspection form for hand annotation.
+     * recorded wear (bands, pits, min-Ø readings) is omitted — but the shaft profile AND every
+     * liner's zoomed detail strip still render, with the dimension lines kept and their values
+     * left out (rail labels omitted, the anchor-from-SET value replaced by a writing rule with
+     * "AFT / FWD" printed for circling one) so the sheet prints as a fresh inspection form the
+     * machinist fills in by hand (2026-07-27, matching the blank schematic's lines-in/values-out
+     * posture).
      */
     blankValues: Boolean = false,
 ) {
@@ -98,6 +105,10 @@ fun composeWearPdf(
 
     val docSpec = spec.withResolvedBodies(resolvedComponents)
     val effectiveRecord = if (blankValues) WearRecord() else wearRecord
+    // Shared liner display titles — custom label wins, else positional AFT/MID/FWD defaults
+    // (util/LinerTitles.kt). Same names the carousel cards and runout sheet show, so the
+    // printed sheet and the app always agree.
+    val linerTitles = buildLinerTitleById(docSpec)
 
     val pageW = page.info.pageWidth.toFloat()
     val pageH = page.info.pageHeight.toFloat()
@@ -161,9 +172,11 @@ fun composeWearPdf(
     val maxDiaMm = (docSpec.maxOuterDiaMm().takeIf { it > 0f } ?: 50f).coerceAtLeast(20f)
 
     // ── Wear strip selection (pure — pdf/WearStripLayout.kt) ──────────────────
-    // Liners with ≥1 wear spot, aft→fwd. GRID mode (2+ wear liners) shows up to 4 in a 2-column
-    // grid; the single-column path (0-1 liners) uses the smaller cap. The shaft profile is ALWAYS
-    // drawn on top now (2026-07-21) — the old strips-only mode that dropped it is gone.
+    // EVERY drawable liner, aft→fwd, with or without recorded wear (2026-07-27 — normal shop
+    // procedure; also what makes the blank write-in template render all zoomed strips). GRID mode
+    // (2+ liners) shows up to 4 in a 2-column grid; the single-column path (0-1 liners) uses the
+    // smaller cap. The shaft profile is ALWAYS drawn on top (2026-07-21) — the old strips-only
+    // mode that dropped it is gone.
     val wearGroups = collectWearLinerGroups(docSpec.liners, effectiveRecord)
     val wearMode   = determineWearPdfMode(wearGroups.size)
     val maxPerPage = if (wearMode == WearPdfMode.GRID) WEAR_STRIP_GRID_MAX_PER_PAGE else WEAR_STRIP_MAX_PER_PAGE
@@ -231,7 +244,7 @@ fun composeWearPdf(
 
     // Liner names centered under their span on the main profile — a reference tying each wear band
     // to its broken-out (zoomed) strip below. Only the liners that get a strip on this page.
-    drawWearLinerNamesOnProfile(c, onPage, shaftCy + rPx(maxDiaMm), profileBottom, contentLeft, contentRight, ::xAt, text)
+    drawWearLinerNamesOnProfile(c, onPage, shaftCy + rPx(maxDiaMm), profileBottom, contentLeft, contentRight, ::xAt, text, linerTitles)
 
     // ── Per-liner detail strips ─────────────────────────────────────────────
     onPage.forEachIndexed { i, group ->
@@ -239,11 +252,13 @@ fun composeWearPdf(
         drawWearDetailStrip(
             c, docSpec, group, cell.top, cell.bottom, cell.left, cell.right,
             unit, setPositions, text, outline, dim,
+            linerTitle = linerTitles[group.liner.id] ?: "Liner",
             linerPits = effectiveRecord.pits.filter { it.componentId == group.liner.id },
+            blankValues = blankValues,
         )
     }
     if (stripSelection.overflow.isNotEmpty()) {
-        drawWearOverflowNote(c, text, contentLeft, contentRight, overflowBandTop, midBotFull, stripSelection.overflow)
+        drawWearOverflowNote(c, text, contentLeft, contentRight, overflowBandTop, midBotFull, stripSelection.overflow, linerTitles)
     }
 
     // ── Notes / dye-pen area ──────────────────────────────────────────────
@@ -376,8 +391,9 @@ private fun drawWearDirectionRef(
  * Liner names centered under their span on the MAIN profile — a lightweight reference tying each
  * wear band to its broken-out (zoomed) strip below, so a reader can match "this band on the shaft"
  * to "that strip". Shares the row with the "← AFT" / "FWD →" direction labels: each name is
- * centered on its liner span but clamped clear of those edge-anchored labels. Uses the same name
- * (`label` or "Liner") the strip title shows, so the two always read the same.
+ * centered on its liner span but clamped clear of those edge-anchored labels. Uses the same shared
+ * title (`buildLinerTitleById` — custom label or positional AFT/MID/FWD default) the strip title
+ * shows, so the two always read the same.
  */
 private fun drawWearLinerNamesOnProfile(
     c: Canvas,
@@ -388,6 +404,7 @@ private fun drawWearLinerNamesOnProfile(
     contentRight: Float,
     xAt: (Float) -> Float,
     text: Paint,
+    linerTitles: Map<String, String>,
 ) {
     if (groups.isEmpty()) return
     val p = Paint(text).apply { textAlign = Paint.Align.CENTER }
@@ -399,7 +416,7 @@ private fun drawWearLinerNamesOnProfile(
     groups.forEach { g ->
         val ln = g.liner
         if (ln.lengthMm <= 0f) return@forEach
-        val name = ln.label?.takeIf { it.isNotBlank() } ?: "Liner"
+        val name = linerTitles[ln.id] ?: "Liner"
         val cx = ((xAt(ln.startFromAftMm) + xAt(ln.startFromAftMm + ln.lengthMm)) * 0.5f).coerceIn(loX, hiX)
         c.drawText(ellipsizeToWidth(name, p, hiX - loX), cx, y, p)
     }
@@ -614,6 +631,12 @@ private fun drawWearPitX(c: Canvas, cx: Float, cy: Float, half: Float, paint: Pa
  * see `buildWearStripRailSpans`/`layoutWearStripRail`/`drawWearStripRail`), a min-Ø reading per
  * band when recorded, and the liner's anchor dimension from its nearer SET (the "110 FROM
  * CPLG S.E.T." line in the shop sketch this feature digitizes).
+ *
+ * A liner with no recorded wear (spots empty — every liner gets a strip since 2026-07-27)
+ * degenerates cleanly: no bands, no min-Ø readings, and the rail is one full-length span
+ * (the liner's own length). With [blankValues] the strip keeps all its dimension LINES but
+ * drops the VALUES: rail labels are omitted and the anchor title's number becomes a writing
+ * rule — the write-in template posture shared with the blank schematic.
  */
 private fun drawWearDetailStrip(
     c: Canvas,
@@ -628,7 +651,9 @@ private fun drawWearDetailStrip(
     text: Paint,
     outline: Paint,
     dim: Paint,
+    linerTitle: String,
     linerPits: List<WearPit> = emptyList(),
+    blankValues: Boolean = false,
 ) {
     val ln = group.liner
     if (ln.lengthMm <= 0f || ln.odMm <= 0f) return
@@ -640,7 +665,7 @@ private fun drawWearDetailStrip(
     fun xAtStrip(mm: Float): Float = hLayout.linerLeftPt + (mm - aftMm) * ptPerMmStrip
 
     val titleText = Paint(text).apply { textSize = (text.textSize - 1f).coerceAtLeast(7f) }
-    val title = (ln.label?.takeIf { it.isNotBlank() } ?: "Liner") + " — " +
+    val title = linerTitle + " — " +
         buildLinerAnchorLabel(docSpec, ln, setPositions, unit)
     // The title + liner-anchor dimension is drawn LAST, at the bottom of the strip (swapped with the
     // dimension rail 2026-07-22 to match the hand-marked sheet). See the title block near the end.
@@ -736,18 +761,37 @@ private fun drawWearDetailStrip(
         xAtStripMm = { mm -> xAtStrip(aftMm + mm) },
         labelWidthPt = { s -> dimText.measureText(s) },
     )
-    drawWearStripRail(c, dim, dimText, railLayout, inner.cylTop, inner.railY, inner.railLabelRows)
+    // Blank draft: the rail's witness lines/spans/arrows still draw (lines stay), the value
+    // labels do not — the machinist writes the measured figures under the rail by hand.
+    drawWearStripRail(c, dim, dimText, railLayout, inner.cylTop, inner.railY, inner.railLabelRows,
+        drawLabels = !blankValues)
 
     // Title + liner-anchor dimension, drawn LAST at the BOTTOM of the strip. Direction cue: a
     // FWD-SET-referenced title right-aligns (toward the FWD end drawn on the right), an
     // AFT-SET-referenced one stays left-aligned — mirrors the measurement direction.
     val titleBaselineY = (stripBottom - 2f).coerceAtLeast(inner.cylBottom + titleText.textSize)
-    val titleFit = ellipsizeToWidth(title, titleText, contentRight - contentLeft)
-    if (linerAnchorForPdf(docSpec, ln) == LinerAnchor.FWD_SET) {
-        titleText.textAlign = Paint.Align.RIGHT
-        c.drawText(titleFit, contentRight, titleBaselineY, titleText)
+    if (blankValues) {
+        // Write-in title: "Name — ____ FROM  AFT / FWD  S.E.T." — the anchor VALUE becomes a
+        // writing rule and BOTH directions print for the machinist to circle one
+        // (WEAR_BLANK_ANCHOR_SUFFIX). Always left-aligned: the FWD right-align cue mirrors a
+        // KNOWN measurement direction, which a write-in sheet doesn't have.
+        // drawLabelWithRule needs LEFT-aligned paint.
+        titleText.textAlign = Paint.Align.LEFT
+        val prefix = "$linerTitle —"
+        val afterRule = drawLabelWithRule(
+            c, prefix, contentLeft, titleBaselineY, titleText,
+            ruleWidth = BLANK_DIM_GAP_PT, maxRight = contentRight,
+        )
+        c.drawText(WEAR_BLANK_ANCHOR_SUFFIX, afterRule - 8f, titleBaselineY, titleText)
     } else {
-        c.drawText(titleFit, contentLeft, titleBaselineY, titleText)
+        val anchor = linerAnchorForPdf(docSpec, ln)
+        val titleFit = ellipsizeToWidth(title, titleText, contentRight - contentLeft)
+        if (anchor == LinerAnchor.FWD_SET) {
+            titleText.textAlign = Paint.Align.RIGHT
+            c.drawText(titleFit, contentRight, titleBaselineY, titleText)
+        } else {
+            c.drawText(titleFit, contentLeft, titleBaselineY, titleText)
+        }
     }
 }
 
@@ -757,6 +801,9 @@ private fun drawWearDetailStrip(
  * dimension line per chained span, and each span's label — stacked onto whichever row
  * `layoutWearStripRail` assigned it, clamped to [maxLabelRows] (rows beyond the budget
  * `computeWearStripInnerLayout` actually fit for this strip are never drawn).
+ *
+ * [drawLabels] = false (blank write-in draft) keeps every line and arrowhead but skips the
+ * value labels — the lines-in/values-out template rule.
  */
 private fun drawWearStripRail(
     c: Canvas,
@@ -766,6 +813,7 @@ private fun drawWearStripRail(
     cylTop: Float,
     railY: Float,
     maxLabelRows: Int,
+    drawLabels: Boolean = true,
 ) {
     if (layout.isEmpty()) return
     val arrow = 4f
@@ -788,7 +836,7 @@ private fun drawWearStripRail(
         c.drawLine(s.x1Pt, railY, s.x1Pt + dirRight * arrow, railY + arrow * 0.5f, dim)
 
         val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
-        if (row >= 0) {
+        if (drawLabels && row >= 0) {
             val ly = railY + labelGapPt + dimText.textSize + row * rowStepPt
             val lw = dimText.measureText(s.label)
             c.drawText(s.label, s.labelCxPt - lw * 0.5f, ly, dimText)
@@ -833,11 +881,12 @@ private fun drawWearOverflowNote(
     bandTop: Float,
     bandBottom: Float,
     overflow: List<WearLinerGroup>,
+    linerTitles: Map<String, String>,
 ) {
     val names = overflow.joinToString(", ") { g ->
-        g.liner.label?.takeIf { it.isNotBlank() } ?: "liner @ ${g.liner.startFromAftMm.toInt()}mm"
+        linerTitles[g.liner.id] ?: "liner @ ${g.liner.startFromAftMm.toInt()}mm"
     }
-    val msg = "+${overflow.size} more liner(s) with wear spots: $names"
+    val msg = "+${overflow.size} more liner(s): $names"
     val y = (bandTop + bandBottom) * 0.5f + text.textSize * 0.35f
     c.drawText(ellipsizeToWidth(msg, text, right - left), left, y, text)
 }
