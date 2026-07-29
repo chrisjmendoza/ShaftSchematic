@@ -5,6 +5,9 @@
 spec: SET/liner-edge start references + blocking span validation). Decisions and
 deviations: `docs/LinerWearAreas_BuildLog_2026-07-18.md`. This document is the design
 record; the living contract is the wear section of the in-source `RunoutSheet.md`.
+Post-implementation note (2026-07-29): the per-band min-Ø reading designed here was later
+retired from entry and print — superseded by measured-Ø readings (`WearDiaReading`, see
+`RunoutSheet.md` §"Wear Diameter Measurements"); `WearSpot.minDiaMm` persists for old files.
 **Reference:** Chris's shop sketch (Tidewater job 934918 STBD) — three liner detail views,
 each "cut out" of the shaft with break symbols, enlarged, with wear spans drawn as lines
 on the liner and dimensioned (e.g. `37¾`, `15½`, `110 FROM CPLG S.E.T.`).

@@ -96,11 +96,12 @@ persisted in `ShaftSpec`:
   `deriveAutoBodies()`, producing `ResolvedBody(source = ResolvedComponentSource.AUTO)` entries.
 - Fill axial gaps between explicit (sacred) components. When OAL is manually authored, a base
   auto body spans 0 → OAL immediately; derived OAL does **not** seed a base auto body.
-- Promotion to an explicit `Body` happens on an explicit user action — editing one of the
-  auto-body card's fields (Start / Length / Ø), **or** ticking the "Make editable body"
-  checkbox: `promoteIfNeeded()` in `ComponentCarousel.kt` calls `onAddBody(...)` and persists
-  the section into `ShaftSpec.bodies`. Viewing the card without acting never promotes it (see
-  the "Auto-body promotion" invariant in `CLAUDE.md`).
+- Promotion to an explicit `Body` happens ONLY by ticking the **"Explicit body"** checkbox
+  (`ComponentCarousel.kt` calls `onAddBody(...)` with the derived span). There is no
+  field-edit promotion path: the auto-body card's Start/Length are disabled derived fields,
+  and its editable Ø field sets the shared bare-shaft `ShaftSpec.autoBodyDiaMm` without
+  promoting. Viewing the card never promotes it (see the "Auto-body promotion" invariant
+  in `CLAUDE.md`).
 
 ### 3.1.2 Default Start Position (`computeAddDefaults`)
 
@@ -122,8 +123,8 @@ stored (explicit) and derived (auto) bodies are fluid base material / fillers. A
 component added or moved over a plain body **splits** it (`splitBodiesAround`) — there is no
 hard-block, and bodies never raise collision warnings. A body that has a keyway is never split:
 it stays one whole card (keyway intact) and the resolve layer trims it for drawing. Auto-bodies
-(derived, unstored) get "Body (auto)" cards and can be promoted to explicit (field edit or
-"Make editable body").
+(derived, unstored) get "Body (auto)" cards and are promoted to explicit only via the
+"Explicit body" checkbox (see §3.1.1 — no field-edit promotion path).
 
 (The "explicit bodies are non-negotiable" experiment was reverted 2026-07-21 — it raised false
 collision warnings on normal drafts. The `bodyOverlapErrorMm` / `nonBodyOverlapErrorMm` hard
@@ -265,9 +266,10 @@ rather than duplicated here. Summary of the boundaries, which follow the same ru
   (`RunoutBubbleDialog`: TIR value + high-spot clock marker). All bubble placement comes
   from the shared `geom/RunoutBubbleLayout.kt` engine; the route never computes placement.
 - **WearRoute** — tappable overview canvas (component tint + wear-count badges) opening
-  `ComponentWearDetailOverlay`: explicit tool chips **Add X** / **Remove X** (wear pits)
-  and **Add Ø** (measured-diameter readings via a Save/Cancel/Delete value dialog —
-  readings are created only on Save). Liner cards keep the wear-spot editor
+  `ComponentWearDetailOverlay`: a **Pits** section (tool chips **Add X** / **Remove X**)
+  and a separate **Diameter measurements** section (**Add Ø** / **Remove Ø**; add/edit via
+  a Save/Cancel/Delete value dialog — readings are created only on Save). One canvas tool
+  is active at a time across both sections. Liner cards keep the wear-spot editor
   (`NumberField.md` commit rules apply).
 - Both tabs preview by **rasterizing the real composed PDF** (`PdfPreviewOverlay`) — the
   UI never re-draws document geometry itself, and all hit-testing/placement math lives in

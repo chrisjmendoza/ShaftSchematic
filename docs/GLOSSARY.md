@@ -167,8 +167,9 @@ measured-Ø readings, and runout readings.
 
 ### Wear Spot
 A recorded liner wear band (`WearSpot` in `WearRecord.spots`): liner-local start/length from
-the liner's AFT edge, optional min-Ø reading and note. Drawn as a hatched band on the wear
-document; clamped for rendering only, stored data never mutated.
+the liner's AFT edge, plus a note. Drawn as a hatched band on the wear document; clamped for
+rendering only, stored data never mutated. (Its old per-band min-Ø field is retired from
+entry and print — superseded by measured-Ø readings; the model field survives for old files.)
 
 ### Wear Pit
 A pit / dye-penetrant failure marker (`WearPit`), drawn as a hand-style "X" (small or large

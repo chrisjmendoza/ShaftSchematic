@@ -94,7 +94,7 @@ fun composeWearPdf(
     lineThicknessScale: Float = 1.0f,
     /**
      * Blank-draft (write-in) mode: header job info and the OAL value are blanked, and any
-     * recorded wear (bands, pits, min-Ø readings) is omitted — but the shaft profile AND every
+     * recorded wear (bands, pits, measured-Ø readings) is omitted — but the shaft profile AND every
      * liner's zoomed detail strip still render, with the dimension lines kept and their values
      * left out (rail labels omitted, the anchor-from-SET value replaced by a writing rule with
      * "AFT / FWD" printed for circling one) so the sheet prints as a fresh inspection form the
@@ -767,12 +767,12 @@ private fun drawDiaCallouts(c: Canvas, placed: List<PlacedDiaCallout>, dim: Pain
  * strip-local large scale, hatched wear bands with a chained dimension rail below the
  * cylinder (liner AFT edge → first band start → each band's length → inter-band gaps →
  * trailing remainder to the liner FWD edge, standard witness-line/arrowed-span convention —
- * see `buildWearStripRailSpans`/`layoutWearStripRail`/`drawWearStripRail`), a min-Ø reading per
- * band when recorded, and the liner's anchor dimension from its nearer SET (the "110 FROM
- * CPLG S.E.T." line in the shop sketch this feature digitizes).
+ * see `buildWearStripRailSpans`/`layoutWearStripRail`/`drawWearStripRail`), measured-Ø value
+ * callouts below the cylinder when recorded, and the liner's anchor dimension from its nearer
+ * SET (the "110 FROM CPLG S.E.T." line in the shop sketch this feature digitizes).
  *
  * A liner with no recorded wear (spots empty — every liner gets a strip)
- * degenerates cleanly: no bands, no min-Ø readings, and the band-less rail draws only the two
+ * degenerates cleanly: no bands, no callouts, and the band-less rail draws only the two
  * liner-edge witness bars — no spanning line, arrowheads, or value, since that span would just
  * re-state the liner's own length and the rail exists to measure distances to wear areas
  * (device feedback). With [blankValues] the strip keeps its dimension LINES but drops
@@ -871,29 +871,19 @@ private fun drawWearDetailStrip(
     c.drawLine(hLayout.linerRightPt, cy + fwdR, stubRightX, cy + fwdR, outline)
     drawBreakEdge(c, stubRightX, cy - fwdR, cy + fwdR, fwdR * 0.6f, outline, eyeAtTop = false)
 
-    // Wear bands (hatch fill + edge ticks on the cylinder itself) and the min-Ø reading —
-    // per spot, as before. The dimension story (offsets/lengths) is now the chained rail
-    // drawn below, not a per-spot row here.
+    // Wear bands (hatch fill + edge ticks on the cylinder itself) — per spot, as before.
+    // The dimension story (offsets/lengths) is the chained rail above; the diameter story is
+    // the measured-Ø callouts below. No per-band min-Ø label prints anymore: it collided
+    // with the measured-Ø values under a wear band (on-device report) and is superseded by
+    // them — [WearSpot.minDiaMm] is retired from print, kept in the model for old files.
     val bandHatch = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.6f; alpha = 160 }
     val clampedBands = sortedSpots.map { spot -> clampWearBandToLiner(spot.startMm, spot.lengthMm, ln.lengthMm) }
-    sortedSpots.forEachIndexed { idx, spot ->
-        val clamp = clampedBands[idx]
+    clampedBands.forEach { clamp ->
+        if (clamp.lengthMm <= 0f) return@forEach
         val x0 = xAtStrip(aftMm + clamp.startMm)
         val x1 = xAtStrip(aftMm + clamp.startMm + clamp.lengthMm)
-        if (clamp.lengthMm > 0f) {
-            drawHatchBand(c, x0, x1, top, bot, bandHatch, pitchPt = 5f)
-            c.drawLine(x0, top, x0, bot, dimPaint); c.drawLine(x1, top, x1, bot, dimPaint)
-        }
-
-        // Min-Ø reading, printed just below the band (skipped when unrecorded). Below — not above —
-        // now that the dimension rail sits above the cylinder; the headroom below the cylinder keeps
-        // it clear of the title.
-        formatMinDiaLabelOrNull(spot.minDiaMm, unit)?.let { label ->
-            val lw = dimText.measureText(label)
-            val lx = (((x0 + x1) * 0.5f) - lw * 0.5f).coerceIn(contentLeft, contentRight - lw)
-            val ly = (bot + dimText.textSize).coerceAtMost(stripBottom)
-            c.drawText(label, lx, ly, dimText)
-        }
+        drawHatchBand(c, x0, x1, top, bot, bandHatch, pitchPt = 5f)
+        c.drawLine(x0, top, x0, bot, dimPaint); c.drawLine(x1, top, x1, bot, dimPaint)
     }
 
     // Pit "X" markers on the broken-out liner (strip-local scale) — reinforcing the same pits
@@ -911,8 +901,8 @@ private fun drawWearDetailStrip(
 
     // Measured-Ø readings: a thin witness tick across the full cylinder height at each
     // station (where the diameter was taken), plus the value below with a leader — the
-    // hand sketch's fan of diameters. Leaders share the min-Ø headroom; the value rows sit
-    // in the diaBand reserved by computeWearStripInnerLayout above. Same engine +
+    // hand sketch's fan of diameters. Leaders run through the label headroom; the value
+    // rows sit in the diaBand reserved by computeWearStripInnerLayout above. Same engine +
     // construction as the main-profile callouts and the overlay canvas.
     if (diaPlan != null) {
         val tickPaint = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.6f; alpha = 160 }
@@ -1185,5 +1175,5 @@ private const val ZIGZAG_GAP_MAX_PT   = 20f
 private const val WEAR_DIA_TEXT_PT           = 8f   // value label text size
 private const val WEAR_DIA_MIN_GAP_PT        = 5f   // min clear gap between label edges / leader drops
 private const val WEAR_DIA_ROW_GAP_PT        = 3f   // vertical gap between the two label rows
-private const val WEAR_DIA_PROFILE_LEADER_PT = 10f  // leader region reserved below the names row (profile band only; strips reuse the min-Ø headroom)
+private const val WEAR_DIA_PROFILE_LEADER_PT = 10f  // leader region reserved below the names row (profile band only; strips reuse the label headroom)
 private const val WEAR_DIA_TICK_OVERSHOOT_PT = 2f   // witness tick overshoot past the cylinder edges (strips)

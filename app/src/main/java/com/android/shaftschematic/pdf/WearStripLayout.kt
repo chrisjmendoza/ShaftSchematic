@@ -376,9 +376,9 @@ const val WEAR_STRIP_ROW_HEIGHT_PT = 13f
 /**
  * Extra vertical gap reserved between the title's own text line and the top of the
  * liner cylinder. Without this gap, the cylinder would consume the strip's whole
- * remaining band right up against the title with no headroom at all — a label pinned
- * to the cylinder's top edge (the min-Ø reading, see
- * `WearPdfComposer.drawWearDetailStrip`) would then land only a few points below the
+ * remaining band right up against the title with no headroom at all — the measured-Ø
+ * callout leaders departing the cylinder bottom (see
+ * `WearPdfComposer.drawWearDetailStrip`) would then land only a few points above the
  * title text, reading as crowded/overlapping.
  */
 const val WEAR_STRIP_LABEL_HEADROOM_PT = 11f
@@ -416,8 +416,8 @@ data class WearStripInnerLayout(
  *
  * [titleHeightPt] is the space the title text line itself consumes (its own line
  * height); [labelHeadroomPt] is then an EXTRA, explicit gap reserved above the title,
- * just below the cylinder, so the title never crowds the cylinder or a min-Ø reading
- * (see [WEAR_STRIP_LABEL_HEADROOM_PT]'s KDoc for what this prevents).
+ * just below the cylinder — the measured-Ø callout leaders' departure region — so the
+ * title never crowds the cylinder (see [WEAR_STRIP_LABEL_HEADROOM_PT]'s KDoc).
  *
  * The rail's own vertical budget is a FIXED [maxLabelRows] × [rowHeightPt] —
  * not proportional to how many wear spots the liner has, since the rail is always
@@ -714,6 +714,3 @@ const val WEAR_BLANK_ANCHOR_SUFFIX = "FROM  AFT / FWD  S.E.T."
 fun linerAnchorForPdf(spec: ShaftSpec, liner: Liner): LinerAnchor? =
     mapToLinerDimsForPdf(spec, PdfTieringMode.AUTO).firstOrNull { it.id == liner.id }?.anchor
 
-/** Min-Ø reading label, or `null` when unrecorded (`minDiaMm == 0`) — never printed in that case. */
-fun formatMinDiaLabelOrNull(minDiaMm: Float, unit: UnitSystem): String? =
-    if (minDiaMm > 0f) "⌀${formatDiaWithUnit(minDiaMm.toDouble(), unit)}" else null

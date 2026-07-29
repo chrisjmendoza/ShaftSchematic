@@ -69,7 +69,7 @@ class WearDiaCalloutSvgPreviewTest {
         stripBottom: Float,
         linerLenMm: Float,
         readingsAxialToDiaMm: List<Pair<Float, Float>>,
-        minDiaBand: Pair<Float, Float>? = null,  // wear band startMm..endMm for context
+        wearBand: Pair<Float, Float>? = null,  // wear band startMm..endMm for context
         title: String,
     ): Pair<String, Boolean> {
         val svg = Svg()
@@ -100,10 +100,9 @@ class WearDiaCalloutSvgPreviewTest {
         // Rail line placeholder (real rail spans omitted — not what's under review)
         svg.line(h.linerLeftPt, inner.railY, h.linerRightPt, inner.railY, w = 0.5f, color = "#999", dash = "3,2")
 
-        // Wear band context + min-Ø label position
-        minDiaBand?.let { (s, e) ->
+        // Wear band context (no min-Ø label — retired in favor of the measured-Ø callouts)
+        wearBand?.let { (s, e) ->
             svg.rect(xAt(s), top, xAt(e) - xAt(s), bot - top, stroke = "#c00", fill = "#fdd", sw = 0.8f)
-            svg.text((xAt(s) + xAt(e)) / 2f, bot + textH, "⌀9.66\"", color = "#c00")
         }
 
         // Witness ticks + callouts — the feature under review
@@ -138,7 +137,7 @@ class WearDiaCalloutSvgPreviewTest {
                 210f to 9.753f * 25.4f,
                 292f to 10.000f * 25.4f,
             ),
-            minDiaBand = 70f to 170f,
+            wearBand = 70f to 170f,
             title = "AFT LINER — 110 FROM AFT S.E.T.",
         )
         File(outDir, "a-sketch-fullwidth.svg").writeText(svgA)

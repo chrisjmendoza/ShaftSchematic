@@ -6,6 +6,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,8 +45,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +62,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -121,6 +126,12 @@ import com.android.shaftschematic.util.UnitSystem
  * Same pattern as `PdfPreviewOverlay` (`RunoutRoute.kt`): a plain composable, not a nav
  * destination, dismissed via [BackHandler] or the back-arrow button — the caller composes this
  * conditionally (`if (selectedComponentId != null) ComponentWearDetailOverlay(...)`).
+ *
+ * The broken-out canvas supports **pinch-to-zoom + two-finger pan** (accurate pit / band / Ø
+ * placement, on-device request) using the RunoutRoute preview's transform pattern: a
+ * `transformable` state drives the Canvas `graphicsLayer` (scale about the centre pivot, then
+ * translate) and the tap handler inverts that transform, so every placement/hit-test runs in
+ * untransformed canvas space — zooming changes precision, never coordinates.
  *
  * Layout math is self-contained here — it draws ONE component + short neighbor stubs, not the
  * whole shaft, so it does not use `ShaftLayout`/`ShaftRenderer`. Neighbor geometry still comes
@@ -234,13 +245,26 @@ fun ComponentWearDetailOverlay(
     // Brush size for the NEXT placed pit (small X's mark little holes, large for bigger
     // cavities — matching the hand convention).
     var brushSize by remember { mutableStateOf(PitSize.SMALL) }
-    // Explicit Add / Remove / Ø tool so a stray tap can't place or delete unexpectedly — in
-    // Remove mode a miss is a no-op; in Add mode a tap always places (no accidental deletes);
-    // in Ø mode a tap on a tick edits that reading and a tap on bare metal starts a new one.
-    var pitTool by remember { mutableStateOf(PitTool.ADD) }
+    // ONE active canvas tool across both feature sections (Pits, Diameter measurements) so a
+    // stray tap can't place or delete unexpectedly — in the remove modes a miss is a no-op; in
+    // Add X mode a tap always places; in Add Ø mode a tap on a tick edits that reading and a
+    // tap on bare metal starts a new one; in Remove Ø mode a tap on a tick deletes it.
+    var tool by remember { mutableStateOf(WearCanvasTool.ADD_PIT) }
     // Pending Ø-reading dialog: existingId == null → adding at axialMm (the reading is only
     // created when the dialog SAVES, so cancelling never leaves a ghost zero-value station).
     var diaDialog by remember { mutableStateOf<DiaDialogState?>(null) }
+
+    // Pinch-to-zoom on the broken-out canvas (on-device request: accurate pit / band / Ø
+    // placement) — the RunoutRoute preview's exact pattern: transformable state drives a
+    // graphicsLayer (scale about the centre pivot, then translate); the tap handler inverts
+    // that transform to map taps into canvas space. Two-finger pinch/pan only; a plain tap
+    // stays a placement tap.
+    var zoomScale by remember { mutableFloatStateOf(1f) }
+    var zoomOffset by remember { mutableStateOf(Offset.Zero) }
+    val zoomTransformState = rememberTransformableState { zoomChange, panChange, _ ->
+        zoomScale = (zoomScale * zoomChange).coerceIn(1f, 6f)
+        zoomOffset = if (zoomScale <= 1f) Offset.Zero else zoomOffset + panChange
+    }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
@@ -291,14 +315,26 @@ fun ComponentWearDetailOverlay(
                     rightNeighbor?.maxDiaMm() ?: 0f,
                 ).coerceAtLeast(1f)
 
+                // Read live inside the tap pointerInput without re-keying it on every pinch.
+                val scaleForTap = rememberUpdatedState(zoomScale)
+                val offsetForTap = rememberUpdatedState(zoomOffset)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(canvasHeightDp)
                         .clip(cardShape)
                         .background(Color.White)
-                        .pointerInput(componentId, pits, diaReadings, brushSize, pitTool, lenMm, startDiaMm, endDiaMm) {
-                            detectTapGestures { tap ->
+                        .transformable(zoomTransformState)
+                        .pointerInput(componentId, pits, diaReadings, brushSize, tool, lenMm, startDiaMm, endDiaMm) {
+                            detectTapGestures { rawTap ->
+                                // Invert the Canvas graphicsLayer transform (scale about the
+                                // centre pivot, then translate) so hit-testing/placement math
+                                // stays in untransformed canvas space at any zoom.
+                                val sc = scaleForTap.value
+                                val tap = Offset(
+                                    (rawTap.x - offsetForTap.value.x - size.width / 2f) / sc + size.width / 2f,
+                                    (rawTap.y - offsetForTap.value.y - size.height / 2f) / sc + size.height / 2f,
+                                )
                                 val lay = computeSegDetailLayout(
                                     widthPx = size.width.toFloat(),
                                     stubRowHeightPx = stubRowHeightDp.toPx(),
@@ -307,8 +343,14 @@ fun ComponentWearDetailOverlay(
                                     maxOdMm = maxOdMm,
                                 )
                                 val smallHalfPx = PIT_SMALL_HALF_DP.dp.toPx()
-                                when (pitTool) {
-                                    PitTool.REMOVE -> {
+                                fun diaTargets() = diaReadings.map { r ->
+                                    val local = r.axialMm.coerceIn(0f, lenMm)
+                                    val cx = lay.startPx + local * lay.pxPerMm
+                                    val rr = radiusLocalPx(lay, startDiaMm, endDiaMm, lenMm, local)
+                                    DiaHitTarget(r.id, cx, lay.cy - rr, lay.cy + rr)
+                                }
+                                when (tool) {
+                                    WearCanvasTool.REMOVE_PIT -> {
                                         // Tap an X to delete it; a miss does nothing.
                                         val targets = pits.map { p ->
                                             val (cx, cy) = pitCenterPx(lay, startDiaMm, endDiaMm, lenMm, p)
@@ -317,7 +359,7 @@ fun ComponentWearDetailOverlay(
                                         pickPitAt(tap.x, tap.y, targets, padPx = 11.dp.toPx())
                                             ?.let { onRemovePit(it) }
                                     }
-                                    PitTool.ADD -> {
+                                    WearCanvasTool.ADD_PIT -> {
                                         // Only taps landing on the segment (between its edges) count.
                                         if (tap.x < lay.startPx - 4f || tap.x > lay.endPx + 4f) return@detectTapGestures
                                         val localMm = ((tap.x - lay.startPx) / lay.pxPerMm).coerceIn(0f, lenMm)
@@ -325,17 +367,11 @@ fun ComponentWearDetailOverlay(
                                         val frac = acrossFracFromTapY(tap.y, lay.cy - r, lay.cy + r)
                                         onAddPit(componentId, localMm, frac, brushSize)
                                     }
-                                    PitTool.DIA -> {
+                                    WearCanvasTool.ADD_DIA -> {
                                         // Tap an existing witness tick → edit that reading;
                                         // tap bare metal on the segment → start a new one
                                         // (created only when the dialog saves).
-                                        val targets = diaReadings.map { r ->
-                                            val local = r.axialMm.coerceIn(0f, lenMm)
-                                            val cx = lay.startPx + local * lay.pxPerMm
-                                            val rr = radiusLocalPx(lay, startDiaMm, endDiaMm, lenMm, local)
-                                            DiaHitTarget(r.id, cx, lay.cy - rr, lay.cy + rr)
-                                        }
-                                        val hit = pickDiaReadingAt(tap.x, tap.y, targets, padPx = 12.dp.toPx())
+                                        val hit = pickDiaReadingAt(tap.x, tap.y, diaTargets(), padPx = 12.dp.toPx())
                                         if (hit != null) {
                                             val r = diaReadings.first { it.id == hit }
                                             diaDialog = DiaDialogState(existingId = r.id, axialMm = r.axialMm)
@@ -345,11 +381,25 @@ fun ComponentWearDetailOverlay(
                                             diaDialog = DiaDialogState(existingId = null, axialMm = localMm)
                                         }
                                     }
+                                    WearCanvasTool.REMOVE_DIA -> {
+                                        // Tap a witness tick to delete its reading; a miss does nothing.
+                                        pickDiaReadingAt(tap.x, tap.y, diaTargets(), padPx = 12.dp.toPx())
+                                            ?.let { onRemoveDiaReading(it) }
+                                    }
                                 }
                             }
                         },
                 ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer(
+                                scaleX = zoomScale,
+                                scaleY = zoomScale,
+                                translationX = zoomOffset.x,
+                                translationY = zoomOffset.y,
+                            ),
+                    ) {
                         val outlineWidthPx = 1.5.dp.toPx()
                         val stubWidthPx = stubWidthDp.toPx()
                         val stubRowHeightPx = stubRowHeightDp.toPx()
@@ -524,7 +574,8 @@ fun ComponentWearDetailOverlay(
                 }
 
                 // Tool: Add X (place on tap) / Remove X (delete on tap). Explicit so a stray tap
-                // can't place or delete by accident.
+                // can't place or delete by accident. Selecting a chip here deselects the
+                // Diameter-measurements section's chips — one active canvas tool at a time.
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -533,13 +584,12 @@ fun ComponentWearDetailOverlay(
                         "Tool:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    WearChip("Add X", pitTool == PitTool.ADD) { pitTool = PitTool.ADD }
-                    WearChip("Remove X", pitTool == PitTool.REMOVE) { pitTool = PitTool.REMOVE }
-                    WearChip("Add Ø", pitTool == PitTool.DIA) { pitTool = PitTool.DIA }
+                    WearChip("Add X", tool == WearCanvasTool.ADD_PIT) { tool = WearCanvasTool.ADD_PIT }
+                    WearChip("Remove X", tool == WearCanvasTool.REMOVE_PIT) { tool = WearCanvasTool.REMOVE_PIT }
                 }
 
                 // Size — only affects newly placed pits, so shown while adding.
-                if (pitTool == PitTool.ADD) {
+                if (tool == WearCanvasTool.ADD_PIT) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -553,15 +603,17 @@ fun ComponentWearDetailOverlay(
                     }
                 }
 
-                Text(
-                    text = when (pitTool) {
-                        PitTool.ADD -> "Add mode — tap the segment to place an X."
-                        PitTool.REMOVE -> "Remove mode — tap an X to delete it."
-                        PitTool.DIA -> "Ø mode — tap the segment to record a measured diameter; tap a tick to edit or delete it."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                when (tool) {
+                    WearCanvasTool.ADD_PIT -> "Add mode — tap the segment to place an X."
+                    WearCanvasTool.REMOVE_PIT -> "Remove mode — tap an X to delete it."
+                    else -> null
+                }?.let { helper ->
+                    Text(
+                        text = helper,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
                 if (pits.isNotEmpty()) {
                     OutlinedButton(onClick = { pits.forEach { onRemovePit(it.id) } }) {
@@ -570,6 +622,48 @@ fun ComponentWearDetailOverlay(
                         Text("Clear all pits")
                     }
                 }
+
+                // ── Diameter measurements (measured-Ø readings) ──────────────
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Diameter measurements", style = MaterialTheme.typography.titleMedium)
+                    if (diaReadings.isNotEmpty()) {
+                        Text(
+                            "${diaReadings.size} recorded",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Tool:", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    WearChip("Add Ø", tool == WearCanvasTool.ADD_DIA) { tool = WearCanvasTool.ADD_DIA }
+                    WearChip("Remove Ø", tool == WearCanvasTool.REMOVE_DIA) { tool = WearCanvasTool.REMOVE_DIA }
+                }
+
+                Text(
+                    text = when (tool) {
+                        WearCanvasTool.ADD_DIA ->
+                            "Add mode — tap the segment to record a measured diameter at that spot; tap an existing tick to edit it."
+                        WearCanvasTool.REMOVE_DIA ->
+                            "Remove mode — tap a measurement tick to delete its reading."
+                        else ->
+                            "Measured diameters print on the wear sheet as values with pointer lines."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
                 // ── Liner wear spots (bands) — liners only ───────────────────
                 if (liner != null) {
@@ -682,8 +776,10 @@ private data class DiaDialogState(val existingId: String?, val axialMm: Float)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Which tool a tap uses on the detail canvas (explicit, to avoid accidental edits):
- *  place a pit X, remove a pit X, or add/edit a measured-Ø reading. */
-private enum class PitTool { ADD, REMOVE, DIA }
+ *  place a pit X, remove a pit X, add/edit a measured-Ø reading, or remove one. The Pits
+ *  and Diameter-measurements sections each own two chips, but only ONE tool is ever
+ *  active — selecting in one section deselects the other's. */
+private enum class WearCanvasTool { ADD_PIT, REMOVE_PIT, ADD_DIA, REMOVE_DIA }
 
 /** True for the pit-eligible subtypes (bodies, tapers, liners); used to gate the overlay. */
 private val ResolvedComponent.isPitEligible: Boolean
@@ -885,10 +981,10 @@ private fun WearSpotCard(
                 },
             ) { s -> toMmOrNull(s, unit)?.let { onCommit(spot.startMm, it, spot.minDiaMm, spot.note) } }
 
-            WearNum(
-                label = "Min diameter measured (${abbr(unit)})",
-                initialDisplay = disp(spot.minDiaMm, unit),
-            ) { s -> toMmOrNull(s, unit)?.let { onCommit(spot.startMm, spot.lengthMm, it, spot.note) } }
+            // No min-Ø field: per-band minimum-diameter entry is superseded by the
+            // Diameter measurements tool (measured-Ø readings at exact stations) — the two
+            // printed labels collided under a wear band (on-device report). The stored
+            // [WearSpot.minDiaMm] is preserved verbatim through commits for old files.
 
             // Notes — plain text, same tap-and-leave no-op discipline as the numeric fields
             // above (NumberField.md): capture on focus, commit on blur only if changed.

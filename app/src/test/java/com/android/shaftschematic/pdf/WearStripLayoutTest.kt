@@ -725,16 +725,4 @@ class WearStripLayoutTest {
         assertTrue(WEAR_BLANK_ANCHOR_SUFFIX.endsWith("S.E.T."))
     }
 
-    // ── formatMinDiaLabelOrNull ────────────────────────────────────────────────
-
-    @Test
-    fun `min-diameter label is omitted when unrecorded`() {
-        assertNull(formatMinDiaLabelOrNull(0f, UnitSystem.MILLIMETERS))
-    }
-
-    @Test
-    fun `min-diameter label is printed when recorded`() {
-        val label = formatMinDiaLabelOrNull(139.7f, UnitSystem.MILLIMETERS)
-        assertTrue(label != null && label.contains("139.7"))
-    }
 }

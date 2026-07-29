@@ -86,10 +86,11 @@ Features:
   - Never coexist with auto bodies in the same region
 
 **Rule:** Manual body components promote over auto bodies in any overlapping span. This
-promotion is live today: the carousel's auto-body card promotes on an explicit user action —
-editing Start/Length/Ø, **or** ticking "Make editable body" — via `promoteIfNeeded()`
-(`ComponentCarousel.kt`), persisting the section as a real `Body` in `ShaftSpec`. Viewing an
-auto-body card without acting never promotes it.
+promotion is live today: the carousel's auto-body card promotes ONLY when the user ticks its
+**"Explicit body"** checkbox (`ComponentCarousel.kt` calls `onAddBody(...)`), persisting the
+section as a real `Body` in `ShaftSpec`. There is no field-edit promotion path — the card's
+editable Ø sets `ShaftSpec.autoBodyDiaMm` without promoting; viewing the card never
+promotes it.
 
 ### Explicit bodies are the fluid base (reverted 2026-07-21)
 

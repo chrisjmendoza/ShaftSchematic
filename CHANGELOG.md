@@ -6,6 +6,37 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-29 (wear overlay — diameter measurements get their own section; min-Ø retired)
+
+### fix(ui): Add Ø moved out of the Pits tool row; dedicated section with Remove Ø
+
+On-device feedback: the lone "Add Ø" chip inside the Pits tool row blended in and read as
+a pit action. The wear overlay now has a **"Diameter measurements"** section below Pits —
+own header, recorded count, and tool chips **Add Ø** / **Remove Ø** (tap a measurement
+tick to delete it; a miss is a no-op, same posture as Remove X). One canvas tool stays
+active at a time across both sections (`WearCanvasTool`), and each section shows its own
+helper text. Docs: `RunoutSheet.md` UI paragraph + `UI_CONTRACT.md` §7.5.
+
+### feat(ui): pinch-to-zoom on the wear detail canvas
+
+The component wear overlay's broken-out canvas now supports pinch-to-zoom (1×–6×) with
+two-finger pan, for accurate pit / wear-band / measured-Ø placement — the RunoutRoute
+preview's transform pattern (`transformable` → `graphicsLayer`, taps inverted through the
+scale-about-centre + translate transform so hit-testing and placement stay in canvas
+space at any zoom; zoomed-in taps gain effective precision). Pan resets when zoomed back
+out to 1×. The WearRoute overview canvas stays deliberately zoom-free.
+
+### fix(wear): per-band min-Ø field and printed label retired
+
+On-device report: the min-Ø label under a wear band collided with the measured-Ø callout
+values at the same spot — and the readings say the same thing better (exact stations vs
+one value per band). The spot card's "Min diameter measured" field and the strip's
+`⌀value` label are removed; `formatMinDiaLabelOrNull` deleted. `WearSpot.minDiaMm` stays
+in the model so old files round-trip (commits pass the stored value through verbatim; it
+is never entered or printed).
+
+---
+
 ## 2026-07-28 (wear document — measured-Ø readings)
 
 ### feat(wear): tap-to-add diameter measurements, printed as callouts with leaders

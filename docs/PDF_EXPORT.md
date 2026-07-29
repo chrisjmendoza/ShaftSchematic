@@ -231,8 +231,8 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   blank (2026-07-28). The OAL dimension line blanks the same way as the runout sheet's
   (empty mid-span break, no label). The profile AND every liner's zoomed detail strip
   still render (2026-07-28 — blank mode keeps the drawing; strips' dimension lines keep
-  their edge witness bars, values left out); recorded wear DATA (bands, pit X's, min-Ø
-  readings, measured-Ø callouts) is omitted — the print is a fresh inspection form.
+  their edge witness bars, values left out); recorded wear DATA (bands, pit X's,
+  measured-Ø callouts) is omitted — the print is a fresh inspection form.
   Recorded data in the app is never touched; blanking is render-only.
 - The blank toggle is **session-only, never persisted** (schematic:
   `ShaftViewModel.pdfBlankDraft`, runout/wear: local screen state) — a forgotten sticky

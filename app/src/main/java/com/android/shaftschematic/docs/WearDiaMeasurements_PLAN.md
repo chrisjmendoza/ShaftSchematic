@@ -2,11 +2,14 @@
 
 **Status: IMPLEMENTED as designed (2026-07-28, branch `feat/wear-dia-readings`) — this doc
 is the as-built design record. See `docs/RunoutSheet.md` § "Wear Diameter Measurements" for
-the maintained contract.** Deviations from the plan: none of substance; the strip's leader
-region reuses the existing min-Ø headroom instead of a separate leader band (zero cost for
-reading-free strips), and the callout engine is two-phase (plan → finish) like
-`RunoutBubbleLayout` so both surfaces can reserve exact band heights before fixing
-vertical layout.
+the maintained contract.** Deviations from the plan: the strip's leader region reuses the
+existing label headroom instead of a separate leader band (zero cost for reading-free
+strips); the callout engine is two-phase (plan → finish) like `RunoutBubbleLayout` so both
+surfaces can reserve exact band heights before fixing vertical layout; on-device feedback
+(2026-07-29) moved Add Ø out of the Pits tool row into its own "Diameter measurements"
+section (+ Remove Ø chip), and **retired the per-band min-Ø field/label** — this plan's
+"leader can pass near a min-Ø label" caveat is therefore moot; `WearSpot.minDiaMm` remains
+in the model for old files only.
 
 Digitizes the shop's hand-marked diameter readings on the wear sheet (reference photo:
 Tidewater STBD 934918, 2025-10-14): the machinist measures actual diameters at several
