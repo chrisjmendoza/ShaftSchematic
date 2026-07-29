@@ -1,6 +1,9 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-07-22 — added §5.4 Inline Dimension Text (dimension values now seated in a break in the line, drafting-convention style, PDF export + preview); added §5.3 On-Shaft Diameter Callouts (body/liner OD leaders now all-BELOW, ≤3-decimal formatting, two-tier stacking); previously 2026-07-18 fixed page orientation (landscape, not portrait), clarified preview/PDF as separate drawing paths (named the three fit functions), replaced the "no display compression" invariant with the actual round-stock S-break behavior, fixed the AUDIT.md path.
+Last updated: 2026-07-28 — §5.5 wear-document blank-draft bullet corrected (blank mode keeps
+the profile AND every liner's detail strip since 2026-07-28, values-out only) and extended
+for measured-Ø readings; §5.3 gains a pointer to the wear document's own measured-Ø callout
+system. 2026-07-22 — added §5.4 Inline Dimension Text (dimension values now seated in a break in the line, drafting-convention style, PDF export + preview); added §5.3 On-Shaft Diameter Callouts (body/liner OD leaders now all-BELOW, ≤3-decimal formatting, two-tier stacking); previously 2026-07-18 fixed page orientation (landscape, not portrait), clarified preview/PDF as separate drawing paths (named the three fit functions), replaced the "no display compression" invariant with the actual round-stock S-break behavior, fixed the AUDIT.md path.
 
 ## Purpose
 Defines the **single-page** PDF export process.  
@@ -153,6 +156,11 @@ they are now all-BELOW, same as liners.
 - **PDF-only:** there is no on-screen canvas diameter leader, so the "draw identically
   in both sites" rule that applies to coupler bolt slots / wear pits / runout markers
   does not apply here.
+- **Distinct from the wear document's measured-Ø callouts.** These schematic callouts label
+  *nominal* body/liner ODs from the spec. The wear document has its own callout system for
+  *measured* diameters (`WearRecord.diaReadings` → `geom/WearDiaCalloutLayout.kt`, drawn on
+  the liner detail strips and under the main profile, with a canvas twin in the wear
+  overlay). See `RunoutSheet.md` §"Wear Diameter Measurements".
 
 ---
 
@@ -221,9 +229,11 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
 - **Wear document**: header job-info fields spread edge-to-edge with equal writing rules
   and the title centers on line 2 — the header never carries an OAL field, printed or
   blank (2026-07-28). The OAL dimension line blanks the same way as the runout sheet's
-  (empty mid-span break, no label), and recorded wear (bands, pit X's, detail strips) is
-  omitted — the print is a fresh inspection form. Recorded data in the app is never
-  touched; blanking is render-only.
+  (empty mid-span break, no label). The profile AND every liner's zoomed detail strip
+  still render (2026-07-28 — blank mode keeps the drawing; strips' dimension lines keep
+  their edge witness bars, values left out); recorded wear DATA (bands, pit X's,
+  measured-Ø callouts) is omitted — the print is a fresh inspection form.
+  Recorded data in the app is never touched; blanking is render-only.
 - The blank toggle is **session-only, never persisted** (schematic:
   `ShaftViewModel.pdfBlankDraft`, runout/wear: local screen state) — a forgotten sticky
   toggle would silently blank every future export. Blank exports get a `_BlankDraft`

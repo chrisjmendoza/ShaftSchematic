@@ -53,6 +53,10 @@ enum class WearSpotReference { LINER_AFT, LINER_FWD, AFT_SET, FWD_SET }
  *   Canonical storage — always liner-local AFT-edge mm regardless of [authoredReference].
  * @property lengthMm Axial length of the worn band.
  * @property minDiaMm Minimum measured diameter within the band. `0` = no reading recorded.
+ *   **Never entered or printed** — [WearDiaReading] owns the diameter story (readings at
+ *   exact stations); printing a per-band label here would collide with those callouts
+ *   under a wear band (on-device report). The field exists only so older files
+ *   round-trip; commits pass the stored value through unchanged.
  * @property note Free-text note (e.g. "scored", "pitted 6 o'clock").
  * @property authoredReference Which reference point [startMm] was authored against
  *   (display-only; additive field, default [WearSpotReference.LINER_AFT] preserves the
@@ -119,6 +123,42 @@ data class WearPit(
 )
 
 /**
+ * A single measured-diameter reading at an axial station on a component — the digital form
+ * of the shop's hand-written diameter values under a wear area (a value below the shaft
+ * with a leader line pointing at the measured spot).
+ *
+ * A **pure reference feature**, the same contract class as [WearSpot] / [WearPit] /
+ * [com.android.shaftschematic.model.RunoutReading]: it never affects `coverageEndMm`,
+ * `ensureOverall`, body resolution, collision/overlap validation, or the Free-to-End badge,
+ * and it lives outside [ShaftSpec] entirely (in [WearRecord], the document envelope).
+ *
+ * Like [WearPit], a reading may sit on **any** liner, taper, or body (explicit or auto) and
+ * is keyed by the *resolved* component id ([componentId]). A reading whose component no
+ * longer resolves is simply not drawn — orphan handling at the render layer, not decode.
+ *
+ * ## Coordinate rule
+ * [axialMm] is measured from the component's **AFT edge**, component-local — NOT shaft
+ * space — so a reading survives the component being repositioned, exactly like
+ * [WearPit.axialMm]. Shaft-space conversion is `component.startMmPhysical + axialMm`, done
+ * at render time only. No across position: a diameter belongs to the whole cross-section
+ * at that station, and its callout always hangs below the drawn shaft.
+ *
+ * [diaMm] is the machinist's typed measurement — stored **verbatim** (golden rule: user
+ * inputs are sacred; no snap/round/derive ever rewrites it). `0` means the station was
+ * placed but no value has been entered yet: the detail overlay still draws it (findable,
+ * editable), but the printed PDF skips it — a leader pointing at no value is noise.
+ *
+ * Units: mm.
+ */
+@Serializable
+data class WearDiaReading(
+    val id: String = UUID.randomUUID().toString(),
+    val componentId: String = "",
+    val axialMm: Float = 0f,
+    val diaMm: Float = 0f,
+)
+
+/**
  * Per-document wear inspection record. Lives beside `RunoutConfig` in the document
  * envelope (`ShaftDocCodec.ShaftDocV1`) — NOT inside [ShaftSpec] — so wear data never
  * touches geometry resolution, collision, or coverage math. See [WearSpot] for the
@@ -128,9 +168,12 @@ data class WearPit(
  * @property pits Pit / dye-failure "X" markers on liners, tapers, and bodies (see [WearPit]).
  *   Additive + defaulted, so older files (no `pits`) round-trip to an empty list with no
  *   envelope version bump.
+ * @property diaReadings Measured-diameter readings on liners, tapers, and bodies (see
+ *   [WearDiaReading]). Additive + defaulted, same no-version-bump rule as [pits].
  */
 @Serializable
 data class WearRecord(
     val spots: List<WearSpot> = emptyList(),
     val pits: List<WearPit> = emptyList(),
+    val diaReadings: List<WearDiaReading> = emptyList(),
 )

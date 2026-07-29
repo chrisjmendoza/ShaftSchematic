@@ -71,6 +71,23 @@ be drawn **identically** (same crossed-line construction, same small:large ratio
 strip pits (PDF). Pure sizing/hit-test/clamp math lives in `geom/WearPitMath.kt` (shared, no
 `pdf → ui` dep). See `docs/RunoutSheet.md` (Wear Pits).
 
+### Wear diameter readings are reference features
+Measured-Ø readings (`WearRecord.diaReadings` — a `WearDiaReading` per measured station,
+printed as a value below the shaft with a leader to a witness tick) are **reference-only**,
+the same posture as wear pits / wear spots / runout readings / coupler bolt slots. They
+**never** affect `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End badge,
+and they ride the existing `wear_record` envelope field (additive `diaReadings` list — no
+codec/autosave plumbing). Keyed by **resolved component id** (liner/taper/body, explicit or
+auto) + component-local `axialMm`; orphans are skipped at the **render layer**, never
+pruned at decode (same rule as pits/runout readings). `diaMm` is a typed measurement —
+stored **verbatim** (golden rule); `0` = placed-but-empty, drawn only in the overlay, never
+printed. Callouts are placed by the shared pure engine `geom/WearDiaCalloutLayout.kt`
+(order-preserving spread, two-row stagger, dogleg leaders) and must render **identically**
+in both draw sites: `ComponentWearDetailOverlay` (canvas) and `WearPdfComposer` (liner
+readings → that liner's detail strip; body/taper readings → under the main profile). Labels
+use `formatDiaWithUnit`, no `Ø` prefix. See `docs/RunoutSheet.md` (Wear Diameter
+Measurements) and `docs/WearDiaMeasurements_PLAN.md`.
+
 ### Runout readings are reference features
 Per-station runout readings (`RunoutReadings` in the doc envelope — a TIR value + high-spot
 clock marker per bubble) are **reference-only**, same posture as coupler bolt slots and wear

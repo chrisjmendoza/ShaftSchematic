@@ -1,6 +1,8 @@
 # UI Contract
 Version: v0.5.x
-Last updated: 2026-07-21 — §3.1.4 corrected after the "non-negotiable bodies" revert: bodies are fluid fillers (no collision, plain bodies split around sacred components, keyed bodies protected); removed `bodyOverlapErrorMm`/liner↔body-negotiation references. 2026-07-18 — §5.2 "Planned Preview Tap + Implicit Bodies" documented as shipped and merged into §3.1.1 (also fixes broken section numbering, a 5.2 appearing before 5.1); §§3.2–3.6 trimmed to summaries pointing at the more current in-source `AddComponentDialogs.md`.
+Last updated: 2026-07-28 — added §7.5 pointing the Runout Sheet / Wear Document tab
+interactions (incl. the wear overlay's Add X / Remove X / Add Ø tools) at the in-source
+`RunoutSheet.md` contract. 2026-07-21 — §3.1.4 corrected after the "non-negotiable bodies" revert: bodies are fluid fillers (no collision, plain bodies split around sacred components, keyed bodies protected); removed `bodyOverlapErrorMm`/liner↔body-negotiation references. 2026-07-18 — §5.2 "Planned Preview Tap + Implicit Bodies" documented as shipped and merged into §3.1.1 (also fixes broken section numbering, a 5.2 appearing before 5.1); §§3.2–3.6 trimmed to summaries pointing at the more current in-source `AddComponentDialogs.md`.
 
 ## Purpose
 This document defines all UI interaction rules, screen behaviors, dialog behavior, input handling, and UI–ViewModel boundaries.  
@@ -94,11 +96,12 @@ persisted in `ShaftSpec`:
   `deriveAutoBodies()`, producing `ResolvedBody(source = ResolvedComponentSource.AUTO)` entries.
 - Fill axial gaps between explicit (sacred) components. When OAL is manually authored, a base
   auto body spans 0 → OAL immediately; derived OAL does **not** seed a base auto body.
-- Promotion to an explicit `Body` happens on an explicit user action — editing one of the
-  auto-body card's fields (Start / Length / Ø), **or** ticking the "Make editable body"
-  checkbox: `promoteIfNeeded()` in `ComponentCarousel.kt` calls `onAddBody(...)` and persists
-  the section into `ShaftSpec.bodies`. Viewing the card without acting never promotes it (see
-  the "Auto-body promotion" invariant in `CLAUDE.md`).
+- Promotion to an explicit `Body` happens ONLY by ticking the **"Explicit body"** checkbox
+  (`ComponentCarousel.kt` calls `onAddBody(...)` with the derived span). There is no
+  field-edit promotion path: the auto-body card's Start/Length are disabled derived fields,
+  and its editable Ø field sets the shared bare-shaft `ShaftSpec.autoBodyDiaMm` without
+  promoting. Viewing the card never promotes it (see the "Auto-body promotion" invariant
+  in `CLAUDE.md`).
 
 ### 3.1.2 Default Start Position (`computeAddDefaults`)
 
@@ -120,8 +123,8 @@ stored (explicit) and derived (auto) bodies are fluid base material / fillers. A
 component added or moved over a plain body **splits** it (`splitBodiesAround`) — there is no
 hard-block, and bodies never raise collision warnings. A body that has a keyway is never split:
 it stays one whole card (keyway intact) and the resolve layer trims it for drawing. Auto-bodies
-(derived, unstored) get "Body (auto)" cards and can be promoted to explicit (field edit or
-"Make editable body").
+(derived, unstored) get "Body (auto)" cards and are promoted to explicit only via the
+"Explicit body" checkbox (see §3.1.1 — no field-edit promotion path).
 
 (The "explicit bodies are non-negotiable" experiment was reverted 2026-07-21 — it raised false
 collision warnings on normal drafts. The `bodyOverlapErrorMm` / `nonBodyOverlapErrorMm` hard
@@ -250,6 +253,27 @@ UI emits only:
 - Dialog open/close events
 
 No other responsibilities.
+
+---
+
+# 7.5 Runout Sheet & Wear Document Tabs
+
+This contract predates the sidebar's two inspection tabs; their UI behavior is owned by the
+in-source `app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md` (authoritative)
+rather than duplicated here. Summary of the boundaries, which follow the same rules as above:
+
+- **RunoutRoute** — station-count overrides, TIR orientation, tap-a-bubble editor
+  (`RunoutBubbleDialog`: TIR value + high-spot clock marker). All bubble placement comes
+  from the shared `geom/RunoutBubbleLayout.kt` engine; the route never computes placement.
+- **WearRoute** — tappable overview canvas (component tint + wear-count badges) opening
+  `ComponentWearDetailOverlay`: a **Pits** section (tool chips **Add X** / **Remove X**)
+  and a separate **Diameter measurements** section (**Add Ø** / **Remove Ø**; add/edit via
+  a Save/Cancel/Delete value dialog — readings are created only on Save). One canvas tool
+  is active at a time across both sections. Liner cards keep the wear-spot editor
+  (`NumberField.md` commit rules apply).
+- Both tabs preview by **rasterizing the real composed PDF** (`PdfPreviewOverlay`) — the
+  UI never re-draws document geometry itself, and all hit-testing/placement math lives in
+  `geom/` (`WearPitMath`, `WearDiaMath`, `WearDiaCalloutLayout`, `RunoutReadingMath`).
 
 ---
 

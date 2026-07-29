@@ -58,7 +58,12 @@ contains it — ties (a tap exactly on a shared boundary) broken by whichever li
 nearer edge. A hit opens `LinerWearDetailOverlay` for that liner's id.
 
 **Detail overlay (`LinerWearDetail.kt`)** — a full-screen composable, not a nav destination,
-same shape as `PdfPreviewOverlay`: its own `BackHandler` plus a back-arrow top bar. Layout math
+same shape as `PdfPreviewOverlay`: its own `BackHandler` plus a back-arrow top bar. Its
+broken-out canvas supports **pinch-to-zoom / two-finger pan** (2026-07-29, on-device request:
+accurate pit / band / Ø placement) via the RunoutRoute preview's transform pattern —
+`transformable` → `graphicsLayer`, taps inverted through the transform so placement math is
+zoom-independent. (The WearRoute *overview* canvas remains deliberately zoom-free — single
+tap-to-open only.) Layout math
 is self-contained (draws one liner + short neighbor stubs, not the whole shaft, so it does not
 use `ShaftLayout`): `computeLinerDetailPxPerMm` is width-driven but capped by an available-height
 budget so a very short liner doesn't blow its drawn diameter off-canvas. Neighbor stubs (~24dp)
@@ -78,7 +83,7 @@ material on both sides, so their break stubs are unchanged (no draw-both-sites o
 rects at `clampWearBandToLiner` positions (visual clamp only; the underlying `WearSpot` is never
 mutated) with a small per-spot dimension rail below (offset from the liner's AFT edge, then band
 length, formatted via the existing `disp`/`abbr` helpers in the active unit). Spot cards below
-the canvas use `NumericInputField` for Start/Length/Min-Ø (commit-on-blur, tap-and-leave no-op,
+the canvas use `NumericInputField` for Start/Length (commit-on-blur, tap-and-leave no-op,
 per `NumberField.md`) plus a same-discipline Notes field, a delete icon per card, and an
 "Add spot" button wired to `ShaftViewModel.addWearSpot`/`updateWearSpot`/`removeWearSpot`.
 
@@ -182,6 +187,72 @@ ratio; only the destination units and API differ, exactly like the runout marker
   Rendering Modes"), so body/taper pits always have a whole-shaft view.
 - **PDF detail strip:** liner pits also drawn on the broken-out strip (base half-arm 2.5pt; large 5.0pt),
   reinforcing the profile pits at the strip's larger scale.
+
+---
+
+## Wear Diameter Measurements (measured-Ø callouts, 2026-07-28)
+
+The digital form of the shop's hand-written diameter values under a worn section (reference
+photo: values fanned below the shaft, each with a leader pointing at the measured spot, plus
+the nominal at an unworn edge). The fifth reference-only feature — see `CLAUDE.md` and
+`docs/WearDiaMeasurements_PLAN.md` for the full design.
+
+**Data model** (`model/WearSpot.kt`): `WearDiaReading(id, componentId, axialMm, diaMm)` in
+`WearRecord.diaReadings` — additive/defaulted, rides the existing `wear_record` envelope
+field (no codec/autosave plumbing). Keyed by **resolved component id** (liner, taper, or
+body — explicit or auto), component-local `axialMm` from the AFT edge, no across position
+(a diameter belongs to the whole cross-section; callouts always hang **below**). `diaMm` is
+stored **verbatim** (golden rule); `0` = station placed but no value yet — drawn in the
+overlay (findable/editable), **skipped on the printed PDF**. Orphans skipped at the render
+layer, never decode (`WearRecordPersistenceTest` pins that readings on unknown component
+ids survive decode).
+
+**ViewModel**: `addWearDiaReading` / `updateWearDiaReading` / `removeWearDiaReading` —
+plain `_wearRecord` updates, no geometry side effects.
+
+**UI** (`ComponentWearDetailOverlay`): a dedicated **"Diameter measurements"** section below
+Pits (own header + recorded count), with its own tool chips **Add Ø** / **Remove Ø**
+(on-device feedback: a lone Add Ø chip inside the Pits tool row blended in and read as a
+pit action). Both sections share ONE active canvas tool (`WearCanvasTool`) — selecting a
+chip in either section deselects the other's, so a stray tap can never do the wrong
+section's action. In Add Ø mode a tap on an existing witness tick opens its edit dialog
+(Save / Cancel / Delete); a tap on bare metal opens the add dialog for that axial position —
+the reading is created **only on Save**, so cancelling never leaves a ghost zero-value
+station. In Remove Ø mode a tap on a tick deletes its reading (a miss is a no-op, same
+posture as Remove X). The dialog is one numeric field (unit conversion at the edge, value
+stored verbatim). The canvas draws a thin witness tick across the segment at each station
+plus the value callouts fanned below (a value-less reading shows "—").
+
+**Placement engine — single source of truth: `geom/WearDiaCalloutLayout.kt`** (pure,
+`WearDiaCalloutLayoutTest`), `RunoutBubbleLayout`'s label-width-aware sibling: labels on
+one row when they fit, else two alternating rows (the sketch's stagger); order-preserving
+least-squares x spread (shared PAVA solver); spacing invariants sized to label half-widths
+(same-row `(wᵢ+wⱼ)/2 + minGap`, cross-row `max(wᵢ,wⱼ)/2 + minGap`); row-1 leaders dogleg
+via an elbow above the row-0 band so drops provably clear every label; uniform compression
+(flagged) only in degenerate widths. Hit-test math in `geom/WearDiaMath.kt`
+(`pickDiaReadingAt`, point-to-tick distance).
+
+**Rendering** (draw-both-sites lockstep, all through the one engine):
+- **PDF detail strip** (`WearPdfComposer.drawWearDetailStrip`): liner readings print on
+  their liner's strip — witness tick across the full cylinder height (overshoot
+  `WEAR_DIA_TICK_OVERSHOOT_PT`), value labels in a band reserved **below** the cylinder by
+  `computeWearStripInnerLayout(diaBandPt = …)` (label rows only; the leader region reuses
+  the existing label headroom, so a reading-free strip's layout is byte-identical to
+  before — `WearStripDiaBandTest`). Labels use `formatDiaWithUnit` — the same ≤3-decimal
+  format as the footer's Ø text, no `Ø` prefix (matches the hand sketch, keeps labels
+  narrow). **The per-band min-Ø label is retired** (on-device report: it collided with
+  these values under a wear band) — measured-Ø readings ARE the diameter story now; the
+  spot card no longer offers the min-Ø field and `WearSpot.minDiaMm` survives only for
+  old files (stored value passed through commits verbatim, never printed).
+- **PDF main profile**: body/taper readings print under the whole-shaft profile, in a band
+  below the names/direction row; the leader originates on the drawn bottom surface (taper Ø
+  interpolated at the station, same as pits). The profile band reserves the height via
+  `preferredProfileHeightPt` only when such readings exist. Liner readings do **not** draw
+  on the profile (the strip is the zoomed reading surface); a liner past the strip cap
+  loses its readings on print — same class of limitation as other strip-overflow content.
+- **Canvas overlay**: same engine in px, anchored under the drawn segment.
+- **Blank draft**: readings omitted entirely (`effectiveRecord = WearRecord()`), consistent
+  with bands/pits.
 
 ---
 
@@ -431,7 +502,7 @@ detail strips below pick their layout from `determineWearPdfMode(collectWearLine
 docSpec.liners, wearRecord).size)` — since 2026-07-27 that is a pure function of the shaft's
 **drawable liner count**: every liner with positive length and OD gets a strip, whether or
 not it has recorded wear (the shop's normal operating procedure — the sheet always shows all
-liners; a spotless liner's strip simply has no bands/min-Ø and its rail shows edge witness bars
+liners; a spotless liner's strip simply has no bands/callouts and its rail shows edge witness bars
 only — a band-less rail draws no spanning length). Orphan spots on a since-deleted liner are dropped by `collectWearLinerGroups`; pits
 don't affect the mode:
 
@@ -451,7 +522,7 @@ header never carries an OAL field, printed or blank. The OAL dimension line itse
 witness lines and arrowheads but drops the "OAL:" label + rule entirely; instead the span line
 gets an empty `BLANK_DIM_GAP_PT`-wide break cut at mid-span — no underline, no text — the exact
 convention `PdfDimensionRenderer` uses for blank schematic dimension breaks, so the machinist
-writes the measured OAL directly into the gap. Recorded wear (bands, pits, min-Ø) is omitted;
+writes the measured OAL directly into the gap. Recorded wear (bands, pits, measured-Ø readings) is omitted;
 each strip's dimension rail shows **only the
 two liner-edge witness bars** — no spanning line, arrowheads, or labels, since a band-less rail's
 one span would merely re-state the liner's own length and the rail's job is dimensioning distances
@@ -473,7 +544,7 @@ shrinks below its minimum and the "nothing wasted / nothing overflows" guarantee
 unchanged; each strip then takes its row's vertical band and one equal-width column slot across the
 content width (`WEAR_STRIP_COL_GAP_PT` gutter). A partial last row (e.g. the lone third strip) is
 **centered** at the same column width as a full row. Everything inside a strip — horizontal
-cylinder/stub layout, dimension rail, min-Ø labels, anchor-from-SET title, and now pit "X"s — is the
+cylinder/stub layout, dimension rail, measured-Ø callouts, anchor-from-SET title, and now pit "X"s — is the
 same `drawWearDetailStrip` used by the single-column path; only the per-strip rectangle differs.
 
 ---
@@ -551,9 +622,9 @@ height-encoded either (product decision). Each strip draws:
   radius (an oversized neighbor can't overflow the cylinder band), broken out with the
   standard S-curve edge (`BreakSymbol.drawBreakEdge`).
 - Hatched wear bands on the liner at strip-local scale (diagonal hatch, unlike the
-  main-profile bands' vertical lines), clamped the same way, plus a min-Ø reading printed
-  just **below** each band (moved below when the rail moved above, 2026-07-22) — omitted
-  entirely when `minDiaMm == 0` (unrecorded).
+  main-profile bands' vertical lines), clamped the same way. (The per-band min-Ø reading
+  that printed below each band is retired — superseded by the measured-Ø callouts, see
+  "Wear Diameter Measurements" above.)
 - One chained dimension rail above the cylinder (see "Dimension rail" below).
 - One anchor-from-SET label per strip (`buildLinerAnchorLabel`) — the digitized form of
   the shop sketch's "110 FROM CPLG S.E.T." line. It reuses `mapToLinerDimsForPdf` +

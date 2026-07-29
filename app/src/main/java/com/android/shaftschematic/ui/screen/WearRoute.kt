@@ -427,6 +427,9 @@ fun WearRoute(
             onRemoveSpot = vm::removeWearSpot,
             onAddPit = vm::addWearPit,
             onRemovePit = vm::removeWearPit,
+            onAddDiaReading = vm::addWearDiaReading,
+            onUpdateDiaReading = vm::updateWearDiaReading,
+            onRemoveDiaReading = vm::removeWearDiaReading,
             onClose = { selectedComponentId = null },
         )
     }
