@@ -53,9 +53,10 @@ enum class WearSpotReference { LINER_AFT, LINER_FWD, AFT_SET, FWD_SET }
  *   Canonical storage — always liner-local AFT-edge mm regardless of [authoredReference].
  * @property lengthMm Axial length of the worn band.
  * @property minDiaMm Minimum measured diameter within the band. `0` = no reading recorded.
- *   **Retired from entry and print** — superseded by [WearDiaReading] (measured-Ø readings
- *   at exact stations; the two printed labels collided under a wear band). The field stays
- *   so old files round-trip, and commits pass the stored value through unchanged.
+ *   **Never entered or printed** — [WearDiaReading] owns the diameter story (readings at
+ *   exact stations); printing a per-band label here would collide with those callouts
+ *   under a wear band (on-device report). The field exists only so older files
+ *   round-trip; commits pass the stored value through unchanged.
  * @property note Free-text note (e.g. "scored", "pitted 6 o'clock").
  * @property authoredReference Which reference point [startMm] was authored against
  *   (display-only; additive field, default [WearSpotReference.LINER_AFT] preserves the

@@ -17,6 +17,14 @@ tick to delete it; a miss is a no-op, same posture as Remove X). One canvas tool
 active at a time across both sections (`WearCanvasTool`), and each section shows its own
 helper text. Docs: `RunoutSheet.md` UI paragraph + `UI_CONTRACT.md` §7.5.
 
+### fix(ui): wear detail canvas — break edges no longer clip; zoom-out to 0.5×
+
+The broken-out assembly's layout now reserves edge padding (`SEG_EDGE_PAD_DP` = 32dp per
+side) for the neighbor stubs' S-curve break edges, whose bulge extends up to `r × 0.6`
+past the stub's outer x — a full-width liner previously clipped the curves at the canvas
+edges, reading as mis-sized stubs (on-device report). Zoom range widened from 1×–6× to
+0.5×–6× for a step-back overall view; pan still resets at ≤1×.
+
 ### feat(ui): pinch-to-zoom on the wear detail canvas
 
 The component wear overlay's broken-out canvas now supports pinch-to-zoom (1×–6×) with

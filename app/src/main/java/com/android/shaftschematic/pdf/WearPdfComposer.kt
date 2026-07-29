@@ -871,11 +871,11 @@ private fun drawWearDetailStrip(
     c.drawLine(hLayout.linerRightPt, cy + fwdR, stubRightX, cy + fwdR, outline)
     drawBreakEdge(c, stubRightX, cy - fwdR, cy + fwdR, fwdR * 0.6f, outline, eyeAtTop = false)
 
-    // Wear bands (hatch fill + edge ticks on the cylinder itself) — per spot, as before.
-    // The dimension story (offsets/lengths) is the chained rail above; the diameter story is
-    // the measured-Ø callouts below. No per-band min-Ø label prints anymore: it collided
-    // with the measured-Ø values under a wear band (on-device report) and is superseded by
-    // them — [WearSpot.minDiaMm] is retired from print, kept in the model for old files.
+    // Wear bands (hatch fill + edge ticks on the cylinder itself) — per spot. The dimension
+    // story (offsets/lengths) is the chained rail above; the diameter story is the
+    // measured-Ø callouts below, exclusively: printing a per-band min-Ø label here would
+    // collide with the callout values under a wear band (on-device report).
+    // [WearSpot.minDiaMm] is model-only, for older files.
     val bandHatch = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.6f; alpha = 160 }
     val clampedBands = sortedSpots.map { spot -> clampWearBandToLiner(spot.startMm, spot.lengthMm, ln.lengthMm) }
     clampedBands.forEach { clamp ->

@@ -261,8 +261,10 @@ fun ComponentWearDetailOverlay(
     // stays a placement tap.
     var zoomScale by remember { mutableFloatStateOf(1f) }
     var zoomOffset by remember { mutableStateOf(Offset.Zero) }
+    // 0.5×–6×: zoom out past 1× gives a step-back overall view; pan resets at ≤1× (the whole
+    // drawing is already on screen there, so a stale offset could only lose it).
     val zoomTransformState = rememberTransformableState { zoomChange, panChange, _ ->
-        zoomScale = (zoomScale * zoomChange).coerceIn(1f, 6f)
+        zoomScale = (zoomScale * zoomChange).coerceIn(0.5f, 6f)
         zoomOffset = if (zoomScale <= 1f) Offset.Zero else zoomOffset + panChange
     }
 
@@ -341,6 +343,7 @@ fun ComponentWearDetailOverlay(
                                     stubWidthPx = stubWidthDp.toPx(),
                                     lenMm = lenMm,
                                     maxOdMm = maxOdMm,
+                                    edgePadPx = SEG_EDGE_PAD_DP.dp.toPx(),
                                 )
                                 val smallHalfPx = PIT_SMALL_HALF_DP.dp.toPx()
                                 fun diaTargets() = diaReadings.map { r ->
@@ -414,6 +417,7 @@ fun ComponentWearDetailOverlay(
                             stubWidthPx = stubWidthPx,
                             lenMm = lenMm,
                             maxOdMm = maxOdMm,
+                            edgePadPx = SEG_EDGE_PAD_DP.dp.toPx(),
                         )
                         val startPx = lay.startPx
                         val endPx = lay.endPx
@@ -796,6 +800,13 @@ private data class SegDetailLayout(
  * On-screen layout of the broken-out focus component. Pure function of the canvas size + the
  * component's length/OD, so the Canvas renderer and the tap handler compute IDENTICAL geometry
  * (a tapped X removes the same X that was drawn). Mirrors the original liner-detail math.
+ *
+ * [edgePadPx] reserves clear space outside each neighbor stub for the S-curve break edge,
+ * whose bulge extends up to `r × 0.6` past the stub's outer x — without the pad, a
+ * full-width assembly clips the curves at the canvas edges and the break-out read as
+ * mis-sized (on-device report). `r` is capped by the height budget
+ * (`computeLinerDetailPxPerMm`'s 72% fill of the stub row), so [SEG_EDGE_PAD_DP] covers the
+ * worst case.
  */
 private fun computeSegDetailLayout(
     widthPx: Float,
@@ -803,8 +814,9 @@ private fun computeSegDetailLayout(
     stubWidthPx: Float,
     lenMm: Float,
     maxOdMm: Float,
+    edgePadPx: Float = 0f,
 ): SegDetailLayout {
-    val usableWidthPx = (widthPx - 2f * stubWidthPx).coerceAtLeast(1f)
+    val usableWidthPx = (widthPx - 2f * stubWidthPx - 2f * edgePadPx).coerceAtLeast(1f)
     val pxPerMm = computeLinerDetailPxPerMm(
         usableWidthPx = usableWidthPx,
         linerLengthMm = lenMm,
@@ -856,6 +868,14 @@ private fun pitCenterPx(
 
 /** Base half-arm (dp) of a SMALL pit "X" on the detail canvas; LARGE scales by the shared ratio. */
 private const val PIT_SMALL_HALF_DP = 4.5f
+
+/**
+ * Clear space (dp) reserved outside each neighbor stub for its S-curve break edge. The
+ * curve's bulge reaches `r × 0.6` past the stub's outer x, and `r` is capped by the height
+ * budget at `(stub row height × 0.72) / 2` — 140dp rows cap the bulge at ≈30dp, so 32dp
+ * guarantees the break edges always render complete inside the canvas at 1× zoom.
+ */
+private const val SEG_EDGE_PAD_DP = 32f
 
 private fun componentWearTitle(spec: ShaftSpec, rc: ResolvedComponent): String = when (rc) {
     is ResolvedLiner -> buildLinerTitleById(spec)[rc.id] ?: "Liner"
@@ -981,10 +1001,10 @@ private fun WearSpotCard(
                 },
             ) { s -> toMmOrNull(s, unit)?.let { onCommit(spot.startMm, it, spot.minDiaMm, spot.note) } }
 
-            // No min-Ø field: per-band minimum-diameter entry is superseded by the
-            // Diameter measurements tool (measured-Ø readings at exact stations) — the two
-            // printed labels collided under a wear band (on-device report). The stored
-            // [WearSpot.minDiaMm] is preserved verbatim through commits for old files.
+            // No min-Ø field: the Diameter measurements tool (measured-Ø readings at exact
+            // stations) owns diameter entry — a per-band value would print into the same
+            // spot as its callouts and collide (on-device report). The stored
+            // [WearSpot.minDiaMm] passes through commits verbatim for older files.
 
             // Notes — plain text, same tap-and-leave no-op discipline as the numeric fields
             // above (NumberField.md): capture on focus, commit on blur only if changed.
