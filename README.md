@@ -25,8 +25,8 @@ Editing Workflow
 Documents
 
 - Shaft drawing: one-page landscape technical PDF with dimension tiers, callouts, grid, and title block
-- Runout sheet: inline shaft preview with collision-free alternating runout bubbles and TIR label
-- Wear document: shaft profile with PASS/FAIL dye-pen checkboxes and field notes
+- Runout sheet: inline shaft preview with collision-free alternating runout bubbles and TIR label; tap a bubble to record its TIR value + high-spot marker
+- Wear document: shaft profile + per-liner detail strips, tap-to-record wear bands, pit "X" markers, and measured-Ø readings (value callouts with leaders); PASS/FAIL dye-pen checkboxes and field notes; blank write-in variants of all three documents
 - All three reachable from the editor sidebar (Schematic / Runout / Wear tabs)
 
 Persistence & Data Safety

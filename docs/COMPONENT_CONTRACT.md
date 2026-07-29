@@ -53,6 +53,12 @@ Features:
   - Excluded from OAL/`coverageEndMm`, excluded from collision detection (`collisionGroup()` → null), and never splits or merges bodies.
   - Position authored from AFT/FWD (default FWD); `showDimensionRail` is deferred (no rail drawn in v1). See DATA_MODEL.md for the full field list.
 
+- **Not components — envelope records**: wear spots, wear pits, measured-Ø readings, and
+  runout readings are reference-only *inspection records* stored in the document envelope
+  (`WearRecord` / `RunoutReadings`), not in `ShaftSpec`, and are outside this contract —
+  they never resolve, collide, or occupy spans. See DATA_MODEL.md §Serialization and
+  `CLAUDE.md`.
+
 ---
 
 ## 2.1 Implicit Body Spans (Derived)

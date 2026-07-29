@@ -534,6 +534,40 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _wearRecord.update { rec -> rec.copy(pits = rec.pits.filterNot { it.id == id }) }
     }
 
+    // ── Wear diameter readings (measured-Ø callouts) ─────────────────────────
+    // Same reference-only posture and storage as pits: keyed by resolved component id,
+    // component-local axial position, no geometry side effects, render-layer orphans.
+    // See model/WearSpot.kt (WearDiaReading) and geom/WearDiaCalloutLayout.kt.
+
+    /**
+     * Record a measured diameter [diaMm] on [componentId] at component-local [axialMm]
+     * (from the AFT edge). [diaMm] is stored verbatim — user inputs are sacred; only the
+     * tap-derived [axialMm] is coerced non-negative (coarse-gesture clamp).
+     */
+    fun addWearDiaReading(componentId: String, axialMm: Float, diaMm: Float) {
+        _wearRecord.update { rec ->
+            rec.copy(
+                diaReadings = rec.diaReadings + WearDiaReading(
+                    componentId = componentId,
+                    axialMm = max(0f, axialMm),
+                    diaMm = diaMm,
+                )
+            )
+        }
+    }
+
+    /** Replace an existing reading's measured value by [id]. No-op if the id is absent. */
+    fun updateWearDiaReading(id: String, diaMm: Float) {
+        _wearRecord.update { rec ->
+            rec.copy(diaReadings = rec.diaReadings.map { if (it.id == id) it.copy(diaMm = diaMm) else it })
+        }
+    }
+
+    /** Remove a reading by [id]. Confirm-free — deleted from its edit dialog. */
+    fun removeWearDiaReading(id: String) {
+        _wearRecord.update { rec -> rec.copy(diaReadings = rec.diaReadings.filterNot { it.id == id }) }
+    }
+
     // Tap-to-add pending position: non-null while the user has tapped empty space and
     // has not yet confirmed or dismissed the add-at-position flow.
     private val _pendingAddPositionMm = MutableStateFlow<Float?>(null)

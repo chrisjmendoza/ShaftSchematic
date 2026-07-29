@@ -429,6 +429,12 @@ data class WearStripInnerLayout(
  * toward zero (labels omitted, not drawn) rather than letting anything overflow
  * the strip. This is what keeps `WearPdfComposer.drawWearDetailStrip`'s Canvas
  * calls inside the content rect without needing per-call bounds checks there.
+ *
+ * [diaBandPt] reserves an extra band between the label headroom and the title for the
+ * strip's measured-diameter callout rows (`geom/WearDiaCalloutLayout.kt` — value labels
+ * with leaders below the cylinder). `0` (the default) reproduces the pre-callout layout
+ * exactly; the cylinder shrinks first when the band doesn't fit, same degradation order
+ * as everything else here.
  */
 fun computeWearStripInnerLayout(
     stripTop: Float,
@@ -437,10 +443,12 @@ fun computeWearStripInnerLayout(
     rowHeightPt: Float = WEAR_STRIP_ROW_HEIGHT_PT,
     labelHeadroomPt: Float = WEAR_STRIP_LABEL_HEADROOM_PT,
     maxLabelRows: Int = WEAR_RAIL_MAX_LABEL_ROWS,
+    diaBandPt: Float = 0f,
 ): WearStripInnerLayout {
     // Title sits at the BOTTOM (its own height + an explicit headroom gap reserved just below the
-    // cylinder); the chained rail sits ABOVE the cylinder (fixed maxLabelRows budget at the top).
-    val cylBottom = (stripBottom - titleHeightPt - labelHeadroomPt)
+    // cylinder, then any measured-Ø callout band); the chained rail sits ABOVE the cylinder
+    // (fixed maxLabelRows budget at the top).
+    val cylBottom = (stripBottom - titleHeightPt - labelHeadroomPt - diaBandPt.coerceAtLeast(0f))
         .coerceIn(stripTop, stripBottom.coerceAtLeast(stripTop))
     val available = (cylBottom - stripTop).coerceAtLeast(0f)
     val railBudgetH = maxLabelRows.coerceAtLeast(0) * rowHeightPt

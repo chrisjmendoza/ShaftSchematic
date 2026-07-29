@@ -185,6 +185,63 @@ ratio; only the destination units and API differ, exactly like the runout marker
 
 ---
 
+## Wear Diameter Measurements (measured-Ø callouts, 2026-07-28)
+
+The digital form of the shop's hand-written diameter values under a worn section (reference
+photo: values fanned below the shaft, each with a leader pointing at the measured spot, plus
+the nominal at an unworn edge). The fifth reference-only feature — see `CLAUDE.md` and
+`docs/WearDiaMeasurements_PLAN.md` for the full design.
+
+**Data model** (`model/WearSpot.kt`): `WearDiaReading(id, componentId, axialMm, diaMm)` in
+`WearRecord.diaReadings` — additive/defaulted, rides the existing `wear_record` envelope
+field (no codec/autosave plumbing). Keyed by **resolved component id** (liner, taper, or
+body — explicit or auto), component-local `axialMm` from the AFT edge, no across position
+(a diameter belongs to the whole cross-section; callouts always hang **below**). `diaMm` is
+stored **verbatim** (golden rule); `0` = station placed but no value yet — drawn in the
+overlay (findable/editable), **skipped on the printed PDF**. Orphans skipped at the render
+layer, never decode (`WearRecordPersistenceTest` pins that readings on unknown component
+ids survive decode).
+
+**ViewModel**: `addWearDiaReading` / `updateWearDiaReading` / `removeWearDiaReading` —
+plain `_wearRecord` updates, no geometry side effects.
+
+**UI** (`ComponentWearDetailOverlay`): a third tool chip, **Add Ø**, joins Add X / Remove X.
+In Ø mode a tap on an existing witness tick opens its edit dialog (Save / Cancel / Delete);
+a tap on bare metal opens the add dialog for that axial position — the reading is created
+**only on Save**, so cancelling never leaves a ghost zero-value station. The dialog is one
+numeric field (unit conversion at the edge, value stored verbatim). The canvas draws a thin
+witness tick across the segment at each station plus the value callouts fanned below
+(a value-less reading shows "—").
+
+**Placement engine — single source of truth: `geom/WearDiaCalloutLayout.kt`** (pure,
+`WearDiaCalloutLayoutTest`), `RunoutBubbleLayout`'s label-width-aware sibling: labels on
+one row when they fit, else two alternating rows (the sketch's stagger); order-preserving
+least-squares x spread (shared PAVA solver); spacing invariants sized to label half-widths
+(same-row `(wᵢ+wⱼ)/2 + minGap`, cross-row `max(wᵢ,wⱼ)/2 + minGap`); row-1 leaders dogleg
+via an elbow above the row-0 band so drops provably clear every label; uniform compression
+(flagged) only in degenerate widths. Hit-test math in `geom/WearDiaMath.kt`
+(`pickDiaReadingAt`, point-to-tick distance).
+
+**Rendering** (draw-both-sites lockstep, all through the one engine):
+- **PDF detail strip** (`WearPdfComposer.drawWearDetailStrip`): liner readings print on
+  their liner's strip — witness tick across the full cylinder height (overshoot
+  `WEAR_DIA_TICK_OVERSHOOT_PT`), value labels in a band reserved **below** the cylinder by
+  `computeWearStripInnerLayout(diaBandPt = …)` (label rows only; the leader region reuses
+  the min-Ø headroom, so a reading-free strip's layout is byte-identical to before —
+  `WearStripDiaBandTest`). Labels use `formatDiaWithUnit` — the same ≤3-decimal format as
+  the footer/min-Ø, no `Ø` prefix (matches the hand sketch, keeps labels narrow).
+- **PDF main profile**: body/taper readings print under the whole-shaft profile, in a band
+  below the names/direction row; the leader originates on the drawn bottom surface (taper Ø
+  interpolated at the station, same as pits). The profile band reserves the height via
+  `preferredProfileHeightPt` only when such readings exist. Liner readings do **not** draw
+  on the profile (the strip is the zoomed reading surface); a liner past the strip cap
+  loses its readings on print — same class of limitation as other strip-overflow content.
+- **Canvas overlay**: same engine in px, anchored under the drawn segment.
+- **Blank draft**: readings omitted entirely (`effectiveRecord = WearRecord()`), consistent
+  with bands/pits/min-Ø.
+
+---
+
 ## Runout Bubble Editor (interactive value + high-spot, 2026-07-21)
 
 Tapping a bubble on the `RunoutRoute` preview opens `RunoutBubbleDialog` — a "zoom-in" on that one

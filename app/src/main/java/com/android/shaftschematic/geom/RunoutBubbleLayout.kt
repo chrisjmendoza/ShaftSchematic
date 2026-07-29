@@ -333,8 +333,12 @@ private fun solveBubbleX(
     return FloatArray(n) { i -> ((u[i].coerceIn(lo, hi)) + g[i]).toFloat() }
 }
 
-/** Classic pool-adjacent-violators isotonic regression (non-decreasing, unit weights). */
-private fun isotonicNonDecreasing(t: DoubleArray): DoubleArray {
+/**
+ * Classic pool-adjacent-violators isotonic regression (non-decreasing, unit weights).
+ * Internal (not private) so `WearDiaCalloutLayout` reuses the same solver for its
+ * label-spread x fit.
+ */
+internal fun isotonicNonDecreasing(t: DoubleArray): DoubleArray {
     val n = t.size
     val mean = DoubleArray(n)
     val weight = IntArray(n)

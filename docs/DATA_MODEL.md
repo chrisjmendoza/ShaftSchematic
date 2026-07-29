@@ -1,6 +1,13 @@
 # ShaftSchematic Data Model
 Version: v0.5.x
-Last updated: 2026-07-21 — reverted "explicit bodies are non-negotiable" (false collision warnings on normal drafts); bodies are the fluid base again (no collision, plain bodies split around sacred components, keyed bodies protected). 2026-07-18 — component field listings corrected to match `model/*.kt`; fixed nonexistent `keywayHasSpoon` alias; removed a garbled duplicate tail section.
+Last updated: 2026-07-28 — ShaftSpec sample corrected to include `keyways180Apart` +
+`autoBodyDiaMm`; documented the document envelope's reference-only records (WearRecord
+spots/pits/measured-Ø readings, RunoutReadings) and their orphan policies; auto-body
+promotion corrected to the checkbox-only "Explicit body" path. 2026-07-21 — reverted
+"explicit bodies are non-negotiable" (false collision warnings on normal drafts); bodies are
+the fluid base again (no collision, plain bodies split around sacred components, keyed
+bodies protected). 2026-07-18 — component field listings corrected to match `model/*.kt`;
+fixed nonexistent `keywayHasSpoon` alias; removed a garbled duplicate tail section.
 
 ## Overview
 The data model defines all immutable geometric entities that compose a shaft schematic. All measurements are stored in **millimeters** (`Float`). No rendering or UI logic is present in this layer.
@@ -21,6 +28,8 @@ data class ShaftSpec(
     val threads: List<Threads> = emptyList(),
     val liners: List<Liner> = emptyList(),
     val couplerBoltSlots: List<CouplerBoltSlot> = emptyList(),
+    val keyways180Apart: Boolean = false,  // drawing note: keyways clocked 180° apart
+    val autoBodyDiaMm: Float = 0f,         // single bare-shaft Ø shared by all auto-body spans; 0 = derive from neighbors
 )
 Responsibilities:
 ```
@@ -67,8 +76,10 @@ raised false collision warnings on normal drafts.)
   `nonBodyOverlapErrorMm` helpers and the liner↔body "boundary negotiation"
   (`linerBodyBoundaryAdjust` / `updateLinerWithBodyBoundary`) no longer exist.
 - **Auto-bodies** (derived at resolve via `deriveAutoBodies`, never stored) flow around every
-  component. Promote one to explicit with the "Make editable body" checkbox (or Add Body) to
-  lock a span / add a keyway.
+  component. Promote one to explicit with the **"Explicit body"** checkbox on its carousel card
+  (or Add Body) to lock a span / add a keyway — the checkbox is the ONLY promotion path; the
+  card's editable Ø field instead sets the shared bare-shaft `ShaftSpec.autoBodyDiaMm` without
+  promoting.
 
 #### Body Split / Merge
 
@@ -247,21 +258,46 @@ maxOuterDiaMm
 Used by layout engine for vertical fit.
 
 Serialization & Migration
-Format:
+Format (the **document envelope**, `doc/ShaftDocCodec.ShaftDocV1` — abridged):
 @Serializable
 data class ShaftDocV1(
     val version: Int = 1,
-    val preferredUnit: UnitSystem = UnitSystem.INCHES,
-    val unitLocked: Boolean = true,
-    val spec: ShaftSpec
+    val preferredUnit: UnitSystem = UnitSystem.INCHES,   // @SerialName("preferred_unit")
+    val unitLocked: Boolean = true,                      // @SerialName("unit_locked")
+    val jobNumber: String = "", val customer: String = "", val vessel: String = "",
+    val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
+    val notes: String = "",
+    val spec: ShaftSpec,
+    val runoutConfig: RunoutConfig = RunoutConfig(),     // @SerialName("runout_config")
+    val wearRecord: WearRecord = WearRecord(),           // @SerialName("wear_record")
+    val runoutReadings: RunoutReadings = RunoutReadings() // @SerialName("runout_readings")
 )
+
+**Reference-only inspection records** live in the envelope, never in `ShaftSpec`, so they
+can never affect geometry resolution:
+
+- `WearRecord(spots, pits, diaReadings)` — liner wear bands (`WearSpot`, keyed by
+  `linerId`), pit "X" markers (`WearPit`), and measured-diameter readings
+  (`WearDiaReading`) — the latter two keyed by *resolved* component id with
+  component-local `axialMm`.
+- `RunoutReadings` — per-station TIR value + high-spot marker, keyed by
+  `(componentId, stationIndex)`.
+
+**Orphan policy** differs by key type: wear *spots* (liner-id-keyed, ids the codec knows)
+are pruned at **decode**; pits, measured-Ø readings, and runout readings key on resolved
+ids (incl. auto-bodies) the codec cannot know, so their orphans are skipped at the
+**render layer** and survive decode untouched.
+
 Migration:
 
 Backfill missing UUIDs
 
 Normalize thread pitch/tpi relationships
 
-`couplerBoltSlots` round-trips automatically through `ShaftDocCodec` with no schema/version bump: the list defaults empty and decode uses `ignoreUnknownKeys`, so documents written before the field decode unchanged.
+`couplerBoltSlots`, `keyways180Apart`, `autoBodyDiaMm`, and every envelope record above
+round-trip automatically through `ShaftDocCodec` with no schema/version bump: each defaults
+empty/zero and decode uses `ignoreUnknownKeys`, so documents written before a field existed
+decode unchanged.
 
 Invariants
 All geometry stored in millimeters.

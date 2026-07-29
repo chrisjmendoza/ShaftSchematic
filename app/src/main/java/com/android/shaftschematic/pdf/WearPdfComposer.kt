@@ -7,11 +7,14 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
+import com.android.shaftschematic.geom.DiaCalloutStation
+import com.android.shaftschematic.geom.PlacedDiaCallout
 import com.android.shaftschematic.geom.SetPositions
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.pitHalfArm
+import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -135,6 +138,8 @@ fun composeWearPdf(
     val pitPaint = Paint(outline).apply {
         strokeWidth = WEAR_OUTLINE_PT * thicknessScale; strokeCap = Paint.Cap.ROUND
     }
+    // Measured-Ø callout value labels — small, same family as the body text.
+    val diaText = Paint(text).apply { textSize = WEAR_DIA_TEXT_PT }
 
     // ── Page geometry ─────────────────────────────────────────────────────
     val margin       = WEAR_MARGIN_PT
@@ -185,6 +190,19 @@ fun composeWearPdf(
     val onPage         = stripSelection.onPage
     val overflowNoteH  = if (stripSelection.overflow.isNotEmpty()) WEAR_OVERFLOW_NOTE_HEIGHT_PT else 0f
 
+    // ── Measured-Ø callouts under the MAIN profile (body/taper readings only — liner
+    // readings print on their detail strip at the zoomed scale). Planned here, before the
+    // vertical split, so the profile band can reserve the label rows' height; drawn after
+    // the profile once shaftCy is fixed. Orphans (unresolved componentId) and value-less
+    // readings are skipped at this render layer, same posture as pits.
+    val profileDia = if (resolvedComponents != null) {
+        buildProfileDiaCalloutInput(effectiveRecord.diaReadings, resolvedComponents, ::xAt, diaText, unit)
+    } else ProfileDiaCalloutInput(emptyList(), emptyMap())
+    val profileDiaPlan = if (profileDia.stations.isEmpty()) null else
+        planDiaCallouts(profileDia.stations, contentLeft, contentRight, WEAR_DIA_MIN_GAP_PT)
+    val profileDiaBandPt = profileDiaPlan?.bandHeightPt(
+        diaText.textSize, WEAR_DIA_ROW_GAP_PT, WEAR_DIA_PROFILE_LEADER_PT) ?: 0f
+
     // ── Header (always drawn) ───────────────────────────────────────────────
     drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, blankValues)
 
@@ -198,7 +216,7 @@ fun composeWearPdf(
     // the reclaimed height (device feedback: dead white between shaft and strips).
     val preferredProfileHeightPt = maxOf(
         WEAR_OAL_TOP_REGION_PT + WEAR_OAL_ABOVE_SHAFT_PT + 2f * rPx(maxDiaMm) +
-            WEAR_PROFILE_NAMES_ROW_PT + WEAR_PROFILE_BOTTOM_PAD_PT,
+            WEAR_PROFILE_NAMES_ROW_PT + profileDiaBandPt + WEAR_PROFILE_BOTTOM_PAD_PT,
         minProfileHeightPt,
     )
 
@@ -246,7 +264,7 @@ fun composeWearPdf(
     val profileSlack = ((profileBottom - profileTop) - preferredProfileHeightPt).coerceAtLeast(0f)
     val shaftCy = (profileTop + WEAR_OAL_TOP_REGION_PT + WEAR_OAL_ABOVE_SHAFT_PT +
         rPx(maxDiaMm) + profileSlack * 0.5f)
-        .coerceAtMost(profileBottom - rPx(maxDiaMm) - WEAR_PROFILE_NAMES_ROW_PT)
+        .coerceAtMost(profileBottom - rPx(maxDiaMm) - WEAR_PROFILE_NAMES_ROW_PT - profileDiaBandPt)
     val geomRect = RectF(contentLeft, profileTop, contentRight, profileBottom)
     val shaftTopApprox = shaftCy - rPx(maxDiaMm)
     val oalLineY = (shaftTopApprox - WEAR_OAL_ABOVE_SHAFT_PT).coerceAtLeast(profileTop + WEAR_TEXT_PT + 6f)
@@ -274,6 +292,22 @@ fun composeWearPdf(
     // to its broken-out (zoomed) strip below. Only the liners that get a strip on this page.
     drawWearLinerNamesOnProfile(c, onPage, shaftCy + rPx(maxDiaMm), profileBottom, contentLeft, contentRight, ::xAt, text, linerTitles)
 
+    // Measured-Ø callouts (body/taper readings): leader from the drawn bottom surface at the
+    // station down to the value, in the band reserved below the names/direction row. Same
+    // engine + construction as the detail strips and the overlay canvas.
+    if (profileDiaPlan != null) {
+        val placed = profileDiaPlan.finish(
+            row0Top = shaftCy + rPx(maxDiaMm) + WEAR_PROFILE_NAMES_ROW_PT + 2f,
+            labelTextHeight = diaText.textSize,
+            rowGap = WEAR_DIA_ROW_GAP_PT,
+            surfaceYAt = { i ->
+                shaftCy + rPx(profileDia.surfaceDiaByKey[profileDiaPlan.stations[i].key] ?: maxDiaMm)
+            },
+            leaderStartGap = 2f,
+        )
+        drawDiaCallouts(c, placed, dim, diaText)
+    }
+
     // ── Per-liner detail strips ─────────────────────────────────────────────
     onPage.forEachIndexed { i, group ->
         val cell = stripCells[i]
@@ -282,6 +316,7 @@ fun composeWearPdf(
             unit, setPositions, text, outline, dim,
             linerTitle = linerTitles[group.liner.id] ?: "Liner",
             linerPits = effectiveRecord.pits.filter { it.componentId == group.liner.id },
+            linerDiaReadings = effectiveRecord.diaReadings.filter { it.componentId == group.liner.id },
             blankValues = blankValues,
         )
     }
@@ -663,6 +698,71 @@ private fun drawWearPitX(c: Canvas, cx: Float, cy: Float, half: Float, paint: Pa
 }
 
 /**
+ * Body/taper measured-Ø stations for the MAIN-profile callouts, plus each station's drawn
+ * diameter (keyed by reading id) so the leader can originate on the actual bottom surface —
+ * a taper's diameter is interpolated at the reading's axial position, same as
+ * `drawWearPitsOnProfile`. Liner readings are excluded here: they print on their detail
+ * strip at the zoomed scale instead. Value-less (`diaMm == 0`) readings and orphans
+ * (unresolved componentId) are skipped — render-layer orphan handling.
+ */
+private class ProfileDiaCalloutInput(
+    val stations: List<DiaCalloutStation>,
+    val surfaceDiaByKey: Map<String, Float>,
+)
+
+private fun buildProfileDiaCalloutInput(
+    readings: List<WearDiaReading>,
+    components: List<ResolvedComponent>,
+    xAt: (Float) -> Float,
+    diaText: Paint,
+    unit: UnitSystem,
+): ProfileDiaCalloutInput {
+    if (readings.isEmpty()) return ProfileDiaCalloutInput(emptyList(), emptyMap())
+    val byId = components.associateBy { it.id }
+    val stations = mutableListOf<DiaCalloutStation>()
+    val surface = mutableMapOf<String, Float>()
+    readings.forEach { r ->
+        if (r.diaMm <= 0f) return@forEach
+        val rc = byId[r.componentId] ?: return@forEach
+        val lenMm = (rc.endMmPhysical - rc.startMmPhysical).coerceAtLeast(0.001f)
+        val local = r.axialMm.coerceIn(0f, lenMm)
+        val drawnDiaMm = when (rc) {
+            is ResolvedBody -> rc.diaMm
+            is ResolvedTaper -> {
+                val t = (local / lenMm).coerceIn(0f, 1f)
+                rc.startDiaMm + (rc.endDiaMm - rc.startDiaMm) * t
+            }
+            else -> return@forEach   // liners → detail strip; threads/slots ineligible
+        }
+        if (drawnDiaMm <= 0f) return@forEach
+        val label = formatDiaWithUnit(r.diaMm.toDouble(), unit)
+        stations += DiaCalloutStation(
+            key = r.id,
+            stationX = xAt(rc.startMmPhysical + local),
+            label = label,
+            labelWidth = diaText.measureText(label),
+        )
+        surface[r.id] = drawnDiaMm
+    }
+    return ProfileDiaCalloutInput(stations, surface)
+}
+
+/**
+ * Draws placed measured-Ø callouts: each leader polyline (straight or dogleg — see
+ * `geom/WearDiaCalloutLayout.kt`) plus its value label at the planned row position. Shared
+ * by the main-profile and detail-strip draw paths so both surfaces render identically.
+ */
+private fun drawDiaCallouts(c: Canvas, placed: List<PlacedDiaCallout>, dim: Paint, diaText: Paint) {
+    placed.forEach { p ->
+        for (s in 0 until p.leader.size - 1) {
+            c.drawLine(p.leader[s].x, p.leader[s].y, p.leader[s + 1].x, p.leader[s + 1].y, dim)
+        }
+        val fm = diaText.fontMetrics
+        c.drawText(p.label, p.labelCx - p.labelWidth * 0.5f, p.labelTopY - fm.ascent, diaText)
+    }
+}
+
+/**
  * One broken-out liner detail strip: neighbor stubs with S-curve break edges, the liner at
  * strip-local large scale, hatched wear bands with a chained dimension rail below the
  * cylinder (liner AFT edge → first band start → each band's length → inter-band gaps →
@@ -695,6 +795,7 @@ private fun drawWearDetailStrip(
     dim: Paint,
     linerTitle: String,
     linerPits: List<WearPit> = emptyList(),
+    linerDiaReadings: List<WearDiaReading> = emptyList(),
     blankValues: Boolean = false,
 ) {
     val ln = group.liner
@@ -707,15 +808,31 @@ private fun drawWearDetailStrip(
     fun xAtStrip(mm: Float): Float = hLayout.linerLeftPt + (mm - aftMm) * ptPerMmStrip
 
     val titleText = Paint(text).apply { textSize = (text.textSize - 1f).coerceAtLeast(7f) }
+    val dimText = Paint(text).apply { textSize = (text.textSize - 2f).coerceAtLeast(7f) }
     val title = linerTitle + " — " +
         buildLinerAnchorLabel(docSpec, ln, setPositions, unit)
     // The title + liner-anchor dimension is drawn LAST, at the bottom of the strip, to match
     // the hand-marked sheet. See the title block near the end.
 
+    // Measured-Ø callout plan (readings with a recorded value only — a placed-but-empty
+    // station is an overlay-only affordance and never prints). Planned BEFORE the inner
+    // split so the strip reserves exactly the label rows this liner needs; the leader
+    // region reuses the existing label headroom below the cylinder, so a reading-free
+    // strip's layout is unchanged.
+    val diaStations = linerDiaReadings.filter { it.diaMm > 0f }.map { r ->
+        val local = r.axialMm.coerceIn(0f, ln.lengthMm)
+        val label = formatDiaWithUnit(r.diaMm.toDouble(), unit)
+        DiaCalloutStation(r.id, xAtStrip(aftMm + local), label, dimText.measureText(label))
+    }
+    val diaPlan = if (diaStations.isEmpty()) null else
+        planDiaCallouts(diaStations, contentLeft + 2f, contentRight - 2f, WEAR_DIA_MIN_GAP_PT)
+    val diaBandPt = diaPlan?.let { it.labelsHeightPt(dimText.textSize, WEAR_DIA_ROW_GAP_PT) + 2f } ?: 0f
+
     val sortedSpots = group.spots.sortedBy { it.startMm }
     val inner = computeWearStripInnerLayout(
         stripTop, stripBottom,
         titleHeightPt = titleText.textSize,
+        diaBandPt = diaBandPt,
     )
     val cy = (inner.cylTop + inner.cylBottom) / 2f
     val rCap = ((inner.cylBottom - inner.cylTop) / 2f).coerceAtLeast(0f)
@@ -758,7 +875,6 @@ private fun drawWearDetailStrip(
     // per spot, as before. The dimension story (offsets/lengths) is now the chained rail
     // drawn below, not a per-spot row here.
     val bandHatch = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.6f; alpha = 160 }
-    val dimText = Paint(text).apply { textSize = (text.textSize - 2f).coerceAtLeast(7f) }
     val clampedBands = sortedSpots.map { spot -> clampWearBandToLiner(spot.startMm, spot.lengthMm, ln.lengthMm) }
     sortedSpots.forEachIndexed { idx, spot ->
         val clamp = clampedBands[idx]
@@ -791,6 +907,29 @@ private fun drawWearDetailStrip(
             val pyp = pitCenterY(top, bot, pit.acrossFrac)
             drawWearPitX(c, cxp, pyp, pitHalfArm(pit.size, WEAR_PIT_SMALL_HALF_STRIP_PT), pitPaintStrip)
         }
+    }
+
+    // Measured-Ø readings: a thin witness tick across the full cylinder height at each
+    // station (where the diameter was taken), plus the value below with a leader — the
+    // hand sketch's fan of diameters. Leaders share the min-Ø headroom; the value rows sit
+    // in the diaBand reserved by computeWearStripInnerLayout above. Same engine +
+    // construction as the main-profile callouts and the overlay canvas.
+    if (diaPlan != null) {
+        val tickPaint = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.6f; alpha = 160 }
+        diaPlan.stations.forEach { s ->
+            c.drawLine(
+                s.stationX, top - WEAR_DIA_TICK_OVERSHOOT_PT,
+                s.stationX, bot + WEAR_DIA_TICK_OVERSHOOT_PT, tickPaint,
+            )
+        }
+        val placed = diaPlan.finish(
+            row0Top = inner.cylBottom + WEAR_STRIP_LABEL_HEADROOM_PT,
+            labelTextHeight = dimText.textSize,
+            rowGap = WEAR_DIA_ROW_GAP_PT,
+            surfaceYAt = { _ -> bot },
+            leaderStartGap = WEAR_DIA_TICK_OVERSHOOT_PT + 1f,
+        )
+        drawDiaCallouts(c, placed, dim, dimText)
     }
 
     // Chained dimension rail ABOVE the cylinder (matches the hand-marked sheet convention;
@@ -1040,3 +1179,11 @@ private const val WEAR_PROFILE_RADIUS_MARGIN_PT  = 8f   // headroom above/below 
 
 private const val COMPRESS_TRIGGER_PT = 220f
 private const val ZIGZAG_GAP_MAX_PT   = 20f
+
+// Measured-Ø callouts (geom/WearDiaCalloutLayout.kt drives placement; these size the text
+// band and clearances on both surfaces — profile + detail strips).
+private const val WEAR_DIA_TEXT_PT           = 8f   // value label text size
+private const val WEAR_DIA_MIN_GAP_PT        = 5f   // min clear gap between label edges / leader drops
+private const val WEAR_DIA_ROW_GAP_PT        = 3f   // vertical gap between the two label rows
+private const val WEAR_DIA_PROFILE_LEADER_PT = 10f  // leader region reserved below the names row (profile band only; strips reuse the min-Ø headroom)
+private const val WEAR_DIA_TICK_OVERSHOOT_PT = 2f   // witness tick overshoot past the cylinder edges (strips)

@@ -1,6 +1,8 @@
 # UI Contract
 Version: v0.5.x
-Last updated: 2026-07-21 — §3.1.4 corrected after the "non-negotiable bodies" revert: bodies are fluid fillers (no collision, plain bodies split around sacred components, keyed bodies protected); removed `bodyOverlapErrorMm`/liner↔body-negotiation references. 2026-07-18 — §5.2 "Planned Preview Tap + Implicit Bodies" documented as shipped and merged into §3.1.1 (also fixes broken section numbering, a 5.2 appearing before 5.1); §§3.2–3.6 trimmed to summaries pointing at the more current in-source `AddComponentDialogs.md`.
+Last updated: 2026-07-28 — added §7.5 pointing the Runout Sheet / Wear Document tab
+interactions (incl. the wear overlay's Add X / Remove X / Add Ø tools) at the in-source
+`RunoutSheet.md` contract. 2026-07-21 — §3.1.4 corrected after the "non-negotiable bodies" revert: bodies are fluid fillers (no collision, plain bodies split around sacred components, keyed bodies protected); removed `bodyOverlapErrorMm`/liner↔body-negotiation references. 2026-07-18 — §5.2 "Planned Preview Tap + Implicit Bodies" documented as shipped and merged into §3.1.1 (also fixes broken section numbering, a 5.2 appearing before 5.1); §§3.2–3.6 trimmed to summaries pointing at the more current in-source `AddComponentDialogs.md`.
 
 ## Purpose
 This document defines all UI interaction rules, screen behaviors, dialog behavior, input handling, and UI–ViewModel boundaries.  
@@ -250,6 +252,26 @@ UI emits only:
 - Dialog open/close events
 
 No other responsibilities.
+
+---
+
+# 7.5 Runout Sheet & Wear Document Tabs
+
+This contract predates the sidebar's two inspection tabs; their UI behavior is owned by the
+in-source `app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md` (authoritative)
+rather than duplicated here. Summary of the boundaries, which follow the same rules as above:
+
+- **RunoutRoute** — station-count overrides, TIR orientation, tap-a-bubble editor
+  (`RunoutBubbleDialog`: TIR value + high-spot clock marker). All bubble placement comes
+  from the shared `geom/RunoutBubbleLayout.kt` engine; the route never computes placement.
+- **WearRoute** — tappable overview canvas (component tint + wear-count badges) opening
+  `ComponentWearDetailOverlay`: explicit tool chips **Add X** / **Remove X** (wear pits)
+  and **Add Ø** (measured-diameter readings via a Save/Cancel/Delete value dialog —
+  readings are created only on Save). Liner cards keep the wear-spot editor
+  (`NumberField.md` commit rules apply).
+- Both tabs preview by **rasterizing the real composed PDF** (`PdfPreviewOverlay`) — the
+  UI never re-draws document geometry itself, and all hit-testing/placement math lives in
+  `geom/` (`WearPitMath`, `WearDiaMath`, `WearDiaCalloutLayout`, `RunoutReadingMath`).
 
 ---
 

@@ -6,6 +6,47 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-28 (wear document — measured-Ø readings)
+
+### feat(wear): tap-to-add diameter measurements, printed as callouts with leaders
+
+Digitizes the shop's hand-written diameter values under a worn section (reference photo:
+values fanned below the shaft, each with a leader to the measured spot, nominal at the
+unworn edge). The fifth reference-only feature — never affects OAL/resolve/collision.
+
+- **Model**: `WearDiaReading(componentId, axialMm, diaMm)` in `WearRecord.diaReadings` —
+  additive envelope field (no codec/version changes; old files decode unchanged). Keyed by
+  resolved component id (liner/taper/body, explicit or auto), component-local axial from
+  the AFT edge; orphans skipped at the render layer (like pits/runout readings, unlike
+  spots). `diaMm` stored verbatim (golden rule); `0` = placed-but-empty (overlay-only,
+  never printed).
+- **UI**: "Add Ø" tool chip in `ComponentWearDetailOverlay` beside Add X / Remove X — tap
+  the segment to record a measured diameter (value dialog; created only on Save, so Cancel
+  leaves no ghost), tap an existing witness tick to edit/delete. Canvas draws ticks +
+  fanned value callouts below the segment.
+- **Placement engine**: new pure `geom/WearDiaCalloutLayout.kt` (+ `geom/WearDiaMath.kt`
+  hit-testing) — `RunoutBubbleLayout`'s label-width-aware sibling: order-preserving
+  least-squares spread (shared PAVA solver), single-row fan → two-row stagger with dogleg
+  leaders → flagged uniform compression; randomized JVM tests assert no leader crossings
+  or label intrusions.
+- **PDF**: liner readings print on that liner's detail strip (full-height witness tick +
+  value band reserved below the cylinder via `computeWearStripInnerLayout(diaBandPt)` —
+  reading-free strips are pixel-identical to before, regression-pinned); body/taper
+  readings print under the main profile below the names row (band reserved only when
+  present; taper surface Ø interpolated at the station). Labels use `formatDiaWithUnit`,
+  no `Ø` prefix. Blank drafts omit readings like all recorded wear.
+- **Tests**: `WearDiaCalloutLayoutTest`, `WearDiaMathTest`, `WearStripDiaBandTest`,
+  envelope round-trip/legacy-decode additions to `WearRecordPersistenceTest`, plus a
+  same-math SVG preview generator (`WearDiaCalloutSvgPreviewTest` →
+  `app/build/reports/wear-dia-preview/`).
+- **Docs**: CLAUDE.md invariant block; `RunoutSheet.md` §Wear Diameter Measurements;
+  as-built plan `docs/WearDiaMeasurements_PLAN.md`; root-doc refresh (ARCHITECTURE,
+  DATA_MODEL, PDF_EXPORT, UI_CONTRACT, GLOSSARY, COMPONENT_CONTRACT, ROADMAP — envelope
+  records, `geom/` shared-engine layer, checkbox-only auto-body promotion, blank-mode
+  strip retention).
+
+---
+
 ## 2026-07-28 (wear document — all liners, write-in template, layout reclaim)
 
 Four rounds of on-device feedback in one day, all on the wear/inspection sheet.

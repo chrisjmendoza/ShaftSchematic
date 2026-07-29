@@ -64,6 +64,16 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Wear document — shaft profile + header + dye-pen PASS/FAIL checkboxes
 - Liner wear areas — tap-to-inspect liners, wear-spot recording (SET/liner-edge
   references, blocking span validation), PDF detail strips with dimension rails
+- Wear pits — tap-to-place "X" markers (small/large) on liners, tapers, and bodies;
+  drawn on the wear document's profile + strips
+- Runout bubble editor — tap a bubble to record TIR value + high-spot clock marker,
+  printed in place on the runout sheet
+- Wear diameter measurements — "Add Ø" tool in the wear overlay records measured
+  diameters at tapped stations; printed as value callouts with leaders + witness ticks
+  (liner readings on their detail strip, body/taper readings under the profile; shared
+  `geom/WearDiaCalloutLayout.kt` engine)
+- Blank drafts + direct print — write-in (lines-in/values-out) variants of all three
+  documents, plus Android print-framework output identical to export
 - Line thickness control — Settings slider 50%–200%, DataStore-persisted, applies to preview and PDF strokes
 - OAL include-thread fix — bracket spans SET-to-SET (excluded) or shaft-end-to-SET (included); label always equals typed OAL
 - Unsaved-changes guard — "Save / Discard / Cancel" dialog when New or Open is triggered with unsaved work; dirty state tracks spec + metadata fields against last save or load

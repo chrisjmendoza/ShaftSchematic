@@ -4,6 +4,7 @@ import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.WearDiaReading
 import com.android.shaftschematic.model.WearPit
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
@@ -231,5 +232,67 @@ class WearRecordPersistenceTest {
         assertTrue("orphan spot should be dropped", decoded.wearRecord.spots.isEmpty())
         assertEquals("pit should survive", 1, decoded.wearRecord.pits.size)
         assertEquals("auto_body_0.000_100.000", decoded.wearRecord.pits.single().componentId)
+    }
+
+    // ── Measured-Ø readings ───────────────────────────────────────────────────
+
+    @Test
+    fun `envelope round trip preserves dia readings verbatim`() {
+        val reading = WearDiaReading(
+            id = "dia-1", componentId = "ln1", axialMm = 42.5f, diaMm = 247.777f,
+        )
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(diaReadings = listOf(reading)),
+        )
+
+        val raw = ShaftDocCodec.encodeV1(doc)
+        assertTrue("expected diaReadings key in JSON", raw.contains("\"diaReadings\""))
+
+        val decoded = ShaftDocCodec.decode(raw)
+        assertEquals(ShaftDocCodec.Format.ENVELOPE_V1, decoded.format)
+        val d = decoded.wearRecord.diaReadings.single()
+        assertEquals("dia-1", d.id)
+        assertEquals("ln1", d.componentId)
+        assertEquals(42.5f, d.axialMm, 0.0001f)
+        // Golden rule: the typed measurement round-trips exactly, no rounding.
+        assertEquals(247.777f, d.diaMm, 0f)
+    }
+
+    @Test
+    fun `a wear_record json without diaReadings decodes to an empty list`() {
+        // Simulates a file written before dia readings existed.
+        val raw = """
+            {
+              "version": 1, "preferred_unit": "INCHES", "unit_locked": true,
+              "job_number": "", "customer": "", "vessel": "", "shaft_position": "OTHER", "notes": "",
+              "spec": {
+                "overallLengthMm": 500.0,
+                "liners": [ { "id": "ln1", "startMmPhysical": 0.0, "lengthMm": 200.0, "odMm": 50.0, "endMmPhysical": 200.0 } ]
+              },
+              "wear_record": { "spots": [ { "id": "spot-1", "linerId": "ln1", "startMm": 25.0, "lengthMm": 40.0 } ] }
+            }
+        """.trimIndent()
+
+        val decoded = ShaftDocCodec.decode(raw)
+
+        assertEquals(1, decoded.wearRecord.spots.size)
+        assertTrue(decoded.wearRecord.diaReadings.isEmpty())
+    }
+
+    @Test
+    fun `dia readings on non-liner or missing components survive decode`() {
+        // Like pits (and unlike orphan spots), readings key on resolved component ids the
+        // codec can't know — orphan handling is at the render layer, never decode.
+        val kept = WearDiaReading(id = "d1", componentId = "auto_body_0.000_100.000", axialMm = 10f, diaMm = 99f)
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(diaReadings = listOf(kept)),
+        )
+
+        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
+
+        assertEquals(1, decoded.wearRecord.diaReadings.size)
+        assertEquals("auto_body_0.000_100.000", decoded.wearRecord.diaReadings.single().componentId)
     }
 }

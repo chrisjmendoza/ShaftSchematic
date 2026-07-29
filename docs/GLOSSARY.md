@@ -1,6 +1,8 @@
 # Glossary
 Version: v0.5.x
-Last updated: 2026-07-21 — Keyway entry: body-hosted keyways now shipped (were shelved); added keyways-180°-apart notes; corrected explicit-vs-auto-body entry after the "non-negotiable bodies" revert (bodies are fluid fillers, never collide).
+Last updated: 2026-07-28 — added the reference-only inspection terms (wear spot/pit,
+measured-Ø reading, runout reading, witness tick); corrected auto-body promotion to the
+checkbox-only "Explicit body" path. 2026-07-21 — Keyway entry: body-hosted keyways now shipped (were shelved); added keyways-180°-apart notes; corrected explicit-vs-auto-body entry after the "non-negotiable bodies" revert (bodies are fluid fillers, never collide).
 
 Definitions of all terms used across architecture, components, rendering, validation, and PDF export.
 
@@ -151,10 +153,44 @@ An **explicit** body is a stored `ShaftSpec.bodies` entry; an **auto body** is d
 resolve time (never stored) to fill unoccupied spans. Both are fluid base material / fillers:
 bodies never collide (`collidingIds()` checks only sacred taper/thread/liner pairs), and a
 sacred component added over a plain body splits it (`splitBodiesAround`) — a body that has a
-keyway stays whole and is trimmed for drawing instead. Promote an auto body to explicit by
-editing a field or ticking "Make editable body" on its carousel card. (The "explicit bodies are
-non-negotiable" experiment was reverted 2026-07-21 — it raised false collision warnings on
-normal drafts.)
+keyway stays whole and is trimmed for drawing instead. Promote an auto body to explicit ONLY by
+ticking the "Explicit body" checkbox on its carousel card (there is no field-edit promotion
+path; the card's Ø field sets the shared bare-shaft `autoBodyDiaMm` without promoting). (The
+"explicit bodies are non-negotiable" experiment was reverted 2026-07-21 — it raised false
+collision warnings on normal drafts.)
+
+### Reference-only feature
+A record that is drawn on the shaft but never participates in geometry: it does not affect
+OAL/`coverageEndMm`, body resolution, collision, or the Free-to-End badge. Five kinds:
+coupler bolt slots (in `ShaftSpec`), and — in the document envelope — wear spots, wear pits,
+measured-Ø readings, and runout readings.
+
+### Wear Spot
+A recorded liner wear band (`WearSpot` in `WearRecord.spots`): liner-local start/length from
+the liner's AFT edge, optional min-Ø reading and note. Drawn as a hatched band on the wear
+document; clamped for rendering only, stored data never mutated.
+
+### Wear Pit
+A pit / dye-penetrant failure marker (`WearPit`), drawn as a hand-style "X" (small or large
+symbol size) on any liner, taper, or body. Keyed by resolved component id + component-local
+axial + across fraction.
+
+### Measured-Ø Reading
+A measured diameter at an axial station (`WearDiaReading` in `WearRecord.diaReadings`),
+recorded via the wear overlay's "Add Ø" tool. Printed on the wear document as a value below
+the shaft with a leader to a witness tick (liner readings on the liner's detail strip;
+body/taper readings under the main profile). Placement by `geom/WearDiaCalloutLayout.kt`.
+The typed value is stored verbatim (golden rule); `diaMm = 0` = placed-but-empty
+(overlay-only, never printed).
+
+### Witness Tick
+The thin vertical line across a component's full drawn height marking where a measured-Ø
+reading was taken — the anchor the callout leader points at.
+
+### Runout Reading
+A per-station TIR value + high-spot clock marker (`RunoutReading`), recorded by tapping a
+bubble on the runout sheet. Keyed by `(componentId, stationIndex)`; 30-minute clock ticks
+for the high spot.
 
 ### Pilot Diameter (future)
 Centering diameter for couplings.
