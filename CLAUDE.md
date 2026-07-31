@@ -105,7 +105,12 @@ pair in `geom/UndercutMath.kt`). Detail strips are liner-anchored: a cut inside 
 that liner's whole span (`buildUndercutStrips`), not just a padded window; bare-shaft cuts still
 cluster into padded windows. `diaMm` is a typed
 measurement — stored **verbatim** (golden rule); `0` = placed-but-empty, drawn with a
-symbolic shallow floor in the overlay, never printed. No carousel card and no Add dialog —
+symbolic shallow floor in the overlay, never printed. Notch **depth is display-exaggerated**
+(`normalizedNotchFloorDiaMm` — drawn depth normalized to the sheet's deepest cut
+(`deepestUndercutDepthMm`) at the per-sheet "Cut depth exaggeration" slider value
+(`UndercutRecord.exaggerationFrac`, cap `UNDERCUT_EXAGGERATION_MAX_FRAC` = 25%), never
+shallower than true, region topology from the TRUE floor) because real cuts are hairline-thin
+at scale; printed Ø values stay the stored numbers. No carousel card and no Add dialog —
 undercuts are authored only on their tab, keeping them outside the add-dialog-parity
 invariant. The notch (void fill + shoulders + floor, cut against the **local outer-surface
 envelope** so a cut crossing a liner edge shows stepped shoulders) must render

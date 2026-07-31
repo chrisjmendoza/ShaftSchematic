@@ -164,6 +164,59 @@ class UndercutRecordPersistenceTest {
     }
 
     @Test
+    fun `non-default exaggerationFrac round trips through the envelope`() {
+        // Per-sheet drawing style: a document keeps the look it was authored with, so the
+        // slider's value rides the record rather than app prefs.
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = spec(),
+            undercutRecord = UndercutRecord(
+                undercuts = listOf(Undercut(id = "u1", startFromAftMm = 10f, lengthMm = 5f)),
+                exaggerationFrac = 0.08f,
+            ),
+        )
+
+        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
+
+        assertEquals(0.08f, decoded.undercutRecord.exaggerationFrac, 0f)
+    }
+
+    @Test
+    fun `older JSON without exaggerationFrac decodes to the default`() {
+        // Simulates a file written before the exaggeration slider existed: the
+        // undercut_record object has no "exaggerationFrac" key. Additive + defaulted, so it
+        // must decode to 0.25 rather than fail or read as 0 (true scale).
+        val raw = """
+            {
+              "version": 1,
+              "preferred_unit": "INCHES",
+              "unit_locked": true,
+              "job_number": "",
+              "customer": "",
+              "vessel": "",
+              "shaft_position": "OTHER",
+              "notes": "",
+              "spec": { "overallLengthMm": 500.0 },
+              "undercut_record": {
+                "undercuts": [
+                  {
+                    "id": "u1",
+                    "startFromAftMm": 10.0,
+                    "lengthMm": 5.0,
+                    "diaMm": 0.0,
+                    "authoredReference": "AFT_SET",
+                    "note": ""
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val decoded = ShaftDocCodec.decode(raw)
+
+        assertEquals(0.25f, decoded.undercutRecord.exaggerationFrac, 0f)
+    }
+
+    @Test
     fun `envelope without undercut_record field decodes to empty record`() {
         // Simulates a file written before this field existed: no "undercut_record" key at all.
         val raw = """

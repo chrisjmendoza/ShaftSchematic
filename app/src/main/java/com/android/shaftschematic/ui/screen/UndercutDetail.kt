@@ -70,10 +70,12 @@ import com.android.shaftschematic.geom.canonicalToUndercutStartMm
 import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.deepestUndercutDepthMm
 import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.minOuterDiaOver
+import com.android.shaftschematic.geom.normalizedNotchFloorDiaMm
 import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickUndercutAt
@@ -175,7 +177,15 @@ fun UndercutWindowDetailOverlay(
             .mapNotNull { id -> undercutRecord.undercuts.firstOrNull { it.id == id } }
             .sortedBy { it.startFromAftMm }
     }
-    val notches = remember(undercuts, segs, oalMm) { buildUndercutNotches(undercuts, segs, oalMm) }
+    // The whole record rides along as the normalization pool: drawn depth is scaled to the
+    // SHEET's deepest cut, so this strip's notches match what the printed drawing shows.
+    val notches = remember(undercuts, segs, oalMm, undercutRecord) {
+        buildUndercutNotches(
+            undercuts, segs, oalMm,
+            exaggerationFrac = undercutRecord.exaggerationFrac,
+            sheetUndercuts = undercutRecord.undercuts,
+        )
+    }
     val spans = remember(undercuts, oalMm) {
         undercuts.map { u ->
             val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
@@ -948,9 +958,11 @@ internal fun componentDiaAt(rc: ResolvedComponent, xMm: Float): Float = when (rc
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * One undercut's drawable notch: its render-clamped span, the floor Ø actually cut to
- * ([effectiveNotchDiaMm] — a placed-but-empty Ø gets a symbolic shallow floor so the section
- * stays visible), and the surface-relative regions from `geom/SurfaceProfileMath.kt`.
+ * One undercut's drawable notch: its render-clamped span, the **drawn** floor Ø
+ * ([normalizedNotchFloorDiaMm] over [effectiveNotchDiaMm] — drawn depth is exaggerated
+ * against the sheet's deepest cut so a 1/16" cut still reads as a cut; a placed-but-empty Ø
+ * gets a symbolic shallow floor first), and the surface-relative regions from
+ * `geom/SurfaceProfileMath.kt`.
  */
 internal data class UndercutNotch(
     val id: String,
@@ -964,23 +976,43 @@ internal data class UndercutNotch(
  * Build every drawable notch for [undercuts] against the local outer surface [segs]. The single
  * pipeline behind both draw sites (this overlay's canvas and the undercut PDF), so the notch a
  * machinist taps on screen is the notch that prints.
+ *
+ * Regions come from `notchProfiles` at the TRUE effective floor (topology stays honest — a
+ * cut that never reached the neighboring body must not draw into it); only the floor Ø on
+ * the returned profiles is then swapped for the display-exaggerated one, deepening the
+ * drawn floor and shoulders. Printed/stored Ø values are untouched.
+ *
+ * [exaggerationFrac] is the sheet's drawn-depth setting
+ * ([com.android.shaftschematic.model.UndercutRecord.exaggerationFrac]) and
+ * [sheetUndercuts] is the WHOLE sheet's cut list — the normalization reference
+ * ([deepestUndercutDepthMm]) is per sheet, not per strip, so a strip holding only shallow
+ * cuts draws them at the same reduced depth the full drawing gives them. It defaults to
+ * [undercuts] for callers that already pass the whole sheet.
  */
 internal fun buildUndercutNotches(
     undercuts: List<Undercut>,
     segs: List<SurfaceSeg>,
     oalMm: Float,
-): List<UndercutNotch> = undercuts.mapNotNull { u ->
-    val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
-    if (c.isEmpty) return@mapNotNull null
-    val floor = effectiveNotchDiaMm(u.diaMm, minOuterDiaOver(segs, c.startMm, c.endMm))
-    UndercutNotch(
-        id = u.id,
-        startMm = c.startMm,
-        endMm = c.endMm,
-        floorDiaMm = floor,
-        profiles = notchProfiles(segs, c.startMm, c.endMm, floor),
-    )
-}.sortedBy { it.startMm }
+    exaggerationFrac: Float,
+    sheetUndercuts: List<Undercut> = undercuts,
+): List<UndercutNotch> {
+    val deepest = deepestUndercutDepthMm(sheetUndercuts, segs, oalMm)
+    return undercuts.mapNotNull { u ->
+        val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+        if (c.isEmpty) return@mapNotNull null
+        val minSurface = minOuterDiaOver(segs, c.startMm, c.endMm)
+        val floor = effectiveNotchDiaMm(u.diaMm, minSurface)
+        val drawnFloor = normalizedNotchFloorDiaMm(u.diaMm, minSurface, deepest, exaggerationFrac)
+        UndercutNotch(
+            id = u.id,
+            startMm = c.startMm,
+            endMm = c.endMm,
+            floorDiaMm = drawnFloor,
+            profiles = notchProfiles(segs, c.startMm, c.endMm, floor)
+                .map { it.copy(floorDiaMm = drawnFloor) },
+        )
+    }.sortedBy { it.startMm }
+}
 
 /**
  * Draw notches as **voids**: [voidColor] fill from the local surface down to the floor (mirrored
@@ -1006,20 +1038,25 @@ internal fun DrawScope.drawUndercutNotches(
             val x1 = xPx(p.endMm)
             val rSurfStart = rPx(p.surface.first().diaMm)
             val rSurfEnd = rPx(p.surface.last().diaMm)
+            // The void's surface boundary overdraws OUTWARD by the stroke width: the
+            // component outline is stroked centred on the surface line, so a fill that
+            // stops exactly there leaves half the stroke as a line across the notch
+            // mouth (on-device report) — the cut removed that surface, the mouth is open.
+            val od = strokeWidthPx
 
             val topVoid = Path().apply {
-                moveTo(xPx(p.surface.first().xMm), cy - rSurfStart)
+                moveTo(xPx(p.surface.first().xMm), cy - rSurfStart - od)
                 for (i in 1 until p.surface.size) {
-                    lineTo(xPx(p.surface[i].xMm), cy - rPx(p.surface[i].diaMm))
+                    lineTo(xPx(p.surface[i].xMm), cy - rPx(p.surface[i].diaMm) - od)
                 }
                 lineTo(x1, cy - rFloor)
                 lineTo(x0, cy - rFloor)
                 close()
             }
             val botVoid = Path().apply {
-                moveTo(xPx(p.surface.first().xMm), cy + rSurfStart)
+                moveTo(xPx(p.surface.first().xMm), cy + rSurfStart + od)
                 for (i in 1 until p.surface.size) {
-                    lineTo(xPx(p.surface[i].xMm), cy + rPx(p.surface[i].diaMm))
+                    lineTo(xPx(p.surface[i].xMm), cy + rPx(p.surface[i].diaMm) + od)
                 }
                 lineTo(x1, cy + rFloor)
                 lineTo(x0, cy + rFloor)

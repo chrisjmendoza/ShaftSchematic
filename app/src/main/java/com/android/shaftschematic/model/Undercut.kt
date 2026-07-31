@@ -97,8 +97,16 @@ data class Undercut(
  * `undercut_record`) round-trip to an empty record with no envelope version bump.
  *
  * @property undercuts Recorded undercut sections (see [Undercut]).
+ * @property exaggerationFrac Drawn-depth exaggeration for this sheet, `0..0.25` (the
+ *   geom-side cap `UNDERCUT_EXAGGERATION_MAX_FRAC`): the sheet's **deepest** cut draws
+ *   at this fraction of its local surface Ø and shallower cuts scale relative to it
+ *   (`normalizedNotchFloorDiaMm`), so sheets with very different absolute depths read
+ *   alike. `0` = true scale. Display-only styling for the drawing — it never changes a
+ *   stored or printed Ø — but it is per-document (a sheet keeps its chosen look), so it
+ *   lives here rather than in app prefs. Additive + defaulted; older files get 0.25.
  */
 @Serializable
 data class UndercutRecord(
     val undercuts: List<Undercut> = emptyList(),
+    val exaggerationFrac: Float = 0.25f,
 )

@@ -6,9 +6,11 @@ import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.clampUndercutSpan
+import com.android.shaftschematic.geom.deepestUndercutDepthMm
 import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.minOuterDiaOver
+import com.android.shaftschematic.geom.normalizedNotchFloorDiaMm
 import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
@@ -53,6 +55,9 @@ class UndercutStripSvgPreviewTest {
     private val titleH = 9f
     private val rowGap = 3f
     private val minGap = 5f
+
+    /** The sheet's drawn-depth exaggeration, the record's default (`exaggerationFrac`). */
+    private val exaggerationFrac = 0.25f
 
     /** Stand-in for Paint.measureText at 8pt sans — close enough for preview spreads. */
     private fun labelW(s: String): Float = s.length * textH * 0.58f
@@ -195,6 +200,8 @@ class UndercutStripSvgPreviewTest {
             val s = clampedById.getValue(u.id)
             if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
         }
+        // Normalization reference, computed ONCE per sheet exactly as the composer does.
+        val deepestDepthMm = deepestUndercutDepthMm(undercuts, segs, oalMm)
         val strips = buildUndercutStrips(liveSpans, linerSpans, oalMm)
         assertEquals("the scenario must read as one detail strip", 1, strips.size)
         val strip = strips[0]
@@ -254,13 +261,20 @@ class UndercutStripSvgPreviewTest {
         }
 
         // Notches — white void from surface to floor, mirrored, then shoulders + floor.
+        // Regions come from the TRUE floor; the drawn floor is depth-exaggerated against the
+        // sheet's deepest cut and the void overdraws the surface stroke, both mirroring the
+        // composer.
         spans.forEach { s ->
             val u = undercuts.first { it.id == s.id }
-            val floorDia = effectiveNotchDiaMm(u.diaMm, minOuterDiaOver(segs, s.startMm, s.endMm))
-            val rFloor = rAt(floorDia)
+            val minSurface = minOuterDiaOver(segs, s.startMm, s.endMm)
+            val floorDia = effectiveNotchDiaMm(u.diaMm, minSurface)
+            val rFloor = rAt(
+                normalizedNotchFloorDiaMm(u.diaMm, minSurface, deepestDepthMm, exaggerationFrac),
+            )
+            val od = 0.8f
             notchProfiles(segs, s.startMm, s.endMm, floorDia).forEach { np ->
                 listOf(-1f, 1f).forEach { sign ->
-                    val pts = np.surface.map { sp -> xAt(sp.xMm) to cy + sign * rAt(sp.diaMm) } +
+                    val pts = np.surface.map { sp -> xAt(sp.xMm) to cy + sign * (rAt(sp.diaMm) + od) } +
                         listOf(xAt(np.endMm) to cy + sign * rFloor, xAt(np.startMm) to cy + sign * rFloor)
                     svg.poly(pts, fill = "white")
                 }
@@ -278,7 +292,10 @@ class UndercutStripSvgPreviewTest {
         if (plan != null) {
             val floorBottomY = undercuts.associate { u ->
                 val s = clampedById.getValue(u.id)
-                val floor = if (s.isEmpty) 0f else effectiveNotchDiaMm(u.diaMm, minOuterDiaOver(segs, s.startMm, s.endMm))
+                val floor = if (s.isEmpty) 0f else normalizedNotchFloorDiaMm(
+                    u.diaMm, minOuterDiaOver(segs, s.startMm, s.endMm),
+                    deepestDepthMm, exaggerationFrac,
+                )
                 u.id to cy + rAt(floor)
             }
             val placed = plan.finish(

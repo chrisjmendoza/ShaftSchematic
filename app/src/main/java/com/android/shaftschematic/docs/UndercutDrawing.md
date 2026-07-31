@@ -33,6 +33,11 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   pinch-zoom on this canvas; the overlay owns zoom.
 - **"Add undercut"** button: records a default section and opens its strip (see "Add default"
   below).
+- **"Cut depth exaggeration" slider** (shown once at least one cut is recorded, directly under
+  the canvas it restyles): 0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` with a live "%" readout,
+  committing continuously through `ShaftViewModel.setUndercutExaggeration` — the OAL field's
+  live-update posture, not commit-on-blur (it is a `Slider`, not a `NumericInputField`). It
+  drives `UndercutRecord.exaggerationFrac`; see "Drawn depth exaggeration" below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   aft → fwd — not an edit card (see "UI contract").
 - Blank-draft (write-in) toggle, PDF Preview (`PdfPreviewOverlay` + `RunoutWearOptionsSheet`),
@@ -155,6 +160,39 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   `UNDERCUT_PLACEHOLDER_DEPTH_FRAC` (0.85) of the smallest local surface Ø over the span, so the
   section stays visible/tappable in the overlay. Display-only: never stored, never printed —
   see `buildUndercutDiaStations` below, which skips a `diaMm <= 0` undercut entirely on the PDF.
+- **Drawn depth exaggeration** `normalizedNotchFloorDiaMm(diaMm, minSurfaceDiaMm,
+  deepestDepthMm, exaggerationFrac)`: a real undercut removes 1/16"–1/2" from a shaft
+  measured in whole inches — at true scale the notch is a hairline, so every notch draw site
+  deepens the drawn floor (the hand-sheet convention: depth exaggerated, the printed Ø carries
+  the real number). The exaggeration is **per sheet**, stored as
+  `UndercutRecord.exaggerationFrac` and driven by the "Cut depth exaggeration" slider on the
+  Undercut Drawing tab (0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` = 0.25, live-committing through
+  `ShaftViewModel.setUndercutExaggeration`; it lives in the record, not app prefs, so a
+  document keeps the look it was authored with).
+
+  The model is **normalized to the sheet's deepest cut**, computed once per compose by
+  `deepestUndercutDepthMm(undercuts, segs, oalMm)` (Ø-reduction of the deepest **measured**
+  cut; placeholders and cuts that removed nothing contribute 0):
+
+  ```
+  drawnDepth = minSurfaceDiaMm × exaggerationFrac × (trueDepth / deepestDepthMm)
+  ```
+
+  So the deepest cut draws at exactly `exaggerationFrac` of its local surface Ø, shallower
+  cuts scale relative to IT (proportions within a sheet stay honest), and a sheet whose worst
+  cut is 1" deep reads like one whose worst is 1/4" — the on-device requirement that sheets
+  read alike. Rules: never shallower than reality (`drawnDepth ≥ trueDepth`, so a cut past the
+  cap draws true); `exaggerationFrac == 0` is true scale; a placeholder (`diaMm == 0`) draws at
+  `UNDERCUT_PLACEHOLDER_OF_EXAGGERATION` (0.5) of the sheet's exaggeration, never below the
+  `UNDERCUT_PLACEHOLDER_MIN_DRAWN_FRAC` (0.04) visibility floor, and is excluded from the
+  deepest-depth reference so an unmeasured cut can't squash the real ones.
+
+  Region topology still comes from `notchProfiles` at the TRUE floor — a cut that never
+  touched the neighboring stock must not draw into it; only the floor line and shoulders
+  deepen. Ø callout leaders anchor on the drawn floor; labels print the stored value.
+  Display-only: canonical values and printed Ø are untouched (golden rule). The notch
+  **mouth is open**: the void fill overdraws the surface stroke across the cut, so no
+  outline runs across the top of an undercut in either draw site.
 
 - **Strips — liner-anchored vs free windows.** The zoomed-view unit consumed by the overview
   affordances, the detail overlay, and the PDF is a sealed `UndercutStrip`, not a bare

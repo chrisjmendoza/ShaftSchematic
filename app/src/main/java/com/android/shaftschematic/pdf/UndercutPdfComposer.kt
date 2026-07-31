@@ -16,9 +16,11 @@ import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.deepestUndercutDepthMm
 import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.minOuterDiaOver
+import com.android.shaftschematic.geom.normalizedNotchFloorDiaMm
 import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
@@ -78,7 +80,9 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * model. Every notch on both draw sites (this composer and the canvas overlay) comes from
  * the one shared pipeline — `clampUndercutSpan` → `effectiveNotchDiaMm(dia,
  * minOuterDiaOver(segs, …))` → `notchProfiles(surfaceSegsFrom(resolved), …)` — so the
- * printed sheet and the screen cannot disagree about where material was removed.
+ * printed sheet and the screen cannot disagree about where material was removed. The floor is
+ * then re-scaled for DRAWING only, once per sheet, by `normalizedNotchFloorDiaMm` against
+ * `deepestUndercutDepthMm` and the record's `exaggerationFrac`.
  *
  * Same public contract as `composeWearPdf`/`composeRunoutPdf`: landscape US Letter page
  * already started by the caller; `resolvedComponents`, when provided, replace `spec.bodies`
@@ -187,6 +191,12 @@ fun composeUndercutPdf(
         val s = clampedById[u.id] ?: return@mapNotNull null
         if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
     }
+    // Drawn-depth normalization reference, computed ONCE per sheet: the deepest measured cut
+    // draws at `exaggerationFrac` of its local surface Ø and every shallower cut scales
+    // relative to it, so the profile and every strip agree. Blank mode's empty record simply
+    // yields 0 here, which the placeholder branch of `normalizedNotchFloorDiaMm` handles.
+    val deepestDepthMm = deepestUndercutDepthMm(effectiveRecord.undercuts, surfaceSegs, shaftExtentMm)
+    val exaggerationFrac = effectiveRecord.exaggerationFrac
     // Strip source: a cut overlapping a liner joins that liner's strip (whole liner drawn,
     // wear-style); the leftovers cluster into padded bare-shaft windows. Degenerate liners
     // (no length or no OD) would only produce a blank cell, so they are not offered — the
@@ -272,7 +282,7 @@ fun composeUndercutPdf(
     drawUndercutNotches(
         c, surfaceSegs,
         liveSpans.map { s -> NotchCut(s.startMm, s.endMm, undercutById[s.id]?.diaMm ?: 0f) },
-        shaftCy, ::xAt, ::rPx, outline, voidFill,
+        shaftCy, ::xAt, ::rPx, outline, voidFill, deepestDepthMm, exaggerationFrac,
     )
 
     drawUndercutDirectionRef(c, text, contentLeft, contentRight, shaftCy + rPx(maxDiaMm), profileBottom)
@@ -291,6 +301,8 @@ fun composeUndercutPdf(
             voidFill = voidFill,
             linerTitle = (strip as? UndercutStrip.LinerStrip)?.let { linerTitles[it.linerId] },
             blankValues = blankValues,
+            deepestDepthMm = deepestDepthMm,
+            exaggerationFrac = exaggerationFrac,
         )
     }
     if (overflow.isNotEmpty()) {
@@ -562,6 +574,13 @@ private fun notchFloorDiaMm(segs: List<SurfaceSeg>, cut: NotchCut): Float =
  * the surface is already at or below the floor yield no region and draw nothing —
  * `notchProfiles` owns that rule, so a cut running off a liner onto smaller stock simply
  * stops at the liner edge.
+ *
+ * [deepestDepthMm]/[exaggerationFrac] carry the sheet's drawn-depth normalization
+ * (`normalizedNotchFloorDiaMm`): the deepest measured cut draws at [exaggerationFrac] of its
+ * local surface Ø, shallower cuts scale relative to it, and a 1/16"-deep cut still reads as a
+ * cut (the hand-drawn convention — depth exaggerated, the printed Ø carrying the real
+ * number). Only the floor line, shoulders, and Ø-leader anchors move; region topology stays
+ * on the TRUE floor.
  */
 private fun drawUndercutNotches(
     c: Canvas,
@@ -572,22 +591,35 @@ private fun drawUndercutNotches(
     rAt: (Float) -> Float,
     outline: Paint,
     voidFill: Paint,
+    deepestDepthMm: Float,
+    exaggerationFrac: Float,
 ) {
     if (cuts.isEmpty() || segs.isEmpty()) return
     cuts.forEach { cut ->
         val floorDia = notchFloorDiaMm(segs, cut)
         if (floorDia <= 0f) return@forEach
-        val rFloor = rAt(floorDia)
+        // Regions come from the TRUE floor (a cut that never reached the neighboring
+        // stock must not draw into it); the floor line itself is drawn depth-exaggerated.
+        val rFloor = rAt(
+            normalizedNotchFloorDiaMm(
+                cut.diaMm, minOuterDiaOver(segs, cut.startMm, cut.endMm),
+                deepestDepthMm, exaggerationFrac,
+            )
+        )
         notchProfiles(segs, cut.startMm, cut.endMm, floorDia).forEach { np ->
             if (np.surface.size < 2) return@forEach
             val xStart = xAt(np.startMm)
             val xEnd = xAt(np.endMm)
 
-            // Void fill, top half then its mirror below the centreline.
+            // Void fill, top half then its mirror below the centreline. The surface
+            // boundary overdraws OUTWARD by the outline stroke width — the surface
+            // stroke is centred on that line, and a fill stopping exactly there would
+            // leave half the stroke as a line across the notch mouth (on-device report).
+            val od = outline.strokeWidth
             listOf(-1f, 1f).forEach { sign ->
                 val path = Path()
                 np.surface.forEachIndexed { i, sp ->
-                    val y = cy + sign * rAt(sp.diaMm)
+                    val y = cy + sign * (rAt(sp.diaMm) + od)
                     if (i == 0) path.moveTo(xAt(sp.xMm), y) else path.lineTo(xAt(sp.xMm), y)
                 }
                 path.lineTo(xEnd, cy + sign * rFloor)
@@ -660,6 +692,8 @@ private fun drawUndercutDetailStrip(
     voidFill: Paint,
     linerTitle: String?,
     blankValues: Boolean,
+    deepestDepthMm: Float,
+    exaggerationFrac: Float,
 ) {
     val drawStartMm = strip.drawStartMm
     val drawEndMm = strip.drawEndMm
@@ -723,15 +757,18 @@ private fun drawUndercutDetailStrip(
     drawUndercutNotches(
         c, segs,
         spans.map { s -> NotchCut(s.startMm, s.endMm, undercuts.first { it.id == s.id }.diaMm) },
-        cy, ::xAtStrip, ::rStrip, outline, voidFill,
+        cy, ::xAtStrip, ::rStrip, outline, voidFill, deepestDepthMm, exaggerationFrac,
     )
 
     // ── Measured-Ø callouts: leader from each notch floor down to the printed value ──
     if (diaPlan != null) {
         val floorBottomYByKey = undercuts.associate { u ->
             val s = clampedById[u.id]
-            val floorDia = if (s == null || s.isEmpty) 0f
-            else notchFloorDiaMm(segs, NotchCut(s.startMm, s.endMm, u.diaMm))
+            // The leader must land on the DRAWN floor, so it uses the same normalized Ø the
+            // notch was cut to rather than the true floor.
+            val floorDia = if (s == null || s.isEmpty) 0f else normalizedNotchFloorDiaMm(
+                u.diaMm, minOuterDiaOver(segs, s.startMm, s.endMm), deepestDepthMm, exaggerationFrac,
+            )
             u.id to (cy + rStrip(floorDia))
         }
         val placed = diaPlan.finish(

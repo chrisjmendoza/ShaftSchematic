@@ -1,5 +1,6 @@
 package com.android.shaftschematic.geom
 
+import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,7 +11,8 @@ import org.junit.Test
 
 /**
  * Tests for `geom/UndercutMath.kt` — reference conversion, span validation, cluster
- * windows, and hit-testing for the undercut drawing feature.
+ * windows, hit-testing, and the per-sheet drawn-depth exaggeration for the undercut
+ * drawing feature.
  */
 class UndercutMathTest {
 
@@ -305,6 +307,139 @@ class UndercutMathTest {
         assertNull(pickUndercutStripAt(200f, strips))
     }
 
+    // ── Drawn depth exaggeration (normalized to the sheet's deepest cut) ──
+
+    /** Plain round stock of [diaMm] over the whole shaft — the exaggeration scenarios' surface. */
+    private fun stockSegs(diaMm: Float, oalMm: Float = EX_OAL_MM): List<SurfaceSeg> =
+        listOf(SurfaceSeg(0f, oalMm, diaMm, diaMm))
+
+    /** A cut of [depthMm] Ø-reduction below [surfaceDiaMm], placed at [startMm]. */
+    private fun cutOfDepth(id: String, depthMm: Float, surfaceDiaMm: Float, startMm: Float) =
+        Undercut(id = id, startFromAftMm = startMm, lengthMm = 50f, diaMm = surfaceDiaMm - depthMm)
+
+    /** Drawn depth as a fraction of the local surface Ø — what the eye reads on the sheet. */
+    private fun drawnFrac(diaMm: Float, surfaceDiaMm: Float, deepestMm: Float, ex: Float): Float =
+        (surfaceDiaMm - normalizedNotchFloorDiaMm(diaMm, surfaceDiaMm, deepestMm, ex)) / surfaceDiaMm
+
+    @Test
+    fun `the sheet's deepest measured cut draws at exactly the exaggeration fraction`() {
+        val surface = 10f * 25.4f
+        val deep = cutOfDepth("deep", depthMm = 12.7f, surfaceDiaMm = surface, startMm = 200f)
+        val deepest = deepestUndercutDepthMm(listOf(deep), stockSegs(surface), EX_OAL_MM)
+        assertEquals(12.7f, deepest, 1e-3f)
+
+        assertEquals(0.25f, drawnFrac(deep.diaMm, surface, deepest, 0.25f), 1e-4f)
+    }
+
+    @Test
+    fun `a half-as-deep cut draws at half the deepest cut's drawn depth`() {
+        // Proportions WITHIN a sheet stay honest: only the sheet-wide scale is exaggerated.
+        val surface = 10f * 25.4f
+        val deep = cutOfDepth("deep", depthMm = 12.7f, surfaceDiaMm = surface, startMm = 200f)
+        val half = cutOfDepth("half", depthMm = 6.35f, surfaceDiaMm = surface, startMm = 600f)
+        val deepest = deepestUndercutDepthMm(listOf(deep, half), stockSegs(surface), EX_OAL_MM)
+
+        val deepFrac = drawnFrac(deep.diaMm, surface, deepest, 0.25f)
+        val halfFrac = drawnFrac(half.diaMm, surface, deepest, 0.25f)
+        assertEquals(0.25f, deepFrac, 1e-4f)
+        assertEquals(deepFrac * 0.5f, halfFrac, 1e-4f)
+    }
+
+    @Test
+    fun `sheets with very different absolute depths read alike`() {
+        // The point of normalizing: a sheet whose worst cut is 1" deep and one whose worst is
+        // 1/4" deep must print their deepest cut at the SAME drawn depth (on-device request).
+        val surface = 10f * 25.4f
+        val inchSheet = listOf(cutOfDepth("a", 25.4f, surface, 200f))
+        val quarterSheet = listOf(cutOfDepth("b", 6.35f, surface, 200f))
+
+        val inchDeepest = deepestUndercutDepthMm(inchSheet, stockSegs(surface), EX_OAL_MM)
+        val quarterDeepest = deepestUndercutDepthMm(quarterSheet, stockSegs(surface), EX_OAL_MM)
+
+        assertEquals(
+            drawnFrac(inchSheet[0].diaMm, surface, inchDeepest, 0.25f),
+            drawnFrac(quarterSheet[0].diaMm, surface, quarterDeepest, 0.25f),
+            1e-4f,
+        )
+    }
+
+    @Test
+    fun `a cut deeper than the cap is never drawn shallower than its true depth`() {
+        // True depth frac 0.5 exceeds the 0.25 cap — the drawn floor stays the true floor.
+        val surface = 114.3f
+        assertEquals(
+            57.15f,
+            normalizedNotchFloorDiaMm(57.15f, surface, deepestDepthMm = 57.15f, exaggerationFrac = 0.25f),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun `zero exaggeration draws measured cuts at true scale`() {
+        val surface = 10f * 25.4f
+        val cut = cutOfDepth("c", depthMm = 12.7f, surfaceDiaMm = surface, startMm = 200f)
+        val deepest = deepestUndercutDepthMm(listOf(cut), stockSegs(surface), EX_OAL_MM)
+
+        assertEquals(
+            cut.diaMm,
+            normalizedNotchFloorDiaMm(cut.diaMm, surface, deepest, exaggerationFrac = 0f),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun `a placeholder cut draws at half the exaggeration and never below the visibility floor`() {
+        val surface = 10f * 25.4f
+        assertEquals(
+            0.25f * UNDERCUT_PLACEHOLDER_OF_EXAGGERATION,
+            drawnFrac(0f, surface, deepestMm = 12.7f, ex = 0.25f),
+            1e-4f,
+        )
+        // At true scale a placeholder would vanish, so it keeps the visibility floor.
+        assertEquals(
+            UNDERCUT_PLACEHOLDER_MIN_DRAWN_FRAC,
+            drawnFrac(0f, surface, deepestMm = 12.7f, ex = 0f),
+            1e-4f,
+        )
+    }
+
+    @Test
+    fun `placeholder cuts are excluded from the deepest-depth reference`() {
+        // An unmeasured cut must not be able to squash the real ones: only measured cuts
+        // (and only where material was actually removed) set the normalization reference.
+        val surface = 10f * 25.4f
+        val cuts = listOf(
+            Undercut(id = "placeholder", startFromAftMm = 200f, lengthMm = 50f, diaMm = 0f),
+            cutOfDepth("measured", depthMm = 6.35f, surfaceDiaMm = surface, startMm = 600f),
+            // Ø at the surface: nothing removed, so it contributes no depth either.
+            Undercut(id = "no-cut", startFromAftMm = 900f, lengthMm = 50f, diaMm = surface),
+        )
+        assertEquals(6.35f, deepestUndercutDepthMm(cuts, stockSegs(surface), EX_OAL_MM), 1e-3f)
+    }
+
+    @Test
+    fun `a hairline cut on a ten inch shaft draws at the full exaggeration when it is the only cut`() {
+        // Sizing context: shafts run up to ~10" Ø, where a 1/16" Ø-reduction is 0.6% of the
+        // diameter — invisible at true scale. As the sheet's deepest cut it sets the
+        // reference, so it draws at the full chosen exaggeration.
+        val surface = 10f * 25.4f
+        val cut = cutOfDepth("hairline", depthMm = (1f / 16f) * 25.4f, surfaceDiaMm = surface, startMm = 200f)
+        val deepest = deepestUndercutDepthMm(listOf(cut), stockSegs(surface), EX_OAL_MM)
+
+        assertEquals(0.25f, drawnFrac(cut.diaMm, surface, deepest, 0.25f), 1e-4f)
+    }
+
+    @Test
+    fun `exaggeration degrades safely on degenerate inputs`() {
+        // No surface to reference: the Ø passes straight through.
+        assertEquals(50f, normalizedNotchFloorDiaMm(50f, 0f, 10f, 0.25f), 1e-4f)
+        // A Ø at or above the surface removed no material (the card's warning case), so there
+        // is no depth to exaggerate and the notch degenerates to the surface itself.
+        assertEquals(114.3f, normalizedNotchFloorDiaMm(120f, 114.3f, 10f, 0.25f), 1e-4f)
+        // An empty sheet has no reference depth at all.
+        assertEquals(0f, deepestUndercutDepthMm(emptyList(), stockSegs(114.3f), EX_OAL_MM), 1e-4f)
+    }
+
     // ── Placeholder Ø ──
 
     @Test
@@ -319,4 +454,9 @@ class UndercutMathTest {
 
     /** The pad parameter is mm in shaft space; named helper only for test readability. */
     private fun padPx(mm: Float): Float = mm
+
+    private companion object {
+        /** Shaft extent used by the exaggeration scenarios (long enough for several cuts). */
+        const val EX_OAL_MM = 2000f
+    }
 }

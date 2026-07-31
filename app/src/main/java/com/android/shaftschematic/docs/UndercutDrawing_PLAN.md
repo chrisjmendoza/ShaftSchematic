@@ -42,6 +42,10 @@ Shipped shape (detail in `docs/UndercutDrawing.md`, current-behavior contract):
   list gives a read-only summary + delete row per cut; the overlay grew four reference chips
   (Liner pair shown only while a reference liner resolves) and an "Add undercut in this liner"
   button on liner strips.
+- Drawn-depth exaggeration reworked: the fixed min/max ramp became a **per-sheet slider**
+  ("Cut depth exaggeration", 0–25%, stored as `UndercutRecord.exaggerationFrac`) with drawn
+  depth **normalized to the sheet's deepest cut** (`deepestUndercutDepthMm` +
+  `normalizedNotchFloorDiaMm`), so sheets with very different absolute depths read alike.
 
 ---
 

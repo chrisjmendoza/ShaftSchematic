@@ -6,6 +6,33 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-31 (undercut drawing — depth exaggeration slider, open notch mouths)
+
+### feat(undercut): per-sheet drawn-depth exaggeration normalized to the deepest cut
+
+On-device reports: real undercuts (1/16"–1/2" on shafts up to ~10" Ø) are hairlines at
+true scale, and a stroke ran across the top of each cut (the surface outline surviving
+the void fill).
+
+- **Exaggeration slider** on the Undercut tab (0–25%, `UNDERCUT_EXAGGERATION_MAX_FRAC`),
+  stored per document as `UndercutRecord.exaggerationFrac` (additive envelope field,
+  older files default 0.25). The sheet's **deepest measured cut** draws at the slider
+  fraction of its local surface Ø; shallower cuts scale relative to it
+  (`normalizedNotchFloorDiaMm` + `deepestUndercutDepthMm`, whole-sheet normalization),
+  so sheets with very different absolute depths read alike while proportions within a
+  sheet stay honest. Never drawn shallower than reality; 0% = true scale; Ø-0
+  placeholders draw at half the slider (4% visibility floor) and are excluded from the
+  normalization reference. Region topology still comes from the TRUE floor; printed Ø
+  values are always the stored measurements.
+- **Open notch mouths**: the void fill now overdraws the surface stroke across each cut
+  in both draw sites — no outline runs across the top of an undercut.
+- Fix folded in: a Ø at/above the local surface degenerates to the surface instead of
+  drawing outside the shaft.
+
+Docs: `docs/UndercutDrawing.md`, `CLAUDE.md` invariant block, `docs/UndercutDrawing_PLAN.md`.
+
+---
+
 ## 2026-07-31 (undercut drawing — liner-anchored strips, liner references, route list)
 
 ### feat(undercut): liner-aware authoring + liner-anchored detail strips

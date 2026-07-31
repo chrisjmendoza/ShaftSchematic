@@ -43,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -71,6 +72,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.SurfaceSeg
+import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
@@ -102,6 +104,7 @@ import com.android.shaftschematic.util.printShaftPdfPage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.roundToInt
 
 /**
  * UndercutRoute
@@ -121,6 +124,9 @@ import java.io.File
  *   `linerStripFor` strip — the authoring entry point). No pinch-zoom here; the overlay owns zoom.
  * - **Add undercut** — records a 1 in section just FWD of the AFT S.E.T. and opens its strip.
  *   Precision comes from the overlay's numeric fields, never from the tap (wear posture).
+ * - **Cut depth exaggeration** — a slider (0 – `UNDERCUT_EXAGGERATION_MAX_FRAC`) storing the
+ *   sheet's drawn-depth setting in the record. Display-only styling for every notch draw site;
+ *   it never touches a stored or printed Ø.
  * - **Undercut list** — one compact row per recorded cut, aft → fwd: its distance under its own
  *   authored reference, length, Ø, and a stale-overrun warning. Tapping a row opens that cut's
  *   strip; the trailing icon deletes it (confirm-free, the wear-spot posture).
@@ -169,7 +175,10 @@ fun UndercutRoute(
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
     val segs = remember(resolvedComponents) { surfaceSegsFrom(resolvedComponents) }
     val notches = remember(undercutRecord, segs, oalMm) {
-        buildUndercutNotches(undercutRecord.undercuts, segs, oalMm)
+        buildUndercutNotches(
+            undercutRecord.undercuts, segs, oalMm,
+            exaggerationFrac = undercutRecord.exaggerationFrac,
+        )
     }
     val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }
     val spans = remember(undercutRecord, oalMm) {
@@ -445,11 +454,49 @@ fun UndercutRoute(
                 Text("Add undercut")
             }
 
-            // ── Recorded undercuts ────────────────────────────────────────────
+            // ── Drawn depth exaggeration + recorded undercuts ─────────────────
             // Visibility + removal without hunting for the right strip first: every cut on the
             // shaft is listed here, aft → fwd, whichever strip it belongs to.
             if (undercutRecord.undercuts.isNotEmpty()) {
                 HorizontalDivider()
+
+                // Sheet-wide drawn-depth styling, sitting directly under the overview canvas
+                // it restyles so the change is visible while dragging. Display-only: the
+                // deepest cut draws at this fraction of its local surface Ø and shallower
+                // cuts scale relative to it, so sheets with very different absolute depths
+                // read alike; stored and printed Ø values never move (golden rule). Commits
+                // continuously — the same live-update posture as the OAL field and the
+                // preview options sliders (not a NumericInputField, so the commit-on-blur
+                // rule does not apply here).
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Cut depth exaggeration", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "${(undercutRecord.exaggerationFrac * 100f).roundToInt()}%",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Slider(
+                        value = undercutRecord.exaggerationFrac,
+                        onValueChange = { vm.setUndercutExaggeration(it) },
+                        valueRange = 0f..UNDERCUT_EXAGGERATION_MAX_FRAC,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("undercut_exaggeration_slider"),
+                    )
+                    Text(
+                        "Drawing only — 0% is true scale. The deepest cut draws at this depth " +
+                            "and shallower cuts scale to it; printed Ø values never change.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
                 // Own spacing: the surrounding 16 dp rhythm would read as separate blocks
                 // rather than one list.
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
