@@ -9,10 +9,11 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.ClampedUndercutSpanMm
 import com.android.shaftschematic.geom.SurfaceSeg
+import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
-import com.android.shaftschematic.geom.UndercutWindow
+import com.android.shaftschematic.geom.UndercutStrip
+import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.clampUndercutSpan
-import com.android.shaftschematic.geom.clusterUndercuts
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.effectiveNotchDiaMm
@@ -26,6 +27,7 @@ import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.buildLinerTitleById
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -48,9 +50,9 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  *
  * Generates the undercut drawing PDF page — the printable record of a shaft's undercut
  * sections (see `docs/UndercutDrawing_PLAN.md` §8): header, SET-to-SET OAL line, the full
- * shaft profile with notches, and one zoomed detail strip per undercut cluster window
- * (chained dimension rail + cluster total above, measured-Ø callouts below, anchor-from-SET
- * title).
+ * shaft profile with notches, and one zoomed detail strip per **liner holding cuts** plus
+ * one per bare-shaft cluster (chained dimension rail + total above, measured-Ø callouts
+ * below, anchor-from-SET title).
  *
  * ## Page layout (landscape US Letter, 792 × 612 pt)
  * ```
@@ -58,10 +60,19 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * │   ←────────── OAL (AFT SET → FWD SET) ─────────────────────────→          │
  * │   [shaft profile — full length, notches cut at each undercut]             │
  * │   ← AFT                                                          FWD →    │
- * │   [detail strip per cluster: total rail / chained rail / window / Ø / SET] │
+ * │   [detail strip: total rail / chained rail / profile / Ø / name + SET]    │
  * │   Notes: ______________________________________________________________   │
  * └───────────────────────────────────────────────────────────────────────────┘
  * ```
+ *
+ * ## What one strip covers
+ * A cut inside a liner draws the **whole liner**, wear-style: its true edges visible, a
+ * sliver of the neighbouring stock beyond each edge, break edges past that, and room for a
+ * cut that overhangs a liner edge (the notch simply continues onto the body). The chained
+ * rail's outer witness lines then land on the **liner's own edges**, not on the zoom pad —
+ * an arbitrary margin is not a figure worth printing (on-device report: a padded window with
+ * no visible liner edges printed as an anonymous grey slab). Bare-shaft cuts keep the padded
+ * cluster window; `geom/UndercutMath.kt`'s `buildUndercutStrips` decides which is which.
  *
  * Undercuts are a **reference-only** feature: nothing here feeds geometry back into the
  * model. Every notch on both draw sites (this composer and the canvas overlay) comes from
@@ -78,7 +89,7 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * @param spec    Shaft specification in millimeters.
  * @param project Job information (customer, vessel, job#, side).
  * @param unit    Display unit for every printed dimension.
- * @param undercutRecord Recorded undercut sections. Clusters (`clusterUndercuts`) decide the
+ * @param undercutRecord Recorded undercut sections. Strips (`buildUndercutStrips`) decide the
  *                page mode: 0 → profile-only form, 1 → one full-width strip, 2+ → a
  *                2-column grid of strips with a "+N more" note past the cap.
  * @param blankValues Blank-draft (write-in) mode: the record is dropped entirely
@@ -102,6 +113,10 @@ fun composeUndercutPdf(
 
     val docSpec = spec.withResolvedBodies(resolvedComponents)
     val effectiveRecord = if (blankValues) UndercutRecord() else undercutRecord
+    // Shared liner display titles — custom label wins, else positional AFT/MID/FWD defaults
+    // (util/LinerTitles.kt). Same names the carousel cards, the wear sheet, and the runout
+    // sheet show, so a liner-anchored strip is identifiable at a glance.
+    val linerTitles = buildLinerTitleById(docSpec)
 
     val pageW = page.info.pageWidth.toFloat()
     val pageH = page.info.pageHeight.toFloat()
@@ -172,11 +187,18 @@ fun composeUndercutPdf(
         val s = clampedById[u.id] ?: return@mapNotNull null
         if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
     }
-    val windows = clusterUndercuts(liveSpans, shaftExtentMm)
-    val mode = determineUndercutPdfMode(windows.size)
+    // Strip source: a cut overlapping a liner joins that liner's strip (whole liner drawn,
+    // wear-style); the leftovers cluster into padded bare-shaft windows. Degenerate liners
+    // (no length or no OD) would only produce a blank cell, so they are not offered — the
+    // same drawable filter `collectWearLinerGroups` applies.
+    val linerSpans = docSpec.liners
+        .filter { it.lengthMm > 0f && it.odMm > 0f }
+        .map { ln -> UndercutLinerSpan(ln.id, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm) }
+    val strips = buildUndercutStrips(liveSpans, linerSpans, shaftExtentMm)
+    val mode = determineUndercutPdfMode(strips.size)
     val maxPerPage = undercutStripsPerPage(mode)
-    val onPage = windows.take(maxPerPage)
-    val overflow = windows.drop(maxPerPage)
+    val onPage = strips.take(maxPerPage)
+    val overflow = strips.drop(maxPerPage)
     val overflowNoteH = if (overflow.isNotEmpty()) UC_OVERFLOW_NOTE_HEIGHT_PT else 0f
 
     val undercutById = effectiveRecord.undercuts.associateBy { it.id }
@@ -255,18 +277,19 @@ fun composeUndercutPdf(
 
     drawUndercutDirectionRef(c, text, contentLeft, contentRight, shaftCy + rPx(maxDiaMm), profileBottom)
 
-    // ── Detail strips, one per cluster window ────────────────────────────────
-    onPage.forEachIndexed { i, window ->
+    // ── Detail strips, one per liner / bare-shaft cluster ────────────────────
+    onPage.forEachIndexed { i, strip ->
         val cell = stripCells[i]
         drawUndercutDetailStrip(
-            c, docSpec, surfaceSegs, window,
-            window.undercutIds.mapNotNull { id -> undercutById[id] },
+            c, docSpec, surfaceSegs, strip,
+            strip.undercutIds.mapNotNull { id -> undercutById[id] },
             clampedById,
             cell.top, cell.bottom, cell.left, cell.right,
             unit, aftSetMm, fwdSetMm, text, outline, dim, diaText,
             bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill,
             shaftExtentMm = shaftExtentMm,
             voidFill = voidFill,
+            linerTitle = (strip as? UndercutStrip.LinerStrip)?.let { linerTitles[it.linerId] },
             blankValues = blankValues,
         )
     }
@@ -588,15 +611,20 @@ private fun drawUndercutNotches(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Detail strip — one zoomed cluster window
+// Detail strip — one zoomed liner / bare-shaft cluster
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * One broken-out cluster window: the window's own resolved profile at strip-local scale
- * with a break edge at each cut end, the notches cut into it, the cluster's total dimension
- * on a rail line at the very top, the chained rail below that (window pad → each cut →
- * each gap → window pad), the measured Ø values below with leaders to their notch floors,
- * and the anchor-from-SET title at the bottom.
+ * One broken-out detail strip: the resolved profile over the strip's draw range at
+ * strip-local scale with a break edge at each cut end, the notches cut into it, the total
+ * dimension on a rail line at the very top, the chained rail below that, the measured Ø
+ * values below with leaders to their notch floors, and the title at the bottom.
+ *
+ * The draw range and the chain range come from the [strip] and differ on a
+ * `LinerStrip`: the profile spans the whole liner (plus any cut overhang) padded each side
+ * so the liner's edges and its neighbours' slivers are visible, while the chain — and with
+ * it the rail's outer witness lines — anchors on the liner's true edges, leaving the pad
+ * undimensioned. A `FreeStrip`'s two ranges coincide, so it draws exactly as before.
  *
  * Layout math is pure and lives in `UndercutStripLayout.kt`; this function only draws.
  *
@@ -611,7 +639,7 @@ private fun drawUndercutDetailStrip(
     c: Canvas,
     docSpec: ShaftSpec,
     segs: List<SurfaceSeg>,
-    window: UndercutWindow,
+    strip: UndercutStrip,
     undercuts: List<Undercut>,
     clampedById: Map<String, ClampedUndercutSpanMm>,
     stripTop: Float,
@@ -630,26 +658,30 @@ private fun drawUndercutDetailStrip(
     linerFill: Paint?,
     shaftExtentMm: Float,
     voidFill: Paint,
+    linerTitle: String?,
     blankValues: Boolean,
 ) {
-    if (window.lengthMm <= 0f) return
+    val drawStartMm = strip.drawStartMm
+    val drawEndMm = strip.drawEndMm
+    val drawLengthMm = drawEndMm - drawStartMm
+    if (drawLengthMm <= 0f) return
 
     val hLayout = computeWearStripHorizontalLayout(
-        stripLeft, stripRight, window.lengthMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
+        stripLeft, stripRight, drawLengthMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
     )
     val ptPerMmStrip = hLayout.ptPerMm
-    fun xAtStrip(mm: Float): Float = hLayout.linerLeftPt + (mm - window.startMm) * ptPerMmStrip
+    fun xAtStrip(mm: Float): Float = hLayout.linerLeftPt + (mm - drawStartMm) * ptPerMmStrip
 
     val titleText = Paint(text).apply { textSize = (text.textSize - 1f).coerceAtLeast(7f) }
     val dimText = Paint(text).apply { textSize = (text.textSize - 2f).coerceAtLeast(7f) }
 
-    // Spans in this window, aft → fwd, render-clamped.
+    // Spans on this strip, aft → fwd, render-clamped.
     val spans = undercuts.mapNotNull { u ->
         val s = clampedById[u.id] ?: return@mapNotNull null
         if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
     }.sortedBy { it.startMm }
 
-    // Measured-Ø plan first, so the strip reserves exactly the label rows this cluster needs.
+    // Measured-Ø plan first, so the strip reserves exactly the label rows its cuts need.
     val diaStations = buildUndercutDiaStations(
         undercuts, clampedById, ::xAtStrip, unit, { s -> diaText.measureText(s) },
     )
@@ -657,7 +689,7 @@ private fun drawUndercutDetailStrip(
         planDiaCallouts(diaStations, stripLeft + 2f, stripRight - 2f, UC_DIA_MIN_GAP_PT)
     val diaBandPt = diaPlan?.let { it.labelsHeightPt(diaText.textSize, UC_DIA_ROW_GAP_PT) + 2f } ?: 0f
 
-    val railSpans = buildUndercutRailSpans(window, spans, unit)
+    val railSpans = buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, unit)
     val totalSpan = buildUndercutTotalSpan(spans, unit)
 
     val inner = computeUndercutStripInnerLayout(
@@ -669,22 +701,24 @@ private fun drawUndercutDetailStrip(
     val cy = (inner.cylTop + inner.cylBottom) / 2f
     val rCap = ((inner.cylBottom - inner.cylTop) / 2f).coerceAtLeast(0f)
 
-    // Vertical scale: the largest surface Ø inside the window fills the strip's budget, so a
-    // window always draws as tall as the strip allows regardless of its length.
-    val windowMaxDiaMm = maxOuterDiaOver(segs, window.startMm, window.endMm).takeIf { it > 0f }
+    // Vertical scale: the largest surface Ø inside the draw range fills the strip's budget, so
+    // a strip always draws as tall as the strip allows regardless of its length. On a liner
+    // strip that maximum is the liner's own OD, so the liner reads full height and the
+    // neighbouring stock slivers step down from it — the wear strip's look.
+    val stripMaxDiaMm = maxOuterDiaOver(segs, drawStartMm, drawEndMm).takeIf { it > 0f }
         ?: docSpec.maxOuterDiaMm().takeIf { it > 0f } ?: 1f
-    fun rStrip(diaMm: Float): Float = (rCap * (diaMm / windowMaxDiaMm)).coerceIn(0f, rCap)
+    fun rStrip(diaMm: Float): Float = (rCap * (diaMm / stripMaxDiaMm)).coerceIn(0f, rCap)
 
     drawUndercutWindowProfile(
-        c, docSpec, window.startMm, window.endMm, cy, ::xAtStrip, ::rStrip,
+        c, docSpec, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
         outline, bodyFill, taperFill, linerFill, ptPerMmStrip,
     )
-    // Cut ends: an S-break where the window slices through material (void beyond it, so the
+    // Cut ends: an S-break where the strip slices through material (void beyond it, so the
     // AFT stub's eye is at the top and the FWD stub's at the bottom — the stub convention,
-    // the inverse of a centred compression break), a flat edge where the window end IS the
-    // physical shaft end.
-    drawUndercutWindowEnd(c, segs, window.startMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = true)
-    drawUndercutWindowEnd(c, segs, window.endMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = false)
+    // the inverse of a centred compression break), a flat edge where the draw range's end IS
+    // the physical shaft end.
+    drawUndercutWindowEnd(c, segs, drawStartMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = true)
+    drawUndercutWindowEnd(c, segs, drawEndMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = false)
 
     drawUndercutNotches(
         c, segs,
@@ -716,7 +750,7 @@ private fun drawUndercutDetailStrip(
         }
     }
 
-    // ── Rails: the chain, then the cluster total on its own line above it ──
+    // ── Rails: the chain, then the total on its own line above it ──
     val railLayout = layoutWearStripRail(
         railSpans,
         xAtStripMm = { mm -> xAtStrip(mm) },
@@ -745,7 +779,7 @@ private fun drawUndercutDetailStrip(
         )
     }
 
-    // ── Anchor title at the bottom ──
+    // ── Title at the bottom: "<liner name> — <dist> FROM … S.E.T." ──
     val titleBaselineY = (stripBottom - 2f).coerceAtLeast(inner.cylBottom + titleText.textSize)
     if (blankValues) {
         // Write-in title: the anchor value becomes a writing rule and BOTH directions print
@@ -753,7 +787,7 @@ private fun drawUndercutDetailStrip(
         // mirrors a KNOWN measurement direction, which a write-in sheet doesn't have.
         titleText.textAlign = Paint.Align.LEFT
         val afterRule = drawLabelWithRule(
-            c, "", stripLeft, titleBaselineY, titleText,
+            c, linerTitle?.let { "$it —" } ?: "", stripLeft, titleBaselineY, titleText,
             ruleWidth = BLANK_DIM_GAP_PT, maxRight = stripRight,
         )
         c.drawText(WEAR_BLANK_ANCHOR_SUFFIX, afterRule - 8f, titleBaselineY, titleText)
@@ -764,7 +798,11 @@ private fun drawUndercutDetailStrip(
             aftSetXMm = aftSetMm,
             fwdSetXMm = fwdSetMm,
         )
-        val label = ellipsizeToWidth(buildUndercutAnchorLabel(anchor, unit), titleText, stripRight - stripLeft)
+        val label = ellipsizeToWidth(
+            buildUndercutStripTitle(linerTitle, buildUndercutAnchorLabel(anchor, unit)),
+            titleText,
+            stripRight - stripLeft,
+        )
         if (anchor.alignRight) {
             titleText.textAlign = Paint.Align.RIGHT
             c.drawText(label, stripRight, titleBaselineY, titleText)
@@ -772,6 +810,11 @@ private fun drawUndercutDetailStrip(
             titleText.textAlign = Paint.Align.LEFT
             c.drawText(label, stripLeft, titleBaselineY, titleText)
         }
+    } else if (linerTitle != null) {
+        // A liner strip can exist with no drawable cut (every assigned span clamped away):
+        // the liner is still worth naming, there is just no anchor dimension to state.
+        titleText.textAlign = Paint.Align.LEFT
+        c.drawText(ellipsizeToWidth(linerTitle, titleText, stripRight - stripLeft), stripLeft, titleBaselineY, titleText)
     }
 }
 
@@ -890,7 +933,7 @@ private fun drawUndercutWindowEnd(
  * (the inward-arrow test, which also guarantees stub room at [DIM_BREAK_TEXT_PAD_PT])
  * **seats in a break cut in the line**, vertically centred — the schematic's
  * value-in-a-break convention. A label wider than its span falls back to the stacked rows
- * `layoutWearStripRail` assigned, clamped to [maxLabelRows]; on the cluster-total rail
+ * `layoutWearStripRail` assigned, clamped to [maxLabelRows]; on the total-span rail
  * ([fallbackLabelAbove]) it goes ABOVE the line instead, since the chained rail occupies
  * the space below it.
  *
@@ -957,11 +1000,11 @@ private fun drawUndercutRail(
     }
 }
 
-/** Text note for cluster windows that didn't fit as strips on this page. */
+/** Text note for detail strips that didn't fit on this page. */
 private fun drawUndercutOverflowNote(
     c: Canvas, text: Paint, left: Float, right: Float, bandTop: Float, bandBottom: Float, count: Int,
 ) {
-    val msg = "+$count more undercut cluster(s) not shown"
+    val msg = "+$count more undercut detail strip(s) not shown"
     val y = (bandTop + bandBottom) * 0.5f + text.textSize * 0.35f
     c.drawText(ellipsizeToWidth(msg, text, right - left), left, y, text)
 }

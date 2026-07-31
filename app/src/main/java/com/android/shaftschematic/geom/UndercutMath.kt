@@ -53,6 +53,15 @@ const val UNDERCUT_PLACEHOLDER_DEPTH_FRAC = 0.85f
  *   the AFT SET: canonical = `aftSetXMm + enteredMm`.
  * - [UndercutReference.FWD_SET] locates the undercut's **FWD edge**, measured AFT from
  *   the FWD SET: canonical = `fwdSetXMm − enteredMm − lengthMm`.
+ * - [UndercutReference.LINER_AFT] locates the undercut's **AFT edge**, measured FWD from
+ *   the reference liner's AFT edge: canonical = `linerStartMm + enteredMm`.
+ * - [UndercutReference.LINER_FWD] locates the undercut's **FWD edge**, measured AFT from
+ *   the reference liner's FWD edge: canonical = `linerEndMm − enteredMm − lengthMm`.
+ *
+ * [linerStartMm]/[linerEndMm] are the reference liner's shaft-space edges (the liner
+ * named by `Undercut.referenceLinerId`); they are read only by the `LINER_*` branches, so
+ * SET-authored call sites may pass zeros. Callers offer the liner references only while
+ * that liner exists — a deleted reference liner falls back to the AFT_SET projection.
  *
  * Pure and side-effect-free; does not clamp or validate — see [undercutSpanIssue] for
  * the blocking in-span check applied at commit time.
@@ -63,9 +72,13 @@ fun undercutStartToCanonicalMm(
     lengthMm: Float,
     aftSetXMm: Float,
     fwdSetXMm: Float,
+    linerStartMm: Float = 0f,
+    linerEndMm: Float = 0f,
 ): Float = when (reference) {
     UndercutReference.AFT_SET -> aftSetXMm + enteredMm
     UndercutReference.FWD_SET -> fwdSetXMm - enteredMm - lengthMm
+    UndercutReference.LINER_AFT -> linerStartMm + enteredMm
+    UndercutReference.LINER_FWD -> linerEndMm - enteredMm - lengthMm
 }
 
 /**
@@ -79,9 +92,13 @@ fun canonicalToUndercutStartMm(
     lengthMm: Float,
     aftSetXMm: Float,
     fwdSetXMm: Float,
+    linerStartMm: Float = 0f,
+    linerEndMm: Float = 0f,
 ): Float = when (reference) {
     UndercutReference.AFT_SET -> canonicalStartMm - aftSetXMm
     UndercutReference.FWD_SET -> fwdSetXMm - canonicalStartMm - lengthMm
+    UndercutReference.LINER_AFT -> canonicalStartMm - linerStartMm
+    UndercutReference.LINER_FWD -> linerEndMm - canonicalStartMm - lengthMm
 }
 
 // ── Validation ──
@@ -231,6 +248,133 @@ fun pickUndercutAt(xMm: Float, spans: List<UndercutSpanMm>, padMm: Float): Strin
     if (candidates.size == 1) return candidates[0].id
     return candidates.minByOrNull { s -> min(abs(xMm - s.startMm), abs(xMm - s.endMm)) }?.id
 }
+
+// ── Strips: liner-anchored vs free windows ──
+
+/** A liner's shaft-space span, the liner-side input to strip grouping (geom-local so this
+ *  file stays free of `ui`/`model` component imports beyond the reference enum). */
+data class UndercutLinerSpan(val id: String, val startMm: Float, val endMm: Float)
+
+/**
+ * One zoomed detail strip. The drawing pipeline (profile, notches, break/flat ends,
+ * Ø callouts) treats every strip as the draw range `[drawStartMm, drawEndMm]`; the two
+ * kinds differ in what anchors that range and where the dimension chain runs
+ * (on-device report: a grey slab with no liner edges was unreadable — a cut inside a
+ * liner must show the whole liner, wear-style).
+ *
+ * - [LinerStrip]: the cuts live in a liner. The draw range covers the **whole liner**
+ *   (plus any cut overhang past its edges) padded each side, so the liner's true edges
+ *   are always visible and a neighbor sliver shows before the break edge. The chain rail
+ *   anchors at the **liner edges** (extended only by overhang), like the wear rail.
+ * - [FreeStrip]: bare-shaft cuts, no liner involved — the padded cluster window, chain
+ *   anchored at the window edges (the original strip behavior).
+ */
+sealed class UndercutStrip {
+    abstract val drawStartMm: Float
+    abstract val drawEndMm: Float
+    /** Where the chained dimension rail starts/ends (witness datums, chain coverage). */
+    abstract val chainStartMm: Float
+    abstract val chainEndMm: Float
+    abstract val undercutIds: List<String>
+
+    data class LinerStrip(
+        val linerId: String,
+        val linerStartMm: Float,
+        val linerEndMm: Float,
+        override val drawStartMm: Float,
+        override val drawEndMm: Float,
+        override val chainStartMm: Float,
+        override val chainEndMm: Float,
+        override val undercutIds: List<String>,
+    ) : UndercutStrip()
+
+    data class FreeStrip(val window: UndercutWindow) : UndercutStrip() {
+        override val drawStartMm: Float get() = window.startMm
+        override val drawEndMm: Float get() = window.endMm
+        override val chainStartMm: Float get() = window.startMm
+        override val chainEndMm: Float get() = window.endMm
+        override val undercutIds: List<String> get() = window.undercutIds
+    }
+}
+
+/**
+ * The liner a cut belongs to for strip purposes: the one overlapping the largest share
+ * of the cut's span (`null` when no liner overlaps at all). A cut crossing a liner edge
+ * belongs to the liner holding most of it; an exact tie breaks to the AFT-most liner.
+ */
+fun assignUndercutLiner(span: UndercutSpanMm, liners: List<UndercutLinerSpan>): String? =
+    liners
+        .map { l -> l to (min(span.endMm, l.endMm) - max(span.startMm, l.startMm)) }
+        .filter { (_, overlap) -> overlap > 0f }
+        .maxWithOrNull(compareBy({ it.second }, { -it.first.startMm }))
+        ?.first?.id
+
+/**
+ * Build one [UndercutStrip.LinerStrip] for [liner] and the cuts assigned to it (may be
+ * empty — the overlay uses this to zoom an undercut-free liner for authoring). The draw
+ * range is the liner's full span, expanded by any cut overhang past its edges, then
+ * padded by [padMm] each side and clamped to `[0, oalMm]`; the chain range is the liner
+ * span expanded by overhang only (no pad), so the rail's outer witness lines sit on real
+ * datums — liner edges or cut shoulders, never the arbitrary pad edge.
+ */
+fun linerStripFor(
+    liner: UndercutLinerSpan,
+    assignedSpans: List<UndercutSpanMm>,
+    oalMm: Float,
+    padMm: Float = UNDERCUT_WINDOW_PAD_MM,
+): UndercutStrip.LinerStrip {
+    val hi = oalMm.coerceAtLeast(0f)
+    val cutsMin = assignedSpans.minOfOrNull { it.startMm } ?: liner.startMm
+    val cutsMax = assignedSpans.maxOfOrNull { it.endMm } ?: liner.endMm
+    val chainStart = min(liner.startMm, cutsMin)
+    val chainEnd = max(liner.endMm, cutsMax)
+    return UndercutStrip.LinerStrip(
+        linerId = liner.id,
+        linerStartMm = liner.startMm,
+        linerEndMm = liner.endMm,
+        drawStartMm = (chainStart - padMm).coerceIn(0f, hi),
+        drawEndMm = (chainEnd + padMm).coerceIn(0f, hi),
+        chainStartMm = chainStart.coerceIn(0f, hi),
+        chainEndMm = chainEnd.coerceIn(0f, hi),
+        undercutIds = assignedSpans.sortedBy { it.startMm }.map { it.id },
+    )
+}
+
+/**
+ * Group cuts into detail strips: every cut overlapping a liner joins that liner's
+ * [UndercutStrip.LinerStrip] (one strip per liner with ≥1 cut, covering the whole liner);
+ * the remaining bare-shaft cuts cluster into [UndercutStrip.FreeStrip] windows via
+ * [clusterUndercuts]. Result is sorted aft → fwd by draw start. Consumed by the overview
+ * affordances, the detail overlay, and the PDF strips, so all three agree by
+ * construction. Empty spans are skipped, as in [clusterUndercuts].
+ */
+fun buildUndercutStrips(
+    spans: List<UndercutSpanMm>,
+    liners: List<UndercutLinerSpan>,
+    oalMm: Float,
+    gapMm: Float = UNDERCUT_CLUSTER_GAP_MM,
+    padMm: Float = UNDERCUT_WINDOW_PAD_MM,
+): List<UndercutStrip> {
+    val live = spans.filter { it.endMm > it.startMm }
+    val byLiner = live.groupBy { assignUndercutLiner(it, liners) }
+    val strips = mutableListOf<UndercutStrip>()
+    for (liner in liners) {
+        val assigned = byLiner[liner.id] ?: continue
+        strips += linerStripFor(liner, assigned, oalMm, padMm)
+    }
+    for (window in clusterUndercuts(byLiner[null].orEmpty(), oalMm, gapMm, padMm)) {
+        strips += UndercutStrip.FreeStrip(window)
+    }
+    return strips.sortedBy { it.drawStartMm }
+}
+
+/**
+ * Pick the strip containing shaft-space [xMm], or `null`. Unlike free windows, liner
+ * strips can overlap a neighboring strip's pad; the first hit in aft → fwd order wins —
+ * ties are visually indistinguishable at pad scale.
+ */
+fun pickUndercutStripAt(xMm: Float, strips: List<UndercutStrip>): UndercutStrip? =
+    strips.firstOrNull { xMm >= it.drawStartMm && xMm <= it.drawEndMm }
 
 // ── Placeholder Ø ──
 

@@ -36,14 +36,41 @@ class UndercutMathTest {
     }
 
     @Test
-    fun `conversion pair round-trips exactly for both references`() {
+    fun `conversion pair round-trips exactly for all references`() {
         for (ref in UndercutReference.entries) {
             for (entered in listOf(0f, 12.7f, 101.6001f, 333.333f)) {
-                val canonical = undercutStartToCanonicalMm(ref, entered, 55.5f, 42.42f, 1234.56f)
-                val redisplayed = canonicalToUndercutStartMm(ref, canonical, 55.5f, 42.42f, 1234.56f)
+                val canonical = undercutStartToCanonicalMm(
+                    ref, entered, 55.5f, 42.42f, 1234.56f,
+                    linerStartMm = 600f, linerEndMm = 1000f,
+                )
+                val redisplayed = canonicalToUndercutStartMm(
+                    ref, canonical, 55.5f, 42.42f, 1234.56f,
+                    linerStartMm = 600f, linerEndMm = 1000f,
+                )
                 assertEquals("ref=$ref entered=$entered", entered, redisplayed, 1e-3f)
             }
         }
+    }
+
+    @Test
+    fun `LINER_AFT entry is offset by the liner AFT edge`() {
+        val canonical = undercutStartToCanonicalMm(
+            reference = UndercutReference.LINER_AFT,
+            enteredMm = 50f, lengthMm = 40f, aftSetXMm = 0f, fwdSetXMm = 0f,
+            linerStartMm = 600f, linerEndMm = 1000f,
+        )
+        assertEquals(650f, canonical, 1e-4f)
+    }
+
+    @Test
+    fun `LINER_FWD entry locates the FWD edge measured aft from the liner FWD edge`() {
+        val canonical = undercutStartToCanonicalMm(
+            reference = UndercutReference.LINER_FWD,
+            enteredMm = 50f, lengthMm = 40f, aftSetXMm = 0f, fwdSetXMm = 0f,
+            linerStartMm = 600f, linerEndMm = 1000f,
+        )
+        // FWD edge at 1000 - 50 = 950, AFT edge (canonical) = 950 - 40.
+        assertEquals(910f, canonical, 1e-4f)
     }
 
     // ── Validation ──
@@ -192,6 +219,90 @@ class UndercutMathTest {
         )
         assertEquals("right", pickUndercutAt(207f, spans, padPx(10f)))
         assertNull(pickUndercutAt(500f, spans, padPx(10f)))
+    }
+
+    // ── Strips: liner-anchored vs free ──
+
+    private val liners = listOf(UndercutLinerSpan("liner1", 600f, 1000f))
+
+    @Test
+    fun `cut is assigned to the liner with the largest overlap`() {
+        assertEquals("liner1", assignUndercutLiner(UndercutSpanMm("a", 700f, 760f), liners))
+        // Crossing the FWD edge but mostly inside.
+        assertEquals("liner1", assignUndercutLiner(UndercutSpanMm("b", 960f, 1030f), liners))
+        // Mostly outside: 990-1000 inside (10) vs 1000-1090 outside (90) — still liner1's
+        // (it is the only overlapping liner); no overlap at all → null.
+        assertEquals("liner1", assignUndercutLiner(UndercutSpanMm("c", 990f, 1090f), liners))
+        assertNull(assignUndercutLiner(UndercutSpanMm("d", 100f, 160f), liners))
+    }
+
+    @Test
+    fun `cut crossing two liners belongs to the one holding most of it`() {
+        val two = listOf(
+            UndercutLinerSpan("aftLiner", 0f, 500f),
+            UndercutLinerSpan("fwdLiner", 500f, 1200f),
+        )
+        assertEquals("fwdLiner", assignUndercutLiner(UndercutSpanMm("x", 480f, 580f), two))
+        assertEquals("aftLiner", assignUndercutLiner(UndercutSpanMm("y", 420f, 520f), two))
+    }
+
+    @Test
+    fun `liner strip covers the whole liner and chains at its edges`() {
+        val strips = buildUndercutStrips(
+            listOf(UndercutSpanMm("a", 700f, 760f)), liners, oalMm = 2000f,
+        )
+        assertEquals(1, strips.size)
+        val s = strips[0] as UndercutStrip.LinerStrip
+        assertEquals(600f - UNDERCUT_WINDOW_PAD_MM, s.drawStartMm, 1e-3f)
+        assertEquals(1000f + UNDERCUT_WINDOW_PAD_MM, s.drawEndMm, 1e-3f)
+        assertEquals(600f, s.chainStartMm, 1e-3f)
+        assertEquals(1000f, s.chainEndMm, 1e-3f)
+        assertEquals(listOf("a"), s.undercutIds)
+    }
+
+    @Test
+    fun `cut overhanging the liner edge extends both draw and chain ranges`() {
+        val strips = buildUndercutStrips(
+            listOf(UndercutSpanMm("a", 960f, 1030f)), liners, oalMm = 2000f,
+        )
+        val s = strips[0] as UndercutStrip.LinerStrip
+        assertEquals(1030f, s.chainEndMm, 1e-3f)
+        assertEquals(1030f + UNDERCUT_WINDOW_PAD_MM, s.drawEndMm, 1e-3f)
+        assertEquals(600f, s.chainStartMm, 1e-3f)
+    }
+
+    @Test
+    fun `bare-shaft cuts still cluster into free strips beside liner strips`() {
+        val strips = buildUndercutStrips(
+            listOf(
+                UndercutSpanMm("bare", 100f, 160f),
+                UndercutSpanMm("inLiner", 700f, 760f),
+            ),
+            liners, oalMm = 2000f,
+        )
+        assertEquals(2, strips.size)
+        assertTrue(strips[0] is UndercutStrip.FreeStrip)
+        assertTrue(strips[1] is UndercutStrip.LinerStrip)
+        assertEquals(listOf("bare"), strips[0].undercutIds)
+        // Free strip keeps the original window chain behavior: chain == draw range.
+        assertEquals(strips[0].drawStartMm, strips[0].chainStartMm, 1e-4f)
+    }
+
+    @Test
+    fun `liner with no cuts builds an empty authoring strip on demand`() {
+        val s = linerStripFor(liners[0], emptyList(), oalMm = 2000f)
+        assertTrue(s.undercutIds.isEmpty())
+        assertEquals(600f, s.chainStartMm, 1e-3f)
+        assertEquals(1000f, s.chainEndMm, 1e-3f)
+    }
+
+    @Test
+    fun `strip pick finds the containing strip aft-first`() {
+        val strips = buildUndercutStrips(
+            listOf(UndercutSpanMm("a", 700f, 760f)), liners, oalMm = 2000f,
+        )
+        assertNotNull(pickUndercutStripAt(600f, strips))
+        assertNull(pickUndercutStripAt(200f, strips))
     }
 
     // ── Placeholder Ø ──

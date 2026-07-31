@@ -22,6 +22,27 @@ plan's §6/§8 narrative (see `docs/UndercutDrawing.md` for the full current-beh
   machinery verbatim and forks only `buildUndercutRailSpans` (the chain walks a window's
   shaft-space span rather than a liner's local span) plus the composer-private draw helpers.
 
+### Iteration 2 (liner-anchored strips) — 2026-07-31
+
+On-device feedback on the shipped v1: a cut inside a liner zoomed to a padded window with no
+visible liner edges, reading as an anonymous grey slab, and a liner with no recorded cut yet
+had no way to open a strip to author one — a cut could only be added blind, from the global
+"Add undercut" button, then hunted down.
+
+Shipped shape (detail in `docs/UndercutDrawing.md`, current-behavior contract):
+- `UndercutReference` gained `LINER_AFT`/`LINER_FWD`; `Undercut.referenceLinerId` names the
+  reference liner (display-only, verbatim round-trip, no decode pruning — additive enum values,
+  so a file using them won't decode pre-iteration).
+- `geom/UndercutMath.kt` gained a sealed `UndercutStrip`: `LinerStrip` draws the **whole liner**
+  (plus cut overhang) padded, chain-anchored on the liner's own edges; `FreeStrip` is the
+  original padded cluster window, unchanged. `assignUndercutLiner` + `buildUndercutStrips`
+  decide which cuts join which liner vs. cluster into bare-shaft windows — the one source both
+  the canvas and the PDF composer read.
+- Every liner is now a tap target on the overview (empty or not); a new "Recorded undercuts"
+  list gives a read-only summary + delete row per cut; the overlay grew four reference chips
+  (Liner pair shown only while a reference liner resolves) and an "Add undercut in this liner"
+  button on liner strips.
+
 ---
 
 ## 1. What an undercut is here

@@ -6,6 +6,39 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-31 (undercut drawing — liner-anchored strips, liner references, route list)
+
+### feat(undercut): liner-aware authoring + liner-anchored detail strips
+
+Second iteration of the Undercut Drawing tab (the tab itself, its `undercut_record`
+envelope field, cluster-window strips, and the `UNDERCUT RECORD` PDF shipped 2026-07-30
+and are on `main`; that introduction predates this changelog entry). On-device report:
+zoomed strips printed as an anonymous grey slab with no liner edges, tapping the overview
+off a cut did nothing, and cuts could not be removed without opening the overlay.
+
+- **Liner-anchored strips**: a cut inside a liner now draws that liner's whole span,
+  wear-style — true edges visible, neighbor slivers + break edges outboard, dimension
+  chain anchored on the liner's edges (extended only by a cut overhanging an edge; the
+  zoom pad is never dimensioned), liner display title on the strip. Bare-shaft cuts keep
+  the padded cluster-window style. `geom/UndercutMath.kt`'s sealed `UndercutStrip`
+  (`buildUndercutStrips`, max-overlap `assignUndercutLiner`) feeds overview, overlay, and
+  PDF so all three agree by construction.
+- **Liner references**: `UndercutReference` gains `LINER_AFT`/`LINER_FWD` beside the two
+  S.E.T. datums, with a display-only `Undercut.referenceLinerId` (canonical shaft-space
+  position never moves; a deleted reference liner falls back to the AFT S.E.T.
+  projection). Note: files authored with the liner references do not decode in builds
+  predating them (additive-enum rule); S.E.T.-only files are unaffected.
+- **Tap-to-zoom liners**: every liner on the overview is a tap target (badge shows its
+  cut count); an undercut-free liner opens as an empty authoring strip with
+  "Add undercut in this liner" (centered default, Liner AFT reference preselected).
+- **Recorded undercuts list** on the route: one row per cut (reference-aware distance,
+  length, Ø, stale warning), tap to zoom, per-row delete.
+
+Docs: `docs/UndercutDrawing.md` (contract), `docs/UndercutDrawing_PLAN.md` (status),
+`CLAUDE.md` invariant block.
+
+---
+
 ## 2026-07-30 (keyway clocking — 90° apart added alongside 180°)
 
 ### feat(ui): "Keyways 90° apart" toggle + CW/CCW direction chips

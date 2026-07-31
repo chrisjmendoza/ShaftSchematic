@@ -1,8 +1,11 @@
 package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.geom.ClampedUndercutSpanMm
+import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
+import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.UndercutWindow
+import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
@@ -29,13 +32,17 @@ class UndercutStripLayoutTest {
     private fun List<WearRailSpan>.totalLengthMm(): Float =
         sumOf { (it.endMm - it.startMm).toDouble() }.toFloat()
 
+    /** The chain over a strip's own chain bounds — the composer's exact call. */
+    private fun railFor(strip: UndercutStrip, spans: List<UndercutSpanMm>) =
+        buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans.sortedBy { it.startMm }, mm)
+
     // ── Chained rail: coverage, omissions, overlaps ──────────────────────────
 
     @Test
     fun `chain covers the window exactly with pads, cuts and gaps`() {
         val w = window(100f, 300f, "a", "b")
         val spans = listOf(span("a", 130f, 160f), span("b", 200f, 240f))
-        val rail = buildUndercutRailSpans(w, spans, mm)
+        val rail = railFor(UndercutStrip.FreeStrip(w), spans)
 
         // pad, cut a, gap, cut b, pad
         assertEquals(5, rail.size)
@@ -49,26 +56,23 @@ class UndercutStripLayoutTest {
     @Test
     fun `zero-length spans are omitted but the chain still covers the window`() {
         // Cut flush with BOTH window edges: no leading pad, no trailing pad.
-        val w = window(50f, 150f, "a")
-        val rail = buildUndercutRailSpans(w, listOf(span("a", 50f, 150f)), mm)
+        val rail = buildUndercutRailSpans(50f, 150f, listOf(span("a", 50f, 150f)), mm)
         assertEquals(1, rail.size)
-        assertEquals(w.lengthMm, rail.totalLengthMm(), 1e-3f)
+        assertEquals(100f, rail.totalLengthMm(), 1e-3f)
 
         // Two back-to-back cuts: no gap span between them.
-        val w2 = window(0f, 100f, "a", "b")
-        val rail2 = buildUndercutRailSpans(w2, listOf(span("a", 20f, 50f), span("b", 50f, 80f)), mm)
+        val rail2 = buildUndercutRailSpans(0f, 100f, listOf(span("a", 20f, 50f), span("b", 50f, 80f)), mm)
         assertEquals(4, rail2.size)   // pad, a, b, pad — no zero-width gap
-        assertEquals(w2.lengthMm, rail2.totalLengthMm(), 1e-3f)
+        assertEquals(100f, rail2.totalLengthMm(), 1e-3f)
         assertTrue(rail2.none { it.endMm - it.startMm <= 1e-3f })
     }
 
     @Test
     fun `overlapping undercuts are never double-counted and the chain never runs backward`() {
-        val w = window(0f, 200f, "a", "b")
         val spans = listOf(span("a", 40f, 120f), span("b", 80f, 140f))
-        val rail = buildUndercutRailSpans(w, spans, mm)
+        val rail = buildUndercutRailSpans(0f, 200f, spans, mm)
 
-        assertEquals(w.lengthMm, rail.totalLengthMm(), 1e-3f)
+        assertEquals(200f, rail.totalLengthMm(), 1e-3f)
         rail.forEach { assertTrue("span must run aft→fwd", it.endMm > it.startMm) }
         rail.zipWithNext().forEach { (p, n) -> assertEquals(p.endMm, n.startMm, 1e-3f) }
         // The overlap reads as belonging to the first cut: the second contributes 120→140.
@@ -77,10 +81,84 @@ class UndercutStripLayoutTest {
 
     @Test
     fun `a cluster with no drawable spans still dimensions the whole window`() {
-        val w = window(10f, 90f)
-        val rail = buildUndercutRailSpans(w, emptyList(), mm)
+        val rail = buildUndercutRailSpans(10f, 90f, emptyList(), mm)
         assertEquals(1, rail.size)
-        assertEquals(w.lengthMm, rail.totalLengthMm(), 1e-3f)
+        assertEquals(80f, rail.totalLengthMm(), 1e-3f)
+    }
+
+    // ── Liner strips: the chain anchors on the liner's edges, never on the pad ──
+
+    private val liner = UndercutLinerSpan("liner", 600f, 1000f)
+    private val oal = 2000f
+
+    private fun linerStrip(spans: List<UndercutSpanMm>): UndercutStrip.LinerStrip =
+        buildUndercutStrips(spans, listOf(liner), oal)
+            .filterIsInstance<UndercutStrip.LinerStrip>()
+            .single()
+
+    @Test
+    fun `a liner strip's chain covers the liner exactly and never dimensions the pad`() {
+        val spans = listOf(span("a", 700f, 760f), span("b", 820f, 880f))
+        val strip = linerStrip(spans)
+
+        // Chain = the liner's own edges; the draw range is padded well outside them.
+        assertEquals(600f, strip.chainStartMm, 1e-3f)
+        assertEquals(1000f, strip.chainEndMm, 1e-3f)
+        assertTrue(strip.drawStartMm < strip.chainStartMm)
+        assertTrue(strip.drawEndMm > strip.chainEndMm)
+
+        val rail = railFor(strip, spans)
+        // liner aft → a, a, gap, b, b → liner fwd
+        assertEquals(5, rail.size)
+        assertEquals(600f, rail.first().startMm, 1e-3f)
+        assertEquals(1000f, rail.last().endMm, 1e-3f)
+        assertEquals(400f, rail.totalLengthMm(), 1e-3f)
+        rail.zipWithNext().forEach { (p, n) -> assertEquals(p.endMm, n.startMm, 1e-3f) }
+        // Nothing in the pad between a break edge and the liner edge is dimensioned.
+        assertTrue(rail.none { it.startMm < strip.chainStartMm - 1e-3f || it.endMm > strip.chainEndMm + 1e-3f })
+    }
+
+    @Test
+    fun `a cut overhanging the liner's FWD edge extends the chain to the cut's shoulder`() {
+        // 960→1030 crosses the liner's FWD edge at 1000; most of it (40 mm vs 30 mm) is on
+        // the liner, so it joins the liner's strip and drags the chain datum out with it.
+        val spans = listOf(span("a", 700f, 760f), span("b", 960f, 1030f))
+        val strip = linerStrip(spans)
+
+        assertEquals(600f, strip.chainStartMm, 1e-3f)
+        assertEquals(1030f, strip.chainEndMm, 1e-3f)
+        assertTrue("the pad still clears the overhung shoulder", strip.drawEndMm > 1030f)
+
+        val rail = railFor(strip, spans)
+        assertEquals(1030f, rail.last().endMm, 1e-3f)
+        assertEquals(430f, rail.totalLengthMm(), 1e-3f)
+        // The overhanging cut's own length is dimensioned in full, both sides of the edge.
+        assertTrue(rail.any { kotlin.math.abs(it.startMm - 960f) < 1e-3f && kotlin.math.abs(it.endMm - 1030f) < 1e-3f })
+    }
+
+    @Test
+    fun `a bare-shaft strip keeps the padded window as its chain`() {
+        val spans = listOf(span("a", 200f, 240f))
+        val strip = buildUndercutStrips(spans, listOf(liner), oal)
+            .filterIsInstance<UndercutStrip.FreeStrip>()
+            .single()
+
+        assertEquals(strip.drawStartMm, strip.chainStartMm, 1e-3f)
+        assertEquals(strip.drawEndMm, strip.chainEndMm, 1e-3f)
+        val rail = railFor(strip, spans)
+        assertEquals(strip.drawEndMm - strip.drawStartMm, rail.totalLengthMm(), 1e-3f)
+    }
+
+    // ── Strip titles ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `a liner strip title carries the liner name before its anchor dimension`() {
+        val anchor = buildUndercutAnchorLabel(UndercutAnchor(UndercutAnchorSide.AFT_SET, 500f), mm)
+        assertEquals("AFT Liner — $anchor", buildUndercutStripTitle("AFT Liner", anchor))
+        // A bare-shaft strip has nothing to name: anchor only, no dangling separator.
+        assertEquals(anchor, buildUndercutStripTitle(null, anchor))
+        assertEquals(anchor, buildUndercutStripTitle("  ", anchor))
+        assertEquals("AFT Liner", buildUndercutStripTitle("AFT Liner", ""))
     }
 
     // ── Total span ────────────────────────────────────────────────────────────

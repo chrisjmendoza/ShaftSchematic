@@ -24,8 +24,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,12 +57,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.NotchProfile
 import com.android.shaftschematic.geom.SurfaceSeg
+import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
-import com.android.shaftschematic.geom.UndercutWindow
+import com.android.shaftschematic.geom.UndercutStrip
+import com.android.shaftschematic.geom.assignUndercutLiner
 import com.android.shaftschematic.geom.canonicalToUndercutStartMm
 import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
@@ -88,30 +93,37 @@ import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.buildLinerTitleById
 import kotlin.math.max
 import kotlin.math.min
 
 /**
  * UndercutDetail
  *
- * A full-screen "zoom in" overlay on ONE undercut **cluster window** — the drawing the shop
- * actually reads (see `docs/UndercutDrawing_PLAN.md` §6). Where the wear overlay breaks out one
- * *component*, this one breaks out an axial *window*: undercuts are not bound to components, so
- * the zoom unit is the padded cluster window from `geom/UndercutMath.kt`'s `clusterUndercuts`,
- * and the profile inside it is whatever resolved geometry the window happens to cross (a liner,
- * a liner edge, a body step, a taper run).
+ * A full-screen "zoom in" overlay on ONE undercut **detail strip** — the drawing the shop
+ * actually reads (see `docs/UndercutDrawing.md`). Where the wear overlay breaks out one
+ * *component*, this one breaks out an axial *strip*, because undercuts are not bound to
+ * components. `geom/UndercutMath.kt`'s [UndercutStrip] supplies the two kinds:
+ * - [UndercutStrip.LinerStrip] — the cuts live in a liner (or the machinist zoomed an
+ *   undercut-free liner to author one). The draw range covers the **whole liner** plus any cut
+ *   overhang past its edges, so the liner's real edges are always visible (on-device report: a
+ *   grey slab with no liner edges was unreadable), and the chain rail anchors on those edges.
+ * - [UndercutStrip.FreeStrip] — bare-shaft cuts: the padded cluster window, chain anchored at
+ *   the window edges.
  *
  * Contents, aft → fwd:
  * - a **dimension rail above** — the cluster total span on the upper line, and below it the
- *   chained run: window AFT edge → each shoulder → each gap → window FWD edge;
- * - the **window profile** with the undercut **notches** cut into it (`geom/SurfaceProfileMath.kt`
+ *   chained run across the strip's chain range: chain AFT datum → each shoulder → each gap →
+ *   chain FWD datum. Nothing outside the chain range is labelled, so the drawing never
+ *   dimensions the arbitrary pad;
+ * - the **strip profile** with the undercut **notches** cut into it (`geom/SurfaceProfileMath.kt`
  *   via [buildUndercutNotches], the identical pipeline the PDF composer uses, so the two draw the
  *   same notch by construction);
  * - **Ø callouts below** through the shared `planDiaCallouts` engine — one station per undercut at
  *   its axial centre, leader down to the notch floor. A Ø-less undercut (`diaMm == 0`) shows "—"
  *   here so it stays findable, and never prints.
  *
- * Window ends: an end that lands on the shaft's own extent (x = 0 or x = OAL) is a flat edge —
+ * Strip ends: an end that lands on the shaft's own extent (x = 0 or x = OAL) is a flat edge —
  * the shaft physically stops there — and picks up the thread hatch when the component there is a
  * thread. Any other end is a truncation and gets the S-curve break
  * ([drawBreakEdgeCompose], AFT `eyeAtTop = true` / FWD `false`).
@@ -124,18 +136,24 @@ import kotlin.math.min
  *
  * Coordinate rule: everything here is canonical **shaft space** (mm from the AFT face) — undercuts
  * have no component key, so there is no component-local space to convert through. Only the
- * "Distance" field is re-projected, against the authored S.E.T.
- * ([canonicalToUndercutStartMm]/[undercutStartToCanonicalMm]).
+ * "Distance" field is re-projected, against the authored reference — the two S.E.T.s plus the
+ * reference liner's edges ([canonicalToUndercutStartMm]/[undercutStartToCanonicalMm]).
  */
 @Composable
 fun UndercutWindowDetailOverlay(
-    window: UndercutWindow,
+    strip: UndercutStrip,
     spec: ShaftSpec,
     resolvedComponents: List<ResolvedComponent>,
     unit: UnitSystem,
     undercutRecord: UndercutRecord,
+    onAddUndercut: (
+        startFromAftMm: Float,
+        lengthMm: Float,
+        reference: UndercutReference,
+        referenceLinerId: String,
+    ) -> Unit,
     onUpdateUndercut: (id: String, startFromAftMm: Float, lengthMm: Float, diaMm: Float, note: String) -> Unit,
-    onUpdateReference: (id: String, reference: UndercutReference) -> Unit,
+    onUpdateReference: (id: String, reference: UndercutReference, referenceLinerId: String) -> Unit,
     onRemoveUndercut: (id: String) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -143,10 +161,17 @@ fun UndercutWindowDetailOverlay(
 
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
     val segs = remember(resolvedComponents) { surfaceSegsFrom(resolvedComponents) }
+    val drawStartMm = strip.drawStartMm
+    val drawEndMm = strip.drawEndMm
 
-    // The window's member undercuts, aft → fwd. Ids the record no longer holds simply drop out.
-    val undercuts = remember(undercutRecord, window) {
-        window.undercutIds
+    // Every liner on the shaft, in strip space — the pool the cards' liner references draw from.
+    val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }
+    val stripLiner = (strip as? UndercutStrip.LinerStrip)
+        ?.let { UndercutLinerSpan(it.linerId, it.linerStartMm, it.linerEndMm) }
+
+    // The strip's member undercuts, aft → fwd. Ids the record no longer holds simply drop out.
+    val undercuts = remember(undercutRecord, strip) {
+        strip.undercutIds
             .mapNotNull { id -> undercutRecord.undercuts.firstOrNull { it.id == id } }
             .sortedBy { it.startFromAftMm }
     }
@@ -164,7 +189,7 @@ fun UndercutWindowDetailOverlay(
     val aftSetXMm = setPositions.first
     val fwdSetXMm = setPositions.second
 
-    var selectedId by remember(window) { mutableStateOf<String?>(null) }
+    var selectedId by remember(strip) { mutableStateOf<String?>(null) }
 
     // ── Theme colors captured here — the Canvas draw scope must not read MaterialTheme ──
     val outlineColor = MaterialTheme.colorScheme.onSurface
@@ -208,7 +233,7 @@ fun UndercutWindowDetailOverlay(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Undercut Drawing")
                 }
                 Text(
-                    text = undercutWindowTitle(window, unit),
+                    text = undercutStripTitle(strip, spec, unit),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 4.dp),
                 )
@@ -232,9 +257,9 @@ fun UndercutWindowDetailOverlay(
                 val diaBandDp = if (undercuts.isEmpty()) 0.dp else 48.dp
                 val canvasHeightDp = totalRailRowDp + chainRailRowDp + profileRowDp + diaBandDp
 
-                val winLenMm = window.lengthMm.coerceAtLeast(0.001f)
-                val maxOdMm = remember(segs, window) {
-                    val env = maxOuterDiaOver(segs, window.startMm, window.endMm)
+                val winLenMm = (drawEndMm - drawStartMm).coerceAtLeast(0.001f)
+                val maxOdMm = remember(segs, drawStartMm, drawEndMm) {
+                    val env = maxOuterDiaOver(segs, drawStartMm, drawEndMm)
                     if (env > 0f) env else 1f
                 }
 
@@ -248,7 +273,7 @@ fun UndercutWindowDetailOverlay(
                         .clip(cardShape)
                         .background(Color.White)
                         .transformable(zoomTransformState)
-                        .pointerInput(window, spans, winLenMm, maxOdMm) {
+                        .pointerInput(strip, spans, winLenMm, maxOdMm) {
                             detectTapGestures { rawTap ->
                                 val sc = scaleForTap.value
                                 val tap = Offset(
@@ -263,7 +288,7 @@ fun UndercutWindowDetailOverlay(
                                     maxOdMm = maxOdMm,
                                     edgePadPx = UNDERCUT_EDGE_PAD_DP.dp.toPx(),
                                 )
-                                val xMm = window.startMm + (tap.x - lay.startPx) / lay.pxPerMm
+                                val xMm = drawStartMm + (tap.x - lay.startPx) / lay.pxPerMm
                                 val padMm = 12.dp.toPx() / lay.pxPerMm
                                 selectedId = pickUndercutAt(xMm, spans, padMm)
                             }
@@ -291,10 +316,10 @@ fun UndercutWindowDetailOverlay(
                             edgePadPx = UNDERCUT_EDGE_PAD_DP.dp.toPx(),
                         )
                         val cy = lay.cy
-                        val xPx: (Float) -> Float = { mm -> lay.startPx + (mm - window.startMm) * lay.pxPerMm }
+                        val xPx: (Float) -> Float = { mm -> lay.startPx + (mm - drawStartMm) * lay.pxPerMm }
                         val rPx: (Float) -> Float = { diaMm -> diaMm * 0.5f * lay.pxPerMm }
 
-                        // ── Window profile: every resolved component clipped to the window ──
+                        // ── Strip profile: every resolved component clipped to the draw range ──
                         // Liners paint last so a liner over a body reads as the surface, matching
                         // the max-wins envelope the notch math uses.
                         val eps = 1e-3f
@@ -302,8 +327,8 @@ fun UndercutWindowDetailOverlay(
                             .filter { it !is ResolvedCouplerBoltSlot }
                             .sortedBy { if (it is ResolvedLiner) 1 else 0 }
                         drawn.forEach { rc ->
-                            val a = max(rc.startMmPhysical, window.startMm)
-                            val b = min(rc.endMmPhysical, window.endMm)
+                            val a = max(rc.startMmPhysical, drawStartMm)
+                            val b = min(rc.endMmPhysical, drawEndMm)
                             if (b - a <= eps) return@forEach
                             val rA = rPx(componentDiaAt(rc, a))
                             val rB = rPx(componentDiaAt(rc, b))
@@ -325,20 +350,20 @@ fun UndercutWindowDetailOverlay(
                             drawLine(outlineColor, Offset(xa, cy - rA), Offset(xb, cy - rB), outlineWidthPx)
                             drawLine(outlineColor, Offset(xa, cy + rA), Offset(xb, cy + rB), outlineWidthPx)
                             // Vertical faces only where the edge is the component's own — an edge
-                            // the window cut off is closed by the break edge / flat end below.
-                            if (rc.startMmPhysical > window.startMm + eps) {
+                            // the draw range cut off is closed by the break edge / flat end below.
+                            if (rc.startMmPhysical > drawStartMm + eps) {
                                 drawLine(outlineColor, Offset(xa, cy - rA), Offset(xa, cy + rA), outlineWidthPx)
                             }
-                            if (rc.endMmPhysical < window.endMm - eps) {
+                            if (rc.endMmPhysical < drawEndMm - eps) {
                                 drawLine(outlineColor, Offset(xb, cy - rB), Offset(xb, cy + rB), outlineWidthPx)
                             }
                         }
 
-                        // ── Window ends: flat at the shaft's own extent, S-curve break otherwise ──
-                        val rAft = rPx(outerDiaAt(segs, window.startMm + eps))
-                        val rFwd = rPx(outerDiaAt(segs, window.endMm - eps))
+                        // ── Strip ends: flat at the shaft's own extent, S-curve break otherwise ──
+                        val rAft = rPx(outerDiaAt(segs, drawStartMm + eps))
+                        val rFwd = rPx(outerDiaAt(segs, drawEndMm - eps))
                         if (rAft > 0f) {
-                            if (window.startMm <= eps) {
+                            if (drawStartMm <= eps) {
                                 drawLine(
                                     outlineColor, Offset(lay.startPx, cy - rAft),
                                     Offset(lay.startPx, cy + rAft), outlineWidthPx,
@@ -352,7 +377,7 @@ fun UndercutWindowDetailOverlay(
                             }
                         }
                         if (rFwd > 0f) {
-                            if (window.endMm >= oalMm - eps) {
+                            if (drawEndMm >= oalMm - eps) {
                                 drawLine(
                                     outlineColor, Offset(lay.endPx, cy - rFwd),
                                     Offset(lay.endPx, cy + rFwd), outlineWidthPx,
@@ -402,10 +427,14 @@ fun UndercutWindowDetailOverlay(
                         val totalRailY = totalRailRowDp.toPx() * 0.62f
                         val witnessBottomY = cy - rPx(maxOdMm) - 4f
 
+                        // Chain datums, not the draw range: a liner strip anchors the rail on the
+                        // liner's own edges (extended by any cut overhang), a free strip on its
+                        // window edges. The pad outside the chain range is never dimensioned —
+                        // the identical rule the PDF strips apply.
                         val stops = buildList {
-                            add(window.startMm)
+                            add(strip.chainStartMm)
                             spans.forEach { add(it.startMm); add(it.endMm) }
-                            add(window.endMm)
+                            add(strip.chainEndMm)
                         }
                         stops.forEach { mm ->
                             drawLine(
@@ -511,6 +540,37 @@ fun UndercutWindowDetailOverlay(
 
                 HorizontalDivider()
 
+                // Authoring entry point for a liner strip — the reason a liner with no cuts yet
+                // is tappable on the overview at all. The default section is centred in the
+                // liner and authored against the liner's AFT edge, so the very first typed
+                // Distance already reads against the datum the machinist is standing at.
+                stripLiner?.let { ln ->
+                    Button(
+                        onClick = {
+                            val linerLenMm = (ln.endMm - ln.startMm).coerceAtLeast(0f)
+                            val lengthMm = DEFAULT_UNDERCUT_LENGTH_MM
+                                .coerceAtMost(linerLenMm)
+                                .coerceAtLeast(0.1f)
+                            val startMm = (ln.startMm + (linerLenMm - lengthMm) / 2f)
+                                .coerceIn(0f, (oalMm - lengthMm).coerceAtLeast(0f))
+                            onAddUndercut(startMm, lengthMm, UndercutReference.LINER_AFT, ln.id)
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("undercut_add_in_liner"),
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Add undercut in this liner")
+                    }
+                }
+
+                if (undercuts.isEmpty()) {
+                    Text(
+                        text = "No undercuts recorded here yet.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
                 undercuts.forEachIndexed { i, u ->
                     UndercutCard(
                         index = i,
@@ -520,10 +580,12 @@ fun UndercutWindowDetailOverlay(
                         segs = segs,
                         aftSetXMm = aftSetXMm,
                         fwdSetXMm = fwdSetXMm,
+                        linerSpans = linerSpans,
+                        stripLiner = stripLiner,
                         selected = selectedId == u.id,
                         onSelect = { selectedId = u.id },
                         onCommit = { s, l, d, n -> onUpdateUndercut(u.id, s, l, d, n) },
-                        onUpdateReference = { ref -> onUpdateReference(u.id, ref) },
+                        onUpdateReference = { ref, linerId -> onUpdateReference(u.id, ref, linerId) },
                         onDelete = { onRemoveUndercut(u.id) },
                     )
                 }
@@ -547,13 +609,23 @@ private fun UndercutCard(
     segs: List<SurfaceSeg>,
     aftSetXMm: Float,
     fwdSetXMm: Float,
+    linerSpans: List<UndercutLinerSpan>,
+    stripLiner: UndercutLinerSpan?,
     selected: Boolean,
     onSelect: () -> Unit,
     onCommit: (startFromAftMm: Float, lengthMm: Float, diaMm: Float, note: String) -> Unit,
-    onUpdateReference: (UndercutReference) -> Unit,
+    onUpdateReference: (reference: UndercutReference, referenceLinerId: String) -> Unit,
     onDelete: () -> Unit,
 ) {
-    val reference = undercut.authoredReference
+    // A stored LINER_* reference whose liner is gone falls back to the AFT_SET projection for
+    // display (the `Undercut.referenceLinerId` KDoc rule) — canonical is untouched, so the card
+    // simply shows the AFT S.E.T. chip selected until the machinist picks a reference again.
+    val reference = effectiveUndercutReference(undercut, linerSpans)
+    // Which liner the LINER_* chips convert against: the undercut's own reference liner while it
+    // resolves, else the strip's liner, else whichever liner holds most of this cut.
+    val refLiner = undercutReferenceLinerFor(undercut, linerSpans, stripLiner, oalMm)
+    val refLinerStartMm = refLiner?.startMm ?: 0f
+    val refLinerEndMm = refLiner?.endMm ?: 0f
 
     // Non-blocking classifiers. Neither rewrites stored data: the canvas already renders the
     // clamped span, and an implausible Ø is a measurement — golden rule, never adjusted.
@@ -588,8 +660,10 @@ private fun UndercutCard(
                 UndercutWarning("Ø meets or exceeds shaft surface here")
             }
 
-            // "Measure From" — which S.E.T. the Distance value is authored against. Tapping a
-            // chip persists the reference immediately and re-projects the DISPLAYED distance
+            // "Measure From" — which datum the Distance value is authored against, the wear
+            // overlay's four-reference set: both S.E.T.s always, plus the reference liner's
+            // edges while such a liner exists. Tapping a chip persists the reference (and the
+            // liner it converts against) immediately and re-projects the DISPLAYED distance
             // only; canonical `startFromAftMm` never moves.
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -598,10 +672,20 @@ private fun UndercutCard(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     WearChip("AFT S.E.T.", reference == UndercutReference.AFT_SET) {
-                        onSelect(); onUpdateReference(UndercutReference.AFT_SET)
+                        onSelect(); onUpdateReference(UndercutReference.AFT_SET, "")
                     }
                     WearChip("FWD S.E.T.", reference == UndercutReference.FWD_SET) {
-                        onSelect(); onUpdateReference(UndercutReference.FWD_SET)
+                        onSelect(); onUpdateReference(UndercutReference.FWD_SET, "")
+                    }
+                }
+                if (refLiner != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        WearChip("Liner AFT", reference == UndercutReference.LINER_AFT) {
+                            onSelect(); onUpdateReference(UndercutReference.LINER_AFT, refLiner.id)
+                        }
+                        WearChip("Liner FWD", reference == UndercutReference.LINER_FWD) {
+                            onSelect(); onUpdateReference(UndercutReference.LINER_FWD, refLiner.id)
+                        }
                     }
                 }
             }
@@ -612,6 +696,8 @@ private fun UndercutCard(
                 lengthMm = undercut.lengthMm,
                 aftSetXMm = aftSetXMm,
                 fwdSetXMm = fwdSetXMm,
+                linerStartMm = refLinerStartMm,
+                linerEndMm = refLinerEndMm,
             )
             WearNum(
                 label = "Distance from ${undercutReferenceLabel(reference)} (${abbr(unit)})",
@@ -620,6 +706,7 @@ private fun UndercutCard(
                     val enteredMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
                     val canonicalMm = undercutStartToCanonicalMm(
                         reference, enteredMm, undercut.lengthMm, aftSetXMm, fwdSetXMm,
+                        refLinerStartMm, refLinerEndMm,
                     )
                     undercutSpanIssue(canonicalMm, undercut.lengthMm, oalMm)
                 },
@@ -627,6 +714,7 @@ private fun UndercutCard(
                 val enteredMm = toMmOrNull(s, unit) ?: return@WearNum
                 val canonicalMm = undercutStartToCanonicalMm(
                     reference, enteredMm, undercut.lengthMm, aftSetXMm, fwdSetXMm,
+                    refLinerStartMm, refLinerEndMm,
                 )
                 onCommit(canonicalMm, undercut.lengthMm, undercut.diaMm, undercut.note)
             }
@@ -702,10 +790,86 @@ private fun UndercutWarning(text: String) {
 }
 
 /** Chip labels for [UndercutReference], used in the Distance field's dynamic label. */
-private fun undercutReferenceLabel(reference: UndercutReference): String = when (reference) {
+internal fun undercutReferenceLabel(reference: UndercutReference): String = when (reference) {
     UndercutReference.AFT_SET -> "AFT S.E.T."
     UndercutReference.FWD_SET -> "FWD S.E.T."
+    UndercutReference.LINER_AFT -> "Liner AFT"
+    UndercutReference.LINER_FWD -> "Liner FWD"
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Liner references — shared by the overlay's cards and the route's undercut list
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Every resolved liner as an [UndercutLinerSpan], aft → fwd — the liner-reference pool. */
+internal fun linerSpansOf(resolvedComponents: List<ResolvedComponent>): List<UndercutLinerSpan> =
+    resolvedComponents
+        .filterIsInstance<ResolvedLiner>()
+        .sortedBy { it.startMmPhysical }
+        .map { UndercutLinerSpan(it.id, it.startMmPhysical, it.endMmPhysical) }
+
+/**
+ * The reference actually used to display/convert an undercut's Distance. A `LINER_*` reference
+ * whose [Undercut.referenceLinerId] no longer resolves falls back to
+ * [UndercutReference.AFT_SET] — the model's documented display rule. Canonical storage is never
+ * touched by the fallback, and the stored reference is never rewritten behind the machinist's
+ * back; the card just shows the AFT S.E.T. chip selected until a reference is picked again.
+ */
+internal fun effectiveUndercutReference(
+    undercut: Undercut,
+    linerSpans: List<UndercutLinerSpan>,
+): UndercutReference =
+    if (undercut.authoredReference == UndercutReference.LINER_AFT ||
+        undercut.authoredReference == UndercutReference.LINER_FWD
+    ) {
+        if (linerSpans.any { it.id == undercut.referenceLinerId }) undercut.authoredReference
+        else UndercutReference.AFT_SET
+    } else {
+        undercut.authoredReference
+    }
+
+/**
+ * The liner an undercut's `LINER_*` chips convert against, or `null` when no liner is available
+ * (the chips are then hidden). Preference order: the undercut's own stored reference liner while
+ * it resolves, then the liner of the strip being viewed, then the liner holding the largest share
+ * of the cut ([assignUndercutLiner]). The stored liner wins so a cut authored against one liner
+ * keeps reading against it even while viewed from a neighbor's strip.
+ */
+internal fun undercutReferenceLinerFor(
+    undercut: Undercut,
+    linerSpans: List<UndercutLinerSpan>,
+    stripLiner: UndercutLinerSpan?,
+    oalMm: Float,
+): UndercutLinerSpan? {
+    linerSpans.firstOrNull { it.id == undercut.referenceLinerId }?.let { return it }
+    stripLiner?.let { return it }
+    val clamped = clampUndercutSpan(undercut.startFromAftMm, undercut.lengthMm, oalMm)
+    if (clamped.isEmpty) return null
+    val assignedId = assignUndercutLiner(
+        UndercutSpanMm(undercut.id, clamped.startMm, clamped.endMm), linerSpans,
+    ) ?: return null
+    return linerSpans.firstOrNull { it.id == assignedId }
+}
+
+/**
+ * The Distance an undercut reads under its effective reference, in canonical mm — the value the
+ * card's field shows and the route's list row summarizes, so the two never disagree.
+ */
+internal fun undercutDisplayedDistanceMm(
+    undercut: Undercut,
+    reference: UndercutReference,
+    refLiner: UndercutLinerSpan?,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+): Float = canonicalToUndercutStartMm(
+    reference = reference,
+    canonicalStartMm = undercut.startFromAftMm,
+    lengthMm = undercut.lengthMm,
+    aftSetXMm = aftSetXMm,
+    fwdSetXMm = fwdSetXMm,
+    linerStartMm = refLiner?.startMm ?: 0f,
+    linerEndMm = refLiner?.endMm ?: 0f,
+)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Window geometry (shared by the Canvas renderer and the tap handler)
@@ -910,9 +1074,19 @@ internal fun DrawScope.drawUndercutDimSpan(
     drawContext.canvas.nativeCanvas.drawText(label, (lo + hi) / 2f, y - 6.dp.toPx(), paint)
 }
 
-/** Window title: the zoom range in shaft space, in the active unit. */
-private fun undercutWindowTitle(window: UndercutWindow, unit: UnitSystem): String =
-    "Undercuts ${disp(window.startMm, unit)}–${disp(window.endMm, unit)} ${abbr(unit)} from AFT"
+/**
+ * Strip title: a liner strip is named after its liner (`buildLinerTitleById`, the same positional
+ * names the wear document uses), a free strip states its zoom range in shaft space. A liner the
+ * spec no longer holds falls back to the range text.
+ */
+private fun undercutStripTitle(strip: UndercutStrip, spec: ShaftSpec, unit: UnitSystem): String {
+    val rangeText =
+        "Undercuts ${disp(strip.drawStartMm, unit)}–${disp(strip.drawEndMm, unit)} ${abbr(unit)} from AFT"
+    return when (strip) {
+        is UndercutStrip.FreeStrip -> rangeText
+        is UndercutStrip.LinerStrip -> buildLinerTitleById(spec)[strip.linerId] ?: rangeText
+    }
+}
 
 /** AFT/FWD S.E.T. x positions in physical shaft space (mm from the AFT face). */
 internal fun undercutSetPositions(spec: ShaftSpec): Pair<Float, Float> {

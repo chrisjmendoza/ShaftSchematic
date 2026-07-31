@@ -10,15 +10,24 @@ import java.util.UUID
  *
  * Same role as [WearSpotReference]: it never changes canonical storage
  * ([Undercut.startFromAftMm]), only how the "Distance" field is entered and re-displayed.
- * Undercuts are measured from a S.E.T. (Small End of Taper) only — they are not bound to
- * any component, so there are no component-edge references.
+ * The four references mirror the wear spot's set — two S.E.T. (Small End of Taper) datums
+ * plus the edges of an associated liner ([Undercut.referenceLinerId]); the liner pair is
+ * offered only while such a liner exists, since converting against it needs its edges.
  * - [AFT_SET]: the entered value locates the undercut's **AFT edge**, measured FWD from
  *   the AFT taper's SET.
  * - [FWD_SET]: the entered value locates the undercut's **FWD edge**, measured AFT from
  *   the FWD taper's SET.
+ * - [LINER_AFT]: the entered value locates the undercut's **AFT edge**, measured FWD from
+ *   the reference liner's AFT edge.
+ * - [LINER_FWD]: the entered value locates the undercut's **FWD edge**, measured AFT from
+ *   the reference liner's FWD edge.
+ *
+ * Back-compat note: [LINER_AFT]/[LINER_FWD] are additive enum values — a document that
+ * uses them will not decode in app builds that predate them (the same additive-enum rule
+ * every envelope enum carries); files that stick to the SET references are unaffected.
  */
 @Serializable
-enum class UndercutReference { AFT_SET, FWD_SET }
+enum class UndercutReference { AFT_SET, FWD_SET, LINER_AFT, LINER_FWD }
 
 /**
  * A recorded undercut section — an axial span machined below the surrounding shaft
@@ -40,12 +49,13 @@ enum class UndercutReference { AFT_SET, FWD_SET }
  * extending past the current shaft extent (OAL shrank), which is a non-blocking warning
  * plus a render-layer clamp — the record itself is never mutated.
  *
- * [authoredReference] records which S.E.T. the machinist entered the distance against,
- * purely so the "Distance" field can re-display the same authored number on the next
- * visit. Switching it in the UI re-projects the displayed value only —
+ * [authoredReference] records which reference point the machinist entered the distance
+ * against, purely so the "Distance" field can re-display the same authored number on the
+ * next visit. Switching it in the UI re-projects the displayed value only —
  * [startFromAftMm] never moves as a result. Editing the shaft later (moving a taper,
- * changing OAL) moves the S.E.T., so the *displayed* distance changes; the canonical
- * position stays where it was authored, same rule as [WearSpot].
+ * changing OAL, repositioning the reference liner) moves the reference point, so the
+ * *displayed* distance changes; the canonical position stays where it was authored, same
+ * rule as [WearSpot].
  *
  * Units: mm.
  *
@@ -57,8 +67,14 @@ enum class UndercutReference { AFT_SET, FWD_SET }
  *   user inputs are sacred; no snap/round/derive ever rewrites it). `0` means the
  *   undercut was placed but no Ø has been entered yet: the detail overlay shows "—",
  *   the printed PDF skips the callout — same rule as [WearDiaReading.diaMm].
- * @property authoredReference Which S.E.T. the distance was authored against
+ * @property authoredReference Which reference point the distance was authored against
  *   (display-only; see [UndercutReference]).
+ * @property referenceLinerId The [Liner.id] the distance converts against when
+ *   [authoredReference] is a `LINER_*` value — display metadata only, never a geometry
+ *   key: the undercut still lives in shaft space and renders wherever it is regardless
+ *   of this liner. If the liner is later deleted, the Distance field falls back to the
+ *   [UndercutReference.AFT_SET] projection (canonical untouched); empty for SET-authored
+ *   undercuts.
  * @property note Free-text note (e.g. "weld undercut", "cleanup pass").
  */
 @Serializable
@@ -68,6 +84,7 @@ data class Undercut(
     val lengthMm: Float = 0f,
     val diaMm: Float = 0f,
     val authoredReference: UndercutReference = UndercutReference.AFT_SET,
+    val referenceLinerId: String = "",
     val note: String = "",
 )
 

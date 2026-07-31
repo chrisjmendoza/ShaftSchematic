@@ -8,7 +8,8 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 
 **Files:**
 - `model/Undercut.kt` — `Undercut`, `UndercutRecord`, `UndercutReference`
-- `geom/UndercutMath.kt` — conversion pair, validators, cluster windows, hit-tests, constants
+- `geom/UndercutMath.kt` — conversion pair, validators, cluster windows, liner strips
+  (`UndercutStrip`), hit-tests, constants
 - `geom/SurfaceProfileMath.kt` — `SurfaceSeg`, outer-surface envelope, notch-profile geometry
 - `ui/resolved/SurfaceSegs.kt` — the one `resolvedComponents → SurfaceSeg` mapping every draw
   site shares
@@ -26,18 +27,25 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 ### UndercutRoute
 - Render a live, tappable overview canvas (`ShaftLayout.compute` + `ShaftRenderer.draw` over
   `resolvedComponents`) with every undercut's notch cut into the profile and a faint tint +
-  count badge over each **cluster window** — the wear-area tap idiom, with the window (not a
-  component) as the selectable area. No pinch-zoom on this canvas; the overlay owns zoom.
-- **"Add undercut"** button: records a default section and opens its window (see "Add default"
+  count badge over **every liner** (whether or not it holds cuts) and every bare-shaft
+  **cluster window** — the wear-area tap idiom, with a strip (`geom/UndercutMath.kt`'s
+  `UndercutStrip`) as the selectable area, not a bare window or a single component. No
+  pinch-zoom on this canvas; the overlay owns zoom.
+- **"Add undercut"** button: records a default section and opens its strip (see "Add default"
   below).
+- **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
+  aft → fwd — not an edit card (see "UI contract").
 - Blank-draft (write-in) toggle, PDF Preview (`PdfPreviewOverlay` + `RunoutWearOptionsSheet`),
   Export (SAF `CreateDocument`), Print (`printShaftPdfPage`) — straight ports of the wear tab's
   flows, all calling `composeUndercutPdf`.
 
 ### UndercutWindowDetailOverlay (`UndercutDetail.kt`)
-- Full-screen "zoom in" on one cluster window: dimension rail above (chained run + cluster
-  total), the window's real resolved profile with notches cut in, Ø callouts below, undercut
-  cards below the canvas.
+- Full-screen "zoom in" on one detail strip — a whole liner (plus overhang/pad) when the cuts
+  live in one, or a padded bare-shaft cluster window otherwise: dimension rail above (chained
+  run + strip total), the strip's real resolved profile with notches cut in, Ø callouts below,
+  undercut cards below the canvas. A liner strip additionally offers an "Add undercut in this
+  liner" button above the cards (see "UI contract"), the authoring entry point for a liner with
+  no cuts yet.
 - Pinch-to-zoom (0.5×–6×) + two-finger pan; taps invert the same transform so hit-testing
   always runs in untransformed canvas space.
 - Cards are editable here only — there is no card on `UndercutRoute` itself and no carousel
@@ -50,7 +58,7 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 `model/Undercut.kt`:
 
 ```kotlin
-enum class UndercutReference { AFT_SET, FWD_SET }
+enum class UndercutReference { AFT_SET, FWD_SET, LINER_AFT, LINER_FWD }
 
 data class Undercut(
     val id: String = UUID.randomUUID().toString(),
@@ -58,6 +66,7 @@ data class Undercut(
     val lengthMm: Float = 0f,
     val diaMm: Float = 0f,
     val authoredReference: UndercutReference = UndercutReference.AFT_SET,
+    val referenceLinerId: String = "",
     val note: String = "",
 )
 
@@ -72,12 +81,27 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   extending past the current shaft extent (OAL shrank) — a non-blocking card warning
   (`isUndercutStaleOverrun`) plus a render-layer clamp (`clampUndercutSpan`); the stored record
   is never mutated.
-- **`authoredReference`** is display metadata only: which S.E.T. the "Distance" field is
-  entered against. Switching it re-projects the *displayed* value; `startFromAftMm` never
-  moves (the `WearSpotReference` pattern).
-- **Golden rule**: `startFromAftMm`, `lengthMm`, and `diaMm` are round-tripped verbatim — no
-  snap/round/derive ever rewrites a typed value. `diaMm == 0` means "placed, not yet measured":
-  drawn in the overlay (as a symbolic floor, never a real Ø), never printed.
+- **`authoredReference`** is display metadata only: which datum the "Distance" field is
+  entered against — one of **four** references, mirroring `WearSpotReference`'s set:
+  `AFT_SET`/`FWD_SET` (measured from a taper's S.E.T.) or `LINER_AFT`/`LINER_FWD` (measured
+  from a reference liner's own AFT/FWD edge). Switching it re-projects the *displayed* value
+  only; `startFromAftMm` never moves.
+- **`referenceLinerId`** names the `Liner.id` the distance converts against when
+  `authoredReference` is a `LINER_*` value — display metadata only, never a geometry key (the
+  undercut still lives in shaft space and renders wherever it is regardless of this liner). If
+  that liner is later deleted, the Distance field falls back to the `AFT_SET` projection for
+  display (canonical untouched, and the stored reference is never rewritten behind the
+  machinist's back — `effectiveUndercutReference` in `UndercutDetail.kt`). Empty for
+  SET-authored undercuts. Selecting a SET chip clears it back to `""`.
+- **Back-compat**: `LINER_AFT`/`LINER_FWD` are additive enum values (added this iteration) — a
+  document that uses one will not decode in an app build that predates them, the same rule
+  every envelope enum carries. Files that stick to `AFT_SET`/`FWD_SET` are unaffected.
+- **Golden rule**: `startFromAftMm`, `lengthMm`, `diaMm`, and `referenceLinerId` are
+  round-tripped verbatim — no snap/round/derive ever rewrites a typed value, and
+  `referenceLinerId` is never pruned at decode even when it names no liner in the document
+  (the display fallback is a render-layer concern, not a decode-time one). `diaMm == 0` means
+  "placed, not yet measured": drawn in the overlay (as a symbolic floor, never a real Ø),
+  never printed.
 - **Envelope storage**: `UndercutRecord` rides `ShaftDocCodec.ShaftDocV1.undercutRecord`
   (`@SerialName("undercut_record")`), a sibling of `wear_record`/`runout_readings`, additive +
   defaulted — no version bump. Plumbed through the same 7 sites as `runoutReadings`:
@@ -132,6 +156,35 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   section stays visible/tappable in the overlay. Display-only: never stored, never printed —
   see `buildUndercutDiaStations` below, which skips a `diaMm <= 0` undercut entirely on the PDF.
 
+- **Strips — liner-anchored vs free windows.** The zoomed-view unit consumed by the overview
+  affordances, the detail overlay, and the PDF is a sealed `UndercutStrip`, not a bare
+  `UndercutWindow`:
+  - `UndercutStrip.LinerStrip(linerId, linerStartMm, linerEndMm, drawStartMm, drawEndMm,
+    chainStartMm, chainEndMm, undercutIds)` — the cuts live in a liner (or the liner was
+    zoomed empty, to author into). `drawStartMm`/`drawEndMm` cover the **whole liner** plus any
+    cut overhang past its edges, padded each side, so the liner's true edges and a sliver of
+    neighboring stock are always visible (on-device report: a padded window with no visible
+    liner edges printed/rendered as an anonymous grey slab). `chainStartMm`/`chainEndMm` are
+    the liner's own edges extended only by overhang — **no pad** — so the rail's outer witness
+    lines land on a real datum, leaving the pad between it and the break edge undimensioned.
+  - `UndercutStrip.FreeStrip(window)` — bare-shaft cuts, no liner involved: draw range and
+    chain range both equal the padded `UndercutWindow` from `clusterUndercuts` (the original,
+    unchanged strip behavior).
+  - `assignUndercutLiner(span, liners)` — the liner a cut belongs to for strip purposes: the
+    one overlapping the largest share of the cut's span (`null` if none overlaps at all); an
+    exact tie breaks to the AFT-most liner.
+  - `linerStripFor(liner, assignedSpans, oalMm, padMm)` — builds one `LinerStrip` for a liner
+    and its assigned cuts (`assignedSpans` may be empty — used to zoom an undercut-free liner
+    for authoring, in which case the chain/draw range is just the liner's own span, padded).
+  - `buildUndercutStrips(spans, liners, oalMm, gapMm, padMm)` — every cut overlapping a liner
+    joins that liner's `LinerStrip` (one strip per liner holding ≥1 cut); the remaining
+    bare-shaft cuts cluster into `FreeStrip`s via `clusterUndercuts`. Result sorted aft → fwd by
+    draw start. This is the single source of truth the overview, the detail overlay, and the
+    PDF composer all call, so the three cannot disagree about what one zoomed view covers.
+  - `pickUndercutStripAt(xMm, strips)` — the strip containing a shaft-space tap, first-hit-wins
+    aft → fwd order (liner strips can overlap a neighbor's pad; ties are visually
+    indistinguishable at pad scale anyway).
+
 ### `geom/SurfaceProfileMath.kt` — outer surface + notch geometry
 
 The novel geometry: a notch cuts against the **local outer surface**, which may step (liner
@@ -181,36 +234,76 @@ top nav group.
 ### Overview canvas (`UndercutRoute`)
 - `ShaftLayout.compute` + `ShaftRenderer.draw` over `resolvedComponents`, then notches drawn
   first (they erase profile strokes inside each cut), then a faint primary tint + border over
-  every cluster window plus a small count badge above it (`drawUndercutWindowAffordances`).
-- A tap inverts `ShaftLayout.Result.xMmFromPx` → `pickUndercutWindowAt(tapMm, windows)` → opens
-  `UndercutWindowDetailOverlay` for that window.
-- **The overlay is anchored by undercut id, not by window index or reference.** `UndercutRoute`
-  holds `anchorUndercutId: String?`; windows are re-derived (`clusterUndercuts`) on every
-  composition from the current record, and `activeWindow = windows.firstOrNull { anchorId in
-  it.undercutIds }`. An anchor whose undercut no longer clusters into any window (deleted, or
-  the shaft shrank past it) simply yields no active window — the anchor is never proactively
+  **every liner** (whether or not it holds cuts) and every bare-shaft **cluster window**, plus a
+  small count badge above any target holding ≥ 1 cut (`drawUndercutStripAffordances`). Liners
+  are unconditional tap targets — an empty liner can still be zoomed and authored into, matching
+  the wear document's idiom (on-device report: tapping a liner that had no cut yet did nothing
+  under the earlier windows-only behavior, leaving no way in).
+- **Tap resolution order**, in shaft-space mm via `ShaftLayout.Result.xMmFromPx`:
+  1. `pickUndercutStripAt(tapMm, strips)` — a strip claims the tap first (it covers its cuts
+     plus context);
+  2. failing that, `pickLinerIdAtMm` against every liner span — any liner, cut or not, opens as
+     an empty `linerStripFor` strip to author in;
+  3. no hit → no-op.
+
+  A hit on a `LinerStrip` sets `anchorLinerId` (clearing `anchorUndercutId`); a hit on a
+  `FreeStrip` sets `anchorUndercutId` to its first member (clearing `anchorLinerId`).
+- **Two independent anchors, one live at a time, liner wins.** `UndercutRoute` holds
+  `anchorLinerId: String?` and `anchorUndercutId: String?` (both `rememberSaveable`). Strips are
+  re-derived (`buildUndercutStrips`) on every composition from the current record, so the
+  anchors are ids, not indices. `activeStrip` resolves the liner anchor first (via
+  `stripForLiner`, so an emptied liner strip doesn't slam shut mid-authoring), else the
+  undercut anchor's owning strip, else `null`. An anchor that no longer resolves (undercut
+  deleted, liner removed, shaft shrank past it) simply yields no overlay — never proactively
   cleared, since the record and the anchor can update in either order within a frame and
   clearing on a stale pass could close an overlay that was just opened.
-- **"Add undercut"** (see "Add default" below) sets the anchor to the new undercut's id, which
-  opens its window immediately.
+- **"Add undercut"** button (global — see "Add default" below) sets `anchorUndercutId` to the
+  new undercut's id (clearing `anchorLinerId`), opening its strip immediately.
+- **"Recorded undercuts" list**, below the canvas (`UndercutListRow`, one row per cut, aft →
+  fwd, only shown once ≥ 1 undercut exists): a distance summary under its *effective* reference
+  (`"<distance> from <tag>"`, where a `LINER_*` reference reads `"<liner title> AFT/FWD edge"`
+  via `effectiveUndercutReference`/`undercutReferenceLinerFor`), a second line
+  (`"L … · Ø …"`, Ø shown as `"—"` while unmeasured), and a stale-overrun warning icon
+  (`isUndercutStaleOverrun`) when applicable. **This is a read-only summary + delete row, not
+  an edit card** — tapping the row body (`testTag "undercut_row_<id>"`) calls `anchorToUndercut`
+  to open the cut's owning strip (where the real edit card lives, per "Undercut cards" below);
+  the trailing delete icon (`testTag "undercut_delete_<id>"`) removes the cut outright,
+  confirm-free, without opening anything.
 
 ### Add default
-`vm.addUndercut(startFromAftMm, lengthMm)` records a section at the AFT S.E.T. position
-(clamped to `[0, oalMm]`), length `DEFAULT_UNDERCUT_LENGTH_MM` = 25.4 mm (1 in, clamped to the
-remaining shaft extent), Ø `0` (unentered), reference `AFT_SET`, and returns the new id.
-Precision comes from the overlay's numeric fields afterward, never from the tap — the wear
-posture: a tap only opens/selects, typing does the real work.
+`vm.addUndercut(startFromAftMm, lengthMm, reference = AFT_SET, referenceLinerId = "")` records
+a section at the AFT S.E.T. position (clamped to `[0, oalMm]`), length
+`DEFAULT_UNDERCUT_LENGTH_MM` = 25.4 mm (1 in, clamped to the remaining shaft extent), Ø `0`
+(unentered), and returns the new id. The route's global "Add undercut" button calls it with the
+SET-based defaults; the overlay's liner-scoped "Add undercut in this liner" button (below) calls
+it with a `LINER_AFT` reference instead. Precision comes from the overlay's numeric fields
+afterward, never from the tap — the wear posture: a tap only opens/selects, typing does the
+real work.
 
 ### Undercut cards — overlay only
-**There is no card on `UndercutRoute` itself.** Cards render exclusively inside
-`UndercutWindowDetailOverlay`, below its canvas, one per undercut in the open window (aft → fwd).
-Each card:
-- **"Measure From: AFT S.E.T. | FWD S.E.T."** chips (`WearChip`, shared with the wear overlay) —
-  tapping persists `authoredReference` immediately via `vm.updateUndercutReference` and
-  re-projects the *displayed* Distance only; canonical `startFromAftMm` never moves.
+**There is no card on `UndercutRoute` itself** — the "Recorded undercuts" list is a summary, not
+a card (see above). Cards render exclusively inside `UndercutWindowDetailOverlay`, below its
+canvas, one per undercut in the open strip (aft → fwd). Each card:
+- **"Measure From:"** chips (`WearChip`, shared with the wear overlay), in strict precedence
+  order:
+  - **"AFT S.E.T." | "FWD S.E.T."** always shown.
+  - **"Liner AFT" | "Liner FWD"** shown only when a reference liner resolves
+    (`undercutReferenceLinerFor` returns non-null), by precedence: (1) the undercut's own stored
+    `referenceLinerId`, while it still resolves; (2) else the liner the open strip belongs to
+    (`stripLiner`, when viewing from inside a `LinerStrip`); (3) else the liner overlapping the
+    largest share of the cut (`assignUndercutLiner`). The stored liner wins so a cut authored
+    against one liner keeps reading against it even when viewed from a neighbor's strip.
+
+  Tapping a SET chip persists `authoredReference` and clears `referenceLinerId` to `""`; tapping
+  a Liner chip persists both `authoredReference` and the resolved liner's id — both via
+  `vm.updateUndercutReference`, re-projecting the *displayed* Distance only (canonical
+  `startFromAftMm` never moves). A stored `LINER_*` reference whose liner has been deleted
+  displays as if `AFT_SET` were selected (`effectiveUndercutReference`) until a chip is tapped
+  again — the stored value is not silently rewritten.
 - **Distance** field (`WearNum`, shared wrapper around `NumericInputField`): label shows the
-  active reference; validator converts the entered value to canonical via
-  `undercutStartToCanonicalMm` then runs `undercutSpanIssue`.
+  active reference (`undercutReferenceLabel`); validator converts the entered value to
+  canonical via `undercutStartToCanonicalMm` (passing the resolved reference liner's edges when
+  applicable) then runs `undercutSpanIssue`.
 - **Length** field: validator runs `undercutSpanIssue` against the current canonical start.
 - **Measured Ø** field: **no validator** — any parseable value ≥ 0 commits verbatim (golden
   rule). Initial display is blank when `diaMm == 0` (unentered), else the formatted value.
@@ -226,18 +319,30 @@ Each card:
   (`isUndercutStaleOverrun`) and "Ø meets or exceeds shaft surface here" (`diaMm > 0` and `diaMm
   >= minOuterDiaOver` over the clamped span).
 
-### Overlay canvas contents
-Aft → fwd: a **dimension rail above** (cluster total on the upper line when ≥ 2 undercuts, the
-chained run below it — window start → each shoulder → each gap → window end), the **window
-profile** (every resolved component clipped to the window, liners painted last so a liner over
-a body reads as the surface — matching the notch math's max-wins envelope) with **notches** cut
-in, and **Ø callouts below** via the shared `planDiaCallouts` engine (one station per undercut
-at its axial centre, leader to the notch floor, label `formatDiaWithUnit`, or `"—"` for an
-unentered Ø — the overlay's own placeholder, never printed). A tap selects an undercut
-(highlight rect + scrolls no card, since all cards are already visible below the canvas).
+### Overlay "Add undercut in this liner"
+Shown only when the open strip is a `LinerStrip` (`stripLiner != null`), above the card list,
+`testTag "undercut_add_in_liner"` — the authoring entry point that makes an undercut-free liner
+worth tapping on the overview at all. Default section: length =
+`min(DEFAULT_UNDERCUT_LENGTH_MM, linerLengthMm)`, centered inside the liner span, clamped to
+`[0, oalMm − length]`; reference `LINER_AFT` with `referenceLinerId` = that liner's id, so the
+very first typed Distance already reads against the datum the machinist is standing at.
 
-**Window ends**: an end that lands on the shaft's own extent (`x = 0` or `x = OAL`) draws a
-flat edge; a threaded shaft end additionally gets the diagonal thread-stub hatch
+### Overlay canvas contents
+Aft → fwd: a **dimension rail above** — the strip total on the upper line when ≥ 2 undercuts,
+the chained run below it. The chain runs over the strip's **chain range**
+(`strip.chainStartMm`/`chainEndMm`), not its draw range: on a `FreeStrip` the two coincide (the
+original window-edge chain); on a `LinerStrip` the chain anchors on the **liner's own edges**
+(extended only by cut overhang), so the pad between a break edge and the liner edge is never
+dimensioned. Below the rail, the **strip profile** (every resolved component clipped to the draw
+range, liners painted last so a liner over a body reads as the surface — matching the notch
+math's max-wins envelope) with **notches** cut in, and **Ø callouts below** via the shared
+`planDiaCallouts` engine (one station per undercut at its axial centre, leader to the notch
+floor, label `formatDiaWithUnit`, or `"—"` for an unentered Ø — the overlay's own placeholder,
+never printed). A tap selects an undercut (highlight rect + scrolls no card, since all cards are
+already visible below the canvas).
+
+**Strip ends**: an end that lands on the shaft's own extent (`x = 0` or `x = OAL`) draws a flat
+edge; a threaded shaft end additionally gets the diagonal thread-stub hatch
 (`drawThreadStubHatch`, shared with the wear overlay). Any other end is a truncation and gets
 the S-curve break (`drawBreakEdgeCompose`, AFT `eyeAtTop = true`, FWD `false`).
 
@@ -253,7 +358,7 @@ skeleton reused deliberately:
 │   ←────────── OAL (AFT SET → FWD SET) ─────────────────────────→          │
 │   [shaft profile — full length, notches cut at each undercut]             │
 │   ← AFT                                                          FWD →    │
-│   [detail strip per cluster: total rail / chained rail / window / Ø / SET]│
+│   [detail strip: total rail / chained rail / profile / Ø / name + SET]    │
 │   Notes: ______________________________________________________________   │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -266,41 +371,65 @@ skeleton reused deliberately:
   the wear/runout sheets. Blank mode cuts an empty break.
 - **Main profile**: always on top, full resolved profile scaled SET-to-SET (`ptPerMm` derived
   from the SET-to-SET span) with every undercut's notch cut in at true position/scale — the
-  same construction the strips draw zoomed, not a separate "marker style". No per-cluster
+  same construction the strips draw zoomed, not a separate "marker style". No per-strip
   dimensions on the profile; the strips own the numbers.
-- **Detail strips — one per cluster window**: page mode from cluster count
-  (`determineUndercutPdfMode`, delegating to `determineWearPdfMode`): 0 → `PROFILE_FORM`
-  (profile only — also what blank mode always produces, since its record is dropped before
-  clustering), 1 → `COMBINED` (one full-width strip), 2+ → `GRID` (2-column, max 4 +
-  "+N more" overflow note). Vertical/horizontal strip banding reuses
+- **Strip source — `buildUndercutStrips`**: the composer builds the same sealed `UndercutStrip`
+  list the canvas uses (see "Pure math" above) — one `LinerStrip` per liner holding ≥ 1 cut
+  (`docSpec.liners` filtered to `lengthMm > 0 && odMm > 0`, the drawable-liner filter
+  `collectWearLinerGroups` also applies), plus one `FreeStrip` per bare-shaft cluster window for
+  the leftover cuts. **Liner titles** come from `util/buildLinerTitleById(docSpec)` — the same
+  shared custom-label-else-positional-default map the carousel, the wear sheet, and the runout
+  sheet use, so a liner-anchored strip is identifiable at a glance and never drifts from the
+  liner's name shown elsewhere.
+- **Detail strips**: page mode from strip count (`determineUndercutPdfMode`, delegating to
+  `determineWearPdfMode`): 0 → `PROFILE_FORM` (profile only — also what blank mode always
+  produces, since its record is dropped before the strips are built), 1 → `COMBINED` (one
+  full-width strip), 2+ → `GRID` (2-column, max 4 + "+N more" overflow note).
+  Vertical/horizontal strip banding reuses
   `computeWearVerticalLayout`/`computeWearStripGridLayout`/`computeWearStripHorizontalLayout`
   verbatim (count-driven, content-agnostic). Per strip:
-  - the window's real resolved profile at strip-local scale, with a break edge at each cut end
-    (flat + thread hatch when a window end coincides with a threaded physical shaft end, S-curve
-    break otherwise) and notches cut in;
-  - **chained dimension rail** (`buildUndercutRailSpans`): window AFT edge → first shoulder,
-    each undercut's own length, each inter-cut gap, remainder to window FWD edge. Zero-length
-    spans are omitted (never drawn as degenerate zero-width dims), and the two pad spans (window
-    edge → nearest shoulder) **are labelled** — they locate the cluster inside its zoom window;
-  - **a second rail line above the chain — the cluster total** (`buildUndercutTotalSpan`, first
-    shoulder → last shoulder). **Returns `null` (nothing drawn, no reserved band) for a cluster
-    of fewer than two drawable undercuts** — with exactly one undercut, a total span would just
-    restate that undercut's own length, already dimensioned on the chain below;
+  - the profile drawn over the strip's **draw range** (`strip.drawStartMm`/`drawEndMm`) at
+    strip-local scale, with a break edge at each cut end (flat + thread hatch when a draw-range
+    end coincides with a threaded physical shaft end, S-curve break otherwise) and notches cut
+    in. On a `LinerStrip` the draw range is the **whole liner** plus any cut overhang, padded
+    each side, so the liner's true edges are always visible and a neighbor sliver shows before
+    the break edge (on-device report: a padded window with no visible liner edges printed as an
+    anonymous grey slab). On a `FreeStrip` the draw range is just the padded cluster window, as
+    before;
+  - **chained dimension rail** (`buildUndercutRailSpans`), run over the strip's **chain range**
+    (`strip.chainStartMm`/`chainEndMm`) — **not** the draw range: chain AFT datum → first
+    shoulder, each undercut's own length, each inter-cut gap, remainder to chain FWD datum. On a
+    `FreeStrip` the chain range equals the draw range (the original window-edge chain, so the
+    pad spans **are labelled** — they locate the cluster inside its zoom window). On a
+    `LinerStrip` the chain range is the liner's own edges (extended only by overhang), so the
+    rail's outer witness lines land on a real datum and the **pad between it and the break edge
+    is deliberately left undimensioned** — an arbitrary zoom margin is not a figure worth
+    printing. Zero-length spans are omitted (never drawn as degenerate zero-width dims);
+  - **a second rail line above the chain — the strip total** (`buildUndercutTotalSpan`, first
+    shoulder → last shoulder). **Returns `null` (nothing drawn, no reserved band) for a strip
+    with fewer than two drawable undercuts** — with exactly one undercut, a total span would
+    just restate that undercut's own length, already dimensioned on the chain below;
   - **Ø callouts below** via `planDiaCallouts`/`buildUndercutDiaStations` (leader to notch floor,
     `formatDiaWithUnit`, **no "Ø" prefix**); an undercut with `diaMm <= 0` is **skipped
     entirely** on the printed callouts (no placeholder for an unrecorded value) — its notch
     still draws (at the symbolic floor) and still gets dimensioned on the rail, so the section
     isn't lost from the sheet, only its Ø value is absent;
-  - **anchor title at the bottom**: `"<dist> FROM AFT/FWD S.E.T."` — the S.E.T. chosen by
-    proximity (`undercutAnchorFor`: cluster midpoint vs SET-to-SET midpoint), distance measured
-    to the cluster's **near** shoulder, title aligned toward its SET (left for AFT, right for
-    FWD). Reported as a magnitude even when the cluster sits outboard of its chosen SET. Blank
-    mode: a writing rule + both directions printed for the machinist to circle one, always
-    left-aligned (a write-in sheet has no presumed measurement direction).
+  - **title at the bottom** (`buildUndercutStripTitle(linerTitle, anchorLabel)`): a `LinerStrip`
+    prints `"<liner title> — <dist> FROM AFT/FWD S.E.T."` (e.g. `"AFT Liner — 250.0 FROM AFT
+    S.E.T."`) — the same `name — anchor` construction the wear sheet uses for that liner, so it
+    reads identically wherever the liner is named. A `FreeStrip` has nothing to name (a
+    bare-shaft span carries no shop identity) and prints the anchor alone. The S.E.T. is chosen
+    by proximity (`undercutAnchorFor`: strip midpoint vs SET-to-SET midpoint), distance measured
+    to the strip's **near** shoulder, title aligned toward its SET (left for AFT, right for
+    FWD) — reported as a magnitude even when the strip sits outboard of its chosen SET. A liner
+    strip with zero drawable cuts (every assigned span clamped away) still prints just the liner
+    name, with no anchor. Blank mode: a writing rule + both directions printed for the
+    machinist to circle one, always left-aligned (a write-in sheet has no presumed measurement
+    direction).
 - **Blank/template mode** (`blankValues = true`): `effectiveRecord = UndercutRecord()` — the
-  record is dropped before clustering, so the page is always the profile-only form with header
-  writing rules and an empty OAL break; no strips at all (matches the wear sheet's decision that
-  blank templates carry no recorded stations).
+  record is dropped before the strips are built, so the page is always the profile-only form
+  with header writing rules and an empty OAL break; no strips at all (matches the wear sheet's
+  decision that blank templates carry no recorded stations).
 - **Notes row**: `Notes: ____` only — no dye-pen PASS/FAIL checkboxes (that's a wear/inspection
   concern with no place on a machining record).
 - Standard composer contract: `pdfPrefs` shading, `lineThicknessScale`, `resolvedComponents`
@@ -319,21 +448,26 @@ skeleton reused deliberately:
   invariant (`CLAUDE.md`).
 - **Not component-keyed** — canonical storage is shaft-space `startFromAftMm`; there is no
   orphan concept and nothing is pruned at decode, unlike wear spots (which ARE pruned).
-- **Golden rule** — `startFromAftMm`, `lengthMm`, `diaMm` round-trip verbatim; no field commit
-  path snaps, rounds, or derives a stored value.
+- **Golden rule** — `startFromAftMm`, `lengthMm`, `diaMm`, and `referenceLinerId` round-trip
+  verbatim; no field commit path snaps, rounds, or derives a stored value.
 - **Draw-both-sites, in lockstep**: the notch (void fill + shoulders + floor, cut against the
   local outer-surface envelope) renders identically in `UndercutRoute`/
   `UndercutWindowDetailOverlay` (canvas) and `UndercutPdfComposer` (PDF), from the one shared
   pure pipeline: `clampUndercutSpan` → `effectiveNotchDiaMm(diaMm, minOuterDiaOver(segs, …))` →
-  `notchProfiles(surfaceSegsFrom(resolved), …)`. Cluster windows (`clusterUndercuts`) are the
-  single source of truth for "what's one zoomed view" consumed by the overview affordances, the
-  detail overlay, and the PDF strips — all three windowing decisions agree by construction.
+  `notchProfiles(surfaceSegsFrom(resolved), …)`. `buildUndercutStrips` (liner strips for cuts
+  overlapping a liner, `clusterUndercuts`-derived free windows for the rest) is the single
+  source of truth for "what's one zoomed view" consumed by the overview affordances, the detail
+  overlay, and the PDF strips — all three agree by construction.
 - **Ø-0 placeholder never prints**: an unentered Ø draws a symbolic shallow floor in every
   overlay/canvas draw site but is skipped by `buildUndercutDiaStations` on the PDF — same rule
   as `WearDiaReading.diaMm == 0`.
-- **Single-undercut clusters print no total span** — `buildUndercutTotalSpan` requires ≥ 2
+- **Single-undercut strips print no total span** — `buildUndercutTotalSpan` requires ≥ 2
   drawable undercuts, so a lone section's chained-rail length is never redundantly restated on
   a second rail line.
+- **`referenceLinerId` is display metadata, never a geometry key** — the notch, the strip
+  assignment (`assignUndercutLiner`), and the chain range are all decided by the undercut's
+  actual shaft-space span versus the liner's actual span; the stored reference liner only
+  affects what the Distance field shows and converts against.
 
 ---
 
@@ -342,11 +476,8 @@ skeleton reused deliberately:
 - A dimension rail directly on the main (whole-shaft) profile, so a viewer scanning the full
   shaft sees roughly where a cluster sits without opening a strip (currently only the strips
   carry numbers, by design — "the strips own the numbers").
-- Per-cluster free-text notes (today there is one page-level Notes rule; no per-undercut or
-  per-cluster note field beyond `Undercut.note`).
-- Liner-edge references for the Distance field (today limited to `AFT_SET`/`FWD_SET`; undercuts
-  aren't component-bound, so a liner-edge reference would need its own care — only add if the
-  shop asks).
+- Per-strip free-text notes (today there is one page-level Notes rule; no per-undercut or
+  per-strip note field beyond `Undercut.note`).
 - A way to clear a Ø back to unentered (0) without deleting the whole undercut — see the
   "Measured Ø field" note above.
 - Document title string ("UNDERCUT RECORD" vs "WELD UNDERCUTS", etc.) and the
