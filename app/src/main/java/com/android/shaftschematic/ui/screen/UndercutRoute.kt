@@ -14,6 +14,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,8 +31,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
@@ -64,18 +67,26 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.SurfaceSeg
+import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
+import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.UndercutWindow
+import com.android.shaftschematic.geom.assignUndercutLiner
+import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.clampUndercutSpan
-import com.android.shaftschematic.geom.clusterUndercuts
+import com.android.shaftschematic.geom.isUndercutStaleOverrun
+import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.maxOuterDiaOver
-import com.android.shaftschematic.geom.pickUndercutWindowAt
+import com.android.shaftschematic.geom.pickUndercutStripAt
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutRecord
+import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.pdf.composeUndercutPdf
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
@@ -85,6 +96,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.printShaftPdfPage
 import kotlinx.coroutines.Dispatchers
@@ -100,12 +112,18 @@ import java.io.File
  * ## Layout
  * - **Overview canvas** — `ShaftLayout.compute` + `ShaftRenderer.draw` over
  *   `resolvedComponents` (never raw spec), then an affordance pass: every undercut's notch cut
- *   into the profile, a faint tint + count badge over each **cluster window**. The selectable
- *   area is the window, not a component — undercuts are not component-bound. A tap hit-tests in
- *   mm space via [ShaftLayout.Result.xMmFromPx] + `pickUndercutWindowAt` and opens
- *   [UndercutWindowDetailOverlay] on that window. No pinch-zoom here; the overlay owns zoom.
- * - **Add undercut** — records a 1 in section just FWD of the AFT S.E.T. and opens its window.
+ *   into the profile, plus a faint tint + count badge over **every liner** and over each
+ *   bare-shaft **cluster window**. Liners are tap targets whether or not they hold cuts (the
+ *   wear document's idiom) — on-device report: tapping a liner that had no cut yet did nothing,
+ *   leaving no way in. A tap hit-tests in mm space via [ShaftLayout.Result.xMmFromPx]:
+ *   `pickUndercutStripAt` first, then liner containment, and opens
+ *   [UndercutWindowDetailOverlay] on that strip (an empty liner yields an empty
+ *   `linerStripFor` strip — the authoring entry point). No pinch-zoom here; the overlay owns zoom.
+ * - **Add undercut** — records a 1 in section just FWD of the AFT S.E.T. and opens its strip.
  *   Precision comes from the overlay's numeric fields, never from the tap (wear posture).
+ * - **Undercut list** — one compact row per recorded cut, aft → fwd: its distance under its own
+ *   authored reference, length, Ø, and a stale-overrun warning. Tapping a row opens that cut's
+ *   strip; the trailing icon deletes it (confirm-free, the wear-spot posture).
  * - Blank-draft toggle, Preview, Print, Export — straight ports of the wear document's flows,
  *   all calling `composeUndercutPdf`.
  *
@@ -140,9 +158,12 @@ fun UndercutRoute(
     // and the LaunchedEffect below regenerates it anyway.
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
-    // Which undercut anchors the open detail overlay. Windows are derived state (they re-cluster
-    // on every record edit), so the anchor is an undercut ID rather than a window index — the
-    // window is looked up fresh below and the overlay closes if the anchor stops resolving.
+    // What anchors the open detail overlay. Strips are derived state (they re-cluster on every
+    // record edit), so the anchor is an id rather than a strip index and the strip is looked up
+    // fresh below. Two anchors, one live at a time: a **liner** id keeps a liner strip open even
+    // while it holds no cuts (so an emptied liner strip doesn't slam shut mid-authoring), an
+    // **undercut** id anchors a bare-shaft cluster. The liner anchor wins when both are set.
+    var anchorLinerId by rememberSaveable { mutableStateOf<String?>(null) }
     var anchorUndercutId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
@@ -150,20 +171,49 @@ fun UndercutRoute(
     val notches = remember(undercutRecord, segs, oalMm) {
         buildUndercutNotches(undercutRecord.undercuts, segs, oalMm)
     }
-    val windows = remember(undercutRecord, oalMm) {
-        clusterUndercuts(
-            undercutRecord.undercuts.map { u ->
-                val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
-                UndercutSpanMm(u.id, c.startMm, c.endMm)
-            },
-            oalMm,
-        )
+    val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }
+    val spans = remember(undercutRecord, oalMm) {
+        undercutRecord.undercuts.map { u ->
+            val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+            UndercutSpanMm(u.id, c.startMm, c.endMm)
+        }.filter { it.endMm > it.startMm }
     }
-    // An anchor whose undercut no longer clusters into any window (it was deleted, or the shaft
-    // shrank past it) simply yields no overlay — the anchor is never auto-cleared, because the
-    // record and the anchor can update in either order within a frame and clearing on the stale
-    // pass would close an overlay that was just opened.
-    val activeWindow = anchorUndercutId?.let { id -> windows.firstOrNull { id in it.undercutIds } }
+    val strips = remember(spans, linerSpans, oalMm) {
+        buildUndercutStrips(spans, linerSpans, oalMm)
+    }
+    val freeWindows = remember(strips) {
+        strips.filterIsInstance<UndercutStrip.FreeStrip>().map { it.window }
+    }
+    val cutCountByLiner = remember(spans, linerSpans) {
+        spans.mapNotNull { assignUndercutLiner(it, linerSpans) }.groupingBy { it }.eachCount()
+    }
+
+    // One liner's strip, cuts included — the same construction `buildUndercutStrips` uses, so a
+    // liner tapped with zero cuts and the same liner tapped later with three read identically.
+    fun stripForLiner(liner: UndercutLinerSpan): UndercutStrip.LinerStrip = linerStripFor(
+        liner, spans.filter { assignUndercutLiner(it, linerSpans) == liner.id }, oalMm,
+    )
+
+    // An anchor that no longer resolves (the undercut was deleted, the liner removed, or the
+    // shaft shrank past the cut) simply yields no overlay — an anchor is never auto-cleared,
+    // because the record and the anchor can update in either order within a frame and clearing
+    // on the stale pass would close an overlay that was just opened.
+    val anchoredUndercutId = anchorUndercutId
+    val activeStrip: UndercutStrip? = when {
+        anchorLinerId != null ->
+            linerSpans.firstOrNull { it.id == anchorLinerId }?.let { ln -> stripForLiner(ln) }
+        anchoredUndercutId != null ->
+            strips.firstOrNull { anchoredUndercutId in it.undercutIds }
+        else -> null
+    }
+
+    // Open the strip an undercut belongs to, from the list below the canvas.
+    fun anchorToUndercut(id: String) {
+        when (val s = strips.firstOrNull { id in it.undercutIds }) {
+            is UndercutStrip.LinerStrip -> { anchorLinerId = s.linerId; anchorUndercutId = null }
+            else -> { anchorLinerId = null; anchorUndercutId = id }
+        }
+    }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
@@ -292,7 +342,7 @@ fun UndercutRoute(
                         .height(200.dp)
                         .clip(previewShape)
                         .background(Color.White)
-                        .pointerInput(spec, resolvedComponents, windows) {
+                        .pointerInput(spec, resolvedComponents, strips, linerSpans) {
                             detectTapGestures { tapOffset ->
                                 val layout = ShaftLayout.compute(
                                     spec               = spec,
@@ -304,8 +354,24 @@ fun UndercutRoute(
                                     resolvedComponents = resolvedComponents,
                                 )
                                 val tapMm = layout.xMmFromPx(tapOffset.x)
-                                pickUndercutWindowAt(tapMm, windows)?.let { w ->
-                                    anchorUndercutId = w.undercutIds.firstOrNull()
+                                // A strip claims the tap first (it covers its cuts plus context);
+                                // failing that, any liner opens as an empty strip to author in.
+                                val hit = pickUndercutStripAt(tapMm, strips)
+                                    ?: pickLinerIdAtMm(
+                                        tapMm,
+                                        linerSpans.map { LinerSpanMm(it.id, it.startMm, it.endMm) },
+                                    )?.let { id -> linerSpans.firstOrNull { it.id == id } }
+                                        ?.let { ln -> stripForLiner(ln) }
+                                when (hit) {
+                                    is UndercutStrip.LinerStrip -> {
+                                        anchorLinerId = hit.linerId
+                                        anchorUndercutId = null
+                                    }
+                                    is UndercutStrip.FreeStrip -> {
+                                        anchorLinerId = null
+                                        anchorUndercutId = hit.window.undercutIds.firstOrNull()
+                                    }
+                                    null -> Unit
                                 }
                             }
                         },
@@ -335,9 +401,11 @@ fun UndercutRoute(
                             outlineColor = outlineColor,
                             strokeWidthPx = 1.5f,
                         )
-                        drawUndercutWindowAffordances(
+                        drawUndercutStripAffordances(
                             layout = layout,
-                            windows = windows,
+                            liners = linerSpans,
+                            cutCountByLiner = cutCountByLiner,
+                            windows = freeWindows,
                             segs = segs,
                             tapTintColor = tapTintColor,
                             tapBorderColor = tapBorderColor,
@@ -347,10 +415,14 @@ fun UndercutRoute(
                     }
                 }
                 Text(
-                    text = if (windows.isEmpty())
-                        "No undercuts recorded yet — add one to start the drawing."
-                    else
-                        "Tap a highlighted section to open its zoomed detail view.",
+                    text = when {
+                        linerSpans.isNotEmpty() ->
+                            "Tap a liner — or any highlighted section — to zoom in and record cuts there."
+                        freeWindows.isEmpty() ->
+                            "No undercuts recorded yet — add one to start the drawing."
+                        else ->
+                            "Tap a highlighted section to open its zoomed detail view."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -362,6 +434,7 @@ fun UndercutRoute(
                     val start = aftSetXMm.coerceIn(0f, oalMm)
                     val length = DEFAULT_UNDERCUT_LENGTH_MM
                         .coerceAtMost((oalMm - start).coerceAtLeast(0.1f))
+                    anchorLinerId = null
                     anchorUndercutId = vm.addUndercut(start, length)
                 },
                 enabled = oalMm > 0f,
@@ -370,6 +443,40 @@ fun UndercutRoute(
                 Icon(Icons.Filled.Add, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Add undercut")
+            }
+
+            // ── Recorded undercuts ────────────────────────────────────────────
+            // Visibility + removal without hunting for the right strip first: every cut on the
+            // shaft is listed here, aft → fwd, whichever strip it belongs to.
+            if (undercutRecord.undercuts.isNotEmpty()) {
+                HorizontalDivider()
+                // Own spacing: the surrounding 16 dp rhythm would read as separate blocks
+                // rather than one list.
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "Recorded undercuts",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                    val setPositions = undercutSetPositions(spec)
+                    val linerTitles = buildLinerTitleById(spec)
+                    undercutRecord.undercuts
+                        .sortedBy { it.startFromAftMm }
+                        .forEachIndexed { i, u ->
+                            UndercutListRow(
+                                index = i,
+                                undercut = u,
+                                unit = unit,
+                                oalMm = oalMm,
+                                linerSpans = linerSpans,
+                                linerTitles = linerTitles,
+                                aftSetXMm = setPositions.first,
+                                fwdSetXMm = setPositions.second,
+                                onOpen = { anchorToUndercut(u.id) },
+                                onDelete = { vm.removeUndercut(u.id) },
+                            )
+                        }
+                }
             }
 
             HorizontalDivider()
@@ -465,33 +572,39 @@ fun UndercutRoute(
         )
     }
 
-    // ── Undercut window detail overlay ────────────────────────────────────────
-    // UndercutWindowDetailOverlay hosts its own BackHandler; only compose it while a window
+    // ── Undercut strip detail overlay ─────────────────────────────────────────
+    // UndercutWindowDetailOverlay hosts its own BackHandler; only compose it while a strip
     // is active.
-    activeWindow?.let { w ->
+    activeStrip?.let { s ->
         UndercutWindowDetailOverlay(
-            window = w,
+            strip = s,
             spec = spec,
             resolvedComponents = resolvedComponents,
             unit = unit,
             undercutRecord = undercutRecord,
+            onAddUndercut = { startMm, lengthMm, reference, referenceLinerId ->
+                // Only a liner strip offers this, and the liner anchor already holds the overlay
+                // open, so the new cut appears in place with no re-anchoring.
+                vm.addUndercut(startMm, lengthMm, reference, referenceLinerId)
+            },
             onUpdateUndercut = vm::updateUndercut,
             onUpdateReference = vm::updateUndercutReference,
             onRemoveUndercut = { id ->
-                // Keep the overlay anchored on the window when a sibling is left behind;
-                // deleting the last member closes it via the anchor-resolution effect above.
-                if (id == anchorUndercutId) {
-                    anchorUndercutId = w.undercutIds.firstOrNull { it != id }
+                // A liner strip stays open on its liner regardless. On a free strip, keep the
+                // overlay anchored when a sibling is left behind; deleting the last member
+                // closes it via the anchor-resolution above.
+                if (anchorLinerId == null && id == anchorUndercutId) {
+                    anchorUndercutId = s.undercutIds.firstOrNull { it != id }
                 }
                 vm.removeUndercut(id)
             },
-            onClose = { anchorUndercutId = null },
+            onClose = { anchorLinerId = null; anchorUndercutId = null },
         )
     }
 }
 
 /** Default length of a newly added undercut (1 in), clamped to the remaining shaft extent. */
-private const val DEFAULT_UNDERCUT_LENGTH_MM = 25.4f
+internal const val DEFAULT_UNDERCUT_LENGTH_MM = 25.4f
 
 private fun buildUndercutFilename(
     customer: String,
@@ -519,17 +632,101 @@ private fun openUndercutPdf(context: Context, uri: Uri) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cluster-window tap affordance — drawn after ShaftRenderer.draw() and the notches
+// Undercut list row
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Draw a faint tint + border over every cluster window (the tap affordance) and a small badge
- * carrying the window's undercut count. Purely a rendering overlay — reads the windows but never
- * mutates the record. The window replaces the component as the selectable area, the one
- * difference from the wear document's affordance pass.
+ * One recorded undercut, summarized: its distance under the reference it was authored against
+ * (with that reference's short tag), its length, and its Ø — "—" while unmeasured. A cut whose
+ * span no longer fits the shaft (`isUndercutStaleOverrun`) leads with a warning icon, the same
+ * non-blocking classifier the card shows in full.
+ *
+ * The whole row opens the cut's strip; the trailing icon deletes it outright — confirm-free, the
+ * wear-spot posture. Neither path touches canonical values.
  */
-private fun DrawScope.drawUndercutWindowAffordances(
+@Composable
+private fun UndercutListRow(
+    index: Int,
+    undercut: Undercut,
+    unit: UnitSystem,
+    oalMm: Float,
+    linerSpans: List<UndercutLinerSpan>,
+    linerTitles: Map<String, String>,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val reference = effectiveUndercutReference(undercut, linerSpans)
+    val refLiner = undercutReferenceLinerFor(undercut, linerSpans, stripLiner = null, oalMm = oalMm)
+    val distanceMm = undercutDisplayedDistanceMm(undercut, reference, refLiner, aftSetXMm, fwdSetXMm)
+    val stale = isUndercutStaleOverrun(undercut.startFromAftMm, undercut.lengthMm, oalMm)
+
+    // A liner reference names its liner, so two cuts in different liners never read alike.
+    val referenceTag = when (reference) {
+        UndercutReference.LINER_AFT, UndercutReference.LINER_FWD -> {
+            val title = refLiner?.id?.let { linerTitles[it] }
+            val edge = if (reference == UndercutReference.LINER_AFT) "AFT" else "FWD"
+            if (title != null) "$title $edge edge" else undercutReferenceLabel(reference)
+        }
+        else -> undercutReferenceLabel(reference)
+    }
+    val diaText = if (undercut.diaMm > 0f) disp(undercut.diaMm, unit) + abbr(unit) else "—"
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onOpen)
+            .testTag("undercut_row_${undercut.id}")
+            .padding(start = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (stale) {
+            Icon(
+                Icons.Filled.Warning,
+                contentDescription = "Extends past shaft end",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "${index + 1}. ${disp(distanceMm, unit)}${abbr(unit)} from $referenceTag",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = "L ${disp(undercut.lengthMm, unit)}${abbr(unit)}  ·  Ø $diaText",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(
+            onClick = onDelete,
+            modifier = Modifier.testTag("undercut_delete_${undercut.id}"),
+        ) {
+            Icon(Icons.Filled.Delete, contentDescription = "Delete undercut ${index + 1}")
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Strip tap affordances — drawn after ShaftRenderer.draw() and the notches
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Draw a faint tint + border over every tap target — **every liner** (whether or not it holds
+ * cuts) and every bare-shaft cluster window — plus a small count badge carrying how many cuts
+ * that target holds. Purely a rendering overlay: reads the spans but never mutates the record.
+ *
+ * Liners are unconditional targets so an empty one can be zoomed and authored in, matching the
+ * wear document; the free window remains the target for cuts that belong to no liner, since
+ * undercuts are not component-bound. A liner with no cuts gets no badge (nothing to count).
+ */
+private fun DrawScope.drawUndercutStripAffordances(
     layout: ShaftLayout.Result,
+    liners: List<UndercutLinerSpan>,
+    cutCountByLiner: Map<String, Int>,
     windows: List<UndercutWindow>,
     segs: List<SurfaceSeg>,
     tapTintColor: Color,
@@ -537,7 +734,7 @@ private fun DrawScope.drawUndercutWindowAffordances(
     badgeColor: Color,
     badgeTextArgb: Int,
 ) {
-    if (windows.isEmpty()) return
+    if (liners.isEmpty() && windows.isEmpty()) return
 
     val badgePaint = android.graphics.Paint().apply {
         isAntiAlias = true
@@ -548,10 +745,10 @@ private fun DrawScope.drawUndercutWindowAffordances(
     val badgeRadiusPx = 11.dp.toPx()
     val badgeGapPx = 4.dp.toPx()
 
-    windows.forEach { w ->
-        val x0 = layout.xPx(w.startMm)
-        val x1 = layout.xPx(w.endMm)
-        val r = layout.rPx(maxOuterDiaOver(segs, w.startMm, w.endMm)).coerceAtLeast(4.dp.toPx())
+    fun target(startMm: Float, endMm: Float, count: Int) {
+        val x0 = layout.xPx(startMm)
+        val x1 = layout.xPx(endMm)
+        val r = layout.rPx(maxOuterDiaOver(segs, startMm, endMm)).coerceAtLeast(4.dp.toPx())
         val top = layout.centerlineYPx - r
         val bot = layout.centerlineYPx + r
 
@@ -563,13 +760,17 @@ private fun DrawScope.drawUndercutWindowAffordances(
             style = Stroke(width = 1.5.dp.toPx()),
         )
 
+        if (count <= 0) return
         val cx = (x0 + x1) / 2f
         val cy = (top - badgeGapPx - badgeRadiusPx).coerceAtLeast(badgeRadiusPx)
         drawCircle(color = badgeColor, radius = badgeRadiusPx, center = Offset(cx, cy))
         drawContext.canvas.nativeCanvas.drawText(
-            "${w.undercutIds.size}", cx, cy + badgeRadiusPx * 0.35f, badgePaint,
+            "$count", cx, cy + badgeRadiusPx * 0.35f, badgePaint,
         )
     }
+
+    liners.forEach { ln -> target(ln.startMm, ln.endMm, cutCountByLiner[ln.id] ?: 0) }
+    windows.forEach { w -> target(w.startMm, w.endMm, w.undercutIds.size) }
 }
 
 private fun renderUndercutBitmap(

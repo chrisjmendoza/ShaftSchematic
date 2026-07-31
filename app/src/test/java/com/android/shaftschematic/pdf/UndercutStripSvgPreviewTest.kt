@@ -1,15 +1,20 @@
 package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.geom.SurfaceSeg
+import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
+import com.android.shaftschematic.geom.UndercutStrip
+import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.clampUndercutSpan
-import com.android.shaftschematic.geom.clusterUndercuts
 import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.minOuterDiaOver
 import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
+import com.android.shaftschematic.model.Body
+import com.android.shaftschematic.model.Liner
+import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponentType
@@ -17,6 +22,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.buildLinerTitleById
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -28,16 +34,17 @@ import java.io.File
  * Same-math SVG preview of an undercut detail strip, for visual (markup) review without an
  * on-device round trip: drives the REAL layout and geometry code —
  * `surfaceSegsFrom`/`minOuterDiaOver`/`effectiveNotchDiaMm`/`notchProfiles`,
- * `clusterUndercuts`, `computeWearStripHorizontalLayout`,
+ * `buildUndercutStrips`, `computeWearStripHorizontalLayout`,
  * `computeUndercutStripInnerLayout`, `buildUndercutRailSpans`/`buildUndercutTotalSpan`/
- * `layoutWearStripRail`, `buildUndercutDiaStations`/`planDiaCallouts`, `undercutAnchorFor` —
- * and writes what `UndercutPdfComposer` would draw as SVG into
- * `app/build/reports/undercut-preview/`. Only text width is approximated (no
- * `Paint.measureText` on the JVM; a fixed per-char factor stands in), which can shift label
- * spreads by a point or two but exercises identical placement rules.
+ * `layoutWearStripRail`, `buildUndercutDiaStations`/`planDiaCallouts`, `undercutAnchorFor`,
+ * `buildLinerTitleById`/`buildUndercutStripTitle` — and writes what `UndercutPdfComposer`
+ * would draw as SVG into `app/build/reports/undercut-preview/`. Only text width is
+ * approximated (no `Paint.measureText` on the JVM; a fixed per-char factor stands in), which
+ * can shift label spreads by a point or two but exercises identical placement rules.
  *
- * Doubles as a smoke test: the representative scenario must read as ONE cluster, its chain
- * must cover the window exactly, and its Ø callouts must fit uncompressed.
+ * Doubles as a smoke test: a cut inside a liner must produce ONE liner strip whose chain
+ * anchors on the liner's own edges (never on the zoom pad), and the callouts must fit
+ * uncompressed.
  */
 class UndercutStripSvgPreviewTest {
 
@@ -70,11 +77,36 @@ class UndercutStripSvgPreviewTest {
         ),
     )
 
-    private fun scenarioUndercuts(thirdDiaMm: Float, secondDiaMm: Float) = listOf(
+    /** The spec the composer would draw from — the liner-title source (`buildLinerTitleById`). */
+    private val spec = ShaftSpec(
+        overallLengthMm = oalMm,
+        bodies = listOf(Body(id = "body", startFromAftMm = 0f, lengthMm = oalMm, diaMm = bodyDiaMm)),
+        liners = listOf(
+            Liner(
+                id = "liner", startFromAftMm = linerAftMm, lengthMm = linerFwdMm - linerAftMm,
+                odMm = linerOdMm, endMmPhysical = linerFwdMm,
+            ),
+        ),
+    )
+
+    private val linerSpans = spec.liners
+        .filter { it.lengthMm > 0f && it.odMm > 0f }
+        .map { ln -> UndercutLinerSpan(ln.id, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm) }
+
+    private val linerTitles = buildLinerTitleById(spec)
+
+    /** Three cuts inside the liner, the last one overhanging its FWD edge at 1000 mm. */
+    private fun linerUndercuts(thirdDiaMm: Float, secondDiaMm: Float) = listOf(
         Undercut(id = "u1", startFromAftMm = 700f, lengthMm = 60f, diaMm = 200f),
         Undercut(id = "u2", startFromAftMm = 820f, lengthMm = 60f, diaMm = secondDiaMm),
         // Crosses the liner's FWD edge at 1000 mm: the shoulder is taller on the liner side.
         Undercut(id = "u3", startFromAftMm = 960f, lengthMm = 70f, diaMm = thirdDiaMm),
+    )
+
+    /** Two cuts on bare stock well aft of the liner — the FreeStrip (padded window) case. */
+    private fun bareShaftUndercuts() = listOf(
+        Undercut(id = "b1", startFromAftMm = 240f, lengthMm = 50f, diaMm = 168f),
+        Undercut(id = "b2", startFromAftMm = 340f, lengthMm = 40f, diaMm = 172f),
     )
 
     // ── Minimal SVG writer ────────────────────────────────────────────────────
@@ -141,7 +173,14 @@ class UndercutStripSvgPreviewTest {
 
     // ── The preview ───────────────────────────────────────────────────────────
 
-    private class StripResult(val svg: String, val chainCoversWindow: Boolean, val compressed: Boolean, val hasTotal: Boolean)
+    private class StripResult(
+        val svg: String,
+        val strip: UndercutStrip,
+        val chainCoversStrip: Boolean,
+        val railInsideChain: Boolean,
+        val compressed: Boolean,
+        val hasTotal: Boolean,
+    )
 
     private fun renderStrip(
         undercuts: List<Undercut>,
@@ -156,21 +195,23 @@ class UndercutStripSvgPreviewTest {
             val s = clampedById.getValue(u.id)
             if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
         }
-        val windows = clusterUndercuts(liveSpans, oalMm)
-        assertEquals("the scenario must read as one zoom window", 1, windows.size)
-        val window = windows[0]
-        val spans = liveSpans.filter { it.id in window.undercutIds }.sortedBy { it.startMm }
+        val strips = buildUndercutStrips(liveSpans, linerSpans, oalMm)
+        assertEquals("the scenario must read as one detail strip", 1, strips.size)
+        val strip = strips[0]
+        val linerTitle = (strip as? UndercutStrip.LinerStrip)?.let { linerTitles[it.linerId] }
+        val spans = liveSpans.filter { it.id in strip.undercutIds }.sortedBy { it.startMm }
 
+        val drawLenMm = strip.drawEndMm - strip.drawStartMm
         val h = computeWearStripHorizontalLayout(
-            stripLeft, stripRight, window.lengthMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
+            stripLeft, stripRight, drawLenMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
         )
-        fun xAt(mm: Float) = h.linerLeftPt + (mm - window.startMm) * h.ptPerMm
+        fun xAt(mm: Float) = h.linerLeftPt + (mm - strip.drawStartMm) * h.ptPerMm
 
         val stations = buildUndercutDiaStations(undercuts, clampedById, ::xAt, unit, ::labelW)
         val plan = if (stations.isEmpty()) null else planDiaCallouts(stations, stripLeft + 2f, stripRight - 2f, minGap)
         val diaBand = plan?.let { it.labelsHeightPt(textH, rowGap) + 2f } ?: 0f
 
-        val railSpans = buildUndercutRailSpans(window, spans, unit)
+        val railSpans = buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, unit)
         val totalSpan = buildUndercutTotalSpan(spans, unit)
         val inner = computeUndercutStripInnerLayout(
             stripTop, stripBottom, titleHeightPt = titleH, hasTotalRail = totalSpan != null, diaBandPt = diaBand,
@@ -178,34 +219,36 @@ class UndercutStripSvgPreviewTest {
 
         val cy = (inner.cylTop + inner.cylBottom) / 2f
         val rCap = (inner.cylBottom - inner.cylTop) / 2f
-        val windowMaxDia = maxOuterDiaOver(segs, window.startMm, window.endMm)
-        fun rAt(diaMm: Float) = (rCap * (diaMm / windowMaxDia)).coerceIn(0f, rCap)
+        val stripMaxDia = maxOuterDiaOver(segs, strip.drawStartMm, strip.drawEndMm)
+        fun rAt(diaMm: Float) = (rCap * (diaMm / stripMaxDia)).coerceIn(0f, rCap)
 
         val svg = Svg()
         svg.rect(stripLeft, stripTop, stripRight - stripLeft, stripBottom - stripTop, stroke = "#ddd", sw = 0.5f)
 
-        // Window profile: every component clipped to the window, true local diameters.
+        // Profile over the strip's DRAW range: every component clipped to it, true local
+        // diameters. On a liner strip that range covers the whole liner plus a pad each side,
+        // so the liner's edges and its neighbours' slivers appear naturally.
         components.forEach { comp ->
             val dia = when (comp) {
                 is ResolvedBody -> comp.diaMm
                 is ResolvedLiner -> comp.odMm
                 else -> return@forEach
             }
-            val a = maxOf(comp.startMmPhysical, window.startMm)
-            val b = minOf(comp.endMmPhysical, window.endMm)
+            val a = maxOf(comp.startMmPhysical, strip.drawStartMm)
+            val b = minOf(comp.endMmPhysical, strip.drawEndMm)
             if (b <= a) return@forEach
             val r = rAt(dia)
             svg.line(xAt(a), cy - r, xAt(b), cy - r)
             svg.line(xAt(a), cy + r, xAt(b), cy + r)
-            // End caps only where the real edge falls inside the window.
+            // End caps only where the real edge falls inside the draw range.
             listOf(comp.startMmPhysical, comp.endMmPhysical).forEach { edge ->
-                if (edge > window.startMm + 0.001f && edge < window.endMm - 0.001f) {
+                if (edge > strip.drawStartMm + 0.001f && edge < strip.drawEndMm - 0.001f) {
                     svg.line(xAt(edge), cy - r, xAt(edge), cy + r, w = 0.9f)
                 }
             }
         }
         // Cut ends.
-        listOf(window.startMm to true, window.endMm to false).forEach { (atMm, eyeAtTop) ->
+        listOf(strip.drawStartMm to true, strip.drawEndMm to false).forEach { (atMm, eyeAtTop) ->
             val r = rAt(outerDiaAt(segs, atMm))
             svg.breakEdge(xAt(atMm), cy - r, cy + r, r * 0.6f, eyeAtTop)
         }
@@ -253,7 +296,8 @@ class UndercutStripSvgPreviewTest {
             }
         }
 
-        // Rails: chain, then the cluster total above it.
+        // Rails: chain, then the total above it. The chain's outer witness lines land on the
+        // strip's chain datums — a liner's own edges, not the zoom pad.
         val chain = layoutWearStripRail(railSpans, xAtStripMm = ::xAt, labelWidthPt = ::labelW)
         chain.forEach { svg.railSpan(it, inner.cylTop - 3f, inner.chainRailY, labelAbove = false) }
         totalSpan?.let { ts ->
@@ -261,9 +305,9 @@ class UndercutStripSvgPreviewTest {
                 .forEach { svg.railSpan(it, inner.chainRailY, inner.totalRailY, labelAbove = true) }
         }
 
-        // Anchor title.
+        // Title: "<liner name> — <dist> FROM … S.E.T.", or the anchor alone on bare stock.
         val anchor = undercutAnchorFor(spans.first().startMm, spans.last().endMm, aftSetMm, fwdSetMm)
-        val title = buildUndercutAnchorLabel(anchor, unit)
+        val title = buildUndercutStripTitle(linerTitle, buildUndercutAnchorLabel(anchor, unit))
         if (anchor.alignRight) svg.text(stripRight, stripBottom - 2f, title, size = titleH, anchor = "end")
         else svg.text(stripLeft, stripBottom - 2f, title, size = titleH, anchor = "start")
 
@@ -274,7 +318,11 @@ class UndercutStripSvgPreviewTest {
         // FWD break edge.
         return StripResult(
             svg = svg.wrap(stripRight + 20f, stripBottom + 12f),
-            chainCoversWindow = kotlin.math.abs(chainLen - window.lengthMm) < 0.01f,
+            strip = strip,
+            chainCoversStrip = kotlin.math.abs(chainLen - (strip.chainEndMm - strip.chainStartMm)) < 0.01f,
+            railInsideChain = railSpans.all {
+                it.startMm >= strip.chainStartMm - 0.01f && it.endMm <= strip.chainEndMm + 0.01f
+            },
             compressed = plan?.compressed ?: false,
             hasTotal = totalSpan != null,
         )
@@ -283,31 +331,55 @@ class UndercutStripSvgPreviewTest {
     @Test
     fun `render preview SVGs`() {
         val outDir = File("build/reports/undercut-preview").apply { mkdirs() }
+        // Clear previous runs: the file set changes as scenarios are renamed, and a stale SVG
+        // would both mislead a reviewer and break the count assertion below.
+        outDir.listFiles()?.forEach { if (it.name.endsWith(".svg")) it.delete() }
 
-        // A) All three cuts measured — the sketch case: chained rail + total span + three Ø
-        //    values, the third notch crossing the liner's FWD edge.
-        val a = renderStrip(scenarioUndercuts(thirdDiaMm = 170f, secondDiaMm = 198f))
-        File(outDir, "a-cluster-fullwidth.svg").writeText(a.svg)
-        assertTrue("chain must cover the window exactly", a.chainCoversWindow)
-        assertTrue("three cuts must produce a cluster total span", a.hasTotal)
+        // A) LINER strip, all three cuts measured — the sketch case: the WHOLE liner is drawn
+        //    with its true edges, body slivers and break edges beyond, the chained rail
+        //    anchored on the liner's edges (extended to the third cut, which overhangs the
+        //    FWD edge), the cluster total above, and three Ø values below.
+        val a = renderStrip(linerUndercuts(thirdDiaMm = 170f, secondDiaMm = 198f))
+        File(outDir, "a-liner-strip-fullwidth.svg").writeText(a.svg)
+        val aLiner = a.strip as UndercutStrip.LinerStrip
+        assertEquals("chain must anchor on the liner's AFT edge", linerAftMm, aLiner.chainStartMm, 1e-3f)
+        assertEquals("chain must follow the overhanging cut's shoulder", 1030f, aLiner.chainEndMm, 1e-3f)
+        assertTrue("the whole liner plus a pad must be drawn", aLiner.drawStartMm < linerAftMm)
+        assertTrue("chain must cover the liner exactly", a.chainCoversStrip)
+        assertTrue("the pad outside the chain is never dimensioned", a.railInsideChain)
+        assertTrue("three cuts must produce a total span", a.hasTotal)
         assertFalse("the sketch case must not compress its callouts", a.compressed)
 
         // B) The middle cut has no measured Ø yet: its notch and its rail dimension stay, its
         //    Ø callout does NOT print — the placed-but-empty rule.
-        val b = renderStrip(scenarioUndercuts(thirdDiaMm = 170f, secondDiaMm = 0f))
-        File(outDir, "b-unmeasured-middle.svg").writeText(b.svg)
-        assertTrue(b.chainCoversWindow)
+        val b = renderStrip(linerUndercuts(thirdDiaMm = 170f, secondDiaMm = 0f))
+        File(outDir, "b-liner-strip-unmeasured-middle.svg").writeText(b.svg)
+        assertTrue(b.chainCoversStrip)
         assertFalse(b.compressed)
 
-        // C) The same cluster in a half-width GRID cell.
-        val cCell = renderStrip(
-            scenarioUndercuts(thirdDiaMm = 170f, secondDiaMm = 198f),
+        // C) The same liner strip in a half-width GRID cell.
+        val c = renderStrip(
+            linerUndercuts(thirdDiaMm = 170f, secondDiaMm = 198f),
             stripLeft = 36f, stripRight = 385f, stripTop = 16f, stripBottom = 150f,
         )
-        File(outDir, "c-cluster-gridcell.svg").writeText(cCell.svg)
-        assertTrue(cCell.chainCoversWindow)
+        File(outDir, "c-liner-strip-gridcell.svg").writeText(c.svg)
+        assertTrue(c.chainCoversStrip)
+        assertTrue(c.railInsideChain)
+
+        // D) Bare-shaft cuts in a GRID cell: no liner to draw, so the padded cluster window
+        //    is the strip and the chain runs window edge → window edge (the pre-liner look).
+        val d = renderStrip(
+            bareShaftUndercuts(),
+            stripLeft = 407f, stripRight = 756f, stripTop = 16f, stripBottom = 150f,
+        )
+        File(outDir, "d-bareshaft-freestrip-gridcell.svg").writeText(d.svg)
+        val dFree = d.strip as UndercutStrip.FreeStrip
+        assertEquals("a free strip dimensions its whole window", dFree.drawStartMm, dFree.chainStartMm, 1e-3f)
+        assertEquals(dFree.drawEndMm, dFree.chainEndMm, 1e-3f)
+        assertTrue(d.chainCoversStrip)
+        assertTrue(d.hasTotal)
 
         assertNotNull(outDir.listFiles())
-        assertEquals(3, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
+        assertEquals(4, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
     }
 }

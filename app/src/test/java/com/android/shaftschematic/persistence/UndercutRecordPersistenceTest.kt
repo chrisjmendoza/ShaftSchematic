@@ -82,6 +82,88 @@ class UndercutRecordPersistenceTest {
     }
 
     @Test
+    fun `LINER_AFT reference with referenceLinerId round trips verbatim, even when the liner id matches nothing`() {
+        // referenceLinerId is display-only metadata (converted against by geom/UndercutMath.kt
+        // only while it resolves to a real liner); the codec is not the place that decides
+        // whether it resolves, so it must round-trip byte-for-byte regardless — the render layer
+        // is what falls back to AFT_SET display when the liner is gone, not decode-time pruning.
+        val undercut = Undercut(
+            id = "u1",
+            startFromAftMm = 60f,
+            lengthMm = 10f,
+            authoredReference = UndercutReference.LINER_AFT,
+            referenceLinerId = "no-such-liner",
+        )
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = spec(),
+            undercutRecord = UndercutRecord(undercuts = listOf(undercut)),
+        )
+
+        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
+
+        val d = decoded.undercutRecord.undercuts.single()
+        assertEquals(UndercutReference.LINER_AFT, d.authoredReference)
+        assertEquals("no-such-liner", d.referenceLinerId)
+    }
+
+    @Test
+    fun `LINER_FWD reference round trips through the envelope`() {
+        val undercut = Undercut(
+            id = "u1", startFromAftMm = 10f, lengthMm = 5f,
+            authoredReference = UndercutReference.LINER_FWD,
+            referenceLinerId = "liner-1",
+        )
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = spec(),
+            undercutRecord = UndercutRecord(undercuts = listOf(undercut)),
+        )
+
+        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
+
+        val d = decoded.undercutRecord.undercuts.single()
+        assertEquals(UndercutReference.LINER_FWD, d.authoredReference)
+        assertEquals("liner-1", d.referenceLinerId)
+    }
+
+    @Test
+    fun `older JSON without referenceLinerId decodes to empty string`() {
+        // Simulates a v1 file (predates referenceLinerId): the undercut object has no
+        // "referenceLinerId" key at all. The additive, defaulted field must decode to "" rather
+        // than fail — same posture as any other additive field on an envelope record.
+        val raw = """
+            {
+              "version": 1,
+              "preferred_unit": "INCHES",
+              "unit_locked": true,
+              "job_number": "",
+              "customer": "",
+              "vessel": "",
+              "shaft_position": "OTHER",
+              "notes": "",
+              "spec": { "overallLengthMm": 500.0 },
+              "undercut_record": {
+                "undercuts": [
+                  {
+                    "id": "u1",
+                    "startFromAftMm": 10.0,
+                    "lengthMm": 5.0,
+                    "diaMm": 0.0,
+                    "authoredReference": "AFT_SET",
+                    "note": ""
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val decoded = ShaftDocCodec.decode(raw)
+
+        val d = decoded.undercutRecord.undercuts.single()
+        assertEquals("u1", d.id)
+        assertEquals("", d.referenceLinerId)
+    }
+
+    @Test
     fun `envelope without undercut_record field decodes to empty record`() {
         // Simulates a file written before this field existed: no "undercut_record" key at all.
         val raw = """
