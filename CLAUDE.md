@@ -38,9 +38,11 @@ Specifically:
 - **Body keyway**: `AddBodyDialog` and the explicit-body carousel card must both expose
   the keyway section (KW from AFT | FWD chips, W × D, L, offset, spooned toggle). The
   auto-body card intentionally omits it (auto-bodies can't host keyways until promoted).
-- **Keyways 180° apart**: the spec-level toggle appears on keyway-bearing cards when the
-  shaft has ≥ 2 keyways, and in `AddBodyDialog`/`AddTaperDialog` when adding would reach
-  ≥ 2 (≥ 1 existing + this dialog's keyway defined). Same condition on both surfaces.
+- **Keyway clocking**: the spec-level 180°/90° toggles and the CW/CCW chips appear on
+  keyway-bearing cards when the shaft has ≥ 2 keyways, and in
+  `AddBodyDialog`/`AddTaperDialog` when adding would reach ≥ 2 (≥ 1 existing + this
+  dialog's keyway defined). Same condition on both surfaces. 180° and 90° are mutually
+  exclusive.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
 - **Coupler bolt slot**: `AddCouplerBoltSlotDialog` and the `ResolvedCouplerBoltSlot`
   carousel card must both expose Measure From (AFT | FWD), hole Ø, count, spacing (only

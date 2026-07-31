@@ -6,6 +6,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-30 (keyway clocking — 90° apart added alongside 180°)
+
+### feat(ui): "Keyways 90° apart" toggle + CW/CCW direction chips
+
+On-device report: a shaft came in with keyways 90° apart rather than 180°. Added
+`ShaftSpec.keyways90Apart` + `keyways90Cw` (direction from the AFT keyway, viewed from
+aft) alongside the existing `keyways180Apart` flag — the two are mutually exclusive
+(`ShaftViewModel.setKeyways180Apart`/`setKeyways90Apart` each clear the other). Surfaced
+on keyway-bearing carousel cards (Body, Taper) and in `AddBodyDialog`/`AddTaperDialog`
+under the same ≥ 2-keyway gate as before, keeping add-dialog parity. Rendered as a
+depth-deep notch on an outline edge (bottom for CW, top for CCW) rather than the 180°
+flag's hidden dashed line; the spoon bowl is not drawn at 90°. Docs:
+`docs/COMPONENT_CONTRACT.md`, `docs/DATA_MODEL.md`, `docs/GLOSSARY.md`,
+`AddComponentDialogs.md`.
+
+---
+
 ## 2026-07-29 (wear overlay — diameter measurements get their own section; min-Ø retired)
 
 ### fix(ui): Add Ø moved out of the Pits tool row; dedicated section with Remove Ø

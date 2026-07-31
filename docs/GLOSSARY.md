@@ -144,6 +144,11 @@ Current state:
 - **Keyways 180° apart:** `ShaftSpec.keyways180Apart` — a drawing note that the shaft's keyways
   are clocked 180° from each other. The aft-most keyway (measurement datum) stays solid; every
   other keyway renders as a hidden feature (dashed, no void fill), plus a footer note.
+- **Keyways 90° apart:** `ShaftSpec.keyways90Apart` + `keyways90Cw` — a drawing note that the
+  shaft's keyways are clocked 90° apart instead of 180°, with direction (CW/CCW) measured from
+  the AFT keyway, viewed from aft. Mutually exclusive with Keyways 180° apart (enabling one
+  clears the other). Renders as an edge notch in the silhouette — bottom edge for CW, top edge
+  for CCW — not a hidden dashed line; the spoon bowl is not drawn at 90°.
 
 Non-goal:
 - Keyways will never exist as standalone components.

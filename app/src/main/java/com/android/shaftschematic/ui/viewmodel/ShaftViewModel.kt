@@ -1365,10 +1365,23 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Set the drawing note that the shaft's keyways are clocked 180° apart. */
-    fun setKeyways180Apart(enabled: Boolean) = _spec.update { s ->
-        if (s.keyways180Apart == enabled) s else s.copy(keyways180Apart = enabled)
-    }
+    /**
+     * Set the drawing note that the shaft's keyways are clocked 180° apart. Enabling clears the
+     * 90° note — a shaft carries at most one clocking note. Unchanged input is a no-op.
+     */
+    fun setKeyways180Apart(enabled: Boolean) = _spec.update { s -> s.withKeyways180Apart(enabled) }
+
+    /**
+     * Set the drawing note that the shaft's keyways are clocked 90° apart. Enabling clears the
+     * 180° note — a shaft carries at most one clocking note. Unchanged input is a no-op.
+     */
+    fun setKeyways90Apart(enabled: Boolean) = _spec.update { s -> s.withKeyways90Apart(enabled) }
+
+    /**
+     * Set the 90° clocking direction — true = clockwise viewed from aft. Meaningful only while
+     * [setKeyways90Apart] is on; the choice survives toggling the note off and back on.
+     */
+    fun setKeyways90Cw(cw: Boolean) = _spec.update { s -> s.withKeyways90Cw(cw) }
 
     /**
      * Remove a [Body] by its stable [id].

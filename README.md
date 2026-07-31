@@ -8,7 +8,7 @@ This tool is built for machinists, shipyards, repair techs, and engineering team
 
 Real-Time Shaft Modeling
 
-- Bodies (with keyways), tapers (with keyways and auto taper-rate calculation), threads (with OAL include/exclude), liners, and coupler bolt slots (reference-only cutouts). Keyways can be clocked 180° apart — the far-side one renders as hidden dashed lines
+- Bodies (with keyways), tapers (with keyways and auto taper-rate calculation), threads (with OAL include/exclude), liners, and coupler bolt slots (reference-only cutouts). Keyways can be clocked 180° apart (far-side one renders as hidden dashed lines) or 90° apart with a CW/CCW direction (renders as an edge notch); the two are mutually exclusive
 - Bodies are the fluid base material: plain bodies split around tapers/threads/liners, keyed bodies stay whole; derived auto-bodies fill unoccupied spans. Bodies never participate in collision detection
 - Resolved-component pipeline: auto-bodies fill unoccupied spans in the preview without being persisted
 - Live preview with grid, centerline, and component labels; tap-to-add at position

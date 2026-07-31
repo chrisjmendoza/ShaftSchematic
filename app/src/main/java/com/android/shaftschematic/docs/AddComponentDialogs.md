@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.5, 2026-07-20)
+# AddComponentDialogs Contract (v1.6, 2026-07-30)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -45,14 +45,18 @@ missing from `AddThreadDialog` for several versions (restored 2026-06-23).
 | KW Offset from AFT / FWD | Always (label follows chip; 0 = open, > 0 = floating) |
 | Keyway spooned toggle | Always (disabled + "N/A — floating" when offset > 0) |
 | Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
+| Keyways 90° apart toggle | Same condition as the 180° toggle |
+| CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on |
 
 Matches `ComponentCarousel.kt` `ResolvedBody` explicit-body branch. The **auto-body**
 card intentionally shows only Start/Length/Ø — Start/Length disabled/greyed (derived),
 Ø editable (sets the shared bare-shaft `ShaftSpec.autoBodyDiaMm` without promoting) —
 auto-bodies are derived and cannot host a keyway until promoted; that reduced card is
-not a parity violation. The 180°-apart toggle writes spec-level
-`ShaftSpec.keyways180Apart` (the card's switch appears when `spec.keywayCount() >= 2`,
-which is the same condition evaluated at add time).
+not a parity violation. The 180°/90°-apart toggles write spec-level
+`ShaftSpec.keyways180Apart`/`keyways90Apart` (+ `keyways90Cw` for the CW/CCW chips) — the
+card's switches appear when `spec.keywayCount() >= 2`, which is the same condition
+evaluated at add time. The two toggles are mutually exclusive (enabling one locally
+clears the other's dialog state, mirroring the ViewModel's clearing behavior on commit).
 
 The explicit-body card's **"Explicit body"** checkbox (checked; unchecking demotes back
 to auto-fill via a confirmation dialog) — and the auto-body card's own "Explicit body"
@@ -99,6 +103,8 @@ ShaftViewModel.addThreadAt()` and stored on the `Threads` model object.
 | Rate | Always (read-only in Auto, editable in Manual) |
 | Keyway fields | Always |
 | Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
+| Keyways 90° apart toggle | Same condition as the 180° toggle |
+| CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on |
 
 Manual taper-rate rules:
 - Bare `1` is invalid/ambiguous and must be rewritten as a full ratio or fraction.
@@ -159,6 +165,12 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.6 (2026-07-30)**
+- Spec-level "Keyways 90° apart" toggle (+ CW/CCW direction chips, viewed from aft, from
+  the AFT keyway) added to `AddBodyDialog` + `AddTaperDialog` and both keyway-bearing
+  carousel cards, under the same ≥ 2 keyway gate as "Keyways 180° apart". The two
+  toggles are mutually exclusive.
+
 **v1.5 (2026-07-20)**
 - Body keyway support (un-shelved): `AddBodyDialog` gains the full keyway section
   (KW from AFT|FWD, W×D, L, offset, spooned) mirroring the explicit body card.

@@ -1,13 +1,15 @@
 package com.android.shaftschematic.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Hidden-line classification for keyways clocked 180° apart. The aft-most keyway (smallest
- * absolute center — the shop's measurement datum) stays solid; every other keyway is
- * far-side and renders hidden. Only applies when `keyways180Apart` and ≥ 2 keyways.
+ * Keyway clocking classification. The aft-most keyway (smallest absolute center — the shop's
+ * measurement datum) stays primary; every other keyway is secondary. At 180° a secondary
+ * renders hidden (far-side, dashed); at 90° it renders as a silhouette-edge notch, so
+ * `hiddenKeywayHostIds()` must stay empty there. Only applies with ≥ 2 keyways.
  */
 class KeywayClockingTest {
 
@@ -111,5 +113,131 @@ class KeywayClockingTest {
             keyways180Apart = true,
         )
         assertEquals(setOf("mid", "fwd"), spec.hiddenKeywayHostIds())
+    }
+
+    // ── defaults ─────────────────────────────────────────────────────────────
+
+    @Test fun `a fresh spec has no clocking note and defaults to clockwise`() {
+        val spec = ShaftSpec()
+        assertFalse(spec.keyways180Apart)
+        assertFalse(spec.keyways90Apart)
+        assertTrue(spec.keyways90Cw)
+        assertEquals(KeywayClocking.NONE, spec.keywayClocking())
+    }
+
+    // ── keywayClocking precedence ────────────────────────────────────────────
+
+    @Test fun `90 apart resolves by direction flag`() {
+        val cw = ShaftSpec(keyways90Apart = true, keyways90Cw = true)
+        val ccw = ShaftSpec(keyways90Apart = true, keyways90Cw = false)
+        assertEquals(KeywayClocking.DEG_90_CW, cw.keywayClocking())
+        assertEquals(KeywayClocking.DEG_90_CCW, ccw.keywayClocking())
+    }
+
+    @Test fun `180 wins when a hand-edited document sets both flags`() {
+        val spec = ShaftSpec(keyways180Apart = true, keyways90Apart = true, keyways90Cw = false)
+        assertEquals(KeywayClocking.DEG_180, spec.keywayClocking())
+    }
+
+    @Test fun `direction flag alone is inert without the 90 note`() {
+        assertEquals(KeywayClocking.NONE, ShaftSpec(keyways90Cw = false).keywayClocking())
+    }
+
+    // ── secondaryKeywayHostIds ───────────────────────────────────────────────
+
+    @Test fun `no secondaries without a clocking note`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 2000f,
+            bodies = listOf(keyedBody("aft", 0f), keyedBody("fwd", 1600f)),
+        )
+        assertTrue(spec.secondaryKeywayHostIds().isEmpty())
+    }
+
+    @Test fun `no secondaries with only one keyway at 90 apart`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 2000f,
+            bodies = listOf(keyedBody("aft", 0f)),
+            keyways90Apart = true,
+        )
+        assertTrue(spec.secondaryKeywayHostIds().isEmpty())
+    }
+
+    @Test fun `90 apart uses the same aft-most-primary rule as 180`() {
+        val bodies = listOf(keyedBody("fwd", 1600f), keyedBody("aft", 0f))
+        val cw = ShaftSpec(overallLengthMm = 2000f, bodies = bodies, keyways90Apart = true, keyways90Cw = true)
+        val ccw = cw.copy(keyways90Cw = false)
+        val deg180 = ShaftSpec(overallLengthMm = 2000f, bodies = bodies, keyways180Apart = true)
+
+        assertEquals(setOf("fwd"), cw.secondaryKeywayHostIds())
+        assertEquals(setOf("fwd"), ccw.secondaryKeywayHostIds())
+        assertEquals(deg180.secondaryKeywayHostIds(), cw.secondaryKeywayHostIds())
+    }
+
+    @Test fun `90 apart marks every keyway but the aft-most as secondary`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 3000f,
+            tapers = listOf(keyedTaper("taper", 100f)),   // center ~150
+            bodies = listOf(keyedBody("mid", 1300f), keyedBody("fwd", 2600f)),
+            keyways90Apart = true,
+        )
+        assertEquals(setOf("mid", "fwd"), spec.secondaryKeywayHostIds())
+    }
+
+    @Test fun `at 180 the secondaries are exactly the hidden hosts`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 2000f,
+            bodies = listOf(keyedBody("aft", 0f), keyedBody("fwd", 1600f)),
+            keyways180Apart = true,
+        )
+        assertEquals(spec.secondaryKeywayHostIds(), spec.hiddenKeywayHostIds())
+    }
+
+    // ── hiddenKeywayHostIds is 180-only ──────────────────────────────────────
+
+    @Test fun `no hidden ids in 90 apart modes`() {
+        val bodies = listOf(keyedBody("aft", 0f), keyedBody("fwd", 1600f))
+        val cw = ShaftSpec(overallLengthMm = 2000f, bodies = bodies, keyways90Apart = true, keyways90Cw = true)
+        val ccw = cw.copy(keyways90Cw = false)
+
+        // 90° secondaries render as silhouette notches, never hidden-dashed.
+        assertTrue(cw.hiddenKeywayHostIds().isEmpty())
+        assertTrue(ccw.hiddenKeywayHostIds().isEmpty())
+        assertTrue(cw.secondaryKeywayHostIds().isNotEmpty())
+    }
+
+    // ── mutual exclusion helpers (the ViewModel setters delegate here) ────────
+
+    @Test fun `enabling 180 clears 90 and vice versa`() {
+        val with90 = ShaftSpec().withKeyways90Apart(true)
+        assertTrue(with90.keyways90Apart)
+        assertFalse(with90.keyways180Apart)
+
+        val with180 = with90.withKeyways180Apart(true)
+        assertTrue(with180.keyways180Apart)
+        assertFalse(with180.keyways90Apart)
+
+        val back90 = with180.withKeyways90Apart(true)
+        assertTrue(back90.keyways90Apart)
+        assertFalse(back90.keyways180Apart)
+    }
+
+    @Test fun `unchanged clocking sets return the same instance`() {
+        val spec = ShaftSpec(keyways90Apart = true, keyways90Cw = false)
+        assertTrue(spec === spec.withKeyways90Apart(true))
+        assertTrue(spec === spec.withKeyways90Cw(false))
+        assertTrue(spec === spec.withKeyways180Apart(false))
+    }
+
+    @Test fun `disabling one note leaves the other alone`() {
+        val spec = ShaftSpec(keyways180Apart = true).withKeyways90Apart(false)
+        assertTrue(spec.keyways180Apart)
+        assertFalse(spec.keyways90Apart)
+    }
+
+    @Test fun `direction survives toggling the 90 note off and back on`() {
+        val ccw = ShaftSpec().withKeyways90Apart(true).withKeyways90Cw(false)
+        val cycled = ccw.withKeyways90Apart(false).withKeyways90Apart(true)
+        assertFalse(cycled.keyways90Cw)
+        assertEquals(KeywayClocking.DEG_90_CCW, cycled.keywayClocking())
     }
 }

@@ -171,6 +171,8 @@ internal fun ComponentCarouselPager(
     onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
     onSetKeyways180Apart: (Boolean) -> Unit,
+    onSetKeyways90Apart: (Boolean) -> Unit,
+    onSetKeyways90Cw: (Boolean) -> Unit,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
     onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
     onRemoveBody: (String) -> Unit,
@@ -301,6 +303,8 @@ internal fun ComponentCarouselPager(
                     onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
                     onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
                     onSetKeyways180Apart = onSetKeyways180Apart,
+                    onSetKeyways90Apart = onSetKeyways90Apart,
+                    onSetKeyways90Cw = onSetKeyways90Cw,
                     bodyTitleById = bodyTitleById, taperTitleById = taperTitleById,
                     linerTitleById = linerTitleById, threadTitleById = threadTitleById,
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
@@ -330,12 +334,21 @@ internal fun ComponentCarouselPager(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Keyways 180° apart — spec-level drawing note, surfaced on any keyway-bearing
-// card once the shaft has two or more keyways (below that the flag is meaningless).
+// Keyway clocking — spec-level drawing notes ("Keyways 180° apart" / "Keyways 90°
+// apart" + CW/CCW direction from the AFT keyway), surfaced on any keyway-bearing
+// card once the shaft has two or more keyways (below that neither flag means
+// anything). The two toggles are mutually exclusive; the ViewModel setters own
+// that exclusion (enabling one clears the other) — this section only reflects
+// current spec state and dispatches the user's tap.
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-internal fun Keyways180ApartSwitch(spec: ShaftSpec, onSetKeyways180Apart: (Boolean) -> Unit) {
+internal fun KeywayClockingSection(
+    spec: ShaftSpec,
+    onSetKeyways180Apart: (Boolean) -> Unit,
+    onSetKeyways90Apart: (Boolean) -> Unit,
+    onSetKeyways90Cw: (Boolean) -> Unit,
+) {
     if (spec.keywayCount() < 2) return
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -351,6 +364,46 @@ internal fun Keyways180ApartSwitch(spec: ShaftSpec, onSetKeyways180Apart: (Boole
             checked = spec.keyways180Apart,
             onCheckedChange = null
         )
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .toggleable(
+                value = spec.keyways90Apart,
+                role = androidx.compose.ui.semantics.Role.Switch,
+                onValueChange = onSetKeyways90Apart
+            ).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Keyways 90° apart", modifier = Modifier.weight(1f))
+        androidx.compose.material3.Switch(
+            checked = spec.keyways90Apart,
+            onCheckedChange = null
+        )
+    }
+    if (spec.keyways90Apart) {
+        val clockingChipColors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = Color.Black,
+            selectedLabelColor = Color.White,
+            containerColor = Color.Transparent,
+            labelColor = MaterialTheme.colorScheme.onSurface
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "From AFT keyway, viewed from aft:",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            FilterChip(selected = spec.keyways90Cw, onClick = { onSetKeyways90Cw(true) },
+                label = { Text("CW") }, colors = clockingChipColors,
+                border = if (spec.keyways90Cw) BorderStroke(1.dp, Color.Black) else null)
+            FilterChip(selected = !spec.keyways90Cw, onClick = { onSetKeyways90Cw(false) },
+                label = { Text("CCW") }, colors = clockingChipColors,
+                border = if (!spec.keyways90Cw) BorderStroke(1.dp, Color.Black) else null)
+        }
     }
 }
 
@@ -408,6 +461,8 @@ internal fun ComponentPagerCard(
     onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
     onSetKeyways180Apart: (Boolean) -> Unit,
+    onSetKeyways90Apart: (Boolean) -> Unit,
+    onSetKeyways90Cw: (Boolean) -> Unit,
     bodyTitleById: Map<String, String>,
     taperTitleById: Map<String, String>,
     linerTitleById: Map<String, String>,
@@ -691,7 +746,7 @@ internal fun ComponentPagerCard(
                     }
                 }
 
-                Keyways180ApartSwitch(spec, onSetKeyways180Apart)
+                KeywayClockingSection(spec, onSetKeyways180Apart, onSetKeyways90Apart, onSetKeyways90Cw)
             }
         }
 
@@ -932,7 +987,7 @@ internal fun ComponentPagerCard(
                     )
                 }
 
-                Keyways180ApartSwitch(spec, onSetKeyways180Apart)
+                KeywayClockingSection(spec, onSetKeyways180Apart, onSetKeyways90Apart, onSetKeyways90Cw)
             }
         }
 
