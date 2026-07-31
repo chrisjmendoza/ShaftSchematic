@@ -3,6 +3,7 @@ package com.android.shaftschematic.doc
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.normalized
 import com.android.shaftschematic.settings.RunoutConfig
@@ -76,6 +77,14 @@ object ShaftDocCodec {
          */
         @SerialName("runout_readings")
         val runoutReadings: RunoutReadings = RunoutReadings(),
+        /**
+         * Undercut drawing record — recorded weld/cleanup undercut sections (distance from a
+         * S.E.T., length, measured Ø). Absent in older files → default empty record. Additive
+         * + defaulted: no version bump needed. Undercuts have no component key, so there is no
+         * decode-time pruning — see `docs/UndercutDrawing_PLAN.md` §2, §7.
+         */
+        @SerialName("undercut_record")
+        val undercutRecord: UndercutRecord = UndercutRecord(),
     )
 
     enum class Format { ENVELOPE_V1, LEGACY_SPEC }
@@ -93,6 +102,7 @@ object ShaftDocCodec {
         val runoutConfig: RunoutConfig,
         val wearRecord: WearRecord,
         val runoutReadings: RunoutReadings,
+        val undercutRecord: UndercutRecord,
     )
 
     private val json = Json {
@@ -137,6 +147,9 @@ object ShaftDocCodec {
                     // which we don't have here). Stale entries are harmless — the bubble lookup
                     // simply misses them. See model/RunoutReading.kt.
                     runoutReadings = doc.runoutReadings,
+                    // Undercuts have no component key at all, so there is nothing to orphan-check
+                    // here — pass through untouched. See model/Undercut.kt.
+                    undercutRecord = doc.undercutRecord,
                 )
             }
 
@@ -155,6 +168,7 @@ object ShaftDocCodec {
             runoutConfig = RunoutConfig(),
             wearRecord = WearRecord(),
             runoutReadings = RunoutReadings(),
+            undercutRecord = UndercutRecord(),
         )
     }
 }

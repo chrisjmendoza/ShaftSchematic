@@ -2,6 +2,7 @@ package com.android.shaftschematic.ui.viewmodel
 
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.ui.order.ComponentKey
 
@@ -14,6 +15,7 @@ import com.android.shaftschematic.ui.order.ComponentKey
  * - [spec]: the canonical-mm [ShaftSpec] (geometry, keyways, coupler bolt slots, OAL, …).
  * - [wearRecord]: reference-only wear spots + pits (rides the same envelope as the spec).
  * - [runoutReadings]: reference-only per-station TIR values + high-spot markers.
+ * - [undercutRecord]: reference-only recorded undercut sections.
  * - [componentOrder]: the cross-type UI order (so deleting/reordering is undoable, not just
  *   the spec change — a delete restore must bring back the row in its original position).
  * - [overallIsManual]: the OAL manual/auto mode.
@@ -27,6 +29,7 @@ data class EditState(
     val spec: ShaftSpec,
     val wearRecord: WearRecord,
     val runoutReadings: RunoutReadings,
+    val undercutRecord: UndercutRecord,
     val componentOrder: List<ComponentKey>,
     val overallIsManual: Boolean,
 )

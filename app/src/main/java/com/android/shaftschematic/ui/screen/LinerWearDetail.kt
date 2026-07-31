@@ -1042,9 +1042,12 @@ private fun wearReferenceLabel(reference: WearSpotReference): String = when (ref
     WearSpotReference.FWD_SET -> "FWD SET"
 }
 
-/** One selection chip — same [FilterChip]/border convention as `ComponentCarousel.kt`. */
+/**
+ * One selection chip — same [FilterChip]/border convention as `ComponentCarousel.kt`.
+ * Shared with the undercut overlay's "Measure From" chips so both read identically.
+ */
 @Composable
-private fun WearChip(
+internal fun WearChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -1061,9 +1064,13 @@ private fun WearChip(
     )
 }
 
-/** Thin wrapper around [NumericInputField] mirroring `ComponentCarousel`'s private `CommitNum`. */
+/**
+ * Thin wrapper around [NumericInputField] mirroring `ComponentCarousel`'s private `CommitNum`.
+ * Shared with the undercut overlay's cards so every reference-document field carries the same
+ * commit-on-blur + blocking-validator contract (`docs/NumberField.md`).
+ */
 @Composable
-private fun WearNum(
+internal fun WearNum(
     label: String,
     initialDisplay: String,
     validator: ((String) -> String?)? = null,
@@ -1138,8 +1145,10 @@ private fun DrawScope.drawDimSegment(x0: Float, x1: Float, y: Float, label: Stri
  * Diagonal thread hatch clipped to a neighbor stub — same "legacy look" as
  * `ShaftRenderer.drawThreadHatch`, at a fixed pitch (the stub is symbolic, not to scale). Used
  * only for shaft-END thread stubs, which get a flat outer edge instead of an S-curve break.
+ * Shared with the undercut detail overlay, which applies the same rule to a window end that
+ * lands on a threaded shaft end.
  */
-private fun DrawScope.drawThreadStubHatch(x0: Float, top: Float, x1: Float, bot: Float, color: Color) {
+internal fun DrawScope.drawThreadStubHatch(x0: Float, top: Float, x1: Float, bot: Float, color: Color) {
     if (x1 <= x0 || bot <= top) return
     val hatch = color.copy(alpha = 0.6f)
     withTransform({ clipRect(x0, top, x1, bot) }) {
@@ -1155,9 +1164,10 @@ private fun DrawScope.drawThreadStubHatch(x0: Float, top: Float, x1: Float, bot:
  * Compose port of the pdf-layer `drawBreakEdge` S-curve convention (`pdf/BreakSymbol.kt`) — same
  * math, redrawn with Compose [Path]/[DrawScope]. [eyeAtTop] must be chosen so the eye's larger
  * "sweep" curve bulges into the **void** side of the break: left (AFT) stub = `true`, right (FWD)
- * stub = `false`.
+ * stub = `false`. Shared with the undercut detail overlay, whose zoom window is broken out of the
+ * shaft under the same convention.
  */
-private fun DrawScope.drawBreakEdgeCompose(
+internal fun DrawScope.drawBreakEdgeCompose(
     x: Float,
     yTop: Float,
     yBot: Float,

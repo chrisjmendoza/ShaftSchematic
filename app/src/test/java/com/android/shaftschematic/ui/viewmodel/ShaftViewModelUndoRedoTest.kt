@@ -3,6 +3,7 @@ package com.android.shaftschematic.ui.viewmodel
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
@@ -30,6 +31,7 @@ class ShaftViewModelUndoRedoTest {
         spec = spec,
         wearRecord = WearRecord(),
         runoutReadings = RunoutReadings(),
+        undercutRecord = UndercutRecord(),
         componentOrder = order,
         overallIsManual = false,
     )
