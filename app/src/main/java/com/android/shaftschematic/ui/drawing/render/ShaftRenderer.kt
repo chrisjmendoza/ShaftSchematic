@@ -10,14 +10,25 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import com.android.shaftschematic.geom.KeywaySilhouetteNotch
+import com.android.shaftschematic.geom.KeywaySilhouettePoint
+import com.android.shaftschematic.geom.floorMm
+import com.android.shaftschematic.geom.fillPolygonMm
+import com.android.shaftschematic.geom.keywaySilhouetteNotch
 import com.android.shaftschematic.geom.keywaySpoonBowl
+import com.android.shaftschematic.geom.wallEndMm
+import com.android.shaftschematic.geom.wallStartMm
+import com.android.shaftschematic.geom.yFor
 import com.android.shaftschematic.model.Body
+import com.android.shaftschematic.model.KeywayClocking
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.hasKeyway
 import com.android.shaftschematic.model.hiddenKeywayHostIds
+import com.android.shaftschematic.model.keywayClocking
 import com.android.shaftschematic.model.maxOuterDiaMm
+import com.android.shaftschematic.model.secondaryKeywayHostIds
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentType
@@ -183,15 +194,25 @@ object ShaftRenderer {
             }
         }
 
-        // Keyways 180° apart: far-side keyways render hidden (dashed, no fill). The
-        // aft-most keyway (measurement datum) stays solid. Empty unless the flag is set.
+        // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every
+        // other host is a secondary. At 180° a secondary renders hidden (dashed, no fill); at
+        // 90° it renders as a notch cut into a silhouette edge. Both sets are empty unless a
+        // clocking note is set with ≥ 2 keyways.
+        val clocking = spec.keywayClocking()
         val hiddenKeywayIds = spec.hiddenKeywayHostIds()
+        val secondaryKeywayIds = spec.secondaryKeywayHostIds()
+        val silhouetteKeyways = clocking == KeywayClocking.DEG_90_CW || clocking == KeywayClocking.DEG_90_CCW
 
         // ───────── Body keyways ─────────
         // Keyways live on explicit model bodies; draw from model geometry so resolved
         // fragment subtraction can't displace the slot.
         for (b in spec.bodies) {
-            if (b.hasKeyway) drawKeywayNotchBody(b, L, outline, outlineW, hidden = b.id in hiddenKeywayIds)
+            if (!b.hasKeyway) continue
+            if (silhouetteKeyways && b.id in secondaryKeywayIds) {
+                b.keywaySilhouetteNotch(clocking)?.let { drawKeywaySilhouetteNotch(it, L, outline, outlineW) }
+            } else {
+                drawKeywayNotchBody(b, L, outline, outlineW, hidden = b.id in hiddenKeywayIds)
+            }
         }
 
         val resolvedTapers = components?.filterIsInstance<ResolvedTaper>()
@@ -231,7 +252,12 @@ object ShaftRenderer {
                 // Keyway — look up model taper by id for keyway data
                 val modelTaper = spec.tapers.firstOrNull { it.id == t.id }
                 if (modelTaper != null && modelTaper.hasKeyway) {
-                    drawKeywayNotch(modelTaper, L, x0, x1, top0, top1, outline, outlineW, taperFill, hidden = t.id in hiddenKeywayIds)
+                    if (silhouetteKeyways && t.id in secondaryKeywayIds) {
+                        modelTaper.keywaySilhouetteNotch(clocking)
+                            ?.let { drawKeywaySilhouetteNotch(it, L, outline, outlineW) }
+                    } else {
+                        drawKeywayNotch(modelTaper, L, x0, x1, top0, top1, outline, outlineW, taperFill, hidden = t.id in hiddenKeywayIds)
+                    }
                 }
             }
         } else {
@@ -266,7 +292,11 @@ object ShaftRenderer {
                 drawLine(outline, Offset(x1, top1), Offset(x1, bot1), strokeWidth = outlineW)
 
                 if (t.hasKeyway) {
-                    drawKeywayNotch(t, L, x0, x1, top0, top1, outline, outlineW, taperFill, hidden = t.id in hiddenKeywayIds)
+                    if (silhouetteKeyways && t.id in secondaryKeywayIds) {
+                        t.keywaySilhouetteNotch(clocking)?.let { drawKeywaySilhouetteNotch(it, L, outline, outlineW) }
+                    } else {
+                        drawKeywayNotch(t, L, x0, x1, top0, top1, outline, outlineW, taperFill, hidden = t.id in hiddenKeywayIds)
+                    }
                 }
             }
         }
@@ -733,4 +763,45 @@ private fun DrawScope.drawKeywaySlot(
     }
     // Open keyway: no SET-end wall — the shaft face end-line already closes the slot
     // (the same solid body/taper outline closes a hidden slot's open end too).
+}
+
+/**
+ * Draw a 90°-clocked secondary keyway as a notch cut into the host's silhouette edge — the
+ * true edge-on projection, where the slot's depth is what shows in profile.
+ *
+ * Geometry (span clamp, floor radii, top/bottom side) comes entirely from
+ * `geom/KeywaySilhouetteMath.kt`; this only maps mm → px. The PDF
+ * mirror is `ShaftPdfComposer.drawKeywaySilhouetteNotchPdf` — the two must stay in lockstep.
+ *
+ * The void polygon is filled first so it erases the host outline segment crossing the notch
+ * (keyways draw after outlines), then the two walls and the floor are stroked. The original
+ * surface line is deliberately not stroked — the notch is open at the surface.
+ */
+private fun DrawScope.drawKeywaySilhouetteNotch(
+    notch: KeywaySilhouetteNotch,
+    L: ShaftRenderer.Layout,
+    outline: Color,
+    outlineW: Float,
+) {
+    val cy = L.centerlineYPx
+    fun y(radiusMm: Float) = notch.side.yFor(cy, radiusMm, L.pxPerMm)
+
+    val poly = notch.fillPolygonMm()
+    val path = Path().apply {
+        poly.forEachIndexed { i, p ->
+            val px = L.xPx(p.xMm); val py = y(p.radiusMm)
+            if (i == 0) moveTo(px, py) else lineTo(px, py)
+        }
+        close()
+    }
+    // The keyway is a void — always white, regardless of the host's fill colour.
+    drawPath(path, color = Color.White)
+
+    fun stroke(seg: Pair<KeywaySilhouettePoint, KeywaySilhouettePoint>) {
+        val (a, b) = seg
+        drawLine(outline, Offset(L.xPx(a.xMm), y(a.radiusMm)), Offset(L.xPx(b.xMm), y(b.radiusMm)), strokeWidth = outlineW)
+    }
+    stroke(notch.wallStartMm())
+    stroke(notch.floorMm())
+    stroke(notch.wallEndMm())
 }

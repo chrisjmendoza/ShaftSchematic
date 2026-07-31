@@ -82,7 +82,7 @@ A `ShaftSpec` is the root aggregate:
 | `Threads` | Threaded segment. Fields: `majorDiaMm`, pitch (`pitchMm` + `tpi`), `excludeFromOAL`. |
 | `Liner` | Outer sleeve. Fields: `odMm`, anchor reference (`LinerAnchor`), authored direction. |
 
-`ShaftSpec` also carries `keyways180Apart` — a drawing note that the shaft's keyways are clocked 180° apart (far-side keyway renders hidden/dashed).
+`ShaftSpec` also carries `keyways180Apart` — a drawing note that the shaft's keyways are clocked 180° apart (far-side keyway renders hidden/dashed) — and `keyways90Apart` + `keyways90Cw`, its mutually-exclusive 90°-apart alternative (CW/CCW from the AFT keyway, viewed from aft; renders as an edge notch, not a hidden line).
 
 All axial positions are measured **AFT → FWD**. `ShaftSpec.validate()` checks non-negative values and segment bounds; it does not test for overlaps — overlap enforcement lives in collision detection (`collidingIds()`), separate from `validate()`. `collidingIds()` checks only sacred pairs (taper/thread/liner); bodies are fluid base material and never collide (a liner legitimately runs over a body).
 

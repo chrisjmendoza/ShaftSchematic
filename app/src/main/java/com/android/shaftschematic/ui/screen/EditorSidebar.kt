@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Schema
 import androidx.compose.material.icons.filled.Settings
@@ -45,8 +46,8 @@ import androidx.compose.ui.unit.dp
 /**
  * EditorSidebarOverlay
  *
- * A modal overlay navigation drawer for the shaft editor's three document views
- * (Schematic, Runout Sheet, Wear Document) plus Home and Settings shortcuts.
+ * A modal overlay navigation drawer for the shaft editor's document views
+ * (Schematic, Runout Sheet, Wear Document, Undercut Drawing) plus Home and Settings shortcuts.
  *
  * ## Layout strategy
  * The sidebar does NOT push content. It overlays as a modal:
@@ -63,13 +64,13 @@ import androidx.compose.ui.unit.dp
  * the phone's notification bar area.
  *
  * ## Items
- * Top group:  Home · Schematic · Runout Sheet · Wear Document
+ * Top group:  Home · Schematic · Runout Sheet · Wear Document · Undercut Drawing
  * Bottom group: Settings
- * Runout and Wear are dimmed when [runoutEnabled] is false (shaft not yet built).
+ * Runout, Wear, and Undercut are dimmed when [runoutEnabled] is false (shaft not yet built).
  *
  * @param open          Whether the sidebar is currently visible.
  * @param selectedTab   Which document tab is active (highlighted).
- * @param runoutEnabled Whether Runout and Wear tabs respond to taps.
+ * @param runoutEnabled Whether the Runout, Wear, and Undercut tabs respond to taps.
  * @param onOpen        Called when the user taps the collapsed handle tab.
  * @param onClose       Called when the user taps the scrim or any active nav item.
  * @param onTabSelected Called with the newly selected [EditorTab].
@@ -172,6 +173,14 @@ fun EditorSidebarOverlay(
                             selected = selectedTab == EditorTab.WEAR,
                             enabled = runoutEnabled,
                             onClick = { if (runoutEnabled) { onTabSelected(EditorTab.WEAR); onClose() } },
+                            disabledHint = "Add components first",
+                        )
+                        NavItem(
+                            icon = Icons.Filled.ContentCut,
+                            label = EditorTab.UNDERCUT.label,
+                            selected = selectedTab == EditorTab.UNDERCUT,
+                            enabled = runoutEnabled,
+                            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.UNDERCUT); onClose() } },
                             disabledHint = "Add components first",
                         )
 

@@ -40,6 +40,9 @@ where they merely mirrored code. (Sweep record in git history.)
   ShaftRenderer geometry, RenderOptions styling. PDF is a separate drawing path.
 - **RunoutSheet.md** — runout + wear tabs, bubble collision engine
   (`geom/RunoutBubbleLayout.kt`), OAL alignment, PDF appearance options
+- **UndercutDrawing.md** — Undercut Drawing tab/PDF: shaft-space (not component-keyed)
+  undercut sections, cluster-window zoom, notch geometry against the local outer surface,
+  chained + total dimension rails. Design plan: `UndercutDrawing_PLAN.md`.
 - **PdfExport.md** — export route (SAF, Letter landscape 792×612) and PDF preview
   screen (options sheet, orientation unlock). Composer pipeline: `docs/PDF_EXPORT.md`.
 

@@ -17,8 +17,8 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 /**
  * ShaftEditorRoute
  *
- * Top-level container for the three editor document views:
- * Schematic (shaft editor), Runout Sheet, and Wear Document.
+ * Top-level container for the editor document views:
+ * Schematic (shaft editor), Runout Sheet, Wear Document, and Undercut Drawing.
  *
  * ## Navigation model
  * Navigation is handled by [EditorSidebarOverlay], which is a modal overlay drawer.
@@ -29,9 +29,9 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
  * on phones, especially smaller devices.
  *
  * ## "Built" definition
- * Runout and Wear tabs are enabled once the spec has ≥1 component and a non-zero OAL.
- * If the shaft loses "built" status (all components deleted) the active tab reverts to
- * Schematic automatically.
+ * The Runout, Wear, and Undercut tabs are enabled once the spec has ≥1 component and a
+ * non-zero OAL. If the shaft loses "built" status (all components deleted) the active tab
+ * reverts to Schematic automatically.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,6 +88,11 @@ fun ShaftEditorRoute(
             )
 
             EditorTab.WEAR -> WearRoute(
+                vm = vm,
+                onOpenSidebar = { sidebarOpen = true },
+            )
+
+            EditorTab.UNDERCUT -> UndercutRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
             )

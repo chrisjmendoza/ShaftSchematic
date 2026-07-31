@@ -152,14 +152,18 @@ Body keyways survive body split/merge by **absolute position**: `carryBodyKeyway
 (`model/ShaftSpecExtensions.kt`) re-anchors the offset to the surviving fragment's face,
 and drops the keyway if a cut passes through it.
 
-### Keyways 180° apart
+### Keyway clocking — 180° / 90° apart
 
 `ShaftSpec.keyways180Apart` states the shaft's keyways are clocked 180° from each other.
-It is only meaningful when `spec.keywayCount() >= 2`; UI surfaces the toggle only then,
-and the PDF prints "Keyways 180° apart" in the footer's middle column under the same
-condition.
+`ShaftSpec.keyways90Apart` (+ `keyways90Cw`) states they are clocked 90° apart instead,
+with the direction measured **from the AFT keyway, viewed from aft** (CW/CCW). The two
+flags are **mutually exclusive** — `ShaftViewModel.setKeyways180Apart(true)` clears
+`keyways90Apart` and vice versa; the UI never enforces this itself, it only reflects
+whichever flag the ViewModel currently reports. Both are only meaningful when
+`spec.keywayCount() >= 2`; UI surfaces the toggles (and, for 90°, the CW/CCW chips) only
+then, and the PDF prints the matching footer note under the same condition.
 
-**Hidden-line rendering.** When the flag is set (≥ 2 keyways), the keyway nearest the AFT
+**180° hidden-line rendering.** When `keyways180Apart` is set, the keyway nearest the AFT
 face — the shop's measurement datum — stays **solid** (near side); every other keyway is
 drawn as a **hidden feature**: dashed outline (`HIDDEN_DASH_ON`/`HIDDEN_DASH_OFF` =
 6/4 px) with **no** white void fill, since the near surface is unbroken in a plan view.
@@ -167,6 +171,19 @@ drawn as a **hidden feature**: dashed outline (`HIDDEN_DASH_ON`/`HIDDEN_DASH_OFF
 the host IDs to draw hidden, and both `ShaftRenderer` (preview) and `ShaftPdfComposer`
 (export) consume it, so the two surfaces never diverge. This is the standard drafting
 convention for a feature on the far side of the part; the footer note stays as well.
+
+**90° notch rendering.** A 90° secondary keyway is neither near-side (solid) nor far-side
+(hidden/dashed) — it is drawn on an **edge** of the silhouette: a depth-deep notch cut into
+the profile outline itself, not a dashed reference line. Which edge is derived from the
+same aft-view clock convention as runout high-spot markers (12 o'clock = up, increasing
+clockwise): the AFT keyway is always drawn facing the page viewer (solid, near side), which
+— because the drawing runs AFT-at-page-left / FWD-at-page-right — puts it at an
+aft-observer's **3 o'clock**. Rotating **CW** from that reference lands 90° further around
+at **6 o'clock**, the profile's **bottom edge**; rotating **CCW** lands at **12 o'clock**,
+the profile's **top edge**. So: `keyways90Cw = true` → notch on the bottom edge;
+`keyways90Cw = false` (CCW) → notch on the top edge. The spoon bowl (see "Spooned keyways")
+is a face-view construct: it draws on face-on slots (the primary, or a 180° hidden slot,
+dashed) but has no edge-on projection, so a spooned 90° secondary draws as a plain notch.
 
 ---
 

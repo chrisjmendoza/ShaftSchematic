@@ -33,6 +33,10 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - [ ] **Preview panel + event wiring extraction** — remaining ShaftScreen refactor work (lower priority)
 
 **Delivered in v0.5.x so far:**
+- Keyways 90° apart — spec-level clocking note alongside Keyways 180° apart (mutually
+  exclusive), with a CW/CCW direction chip pair measured from the AFT keyway, viewed from
+  aft; renders as a depth-deep notch on the silhouette's top/bottom edge (not a hidden
+  dashed line) and is not paired with a spoon bowl
 - Backup & restore for saved shafts — Settings → Data gains "Back up all
 	shafts…" (single zip to any picked location: Drive, Downloads, SD card) and
 	"Restore from backup…" (never overwrites; identical docs skipped, collisions

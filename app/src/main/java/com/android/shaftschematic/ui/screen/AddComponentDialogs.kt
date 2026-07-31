@@ -111,7 +111,8 @@ fun AddBodyDialog(
     onSubmit: (startMm: Float, lengthMm: Float, diaMm: Float,
                keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
-               keywaySpooned: Boolean, keyways180Apart: Boolean) -> Unit,
+               keywaySpooned: Boolean, keyways180Apart: Boolean, keyways90Apart: Boolean,
+               keyways90Cw: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -130,7 +131,12 @@ fun AddBodyDialog(
     var kwOffset  by remember { mutableStateOf("") }
     var kwFwd     by remember { mutableStateOf(false) }
     var kwSpooned by remember { mutableStateOf(false) }
-    var opposed   by remember { mutableStateOf(spec.keyways180Apart) }
+    // 180°/90° clocking are mutually exclusive; enforced locally here (mirrors the
+    // ViewModel's clearing behavior) so the two switches never show both checked
+    // before the value round-trips through onSubmit.
+    var clock180  by remember { mutableStateOf(spec.keyways180Apart) }
+    var clock90   by remember { mutableStateOf(spec.keyways90Apart) }
+    var cw90      by remember { mutableStateOf(spec.keyways90Cw) }
 
     val startMm = toMmOrNull(start, unit) ?: -1f
     val lengthMm = toMmOrNull(length, unit) ?: -1f
@@ -144,7 +150,7 @@ fun AddBodyDialog(
     val isFloating = kwO > 0f
     // Same condition as the carousel card's switch: it appears once the shaft will
     // have ≥ 2 keyways (≥ 1 existing plus the one being defined here).
-    val show180Toggle = kwEnabled && spec.keywayCount() >= 1 && kwW > 0f && kwD > 0f && kwL > 0f
+    val showClockingToggle = kwEnabled && spec.keywayCount() >= 1 && kwW > 0f && kwD > 0f && kwL > 0f
 
     val scroll = rememberScrollState()
 
@@ -211,13 +217,38 @@ fun AddBodyDialog(
                         )
                     }
                 }
-                if (show180Toggle) {
+                if (showClockingToggle) {
                     Row(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Keyways 180° apart", modifier = Modifier.weight(1f))
-                        Switch(checked = opposed, onCheckedChange = { opposed = it })
+                        Switch(checked = clock180, onCheckedChange = { checked ->
+                            clock180 = checked
+                            if (checked) clock90 = false
+                        })
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Keyways 90° apart", modifier = Modifier.weight(1f))
+                        Switch(checked = clock90, onCheckedChange = { checked ->
+                            clock90 = checked
+                            if (checked) clock180 = false
+                        })
+                    }
+                    if (clock90) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("From AFT keyway, viewed from aft:", style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            DirectionChip("CW", selected = cw90) { cw90 = true }
+                            DirectionChip("CCW", selected = !cw90) { cw90 = false }
+                        }
                     }
                 }
             }
@@ -230,7 +261,9 @@ fun AddBodyDialog(
                     kwW, kwD, kwL, kwO,
                     if (kwFwd) LinerAuthoredReference.FWD else LinerAuthoredReference.AFT,
                     kwSpooned && !isFloating,
-                    if (show180Toggle) opposed else spec.keyways180Apart,
+                    if (showClockingToggle) clock180 else spec.keyways180Apart,
+                    if (showClockingToggle) clock90 else spec.keyways90Apart,
+                    if (showClockingToggle) cw90 else spec.keyways90Cw,
                 )
             }) { Text("Add") }
         },
@@ -601,7 +634,8 @@ fun AddTaperDialog(
     initialLengthMm: Float? = null,
     onSubmit: (startMm: Float, lengthMm: Float, setDiaMm: Float, letDiaMm: Float, rateText: String,
                keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
-               keywayOffsetFromSetMm: Float, keywaySpooned: Boolean, keyways180Apart: Boolean) -> Unit,
+               keywayOffsetFromSetMm: Float, keywaySpooned: Boolean, keyways180Apart: Boolean,
+               keyways90Apart: Boolean, keyways90Cw: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -628,7 +662,12 @@ fun AddTaperDialog(
     var kwLength  by remember { mutableStateOf("") }
     var kwOffset  by remember { mutableStateOf("") }
     var kwSpooned by remember { mutableStateOf(false) }
-    var opposed   by remember { mutableStateOf(spec.keyways180Apart) }
+    // 180°/90° clocking are mutually exclusive; enforced locally here (mirrors the
+    // ViewModel's clearing behavior) so the two switches never show both checked
+    // before the value round-trips through onSubmit.
+    var clock180  by remember { mutableStateOf(spec.keyways180Apart) }
+    var clock90   by remember { mutableStateOf(spec.keyways90Apart) }
+    var cw90      by remember { mutableStateOf(spec.keyways90Cw) }
 
     val startEntered = toMmOrNull(if (isFwd) startFwd else startAft, unit) ?: -1f
     val lengthMm = toMmOrNull(length, unit) ?: -1f
@@ -706,7 +745,7 @@ fun AddTaperDialog(
     val kwDefined = (toMmOrNull(kwWidth, unit) ?: 0f) > 0f &&
         (toMmOrNull(kwDepth, unit) ?: 0f) > 0f &&
         (toMmOrNull(kwLength, unit) ?: 0f) > 0f
-    val show180Toggle = spec.keywayCount() >= 1 && kwDefined
+    val showClockingToggle = spec.keywayCount() >= 1 && kwDefined
 
     val scroll = rememberScrollState()
 
@@ -792,13 +831,38 @@ fun AddTaperDialog(
                         onCheckedChange = { if (!isFloating) kwSpooned = it }
                     )
                 }
-                if (show180Toggle) {
+                if (showClockingToggle) {
                     Row(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Keyways 180° apart", modifier = Modifier.weight(1f))
-                        Switch(checked = opposed, onCheckedChange = { opposed = it })
+                        Switch(checked = clock180, onCheckedChange = { checked ->
+                            clock180 = checked
+                            if (checked) clock90 = false
+                        })
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Keyways 90° apart", modifier = Modifier.weight(1f))
+                        Switch(checked = clock90, onCheckedChange = { checked ->
+                            clock90 = checked
+                            if (checked) clock180 = false
+                        })
+                    }
+                    if (clock90) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("From AFT keyway, viewed from aft:", style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            DirectionChip("CW", selected = cw90) { cw90 = true }
+                            DirectionChip("CCW", selected = !cw90) { cw90 = false }
+                        }
                     }
                 }
             }
@@ -832,7 +896,9 @@ fun AddTaperDialog(
                     val action = {
                         onSubmit(physStartMm, lengthMm, startDia, endDia, submitRateText,
                                  kwW, kwD, kwL, kwO, kwSpooned && !isFloating,
-                                 if (show180Toggle) opposed else spec.keyways180Apart)
+                                 if (showClockingToggle) clock180 else spec.keyways180Apart,
+                                 if (showClockingToggle) clock90 else spec.keyways90Apart,
+                                 if (showClockingToggle) cw90 else spec.keyways90Cw)
                     }
                     val warnings = collectAddWarnings(spec, physStartMm, lengthMm, overallIsManual)
                     if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }

@@ -6,9 +6,17 @@ package com.android.shaftschematic.pdf
 import android.graphics.*
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.END_EPS_MM
+import com.android.shaftschematic.geom.KeywaySilhouetteNotch
+import com.android.shaftschematic.geom.KeywaySilhouettePoint
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.fillPolygonMm
+import com.android.shaftschematic.geom.floorMm
+import com.android.shaftschematic.geom.keywaySilhouetteNotch
 import com.android.shaftschematic.geom.keywaySpoonBowl
+import com.android.shaftschematic.geom.wallEndMm
+import com.android.shaftschematic.geom.wallStartMm
+import com.android.shaftschematic.geom.yFor
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.pdf.dim.*
 import com.android.shaftschematic.pdf.notes.*
@@ -221,15 +229,28 @@ fun composeShaftPdf(
     } else {
         drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect, bodyFill)
     }
-    // Keyways 180° apart: far-side keyways render hidden (dashed, no fill); aft-most
-    // stays solid. Empty unless the flag is set.
+    // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every other
+    // host is a secondary. At 180° a secondary renders hidden (dashed, no fill); at 90° it renders
+    // as a notch cut into a silhouette edge. Mirrors the canvas renderer.
+    val clocking = spec.keywayClocking()
     val hiddenKeywayIds = spec.hiddenKeywayHostIds()
+    val secondaryKeywayIds = spec.secondaryKeywayHostIds()
+    val silhouetteKeyways = clocking == KeywayClocking.DEG_90_CW || clocking == KeywayClocking.DEG_90_CCW
     // Body keyways — drawn from model bodies (resolved fragments and center-break
     // compression keep true end faces, so the slot lands at its physical position).
     spec.bodies.filter { it.hasKeyway }.forEach { b ->
-        drawKeywayNotchBodyPdf(c, b, ::xAt, cy, outline, hidden = b.id in hiddenKeywayIds)
+        if (silhouetteKeyways && b.id in secondaryKeywayIds) {
+            b.keywaySilhouetteNotch(clocking)?.let {
+                drawKeywaySilhouetteNotchPdf(c, it, ::xAt, ptPerMm, cy, outline)
+            }
+        } else {
+            drawKeywayNotchBodyPdf(c, b, ::xAt, cy, outline, hidden = b.id in hiddenKeywayIds)
+        }
     }
-    drawTapers(c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill, hiddenKeywayIds)
+    drawTapers(
+        c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill,
+        hiddenKeywayIds, clocking, secondaryKeywayIds, ptPerMm,
+    )
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill)
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill(), bodies = bodiesForPdf)
@@ -745,7 +766,11 @@ private fun drawTapers(
     outline: Paint,
     fill: Paint? = null,
     hiddenKeywayIds: Set<String> = emptySet(),
+    clocking: KeywayClocking = KeywayClocking.NONE,
+    secondaryKeywayIds: Set<String> = emptySet(),
+    ptPerMm: Float = 1f,
 ) {
+    val silhouetteKeyways = clocking == KeywayClocking.DEG_90_CW || clocking == KeywayClocking.DEG_90_CCW
     tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
         val x0 = requireFinite("taper.x0", xAt(t.startFromAftMm))
@@ -767,9 +792,60 @@ private fun drawTapers(
         c.drawLine(x1, top1, x1, bot1, outline)
 
         if (t.hasKeyway) {
-            drawKeywayNotchPdf(c, t, x0, x1, top0, top1, cy, outline, hidden = t.id in hiddenKeywayIds)
+            if (silhouetteKeyways && t.id in secondaryKeywayIds) {
+                t.keywaySilhouetteNotch(clocking)?.let {
+                    drawKeywaySilhouetteNotchPdf(c, it, xAt, ptPerMm, cy, outline)
+                }
+            } else {
+                drawKeywayNotchPdf(c, t, x0, x1, top0, top1, cy, outline, hidden = t.id in hiddenKeywayIds)
+            }
         }
     }
+}
+
+/**
+ * Draw a 90°-clocked secondary keyway as a notch cut into the host's silhouette edge — the true
+ * edge-on projection, where the slot's depth is what shows in profile.
+ *
+ * Geometry (span clamp, floor radii, top/bottom side) comes entirely from
+ * `geom/KeywaySilhouetteMath.kt`; this only maps mm → pt. The canvas
+ * mirror is `ShaftRenderer.drawKeywaySilhouetteNotch` — the two must stay in lockstep.
+ *
+ * The void polygon is filled first so it erases the host outline segment crossing the notch
+ * (keyways draw after outlines), then the two walls and the floor are stroked. The original
+ * surface line is deliberately not stroked — the notch is open at the surface.
+ */
+private fun drawKeywaySilhouetteNotchPdf(
+    c: Canvas,
+    notch: KeywaySilhouetteNotch,
+    xAt: (Float) -> Float,
+    ptPerMm: Float,
+    cy: Float,
+    outline: Paint,
+) {
+    fun y(radiusMm: Float) = notch.side.yFor(cy, radiusMm, ptPerMm)
+
+    val path = Path().apply {
+        notch.fillPolygonMm().forEachIndexed { i, p ->
+            val px = xAt(p.xMm); val py = y(p.radiusMm)
+            if (i == 0) moveTo(px, py) else lineTo(px, py)
+        }
+        close()
+    }
+    // The keyway is a void — always white, regardless of the host's fill shading.
+    val whiteFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.WHITE
+    }
+    c.drawPath(path, whiteFill)
+
+    fun stroke(seg: Pair<KeywaySilhouettePoint, KeywaySilhouettePoint>) {
+        val (a, b) = seg
+        c.drawLine(xAt(a.xMm), y(a.radiusMm), xAt(b.xMm), y(b.radiusMm), outline)
+    }
+    stroke(notch.wallStartMm())
+    stroke(notch.floorMm())
+    stroke(notch.wallEndMm())
 }
 
 internal fun drawKeywayNotchPdf(
@@ -1086,8 +1162,8 @@ private fun drawFooter(
             if (cfg.bodyDiasMm.isNotEmpty()) {
                 drawFooterLine("Body: Ø", midX, y, midMaxW); y += lh
             }
-            if (spec.keyways180Apart && spec.keywayCount() >= 2) {
-                c.drawText(ellipsizeToWidth("Keyways 180° apart", text, midMaxW), midX, y, text); y += lh
+            keywayClockingFooterNote(spec)?.let { note ->
+                c.drawText(ellipsizeToWidth(note, text, midMaxW), midX, y, text); y += lh
             }
             drawFooterLine("Side:", midX, y, midMaxW)
         } else {
@@ -1103,8 +1179,8 @@ private fun drawFooter(
             }
 
             // Keyway clocking note — only meaningful with ≥ 2 keyways on the shaft.
-            if (spec.keyways180Apart && spec.keywayCount() >= 2) {
-                c.drawText(ellipsizeToWidth("Keyways 180° apart", text, midMaxW), midX, y, text); y += lh
+            keywayClockingFooterNote(spec)?.let { note ->
+                c.drawText(ellipsizeToWidth(note, text, midMaxW), midX, y, text); y += lh
             }
 
             project.side.printableLabelOrNull()?.let { pos ->
@@ -1125,6 +1201,24 @@ private fun drawFooter(
             drawFooterLine(line, rightX, y, rightMaxW)
             y += lh
         }
+    }
+}
+
+/**
+ * The single keyway-clocking note printed in the footer's middle column, or null when none
+ * applies. Only meaningful with ≥ 2 keyways on the shaft — "apart from each other" says nothing
+ * about a lone keyway.
+ *
+ * At most one note ever prints: [keywayClocking] resolves the mutually-exclusive flags into one
+ * mode. Shared by the printed and blank-draft footer branches so they can't drift apart.
+ */
+internal fun keywayClockingFooterNote(spec: ShaftSpec): String? {
+    if (spec.keywayCount() < 2) return null
+    return when (spec.keywayClocking()) {
+        KeywayClocking.DEG_180    -> "Keyways 180° apart"
+        KeywayClocking.DEG_90_CW  -> "Keyways 90° apart (CW from aft)"
+        KeywayClocking.DEG_90_CCW -> "Keyways 90° apart (CCW from aft)"
+        KeywayClocking.NONE       -> null
     }
 }
 

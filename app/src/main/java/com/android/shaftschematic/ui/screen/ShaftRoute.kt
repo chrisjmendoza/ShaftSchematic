@@ -217,6 +217,8 @@ fun ShaftRoute(
         onUpdateCouplerBoltSlotShowRail = { i, show -> vm.updateCouplerBoltSlotShowRail(i, show) },
 
         onSetKeyways180Apart = vm::setKeyways180Apart,
+        onSetKeyways90Apart = vm::setKeyways90Apart,
+        onSetKeyways90Cw = vm::setKeyways90Cw,
         onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
         onSetThreadEndPosition = vm::setThreadEndPosition,
 

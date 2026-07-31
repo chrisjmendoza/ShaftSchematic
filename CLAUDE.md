@@ -38,9 +38,11 @@ Specifically:
 - **Body keyway**: `AddBodyDialog` and the explicit-body carousel card must both expose
   the keyway section (KW from AFT | FWD chips, W × D, L, offset, spooned toggle). The
   auto-body card intentionally omits it (auto-bodies can't host keyways until promoted).
-- **Keyways 180° apart**: the spec-level toggle appears on keyway-bearing cards when the
-  shaft has ≥ 2 keyways, and in `AddBodyDialog`/`AddTaperDialog` when adding would reach
-  ≥ 2 (≥ 1 existing + this dialog's keyway defined). Same condition on both surfaces.
+- **Keyway clocking**: the spec-level 180°/90° toggles and the CW/CCW chips appear on
+  keyway-bearing cards when the shaft has ≥ 2 keyways, and in
+  `AddBodyDialog`/`AddTaperDialog` when adding would reach ≥ 2 (≥ 1 existing + this
+  dialog's keyway defined). Same condition on both surfaces. 180° and 90° are mutually
+  exclusive.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
 - **Coupler bolt slot**: `AddCouplerBoltSlotDialog` and the `ResolvedCouplerBoltSlot`
   carousel card must both expose Measure From (AFT | FWD), hole Ø, count, spacing (only
@@ -87,6 +89,28 @@ in both draw sites: `ComponentWearDetailOverlay` (canvas) and `WearPdfComposer` 
 readings → that liner's detail strip; body/taper readings → under the main profile). Labels
 use `formatDiaWithUnit`, no `Ø` prefix. See `docs/RunoutSheet.md` (Wear Diameter
 Measurements) and `docs/WearDiaMeasurements_PLAN.md`.
+
+### Undercuts are reference features
+Undercut sections (`UndercutRecord.undercuts` — an `Undercut` per machined-below-surface
+span, printed on its own Undercut Drawing tab/PDF) are **reference-only**, the same posture
+as wear spots / pits / dia readings / runout readings / coupler bolt slots. They **never**
+affect `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End badge, and they
+live outside `ShaftSpec` in their own envelope field (`undercut_record`, sibling of
+`wear_record`). **Deliberately NOT component-keyed**: canonical storage is shaft-space
+`startFromAftMm` (an undercut may cross a liner edge or span components), so there are no
+orphans and nothing is pruned at decode. The Distance field is authored against an
+`AFT_SET`/`FWD_SET` reference (display-only metadata; canonical never moves — the
+`WearSpotReference` pattern, conversion pair in `geom/UndercutMath.kt`). `diaMm` is a typed
+measurement — stored **verbatim** (golden rule); `0` = placed-but-empty, drawn with a
+symbolic shallow floor in the overlay, never printed. No carousel card and no Add dialog —
+undercuts are authored only on their tab, keeping them outside the add-dialog-parity
+invariant. The notch (void fill + shoulders + floor, cut against the **local outer-surface
+envelope** so a cut crossing a liner edge shows stepped shoulders) must render
+**identically** in all draw sites — `UndercutRoute`/`UndercutWindowDetailOverlay` (canvas)
+and `UndercutPdfComposer` (PDF) — from the shared pure pipeline `geom/SurfaceProfileMath.kt`
++ `geom/UndercutMath.kt` (cluster windows, clamps, hit-tests; no `pdf → ui` dep) with
+`ui/resolved/SurfaceSegs.kt` as the single resolved→surface mapping. See
+`docs/UndercutDrawing_PLAN.md`.
 
 ### Runout readings are reference features
 Per-station runout readings (`RunoutReadings` in the doc envelope — a TIR value + high-spot

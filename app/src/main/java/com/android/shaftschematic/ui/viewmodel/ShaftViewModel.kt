@@ -116,6 +116,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             overallIsManual = _overallIsManual.value,
             wearRecord = _wearRecord.value,
             runoutReadings = _runoutReadings.value,
+            undercutRecord = _undercutRecord.value,
         )
 
     /**
@@ -568,6 +569,72 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _wearRecord.update { rec -> rec.copy(diaReadings = rec.diaReadings.filterNot { it.id == id }) }
     }
 
+    // ── Undercut drawing record ────────────────────────────────────────────────
+    // Reference-only data, same posture as _wearRecord/_runoutReadings above: plain state
+    // updates, no geometry side effects, no ensureOverall/auto-body interaction. Undercuts
+    // have no component key, so there is no orphan concept here. See
+    // docs/UndercutDrawing_PLAN.md §2, §6.
+
+    private val _undercutRecord = MutableStateFlow(UndercutRecord())
+    val undercutRecord: StateFlow<UndercutRecord> = _undercutRecord.asStateFlow()
+
+    /**
+     * Record a new undercut section at [startFromAftMm] (canonical shaft space) with
+     * [lengthMm], Ø unentered (0) and [UndercutReference.AFT_SET]. Returns the new
+     * undercut's id so the caller can immediately open its detail overlay.
+     */
+    fun addUndercut(startFromAftMm: Float, lengthMm: Float): String {
+        val undercut = Undercut(
+            startFromAftMm = startFromAftMm,
+            lengthMm = lengthMm,
+            diaMm = 0f,
+            authoredReference = UndercutReference.AFT_SET,
+        )
+        _undercutRecord.update { rec -> rec.copy(undercuts = rec.undercuts + undercut) }
+        return undercut.id
+    }
+
+    /**
+     * Replace an existing undercut's fields by [id]. Fields are stored **verbatim** — golden
+     * rule: no snap/round/derive ever rewrites a typed value, including [diaMm] (0 = placed,
+     * not yet measured). No-op if the id is not found.
+     */
+    fun updateUndercut(id: String, startFromAftMm: Float, lengthMm: Float, diaMm: Float, note: String) {
+        _undercutRecord.update { rec ->
+            rec.copy(
+                undercuts = rec.undercuts.map { u ->
+                    if (u.id != id) u else u.copy(
+                        startFromAftMm = startFromAftMm,
+                        lengthMm = lengthMm,
+                        diaMm = diaMm,
+                        note = note,
+                    )
+                }
+            )
+        }
+    }
+
+    /**
+     * Update an undercut's authored "Measure from" reference by [id]. Display-only — same
+     * pattern as [updateWearSpotReference]: it never touches [Undercut.startFromAftMm],
+     * only which S.E.T. the "Distance" field re-projects against.
+     */
+    fun updateUndercutReference(id: String, reference: UndercutReference) {
+        _undercutRecord.update { rec ->
+            rec.copy(
+                undercuts = rec.undercuts.map { u ->
+                    if (u.id != id || u.authoredReference == reference) u
+                    else u.copy(authoredReference = reference)
+                }
+            )
+        }
+    }
+
+    /** Remove an undercut by [id]. Confirm-free, as authored in its edit card. */
+    fun removeUndercut(id: String) {
+        _undercutRecord.update { rec -> rec.copy(undercuts = rec.undercuts.filterNot { it.id == id }) }
+    }
+
     // Tap-to-add pending position: non-null while the user has tapped empty space and
     // has not yet confirmed or dismissed the add-at-position flow.
     private val _pendingAddPositionMm = MutableStateFlow<Float?>(null)
@@ -633,6 +700,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         spec = _spec.value,
         wearRecord = _wearRecord.value,
         runoutReadings = _runoutReadings.value,
+        undercutRecord = _undercutRecord.value,
         componentOrder = _componentOrder.value,
         overallIsManual = _overallIsManual.value,
     )
@@ -655,6 +723,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             _spec.value = e.spec
             _wearRecord.value = e.wearRecord
             _runoutReadings.value = e.runoutReadings
+            _undercutRecord.value = e.undercutRecord
             _componentOrder.value = e.componentOrder
             _overallIsManual.value = e.overallIsManual
         } finally {
@@ -713,9 +782,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Flow.combine overload for >5 flows returns Array<Any?>
         val sessionSnapshotFlow = combine(
             spec, unit, shaftPosition, customer, vessel, jobNumber, notes,
-            runoutConfig, unitLocked, overallIsManual, wearRecord, runoutReadings
+            runoutConfig, unitLocked, overallIsManual, wearRecord, runoutReadings, undercutRecord
         ) { values: Array<Any?> ->
-            check(values.size == 12) { "Autosave combine expected 12 values, got ${values.size}" }
+            check(values.size == 13) { "Autosave combine expected 13 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -729,6 +798,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val manual = values[9] as Boolean
             val wear = values[10] as WearRecord
             val readings = values[11] as RunoutReadings
+            val undercuts = values[12] as UndercutRecord
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -743,6 +813,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 overallIsManual = manual,
                 wearRecord = wear,
                 runoutReadings = readings,
+                undercutRecord = undercuts,
             )
         }
 
@@ -811,14 +882,19 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Restores (undo/redo) re-emit the restored state, but SessionHistory.record no-ops it
         // (equal to head) and isRestoringHistory guards the application block as well.
         viewModelScope.launch {
-            combine(spec, wearRecord, runoutReadings, componentOrder, overallIsManual) {
-                s, wear, readings, order, manual ->
+            @Suppress("UNCHECKED_CAST")
+            // Flow.combine overload for >5 flows returns Array<Any?>
+            combine(
+                spec, wearRecord, runoutReadings, undercutRecord, componentOrder, overallIsManual
+            ) { values: Array<Any?> ->
+                check(values.size == 6) { "Edit-history combine expected 6 values, got ${values.size}" }
                 EditState(
-                    spec = s,
-                    wearRecord = wear,
-                    runoutReadings = readings,
-                    componentOrder = order,
-                    overallIsManual = manual,
+                    spec = values[0] as ShaftSpec,
+                    wearRecord = values[1] as WearRecord,
+                    runoutReadings = values[2] as RunoutReadings,
+                    undercutRecord = values[3] as UndercutRecord,
+                    componentOrder = values[4] as List<ComponentKey>,
+                    overallIsManual = values[5] as Boolean,
                 )
             }.collect { edit ->
                 if (isRestoringHistory) return@collect
@@ -1113,6 +1189,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutConfig.value = snapshot.runoutConfig
         _wearRecord.value = snapshot.wearRecord
         _runoutReadings.value = snapshot.runoutReadings
+        _undercutRecord.value = snapshot.undercutRecord
         // Restore unitLocked before any defaultUnitFlow emission can overwrite the
         // draft's unit, and overallIsManual so a manually-set OAL isn't auto-resized.
         _unitLocked.value = snapshot.unitLocked
@@ -1288,10 +1365,23 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Set the drawing note that the shaft's keyways are clocked 180° apart. */
-    fun setKeyways180Apart(enabled: Boolean) = _spec.update { s ->
-        if (s.keyways180Apart == enabled) s else s.copy(keyways180Apart = enabled)
-    }
+    /**
+     * Set the drawing note that the shaft's keyways are clocked 180° apart. Enabling clears the
+     * 90° note — a shaft carries at most one clocking note. Unchanged input is a no-op.
+     */
+    fun setKeyways180Apart(enabled: Boolean) = _spec.update { s -> s.withKeyways180Apart(enabled) }
+
+    /**
+     * Set the drawing note that the shaft's keyways are clocked 90° apart. Enabling clears the
+     * 180° note — a shaft carries at most one clocking note. Unchanged input is a no-op.
+     */
+    fun setKeyways90Apart(enabled: Boolean) = _spec.update { s -> s.withKeyways90Apart(enabled) }
+
+    /**
+     * Set the 90° clocking direction — true = clockwise viewed from aft. Meaningful only while
+     * [setKeyways90Apart] is on; the choice survives toggling the note off and back on.
+     */
+    fun setKeyways90Cw(cw: Boolean) = _spec.update { s -> s.withKeyways90Cw(cw) }
 
     /**
      * Remove a [Body] by its stable [id].
@@ -2018,6 +2108,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             runoutConfig = _runoutConfig.value,
             wearRecord = _wearRecord.value,
             runoutReadings = _runoutReadings.value,
+            undercutRecord = _undercutRecord.value,
         )
     )
 
@@ -2053,6 +2144,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Already orphan-filtered against decoded.spec.liners inside ShaftDocCodec.decode().
         _wearRecord.value = decoded.wearRecord
         _runoutReadings.value = decoded.runoutReadings
+        _undercutRecord.value = decoded.undercutRecord
 
         // Derive OAL mode from the document instead of leaking the previous session's
         // flag: an authored OAL beyond the content end must be treated as manual, or
@@ -2101,6 +2193,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutConfig.value = RunoutConfig()
         _wearRecord.value = WearRecord()
         _runoutReadings.value = RunoutReadings()
+        _undercutRecord.value = UndercutRecord()
         _notes.value = ""
         _overallIsManual.value = false
 

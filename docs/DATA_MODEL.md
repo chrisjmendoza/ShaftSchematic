@@ -1,6 +1,7 @@
 # ShaftSchematic Data Model
 Version: v0.5.x
-Last updated: 2026-07-28 — ShaftSpec sample corrected to include `keyways180Apart` +
+Last updated: 2026-07-30 — added `keyways90Apart`/`keyways90Cw` (90°-apart clocking,
+mutually exclusive with `keyways180Apart`). 2026-07-28 — ShaftSpec sample corrected to include `keyways180Apart` +
 `autoBodyDiaMm`; documented the document envelope's reference-only records (WearRecord
 spots/pits/measured-Ø readings, RunoutReadings) and their orphan policies; auto-body
 promotion corrected to the checkbox-only "Explicit body" path. 2026-07-21 — reverted
@@ -29,6 +30,8 @@ data class ShaftSpec(
     val liners: List<Liner> = emptyList(),
     val couplerBoltSlots: List<CouplerBoltSlot> = emptyList(),
     val keyways180Apart: Boolean = false,  // drawing note: keyways clocked 180° apart
+    val keyways90Apart: Boolean = false,   // drawing note: keyways clocked 90° apart (mutually exclusive with keyways180Apart)
+    val keyways90Cw: Boolean = true,       // 90°-apart direction from the AFT keyway, viewed from aft; meaningful only when keyways90Apart
     val autoBodyDiaMm: Float = 0f,         // single bare-shaft Ø shared by all auto-body spans; 0 = derive from neighbors
 )
 Responsibilities:
@@ -152,13 +155,22 @@ val Body.hasKeyway:  Boolean get() = keywayWidthMm > 0f && keywayDepthMm > 0f &&
 val Body.keywayAbsSpanMm(): Pair<Float, Float>?  // absolute AFT-origin span of the slot
 val Taper.maxDiaMm get() = max(startDiaMm, endDiaMm)
 
-Spec-level keyway note:
+Spec-level keyway clocking note:
 - ShaftSpec.keyways180Apart: Boolean (default false) — the shaft's keyways are clocked
   180° apart. Meaningful only when spec.keywayCount() >= 2 (UI + PDF gate on that).
-- ShaftSpec.hiddenKeywayHostIds(): Set<String> — when the flag is set, the aft-most
+- ShaftSpec.keyways90Apart: Boolean (default false) — the shaft's keyways are clocked
+  90° apart instead of 180°. Same >= 2 keyway gate. Mutually exclusive with
+  keyways180Apart — ShaftViewModel.setKeyways180Apart/setKeyways90Apart each clear the
+  other flag when enabling.
+- ShaftSpec.keyways90Cw: Boolean (default true) — direction of the 90° clocking, measured
+  from the AFT keyway, viewed from aft (true = CW, false = CCW). Meaningful only when
+  keyways90Apart is set.
+- ShaftSpec.hiddenKeywayHostIds(): Set<String> — when keyways180Apart is set, the aft-most
   keyway (smallest absolute center, the measurement datum) stays solid; every other
   keyway's host id is returned so the renderer/PDF draw it as a hidden feature (dashed,
-  no void fill). No geometric effect — pure drawing classification.
+  no void fill). No geometric effect — pure drawing classification. (keyways90Apart uses a
+  different rendering path — an edge notch, not a hidden dashed line — see
+  docs/COMPONENT_CONTRACT.md "Keyway clocking — 180° / 90° apart".)
 - Taper.keywayAbsSpanMm(): Pair<Float, Float>?  // absolute AFT-origin span (for clocking)
 Threads
 @Serializable
@@ -294,10 +306,10 @@ Backfill missing UUIDs
 
 Normalize thread pitch/tpi relationships
 
-`couplerBoltSlots`, `keyways180Apart`, `autoBodyDiaMm`, and every envelope record above
-round-trip automatically through `ShaftDocCodec` with no schema/version bump: each defaults
-empty/zero and decode uses `ignoreUnknownKeys`, so documents written before a field existed
-decode unchanged.
+`couplerBoltSlots`, `keyways180Apart`, `keyways90Apart`, `keyways90Cw`, `autoBodyDiaMm`, and
+every envelope record above round-trip automatically through `ShaftDocCodec` with no
+schema/version bump: each defaults empty/zero/false and decode uses `ignoreUnknownKeys`, so
+documents written before a field existed decode unchanged.
 
 Invariants
 All geometry stored in millimeters.

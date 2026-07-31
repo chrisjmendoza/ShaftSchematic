@@ -7,6 +7,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.ShaftPosition
+import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.UnitSystem
@@ -59,6 +60,9 @@ object AutosaveManager {
         // Added (runout bubble editor): per-station TIR value + high-spot marker.
         // Absent in older drafts; default empty set keeps them decodable.
         val runoutReadings: RunoutReadings = RunoutReadings(),
+        // Added (undercut drawing Phase 1): recorded undercut sections. Absent in older
+        // drafts; default empty record keeps them decodable.
+        val undercutRecord: UndercutRecord = UndercutRecord(),
     )
 
     /**

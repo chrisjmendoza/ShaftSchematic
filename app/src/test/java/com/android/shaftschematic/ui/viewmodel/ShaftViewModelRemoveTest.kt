@@ -6,6 +6,7 @@ import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.model.Liner
+import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.order.ComponentKey
@@ -187,6 +188,7 @@ class ShaftViewModelRemoveTest {
         spec = spec,
         wearRecord = WearRecord(),
         runoutReadings = RunoutReadings(),
+        undercutRecord = UndercutRecord(),
         componentOrder = order,
         overallIsManual = false,
     )

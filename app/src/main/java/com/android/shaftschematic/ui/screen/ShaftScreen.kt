@@ -212,6 +212,8 @@ fun ShaftScreen(
     onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
 
     onSetKeyways180Apart: (Boolean) -> Unit,
+    onSetKeyways90Apart: (Boolean) -> Unit,
+    onSetKeyways90Cw: (Boolean) -> Unit,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
     onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
 
@@ -688,6 +690,8 @@ fun ShaftScreen(
                     onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
                     onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
                     onSetKeyways180Apart = onSetKeyways180Apart,
+                    onSetKeyways90Apart = onSetKeyways90Apart,
+                    onSetKeyways90Cw = onSetKeyways90Cw,
 
                     onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
                     onSetThreadEndPosition = onSetThreadEndPosition,
@@ -828,10 +832,12 @@ fun ShaftScreen(
                         spec = spec,
                         initialStartMm = tapAddStartMm,
                         initialLengthMm = tapAddGapMm,
-                        onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, opposed ->
+                        onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90 ->
                             tapAddBodyOpen = false
                             onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned)
-                            onSetKeyways180Apart(opposed)
+                            onSetKeyways180Apart(k180)
+                            onSetKeyways90Apart(k90)
+                            if (k90) onSetKeyways90Cw(cw90)
                         },
                         onCancel = { tapAddBodyOpen = false }
                     )
@@ -859,10 +865,12 @@ fun ShaftScreen(
                         overallIsManual = overallIsManual,
                         initialStartMm = tapAddStartMm,
                         initialLengthMm = tapAddGapMm,
-                        onSubmit = { s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned, opposed ->
+                        onSubmit = { s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90 ->
                             tapAddTaperOpen = false
                             onAddTaper(s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned)
-                            onSetKeyways180Apart(opposed)
+                            onSetKeyways180Apart(k180)
+                            onSetKeyways90Apart(k90)
+                            if (k90) onSetKeyways90Cw(cw90)
                         },
                         onCancel = { tapAddTaperOpen = false }
                     )

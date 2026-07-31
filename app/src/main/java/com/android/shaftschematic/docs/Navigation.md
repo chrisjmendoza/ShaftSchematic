@@ -2,15 +2,16 @@ Navigation Contracts
 --------------------
 
 Files: AppNav.kt, InternalDocRoutes.kt, PdfExportRoute.kt (ui/nav/);
-ShaftEditorRoute.kt, ShaftRoute.kt, StartScreen.kt, RunoutRoute.kt, WearRoute.kt (ui/screen/)  
+ShaftEditorRoute.kt, ShaftRoute.kt, StartScreen.kt, RunoutRoute.kt, WearRoute.kt,
+UndercutRoute.kt (ui/screen/)  
 Layer: UI → Nav
 
-Version: v0.3 (2026-07-25)
+Version: v0.4 (2026-07-30)
 
 Invariants
 - Routes are stable, typed constants or sealed routes.
 - No heavy work in nav composables; they wire screens and VM scopes.
-- The Schematic / Runout / Wear switch is **in-editor tab state** (sidebar), not
+- The Schematic / Runout / Wear / Undercut switch is **in-editor tab state** (sidebar), not
   NavHost navigation — leaving the editor route discards tab state.
 
 Route graph (AppNav.kt NavHost)
@@ -20,6 +21,8 @@ Route graph (AppNav.kt NavHost)
   - Schematic tab → ShaftRoute → ShaftScreen
   - Runout tab → RunoutRoute
   - Wear tab → WearRoute
+  - Undercut Drawing tab → UndercutRoute (`docs/UndercutDrawing.md`) — same "built" gating as
+    Runout/Wear
 - `settings` → SettingsRoute
 - `about` → AboutRoute
 - `developerOptions` → DeveloperOptionsRoute
