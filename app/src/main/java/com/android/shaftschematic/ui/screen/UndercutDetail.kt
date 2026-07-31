@@ -193,7 +193,6 @@ fun UndercutWindowDetailOverlay(
 
     // ── Theme colors captured here — the Canvas draw scope must not read MaterialTheme ──
     val outlineColor = MaterialTheme.colorScheme.onSurface
-    val fillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f)
     val linerFillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.30f)
     val railColor = outlineColor.copy(alpha = 0.65f)
     val witnessColor = outlineColor.copy(alpha = 0.35f)
@@ -249,7 +248,11 @@ fun UndercutWindowDetailOverlay(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                val totalRailRowDp = 30.dp
+                // The cluster-total rail exists only with ≥ 2 drawable cuts — for a single
+                // cut it would restate that cut's own chain figure (a duplicate value, per
+                // on-device report). Same rule as the PDF's buildUndercutTotalSpan; the row
+                // collapses so the canvas doesn't keep a blank band.
+                val totalRailRowDp = if (spans.size >= 2) 30.dp else 0.dp
                 val chainRailRowDp = 30.dp
                 val profileRowDp = 160.dp
                 // Fixed band for the Ø callouts (leader + up to two staggered label rows), so the
@@ -344,8 +347,13 @@ fun UndercutWindowDetailOverlay(
                             }
                             if (rc is ResolvedThread) {
                                 drawThreadStubHatch(xa, cy - rA, xb, cy + rB, outlineColor)
-                            } else {
-                                drawPath(path, color = if (rc is ResolvedLiner) linerFillColor else fillColor)
+                            } else if (rc is ResolvedLiner) {
+                                // Only the liner is filled. Bodies/tapers draw outline-only —
+                                // a filled body sliver past the liner edge read as a mystery
+                                // second box (on-device report), while an outline reads as the
+                                // shaft continuing under the break edge, matching the wear
+                                // overlay's unfilled neighbor stubs.
+                                drawPath(path, color = linerFillColor)
                             }
                             drawLine(outlineColor, Offset(xa, cy - rA), Offset(xb, cy - rB), outlineWidthPx)
                             drawLine(outlineColor, Offset(xa, cy + rA), Offset(xb, cy + rB), outlineWidthPx)
@@ -451,7 +459,7 @@ fun UndercutWindowDetailOverlay(
                                 undercutDimLabel(b - a, unit), textPaint, railColor,
                             )
                         }
-                        if (spans.isNotEmpty()) {
+                        if (spans.size >= 2) {
                             val first = spans.first().startMm
                             val last = spans.last().endMm
                             if (last - first > eps) {
