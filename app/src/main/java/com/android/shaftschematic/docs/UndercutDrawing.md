@@ -530,15 +530,31 @@ Two pages have no cuts to strip, and they degrade in this order:
 
 1. **No recorded cuts, ≥ 1 drawable liner → started liner strips.** The blank write-in template
    (whose record is dropped outright) and a non-blank export of an empty record produce the same
-   page: one **started** strip per drawable liner (`linerStripFor(liner, emptyList(), …)`, the
-   same call the overlay uses to zoom an undercut-free liner — so a started strip and a real one
-   are the same figure at the same scale). The liner's zoomed profile is drawn as usual (true
-   edges, neighbour slivers, break edges, cylinder); everything else is left **empty** — no
-   notches, no rail spans or values, only the two chain-datum witness bars rising off the liner's
-   own edges, with generous clear space above the cylinder for hand-drawn dimensions and below it
-   for hand-written Ø values. The title is the write-in form: liner name, a rule for the distance,
-   and `WEAR_BLANK_ANCHOR_SUFFIX`'s circle-one "FROM  AFT / FWD  S.E.T.". The machinist sketches
-   the sections in by hand. Every-liner coverage mirrors the wear blank's rule.
+   page layout: one **started** strip per drawable liner (`linerStripFor(liner, emptyList(), …)`,
+   the same call the overlay uses to zoom an undercut-free liner — so a started strip and a real
+   one are the same figure at the same scale). Nothing is recorded on it — no notches, no rail
+   spans or values, only the two chain-datum witness bars rising off the liner's own edges, with
+   generous clear space above the cylinder for hand-drawn dimensions and below it for
+   hand-written Ø values. The title is the write-in form: liner name, a rule for the distance,
+   and `WEAR_BLANK_ANCHOR_SUFFIX`'s circle-one "FROM  AFT / FWD  S.E.T.". Every-liner coverage
+   mirrors the wear blank's rule.
+
+   **How much of the liner is printed depends on the page** (`linerSpanBlank = startedPage &&
+   blankValues` in `drawUndercutDetailStrip`):
+   - **Blank write-in template** — *starting geometry only*: the liner's two **vertical end
+     faces** (full drawn height at its OD, outline weight), the **neighbour stock outboard of
+     them** with its normal outline + fill, and the break edges. The liner's own span gets **no
+     fill (whatever `pdfPrefs` shading says) and no top/bottom surface lines** — the middle is
+     clear paper the machinist draws the liner surface and the undercuts onto. Implemented by
+     calling `drawUndercutWindowProfile` twice over `[drawStart, linerStart]` and `[linerEnd,
+     drawEnd]`: the liner edge sits at a window *end* in each, so the profile draws no cap there
+     and the two end faces are the only vertical lines at those stations. The clip also keeps a
+     body running *underneath* the liner (an unresolved `spec.bodies` span) out of the blank
+     middle. On-device report: a fully outlined liner reads as a finished figure and invites
+     sketching on top of printed lines.
+   - **Non-blank export of an empty record** — the liner's zoomed profile drawn as usual (true
+     edges, neighbour slivers, break edges, cylinder), just with nothing recorded on it. An
+     export is a record of this shaft, so it keeps the liner fully drawn.
 2. **No cuts and no drawable liner → the whole-shaft profile form.** The last fallback only:
    there is nothing to strip, and the page would otherwise be empty. This is the one layout that
    still draws the profile, the SET-to-SET OAL line (empty break in blank mode) and a direction
@@ -657,8 +673,10 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   record is dropped before the strips are built (matching the wear sheet's decision that blank
   templates carry no recorded stations), so the page comes out as **started liner strips** with
   header writing rules, or the profile form when the shaft has no drawable liner. A started
-  strip always draws in the write-in posture regardless of `blankValues`: an empty record has no
-  recorded value to print anywhere, so a non-blank export of one is the same page.
+  strip always draws in the write-in posture (title rule, no printed values) regardless of
+  `blankValues` — an empty record has no recorded value to print anywhere — but only the blank
+  template empties the liner's span down to its end faces; an export of an empty record keeps
+  the liner fully drawn (see "started liner strips" above).
 - **Notes row**: `Notes: ____` only — no dye-pen PASS/FAIL checkboxes (that's a wear/inspection
   concern with no place on a machining record).
 - Standard composer contract: `pdfPrefs` shading, `lineThicknessScale`, `resolvedComponents`

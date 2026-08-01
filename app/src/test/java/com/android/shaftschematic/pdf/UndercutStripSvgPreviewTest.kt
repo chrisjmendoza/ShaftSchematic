@@ -228,6 +228,12 @@ class UndercutStripSvgPreviewTest {
         val hasTotal: Boolean,
         /** Narrower of the two drawn pads (chain datum → break edge), points. */
         val minPadPt: Float,
+        /**
+         * Horizontal surface lines (top + bottom, any component) crossing the liner's
+         * mid-station. Must be 0 on the blank write-in template, whose liner span is clear
+         * paper — including for a body running underneath the liner.
+         */
+        val surfaceLinesAtLinerMid: Int,
     )
 
     private fun renderStrip(
@@ -296,23 +302,51 @@ class UndercutStripSvgPreviewTest {
         // Profile over the strip's DRAW range: every component clipped to it, true local
         // diameters. On a liner strip that range covers the whole liner plus a pad each side,
         // so the liner's edges and its neighbours' slivers appear naturally.
-        components.forEach { comp ->
-            val dia = when (comp) {
-                is ResolvedBody -> comp.diaMm
-                is ResolvedLiner -> comp.odMm
-                else -> return@forEach
-            }
-            val a = maxOf(comp.startMmPhysical, drawStartMm)
-            val b = minOf(comp.endMmPhysical, drawEndMm)
-            if (b <= a) return@forEach
-            val r = rAt(dia)
-            svg.line(xAt(a), cy - r, xAt(b), cy - r)
-            svg.line(xAt(a), cy + r, xAt(b), cy + r)
-            // End caps only where the real edge falls inside the draw range.
-            listOf(comp.startMmPhysical, comp.endMmPhysical).forEach { edge ->
-                if (edge > drawStartMm + 0.001f && edge < drawEndMm - 0.001f) {
-                    svg.line(xAt(edge), cy - r, xAt(edge), cy + r, w = 0.9f)
+        //
+        // The blank write-in template is the exception (`linerSpanBlank` in the composer): the
+        // liner's own span is drawn as STARTING geometry only — its two vertical end faces and
+        // the neighbour stock outboard of them, with no fill and no surface lines across the
+        // middle, which stays clear paper for the hand-drawn liner and cuts. `started` is the
+        // blank template here; a non-blank export of an empty record keeps the full profile.
+        val blankLiner = if (started) strip as? UndercutStrip.LinerStrip else null
+        val profileBands =
+            if (blankLiner == null) listOf(drawStartMm to drawEndMm)
+            else listOf(
+                drawStartMm to blankLiner.linerStartMm.coerceIn(drawStartMm, drawEndMm),
+                blankLiner.linerEndMm.coerceIn(drawStartMm, drawEndMm) to drawEndMm,
+            )
+        val linerMidMm = (linerAftMm + linerFwdMm) / 2f
+        var surfaceLinesAtLinerMid = 0
+        profileBands.forEach { (bandStartMm, bandEndMm) ->
+            components.forEach { comp ->
+                val dia = when (comp) {
+                    is ResolvedBody -> comp.diaMm
+                    is ResolvedLiner -> comp.odMm
+                    else -> return@forEach
                 }
+                val a = maxOf(comp.startMmPhysical, bandStartMm)
+                val b = minOf(comp.endMmPhysical, bandEndMm)
+                if (b <= a) return@forEach
+                val r = rAt(dia)
+                svg.line(xAt(a), cy - r, xAt(b), cy - r)
+                svg.line(xAt(a), cy + r, xAt(b), cy + r)
+                if (a < linerMidMm && b > linerMidMm) surfaceLinesAtLinerMid += 2
+                // End caps only where the real edge falls inside the band.
+                listOf(comp.startMmPhysical, comp.endMmPhysical).forEach { edge ->
+                    if (edge > bandStartMm + 0.001f && edge < bandEndMm - 0.001f) {
+                        svg.line(xAt(edge), cy - r, xAt(edge), cy + r, w = 0.9f)
+                    }
+                }
+            }
+        }
+        // The blank template's end faces: full drawn height at the liner's OD, the only vertical
+        // lines at those stations now the surface lines are gone.
+        blankLiner?.let { bl ->
+            val faceAftMm = bl.linerStartMm.coerceIn(drawStartMm, drawEndMm)
+            val faceFwdMm = bl.linerEndMm.coerceIn(drawStartMm, drawEndMm)
+            val rFace = rAt(maxOuterDiaOver(segs, faceAftMm, faceFwdMm))
+            listOf(faceAftMm, faceFwdMm).forEach { mm ->
+                svg.line(xAt(mm), cy - rFace, xAt(mm), cy + rFace, w = 1.2f)
             }
         }
         // Cut ends — amplitude capped exactly as `drawUndercutWindowEnd` caps it, so the preview
@@ -426,6 +460,7 @@ class UndercutStripSvgPreviewTest {
                 xAt(strip.chainStartMm) - xAt(drawStartMm),
                 xAt(drawEndMm) - xAt(strip.chainEndMm),
             ),
+            surfaceLinesAtLinerMid = surfaceLinesAtLinerMid,
         )
     }
 
@@ -493,10 +528,13 @@ class UndercutStripSvgPreviewTest {
         // floor — the break edge no longer lands on the outer witness line.
         assertTrue("a free strip's window edge must clear its break", d.minPadPt >= UNDERCUT_STRIP_MIN_PAD_PT - 1e-2f)
 
-        // E) STARTED strip — the blank template / empty-record page: the liner drawn to scale
-        //    with its edges, slivers and break edges, but no notches, no rail spans (only the
-        //    two chain-datum bars) and a write-in anchor title. Everything else is air the
-        //    machinist sketches the sections into.
+        // E) STARTED strip, blank write-in TEMPLATE: starting geometry only — the liner's two
+        //    end faces, the neighbour slivers outboard of them and the break edges, with its
+        //    span left as clear paper (no fill, no top/bottom surface lines). No notches, no
+        //    rail spans (only the two chain-datum bars), a write-in anchor title. Everything
+        //    else is air the machinist sketches the liner and its sections into. (A non-blank
+        //    export of an empty record keeps the fully drawn started strip — same layout,
+        //    profile intact.)
         val e = renderStrip(emptyList())
         File(outDir, "e-started-liner-strip-blank.svg").writeText(e.svg)
         val eLiner = e.strip as UndercutStrip.LinerStrip
@@ -504,6 +542,13 @@ class UndercutStripSvgPreviewTest {
         assertEquals(linerFwdMm, eLiner.chainEndMm, 1e-3f)
         assertTrue("nothing is recorded on a started strip", eLiner.undercutIds.isEmpty())
         assertFalse("no cuts ⇒ no total rail", e.hasTotal)
+        assertEquals(
+            "the blank template's liner span must be clear paper — no surface line crosses it",
+            0, e.surfaceLinesAtLinerMid,
+        )
+        // …and the contrast: a strip that is not the blank template draws the liner (and the
+        // body under it) right across that station.
+        assertTrue("a real strip still draws the liner surface", a.surfaceLinesAtLinerMid > 0)
 
         assertNotNull(outDir.listFiles())
         assertEquals(5, outDir.listFiles()!!.count { it.name.endsWith(".svg") })

@@ -78,10 +78,18 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * ## Nothing recorded yet — started liner strips
  * A page with **no recorded cuts** — the blank write-in template (whose record is dropped
  * outright) and a non-blank export of an empty record alike — draws one *started* strip per
- * drawable liner instead: the liner's zoomed profile as usual (true edges, neighbour slivers,
- * break edges) but otherwise left empty — no notches, no rail spans beyond the two chain-datum
- * witness bars, and a write-in anchor title. The machinist sketches the sections in by hand,
- * so the sheet must give them the liner drawn to scale and clear space above and below it.
+ * drawable liner instead: the liner at its true scale and station, but no notches, no rail
+ * spans beyond the two chain-datum witness bars, and a write-in anchor title. The machinist
+ * sketches the sections in by hand, so the sheet must give them the liner's stations and clear
+ * space above and below.
+ *
+ * How much of the liner is printed depends on which page it is:
+ * - **Blank write-in template** (`blankValues`) — *starting geometry only*: the liner's two
+ *   vertical end faces, the neighbour stock outboard of them (normal outline + fill) and the
+ *   break edges. Its span carries **no fill and no top/bottom surface lines**, so the middle is
+ *   clear paper for the hand-drawn liner surface and cuts.
+ * - **Export of an empty record** — the liner's zoomed profile as usual (true edges, neighbour
+ *   slivers, break edges, cylinder), just with nothing recorded on it.
  *
  * The whole-shaft profile form survives ONLY as the last fallback: a shaft with no cuts AND no
  * drawable liner has nothing to strip, and would otherwise print an empty sheet.
@@ -119,7 +127,7 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * @param blankValues Blank-draft (write-in) mode: the record is dropped entirely
  *                (`UndercutRecord()`) — the wear sheet's decision that blank templates carry
  *                no recorded stations — so the page comes out as started liner strips with
- *                header writing rules.
+ *                header writing rules, drawn as end faces + slivers only (see above).
  */
 fun composeUndercutPdf(
     page: PdfDocument.Page,
@@ -350,6 +358,9 @@ fun composeUndercutPdf(
             // the circle-one anchor rule, and it has no recorded value to print anywhere.
             blankValues = blankValues || startedPage,
             startedStrip = startedPage,
+            // Edges-only is the write-in TEMPLATE's look alone: an export of an empty record is
+            // still a record of this shaft, so it keeps the liner fully drawn.
+            linerSpanBlank = startedPage && blankValues,
             deepestDepthMm = deepestDepthMm,
             exaggerationFrac = exaggerationFrac,
         )
@@ -720,6 +731,14 @@ private fun drawUndercutNotches(
  * but the strip carries no cuts, so the chain and total rails collapse to the two chain-datum
  * witness bars and the bands above and below the cylinder are left as clear space for the
  * machinist's own sections and Ø values. It always arrives with [blankValues] set.
+ *
+ * [linerSpanBlank] narrows that further, for the blank write-in TEMPLATE only: the liner's own
+ * span prints no fill and no top/bottom surface lines at all, leaving only the *starting*
+ * geometry — the liner's two vertical end faces, the neighbour stock outboard of them, and the
+ * break edges. The middle is clear paper the machinist draws the liner surface and its cuts
+ * onto (on-device report: a fully outlined liner reads as a finished figure and invites
+ * sketching on top of printed lines). A non-blank export of an empty record keeps the fully
+ * drawn started strip.
  */
 private fun drawUndercutDetailStrip(
     c: Canvas,
@@ -747,6 +766,7 @@ private fun drawUndercutDetailStrip(
     linerTitle: String?,
     blankValues: Boolean,
     startedStrip: Boolean,
+    linerSpanBlank: Boolean,
     deepestDepthMm: Float,
     exaggerationFrac: Float,
 ) {
@@ -808,10 +828,35 @@ private fun drawUndercutDetailStrip(
         ?: docSpec.maxOuterDiaMm().takeIf { it > 0f } ?: 1f
     fun rStrip(diaMm: Float): Float = (rCap * (diaMm / stripMaxDiaMm)).coerceIn(0f, rCap)
 
-    drawUndercutWindowProfile(
-        c, docSpec, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
-        outline, bodyFill, taperFill, linerFill, ptPerMmStrip,
-    )
+    // Blank write-in template: only the STARTING geometry, so the liner's span stays clear
+    // paper (see the KDoc). The two outboard calls draw the neighbour slivers with their normal
+    // outline + fill; the liner edge sits at a window END in each, so the profile draws no cap
+    // there and the full-height end faces below are the only vertical lines at those stations.
+    val blankLiner = if (linerSpanBlank) strip as? UndercutStrip.LinerStrip else null
+    if (blankLiner != null) {
+        val faceAftMm = blankLiner.linerStartMm.coerceIn(drawStartMm, drawEndMm)
+        val faceFwdMm = blankLiner.linerEndMm.coerceIn(drawStartMm, drawEndMm)
+        drawUndercutWindowProfile(
+            c, docSpec, drawStartMm, faceAftMm, cy, ::xAtStrip, ::rStrip,
+            outline, bodyFill, taperFill, linerFill, ptPerMmStrip,
+        )
+        drawUndercutWindowProfile(
+            c, docSpec, faceFwdMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
+            outline, bodyFill, taperFill, linerFill, ptPerMmStrip,
+        )
+        // Full drawn height at the liner's own OD — the surface envelope over the liner's span
+        // is the liner, so its maximum there IS that OD. Drawn at outline weight: with the
+        // surface lines gone these faces carry the figure.
+        val rFace = rStrip(maxOuterDiaOver(segs, faceAftMm, faceFwdMm))
+        if (rFace > 0f) listOf(faceAftMm, faceFwdMm).forEach { mm ->
+            c.drawLine(xAtStrip(mm), cy - rFace, xAtStrip(mm), cy + rFace, outline)
+        }
+    } else {
+        drawUndercutWindowProfile(
+            c, docSpec, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
+            outline, bodyFill, taperFill, linerFill, ptPerMmStrip,
+        )
+    }
     // Cut ends: an S-break where the strip slices through material (void beyond it, so the
     // AFT stub's eye is at the top and the FWD stub's at the bottom — the stub convention,
     // the inverse of a centred compression break), a flat edge where the draw range's end IS

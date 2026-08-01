@@ -22,10 +22,14 @@ On-device report: the per-card Confirm button was tucked away and easy to forget
 
 On-device report: real undercut drawings show only the cut sections. With ≥1 strip the
 sheet drops the shaft profile and OAL line entirely — header, one AFT/FWD row, strips
-filling the page, Notes. Blank/template mode (and any empty-record export) prints one
-**started strip per liner**: the liner outline with edges and break edges, otherwise
-empty for hand-drawn cuts, with a circle-one "FROM AFT / FWD S.E.T." writing rule. The
-whole-shaft profile form survives only for a shaft with no drawable liners.
+filling the page, Notes. With nothing recorded, the page prints one **started strip per
+liner** — no notches or dimensions, just the two chain-datum bars and a circle-one
+"FROM AFT / FWD S.E.T." writing rule. The **blank/template** sheet draws only the
+starting geometry there (on-device report): the liner's two vertical end faces, the
+neighbour stock slivers outboard of them and the break edges, with its span left as clear
+paper — no fill, no top/bottom surface lines — for the hand-drawn liner and cuts. An
+**empty-record export** keeps the liner fully drawn. The whole-shaft profile form
+survives only for a shaft with no drawable liners.
 
 ### fix(pdf): rail spacing, section size, end air
 
