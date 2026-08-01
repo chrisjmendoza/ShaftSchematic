@@ -13,7 +13,8 @@ import org.junit.Test
 /**
  * Pins the undercut carousel's draft/ordering rules (`UndercutDetail.kt`): page order aft → fwd
  * off STORED values (cards move only on confirm), draft substitution for the canvas preview, the
- * default span a new draft opens at, and the confirm-time blocking check.
+ * default span a new draft opens at, the confirm-time blocking check, and the leave decision that
+ * auto-saves a card on the way out (or asks, when the draft is blocked).
  */
 class UndercutDraftTest {
 
@@ -162,5 +163,61 @@ class UndercutDraftTest {
         assertNotNull(undercutConfirmIssue(draftOf("x", 250f, 100f), 1000f, others))
         // Edge-to-edge is legal — two cuts may be machined back to back.
         assertNull(undercutConfirmIssue(draftOf("x", 300f, 100f), 1000f, others))
+    }
+
+    @Test
+    fun `the adjacency pool excludes the draft's own cut and any degenerate span`() {
+        val sheet = listOf(cut("a", 100f), cut("b", 400f), cut("c", 700f, lengthMm = 0f))
+        val pool = undercutOtherSpans(sheet, excludeId = "a", oalMm = 1000f)
+        assertEquals(listOf("b"), pool.map { it.id })
+    }
+
+    // ── Leaving a card ───────────────────────────────────────────────────────
+
+    @Test
+    fun `leaving an untouched card does nothing`() {
+        val baseline = draftOf("a", 100f)
+        assertEquals(
+            UndercutLeaveAction.NONE,
+            undercutLeaveAction(baseline, baseline, confirmIssue = null),
+        )
+        assertEquals(
+            UndercutLeaveAction.NONE,
+            undercutLeaveAction(draft = null, baseline = baseline, confirmIssue = null),
+        )
+    }
+
+    @Test
+    fun `leaving a clear dirty card commits it`() {
+        assertEquals(
+            UndercutLeaveAction.COMMIT,
+            undercutLeaveAction(draftOf("a", 150f), draftOf("a", 100f), confirmIssue = null),
+        )
+    }
+
+    @Test
+    fun `leaving a blocked card asks instead of committing or dropping it`() {
+        assertEquals(
+            UndercutLeaveAction.PROMPT,
+            undercutLeaveAction(
+                draftOf("a", 150f), draftOf("a", 100f),
+                confirmIssue = "Overlaps an adjacent undercut",
+            ),
+        )
+    }
+
+    @Test
+    fun `a pending add card has no baseline, so leaving it always resolves`() {
+        // Nothing stored to equal, so the add page is dirty by construction: it commits on the
+        // way out when it is clear, and prompts when it is not — it never evaporates silently.
+        val pending = draftOf(PENDING_UNDERCUT_ID, 250f)
+        assertEquals(
+            UndercutLeaveAction.COMMIT,
+            undercutLeaveAction(pending, baseline = null, confirmIssue = null),
+        )
+        assertEquals(
+            UndercutLeaveAction.PROMPT,
+            undercutLeaveAction(pending, baseline = null, confirmIssue = "Extends past the shaft"),
+        )
     }
 }

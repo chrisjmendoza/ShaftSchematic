@@ -72,11 +72,189 @@ fun undercutStripsPerPage(mode: WearPdfMode): Int =
 const val UNDERCUT_STRIP_EDGE_INSET_PT = 16f
 
 /**
+ * Minimum DRAWN width, points, of the undimensioned neighbour-stock pad a strip keeps between
+ * each chain datum and its end break — enforced by [computeUndercutStripDrawRange].
+ *
+ * The pad is authored in mm (`geom/UndercutMath.kt`'s `UNDERCUT_WINDOW_PAD_MM`), so how wide it
+ * PRINTS depends entirely on the strip's own scale: the same 1 in of stock is ~36 pt beside a
+ * short liner on a full-width strip and under 9 pt beside a long one in a grid cell, where the
+ * break edge then sits all but against the liner's end face (on-device report: "oddly cramped").
+ * Widening the mm constant instead would fix only one scale, and would additionally re-letter
+ * every `FreeStrip`'s pad dimension — the bare-shaft chain runs window edge → window edge, so
+ * its leading/trailing spans PRINT the pad, and 1 in is a figure worth reading.
+ *
+ * Sized so the break symbol has about as much air inboard as the [UNDERCUT_STRIP_EDGE_INSET_PT]
+ * margin gives it outboard, plus the lobe's own excursion (≈ 8 pt at
+ * [UNDERCUT_BREAK_AMP_MAX_PT]): 16 + 8. Undimensioned either way — this changes only how much
+ * neighbouring stock is drawn, never where a datum sits.
+ */
+const val UNDERCUT_STRIP_MIN_PAD_PT = 24f
+
+/**
+ * Ceiling on [UNDERCUT_STRIP_MIN_PAD_PT] as a share of a strip's available inner width, so a
+ * pathologically narrow cell cannot spend most of itself on margin: the two pads together never
+ * take more than twice this. No real strip reaches it (the narrowest, a grid cell, has ~317 pt of
+ * inner width against a 24 pt floor), so this only bounds the degenerate case.
+ */
+private const val UNDERCUT_STRIP_MAX_PAD_FRAC = 0.15f
+
+/**
+ * Ceiling on a strip end's S-break amplitude, points. The break's nominal amplitude is
+ * `r × 0.6` — sized off the drawn cylinder so a small section still gets a legible symbol —
+ * but on a tall strip that puts the lobes far outside the cylinder corners, where they read as
+ * heavy "ears" hung off the ends rather than as a cut through round stock (on-device report).
+ *
+ * Capping in absolute points keeps the symbol the same size on every strip, and keeps it inside
+ * [UNDERCUT_STRIP_EDGE_INSET_PT]: peak lateral deviation of the drawn curves is ≈ 0.29 × amp
+ * (the S itself) and ≈ 0.43 × amp (the return sweep, widened by the break symbol's fullness
+ * factor), so at this cap the widest excursion is ≈ 8 pt — comfortably inside the 16 pt inset.
+ *
+ * Applies to the strip/window END breaks only. The whole-shaft profile's mid-run compression
+ * break keeps the uncapped `r × 0.6`: it is drawn on one shaft at one scale, where the lobes
+ * have nothing to collide with.
+ */
+const val UNDERCUT_BREAK_AMP_MAX_PT = 18f
+
+/**
+ * Air reserved ABOVE the total-span rail line, inside [UNDERCUT_TOTAL_RAIL_BAND_PT]: the row a
+ * total whose value cannot seat in a break falls back to (`drawUndercutRail`'s
+ * `fallbackLabelAbove`, which draws its label above the line because the chained rail owns the
+ * space below). Everything the band holds beyond this is clear separation DOWN to the chained
+ * rail.
+ */
+const val UNDERCUT_TOTAL_RAIL_ABOVE_PT = 18f
+
+/**
  * Vertical band reserved at the top of a strip for the strip's **total** dimension rail —
  * the second rail line above the chained one (the reference sketch's overall figure across
  * all the sections). Only reserved when a total span exists ([buildUndercutTotalSpan]).
+ *
+ * Split [UNDERCUT_TOTAL_RAIL_ABOVE_PT] above the line / the remainder below it, so the total's
+ * value and the chained rail's values sit ~20 pt apart. Anything tighter reads as one crowded
+ * band: the total ("16\"") appears to belong to the chain below it (on-device report, twice —
+ * at 14 pt and again at 22 pt).
  */
-const val UNDERCUT_TOTAL_RAIL_BAND_PT = 14f
+const val UNDERCUT_TOTAL_RAIL_BAND_PT = 38f
+
+/**
+ * Row pitch for the chained rail's stacked fallback labels — the value a span too narrow to
+ * seat its own figure drops to. Wider than the wear sheet's [WEAR_STRIP_ROW_HEIGHT_PT] because
+ * `drawUndercutRail` starts row 0 clear of the outward arrowheads straddling the rail line: at
+ * the wear pitch a two-row stack ran into the cylinder, and row 0 itself read as glued under
+ * the rail (on-device report: the narrow-gap value "2\"" sat on the line).
+ *
+ * `drawUndercutRail` steps its label rows by this same constant, so the reserved budget
+ * ([UndercutStripInnerLayout.railLabelRows]) and the drawn rows cannot drift apart.
+ */
+const val UNDERCUT_RAIL_ROW_HEIGHT_PT = 17f
+
+/**
+ * Ceiling on the drawn cylinder's height, as a fraction of the strip's own band. Without the
+ * main profile a single strip owns nearly the whole page, and an uncapped cylinder would eat
+ * that band as one black slab; the reclaimed height belongs to the rails, the Ø callouts and
+ * the margins first, the cylinder second.
+ *
+ * Deliberately well under half the band: a section drawn any larger reads as oversized for what
+ * it carries, and its end breaks sprawl (on-device report on the strips-only sheet).
+ */
+const val UNDERCUT_CYL_MAX_HEIGHT_FRAC = 0.38f
+
+/**
+ * Absolute ceiling over [UNDERCUT_CYL_MAX_HEIGHT_FRAC] — `min(frac × band, this)`. A fraction
+ * alone scales with the band, so a taller band would keep growing the section; past this height
+ * a strip stops being a drawing and becomes a poster of one cylinder. Beyond the cap every extra
+ * point goes to the surplus split below.
+ */
+const val UNDERCUT_CYL_MAX_ABS_PT = 170f
+
+/**
+ * Floor under [UNDERCUT_CYL_MAX_HEIGHT_FRAC]/[UNDERCUT_CYL_MAX_ABS_PT]: a short strip (a 4-up
+ * grid cell) is never capped below what it could already draw, so the cap only ever bites on
+ * the tall strips-own-page bands.
+ */
+const val UNDERCUT_CYL_MAX_FLOOR_PT = 96f
+
+/** Most extra air the capped cylinder's surplus may put between the rail labels and the cylinder. */
+const val UNDERCUT_RAIL_EXTRA_HEADROOM_MAX_PT = 30f
+
+/**
+ * Most extra air that surplus may put between the Ø callout band and the strip title. Sized so
+ * the even split of the remainder (half here, half above the rails) stays even on a full-page
+ * strip rather than capping out on one side and stacking the rest at the top — which is also
+ * what keeps the drawn cylinder vertically centred on the same line whatever the cap is set to
+ * (`cylBottom = bottom − rest/2` and `cylTop = cylBottom − cap` move the two edges by equal and
+ * opposite amounts). Sized for the largest real surplus, the started (write-in) strip's, since
+ * the tighter cylinder cap frees more of it than before; past that it is only a guard against a
+ * pathologically tall band.
+ */
+const val UNDERCUT_CYL_BELOW_EXTRA_MAX_PT = 88f
+
+/** Share of the cylinder's surplus height spent on rail-label → cylinder air (rest splits below/above). */
+private const val UNDERCUT_SURPLUS_RAIL_SHARE = 0.4f
+
+/** A strip's drawn axial range in shaft-space mm — see [computeUndercutStripDrawRange]. */
+data class UndercutStripDrawRangeMm(val startMm: Float, val endMm: Float)
+
+/**
+ * The axial range a strip actually DRAWS, widening the strip's own
+ * (`geom/UndercutMath.kt` `UndercutStrip.drawStartMm`/`drawEndMm`) just enough that the
+ * neighbour-stock pad outside each chain datum prints at least [minPadPt] wide.
+ *
+ * The mm pad the geometry carries is scale-blind (see [UNDERCUT_STRIP_MIN_PAD_PT]); this is the
+ * scale-aware half, applied at layout time so a half-width grid cell and a full-width strip both
+ * read with the same air at their ends. A strip whose pad already prints wide enough — a short
+ * liner, or any strip on a wide cell — comes back untouched.
+ *
+ * Only ever widens, and only outward from the CHAIN datums, so:
+ * - no datum moves and no dimension changes (the pad stays undimensioned on a `LinerStrip`, and
+ *   a `FreeStrip`'s window-edge chain keeps printing the same 1 in pad spans — the extra stock is
+ *   drawn OUTSIDE the window, between its edge and the break);
+ * - the range stays clamped to `[0, oalMm]`, so a cut near a shaft end keeps its flat physical
+ *   end rather than growing a break past the metal.
+ *
+ * [stripLeftPt]/[stripRightPt] are the cell the strip is laid out in; the usable width is that
+ * less two [edgeInsetPt] margins, matching [computeWearStripHorizontalLayout]'s stub arithmetic,
+ * and [minPtPerMm]/[maxPtPerMm] are its scale clamps so the pad this reserves is the pad that
+ * layout then draws.
+ */
+fun computeUndercutStripDrawRange(
+    drawStartMm: Float,
+    drawEndMm: Float,
+    chainStartMm: Float,
+    chainEndMm: Float,
+    stripLeftPt: Float,
+    stripRightPt: Float,
+    oalMm: Float,
+    edgeInsetPt: Float = UNDERCUT_STRIP_EDGE_INSET_PT,
+    minPadPt: Float = UNDERCUT_STRIP_MIN_PAD_PT,
+    minPtPerMm: Float = WEAR_STRIP_MIN_PT_PER_MM,
+    maxPtPerMm: Float = WEAR_STRIP_MAX_PT_PER_MM,
+): UndercutStripDrawRangeMm {
+    val unchanged = UndercutStripDrawRangeMm(drawStartMm, drawEndMm)
+    val drawLenMm = drawEndMm - drawStartMm
+    if (drawLenMm <= UNDERCUT_RAIL_SPAN_EPS_MM) return unchanged
+
+    val availPt = (stripRightPt - stripLeftPt - 2f * edgeInsetPt).coerceAtLeast(1f)
+    val padPt = minPadPt.coerceIn(0f, availPt * UNDERCUT_STRIP_MAX_PAD_FRAC)
+    // What the narrower of the two pads prints at today's scale.
+    val nowPtPerMm = (availPt / drawLenMm).coerceIn(minPtPerMm, maxPtPerMm)
+    val nowPadPt = minOf(chainStartMm - drawStartMm, drawEndMm - chainEndMm)
+        .coerceAtLeast(0f) * nowPtPerMm
+    if (nowPadPt >= padPt) return unchanged
+
+    // Re-solve for the scale that leaves exactly `padPt` each side: the chain gets the rest of
+    // the width, and the pad in mm follows from it. Clamping the scale the same way layout does
+    // keeps the two in step — a scale pinned at a clamp yields a proportionally larger mm pad,
+    // which then draws at the intended width anyway.
+    val chainLenMm = (chainEndMm - chainStartMm).coerceAtLeast(UNDERCUT_RAIL_SPAN_EPS_MM)
+    val ptPerMm = ((availPt - 2f * padPt) / chainLenMm).coerceIn(minPtPerMm, maxPtPerMm)
+    val padMm = padPt / ptPerMm
+    val hi = oalMm.coerceAtLeast(0f)
+    return UndercutStripDrawRangeMm(
+        startMm = minOf(drawStartMm, chainStartMm - padMm).coerceIn(0f, hi),
+        endMm = maxOf(drawEndMm, chainEndMm + padMm).coerceIn(0f, hi),
+    )
+}
 
 /**
  * One undercut strip's vertical split: the total-span rail line at the very top, the
@@ -105,6 +283,21 @@ data class UndercutStripInnerLayout(
  * band ([diaBandPt]) and the title degrade in exactly the same order the wear strips do
  * (the drawn cylinder shrinks first, then label rows drop out; nothing ever overflows the
  * strip).
+ *
+ * On a **tall** band — the strips-own-page layout, where dropping the main profile hands a
+ * lone strip most of the sheet — that delegation alone would pour every reclaimed point into
+ * the cylinder. So the cylinder is capped at
+ * `max(cylMaxFloorPt, min(bandHeight × cylMaxFrac, cylMaxAbsPt))` — a fraction of the band, but
+ * never past an absolute height — and the surplus is spent on legibility instead, in a fixed
+ * order:
+ *  1. up to [UNDERCUT_RAIL_EXTRA_HEADROOM_MAX_PT] between the chained rail's label rows and the
+ *     cylinder top,
+ *  2. the remainder split evenly — half between the Ø callout band and the title (the cylinder
+ *     bottom rises and the callouts hang off it, capped at [UNDERCUT_CYL_BELOW_EXTRA_MAX_PT]),
+ *     half as air above the rails, which drifts the whole figure down the band.
+ *
+ * A band short enough that the cylinder never reaches the cap comes out bit-identical to the
+ * plain delegation, so grid cells and the wear-shaped strips are unaffected.
  */
 fun computeUndercutStripInnerLayout(
     stripTop: Float,
@@ -112,10 +305,14 @@ fun computeUndercutStripInnerLayout(
     titleHeightPt: Float,
     hasTotalRail: Boolean,
     totalRailBandPt: Float = UNDERCUT_TOTAL_RAIL_BAND_PT,
-    rowHeightPt: Float = WEAR_STRIP_ROW_HEIGHT_PT,
+    totalRailAbovePt: Float = UNDERCUT_TOTAL_RAIL_ABOVE_PT,
+    rowHeightPt: Float = UNDERCUT_RAIL_ROW_HEIGHT_PT,
     labelHeadroomPt: Float = WEAR_STRIP_LABEL_HEADROOM_PT,
     maxLabelRows: Int = WEAR_RAIL_MAX_LABEL_ROWS,
     diaBandPt: Float = 0f,
+    cylMaxFrac: Float = UNDERCUT_CYL_MAX_HEIGHT_FRAC,
+    cylMaxFloorPt: Float = UNDERCUT_CYL_MAX_FLOOR_PT,
+    cylMaxAbsPt: Float = UNDERCUT_CYL_MAX_ABS_PT,
 ): UndercutStripInnerLayout {
     val bottom = stripBottom.coerceAtLeast(stripTop)
     val band = if (hasTotalRail) totalRailBandPt.coerceAtLeast(0f) else 0f
@@ -129,15 +326,34 @@ fun computeUndercutStripInnerLayout(
         maxLabelRows = maxLabelRows,
         diaBandPt = diaBandPt,
     )
-    // The total rail's value seats in a break in its own line, so it needs roughly half a
-    // text height of air above; sitting it at 60% of the reserved band leaves that above and
-    // keeps it clear of the chained rail below.
-    val totalRailY = if (band > 0f) (stripTop + band * 0.6f).coerceAtMost(inner.railY) else inner.railY
+
+    // Cylinder cap + surplus spend (see the KDoc): the drawn cylinder keeps `cylH - surplus`,
+    // and the freed points become air the reader can see between the bands.
+    val cylH = (inner.cylBottom - inner.cylTop).coerceAtLeast(0f)
+    val cylCap = maxOf(cylMaxFloorPt, minOf((bottom - stripTop) * cylMaxFrac, cylMaxAbsPt))
+        .coerceAtLeast(0f)
+    val surplus = (cylH - cylCap).coerceAtLeast(0f)
+    val extraRailHeadroom = minOf(surplus * UNDERCUT_SURPLUS_RAIL_SHARE, UNDERCUT_RAIL_EXTRA_HEADROOM_MAX_PT)
+    val rest = surplus - extraRailHeadroom
+    val belowExtra = minOf(rest * 0.5f, UNDERCUT_CYL_BELOW_EXTRA_MAX_PT)
+
+    val cylBottom = inner.cylBottom - belowExtra
+    val cylTop = cylBottom - (cylH - surplus)
+    // Both coercions only matter on a pathologically short band, where every band has already
+    // collapsed onto the same Y — they preserve the ordering guarantee rather than shifting a
+    // real layout.
+    val chainRailY = (cylTop - inner.railLabelRows * rowHeightPt - extraRailHeadroom)
+        .coerceIn(stripTop, cylTop)
+    val totalRailY = if (band > 0f) {
+        (chainRailY - (band - totalRailAbovePt).coerceAtLeast(0f)).coerceIn(stripTop, chainRailY)
+    } else {
+        chainRailY
+    }
     return UndercutStripInnerLayout(
         totalRailY = totalRailY,
-        chainRailY = inner.railY,
-        cylTop = inner.cylTop,
-        cylBottom = inner.cylBottom,
+        chainRailY = chainRailY,
+        cylTop = cylTop,
+        cylBottom = cylBottom,
         railLabelRows = inner.railLabelRows,
     )
 }

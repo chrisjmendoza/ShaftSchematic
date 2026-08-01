@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -24,22 +25,26 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -138,13 +143,26 @@ import kotlin.math.min
  * **Draft editing.** A card edits a LOCAL [UndercutDraft], not the record: field commits (blur,
  * per `docs/NumberField.md`), the "Measure From" chips, and the note all land in the draft, and
  * the canvas previews the SELECTED card's draft in place of its stored notch. Nothing reaches
- * `UndercutRecord` until **Confirm**, which is enabled only while the draft differs from stored
- * AND clears both blocking checks — [undercutSpanIssue] (shaft bounds) and [undercutOverlapIssue]
- * (no intruding into another cut's bounds). **Cancel** drops the draft back to stored. Because
- * page order is keyed on **stored** starts, cards reorder only on confirm — and the carousel then
- * follows the confirmed cut to its new aft → fwd position. "Add undercut" opens a **draft-only**
- * page: it previews and orders like any other card but enters the record only on Confirm, so a
- * cancelled add leaves no ghost cut behind.
+ * `UndercutRecord` until the draft is **confirmed**, which requires it to differ from stored AND
+ * to clear both blocking checks — [undercutSpanIssue] (shaft bounds) and [undercutOverlapIssue]
+ * (no intruding into another cut's bounds). Because page order is keyed on **stored** starts,
+ * cards reorder only on confirm — and the carousel then follows the confirmed cut to its new
+ * aft → fwd position. "Add undercut" opens a **draft-only** page: it previews and orders like any
+ * other card but enters the record only on confirm, so a discarded add leaves no ghost cut behind.
+ *
+ * **Saving is a floating pill, not card buttons** ([UndercutStatusPill], pinned at the boundary
+ * between the canvas and the carousel so it can never scroll out of reach — on-device report: per-card
+ * Confirm/Cancel buttons buried in the card's own scroll were missed). It states the selected card's
+ * save state: *Saved* (nothing dirty), *Confirm change* (dirty and clear — one tap commits, staying
+ * on the card), or the blocking reason (dirty and blocked, not confirmable); the last two also carry
+ * a discard (✕).
+ *
+ * **Leaving a card saves it.** A dirty draft that clears the confirm check commits by itself,
+ * through the identical [confirmDraft] path (values verbatim — golden rule), when the machinist
+ * leaves its card: swiping to another page, tapping another notch, or closing the overlay. A
+ * BLOCKED draft is never silently committed and never silently dropped — the leave raises an
+ * AlertDialog stating the blocking reason, with **Keep editing** (return to the card, cancelling
+ * the close) and **Discard** (drop the draft and go). [undercutLeaveAction] is that decision.
  *
  * Selection and paging are one thing: swiping a card highlights its notch, and tapping a notch
  * pages the carousel to its card.
@@ -178,8 +196,6 @@ fun UndercutWindowDetailOverlay(
     onRemoveUndercut: (id: String) -> Unit,
     onClose: () -> Unit,
 ) {
-    BackHandler { onClose() }
-
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
     val segs = remember(resolvedComponents) { surfaceSegsFrom(resolvedComponents) }
     val drawStartMm = strip.drawStartMm
@@ -211,6 +227,14 @@ fun UndercutWindowDetailOverlay(
     var pendingSeedStartMm by remember(stripKey) { mutableStateOf<Float?>(null) }
     var selectedId by remember(stripKey) { mutableStateOf<String?>(null) }
 
+    // ── Leave handling: the card being left is the card being saved ───────────
+    // Set while a blocked draft is being asked about; null means no dialog.
+    var leavePrompt by remember(stripKey) { mutableStateOf<UndercutLeavePrompt?>(null) }
+    // "Keep editing" returns to the blocked card programmatically — that is not the machinist
+    // leaving the card they were moved to, so the next selection change skips leave handling
+    // (without this, snapping back off a pending add page would auto-commit the add).
+    var skipLeaveOnce by remember(stripKey) { mutableStateOf(false) }
+
     val pageIds = remember(undercuts, pendingSeedStartMm) {
         buildUndercutPageIds(undercuts, pendingSeedStartMm)
     }
@@ -240,20 +264,13 @@ fun UndercutWindowDetailOverlay(
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
     }
-    // Confirm-blocking status of the previewed draft, for the canvas: its notch draws
-    // dashed in the selection color while valid, in the error color while this is
-    // non-null — the same check that gates the card's Confirm button, recomputed here
-    // against the sheet so the drawing and the button can never disagree.
+    // Confirm-blocking status of the previewed draft: its notch draws dashed in the selection
+    // color while valid, in the error color while this is non-null, and the status pill states
+    // the same reason — one check over the whole sheet, so the drawing, the pill, and what
+    // leaving the card does can never disagree.
     val activeDraftIssue = remember(activeDraft, oalMm, undercutRecord) {
         activeDraft?.let { d ->
-            val others = undercutRecord.undercuts
-                .filter { it.id != d.id }
-                .map { u ->
-                    val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
-                    UndercutSpanMm(u.id, c.startMm, c.endMm)
-                }
-                .filter { it.endMm > it.startMm }
-            undercutConfirmIssue(d, oalMm, others)
+            undercutConfirmIssue(d, oalMm, undercutOtherSpans(undercutRecord.undercuts, d.id, oalMm))
         }
     }
 
@@ -276,6 +293,9 @@ fun UndercutWindowDetailOverlay(
     // at the current index and undo a deliberate selection (a just-confirmed cut, mid-animation).
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }.collect { page ->
+            // Reads the LIVE page list, so an emission raised by a leave-commit's reorder adopts
+            // the id the pager is actually showing — its own `key` keeps that the card the
+            // machinist swiped to, never the one just committed behind them.
             pageIdsLive.value.getOrNull(page)?.let { selectedId = it }
         }
     }
@@ -303,10 +323,16 @@ fun UndercutWindowDetailOverlay(
         }
     }
 
-    // Confirm — the ONE path from draft to record. Values land verbatim (golden rule); the
-    // reference is persisted only when the chips actually moved, so a card whose stored
-    // `LINER_*` reference is displaying its AFT_SET fallback is never silently rewritten.
-    fun confirmDraft(draft: UndercutDraft) {
+    // Confirm — the ONE path from draft to record, taken by the pill's tap and by every
+    // auto-commit-on-leave alike. Values land verbatim (golden rule); the reference is persisted
+    // only when the chips actually moved, so a card whose stored `LINER_*` reference is displaying
+    // its AFT_SET fallback is never silently rewritten.
+    //
+    // [follow] keeps the confirmed cut selected (the pill's own tap: stay put and watch the card
+    // settle into its new aft → fwd index). A commit triggered by LEAVING the card passes false —
+    // selection already belongs to the card being moved to, and stealing it back would land the
+    // carousel on the card the machinist just left.
+    fun confirmDraft(draft: UndercutDraft, follow: Boolean = true) {
         if (draft.isPending) {
             val newId = onAddUndercut(
                 draft.startFromAftMm, draft.lengthMm, draft.reference, draft.referenceLinerId,
@@ -317,7 +343,7 @@ fun UndercutWindowDetailOverlay(
             }
             drafts = drafts - PENDING_UNDERCUT_ID
             pendingSeedStartMm = null
-            selectedId = newId
+            if (follow) selectedId = newId
         } else {
             onUpdateUndercut(draft.id, draft.startFromAftMm, draft.lengthMm, draft.diaMm, draft.note)
             val base = baselines[draft.id]
@@ -327,9 +353,66 @@ fun UndercutWindowDetailOverlay(
                 onUpdateReference(draft.id, draft.reference, draft.referenceLinerId)
             }
             drafts = drafts - draft.id
-            selectedId = draft.id
+            if (follow) selectedId = draft.id
         }
     }
+
+    // What leaving the card with id [id] should do, plus the blocking reason behind a PROMPT.
+    // The overlap check runs against the whole sheet, exactly as the pill and the canvas run it.
+    fun leaveActionOf(id: String): Pair<UndercutLeaveAction, String?> {
+        val draft = drafts[id]
+        val issue = draft?.let {
+            undercutConfirmIssue(it, oalMm, undercutOtherSpans(undercutRecord.undercuts, it.id, oalMm))
+        }
+        return undercutLeaveAction(draft, baselines[id], issue) to issue
+    }
+
+    /**
+     * Settle every draft except [keepId]'s: commit each one that clears its confirm check, and
+     * stop at the first blocked one with the question to ask about it.
+     *
+     * The sweep covers the WHOLE draft map, not just the card just left, because a field commits
+     * on blur: a value typed and then swiped away from lands in its draft only once focus goes,
+     * which can be after that card is already behind the machinist. Settling only the outgoing
+     * card would strand such an edit — dirty, unsaved, and invisible (the pill only ever states
+     * the SELECTED card).
+     */
+    fun settleDraftsExcept(keepId: String?, closing: Boolean): UndercutLeavePrompt? {
+        drafts.entries.toList().forEach { (id, draft) ->
+            if (id == keepId) return@forEach
+            val (action, issue) = leaveActionOf(id)
+            when (action) {
+                UndercutLeaveAction.NONE -> Unit
+                // `follow = false` is what keeps the carousel on the card being moved TO: the
+                // confirmed cut may take a new aft → fwd index, and the pager's id keys carry the
+                // open page along, but the SELECTION must not be dragged back to a settled card.
+                UndercutLeaveAction.COMMIT -> confirmDraft(draft, follow = false)
+                UndercutLeaveAction.PROMPT ->
+                    return UndercutLeavePrompt(draftId = id, reason = issue.orEmpty(), closing = closing)
+            }
+        }
+        return null
+    }
+
+    // Selection changed → every card the machinist is no longer on is settled. A clear draft
+    // commits itself; a blocked one raises the dialog (they have already moved on visually, so
+    // "Keep editing" is what snaps back).
+    LaunchedEffect(selectedId) {
+        if (skipLeaveOnce) {
+            skipLeaveOnce = false
+            return@LaunchedEffect
+        }
+        settleDraftsExcept(keepId = selectedId, closing = false)?.let { leavePrompt = it }
+    }
+
+    // Closing is a leave too — the back arrow and the system back run through here, so a dirty
+    // draft can never be lost by walking out of the overlay.
+    fun requestClose() {
+        val prompt = settleDraftsExcept(keepId = null, closing = true)
+        if (prompt != null) leavePrompt = prompt else onClose()
+    }
+
+    BackHandler(enabled = leavePrompt == null) { requestClose() }
 
     // ── Theme colors captured here — the Canvas draw scope must not read MaterialTheme ──
     val outlineColor = MaterialTheme.colorScheme.onSurface
@@ -369,7 +452,7 @@ fun UndercutWindowDetailOverlay(
                     .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onClose) {
+                IconButton(onClick = { requestClose() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Undercut Drawing")
                 }
                 Text(
@@ -679,28 +762,48 @@ fun UndercutWindowDetailOverlay(
                     }
                 }
 
-                // ── Shaft-direction reference: AFT at the left, FWD at the right ──
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "← AFT",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "FWD →",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // ── Shaft-direction reference + the floating save pill ────────────
+                // AFT at the left, FWD at the right, the pill riding the empty middle. It sits
+                // here — the boundary band between the canvas and the carousel — rather than
+                // inside the canvas: bottom-anchored inside it, the pill would sit on top of the
+                // Ø callouts, and inside a card it would scroll out of reach (the reason the
+                // per-card Confirm/Cancel row was missed on-device).
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().align(Alignment.Center),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "← AFT",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "FWD →",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    UndercutStatusPill(
+                        state = when {
+                            activeDraft == null -> UndercutPillState.Saved
+                            activeDraftIssue != null -> UndercutPillState.Blocked(activeDraftIssue)
+                            else -> UndercutPillState.Unsaved
+                        },
+                        onConfirm = { activeDraft?.let { confirmDraft(it) } },
+                        onDiscard = { activeDraft?.let { cancelDraft(it.id) } },
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 56.dp),
                     )
                 }
 
                 // Authoring entry point. On a liner strip this is the reason a liner with no cuts
                 // yet is tappable on the overview at all; the new page is a DRAFT — it previews
-                // here but enters the record only on Confirm. The default span takes the first
-                // free gap in the strip so it doesn't land on top of an existing cut.
+                // here but enters the record only when confirmed (pill tap, or leaving the page
+                // with a clear draft). The default span takes the first free gap in the strip so
+                // it doesn't land on top of an existing cut.
                 val addRange = undercutAddRangeOf(strip, stripLiner)
                 Button(
                     onClick = {
@@ -782,8 +885,6 @@ fun UndercutWindowDetailOverlay(
                         stripLiner = stripLiner,
                         sheetUndercuts = undercutRecord.undercuts,
                         onDraftChange = { updated -> drafts = drafts + (id to updated) },
-                        onConfirm = { confirmDraft(draft) },
-                        onCancel = { cancelDraft(id) },
                         onDelete = if (draft.isPending) null else {
                             {
                                 drafts = drafts - id
@@ -795,6 +896,52 @@ fun UndercutWindowDetailOverlay(
                 }
             }
         }
+    }
+
+    // ── Blocked draft on the way out ─────────────────────────────────────────
+    // The one case a leave cannot resolve by itself. Neither button is destructive by default:
+    // dismissing (tap-outside / system back) is "Keep editing", so an edit is never lost to a
+    // stray tap; only "Discard" drops it.
+    leavePrompt?.let { prompt ->
+        val keepEditing = {
+            leavePrompt = null
+            // Back to the blocked card, wherever the machinist had got to. Landing there is not
+            // them LEAVING the card they were taken to, so that selection change must not be
+            // handled as one — otherwise stepping back off a pending add page would commit the
+            // add nobody asked for.
+            if (selectedId != prompt.draftId) {
+                skipLeaveOnce = true
+                selectedId = prompt.draftId
+            }
+        }
+        AlertDialog(
+            onDismissRequest = keepEditing,
+            title = { Text("Undercut can't be saved") },
+            text = { Text(prompt.reason) },
+            confirmButton = {
+                TextButton(onClick = keepEditing, modifier = Modifier.testTag("undercut_leave_keep")) {
+                    Text("Keep editing")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        cancelDraft(prompt.draftId)
+                        // Dropping this one RESUMES the sweep it interrupted: a second unsettled
+                        // draft gets its own question rather than riding out on this answer.
+                        val next = settleDraftsExcept(
+                            keepId = if (prompt.closing) null else selectedId,
+                            closing = prompt.closing,
+                        )
+                        leavePrompt = next
+                        if (next == null && prompt.closing) onClose()
+                    },
+                    modifier = Modifier.testTag("undercut_leave_discard"),
+                ) {
+                    Text("Discard")
+                }
+            },
+        )
     }
 }
 
@@ -955,6 +1102,51 @@ internal fun undercutConfirmIssue(
     ?: undercutOverlapIssue(draft.startFromAftMm, draft.lengthMm, otherSpans)
 
 /**
+ * Every cut on the sheet EXCEPT [excludeId], as render-clamped spans — the adjacency pool
+ * [undercutConfirmIssue] checks against. One helper so the canvas's preview status, the card's
+ * inline reason, the pill, and the leave decision all measure the same thing.
+ */
+internal fun undercutOtherSpans(
+    all: List<Undercut>,
+    excludeId: String,
+    oalMm: Float,
+): List<UndercutSpanMm> = all
+    .filter { it.id != excludeId }
+    .map { u ->
+        val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+        UndercutSpanMm(u.id, c.startMm, c.endMm)
+    }
+    .filter { it.endMm > it.startMm }
+
+/** What leaving a card does with its draft. */
+internal enum class UndercutLeaveAction {
+    /** Nothing to save — no draft, or one that still equals stored values. */
+    NONE,
+
+    /** Commit it, through the same path the pill's tap takes (values verbatim, golden rule). */
+    COMMIT,
+
+    /** Ask: a blocked draft is neither committed nor dropped behind the machinist's back. */
+    PROMPT,
+}
+
+/**
+ * The leave decision for one card: dirty × blocked. [draft] is the card's local edit (null when it
+ * has none), [baseline] the stored values it shadows (null for the add flow's pending card, which
+ * is therefore always dirty), and [confirmIssue] the result of [undercutConfirmIssue] on that
+ * draft. Pure, so the swipe, the notch tap, and the overlay close all resolve identically.
+ */
+internal fun undercutLeaveAction(
+    draft: UndercutDraft?,
+    baseline: UndercutDraft?,
+    confirmIssue: String?,
+): UndercutLeaveAction = when {
+    draft == null || draft == baseline -> UndercutLeaveAction.NONE
+    confirmIssue != null -> UndercutLeaveAction.PROMPT
+    else -> UndercutLeaveAction.COMMIT
+}
+
+/**
  * A strip's stable identity — a liner strip is its liner, a free strip its aft-most member. Strip
  * VALUES carry member ids and a draw range, so they change on every record edit; card drafts and
  * the open page must survive that (they are what produced the edit).
@@ -979,10 +1171,11 @@ private fun undercutAddRangeOf(
 
 /**
  * One card in the carousel, editing a local [UndercutDraft]. Every control writes to the draft
- * through [onDraftChange]; [onConfirm] is the only path to the record and is enabled only while
- * the draft is [dirty] and [undercutConfirmIssue] clears. [onCancel] restores stored values (and
- * discards the page entirely when this is the add flow's pending card, whose [onDelete] is null —
- * there is nothing recorded to delete).
+ * through [onDraftChange]. The card has **no save controls**: committing and discarding live on
+ * the overlay's floating [UndercutStatusPill], and leaving the card commits a clear draft by
+ * itself — a Confirm/Cancel row inside this scroll was easy to miss and easy to forget (on-device
+ * report). [onDelete] is the card's one immediate record action, and is null on the add flow's
+ * pending card (nothing recorded to delete).
  *
  * Numeric fields keep the commit-on-blur contract (`docs/NumberField.md`); the commit lands in the
  * draft rather than the ViewModel. The Distance/Length validators still block a span that leaves
@@ -1005,8 +1198,6 @@ private fun UndercutDraftCard(
     stripLiner: UndercutLinerSpan?,
     sheetUndercuts: List<Undercut>,
     onDraftChange: (UndercutDraft) -> Unit,
-    onConfirm: () -> Unit,
-    onCancel: () -> Unit,
     onDelete: (() -> Unit)?,
 ) {
     // Which liner the LINER_* chips convert against: the draft's own reference liner while it
@@ -1029,10 +1220,7 @@ private fun UndercutDraftCard(
     // Every OTHER cut on the sheet — not just this strip's: a liner strip's pad shows neighbouring
     // stock, and a cut can be typed straight into it.
     val otherSpans = remember(sheetUndercuts, oalMm, draft.id) {
-        sheetUndercuts.filter { it.id != draft.id }.map { u ->
-            val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
-            UndercutSpanMm(u.id, c.startMm, c.endMm)
-        }.filter { it.endMm > it.startMm }
+        undercutOtherSpans(sheetUndercuts, draft.id, oalMm)
     }
     val confirmIssue = undercutConfirmIssue(draft, oalMm, otherSpans)
 
@@ -1174,38 +1362,138 @@ private fun UndercutDraftCard(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            // The blocking reason, inline where the numbers that caused it are. The pill above the
+            // carousel states it too — this one survives being scrolled to, that one survives the
+            // card being scrolled.
             if (dirty && confirmIssue != null) {
                 UndercutWarning(confirmIssue)
             }
+        }
+    }
+}
 
-            // Confirm/Cancel. The plain testTags name the VISIBLE card's actions — neighbouring
-            // pages stay composed for the peek, and duplicate tags would be ambiguous.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = onCancel,
-                    enabled = dirty,
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(if (selected) Modifier.testTag("undercut_cancel") else Modifier),
+// ─────────────────────────────────────────────────────────────────────────────
+// Floating status pill — the overlay's whole save affordance
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** What the selected card's draft is doing, as the pill states it. */
+internal sealed interface UndercutPillState {
+    /** Nothing to save — the card matches the record. Not a button. */
+    object Saved : UndercutPillState
+
+    /** A dirty draft that clears [undercutConfirmIssue]: one tap commits it. */
+    object Unsaved : UndercutPillState
+
+    /** A dirty draft that cannot be committed; [reason] is the blocking check's own text. */
+    data class Blocked(val reason: String) : UndercutPillState
+}
+
+/** A blocked draft the machinist tried to walk away from — [closing] when the exit was the overlay. */
+private data class UndercutLeavePrompt(
+    val draftId: String,
+    val reason: String,
+    val closing: Boolean,
+)
+
+/**
+ * The persistent save pill, floated at the canvas ↔ carousel boundary. It replaces the per-card
+ * Confirm/Cancel row, which lived inside the card's own vertical scroll and was easy to miss
+ * (on-device report). Tapping "Confirm change" runs the identical `confirmDraft` path the
+ * auto-commit-on-leave runs, and stays on the card.
+ *
+ * testTags: the container is `undercut_status_pill`, the confirm action keeps `undercut_confirm`
+ * and the discard action `undercut_cancel` — one instance of each, since only the SELECTED card's
+ * draft is ever represented here (the old per-card tags had to be suppressed on peeking pages).
+ */
+@Composable
+private fun UndercutStatusPill(
+    state: UndercutPillState,
+    onConfirm: () -> Unit,
+    onDiscard: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val container = when (state) {
+        UndercutPillState.Saved -> MaterialTheme.colorScheme.surfaceVariant
+        UndercutPillState.Unsaved -> MaterialTheme.colorScheme.primaryContainer
+        is UndercutPillState.Blocked -> MaterialTheme.colorScheme.errorContainer
+    }
+    val onContainer = when (state) {
+        UndercutPillState.Saved -> MaterialTheme.colorScheme.onSurfaceVariant
+        UndercutPillState.Unsaved -> MaterialTheme.colorScheme.onPrimaryContainer
+        is UndercutPillState.Blocked -> MaterialTheme.colorScheme.onErrorContainer
+    }
+    Surface(
+        modifier = modifier.testTag("undercut_status_pill"),
+        shape = RoundedCornerShape(percent = 50),
+        color = container,
+        contentColor = onContainer,
+        shadowElevation = if (state == UndercutPillState.Saved) 1.dp else 4.dp,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            when (state) {
+                UndercutPillState.Saved ->
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = UNDERCUT_SAVED_TINT,
+                            modifier = Modifier.padding(end = 6.dp),
+                        )
+                        Text("Saved", style = MaterialTheme.typography.labelLarge)
+                    }
+
+                UndercutPillState.Unsaved ->
+                    Row(
+                        modifier = Modifier
+                            .clickable(onClick = onConfirm)
+                            .testTag("undercut_confirm")
+                            .padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 6.dp),
+                        )
+                        Text("Confirm change", style = MaterialTheme.typography.labelLarge)
+                    }
+
+                is UndercutPillState.Blocked ->
+                    Row(
+                        modifier = Modifier.padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 6.dp),
+                        )
+                        Text(
+                            state.reason,
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 2,
+                        )
+                    }
+            }
+            // Discard rides alongside both editable states, so dropping an edit never needs the
+            // card to be scrolled to — and is never the same tap target as confirming it.
+            if (state != UndercutPillState.Saved) {
+                IconButton(
+                    onClick = onDiscard,
+                    modifier = Modifier.testTag("undercut_cancel"),
                 ) {
-                    Text("Cancel")
-                }
-                Button(
-                    onClick = onConfirm,
-                    enabled = dirty && confirmIssue == null,
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(if (selected) Modifier.testTag("undercut_confirm") else Modifier),
-                ) {
-                    Text("Confirm")
+                    Icon(Icons.Filled.Close, contentDescription = "Discard change")
                 }
             }
         }
     }
 }
+
+/** Green check on the "Saved" pill — a settled state reads at a glance, outside the theme ramp. */
+private val UNDERCUT_SAVED_TINT = Color(0xFF2E7D32)
 
 @Composable
 private fun UndercutWarning(text: String) {

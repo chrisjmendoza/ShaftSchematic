@@ -6,6 +6,44 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-01 (undercut drawing — status pill, strips-only sheet, output polish)
+
+### feat(undercut): auto-confirm on leave + floating status pill
+
+On-device report: the per-card Confirm button was tucked away and easy to forget.
+- A valid dirty draft now **auto-confirms when its card is left** (swipe, notch tap, add,
+  or closing the overlay); a blocked draft never silently commits or discards — a dialog
+  offers Keep editing / Discard. Sweep covers stragglers from late blur commits.
+- A **floating status pill** at the canvas/carousel boundary is the always-visible truth:
+  green check "Saved"; "Confirm change" + discard (✕) while editing; error-styled with the
+  blocking reason while conflicted. Per-card Confirm/Cancel buttons removed.
+
+### feat(pdf): strips-only undercut sheet + started-strip write-in template
+
+On-device report: real undercut drawings show only the cut sections. With ≥1 strip the
+sheet drops the shaft profile and OAL line entirely — header, one AFT/FWD row, strips
+filling the page, Notes. Blank/template mode (and any empty-record export) prints one
+**started strip per liner**: the liner outline with edges and break edges, otherwise
+empty for hand-drawn cuts, with a circle-one "FROM AFT / FWD S.E.T." writing rule. The
+whole-shaft profile form survives only for a shaft with no drawable liners.
+
+### fix(pdf): rail spacing, section size, end air
+
+- Total rail band 22→38pt (~20pt air to the chain rail); fallback labels clear the
+  arrowheads on a 17pt row pitch with white halos, drawn in a second pass so no witness
+  line strikes through.
+- Cylinder capped (0.38 × band, 170pt ceiling) so full-page strips stay drawing-sized;
+  break-edge amplitude capped at 18pt so the end lobes stop sprawling.
+- Every strip end now draws ≥24pt of neighbor stock outside the chain datums
+  (pt-floor, widening only outward — no datum or printed dimension changes).
+
+### fix(ui): preview page tucks behind the toolbar
+
+`PdfPreviewOverlay`'s zoom/pan content is clipped to its container (draw-only fix;
+buttons were always tappable) — covers undercut, wear, and runout previews.
+
+---
+
 ## 2026-07-31 (undercut drawing — card carousel with draft/confirm, adjacency guard)
 
 ### feat(undercut): swipeable card carousel, draft-until-confirm editing

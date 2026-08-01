@@ -6,6 +6,7 @@ import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.UndercutWindow
 import com.android.shaftschematic.geom.buildUndercutStrips
+import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
@@ -149,6 +150,121 @@ class UndercutStripLayoutTest {
         assertEquals(strip.drawEndMm - strip.drawStartMm, rail.totalLengthMm(), 1e-3f)
     }
 
+    // ── Drawn pad: the pt floor on the stock outside each chain datum ─────────
+
+    /** A full-width strip on a strips-own-page sheet (36 pt page margins). */
+    private val fullLeft = 36f
+    private val fullRight = 756f
+
+    /** The LEFT cell of a 2-up grid page — half the width, so half the scale. */
+    private val cellLeft = 36f
+    private val cellRight = 385f
+
+    /**
+     * What the two pads (chain datum → break edge) actually PRINT for a draw range laid out in
+     * the given cell — the composer's own arithmetic, `computeWearStripHorizontalLayout` with the
+     * strip's edge inset as the stub.
+     */
+    private fun drawnPadsPt(
+        range: UndercutStripDrawRangeMm,
+        chainStartMm: Float,
+        chainEndMm: Float,
+        leftPt: Float,
+        rightPt: Float,
+    ): Pair<Float, Float> {
+        val h = computeWearStripHorizontalLayout(
+            leftPt, rightPt, range.endMm - range.startMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
+        )
+        return (chainStartMm - range.startMm) * h.ptPerMm to (range.endMm - chainEndMm) * h.ptPerMm
+    }
+
+    private fun drawRangeFor(strip: UndercutStrip, leftPt: Float, rightPt: Float) =
+        computeUndercutStripDrawRange(
+            strip.drawStartMm, strip.drawEndMm, strip.chainStartMm, strip.chainEndMm,
+            leftPt, rightPt, oal,
+        )
+
+    @Test
+    fun `a strip whose mm pad already prints wide enough is left alone`() {
+        val strip = linerStrip(listOf(span("a", 700f, 760f), span("b", 820f, 880f)))
+        val range = drawRangeFor(strip, fullLeft, fullRight)
+
+        assertEquals(strip.drawStartMm, range.startMm, 1e-3f)
+        assertEquals(strip.drawEndMm, range.endMm, 1e-3f)
+        val (padA, padF) = drawnPadsPt(range, strip.chainStartMm, strip.chainEndMm, fullLeft, fullRight)
+        assertTrue("full width already clears the floor", padA >= UNDERCUT_STRIP_MIN_PAD_PT)
+        assertTrue(padF >= UNDERCUT_STRIP_MIN_PAD_PT)
+    }
+
+    @Test
+    fun `a grid cell widens its draw range until the pad prints at the floor`() {
+        val strip = linerStrip(listOf(span("a", 700f, 760f), span("b", 820f, 880f)))
+
+        // Unwidened, the same 1 in of stock would print at well under the floor at cell scale —
+        // the break edge all but against the liner's end face (on-device report).
+        val asIs = UndercutStripDrawRangeMm(strip.drawStartMm, strip.drawEndMm)
+        val (rawPad, _) = drawnPadsPt(asIs, strip.chainStartMm, strip.chainEndMm, cellLeft, cellRight)
+        assertTrue("the cramped case must actually be cramped", rawPad < UNDERCUT_STRIP_MIN_PAD_PT)
+
+        val range = drawRangeFor(strip, cellLeft, cellRight)
+        val (padA, padF) = drawnPadsPt(range, strip.chainStartMm, strip.chainEndMm, cellLeft, cellRight)
+        assertEquals(UNDERCUT_STRIP_MIN_PAD_PT, padA, 1e-2f)
+        assertEquals(UNDERCUT_STRIP_MIN_PAD_PT, padF, 1e-2f)
+        // Only ever widens, and only outward: the datums the rail measures to do not move.
+        assertTrue(range.startMm < strip.drawStartMm)
+        assertTrue(range.endMm > strip.drawEndMm)
+        assertEquals(600f, strip.chainStartMm, 1e-3f)
+        assertEquals(1000f, strip.chainEndMm, 1e-3f)
+    }
+
+    @Test
+    fun `a bare-shaft strip gets its end air from the floor alone`() {
+        // A free strip's chain datums ARE its window edges, so with no widening the break edge
+        // lands exactly on the outer witness line.
+        val strip = buildUndercutStrips(listOf(span("a", 200f, 240f)), listOf(liner), oal)
+            .filterIsInstance<UndercutStrip.FreeStrip>()
+            .single()
+        val range = drawRangeFor(strip, cellLeft, cellRight)
+
+        val (padA, padF) = drawnPadsPt(range, strip.chainStartMm, strip.chainEndMm, cellLeft, cellRight)
+        assertEquals(UNDERCUT_STRIP_MIN_PAD_PT, padA, 1e-2f)
+        assertEquals(UNDERCUT_STRIP_MIN_PAD_PT, padF, 1e-2f)
+        // The window itself is untouched, so its chain still prints the same pad dimensions.
+        assertEquals(strip.drawStartMm, strip.chainStartMm, 1e-3f)
+        assertTrue(range.startMm < strip.chainStartMm)
+    }
+
+    @Test
+    fun `the widened range never runs past the shaft's ends`() {
+        // A cut hard against the AFT face: the window is already clamped at 0, and that end draws
+        // as the physical shaft end (flat), so it must not grow a pad past the metal.
+        val strip = buildUndercutStrips(listOf(span("a", 0f, 40f)), emptyList(), oal)
+            .filterIsInstance<UndercutStrip.FreeStrip>()
+            .single()
+        assertEquals(0f, strip.drawStartMm, 1e-3f)
+
+        val range = drawRangeFor(strip, cellLeft, cellRight)
+        assertEquals("the AFT end stays on the shaft face", 0f, range.startMm, 1e-3f)
+        assertTrue(range.endMm > strip.drawEndMm)
+        assertTrue(range.endMm <= oal + 1e-3f)
+        val (_, padF) = drawnPadsPt(range, strip.chainStartMm, strip.chainEndMm, cellLeft, cellRight)
+        assertEquals(UNDERCUT_STRIP_MIN_PAD_PT, padF, 1e-2f)
+    }
+
+    @Test
+    fun `a degenerate cell cannot spend itself on pad`() {
+        val strip = linerStrip(listOf(span("a", 700f, 760f)))
+        // 100 pt wide: the floor would be nearly half of it, so the fraction guard bites and the
+        // chain keeps most of the width.
+        val range = drawRangeFor(strip, 0f, 100f)
+        val (padA, padF) = drawnPadsPt(range, strip.chainStartMm, strip.chainEndMm, 0f, 100f)
+        val avail = 100f - 2f * UNDERCUT_STRIP_EDGE_INSET_PT
+        assertTrue(padA <= avail * 0.15f + 1e-2f)
+        assertTrue(padF <= avail * 0.15f + 1e-2f)
+        assertTrue(range.startMm <= strip.drawStartMm)
+        assertTrue(range.endMm >= strip.drawEndMm)
+    }
+
     // ── Strip titles ─────────────────────────────────────────────────────────
 
     @Test
@@ -252,6 +368,171 @@ class UndercutStripLayoutTest {
         val noTotal = computeUndercutStripInnerLayout(400f, 540f, 9f, hasTotalRail = false, diaBandPt = 12f)
         assertTrue(inner.chainRailY > noTotal.chainRailY)
         assertEquals(noTotal.chainRailY, noTotal.totalRailY, 1e-3f)
+    }
+
+    @Test
+    fun `the total rail keeps air above itself and clear separation down to the chain`() {
+        val inner = computeUndercutStripInnerLayout(
+            stripTop = 400f, stripBottom = 540f, titleHeightPt = 9f, hasTotalRail = true, diaBandPt = 12f,
+        )
+        // Above: the row a total too wide to seat in its own break falls back to.
+        assertTrue(
+            "total rail must keep its above-label row",
+            inner.totalRailY - 400f >= UNDERCUT_TOTAL_RAIL_ABOVE_PT - 1e-2f,
+        )
+        // Below: the two rails' values must not read as one crowded band (on-device report).
+        assertEquals(
+            UNDERCUT_TOTAL_RAIL_BAND_PT - UNDERCUT_TOTAL_RAIL_ABOVE_PT,
+            inner.chainRailY - inner.totalRailY,
+            1e-2f,
+        )
+    }
+
+    // ── Cylinder cap: the reclaimed profile band becomes air, not a slab ──────
+
+    /** A full-width strip on a strips-own-page sheet: header + direction row → notes gap. */
+    private val fullPageStripTop = 110f
+    private val fullPageStripBottom = 524f
+
+    private fun cylCapFor(stripTop: Float, stripBottom: Float): Float =
+        maxOf(
+            UNDERCUT_CYL_MAX_FLOOR_PT,
+            minOf((stripBottom - stripTop) * UNDERCUT_CYL_MAX_HEIGHT_FRAC, UNDERCUT_CYL_MAX_ABS_PT),
+        )
+
+    /** The same band with the cap lifted out of the way — the plain wear-shaped delegation. */
+    private fun uncapped(
+        stripTop: Float,
+        stripBottom: Float,
+        hasTotalRail: Boolean = true,
+        diaBandPt: Float = 12f,
+    ) = computeUndercutStripInnerLayout(
+        stripTop, stripBottom, titleHeightPt = 9f, hasTotalRail = hasTotalRail, diaBandPt = diaBandPt,
+        cylMaxFrac = 1f, cylMaxAbsPt = Float.MAX_VALUE,
+    )
+
+    @Test
+    fun `a full-page strip caps its cylinder and spends the surplus on air`() {
+        val inner = computeUndercutStripInnerLayout(
+            fullPageStripTop, fullPageStripBottom,
+            titleHeightPt = 9f, hasTotalRail = true, diaBandPt = 12f,
+        )
+        val cap = cylCapFor(fullPageStripTop, fullPageStripBottom)
+        assertTrue(
+            "the drawn cylinder must not eat the reclaimed profile band",
+            inner.cylBottom - inner.cylTop <= cap + 1e-2f,
+        )
+        // At page height the FRACTION binds, not the absolute ceiling — the ceiling is the
+        // guard for any taller band (see the next test).
+        assertEquals(
+            (fullPageStripBottom - fullPageStripTop) * UNDERCUT_CYL_MAX_HEIGHT_FRAC, cap, 1e-2f,
+        )
+        // A moderately drawn section, not a slab: well under half the band it sits in.
+        assertTrue("the section must stay a drawing, not a poster", cap < (fullPageStripBottom - fullPageStripTop) * 0.45f)
+
+        // The surplus shows up as air: the rails sit well down from the strip top, and the Ø
+        // callout band clears the title.
+        assertTrue("air above the rails", inner.chainRailY - fullPageStripTop > 40f)
+        assertTrue("air below the callouts", fullPageStripBottom - inner.cylBottom > 60f)
+
+        // …and it is spent EVENLY. Measured against the uncapped delegation: after the fixed
+        // rail headroom, the same number of points go below the cylinder as above the rails.
+        // If either side capped out, the leftover would all pile up on the other.
+        val plain = uncapped(fullPageStripTop, fullPageStripBottom)
+        val belowExtra = plain.cylBottom - inner.cylBottom
+        val aboveExtra = inner.chainRailY - plain.chainRailY
+        assertEquals("surplus must split evenly below/above", belowExtra, aboveExtra, 1e-2f)
+        assertTrue(
+            "the below-air cap must not bite at page height",
+            belowExtra < UNDERCUT_CYL_BELOW_EXTRA_MAX_PT,
+        )
+
+        // Ordering still holds.
+        assertTrue(inner.totalRailY >= fullPageStripTop)
+        assertTrue(inner.totalRailY <= inner.chainRailY)
+        assertTrue(inner.chainRailY <= inner.cylTop)
+        assertTrue(inner.cylBottom <= fullPageStripBottom)
+    }
+
+    @Test
+    fun `a band taller than the page stops growing at the absolute ceiling`() {
+        // No sheet is this tall today; the ceiling exists so a taller band never turns the strip
+        // into one giant cylinder. `frac × band` would ask for 228 pt here.
+        val top = 60f
+        val bottom = 660f
+        val inner = computeUndercutStripInnerLayout(
+            top, bottom, titleHeightPt = 9f, hasTotalRail = true, diaBandPt = 12f,
+        )
+        assertTrue((bottom - top) * UNDERCUT_CYL_MAX_HEIGHT_FRAC > UNDERCUT_CYL_MAX_ABS_PT)
+        assertEquals(UNDERCUT_CYL_MAX_ABS_PT, inner.cylBottom - inner.cylTop, 1e-2f)
+        assertTrue(inner.chainRailY <= inner.cylTop)
+        assertTrue(inner.cylBottom <= bottom)
+    }
+
+    @Test
+    fun `a grid cell is short enough that the cap never bites`() {
+        val top = 110f
+        val bottom = 310f
+        val inner = computeUndercutStripInnerLayout(
+            top, bottom, titleHeightPt = 9f, hasTotalRail = true, diaBandPt = 12f,
+        )
+        // At this height the FLOOR is the cap, and the delegation's own cylinder lands exactly
+        // on it — so there is no surplus to spend and the layout is untouched.
+        assertEquals(UNDERCUT_CYL_MAX_FLOOR_PT, cylCapFor(top, bottom), 1e-2f)
+        assertTrue(inner.cylBottom - inner.cylTop <= cylCapFor(top, bottom) + 1e-2f)
+        // No surplus ⇒ bit-identical to the plain delegation: the chain rail sits exactly at
+        // the bottom of the reserved total band and the cylinder keeps its full bottom.
+        assertEquals(top + UNDERCUT_TOTAL_RAIL_BAND_PT, inner.chainRailY, 1e-2f)
+        assertEquals(bottom - 9f - 11f - 12f, inner.cylBottom, 1e-2f)
+        val plain = uncapped(top, bottom)
+        assertEquals(plain.cylTop, inner.cylTop, 1e-3f)
+        assertEquals(plain.cylBottom, inner.cylBottom, 1e-3f)
+        assertEquals(plain.chainRailY, inner.chainRailY, 1e-3f)
+    }
+
+    // ── Started strips: the blank template / empty-record page ────────────────
+
+    @Test
+    fun `a started liner strip draws the whole liner and dimensions nothing`() {
+        val strip = linerStripFor(liner, emptyList(), oal)
+
+        assertEquals("liner", strip.linerId)
+        assertTrue("a started strip carries no cuts", strip.undercutIds.isEmpty())
+        // Chain datums are the liner's own edges; the draw range pads past them, so the
+        // liner's edges and its neighbour slivers are visible to sketch against.
+        assertEquals(600f, strip.chainStartMm, 1e-3f)
+        assertEquals(1000f, strip.chainEndMm, 1e-3f)
+        assertTrue(strip.drawStartMm < strip.chainStartMm)
+        assertTrue(strip.drawEndMm > strip.chainEndMm)
+        // Nothing recorded ⇒ no total rail (and the composer skips the chain entirely, leaving
+        // the two chain-datum witness bars).
+        assertNull(buildUndercutTotalSpan(emptyList(), mm))
+        // The page mode still follows the strip count, so N started liners lay out exactly as
+        // N cut strips would.
+        assertEquals(WearPdfMode.COMBINED, determineUndercutPdfMode(1))
+        assertEquals(WearPdfMode.GRID, determineUndercutPdfMode(3))
+    }
+
+    @Test
+    fun `a started strip leaves clear space above and below the cylinder for hand work`() {
+        // Full-page band, no total rail and no Ø band — the empty-record posture. The cylinder
+        // cap must keep most of that band writable rather than drawing a slab.
+        val inner = computeUndercutStripInnerLayout(
+            fullPageStripTop, fullPageStripBottom, titleHeightPt = 9f, hasTotalRail = false,
+        )
+        assertTrue(
+            inner.cylBottom - inner.cylTop <= cylCapFor(fullPageStripTop, fullPageStripBottom) + 1e-2f,
+        )
+        assertTrue("room above for hand-drawn dimensions", inner.cylTop - fullPageStripTop > 80f)
+        assertTrue("room below for hand-written Ø values", fullPageStripBottom - inner.cylBottom > 40f)
+        // This is the biggest surplus any real strip produces (no rail band, no Ø band), so it
+        // is the one the below-air cap has to be able to absorb: the split must still come out
+        // even here, or the write-in space piles up above the cylinder and starves the values.
+        val plain = uncapped(fullPageStripTop, fullPageStripBottom, hasTotalRail = false, diaBandPt = 0f)
+        val belowExtra = plain.cylBottom - inner.cylBottom
+        val aboveExtra = inner.chainRailY - plain.chainRailY
+        assertEquals("surplus must split evenly below/above", belowExtra, aboveExtra, 1e-2f)
+        assertTrue(belowExtra <= UNDERCUT_CYL_BELOW_EXTRA_MAX_PT + 1e-2f)
     }
 
     @Test
