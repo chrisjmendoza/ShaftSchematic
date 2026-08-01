@@ -490,21 +490,66 @@ class UndercutStripLayoutTest {
         assertEquals(plain.chainRailY, inner.chainRailY, 1e-3f)
     }
 
-    // ── Rail row budget: reserve the rows the chain's labels actually use ─────
+    // ── Rail row plan: reserve the rows the chain's labels actually use ───────
 
     @Test
-    fun `the rail row budget follows the fallback rows in use`() {
+    fun `the rail row plan follows the fallback rows in use and which level owns the air above`() {
         fun span(row: Int, inward: Boolean) = WearRailSpanLayout(0f, 10f, "x", 5f, row, inward)
-        // Break-seated labels sit on the rail line itself — one clear row keeps the rail
-        // (and its arrowheads) off the shaft, nothing more.
-        assertEquals(1, undercutRailRowBudget(listOf(span(0, true), span(1, true)), startedStrip = false))
-        assertEquals(1, undercutRailRowBudget(emptyList(), startedStrip = false))
-        // Fallback labels reserve through their own row, capped at the wear budget.
-        assertEquals(1, undercutRailRowBudget(listOf(span(0, false)), startedStrip = false))
-        assertEquals(2, undercutRailRowBudget(listOf(span(0, true), span(1, false)), startedStrip = false))
-        assertEquals(WEAR_RAIL_MAX_LABEL_ROWS, undercutRailRowBudget(listOf(span(5, false)), startedStrip = false))
-        // A started strip draws no chain; its band is hand-drawn into, so the full budget stays.
-        assertEquals(WEAR_RAIL_MAX_LABEL_ROWS, undercutRailRowBudget(emptyList(), startedStrip = true))
+        // Break-seated labels sit on the rail line itself — one clear row below keeps the rail
+        // (and its arrowheads) off the shaft, nothing more, wherever fallbacks would go.
+        assertEquals(
+            UndercutRailRowPlan(belowRows = 1, aboveRows = 0),
+            planUndercutRailRows(listOf(span(0, true), span(1, true)), startedStrip = false, hasTotalRail = true),
+        )
+        assertEquals(
+            UndercutRailRowPlan(belowRows = 1, aboveRows = 0),
+            planUndercutRailRows(emptyList(), startedStrip = false, hasTotalRail = false),
+        )
+        // Total rail above ⇒ fallbacks tuck BELOW, reserving through their own row (wear cap).
+        assertEquals(
+            UndercutRailRowPlan(belowRows = 1, aboveRows = 0),
+            planUndercutRailRows(listOf(span(0, false)), startedStrip = false, hasTotalRail = true),
+        )
+        assertEquals(
+            UndercutRailRowPlan(belowRows = 2, aboveRows = 0),
+            planUndercutRailRows(listOf(span(0, true), span(1, false)), startedStrip = false, hasTotalRail = true),
+        )
+        assertEquals(
+            UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0),
+            planUndercutRailRows(listOf(span(5, false)), startedStrip = false, hasTotalRail = true),
+        )
+        // Chain is the only label level ⇒ fallbacks go ABOVE the line (on-device report),
+        // below keeps just the clear row.
+        assertEquals(
+            UndercutRailRowPlan(belowRows = 1, aboveRows = 1),
+            planUndercutRailRows(listOf(span(0, false)), startedStrip = false, hasTotalRail = false),
+        )
+        assertEquals(
+            UndercutRailRowPlan(belowRows = 1, aboveRows = WEAR_RAIL_MAX_LABEL_ROWS),
+            planUndercutRailRows(listOf(span(5, false)), startedStrip = false, hasTotalRail = false),
+        )
+        // A started strip draws no chain; the full hand-drawing budget stays below.
+        assertEquals(
+            UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0),
+            planUndercutRailRows(emptyList(), startedStrip = true, hasTotalRail = false),
+        )
+    }
+
+    @Test
+    fun `the chain above-band reserves air over a single-level rail`() {
+        // No-surplus band, no total: the above band pushes the whole figure down by its height,
+        // keeping room for the stacked labels above the rail line inside the strip.
+        val flat = computeUndercutStripInnerLayout(400f, 540f, 9f, hasTotalRail = false, diaBandPt = 12f, maxLabelRows = 1)
+        val above = computeUndercutStripInnerLayout(
+            400f, 540f, 9f, hasTotalRail = false, diaBandPt = 12f, maxLabelRows = 1,
+            chainAboveBandPt = UNDERCUT_RAIL_ROW_HEIGHT_PT,
+        )
+        assertEquals(UNDERCUT_RAIL_ROW_HEIGHT_PT, above.chainRailY - flat.chainRailY, 1e-2f)
+        assertTrue("reserved air above the rail", above.chainRailY - 400f >= UNDERCUT_RAIL_ROW_HEIGHT_PT - 1e-2f)
+        // Ordering guarantee holds with the band in play.
+        assertTrue(above.chainRailY <= above.cylTop)
+        assertTrue(above.cylTop <= above.cylBottom)
+        assertTrue(above.cylBottom <= 540f)
     }
 
     @Test

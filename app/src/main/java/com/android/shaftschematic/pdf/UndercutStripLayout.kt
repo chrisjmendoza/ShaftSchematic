@@ -284,29 +284,53 @@ data class UndercutStripInnerLayout(
 )
 
 /**
- * Fallback-label rows to reserve between the chained rail line and the cylinder top — the
- * `maxLabelRows` a composer passes to [computeUndercutStripInnerLayout].
- *
- * The wear-shaped fixed budget ([WEAR_RAIL_MAX_LABEL_ROWS] rows, always) reserves air for a
- * crowding worst case most strips never hit, which pushes the rail figures far above the surface
- * they dimension (on-device report). Since [layoutWearStripRail] is pure horizontal geometry, the
- * chain can be resolved BEFORE the vertical split and the reservation sized to the rows its
- * labels actually landed on:
- * - only spans whose label does NOT seat in the line's break count (a break-seated label sits on
- *   the rail line itself and needs no row);
- * - never less than 1 row, so the rail line and its arrowheads keep clear air off the shaft even
- *   when every label seats inline;
- * - a **started** strip keeps the full [WEAR_RAIL_MAX_LABEL_ROWS] budget: it draws no chain, and
- *   the band between its datum bars is the machinist's to hand-draw a chain into.
+ * Where the chained rail's fallback-label rows go, and how many to reserve on each side of the
+ * line — feeds [computeUndercutStripInnerLayout] (`maxLabelRows` = [belowRows],
+ * `chainAboveBandPt` = [aboveRows] × [UNDERCUT_RAIL_ROW_HEIGHT_PT]) and `drawUndercutRail`'s
+ * `fallbackLabelAbove` flag ([aboveRows] > 0).
  */
-fun undercutRailRowBudget(chainLayout: List<WearRailSpanLayout>, startedStrip: Boolean): Int =
-    if (startedStrip) WEAR_RAIL_MAX_LABEL_ROWS
-    else (chainLayout.filter { !it.arrowInward }.maxOfOrNull { it.labelRow + 1 } ?: 0)
-        .coerceIn(1, WEAR_RAIL_MAX_LABEL_ROWS)
+data class UndercutRailRowPlan(
+    /** Rows reserved between the rail line and the cylinder top (never 0 — clear air). */
+    val belowRows: Int,
+    /** Fallback rows stacked ABOVE the rail line; 0 when fallbacks tuck below instead. */
+    val aboveRows: Int,
+)
+
+/**
+ * Plans the chained rail's fallback-label rows. Since [layoutWearStripRail] is pure horizontal
+ * geometry, the chain is resolved BEFORE the vertical split and the reservation sized to the
+ * rows its labels actually landed on (only spans whose label does NOT seat in the line's break
+ * count — a break-seated label sits on the rail line itself and needs no row). The wear-shaped
+ * fixed budget ([WEAR_RAIL_MAX_LABEL_ROWS] rows, always, below) reserved crowding air most
+ * strips never used, floating the rail figures far above the surface they dimension (on-device
+ * report).
+ *
+ * Which side of the line the fallbacks land on follows what sits above the chain:
+ * - **Total rail present** → fallbacks tuck BELOW the line (the total's figure owns the space
+ *   above), reserving the rows used, never less than 1.
+ * - **Chain is the only label level** → fallbacks go ABOVE the line (on-device report: a small
+ *   value pushed under the span line read as orphaned with nothing above the rail), and below
+ *   keeps just the 1-row clear air off the shaft.
+ * - **Started strip** → no chain at all; the full [WEAR_RAIL_MAX_LABEL_ROWS] budget stays below,
+ *   the machinist's band to hand-draw a chain into.
+ */
+fun planUndercutRailRows(
+    chainLayout: List<WearRailSpanLayout>,
+    startedStrip: Boolean,
+    hasTotalRail: Boolean,
+): UndercutRailRowPlan {
+    if (startedStrip) return UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0)
+    val used = (chainLayout.filter { !it.arrowInward }.maxOfOrNull { it.labelRow + 1 } ?: 0)
+        .coerceAtMost(WEAR_RAIL_MAX_LABEL_ROWS)
+    return if (hasTotalRail) UndercutRailRowPlan(belowRows = used.coerceAtLeast(1), aboveRows = 0)
+    else UndercutRailRowPlan(belowRows = 1, aboveRows = used)
+}
 
 /**
  * Splits one strip's vertical band, reserving [totalRailBandPt] at the top for the
- * cluster's total-span rail when [hasTotalRail], then delegating everything below it to
+ * cluster's total-span rail when [hasTotalRail] (or [chainAboveBandPt] for a single-level
+ * chain's above-the-line fallback rows — see [planUndercutRailRows]; the two are mutually
+ * exclusive), then delegating everything below it to
  * [computeWearStripInnerLayout] — so the chained rail, the profile band, the measured-Ø
  * band ([diaBandPt]) and the title degrade in exactly the same order the wear strips do
  * (the drawn cylinder shrinks first, then label rows drop out; nothing ever overflows the
@@ -338,13 +362,18 @@ fun computeUndercutStripInnerLayout(
     labelHeadroomPt: Float = WEAR_STRIP_LABEL_HEADROOM_PT,
     maxLabelRows: Int = WEAR_RAIL_MAX_LABEL_ROWS,
     diaBandPt: Float = 0f,
+    chainAboveBandPt: Float = 0f,
     cylMaxFrac: Float = UNDERCUT_CYL_MAX_HEIGHT_FRAC,
     cylMaxFloorPt: Float = UNDERCUT_CYL_MAX_FLOOR_PT,
     cylMaxAbsPt: Float = UNDERCUT_CYL_MAX_ABS_PT,
 ): UndercutStripInnerLayout {
     val bottom = stripBottom.coerceAtLeast(stripTop)
     val band = if (hasTotalRail) totalRailBandPt.coerceAtLeast(0f) else 0f
-    val innerTop = (stripTop + band).coerceAtMost(bottom)
+    // Above-the-line fallback rows (chain is the sheet's only label level — see
+    // [planUndercutRailRows]) reserve their band at the top exactly as the total rail's does;
+    // the two are mutually exclusive, so at most one is nonzero.
+    val aboveBand = chainAboveBandPt.coerceAtLeast(0f)
+    val innerTop = (stripTop + band + aboveBand).coerceAtMost(bottom)
     val inner = computeWearStripInnerLayout(
         stripTop = innerTop,
         stripBottom = bottom,
@@ -370,8 +399,11 @@ fun computeUndercutStripInnerLayout(
     // Both coercions only matter on a pathologically short band, where every band has already
     // collapsed onto the same Y — they preserve the ordering guarantee rather than shifting a
     // real layout.
+    // The floor keeps the above-band clear: labels stacked above the line must stay inside the
+    // strip even when a short band pins the rail high.
+    val railFloor = (stripTop + aboveBand).coerceAtMost(cylTop)
     val chainRailY = (cylTop - inner.railLabelRows * rowHeightPt - extraRailHeadroom)
-        .coerceIn(stripTop, cylTop)
+        .coerceIn(railFloor, cylTop)
     val totalRailY = if (band > 0f) {
         (chainRailY - (band - totalRailAbovePt).coerceAtLeast(0f)).coerceIn(stripTop, chainRailY)
     } else {
