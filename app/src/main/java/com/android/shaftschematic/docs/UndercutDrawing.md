@@ -575,17 +575,25 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   (`drawUndercutRail`), so they cannot drift. A fallback label starts clear of the outward
   arrowheads straddling the line (`UC_RAIL_LABEL_GAP_PT` = 5 pt past the arrowhead) — the
   narrow-gap value ("2″") used to sit on the rail.
+- **Rows-used reservation** (`undercutRailRowBudget`, 2026-08-01): the chain is resolved
+  (`layoutWearStripRail`, pure horizontal geometry) *before* the vertical split, and the rail
+  reserves only the fallback rows its labels actually landed on — minimum 1 row so the rail line
+  keeps clear air off the shaft, maximum the wear budget (`WEAR_RAIL_MAX_LABEL_ROWS` = 2). The
+  fixed always-2-rows budget reserved crowding air most strips never used, floating the rail
+  figures far above the surface they dimension (on-device report). A **started** strip keeps the
+  full 2-row budget: its band is the machinist's to hand-draw a chain into.
 - **Cylinder cap** — `max(UNDERCUT_CYL_MAX_FLOOR_PT, min(band × UNDERCUT_CYL_MAX_HEIGHT_FRAC,
   UNDERCUT_CYL_MAX_ABS_PT))`: 0.38 of the strip's band, never past 170 pt, never below the 96 pt
   floor (so a full-width strip draws ≈ 157 pt rather than the ≈ 207 pt a half-band fraction gave —
   the sections read oversized on the sheet, and their end breaks sprawled with them). Without a cap
   at all the delegation to `computeWearStripInnerLayout` would pour every reclaimed point into the
   drawn cylinder and print a slab. The surplus is spent in a fixed order: up to
-  `UNDERCUT_RAIL_EXTRA_HEADROOM_MAX_PT` (30 pt) between the rail's label rows and the cylinder top,
-  then the remainder split evenly — half between the Ø callout band and the title (capped at
-  `UNDERCUT_CYL_BELOW_EXTRA_MAX_PT` = 88 pt, sized for the largest real surplus — the started
-  write-in strip's — so the split stays even at the tighter cylinder cap instead of stacking the
-  leftover at the top), half as air above the rails. An even split also
+  `UNDERCUT_RAIL_EXTRA_HEADROOM_MAX_PT` (15 pt — halved 2026-08-01 with the rows-used reservation,
+  on-device report: rail figures floated far above the shaft) between the rail's label rows and
+  the cylinder top, then the remainder split evenly — half between the Ø callout band and the
+  title (capped at `UNDERCUT_CYL_BELOW_EXTRA_MAX_PT` = 96 pt, sized for the largest real surplus —
+  the started write-in strip's — so the split stays even at the tighter cylinder cap instead of
+  stacking the leftover at the top), half as air above the rails. An even split also
   holds the cylinder's centre line still whatever the cap is. A band short enough that the cylinder
   never reaches the cap (a 4-up grid cell) comes out bit-identical to the plain delegation.
 - **Strip end breaks** — `amp = min(r × 0.6, UNDERCUT_BREAK_AMP_MAX_PT)` (18 pt) in

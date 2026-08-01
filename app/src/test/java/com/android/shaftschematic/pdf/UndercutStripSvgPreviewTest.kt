@@ -286,8 +286,11 @@ class UndercutStripSvgPreviewTest {
         val railSpans = if (started) emptyList()
         else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, unit)
         val totalSpan = if (started) null else buildUndercutTotalSpan(spans, unit)
+        // Chain before the vertical split, composer order: the split reserves the rows used.
+        val chain = layoutWearStripRail(railSpans, xAtStripMm = ::xAt, labelWidthPt = ::labelW)
         val inner = computeUndercutStripInnerLayout(
             stripTop, stripBottom, titleHeightPt = titleH, hasTotalRail = totalSpan != null, diaBandPt = diaBand,
+            maxLabelRows = undercutRailRowBudget(chain, started),
         )
 
         val cy = (inner.cylTop + inner.cylBottom) / 2f
@@ -417,7 +420,6 @@ class UndercutStripSvgPreviewTest {
                 svg.line(xAt(mm), inner.cylTop - 3f, xAt(mm), inner.chainRailY, w = 0.6f)
             }
         }
-        val chain = layoutWearStripRail(railSpans, xAtStripMm = ::xAt, labelWidthPt = ::labelW)
         chain.forEach { svg.railSpan(it, inner.cylTop - 3f, inner.chainRailY, labelAbove = false) }
         totalSpan?.let { ts ->
             layoutWearStripRail(listOf(ts), xAtStripMm = ::xAt, labelWidthPt = ::labelW)

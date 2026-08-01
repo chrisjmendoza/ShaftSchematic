@@ -6,6 +6,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-01 (undercut PDF — rails pulled in close to the shaft)
+
+### fix(pdf): undercut rail height cut roughly in half, level spacing kept
+
+On-device report: after the level-separation round the dimension rails floated far above
+the shaft. The chain is now resolved before the vertical split and the rail reserves only
+the fallback rows its labels actually use (`undercutRailRowBudget`: min 1, max 2; started
+strips keep the full 2-row hand-drawing budget), and the surplus rail headroom is halved
+(30→15pt). Level-to-level spacing (chain↔total 20pt, 17pt fallback row pitch) is
+unchanged; `UNDERCUT_CYL_BELOW_EXTRA_MAX_PT` 88→96pt keeps the started strip's surplus
+split even.
+
+---
+
 ## 2026-08-01 (undercut drawing — status pill, strips-only sheet, output polish)
 
 ### feat(undercut): auto-confirm on leave + floating status pill

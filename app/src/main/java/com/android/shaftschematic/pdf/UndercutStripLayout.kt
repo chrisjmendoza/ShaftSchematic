@@ -174,8 +174,15 @@ const val UNDERCUT_CYL_MAX_ABS_PT = 170f
  */
 const val UNDERCUT_CYL_MAX_FLOOR_PT = 96f
 
-/** Most extra air the capped cylinder's surplus may put between the rail labels and the cylinder. */
-const val UNDERCUT_RAIL_EXTRA_HEADROOM_MAX_PT = 30f
+/**
+ * Most extra air the capped cylinder's surplus may put between the rail labels and the cylinder.
+ * Kept small: together with the rows-used budget ([undercutRailRowBudget]) it is what holds the
+ * chained rail CLOSE to the shaft on a tall band — the dimension figures belong to the surface
+ * they measure, while level-to-level separation is owned by [UNDERCUT_TOTAL_RAIL_BAND_PT] and
+ * [UNDERCUT_RAIL_ROW_HEIGHT_PT] (a larger value here read as the labels floating far above the
+ * shaft — on-device report).
+ */
+const val UNDERCUT_RAIL_EXTRA_HEADROOM_MAX_PT = 15f
 
 /**
  * Most extra air that surplus may put between the Ø callout band and the strip title. Sized so
@@ -187,7 +194,7 @@ const val UNDERCUT_RAIL_EXTRA_HEADROOM_MAX_PT = 30f
  * the tighter cylinder cap frees more of it than before; past that it is only a guard against a
  * pathologically tall band.
  */
-const val UNDERCUT_CYL_BELOW_EXTRA_MAX_PT = 88f
+const val UNDERCUT_CYL_BELOW_EXTRA_MAX_PT = 96f
 
 /** Share of the cylinder's surplus height spent on rail-label → cylinder air (rest splits below/above). */
 private const val UNDERCUT_SURPLUS_RAIL_SHARE = 0.4f
@@ -275,6 +282,27 @@ data class UndercutStripInnerLayout(
     /** Stacked label rows that fit between [chainRailY] and [cylTop] — see [WEAR_RAIL_MAX_LABEL_ROWS]. */
     val railLabelRows: Int,
 )
+
+/**
+ * Fallback-label rows to reserve between the chained rail line and the cylinder top — the
+ * `maxLabelRows` a composer passes to [computeUndercutStripInnerLayout].
+ *
+ * The wear-shaped fixed budget ([WEAR_RAIL_MAX_LABEL_ROWS] rows, always) reserves air for a
+ * crowding worst case most strips never hit, which pushes the rail figures far above the surface
+ * they dimension (on-device report). Since [layoutWearStripRail] is pure horizontal geometry, the
+ * chain can be resolved BEFORE the vertical split and the reservation sized to the rows its
+ * labels actually landed on:
+ * - only spans whose label does NOT seat in the line's break count (a break-seated label sits on
+ *   the rail line itself and needs no row);
+ * - never less than 1 row, so the rail line and its arrowheads keep clear air off the shaft even
+ *   when every label seats inline;
+ * - a **started** strip keeps the full [WEAR_RAIL_MAX_LABEL_ROWS] budget: it draws no chain, and
+ *   the band between its datum bars is the machinist's to hand-draw a chain into.
+ */
+fun undercutRailRowBudget(chainLayout: List<WearRailSpanLayout>, startedStrip: Boolean): Int =
+    if (startedStrip) WEAR_RAIL_MAX_LABEL_ROWS
+    else (chainLayout.filter { !it.arrowInward }.maxOfOrNull { it.labelRow + 1 } ?: 0)
+        .coerceIn(1, WEAR_RAIL_MAX_LABEL_ROWS)
 
 /**
  * Splits one strip's vertical band, reserving [totalRailBandPt] at the top for the

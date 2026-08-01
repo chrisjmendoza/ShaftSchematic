@@ -811,11 +811,19 @@ private fun drawUndercutDetailStrip(
     else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, unit)
     val totalSpan = if (startedStrip) null else buildUndercutTotalSpan(spans, unit)
 
+    // Chain resolved before the vertical split (it is pure horizontal geometry), so the split
+    // reserves only the fallback rows these labels actually use — see `undercutRailRowBudget`.
+    val railLayout = layoutWearStripRail(
+        railSpans,
+        xAtStripMm = { mm -> xAtStrip(mm) },
+        labelWidthPt = { s -> dimText.measureText(s) },
+    )
     val inner = computeUndercutStripInnerLayout(
         stripTop, stripBottom,
         titleHeightPt = titleText.textSize,
         hasTotalRail = totalSpan != null,
         diaBandPt = diaBandPt,
+        maxLabelRows = undercutRailRowBudget(railLayout, startedStrip),
     )
     val cy = (inner.cylTop + inner.cylBottom) / 2f
     val rCap = ((inner.cylBottom - inner.cylTop) / 2f).coerceAtLeast(0f)
@@ -907,11 +915,6 @@ private fun drawUndercutDetailStrip(
             c.drawLine(x, inner.cylTop - UC_RAIL_WITNESS_GAP_PT, x, inner.chainRailY, dim)
         }
     }
-    val railLayout = layoutWearStripRail(
-        railSpans,
-        xAtStripMm = { mm -> xAtStrip(mm) },
-        labelWidthPt = { s -> dimText.measureText(s) },
-    )
     drawUndercutRail(
         c, dim, dimText, railLayout,
         witnessBottomY = inner.cylTop - UC_RAIL_WITNESS_GAP_PT,
