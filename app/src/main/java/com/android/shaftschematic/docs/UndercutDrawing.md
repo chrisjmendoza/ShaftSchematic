@@ -47,14 +47,20 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 ### UndercutWindowDetailOverlay (`UndercutDetail.kt`)
 - Full-screen "zoom in" on one detail strip — a whole liner (plus overhang/pad) when the cuts
   live in one, or a padded bare-shaft cluster window otherwise: dimension rail above (chained
-  run + strip total), the strip's real resolved profile with notches cut in, Ø callouts below,
-  undercut cards below the canvas. A liner strip additionally offers an "Add undercut in this
-  liner" button above the cards (see "UI contract"), the authoring entry point for a liner with
-  no cuts yet.
+  run + strip total), the strip's real resolved profile with notches cut in, Ø callouts below.
+  The canvas is **fixed** at the top; below it a **swipeable card carousel**, one page per cut,
+  aft → fwd. An "Add undercut…" button between the two opens a draft-only page (see "UI
+  contract"), the authoring entry point for a liner with no cuts yet.
 - Pinch-to-zoom (0.5×–6×) + two-finger pan; taps invert the same transform so hit-testing
   always runs in untransformed canvas space.
-- Cards are editable here only — there is no card on `UndercutRoute` itself and no carousel
-  card / Add dialog anywhere (see "Contracts & Invariants").
+- Cards edit a **local draft** that previews on the canvas and reaches the record only on
+  Confirm. The previewed draft's notch draws **dashed** in the selection (primary) color —
+  provisional, unmistakable against the liner and the settled cuts — and switches to the
+  **error color** while its confirm check fails (out of shaft bounds, or overlapping an
+  adjacent cut: the same `undercutConfirmIssue` that disables the Confirm button, so the
+  drawing and the button never disagree). Confirm settles it into the normal solid
+  outline. Cards are editable here only — there is no card on `UndercutRoute` itself and no
+  carousel card / Add dialog anywhere (see "Contracts & Invariants").
 
 ---
 
@@ -138,6 +144,12 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   fields — a violation reverts the field and never touches the model. The Ø field has **no**
   span validator: a measurement is sacred (golden rule); an implausible Ø is a non-blocking
   card warning instead.
+- **Blocking confirm validation** `undercutOverlapIssue(canonicalStartMm, lengthMm, otherSpans)`:
+  a draft may not intrude into another cut's bounds (two overlapping undercuts are physically one
+  cut, and would double-dimension the chain rail). Checked only when **confirming** a drafted card
+  (see "Undercut cards" below), against the clamped spans of every OTHER cut on the sheet;
+  touching edge-to-edge is legal. Confirm-time only, so nothing already stored is retroactively
+  rejected — the `isUndercutStaleOverrun` posture.
 - **Stale classifier** `isUndercutStaleOverrun(startFromAftMm, lengthMm, oalMm)` — non-blocking;
   reuses `undercutSpanIssue` to detect a previously-valid record that no longer fits (OAL
   shrank). Card shows "Extends past shaft end — re-measure"; render clamps via
@@ -175,13 +187,19 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   cut; placeholders and cuts that removed nothing contribute 0):
 
   ```
-  drawnDepth = minSurfaceDiaMm × exaggerationFrac × (trueDepth / deepestDepthMm)
+  share      = max(√(trueDepth / deepestDepthMm), UNDERCUT_MIN_SHARE_OF_EXAGGERATION)
+  drawnDepth = minSurfaceDiaMm × exaggerationFrac × share
   ```
 
-  So the deepest cut draws at exactly `exaggerationFrac` of its local surface Ø, shallower
-  cuts scale relative to IT (proportions within a sheet stay honest), and a sheet whose worst
-  cut is 1" deep reads like one whose worst is 1/4" — the on-device requirement that sheets
-  read alike. Rules: never shallower than reality (`drawnDepth ≥ trueDepth`, so a cut past the
+  So the deepest cut draws at exactly `exaggerationFrac` of its local surface Ø and shallower
+  cuts scale relative to IT — with the ratio **square-root compressed** and floored at
+  `UNDERCUT_MIN_SHARE_OF_EXAGGERATION` (0.25): a linear ratio let a shallow cut normalized
+  against a much deeper one elsewhere on the shaft draw as a hairline (on-device report —
+  two ~0.005"-deep cuts vanished beside a 0.05" cut in another liner). √ keeps
+  deeper-draws-deeper ordering while shrinking the dynamic range; the floor guarantees every
+  measured cut stays readable; a sheet whose worst cut is 1" deep still reads like one whose
+  worst is 1/4" — the sheets-read-alike requirement. Rules: never shallower than reality
+  (`drawnDepth ≥ trueDepth`, so a cut past the
   cap draws true); `exaggerationFrac == 0` is true scale; a placeholder (`diaMm == 0`) draws at
   `UNDERCUT_PLACEHOLDER_OF_EXAGGERATION` (0.5) of the sheet's exaggeration, never below the
   `UNDERCUT_PLACEHOLDER_MIN_DRAWN_FRAC` (0.04) visibility floor, and is excluded from the
@@ -313,15 +331,47 @@ top nav group.
 a section at the AFT S.E.T. position (clamped to `[0, oalMm]`), length
 `DEFAULT_UNDERCUT_LENGTH_MM` = 25.4 mm (1 in, clamped to the remaining shaft extent), Ø `0`
 (unentered), and returns the new id. The route's global "Add undercut" button calls it with the
-SET-based defaults; the overlay's liner-scoped "Add undercut in this liner" button (below) calls
-it with a `LINER_AFT` reference instead. Precision comes from the overlay's numeric fields
+SET-based defaults **immediately** (it has no card to draft into); the overlay's "Add undercut…"
+button drafts first and calls it only on Confirm (below). Precision comes from the overlay's numeric fields
 afterward, never from the tap — the wear posture: a tap only opens/selects, typing does the
 real work.
 
-### Undercut cards — overlay only
+### Undercut cards — the overlay carousel
 **There is no card on `UndercutRoute` itself** — the "Recorded undercuts" list is a summary, not
-a card (see above). Cards render exclusively inside `UndercutWindowDetailOverlay`, below its
-canvas, one per undercut in the open strip (aft → fwd). Each card:
+a card (see above). Cards render exclusively inside `UndercutWindowDetailOverlay`, in a
+**`HorizontalPager` carousel** below its fixed canvas — the `ComponentCarouselPager` presentation
+(one card filling the width, a neighbour peek via `contentPadding`, swipe to change, pages keyed
+by cut id so a card's state follows it), `testTag "undercut_card_pager"`. On-device report: a
+vertical card stack forced scrolling between the drawing and the fields.
+
+- **Order is aft → fwd** (proximity to a liner strip's AFT edge), keyed on **stored**
+  `startFromAftMm` — plus the add draft at its fixed seed position. A card therefore moves only
+  when a draft is **confirmed**; typing a new Distance never slides the card out from under the
+  field being typed in (`buildUndercutPageIds`).
+- **Selection and the open page are one thing**: swiping a card highlights its notch on the
+  canvas, and tapping a notch pages the carousel to that card. A tap that hits nothing keeps the
+  current card (there is no "nothing selected" state while cards exist).
+
+**Draft editing.** Every control on a card writes to a local `UndercutDraft` (span, Ø, note,
+reference + reference liner) — never straight to the record. Numeric fields keep the
+commit-on-blur contract (`NumberField.md`); the commit lands in the draft. The canvas draws the
+**selected** card's draft in place of its stored notch (`applyUndercutDraft` feeds the same
+notch/rail/Ø-callout pipeline, so exaggeration and normalization behave exactly as for stored
+cuts); every other card renders stored values.
+- **Confirm** (`testTag "undercut_confirm"`) is enabled only while the draft differs from stored
+  AND `undercutConfirmIssue` is null — `undercutSpanIssue` (shaft bounds) then
+  `undercutOverlapIssue` against the clamped spans of every OTHER cut **on the sheet**. It calls
+  `updateUndercut` with the draft **verbatim** (golden rule), plus `updateUndercutReference` only
+  when the chips actually moved (so a card merely displaying its `LINER_*`→`AFT_SET` fallback
+  never rewrites the stored reference). The carousel then **follows** the confirmed cut to its
+  new aft → fwd index.
+- **Cancel** (`testTag "undercut_cancel"`) is enabled while dirty and drops the draft back to
+  stored values — including the reference chips.
+- The blocking reason shows inline on the card while Confirm is disabled; the non-blocking stale
+  and Ø-vs-surface warnings still show, read off the **draft** so they describe what the canvas
+  is previewing.
+
+Each card:
 - **"Measure From:"** chips (`WearChip`, shared with the wear overlay), in strict precedence
   order:
   - **"AFT S.E.T." | "FWD S.E.T."** always shown.
@@ -332,38 +382,56 @@ canvas, one per undercut in the open strip (aft → fwd). Each card:
     largest share of the cut (`assignUndercutLiner`). The stored liner wins so a cut authored
     against one liner keeps reading against it even when viewed from a neighbor's strip.
 
-  Tapping a SET chip persists `authoredReference` and clears `referenceLinerId` to `""`; tapping
-  a Liner chip persists both `authoredReference` and the resolved liner's id — both via
-  `vm.updateUndercutReference`, re-projecting the *displayed* Distance only (canonical
-  `startFromAftMm` never moves). A stored `LINER_*` reference whose liner has been deleted
-  displays as if `AFT_SET` were selected (`effectiveUndercutReference`) until a chip is tapped
-  again — the stored value is not silently rewritten.
+  Tapping a SET chip sets the draft's reference and clears its `referenceLinerId` to `""`;
+  tapping a Liner chip sets both the reference and the resolved liner's id. Either
+  **re-projects the displayed Distance immediately** (canonical `startFromAftMm` never moves) but
+  reaches `vm.updateUndercutReference` only on **Confirm**, so Cancel reverts the chip too. A
+  stored `LINER_*` reference whose liner has been deleted displays as if `AFT_SET` were selected
+  (`effectiveUndercutReference`) until a chip is tapped again — the stored value is not silently
+  rewritten.
 - **Distance** field (`WearNum`, shared wrapper around `NumericInputField`): label shows the
   active reference (`undercutReferenceLabel`); validator converts the entered value to
   canonical via `undercutStartToCanonicalMm` (passing the resolved reference liner's edges when
-  applicable) then runs `undercutSpanIssue`.
-- **Length** field: validator runs `undercutSpanIssue` against the current canonical start.
-- **Measured Ø** field: **no validator** — any parseable value ≥ 0 commits verbatim (golden
-  rule). Initial display is blank when `diaMm == 0` (unentered), else the formatted value.
+  applicable) then runs `undercutSpanIssue`. The **span** check stays a field validator (a value
+  that could never be confirmed has no business entering the draft) while the **overlap** check
+  is confirm-time only — a cut is legitimately moved past a neighbour by two separate field
+  edits.
+- **Length** field: validator runs `undercutSpanIssue` against the draft's canonical start.
+- **Measured Ø** field: **no validator** — any parseable value ≥ 0 enters the draft verbatim
+  (golden rule). Initial display is blank when `diaMm == 0` (unentered), else the formatted value.
   Because the underlying `NumericInputField` requires `parseValid` to accept the text to commit
   and an empty string does not parse, **a Ø typed once cannot be cleared back to blank/0 through
   this field** — the field reverts to the last committed non-blank value on blur instead of
   committing an empty edit. (A known as-built limitation, not a design intent; deleting the
   whole undercut is the only way to remove a Ø today.)
-- **Notes**: free text, same tap-and-leave no-op discipline as the numeric fields (capture on
-  focus, commit on blur only if changed).
-- **Delete** icon (confirm-free).
+- **Notes**: free text straight into the draft (Confirm/Cancel own persistence, so the numeric
+  fields' capture-on-focus discipline buys nothing here).
+- **Delete** icon (confirm-free, **immediate** — deletion is not drafted; the page goes with it).
+  Absent on the add flow's pending card, which has nothing recorded to delete — its Cancel
+  discards the page.
 - **Warnings** (non-blocking, both can show together): "Extends past shaft end — re-measure"
   (`isUndercutStaleOverrun`) and "Ø meets or exceeds shaft surface here" (`diaMm > 0` and `diaMm
   >= minOuterDiaOver` over the clamped span).
 
-### Overlay "Add undercut in this liner"
-Shown only when the open strip is a `LinerStrip` (`stripLiner != null`), above the card list,
-`testTag "undercut_add_in_liner"` — the authoring entry point that makes an undercut-free liner
-worth tapping on the overview at all. Default section: length =
-`min(DEFAULT_UNDERCUT_LENGTH_MM, linerLengthMm)`, centered inside the liner span, clamped to
-`[0, oalMm − length]`; reference `LINER_AFT` with `referenceLinerId` = that liner's id, so the
-very first typed Distance already reads against the datum the machinist is standing at.
+### Overlay "Add undercut…"
+Between the canvas and the carousel: **"Add undercut in this liner"** on a `LinerStrip`
+(`testTag "undercut_add_in_liner"` — the authoring entry point that makes an undercut-free liner
+worth tapping on the overview at all), **"Add undercut here"** on a `FreeStrip`
+(`testTag "undercut_add_in_strip"`). Disabled while a pending draft already exists — one at a
+time.
+
+It creates a **draft-only page**, not a record entry: the carousel gains a page at the correct
+aft → fwd position, the canvas previews the cut, and `vm.addUndercut` runs only on **Confirm**
+(followed by `updateUndercut` when the draft also carries a Ø or a note — `addUndercut` lands
+only the span and reference). Cancel discards the page outright, so a cancelled add leaves **no
+ghost cut** in the record.
+
+Default section (`defaultUndercutSpan`): centred in the aft-most free gap of the strip's range
+(the liner's span, else the window) wide enough for `DEFAULT_UNDERCUT_LENGTH_MM`, else centred in
+the widest gap left and shortened to fit — so a fresh draft never opens already overlapping a
+recorded cut, which would block Confirm before a single value had been typed. Reference
+`LINER_AFT` + that liner's id on a liner strip (so the very first typed Distance reads against
+the datum the machinist is standing at), `AFT_SET` on a free strip.
 
 ### Overlay canvas contents
 Aft → fwd: a **dimension rail above** — the strip total on the upper line when ≥ 2 undercuts,
@@ -376,8 +444,9 @@ range, liners painted last so a liner over a body reads as the surface — match
 math's max-wins envelope) with **notches** cut in, and **Ø callouts below** via the shared
 `planDiaCallouts` engine (one station per undercut at its axial centre, leader to the notch
 floor, label `formatDiaWithUnit`, or `"—"` for an unentered Ø — the overlay's own placeholder,
-never printed). A tap selects an undercut (highlight rect + scrolls no card, since all cards are
-already visible below the canvas).
+never printed). A tap selects an undercut (highlight rect) and **pages the carousel to its card**;
+a tap that hits nothing leaves the current card alone. The rails, notches, and Ø callouts all
+read the selected card's **draft**, so an in-progress edit is dimensioned live.
 
 **Strip ends**: an end that lands on the shaft's own extent (`x = 0` or `x = OAL`) draws a flat
 edge; a threaded shaft end additionally gets the diagonal thread-stub hatch
@@ -487,7 +556,12 @@ skeleton reused deliberately:
 - **Not component-keyed** — canonical storage is shaft-space `startFromAftMm`; there is no
   orphan concept and nothing is pruned at decode, unlike wear spots (which ARE pruned).
 - **Golden rule** — `startFromAftMm`, `lengthMm`, `diaMm`, and `referenceLinerId` round-trip
-  verbatim; no field commit path snaps, rounds, or derives a stored value.
+  verbatim; no field commit path snaps, rounds, or derives a stored value. The overlay's draft is
+  a staging area, not a filter: Confirm passes the drafted values through unchanged.
+- **Confirm is the only write path from a card** — fields, chips, and the note edit a local
+  draft; `updateUndercut`/`updateUndercutReference`/`addUndercut` run on Confirm alone, and Cancel
+  reverts everything (a cancelled add leaves no record entry at all). Delete is the one immediate
+  card action. Card order is keyed on stored values, so cards reorder only on Confirm.
 - **Draw-both-sites, in lockstep**: the notch (void fill + shoulders + floor, cut against the
   local outer-surface envelope) renders identically in `UndercutRoute`/
   `UndercutWindowDetailOverlay` (canvas) and `UndercutPdfComposer` (PDF), from the one shared

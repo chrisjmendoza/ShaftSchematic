@@ -104,6 +104,17 @@ class UndercutMathTest {
     }
 
     @Test
+    fun `overlap check blocks intrusion into an adjacent cut and allows touching edges`() {
+        val others = listOf(UndercutSpanMm("other", 200f, 260f))
+        assertNotNull(undercutOverlapIssue(canonicalStartMm = 250f, lengthMm = 40f, otherSpans = others))
+        assertNotNull(undercutOverlapIssue(canonicalStartMm = 180f, lengthMm = 100f, otherSpans = others))
+        // Edge-to-edge is legal, as is clear separation and an empty sheet.
+        assertNull(undercutOverlapIssue(canonicalStartMm = 260f, lengthMm = 40f, otherSpans = others))
+        assertNull(undercutOverlapIssue(canonicalStartMm = 100f, lengthMm = 100f, otherSpans = others))
+        assertNull(undercutOverlapIssue(canonicalStartMm = 250f, lengthMm = 40f, otherSpans = emptyList()))
+    }
+
+    @Test
     fun `stale classifier mirrors the span issue check`() {
         assertFalse(isUndercutStaleOverrun(100f, 50f, 1000f))
         assertTrue(isUndercutStaleOverrun(980f, 50f, 1000f))
@@ -332,8 +343,9 @@ class UndercutMathTest {
     }
 
     @Test
-    fun `a half-as-deep cut draws at half the deepest cut's drawn depth`() {
-        // Proportions WITHIN a sheet stay honest: only the sheet-wide scale is exaggerated.
+    fun `a half-as-deep cut draws at the square root of its depth ratio`() {
+        // Ordering WITHIN a sheet stays honest but the ratio is sqrt-compressed, so a
+        // shallow cut never reads as a hairline next to a deep one.
         val surface = 10f * 25.4f
         val deep = cutOfDepth("deep", depthMm = 12.7f, surfaceDiaMm = surface, startMm = 200f)
         val half = cutOfDepth("half", depthMm = 6.35f, surfaceDiaMm = surface, startMm = 600f)
@@ -342,7 +354,26 @@ class UndercutMathTest {
         val deepFrac = drawnFrac(deep.diaMm, surface, deepest, 0.25f)
         val halfFrac = drawnFrac(half.diaMm, surface, deepest, 0.25f)
         assertEquals(0.25f, deepFrac, 1e-4f)
-        assertEquals(deepFrac * 0.5f, halfFrac, 1e-4f)
+        assertEquals(deepFrac * kotlin.math.sqrt(0.5f), halfFrac, 1e-4f)
+        assertTrue(halfFrac < deepFrac)
+    }
+
+    @Test
+    fun `shallow cuts in one liner stay readable when a deeper cut lives in another`() {
+        // On-device report: two ~0.005"-deep cuts in the MID liner drew as hairlines
+        // because the FWD liner's 0.05"-deep cut owned the sheet reference. Every
+        // measured cut draws at no less than the minimum share of the exaggeration.
+        val surface = 7f * 25.4f
+        val shallow = cutOfDepth("mid1", depthMm = 0.005f * 25.4f, surfaceDiaMm = surface, startMm = 200f)
+        val deeper = cutOfDepth("fwd", depthMm = 0.05f * 25.4f, surfaceDiaMm = surface, startMm = 800f)
+        val deepest = deepestUndercutDepthMm(listOf(shallow, deeper), stockSegs(surface), EX_OAL_MM)
+
+        val shallowFrac = drawnFrac(shallow.diaMm, surface, deepest, 0.25f)
+        assertTrue(
+            "shallow frac $shallowFrac must be >= min share of the exaggeration",
+            shallowFrac >= 0.25f * UNDERCUT_MIN_SHARE_OF_EXAGGERATION - 1e-4f,
+        )
+        assertEquals(0.25f, drawnFrac(deeper.diaMm, surface, deepest, 0.25f), 1e-4f)
     }
 
     @Test

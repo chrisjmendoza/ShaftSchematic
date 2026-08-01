@@ -6,6 +6,38 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-07-31 (undercut drawing — card carousel with draft/confirm, adjacency guard)
+
+### feat(undercut): swipeable card carousel, draft-until-confirm editing
+
+On-device reports: the overlay's vertical card stack forced scrolling between the drawing
+and the fields; editing one cut could cross-wire values into another (cards recomposed
+positionally over a list that re-sorted mid-edit — a golden-rule violation, eliminated
+structurally below); and two shallow cuts in one liner drew as hairlines because a deeper
+cut in another liner owned the sheet's exaggeration reference.
+
+- **Card carousel** (`HorizontalPager`, ComponentCarousel-style neighbour peek): canvas
+  pinned above, swipe between cuts, ordered aft → fwd; swiping highlights the notch, tapping
+  a notch pages to its card.
+- **Draft-until-confirm**: fields edit a local per-id draft previewed live on the canvas —
+  dashed notch in the selection color, switching to the error color while the confirm check
+  fails; **Confirm** commits verbatim (and only then do cards reorder, the carousel following
+  the confirmed cut); **Cancel** reverts everything including reference chips. "Add
+  undercut" is draft-only until confirmed — no ghost cuts. Pages/drafts/commits are keyed by
+  cut id and ordering reads stored values only, so the positional cross-wire bug cannot
+  recur (pinned by `UndercutDraftTest` + ViewModel target-only tests).
+- **Adjacency guard** `undercutOverlapIssue`: a draft may not intrude into another cut's
+  bounds (edge-to-edge touching legal); Confirm disables with the reason inline. Stored
+  data is never retroactively rejected.
+- **Exaggeration curve fix**: the depth ratio is square-root compressed and floored at
+  `UNDERCUT_MIN_SHARE_OF_EXAGGERATION` (0.25 of the slider), so shallow cuts stay readable
+  on sheets that also carry a much deeper cut; deepest-draws-at-slider and
+  deeper-draws-deeper are unchanged.
+
+Docs: `docs/UndercutDrawing.md`, `docs/UndercutDrawing_PLAN.md`.
+
+---
+
 ## 2026-07-31 (undercut drawing — depth exaggeration slider, open notch mouths)
 
 ### feat(undercut): per-sheet drawn-depth exaggeration normalized to the deepest cut

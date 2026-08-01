@@ -47,6 +47,16 @@ Shipped shape (detail in `docs/UndercutDrawing.md`, current-behavior contract):
   depth **normalized to the sheet's deepest cut** (`deepestUndercutDepthMm` +
   `normalizedNotchFloorDiaMm`), so sheets with very different absolute depths read alike.
 
+### Iteration 3 (card carousel + draft/confirm) — 2026-07-31
+
+On-device feedback: the overlay's vertical card stack forced scrolling between the drawing and
+the fields, and every keystroke landed in the record. The cards became a swipeable carousel
+(`ComponentCarouselPager`'s presentation) under a fixed canvas, ordered aft → fwd, editing a
+**local draft** that previews on the canvas and reaches `UndercutRecord` only on **Confirm**
+(Cancel reverts; Add is a draft-only page, so a cancelled add leaves no ghost cut). Confirm is
+additionally gated on `undercutOverlapIssue` — a draft may not intrude into an adjacent cut's
+bounds. See `docs/UndercutDrawing.md` §"Undercut cards — the overlay carousel".
+
 ---
 
 ## 1. What an undercut is here

@@ -630,8 +630,10 @@ fun UndercutRoute(
             unit = unit,
             undercutRecord = undercutRecord,
             onAddUndercut = { startMm, lengthMm, reference, referenceLinerId ->
-                // Only a liner strip offers this, and the liner anchor already holds the overlay
-                // open, so the new cut appears in place with no re-anchoring.
+                // Called when the overlay CONFIRMS a drafted new cut (a cancelled draft never
+                // reaches here, so the record gains no ghosts). The returned id lets the overlay
+                // land the draft's Ø/note and follow the new card; the open anchor already covers
+                // this strip, so no re-anchoring is needed.
                 vm.addUndercut(startMm, lengthMm, reference, referenceLinerId)
             },
             onUpdateUndercut = vm::updateUndercut,

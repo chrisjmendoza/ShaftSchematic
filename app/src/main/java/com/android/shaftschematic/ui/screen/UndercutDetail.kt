@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +21,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,25 +35,28 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -80,6 +86,7 @@ import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
+import com.android.shaftschematic.geom.undercutOverlapIssue
 import com.android.shaftschematic.geom.undercutSpanIssue
 import com.android.shaftschematic.geom.undercutStartToCanonicalMm
 import com.android.shaftschematic.model.ShaftSpec
@@ -113,22 +120,34 @@ import kotlin.math.min
  * - [UndercutStrip.FreeStrip] — bare-shaft cuts: the padded cluster window, chain anchored at
  *   the window edges.
  *
- * Contents, aft → fwd:
- * - a **dimension rail above** — the cluster total span on the upper line, and below it the
- *   chained run across the strip's chain range: chain AFT datum → each shoulder → each gap →
- *   chain FWD datum. Nothing outside the chain range is labelled, so the drawing never
- *   dimensions the arbitrary pad;
- * - the **strip profile** with the undercut **notches** cut into it (`geom/SurfaceProfileMath.kt`
- *   via [buildUndercutNotches], the identical pipeline the PDF composer uses, so the two draw the
- *   same notch by construction);
- * - **Ø callouts below** through the shared `planDiaCallouts` engine — one station per undercut at
- *   its axial centre, leader down to the notch floor. A Ø-less undercut (`diaMm == 0`) shows "—"
- *   here so it stays findable, and never prints.
+ * Contents, top to bottom:
+ * - a **fixed canvas** — a **dimension rail above** (the cluster total span on the upper line,
+ *   and below it the chained run across the strip's chain range: chain AFT datum → each shoulder
+ *   → each gap → chain FWD datum; nothing outside the chain range is labelled, so the drawing
+ *   never dimensions the arbitrary pad); the **strip profile** with the undercut **notches** cut
+ *   into it (`geom/SurfaceProfileMath.kt` via [buildUndercutNotches], the identical pipeline the
+ *   PDF composer uses, so the two draw the same notch by construction); and **Ø callouts below**
+ *   through the shared `planDiaCallouts` engine — one station per undercut at its axial centre,
+ *   leader down to the notch floor. A Ø-less undercut (`diaMm == 0`) shows "—" here so it stays
+ *   findable, and never prints.
+ * - a **card carousel** below it, one page per cut, aft → fwd — the `ComponentCarouselPager`
+ *   presentation (a [HorizontalPager] with a neighbour peek, swipe to change card). The canvas
+ *   never scrolls out from under the fields (on-device report: a vertical card stack forced
+ *   scrolling between the drawing and the numbers).
  *
- * Strip ends: an end that lands on the shaft's own extent (x = 0 or x = OAL) is a flat edge —
- * the shaft physically stops there — and picks up the thread hatch when the component there is a
- * thread. Any other end is a truncation and gets the S-curve break
- * ([drawBreakEdgeCompose], AFT `eyeAtTop = true` / FWD `false`).
+ * **Draft editing.** A card edits a LOCAL [UndercutDraft], not the record: field commits (blur,
+ * per `docs/NumberField.md`), the "Measure From" chips, and the note all land in the draft, and
+ * the canvas previews the SELECTED card's draft in place of its stored notch. Nothing reaches
+ * `UndercutRecord` until **Confirm**, which is enabled only while the draft differs from stored
+ * AND clears both blocking checks — [undercutSpanIssue] (shaft bounds) and [undercutOverlapIssue]
+ * (no intruding into another cut's bounds). **Cancel** drops the draft back to stored. Because
+ * page order is keyed on **stored** starts, cards reorder only on confirm — and the carousel then
+ * follows the confirmed cut to its new aft → fwd position. "Add undercut" opens a **draft-only**
+ * page: it previews and orders like any other card but enters the record only on Confirm, so a
+ * cancelled add leaves no ghost cut behind.
+ *
+ * Selection and paging are one thing: swiping a card highlights its notch, and tapping a notch
+ * pages the carousel to its card.
  *
  * Same posture as [ComponentWearDetailOverlay]: a plain composable, not a nav destination,
  * dismissed via its own [BackHandler] or the back arrow, with pinch-to-zoom (0.5×–6×) +
@@ -153,7 +172,7 @@ fun UndercutWindowDetailOverlay(
         lengthMm: Float,
         reference: UndercutReference,
         referenceLinerId: String,
-    ) -> Unit,
+    ) -> String,
     onUpdateUndercut: (id: String, startFromAftMm: Float, lengthMm: Float, diaMm: Float, note: String) -> Unit,
     onUpdateReference: (id: String, reference: UndercutReference, referenceLinerId: String) -> Unit,
     onRemoveUndercut: (id: String) -> Unit,
@@ -177,20 +196,65 @@ fun UndercutWindowDetailOverlay(
             .mapNotNull { id -> undercutRecord.undercuts.firstOrNull { it.id == id } }
             .sortedBy { it.startFromAftMm }
     }
+
+    // ── Draft state ──────────────────────────────────────────────────────────
+    // Keyed on the strip's IDENTITY, not the strip value: a strip carries its member ids and its
+    // draw range, so every record edit yields a new (unequal) strip — keying on it would wipe
+    // drafts and selection the instant a card was confirmed.
+    val stripKey = remember(strip) { undercutStripKey(strip) }
+    // Per-card local edits; a card with no entry here shows stored values. The add flow's
+    // not-yet-recorded page lives under [PENDING_UNDERCUT_ID].
+    var drafts by remember(stripKey) { mutableStateOf(emptyMap<String, UndercutDraft>()) }
+    // The add draft's ordering key, fixed at creation — a pending card must not slide between
+    // pages while its Distance is being typed, the same "reorder only on confirm" rule the
+    // recorded cards follow.
+    var pendingSeedStartMm by remember(stripKey) { mutableStateOf<Float?>(null) }
+    var selectedId by remember(stripKey) { mutableStateOf<String?>(null) }
+
+    val pageIds = remember(undercuts, pendingSeedStartMm) {
+        buildUndercutPageIds(undercuts, pendingSeedStartMm)
+    }
+    val baselines = remember(undercuts, linerSpans) {
+        undercuts.associate { it.id to undercutDraftOf(it, linerSpans) }
+    }
+
+    // Only the SELECTED card previews: the canvas shows one candidate edit at a time, so what is
+    // drawn is always the card in front of the machinist.
+    val activeDraft = selectedId?.let { id -> drafts[id]?.takeIf { it != baselines[id] } }
+    val drawUndercuts = remember(undercuts, activeDraft) { applyUndercutDraft(undercuts, activeDraft) }
     // The whole record rides along as the normalization pool: drawn depth is scaled to the
     // SHEET's deepest cut, so this strip's notches match what the printed drawing shows.
-    val notches = remember(undercuts, segs, oalMm, undercutRecord) {
+    val sheetUndercuts = remember(undercutRecord, activeDraft) {
+        applyUndercutDraft(undercutRecord.undercuts, activeDraft)
+    }
+    val notches = remember(drawUndercuts, segs, oalMm, undercutRecord.exaggerationFrac, sheetUndercuts) {
         buildUndercutNotches(
-            undercuts, segs, oalMm,
+            drawUndercuts, segs, oalMm,
             exaggerationFrac = undercutRecord.exaggerationFrac,
-            sheetUndercuts = undercutRecord.undercuts,
+            sheetUndercuts = sheetUndercuts,
         )
     }
-    val spans = remember(undercuts, oalMm) {
-        undercuts.map { u ->
+    val spans = remember(drawUndercuts, oalMm) {
+        drawUndercuts.map { u ->
             val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
+    }
+    // Confirm-blocking status of the previewed draft, for the canvas: its notch draws
+    // dashed in the selection color while valid, in the error color while this is
+    // non-null — the same check that gates the card's Confirm button, recomputed here
+    // against the sheet so the drawing and the button can never disagree.
+    val activeDraftIssue = remember(activeDraft, oalMm, undercutRecord) {
+        activeDraft?.let { d ->
+            val others = undercutRecord.undercuts
+                .filter { it.id != d.id }
+                .map { u ->
+                    val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+                    UndercutSpanMm(u.id, c.startMm, c.endMm)
+                }
+                .filter { it.endMm > it.startMm }
+            undercutConfirmIssue(d, oalMm, others)
+        }
     }
 
     // SET positions for the cards' "Measure From" re-projection. Physical shaft space already
@@ -199,7 +263,73 @@ fun UndercutWindowDetailOverlay(
     val aftSetXMm = setPositions.first
     val fwdSetXMm = setPositions.second
 
-    var selectedId by remember(strip) { mutableStateOf<String?>(null) }
+    // ── Carousel ↔ selection, a two-way binding that converges ───────────────
+    // Never zero — the pager is simply not composed for an empty strip, and a 0-page state is a
+    // needless edge case (the `ComponentCarouselPager` rule).
+    val pageCount = pageIds.size.coerceAtLeast(1)
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { pageCount })
+    // Read the live page list inside the never-restarted collector below.
+    val pageIdsLive = rememberUpdatedState(pageIds)
+
+    // Swipe (or any scroll) → selection, so the card in front highlights its own notch. Keyed on
+    // the pager alone: restarting this on every page-list change would re-adopt whatever id sits
+    // at the current index and undo a deliberate selection (a just-confirmed cut, mid-animation).
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            pageIdsLive.value.getOrNull(page)?.let { selectedId = it }
+        }
+    }
+    // Selection → page: a canvas tap opens that cut's card, and a confirmed cut is FOLLOWED to
+    // its new aft → fwd position.
+    LaunchedEffect(selectedId, pageIds) {
+        val target = pageIds.indexOf(selectedId)
+        if (target >= 0 && target != pagerState.currentPage) pagerState.animateScrollToPage(target)
+    }
+    // Heal a selection that was deliberately dropped (a deleted cut, a cancelled add) by adopting
+    // the card the pager now shows. A selection pointing at a cut the record has not published
+    // yet (the frame after Confirm added it) is left alone — it resolves on the next emission.
+    LaunchedEffect(pageIds) {
+        val sel = selectedId
+        if (pageIds.isNotEmpty() && (sel == null || (sel == PENDING_UNDERCUT_ID && sel !in pageIds))) {
+            selectedId = pageIds.getOrNull(pagerState.currentPage.coerceIn(0, pageIds.lastIndex))
+        }
+    }
+
+    fun cancelDraft(id: String) {
+        drafts = drafts - id
+        if (id == PENDING_UNDERCUT_ID) {
+            pendingSeedStartMm = null
+            selectedId = null
+        }
+    }
+
+    // Confirm — the ONE path from draft to record. Values land verbatim (golden rule); the
+    // reference is persisted only when the chips actually moved, so a card whose stored
+    // `LINER_*` reference is displaying its AFT_SET fallback is never silently rewritten.
+    fun confirmDraft(draft: UndercutDraft) {
+        if (draft.isPending) {
+            val newId = onAddUndercut(
+                draft.startFromAftMm, draft.lengthMm, draft.reference, draft.referenceLinerId,
+            )
+            // addUndercut lands the span + reference; Ø and note ride the update op.
+            if (draft.diaMm > 0f || draft.note.isNotBlank()) {
+                onUpdateUndercut(newId, draft.startFromAftMm, draft.lengthMm, draft.diaMm, draft.note)
+            }
+            drafts = drafts - PENDING_UNDERCUT_ID
+            pendingSeedStartMm = null
+            selectedId = newId
+        } else {
+            onUpdateUndercut(draft.id, draft.startFromAftMm, draft.lengthMm, draft.diaMm, draft.note)
+            val base = baselines[draft.id]
+            if (base != null &&
+                (base.reference != draft.reference || base.referenceLinerId != draft.referenceLinerId)
+            ) {
+                onUpdateReference(draft.id, draft.reference, draft.referenceLinerId)
+            }
+            drafts = drafts - draft.id
+            selectedId = draft.id
+        }
+    }
 
     // ── Theme colors captured here — the Canvas draw scope must not read MaterialTheme ──
     val outlineColor = MaterialTheme.colorScheme.onSurface
@@ -207,6 +337,7 @@ fun UndercutWindowDetailOverlay(
     val railColor = outlineColor.copy(alpha = 0.65f)
     val witnessColor = outlineColor.copy(alpha = 0.35f)
     val selectColor = MaterialTheme.colorScheme.primary
+    val errorColor = MaterialTheme.colorScheme.error
     val textColorArgb = MaterialTheme.colorScheme.onSurface.toArgb()
     val textPaint = remember(textColorArgb) {
         android.graphics.Paint().apply {
@@ -228,7 +359,7 @@ fun UndercutWindowDetailOverlay(
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+        Column(modifier = Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
 
             // ── Top bar ──────────────────────────────────────────────────────
             Row(
@@ -249,14 +380,10 @@ fun UndercutWindowDetailOverlay(
             }
             HorizontalDivider()
 
-            // ── Scrollable content ───────────────────────────────────────────
+            // ── Fixed drawing block: the canvas never scrolls away from the cards ──
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .imePadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // The cluster-total rail exists only with ≥ 2 drawable cuts — for a single
                 // cut it would restate that cut's own chain figure (a duplicate value, per
@@ -264,10 +391,10 @@ fun UndercutWindowDetailOverlay(
                 // collapses so the canvas doesn't keep a blank band.
                 val totalRailRowDp = if (spans.size >= 2) 30.dp else 0.dp
                 val chainRailRowDp = 30.dp
-                val profileRowDp = 160.dp
+                val profileRowDp = UNDERCUT_PROFILE_ROW_DP
                 // Fixed band for the Ø callouts (leader + up to two staggered label rows), so the
                 // canvas height doesn't jump between one and two rows.
-                val diaBandDp = if (undercuts.isEmpty()) 0.dp else 48.dp
+                val diaBandDp = if (drawUndercuts.isEmpty()) 0.dp else 44.dp
                 val canvasHeightDp = totalRailRowDp + chainRailRowDp + profileRowDp + diaBandDp
 
                 val winLenMm = (drawEndMm - drawStartMm).coerceAtLeast(0.001f)
@@ -303,7 +430,10 @@ fun UndercutWindowDetailOverlay(
                                 )
                                 val xMm = drawStartMm + (tap.x - lay.startPx) / lay.pxPerMm
                                 val padMm = 12.dp.toPx() / lay.pxPerMm
-                                selectedId = pickUndercutAt(xMm, spans, padMm)
+                                // A miss keeps the current card: selection and the open page are
+                                // one thing now, so clearing it would leave the carousel showing
+                                // a card that nothing on the canvas points at.
+                                pickUndercutAt(xMm, spans, padMm)?.let { selectedId = it }
                             }
                         },
                 ) {
@@ -410,8 +540,13 @@ fun UndercutWindowDetailOverlay(
                         }
 
                         // ── Notches — the void erases the surface inside the cut ──
+                        // Settled cuts draw solid; the previewed DRAFT draws dashed in the
+                        // selection color (error color while its confirm check fails), so a
+                        // provisional cut is unmistakable against the liner and its
+                        // neighbors. Confirm settles it into the normal outline.
+                        val draftId = activeDraft?.id
                         drawUndercutNotches(
-                            notches = notches,
+                            notches = notches.filter { it.id != draftId },
                             xPx = xPx,
                             rPx = rPx,
                             cy = cy,
@@ -419,8 +554,20 @@ fun UndercutWindowDetailOverlay(
                             outlineColor = outlineColor,
                             strokeWidthPx = outlineWidthPx,
                         )
+                        if (draftId != null) {
+                            drawUndercutNotches(
+                                notches = notches.filter { it.id == draftId },
+                                xPx = xPx,
+                                rPx = rPx,
+                                cy = cy,
+                                voidColor = Color.White,
+                                outlineColor = if (activeDraftIssue != null) errorColor else selectColor,
+                                strokeWidthPx = outlineWidthPx,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f)),
+                            )
+                        }
 
-                        // ── Selection highlight ──
+                        // ── Selection highlight — the card the carousel is showing ──
                         selectedId?.let { id ->
                             spans.firstOrNull { it.id == id }?.let { s ->
                                 val x0 = xPx(s.startMm)
@@ -491,8 +638,9 @@ fun UndercutWindowDetailOverlay(
                         // ── Ø callouts below (shared planDiaCallouts engine) ──
                         if (notches.isNotEmpty()) {
                             val leaderColor = outlineColor.copy(alpha = 0.6f)
-                            val stations = notches.map { n ->
-                                val u = undercuts.first { it.id == n.id }
+                            val stations = notches.mapNotNull { n ->
+                                val u = drawUndercuts.firstOrNull { it.id == n.id }
+                                    ?: return@mapNotNull null
                                 val label = if (u.diaMm > 0f) formatDiaWithUnit(u.diaMm.toDouble(), unit) else "—"
                                 DiaCalloutStation(
                                     key = n.id,
@@ -549,50 +697,82 @@ fun UndercutWindowDetailOverlay(
                     )
                 }
 
+                // Authoring entry point. On a liner strip this is the reason a liner with no cuts
+                // yet is tappable on the overview at all; the new page is a DRAFT — it previews
+                // here but enters the record only on Confirm. The default span takes the first
+                // free gap in the strip so it doesn't land on top of an existing cut.
+                val addRange = undercutAddRangeOf(strip, stripLiner)
+                Button(
+                    onClick = {
+                        val occupied = undercutRecord.undercuts.map { u ->
+                            val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+                            UndercutSpanMm(u.id, c.startMm, c.endMm)
+                        }
+                        val span = defaultUndercutSpan(addRange.first, addRange.second, occupied, oalMm)
+                        drafts = drafts + (
+                            PENDING_UNDERCUT_ID to UndercutDraft(
+                                id = PENDING_UNDERCUT_ID,
+                                startFromAftMm = span.startMm,
+                                lengthMm = span.lengthMm,
+                                diaMm = 0f,
+                                note = "",
+                                // A liner strip authors against the datum the machinist is
+                                // standing at, so the very first typed Distance already reads
+                                // from the liner's own AFT edge.
+                                reference = if (stripLiner != null) UndercutReference.LINER_AFT
+                                            else UndercutReference.AFT_SET,
+                                referenceLinerId = stripLiner?.id ?: "",
+                            )
+                            )
+                        pendingSeedStartMm = span.startMm
+                        selectedId = PENDING_UNDERCUT_ID
+                    },
+                    enabled = PENDING_UNDERCUT_ID !in drafts,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(
+                            if (stripLiner != null) "undercut_add_in_liner" else "undercut_add_in_strip",
+                        ),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (stripLiner != null) "Add undercut in this liner" else "Add undercut here")
+                }
+            }
+
+            HorizontalDivider()
+
+            // ── Card carousel — swipe through the cuts, aft → fwd ────────────
+            if (pageIds.isEmpty()) {
                 Text(
-                    text = "Tap an undercut to highlight it. Distance, length, and Ø are typed " +
-                        "below — the tap only selects.",
+                    text = "No undercuts recorded here yet.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp),
                 )
-
-                HorizontalDivider()
-
-                // Authoring entry point for a liner strip — the reason a liner with no cuts yet
-                // is tappable on the overview at all. The default section is centred in the
-                // liner and authored against the liner's AFT edge, so the very first typed
-                // Distance already reads against the datum the machinist is standing at.
-                stripLiner?.let { ln ->
-                    Button(
-                        onClick = {
-                            val linerLenMm = (ln.endMm - ln.startMm).coerceAtLeast(0f)
-                            val lengthMm = DEFAULT_UNDERCUT_LENGTH_MM
-                                .coerceAtMost(linerLenMm)
-                                .coerceAtLeast(0.1f)
-                            val startMm = (ln.startMm + (linerLenMm - lengthMm) / 2f)
-                                .coerceIn(0f, (oalMm - lengthMm).coerceAtLeast(0f))
-                            onAddUndercut(startMm, lengthMm, UndercutReference.LINER_AFT, ln.id)
-                        },
-                        modifier = Modifier.fillMaxWidth().testTag("undercut_add_in_liner"),
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Add undercut in this liner")
-                    }
-                }
-
-                if (undercuts.isEmpty()) {
-                    Text(
-                        text = "No undercuts recorded here yet.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                undercuts.forEachIndexed { i, u ->
-                    UndercutCard(
-                        index = i,
-                        undercut = u,
+            } else {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .testTag("undercut_card_pager"),
+                    // A sliver of the neighbouring cards, so a swipe is discoverable.
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    pageSpacing = 8.dp,
+                    // Key pages by cut id so a card's own state (scroll, focus, field text)
+                    // follows the cut when the order changes, instead of staying positional.
+                    key = { page -> pageIds.getOrNull(page) ?: page },
+                ) { page ->
+                    val id = pageIds.getOrNull(page) ?: return@HorizontalPager
+                    val baseline = baselines[id]
+                    val draft = drafts[id] ?: baseline ?: return@HorizontalPager
+                    UndercutDraftCard(
+                        title = if (draft.isPending) "New undercut"
+                                else "Undercut ${page + 1} of ${pageIds.size}",
+                        draft = draft,
+                        dirty = draft != baseline,
+                        selected = id == selectedId,
                         unit = unit,
                         oalMm = oalMm,
                         segs = segs,
@@ -600,28 +780,222 @@ fun UndercutWindowDetailOverlay(
                         fwdSetXMm = fwdSetXMm,
                         linerSpans = linerSpans,
                         stripLiner = stripLiner,
-                        selected = selectedId == u.id,
-                        onSelect = { selectedId = u.id },
-                        onCommit = { s, l, d, n -> onUpdateUndercut(u.id, s, l, d, n) },
-                        onUpdateReference = { ref, linerId -> onUpdateReference(u.id, ref, linerId) },
-                        onDelete = { onRemoveUndercut(u.id) },
+                        sheetUndercuts = undercutRecord.undercuts,
+                        onDraftChange = { updated -> drafts = drafts + (id to updated) },
+                        onConfirm = { confirmDraft(draft) },
+                        onCancel = { cancelDraft(id) },
+                        onDelete = if (draft.isPending) null else {
+                            {
+                                drafts = drafts - id
+                                selectedId = null
+                                onRemoveUndercut(id)
+                            }
+                        },
                     )
                 }
-
-                Spacer(Modifier.height(8.dp))
             }
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Undercut card
+// Draft state — a card's local edit, previewed on the canvas, applied on Confirm
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Page id of the add flow's not-yet-recorded card; no `Undercut` ever carries it. */
+internal const val PENDING_UNDERCUT_ID = "__undercut_draft__"
+
+/** Height of the strip profile band; the rails and Ø callouts add their own rows above/below. */
+private val UNDERCUT_PROFILE_ROW_DP = 140.dp
+
+/**
+ * One card's in-progress values — everything the card can change, held locally until Confirm.
+ * A draft whose [id] is [PENDING_UNDERCUT_ID] is not in the record at all (the add flow); every
+ * other draft shadows the stored [Undercut] of the same id.
+ *
+ * [reference]/[referenceLinerId] are the "Measure From" chips: they re-project the DISPLAYED
+ * Distance immediately, never the canonical [startFromAftMm] — and, like every other field here,
+ * reach the record only on Confirm, so Cancel reverts them too.
+ */
+internal data class UndercutDraft(
+    val id: String,
+    val startFromAftMm: Float,
+    val lengthMm: Float,
+    val diaMm: Float,
+    val note: String,
+    val reference: UndercutReference,
+    val referenceLinerId: String,
+) {
+    val isPending: Boolean get() = id == PENDING_UNDERCUT_ID
+}
+
+/**
+ * The draft a stored [u] starts from — its values plus the reference the card actually displays
+ * ([effectiveUndercutReference], so a `LINER_*` reference whose liner is gone shows its AFT_SET
+ * fallback). Equality against this baseline is the card's dirty test, which is why the fallback
+ * belongs here: a card that only displays the fallback is NOT dirty and never rewrites the stored
+ * reference behind the machinist's back.
+ */
+internal fun undercutDraftOf(u: Undercut, linerSpans: List<UndercutLinerSpan>): UndercutDraft {
+    val ref = effectiveUndercutReference(u, linerSpans)
+    val usesLiner = ref == UndercutReference.LINER_AFT || ref == UndercutReference.LINER_FWD
+    return UndercutDraft(
+        id = u.id,
+        startFromAftMm = u.startFromAftMm,
+        lengthMm = u.lengthMm,
+        diaMm = u.diaMm,
+        note = u.note,
+        reference = ref,
+        referenceLinerId = if (usesLiner) u.referenceLinerId else "",
+    )
+}
+
+/** The draft as a drawable [Undercut] — preview only; nothing built here is ever stored. */
+internal fun UndercutDraft.toUndercut(): Undercut = Undercut(
+    id = id,
+    startFromAftMm = startFromAftMm,
+    lengthMm = lengthMm,
+    diaMm = diaMm,
+    authoredReference = reference,
+    referenceLinerId = referenceLinerId,
+    note = note,
+)
+
+/**
+ * [list] with [draft] substituted for the cut it shadows — or appended when it is the add flow's
+ * pending card, which has no stored counterpart. Result is aft → fwd, so notches, the chained
+ * rail, and the Ø callouts all read the previewed position. Display-only: the caller passes the
+ * result to the draw pipeline, never to the record.
+ */
+internal fun applyUndercutDraft(list: List<Undercut>, draft: UndercutDraft?): List<Undercut> {
+    if (draft == null) return list
+    val hit = list.any { it.id == draft.id }
+    val merged = if (hit) {
+        list.map { u -> if (u.id == draft.id) draft.toUndercut().copy(id = u.id) else u }
+    } else {
+        list + draft.toUndercut()
+    }
+    return merged.sortedBy { it.startFromAftMm }
+}
+
+/**
+ * Carousel page ids for one strip, aft → fwd — the machinist's reading order (proximity to the
+ * AFT edge). Ordering is keyed on **stored** starts and the pending card's fixed seed position,
+ * so a card moves only when its draft is CONFIRMED; typing a new Distance must not slide the card
+ * out from under the field being typed in.
+ */
+internal fun buildUndercutPageIds(
+    stored: List<Undercut>,
+    pendingSeedStartMm: Float?,
+): List<String> {
+    val keyed = stored.map { it.startFromAftMm to it.id } +
+        (pendingSeedStartMm?.let { listOf(it to PENDING_UNDERCUT_ID) } ?: emptyList())
+    // sortedBy is stable, so a pending card ties to the FWD side of an equally-placed stored cut.
+    return keyed.sortedBy { it.first }.map { it.second }
+}
+
+/** A default span for a newly drafted cut, in canonical shaft mm. */
+internal data class UndercutDraftSpan(val startMm: Float, val lengthMm: Float)
+
+/**
+ * Where a new cut is drafted inside `[rangeStartMm, rangeEndMm]` (a liner's span, or a free
+ * strip's window): centred in the aft-most gap wide enough for [preferredLengthMm], else centred
+ * in the widest gap left (shortened to fit). [occupied] is every recorded cut on the sheet, so a
+ * draft never opens already overlapping a neighbour — which would block Confirm before a single
+ * value had been typed. A fully occupied range falls back to the range start at full length; the
+ * card then shows the overlap block until the machinist types real numbers.
+ */
+internal fun defaultUndercutSpan(
+    rangeStartMm: Float,
+    rangeEndMm: Float,
+    occupied: List<UndercutSpanMm>,
+    oalMm: Float,
+    preferredLengthMm: Float = DEFAULT_UNDERCUT_LENGTH_MM,
+): UndercutDraftSpan {
+    val hiBound = oalMm.coerceAtLeast(0f)
+    val lo = rangeStartMm.coerceIn(0f, hiBound)
+    val hi = rangeEndMm.coerceIn(lo, hiBound)
+
+    val gaps = mutableListOf<Pair<Float, Float>>()
+    var cursor = lo
+    occupied.filter { it.endMm > lo && it.startMm < hi }
+        .sortedBy { it.startMm }
+        .forEach { s ->
+            if (s.startMm > cursor) gaps += cursor to min(s.startMm, hi)
+            cursor = max(cursor, s.endMm)
+        }
+    if (cursor < hi) gaps += cursor to hi
+
+    val gap = gaps.firstOrNull { it.second - it.first >= preferredLengthMm }
+        ?: gaps.maxByOrNull { it.second - it.first }
+    val width = if (gap == null) 0f else gap.second - gap.first
+    val lengthMm = (if (width > 0f) min(preferredLengthMm, width) else preferredLengthMm)
+        .coerceAtLeast(MIN_UNDERCUT_DRAFT_LENGTH_MM)
+    val startMm = if (gap == null) lo else gap.first + ((width - lengthMm) / 2f).coerceAtLeast(0f)
+    return UndercutDraftSpan(
+        startMm = startMm.coerceIn(0f, (hiBound - lengthMm).coerceAtLeast(0f)),
+        lengthMm = lengthMm,
+    )
+}
+
+/** Floor on a drafted length, so a zero-width liner can't seed a degenerate (unconfirmable) cut. */
+internal const val MIN_UNDERCUT_DRAFT_LENGTH_MM = 0.1f
+
+/**
+ * The blocking reason a draft cannot be confirmed, or `null` when it can: the shaft-bounds check
+ * ([undercutSpanIssue]) first, then the adjacency check ([undercutOverlapIssue]) against every
+ * OTHER cut on the sheet. Both are confirm-time gates on new values only — nothing already stored
+ * is retroactively rejected.
+ */
+internal fun undercutConfirmIssue(
+    draft: UndercutDraft,
+    oalMm: Float,
+    otherSpans: List<UndercutSpanMm>,
+): String? = undercutSpanIssue(draft.startFromAftMm, draft.lengthMm, oalMm)
+    ?: undercutOverlapIssue(draft.startFromAftMm, draft.lengthMm, otherSpans)
+
+/**
+ * A strip's stable identity — a liner strip is its liner, a free strip its aft-most member. Strip
+ * VALUES carry member ids and a draw range, so they change on every record edit; card drafts and
+ * the open page must survive that (they are what produced the edit).
+ */
+internal fun undercutStripKey(strip: UndercutStrip): String = when (strip) {
+    is UndercutStrip.LinerStrip -> "liner:${strip.linerId}"
+    is UndercutStrip.FreeStrip -> "free:${strip.window.undercutIds.minOrNull() ?: strip.window.startMm}"
+}
+
+/** The shaft-space range a new cut is drafted into: a liner strip's liner, else its window. */
+private fun undercutAddRangeOf(
+    strip: UndercutStrip,
+    stripLiner: UndercutLinerSpan?,
+): Pair<Float, Float> = when {
+    stripLiner != null -> stripLiner.startMm to stripLiner.endMm
+    else -> strip.drawStartMm to strip.drawEndMm
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Undercut card — one carousel page
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One card in the carousel, editing a local [UndercutDraft]. Every control writes to the draft
+ * through [onDraftChange]; [onConfirm] is the only path to the record and is enabled only while
+ * the draft is [dirty] and [undercutConfirmIssue] clears. [onCancel] restores stored values (and
+ * discards the page entirely when this is the add flow's pending card, whose [onDelete] is null —
+ * there is nothing recorded to delete).
+ *
+ * Numeric fields keep the commit-on-blur contract (`docs/NumberField.md`); the commit lands in the
+ * draft rather than the ViewModel. The Distance/Length validators still block a span that leaves
+ * the shaft — a value that could never be confirmed has no business reaching the draft — while the
+ * adjacency check is confirm-time only, since a cut is legitimately dragged past a neighbour by
+ * two separate field edits.
+ */
 @Composable
-private fun UndercutCard(
-    index: Int,
-    undercut: Undercut,
+private fun UndercutDraftCard(
+    title: String,
+    draft: UndercutDraft,
+    dirty: Boolean,
+    selected: Boolean,
     unit: UnitSystem,
     oalMm: Float,
     segs: List<SurfaceSeg>,
@@ -629,45 +1003,61 @@ private fun UndercutCard(
     fwdSetXMm: Float,
     linerSpans: List<UndercutLinerSpan>,
     stripLiner: UndercutLinerSpan?,
-    selected: Boolean,
-    onSelect: () -> Unit,
-    onCommit: (startFromAftMm: Float, lengthMm: Float, diaMm: Float, note: String) -> Unit,
-    onUpdateReference: (reference: UndercutReference, referenceLinerId: String) -> Unit,
-    onDelete: () -> Unit,
+    sheetUndercuts: List<Undercut>,
+    onDraftChange: (UndercutDraft) -> Unit,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+    onDelete: (() -> Unit)?,
 ) {
-    // A stored LINER_* reference whose liner is gone falls back to the AFT_SET projection for
-    // display (the `Undercut.referenceLinerId` KDoc rule) — canonical is untouched, so the card
-    // simply shows the AFT S.E.T. chip selected until the machinist picks a reference again.
-    val reference = effectiveUndercutReference(undercut, linerSpans)
-    // Which liner the LINER_* chips convert against: the undercut's own reference liner while it
+    // Which liner the LINER_* chips convert against: the draft's own reference liner while it
     // resolves, else the strip's liner, else whichever liner holds most of this cut.
-    val refLiner = undercutReferenceLinerFor(undercut, linerSpans, stripLiner, oalMm)
+    val previewUndercut = draft.toUndercut()
+    val refLiner = undercutReferenceLinerFor(previewUndercut, linerSpans, stripLiner, oalMm)
     val refLinerStartMm = refLiner?.startMm ?: 0f
     val refLinerEndMm = refLiner?.endMm ?: 0f
 
-    // Non-blocking classifiers. Neither rewrites stored data: the canvas already renders the
-    // clamped span, and an implausible Ø is a measurement — golden rule, never adjusted.
-    val staleOverrun = isUndercutStaleOverrun(undercut.startFromAftMm, undercut.lengthMm, oalMm)
-    val clamped = clampUndercutSpan(undercut.startFromAftMm, undercut.lengthMm, oalMm)
+    // Non-blocking classifiers, read off the DRAFT so the card warns about what the canvas is
+    // previewing. Neither rewrites anything: the canvas renders the clamped span, and an
+    // implausible Ø is a measurement — golden rule, never adjusted.
+    val staleOverrun = isUndercutStaleOverrun(draft.startFromAftMm, draft.lengthMm, oalMm)
+    val clamped = clampUndercutSpan(draft.startFromAftMm, draft.lengthMm, oalMm)
     val minSurfaceDiaMm =
         if (clamped.isEmpty) 0f else minOuterDiaOver(segs, clamped.startMm, clamped.endMm)
     val diaAtOrAboveSurface =
-        undercut.diaMm > 0f && minSurfaceDiaMm > 0f && undercut.diaMm >= minSurfaceDiaMm
+        draft.diaMm > 0f && minSurfaceDiaMm > 0f && draft.diaMm >= minSurfaceDiaMm
+
+    // Every OTHER cut on the sheet — not just this strip's: a liner strip's pad shows neighbouring
+    // stock, and a cut can be typed straight into it.
+    val otherSpans = remember(sheetUndercuts, oalMm, draft.id) {
+        sheetUndercuts.filter { it.id != draft.id }.map { u ->
+            val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+            UndercutSpanMm(u.id, c.startMm, c.endMm)
+        }.filter { it.endMm > it.startMm }
+    }
+    val confirmIssue = undercutConfirmIssue(draft, oalMm, otherSpans)
 
     OutlinedCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxSize(),
         border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                  else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Undercut ${index + 1}", style = MaterialTheme.typography.titleSmall)
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete undercut ${index + 1}")
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                if (onDelete != null) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Delete $title")
+                    }
                 }
             }
 
@@ -680,112 +1070,139 @@ private fun UndercutCard(
 
             // "Measure From" — which datum the Distance value is authored against, the wear
             // overlay's four-reference set: both S.E.T.s always, plus the reference liner's
-            // edges while such a liner exists. Tapping a chip persists the reference (and the
-            // liner it converts against) immediately and re-projects the DISPLAYED distance
-            // only; canonical `startFromAftMm` never moves.
+            // edges while such a liner exists. Tapping a chip re-projects the DISPLAYED distance
+            // immediately (canonical `startFromAftMm` never moves) but persists only on Confirm,
+            // so Cancel reverts the chip too.
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     "Measure From:", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WearChip("AFT S.E.T.", reference == UndercutReference.AFT_SET) {
-                        onSelect(); onUpdateReference(UndercutReference.AFT_SET, "")
+                    WearChip("AFT S.E.T.", draft.reference == UndercutReference.AFT_SET) {
+                        onDraftChange(
+                            draft.copy(reference = UndercutReference.AFT_SET, referenceLinerId = ""),
+                        )
                     }
-                    WearChip("FWD S.E.T.", reference == UndercutReference.FWD_SET) {
-                        onSelect(); onUpdateReference(UndercutReference.FWD_SET, "")
+                    WearChip("FWD S.E.T.", draft.reference == UndercutReference.FWD_SET) {
+                        onDraftChange(
+                            draft.copy(reference = UndercutReference.FWD_SET, referenceLinerId = ""),
+                        )
                     }
                 }
                 if (refLiner != null) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        WearChip("Liner AFT", reference == UndercutReference.LINER_AFT) {
-                            onSelect(); onUpdateReference(UndercutReference.LINER_AFT, refLiner.id)
+                        WearChip("Liner AFT", draft.reference == UndercutReference.LINER_AFT) {
+                            onDraftChange(
+                                draft.copy(
+                                    reference = UndercutReference.LINER_AFT,
+                                    referenceLinerId = refLiner.id,
+                                ),
+                            )
                         }
-                        WearChip("Liner FWD", reference == UndercutReference.LINER_FWD) {
-                            onSelect(); onUpdateReference(UndercutReference.LINER_FWD, refLiner.id)
+                        WearChip("Liner FWD", draft.reference == UndercutReference.LINER_FWD) {
+                            onDraftChange(
+                                draft.copy(
+                                    reference = UndercutReference.LINER_FWD,
+                                    referenceLinerId = refLiner.id,
+                                ),
+                            )
                         }
                     }
                 }
             }
 
             val displayedStartMm = canonicalToUndercutStartMm(
-                reference = reference,
-                canonicalStartMm = undercut.startFromAftMm,
-                lengthMm = undercut.lengthMm,
+                reference = draft.reference,
+                canonicalStartMm = draft.startFromAftMm,
+                lengthMm = draft.lengthMm,
                 aftSetXMm = aftSetXMm,
                 fwdSetXMm = fwdSetXMm,
                 linerStartMm = refLinerStartMm,
                 linerEndMm = refLinerEndMm,
             )
             WearNum(
-                label = "Distance from ${undercutReferenceLabel(reference)} (${abbr(unit)})",
+                label = "Distance from ${undercutReferenceLabel(draft.reference)} (${abbr(unit)})",
                 initialDisplay = disp(displayedStartMm, unit),
                 validator = { raw ->
                     val enteredMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
                     val canonicalMm = undercutStartToCanonicalMm(
-                        reference, enteredMm, undercut.lengthMm, aftSetXMm, fwdSetXMm,
+                        draft.reference, enteredMm, draft.lengthMm, aftSetXMm, fwdSetXMm,
                         refLinerStartMm, refLinerEndMm,
                     )
-                    undercutSpanIssue(canonicalMm, undercut.lengthMm, oalMm)
+                    undercutSpanIssue(canonicalMm, draft.lengthMm, oalMm)
                 },
             ) { s ->
                 val enteredMm = toMmOrNull(s, unit) ?: return@WearNum
                 val canonicalMm = undercutStartToCanonicalMm(
-                    reference, enteredMm, undercut.lengthMm, aftSetXMm, fwdSetXMm,
+                    draft.reference, enteredMm, draft.lengthMm, aftSetXMm, fwdSetXMm,
                     refLinerStartMm, refLinerEndMm,
                 )
-                onCommit(canonicalMm, undercut.lengthMm, undercut.diaMm, undercut.note)
+                onDraftChange(draft.copy(startFromAftMm = canonicalMm))
             }
 
             WearNum(
                 label = "Length (${abbr(unit)})",
-                initialDisplay = disp(undercut.lengthMm, unit),
+                initialDisplay = disp(draft.lengthMm, unit),
                 validator = { raw ->
                     val enteredLenMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
-                    undercutSpanIssue(undercut.startFromAftMm, enteredLenMm, oalMm)
+                    undercutSpanIssue(draft.startFromAftMm, enteredLenMm, oalMm)
                 },
             ) { s ->
-                toMmOrNull(s, unit)?.let {
-                    onCommit(undercut.startFromAftMm, it, undercut.diaMm, undercut.note)
-                }
+                toMmOrNull(s, unit)?.let { onDraftChange(draft.copy(lengthMm = it)) }
             }
 
-            // Measured Ø — a measurement, so any parseable value ≥ 0 commits **verbatim**
+            // Measured Ø — a measurement, so any parseable value ≥ 0 lands **verbatim**
             // (golden rule). A Ø at or above the local surface is a warning above, never a
             // block and never an adjustment. An unentered Ø (0) shows an empty field.
             WearNum(
                 label = "Measured Ø (${abbr(unit)})",
-                initialDisplay = if (undercut.diaMm > 0f) disp(undercut.diaMm, unit) else "",
+                initialDisplay = if (draft.diaMm > 0f) disp(draft.diaMm, unit) else "",
             ) { s ->
                 val mm = toMmOrNull(s, unit) ?: return@WearNum
-                onCommit(undercut.startFromAftMm, undercut.lengthMm, mm, undercut.note)
+                onDraftChange(draft.copy(diaMm = mm))
             }
 
-            // Notes — same tap-and-leave no-op discipline as the numeric fields above
-            // (NumberField.md): capture on focus, commit on blur only if changed.
-            var noteDraft by remember(undercut.id, undercut.note) { mutableStateOf(undercut.note) }
-            var noteFocusText by remember(undercut.id, undercut.note) { mutableStateOf<String?>(null) }
+            // Notes — free text straight into the draft; Confirm/Cancel own persistence, so the
+            // numeric fields' capture-on-focus discipline buys nothing here.
             OutlinedTextField(
-                value = noteDraft,
-                onValueChange = { noteDraft = it },
+                value = draft.note,
+                onValueChange = { onDraftChange(draft.copy(note = it)) },
                 label = { Text("Notes") },
                 singleLine = false,
                 maxLines = 3,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { f ->
-                        if (f.isFocused) {
-                            noteFocusText = noteDraft
-                            onSelect()
-                        } else {
-                            val captured = noteFocusText
-                            noteFocusText = null
-                            if (captured != null && noteDraft != captured) {
-                                onCommit(undercut.startFromAftMm, undercut.lengthMm, undercut.diaMm, noteDraft)
-                            }
-                        }
-                    },
+                modifier = Modifier.fillMaxWidth(),
             )
+
+            if (dirty && confirmIssue != null) {
+                UndercutWarning(confirmIssue)
+            }
+
+            // Confirm/Cancel. The plain testTags name the VISIBLE card's actions — neighbouring
+            // pages stay composed for the peek, and duplicate tags would be ambiguous.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onCancel,
+                    enabled = dirty,
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(if (selected) Modifier.testTag("undercut_cancel") else Modifier),
+                ) {
+                    Text("Cancel")
+                }
+                Button(
+                    onClick = onConfirm,
+                    enabled = dirty && confirmIssue == null,
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(if (selected) Modifier.testTag("undercut_confirm") else Modifier),
+                ) {
+                    Text("Confirm")
+                }
+            }
         }
     }
 }
@@ -1029,6 +1446,10 @@ internal fun DrawScope.drawUndercutNotches(
     voidColor: Color,
     outlineColor: Color,
     strokeWidthPx: Float,
+    // Dashed shoulders/floor mark a DRAFT notch (provisional, not yet in the record) —
+    // the overlay passes a dash + a status color (primary while valid, error while its
+    // confirm check fails); settled notches and the overview pass neither.
+    pathEffect: PathEffect? = null,
 ) {
     notches.forEach { n ->
         n.profiles.forEach { p ->
@@ -1065,12 +1486,12 @@ internal fun DrawScope.drawUndercutNotches(
             drawPath(topVoid, color = voidColor)
             drawPath(botVoid, color = voidColor)
 
-            drawLine(outlineColor, Offset(x0, cy - rSurfStart), Offset(x0, cy - rFloor), strokeWidthPx)
-            drawLine(outlineColor, Offset(x1, cy - rSurfEnd), Offset(x1, cy - rFloor), strokeWidthPx)
-            drawLine(outlineColor, Offset(x0, cy - rFloor), Offset(x1, cy - rFloor), strokeWidthPx)
-            drawLine(outlineColor, Offset(x0, cy + rSurfStart), Offset(x0, cy + rFloor), strokeWidthPx)
-            drawLine(outlineColor, Offset(x1, cy + rSurfEnd), Offset(x1, cy + rFloor), strokeWidthPx)
-            drawLine(outlineColor, Offset(x0, cy + rFloor), Offset(x1, cy + rFloor), strokeWidthPx)
+            drawLine(outlineColor, Offset(x0, cy - rSurfStart), Offset(x0, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)
+            drawLine(outlineColor, Offset(x1, cy - rSurfEnd), Offset(x1, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)
+            drawLine(outlineColor, Offset(x0, cy - rFloor), Offset(x1, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)
+            drawLine(outlineColor, Offset(x0, cy + rSurfStart), Offset(x0, cy + rFloor), strokeWidthPx, pathEffect = pathEffect)
+            drawLine(outlineColor, Offset(x1, cy + rSurfEnd), Offset(x1, cy + rFloor), strokeWidthPx, pathEffect = pathEffect)
+            drawLine(outlineColor, Offset(x0, cy + rFloor), Offset(x1, cy + rFloor), strokeWidthPx, pathEffect = pathEffect)
         }
     }
 }
