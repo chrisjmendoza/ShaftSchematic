@@ -6,9 +6,12 @@ import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.clampUndercutSpan
+import com.android.shaftschematic.geom.deepestUndercutDepthMm
 import com.android.shaftschematic.geom.effectiveNotchDiaMm
+import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.minOuterDiaOver
+import com.android.shaftschematic.geom.normalizedNotchFloorDiaMm
 import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
@@ -54,8 +57,26 @@ class UndercutStripSvgPreviewTest {
     private val rowGap = 3f
     private val minGap = 5f
 
+    /** The sheet's drawn-depth exaggeration, the record's default (`exaggerationFrac`). */
+    private val exaggerationFrac = 0.25f
+
     /** Stand-in for Paint.measureText at 8pt sans — close enough for preview spreads. */
     private fun labelW(s: String): Float = s.length * textH * 0.58f
+
+    // ── Page geometry, mirroring `UndercutPdfComposer`'s constants ────────────
+    // Landscape US Letter, 36 pt margins, 36 pt header + 16 pt header gap, 24 pt notes
+    // baseline offset + 28 pt notes gap, and the 22 pt orientation-row band that is all the
+    // strips-own-page layout keeps of the former whole-shaft profile.
+
+    private val PAGE_W = 792f
+    private val PAGE_H = 612f
+    private val PAGE_MARGIN = 36f
+    private val HEADER_RULE_Y = 72f
+    private val DIRECTION_ROW_BASELINE = 98f
+    /** Top of the strip band: the whole drawing area below the orientation row. */
+    private val BAND_TOP = 110f
+    private val BAND_BOTTOM = 524f
+    private val NOTES_Y = 552f
 
     // ── Scenario: a liner over a body, three undercuts, one crossing the liner edge ──
 
@@ -147,9 +168,15 @@ class UndercutStripSvgPreviewTest {
         }
     }
 
-    /** One arrowed rail span with its value seated in a break, mirroring `drawUndercutRail`. */
+    /**
+     * One arrowed rail span with its value seated in a break, mirroring `drawUndercutRail` —
+     * including its label spacing: a fallback label clears the arrowheads by
+     * `UC_RAIL_LABEL_GAP_PT` and stacks by [UNDERCUT_RAIL_ROW_HEIGHT_PT], the same pitch the
+     * inner layout budgets.
+     */
     private fun Svg.railSpan(s: WearRailSpanLayout, witnessBottomY: Float, railY: Float, labelAbove: Boolean) {
         val arrow = 4f
+        val labelGap = 5f
         line(s.x0Pt, witnessBottomY, s.x0Pt, railY - 3f, w = 0.6f)
         line(s.x1Pt, witnessBottomY, s.x1Pt, railY - 3f, w = 0.6f)
         val lw = labelW(s.label)
@@ -160,8 +187,12 @@ class UndercutStripSvgPreviewTest {
             text(s.labelCxPt, railY + textH * 0.35f, s.label)
         } else {
             line(s.x0Pt, railY, s.x1Pt, railY, w = 0.7f)
-            if (labelAbove) text(s.labelCxPt, railY - 3f, s.label)
-            else text(s.labelCxPt, railY + 3f + textH, s.label)
+            if (labelAbove) {
+                text(s.labelCxPt, railY - arrow * 0.5f - labelGap - textH * 0.25f, s.label)
+            } else {
+                val row = s.labelRow.coerceIn(0, WEAR_RAIL_MAX_LABEL_ROWS - 1)
+                text(s.labelCxPt, railY + arrow + labelGap + textH + row * UNDERCUT_RAIL_ROW_HEIGHT_PT, s.label)
+            }
         }
         val dl = if (s.arrowInward) 1f else -1f
         val dr = if (s.arrowInward) -1f else 1f
@@ -169,6 +200,21 @@ class UndercutStripSvgPreviewTest {
         line(s.x0Pt, railY, s.x0Pt + dl * arrow, railY + arrow * 0.5f, w = 0.6f)
         line(s.x1Pt, railY, s.x1Pt + dr * arrow, railY - arrow * 0.5f, w = 0.6f)
         line(s.x1Pt, railY, s.x1Pt + dr * arrow, railY + arrow * 0.5f, w = 0.6f)
+    }
+
+    /**
+     * The page furniture a strips-own-page sheet keeps: the content frame, the single
+     * orientation row that replaced the whole-shaft profile, and the notes rule. Drawn so a
+     * preview shows the strip at its real place on the page, not floating.
+     */
+    private fun Svg.pageChrome() {
+        rect(PAGE_MARGIN, PAGE_MARGIN, PAGE_W - 2 * PAGE_MARGIN, PAGE_H - 2 * PAGE_MARGIN, stroke = "#eee", sw = 0.5f)
+        line(PAGE_MARGIN, HEADER_RULE_Y, PAGE_W - PAGE_MARGIN, HEADER_RULE_Y, w = 0.5f, color = "#bbb")
+        text(PAGE_W / 2f, PAGE_MARGIN + 12f, "UNDERCUT RECORD", size = 10f)
+        text(PAGE_MARGIN, DIRECTION_ROW_BASELINE, "← AFT", size = 10f, anchor = "start")
+        text(PAGE_W - PAGE_MARGIN, DIRECTION_ROW_BASELINE, "FWD →", size = 10f, anchor = "end")
+        text(PAGE_MARGIN, NOTES_Y, "Notes:", size = 10f, anchor = "start")
+        line(PAGE_MARGIN + 34f, NOTES_Y + 2f, PAGE_W - PAGE_MARGIN, NOTES_Y + 2f, w = 0.7f, color = "#bbb")
     }
 
     // ── The preview ───────────────────────────────────────────────────────────
@@ -180,14 +226,22 @@ class UndercutStripSvgPreviewTest {
         val railInsideChain: Boolean,
         val compressed: Boolean,
         val hasTotal: Boolean,
+        /** Narrower of the two drawn pads (chain datum → break edge), points. */
+        val minPadPt: Float,
+        /**
+         * Horizontal surface lines (top + bottom, any component) crossing the liner's
+         * mid-station. Must be 0 on the blank write-in template, whose liner span is clear
+         * paper — including for a body running underneath the liner.
+         */
+        val surfaceLinesAtLinerMid: Int,
     )
 
     private fun renderStrip(
         undercuts: List<Undercut>,
-        stripLeft: Float = 36f,
-        stripRight: Float = 756f,
-        stripTop: Float = 16f,
-        stripBottom: Float = 200f,
+        stripLeft: Float = PAGE_MARGIN,
+        stripRight: Float = PAGE_W - PAGE_MARGIN,
+        stripTop: Float = BAND_TOP,
+        stripBottom: Float = BAND_BOTTOM,
     ): StripResult {
         val segs: List<SurfaceSeg> = surfaceSegsFrom(components)
         val clampedById = undercuts.associate { it.id to clampUndercutSpan(it.startFromAftMm, it.lengthMm, oalMm) }
@@ -195,72 +249,128 @@ class UndercutStripSvgPreviewTest {
             val s = clampedById.getValue(u.id)
             if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
         }
+        // Normalization reference, computed ONCE per sheet exactly as the composer does.
+        val deepestDepthMm = deepestUndercutDepthMm(undercuts, segs, oalMm)
         val strips = buildUndercutStrips(liveSpans, linerSpans, oalMm)
-        assertEquals("the scenario must read as one detail strip", 1, strips.size)
-        val strip = strips[0]
+        // Nothing recorded ⇒ the STARTED-strip page: one `linerStripFor` per drawable liner,
+        // drawn to scale but dimensioned nowhere, for the machinist to sketch into.
+        val started = undercuts.isEmpty()
+        val strip: UndercutStrip = if (started) {
+            assertTrue("an empty record yields no cut-derived strips", strips.isEmpty())
+            linerStripFor(linerSpans.single(), emptyList(), oalMm)
+        } else {
+            assertEquals("the scenario must read as one detail strip", 1, strips.size)
+            strips[0]
+        }
         val linerTitle = (strip as? UndercutStrip.LinerStrip)?.let { linerTitles[it.linerId] }
         val spans = liveSpans.filter { it.id in strip.undercutIds }.sortedBy { it.startMm }
 
-        val drawLenMm = strip.drawEndMm - strip.drawStartMm
+        // Draw range widened to the pt pad floor exactly as the composer does, so a preview
+        // shows the real end air for the cell it is laid out in.
+        val range = computeUndercutStripDrawRange(
+            strip.drawStartMm, strip.drawEndMm, strip.chainStartMm, strip.chainEndMm,
+            stripLeft, stripRight, oalMm,
+        )
+        val drawStartMm = range.startMm
+        val drawEndMm = range.endMm
+        val drawLenMm = drawEndMm - drawStartMm
         val h = computeWearStripHorizontalLayout(
             stripLeft, stripRight, drawLenMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
         )
-        fun xAt(mm: Float) = h.linerLeftPt + (mm - strip.drawStartMm) * h.ptPerMm
+        fun xAt(mm: Float) = h.linerLeftPt + (mm - drawStartMm) * h.ptPerMm
 
         val stations = buildUndercutDiaStations(undercuts, clampedById, ::xAt, unit, ::labelW)
         val plan = if (stations.isEmpty()) null else planDiaCallouts(stations, stripLeft + 2f, stripRight - 2f, minGap)
         val diaBand = plan?.let { it.labelsHeightPt(textH, rowGap) + 2f } ?: 0f
 
-        val railSpans = buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, unit)
-        val totalSpan = buildUndercutTotalSpan(spans, unit)
+        val railSpans = if (started) emptyList()
+        else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, unit)
+        val totalSpan = if (started) null else buildUndercutTotalSpan(spans, unit)
         val inner = computeUndercutStripInnerLayout(
             stripTop, stripBottom, titleHeightPt = titleH, hasTotalRail = totalSpan != null, diaBandPt = diaBand,
         )
 
         val cy = (inner.cylTop + inner.cylBottom) / 2f
         val rCap = (inner.cylBottom - inner.cylTop) / 2f
-        val stripMaxDia = maxOuterDiaOver(segs, strip.drawStartMm, strip.drawEndMm)
+        val stripMaxDia = maxOuterDiaOver(segs, drawStartMm, drawEndMm)
         fun rAt(diaMm: Float) = (rCap * (diaMm / stripMaxDia)).coerceIn(0f, rCap)
 
         val svg = Svg()
+        svg.pageChrome()
         svg.rect(stripLeft, stripTop, stripRight - stripLeft, stripBottom - stripTop, stroke = "#ddd", sw = 0.5f)
 
         // Profile over the strip's DRAW range: every component clipped to it, true local
         // diameters. On a liner strip that range covers the whole liner plus a pad each side,
         // so the liner's edges and its neighbours' slivers appear naturally.
-        components.forEach { comp ->
-            val dia = when (comp) {
-                is ResolvedBody -> comp.diaMm
-                is ResolvedLiner -> comp.odMm
-                else -> return@forEach
-            }
-            val a = maxOf(comp.startMmPhysical, strip.drawStartMm)
-            val b = minOf(comp.endMmPhysical, strip.drawEndMm)
-            if (b <= a) return@forEach
-            val r = rAt(dia)
-            svg.line(xAt(a), cy - r, xAt(b), cy - r)
-            svg.line(xAt(a), cy + r, xAt(b), cy + r)
-            // End caps only where the real edge falls inside the draw range.
-            listOf(comp.startMmPhysical, comp.endMmPhysical).forEach { edge ->
-                if (edge > strip.drawStartMm + 0.001f && edge < strip.drawEndMm - 0.001f) {
-                    svg.line(xAt(edge), cy - r, xAt(edge), cy + r, w = 0.9f)
+        //
+        // The blank write-in template is the exception (`linerSpanBlank` in the composer): the
+        // liner's own span is drawn as STARTING geometry only — its two vertical end faces and
+        // the neighbour stock outboard of them, with no fill and no surface lines across the
+        // middle, which stays clear paper for the hand-drawn liner and cuts. `started` is the
+        // blank template here; a non-blank export of an empty record keeps the full profile.
+        val blankLiner = if (started) strip as? UndercutStrip.LinerStrip else null
+        val profileBands =
+            if (blankLiner == null) listOf(drawStartMm to drawEndMm)
+            else listOf(
+                drawStartMm to blankLiner.linerStartMm.coerceIn(drawStartMm, drawEndMm),
+                blankLiner.linerEndMm.coerceIn(drawStartMm, drawEndMm) to drawEndMm,
+            )
+        val linerMidMm = (linerAftMm + linerFwdMm) / 2f
+        var surfaceLinesAtLinerMid = 0
+        profileBands.forEach { (bandStartMm, bandEndMm) ->
+            components.forEach { comp ->
+                val dia = when (comp) {
+                    is ResolvedBody -> comp.diaMm
+                    is ResolvedLiner -> comp.odMm
+                    else -> return@forEach
+                }
+                val a = maxOf(comp.startMmPhysical, bandStartMm)
+                val b = minOf(comp.endMmPhysical, bandEndMm)
+                if (b <= a) return@forEach
+                val r = rAt(dia)
+                svg.line(xAt(a), cy - r, xAt(b), cy - r)
+                svg.line(xAt(a), cy + r, xAt(b), cy + r)
+                if (a < linerMidMm && b > linerMidMm) surfaceLinesAtLinerMid += 2
+                // End caps only where the real edge falls inside the band.
+                listOf(comp.startMmPhysical, comp.endMmPhysical).forEach { edge ->
+                    if (edge > bandStartMm + 0.001f && edge < bandEndMm - 0.001f) {
+                        svg.line(xAt(edge), cy - r, xAt(edge), cy + r, w = 0.9f)
+                    }
                 }
             }
         }
-        // Cut ends.
-        listOf(strip.drawStartMm to true, strip.drawEndMm to false).forEach { (atMm, eyeAtTop) ->
+        // The blank template's end faces: full drawn height at the liner's OD, the only vertical
+        // lines at those stations now the surface lines are gone.
+        blankLiner?.let { bl ->
+            val faceAftMm = bl.linerStartMm.coerceIn(drawStartMm, drawEndMm)
+            val faceFwdMm = bl.linerEndMm.coerceIn(drawStartMm, drawEndMm)
+            val rFace = rAt(maxOuterDiaOver(segs, faceAftMm, faceFwdMm))
+            listOf(faceAftMm, faceFwdMm).forEach { mm ->
+                svg.line(xAt(mm), cy - rFace, xAt(mm), cy + rFace, w = 1.2f)
+            }
+        }
+        // Cut ends — amplitude capped exactly as `drawUndercutWindowEnd` caps it, so the preview
+        // shows the real lobe size rather than an ear the PDF no longer draws.
+        listOf(drawStartMm to true, drawEndMm to false).forEach { (atMm, eyeAtTop) ->
             val r = rAt(outerDiaAt(segs, atMm))
-            svg.breakEdge(xAt(atMm), cy - r, cy + r, r * 0.6f, eyeAtTop)
+            svg.breakEdge(xAt(atMm), cy - r, cy + r, minOf(r * 0.6f, UNDERCUT_BREAK_AMP_MAX_PT), eyeAtTop)
         }
 
         // Notches — white void from surface to floor, mirrored, then shoulders + floor.
+        // Regions come from the TRUE floor; the drawn floor is depth-exaggerated against the
+        // sheet's deepest cut and the void overdraws the surface stroke, both mirroring the
+        // composer.
         spans.forEach { s ->
             val u = undercuts.first { it.id == s.id }
-            val floorDia = effectiveNotchDiaMm(u.diaMm, minOuterDiaOver(segs, s.startMm, s.endMm))
-            val rFloor = rAt(floorDia)
+            val minSurface = minOuterDiaOver(segs, s.startMm, s.endMm)
+            val floorDia = effectiveNotchDiaMm(u.diaMm, minSurface)
+            val rFloor = rAt(
+                normalizedNotchFloorDiaMm(u.diaMm, minSurface, deepestDepthMm, exaggerationFrac),
+            )
+            val od = 0.8f
             notchProfiles(segs, s.startMm, s.endMm, floorDia).forEach { np ->
                 listOf(-1f, 1f).forEach { sign ->
-                    val pts = np.surface.map { sp -> xAt(sp.xMm) to cy + sign * rAt(sp.diaMm) } +
+                    val pts = np.surface.map { sp -> xAt(sp.xMm) to cy + sign * (rAt(sp.diaMm) + od) } +
                         listOf(xAt(np.endMm) to cy + sign * rFloor, xAt(np.startMm) to cy + sign * rFloor)
                     svg.poly(pts, fill = "white")
                 }
@@ -278,7 +388,10 @@ class UndercutStripSvgPreviewTest {
         if (plan != null) {
             val floorBottomY = undercuts.associate { u ->
                 val s = clampedById.getValue(u.id)
-                val floor = if (s.isEmpty) 0f else effectiveNotchDiaMm(u.diaMm, minOuterDiaOver(segs, s.startMm, s.endMm))
+                val floor = if (s.isEmpty) 0f else normalizedNotchFloorDiaMm(
+                    u.diaMm, minOuterDiaOver(segs, s.startMm, s.endMm),
+                    deepestDepthMm, exaggerationFrac,
+                )
                 u.id to cy + rAt(floor)
             }
             val placed = plan.finish(
@@ -297,7 +410,13 @@ class UndercutStripSvgPreviewTest {
         }
 
         // Rails: chain, then the total above it. The chain's outer witness lines land on the
-        // strip's chain datums — a liner's own edges, not the zoom pad.
+        // strip's chain datums — a liner's own edges, not the zoom pad. A started strip keeps
+        // ONLY those datum bars: the band above the cylinder is the machinist's to draw in.
+        if (started) {
+            listOf(strip.chainStartMm, strip.chainEndMm).forEach { mm ->
+                svg.line(xAt(mm), inner.cylTop - 3f, xAt(mm), inner.chainRailY, w = 0.6f)
+            }
+        }
         val chain = layoutWearStripRail(railSpans, xAtStripMm = ::xAt, labelWidthPt = ::labelW)
         chain.forEach { svg.railSpan(it, inner.cylTop - 3f, inner.chainRailY, labelAbove = false) }
         totalSpan?.let { ts ->
@@ -305,26 +424,43 @@ class UndercutStripSvgPreviewTest {
                 .forEach { svg.railSpan(it, inner.chainRailY, inner.totalRailY, labelAbove = true) }
         }
 
-        // Title: "<liner name> — <dist> FROM … S.E.T.", or the anchor alone on bare stock.
-        val anchor = undercutAnchorFor(spans.first().startMm, spans.last().endMm, aftSetMm, fwdSetMm)
-        val title = buildUndercutStripTitle(linerTitle, buildUndercutAnchorLabel(anchor, unit))
-        if (anchor.alignRight) svg.text(stripRight, stripBottom - 2f, title, size = titleH, anchor = "end")
-        else svg.text(stripLeft, stripBottom - 2f, title, size = titleH, anchor = "start")
+        // Title: "<liner name> — <dist> FROM … S.E.T.", or the anchor alone on bare stock. A
+        // started strip prints the write-in form instead: name, a rule for the distance, and
+        // both directions for the machinist to circle one.
+        val titleY = stripBottom - 2f
+        if (started) {
+            val stem = linerTitle?.let { "$it — " } ?: ""
+            svg.text(stripLeft, titleY, stem, size = titleH, anchor = "start")
+            val ruleX0 = stripLeft + labelW(stem) * (titleH / textH)
+            svg.line(ruleX0, titleY + 1f, ruleX0 + BLANK_DIM_GAP_PT, titleY + 1f, w = 0.7f)
+            svg.text(ruleX0 + BLANK_DIM_GAP_PT + 4f, titleY, WEAR_BLANK_ANCHOR_SUFFIX, size = titleH, anchor = "start")
+        } else {
+            val anchor = undercutAnchorFor(spans.first().startMm, spans.last().endMm, aftSetMm, fwdSetMm)
+            val title = buildUndercutStripTitle(linerTitle, buildUndercutAnchorLabel(anchor, unit))
+            if (anchor.alignRight) svg.text(stripRight, titleY, title, size = titleH, anchor = "end")
+            else svg.text(stripLeft, titleY, title, size = titleH, anchor = "start")
+        }
 
         val chainLen = railSpans.sumOf { (it.endMm - it.startMm).toDouble() }.toFloat()
-        // All draw coordinates are absolute page-space (origin 0, strip frame at
-        // stripLeft/stripTop), so the viewBox must span from 0 to past stripRight/stripBottom
-        // — sizing it to the strip's width alone would clip the frame's right border and the
-        // FWD break edge.
+        // All draw coordinates are absolute page-space, so the viewBox must span from 0 to past
+        // stripRight/stripBottom — sizing it to the strip's width alone would clip the frame's
+        // right border and the FWD break edge. The whole 792 × 612 page satisfies that and
+        // additionally shows the strip in its real place on the sheet.
         return StripResult(
-            svg = svg.wrap(stripRight + 20f, stripBottom + 12f),
+            svg = svg.wrap(PAGE_W, PAGE_H),
             strip = strip,
-            chainCoversStrip = kotlin.math.abs(chainLen - (strip.chainEndMm - strip.chainStartMm)) < 0.01f,
+            chainCoversStrip = started ||
+                kotlin.math.abs(chainLen - (strip.chainEndMm - strip.chainStartMm)) < 0.01f,
             railInsideChain = railSpans.all {
                 it.startMm >= strip.chainStartMm - 0.01f && it.endMm <= strip.chainEndMm + 0.01f
             },
             compressed = plan?.compressed ?: false,
             hasTotal = totalSpan != null,
+            minPadPt = minOf(
+                xAt(strip.chainStartMm) - xAt(drawStartMm),
+                xAt(drawEndMm) - xAt(strip.chainEndMm),
+            ),
+            surfaceLinesAtLinerMid = surfaceLinesAtLinerMid,
         )
     }
 
@@ -334,6 +470,9 @@ class UndercutStripSvgPreviewTest {
         // Clear previous runs: the file set changes as scenarios are renamed, and a stale SVG
         // would both mislead a reviewer and break the count assertion below.
         outDir.listFiles()?.forEach { if (it.name.endsWith(".svg")) it.delete() }
+
+        // Every scenario is a whole strips-own-page sheet: no main profile, no OAL line, one
+        // orientation row under the header, and the strips filling the rest of the band.
 
         // A) LINER strip, all three cuts measured — the sketch case: the WHOLE liner is drawn
         //    with its true edges, body slivers and break edges beyond, the chained rail
@@ -349,6 +488,9 @@ class UndercutStripSvgPreviewTest {
         assertTrue("the pad outside the chain is never dimensioned", a.railInsideChain)
         assertTrue("three cuts must produce a total span", a.hasTotal)
         assertFalse("the sketch case must not compress its callouts", a.compressed)
+        // A full-width strip of this liner already prints its 1 in pad wide enough, so the pt
+        // floor leaves it alone — the mm pad and the drawn pad still agree here.
+        assertTrue("break edges must not sit against the liner faces", a.minPadPt >= UNDERCUT_STRIP_MIN_PAD_PT)
 
         // B) The middle cut has no measured Ø yet: its notch and its rail dimension stay, its
         //    Ø callout does NOT print — the placed-but-empty rule.
@@ -357,20 +499,24 @@ class UndercutStripSvgPreviewTest {
         assertTrue(b.chainCoversStrip)
         assertFalse(b.compressed)
 
-        // C) The same liner strip in a half-width GRID cell.
+        // C) The same liner strip as the LEFT cell of a 2-up GRID page — a grid row now owns
+        //    the full band height too, so a cell is half-width but full-height.
         val c = renderStrip(
             linerUndercuts(thirdDiaMm = 170f, secondDiaMm = 198f),
-            stripLeft = 36f, stripRight = 385f, stripTop = 16f, stripBottom = 150f,
+            stripLeft = 36f, stripRight = 385f, stripTop = BAND_TOP, stripBottom = BAND_BOTTOM,
         )
         File(outDir, "c-liner-strip-gridcell.svg").writeText(c.svg)
         assertTrue(c.chainCoversStrip)
         assertTrue(c.railInsideChain)
+        // Half the width halves the scale, so the mm pad alone would print at ~17 pt — the cell
+        // is where the pt floor earns its keep.
+        assertTrue("a grid cell must read with the same end air", c.minPadPt >= UNDERCUT_STRIP_MIN_PAD_PT - 1e-2f)
 
-        // D) Bare-shaft cuts in a GRID cell: no liner to draw, so the padded cluster window
-        //    is the strip and the chain runs window edge → window edge (the pre-liner look).
+        // D) Bare-shaft cuts in the RIGHT grid cell: no liner to draw, so the padded cluster
+        //    window is the strip and the chain runs window edge → window edge.
         val d = renderStrip(
             bareShaftUndercuts(),
-            stripLeft = 407f, stripRight = 756f, stripTop = 16f, stripBottom = 150f,
+            stripLeft = 407f, stripRight = 756f, stripTop = BAND_TOP, stripBottom = BAND_BOTTOM,
         )
         File(outDir, "d-bareshaft-freestrip-gridcell.svg").writeText(d.svg)
         val dFree = d.strip as UndercutStrip.FreeStrip
@@ -378,8 +524,33 @@ class UndercutStripSvgPreviewTest {
         assertEquals(dFree.drawEndMm, dFree.chainEndMm, 1e-3f)
         assertTrue(d.chainCoversStrip)
         assertTrue(d.hasTotal)
+        // The window edge IS the chain datum here, so all of the drawn end air comes from the pt
+        // floor — the break edge no longer lands on the outer witness line.
+        assertTrue("a free strip's window edge must clear its break", d.minPadPt >= UNDERCUT_STRIP_MIN_PAD_PT - 1e-2f)
+
+        // E) STARTED strip, blank write-in TEMPLATE: starting geometry only — the liner's two
+        //    end faces, the neighbour slivers outboard of them and the break edges, with its
+        //    span left as clear paper (no fill, no top/bottom surface lines). No notches, no
+        //    rail spans (only the two chain-datum bars), a write-in anchor title. Everything
+        //    else is air the machinist sketches the liner and its sections into. (A non-blank
+        //    export of an empty record keeps the fully drawn started strip — same layout,
+        //    profile intact.)
+        val e = renderStrip(emptyList())
+        File(outDir, "e-started-liner-strip-blank.svg").writeText(e.svg)
+        val eLiner = e.strip as UndercutStrip.LinerStrip
+        assertEquals("a started strip covers the whole liner", linerAftMm, eLiner.chainStartMm, 1e-3f)
+        assertEquals(linerFwdMm, eLiner.chainEndMm, 1e-3f)
+        assertTrue("nothing is recorded on a started strip", eLiner.undercutIds.isEmpty())
+        assertFalse("no cuts ⇒ no total rail", e.hasTotal)
+        assertEquals(
+            "the blank template's liner span must be clear paper — no surface line crosses it",
+            0, e.surfaceLinesAtLinerMid,
+        )
+        // …and the contrast: a strip that is not the blank template draws the liner (and the
+        // body under it) right across that station.
+        assertTrue("a real strip still draws the liner surface", a.surfaceLinesAtLinerMid > 0)
 
         assertNotNull(outDir.listFiles())
-        assertEquals(4, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
+        assertEquals(5, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
     }
 }

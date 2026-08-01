@@ -6,6 +6,107 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-01 (undercut drawing — status pill, strips-only sheet, output polish)
+
+### feat(undercut): auto-confirm on leave + floating status pill
+
+On-device report: the per-card Confirm button was tucked away and easy to forget.
+- A valid dirty draft now **auto-confirms when its card is left** (swipe, notch tap, add,
+  or closing the overlay); a blocked draft never silently commits or discards — a dialog
+  offers Keep editing / Discard. Sweep covers stragglers from late blur commits.
+- A **floating status pill** at the canvas/carousel boundary is the always-visible truth:
+  green check "Saved"; "Confirm change" + discard (✕) while editing; error-styled with the
+  blocking reason while conflicted. Per-card Confirm/Cancel buttons removed.
+
+### feat(pdf): strips-only undercut sheet + started-strip write-in template
+
+On-device report: real undercut drawings show only the cut sections. With ≥1 strip the
+sheet drops the shaft profile and OAL line entirely — header, one AFT/FWD row, strips
+filling the page, Notes. With nothing recorded, the page prints one **started strip per
+liner** — no notches or dimensions, just the two chain-datum bars and a circle-one
+"FROM AFT / FWD S.E.T." writing rule. The **blank/template** sheet draws only the
+starting geometry there (on-device report): the liner's two vertical end faces, the
+neighbour stock slivers outboard of them and the break edges, with its span left as clear
+paper — no fill, no top/bottom surface lines — for the hand-drawn liner and cuts. An
+**empty-record export** keeps the liner fully drawn. The whole-shaft profile form
+survives only for a shaft with no drawable liners.
+
+### fix(pdf): rail spacing, section size, end air
+
+- Total rail band 22→38pt (~20pt air to the chain rail); fallback labels clear the
+  arrowheads on a 17pt row pitch with white halos, drawn in a second pass so no witness
+  line strikes through.
+- Cylinder capped (0.38 × band, 170pt ceiling) so full-page strips stay drawing-sized;
+  break-edge amplitude capped at 18pt so the end lobes stop sprawling.
+- Every strip end now draws ≥24pt of neighbor stock outside the chain datums
+  (pt-floor, widening only outward — no datum or printed dimension changes).
+
+### fix(ui): preview page tucks behind the toolbar
+
+`PdfPreviewOverlay`'s zoom/pan content is clipped to its container (draw-only fix;
+buttons were always tappable) — covers undercut, wear, and runout previews.
+
+---
+
+## 2026-07-31 (undercut drawing — card carousel with draft/confirm, adjacency guard)
+
+### feat(undercut): swipeable card carousel, draft-until-confirm editing
+
+On-device reports: the overlay's vertical card stack forced scrolling between the drawing
+and the fields; editing one cut could cross-wire values into another (cards recomposed
+positionally over a list that re-sorted mid-edit — a golden-rule violation, eliminated
+structurally below); and two shallow cuts in one liner drew as hairlines because a deeper
+cut in another liner owned the sheet's exaggeration reference.
+
+- **Card carousel** (`HorizontalPager`, ComponentCarousel-style neighbour peek): canvas
+  pinned above, swipe between cuts, ordered aft → fwd; swiping highlights the notch, tapping
+  a notch pages to its card.
+- **Draft-until-confirm**: fields edit a local per-id draft previewed live on the canvas —
+  dashed notch in the selection color, switching to the error color while the confirm check
+  fails; **Confirm** commits verbatim (and only then do cards reorder, the carousel following
+  the confirmed cut); **Cancel** reverts everything including reference chips. "Add
+  undercut" is draft-only until confirmed — no ghost cuts. Pages/drafts/commits are keyed by
+  cut id and ordering reads stored values only, so the positional cross-wire bug cannot
+  recur (pinned by `UndercutDraftTest` + ViewModel target-only tests).
+- **Adjacency guard** `undercutOverlapIssue`: a draft may not intrude into another cut's
+  bounds (edge-to-edge touching legal); Confirm disables with the reason inline. Stored
+  data is never retroactively rejected.
+- **Exaggeration curve fix**: the depth ratio is square-root compressed and floored at
+  `UNDERCUT_MIN_SHARE_OF_EXAGGERATION` (0.25 of the slider), so shallow cuts stay readable
+  on sheets that also carry a much deeper cut; deepest-draws-at-slider and
+  deeper-draws-deeper are unchanged.
+
+Docs: `docs/UndercutDrawing.md`, `docs/UndercutDrawing_PLAN.md`.
+
+---
+
+## 2026-07-31 (undercut drawing — depth exaggeration slider, open notch mouths)
+
+### feat(undercut): per-sheet drawn-depth exaggeration normalized to the deepest cut
+
+On-device reports: real undercuts (1/16"–1/2" on shafts up to ~10" Ø) are hairlines at
+true scale, and a stroke ran across the top of each cut (the surface outline surviving
+the void fill).
+
+- **Exaggeration slider** on the Undercut tab (0–25%, `UNDERCUT_EXAGGERATION_MAX_FRAC`),
+  stored per document as `UndercutRecord.exaggerationFrac` (additive envelope field,
+  older files default 0.25). The sheet's **deepest measured cut** draws at the slider
+  fraction of its local surface Ø; shallower cuts scale relative to it
+  (`normalizedNotchFloorDiaMm` + `deepestUndercutDepthMm`, whole-sheet normalization),
+  so sheets with very different absolute depths read alike while proportions within a
+  sheet stay honest. Never drawn shallower than reality; 0% = true scale; Ø-0
+  placeholders draw at half the slider (4% visibility floor) and are excluded from the
+  normalization reference. Region topology still comes from the TRUE floor; printed Ø
+  values are always the stored measurements.
+- **Open notch mouths**: the void fill now overdraws the surface stroke across each cut
+  in both draw sites — no outline runs across the top of an undercut.
+- Fix folded in: a Ø at/above the local surface degenerates to the surface instead of
+  drawing outside the shaft.
+
+Docs: `docs/UndercutDrawing.md`, `CLAUDE.md` invariant block, `docs/UndercutDrawing_PLAN.md`.
+
+---
+
 ## 2026-07-31 (undercut drawing — liner-anchored strips, liner references, route list)
 
 ### feat(undercut): liner-aware authoring + liner-anchored detail strips

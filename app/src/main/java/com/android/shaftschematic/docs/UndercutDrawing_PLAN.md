@@ -42,6 +42,43 @@ Shipped shape (detail in `docs/UndercutDrawing.md`, current-behavior contract):
   list gives a read-only summary + delete row per cut; the overlay grew four reference chips
   (Liner pair shown only while a reference liner resolves) and an "Add undercut in this liner"
   button on liner strips.
+- Drawn-depth exaggeration reworked: the fixed min/max ramp became a **per-sheet slider**
+  ("Cut depth exaggeration", 0–25%, stored as `UndercutRecord.exaggerationFrac`) with drawn
+  depth **normalized to the sheet's deepest cut** (`deepestUndercutDepthMm` +
+  `normalizedNotchFloorDiaMm`), so sheets with very different absolute depths read alike.
+
+### Iteration 3 (card carousel + draft/confirm) — 2026-07-31
+
+On-device feedback: the overlay's vertical card stack forced scrolling between the drawing and
+the fields, and every keystroke landed in the record. The cards became a swipeable carousel
+(`ComponentCarouselPager`'s presentation) under a fixed canvas, ordered aft → fwd, editing a
+**local draft** that previews on the canvas and reaches `UndercutRecord` only on **Confirm**
+(Cancel reverts; Add is a draft-only page, so a cancelled add leaves no ghost cut). Confirm is
+additionally gated on `undercutOverlapIssue` — a draft may not intrude into an adjacent cut's
+bounds. See `docs/UndercutDrawing.md` §"Undercut cards — the overlay carousel".
+
+### Iteration 4 (auto-save on leave + floating status pill) — 2026-08-01
+
+On-device feedback on iteration 3: the per-card Confirm/Cancel row sat inside the card's own
+vertical scroll — hard to discover and easy to forget, so edits were lost by swiping away. The row
+is gone. A dirty draft now **auto-confirms when its card is left** (swipe, notch tap, or closing
+the overlay) through the identical `confirmDraft` path; a **blocked** draft raises a Keep
+editing / Discard dialog instead, so nothing is committed or dropped silently
+(`undercutLeaveAction`, unit-pinned). Saving state is stated by a **floating pill** at the
+canvas ↔ carousel boundary — Saved / "Confirm change" / the blocking reason, each of the last two
+with a ✕ discard. See `docs/UndercutDrawing.md` §"Saving: the status pill + leaving a card".
+
+### Iteration 5 (strips own the PDF page) — 2026-08-01
+
+On-device feedback on the printed sheet: the dimension rails still read cramped, and the
+whole-shaft profile did not belong — a real undercut drawing shows only the zoomed sections (as
+the feature's reference hand sketch does). The main profile and the SET-to-SET OAL line are gone
+from any page carrying strips; one "← AFT / FWD →" row keeps orientation and the strips take the
+whole band, spending the reclaimed height on rail separation and label air (cylinder capped so it
+cannot become a slab). A page with **no recorded cuts** — blank template or empty record — now
+draws one *started* strip per drawable liner (liner to scale, dimensioned nowhere, write-in title)
+instead of the profile form, which survives only for a shaft with no drawable liners at all. See
+`docs/UndercutDrawing.md` §"PDF layout".
 
 ---
 

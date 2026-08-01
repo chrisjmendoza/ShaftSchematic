@@ -74,6 +74,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -951,8 +952,13 @@ internal fun PdfPreviewOverlay(
             }
 
             // ── PDF preview area with pinch-to-zoom ────────────────────────
+            // `clipToBounds` keeps the zoomed/panned page inside this Box: a `graphicsLayer`
+            // scale/translate draws outside the layout node unless clipped, so a zoomed-in page
+            // could slide up OVER the toolbar and hide Close/Export (on-device report). The
+            // document tucks BEHIND the bar instead. Hit testing was always bounded by layout,
+            // so the bar stayed tappable — this fixes what the user could see.
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().clipToBounds(),
                 contentAlignment = Alignment.Center,
             ) {
                 when {

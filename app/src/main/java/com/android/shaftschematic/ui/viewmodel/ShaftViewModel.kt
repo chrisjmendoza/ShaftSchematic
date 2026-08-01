@@ -22,6 +22,7 @@ import com.android.shaftschematic.model.snapForwardFrom
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.util.Achievements
+import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.clampPitAcrossFrac
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.resolveComponents
@@ -655,6 +656,21 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /** Remove an undercut by [id]. Confirm-free, as authored in its edit card. */
     fun removeUndercut(id: String) {
         _undercutRecord.update { rec -> rec.copy(undercuts = rec.undercuts.filterNot { it.id == id }) }
+    }
+
+    /**
+     * Set this sheet's drawn-depth exaggeration ([UndercutRecord.exaggerationFrac]), clamped
+     * to `0..`[UNDERCUT_EXAGGERATION_MAX_FRAC]. Display-only styling for the undercut
+     * drawing: the sheet's deepest cut draws at this fraction of its local surface Ø and
+     * shallower cuts scale relative to it (`normalizedNotchFloorDiaMm`). It never touches a
+     * stored or printed Ø, so the golden rule is untouched — but it is per-document, so it
+     * lives in the record rather than in app prefs.
+     */
+    fun setUndercutExaggeration(frac: Float) {
+        val clamped = frac.coerceIn(0f, UNDERCUT_EXAGGERATION_MAX_FRAC)
+        _undercutRecord.update { rec ->
+            if (rec.exaggerationFrac == clamped) rec else rec.copy(exaggerationFrac = clamped)
+        }
     }
 
     // Tap-to-add pending position: non-null while the user has tapped empty space and

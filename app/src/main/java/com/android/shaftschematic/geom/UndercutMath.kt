@@ -1,10 +1,12 @@
 // file: app/src/main/java/com/android/shaftschematic/geom/UndercutMath.kt
 package com.android.shaftschematic.geom
 
+import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 /**
  * Undercut pure math — reference conversion, validation, cluster windows, hit-testing.
@@ -125,6 +127,27 @@ fun undercutSpanIssue(canonicalStartMm: Float, lengthMm: Float, oalMm: Float): S
         canonicalStartMm + lengthMm > oalMm + eps -> "Undercut extends past the shaft's FWD end"
         else -> null
     }
+}
+
+/**
+ * Blocking draft-confirm validation: a cut's span may not intrude into another cut's
+ * bounds — two overlapping undercuts are physically one cut and would double-dimension
+ * the chain rail. Checked when CONFIRMING a drafted card (see `UndercutDetail`'s
+ * draft/confirm flow), against the clamped spans of every OTHER cut on the sheet;
+ * touching edge-to-edge is legal (epsilon [UNDERCUT_SPAN_EPS_MM]). Returns a short
+ * message or `null`. Stored data is never retroactively rejected — like
+ * [isUndercutStaleOverrun], anything already in the record keeps rendering.
+ */
+fun undercutOverlapIssue(
+    canonicalStartMm: Float,
+    lengthMm: Float,
+    otherSpans: List<UndercutSpanMm>,
+): String? {
+    val eps = UNDERCUT_SPAN_EPS_MM
+    val s = canonicalStartMm
+    val e = canonicalStartMm + lengthMm
+    val hit = otherSpans.firstOrNull { it.endMm > s + eps && it.startMm < e - eps }
+    return if (hit != null) "Overlaps an adjacent undercut" else null
 }
 
 /**
@@ -387,3 +410,90 @@ fun pickUndercutStripAt(xMm: Float, strips: List<UndercutStrip>): UndercutStrip?
  */
 fun effectiveNotchDiaMm(diaMm: Float, minSurfaceDiaMm: Float): Float =
     if (diaMm > 0f) diaMm else minSurfaceDiaMm * UNDERCUT_PLACEHOLDER_DEPTH_FRAC
+
+// ── Drawn depth exaggeration (per-sheet, normalized to the deepest cut) ──
+
+/**
+ * Slider cap for [com.android.shaftschematic.model.UndercutRecord.exaggerationFrac]: the
+ * sheet's deepest cut never draws deeper than this fraction of its local surface Ø
+ * (product decision — shafts run up to ~10" Ø, where real cuts of 1/16"–1/2" are
+ * hairlines at true scale; the hand-drawn sheets exaggerate depth heavily while the
+ * printed Ø carries the real number).
+ */
+const val UNDERCUT_EXAGGERATION_MAX_FRAC = 0.25f
+
+/** A placed-but-unmeasured cut (Ø 0) draws at this share of the sheet's exaggeration. */
+const val UNDERCUT_PLACEHOLDER_OF_EXAGGERATION = 0.5f
+
+/**
+ * Every measured cut draws at no less than this share of the sheet's exaggeration.
+ * Without a floor, a shallow cut normalized against a much deeper one elsewhere on the
+ * shaft all but vanished (on-device report: two ~0.005"-deep cuts in one liner drew as
+ * hairlines because a 0.05" cut in another liner owned the reference). Combined with the
+ * square-root ratio compression, the deepest cut still owns the slider depth and deeper
+ * always draws deeper, but nothing readable is ever lost.
+ */
+const val UNDERCUT_MIN_SHARE_OF_EXAGGERATION = 0.25f
+
+/** Visibility floor for placeholder cuts so they stay findable even at 0% exaggeration. */
+const val UNDERCUT_PLACEHOLDER_MIN_DRAWN_FRAC = 0.04f
+
+/**
+ * Depth of the sheet's deepest **measured** cut, in Ø-reduction mm — the normalization
+ * reference for [normalizedNotchFloorDiaMm]. Placeholder cuts (Ø 0) and cuts whose Ø
+ * meets/exceeds their local surface (warning case, no material removed) contribute
+ * nothing. One shared implementation so every draw site normalizes identically.
+ */
+fun deepestUndercutDepthMm(
+    undercuts: List<Undercut>,
+    segs: List<SurfaceSeg>,
+    oalMm: Float,
+): Float = undercuts.maxOfOrNull { u ->
+    if (u.diaMm <= 0f) 0f else {
+        val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+        if (c.isEmpty) 0f
+        else (minOuterDiaOver(segs, c.startMm, c.endMm) - u.diaMm).coerceAtLeast(0f)
+    }
+} ?: 0f
+
+/**
+ * Display-only drawn floor Ø for one cut, normalized to the sheet's deepest cut:
+ * `drawnDepth = minSurfaceDiaMm × exaggerationFrac × max(√(trueDepth / deepestDepthMm),
+ * `[UNDERCUT_MIN_SHARE_OF_EXAGGERATION]`)` — the deepest cut draws at the sheet's chosen
+ * exaggeration and shallower cuts scale relative to IT, so a sheet whose worst cut is 1"
+ * deep and one whose worst is 1/4" read alike (on-device request). The ratio is
+ * **square-root compressed** and floored at a minimum share: with a linear ratio, a
+ * shallow cut normalized against a much deeper one elsewhere on the shaft drew as a
+ * hairline (on-device report) — √ keeps deeper-draws-deeper ordering while shrinking the
+ * dynamic range, and the floor guarantees every measured cut stays readable.
+ *
+ * Rules:
+ * - `exaggerationFrac` clamps to `0..`[UNDERCUT_EXAGGERATION_MAX_FRAC]; `0` = true scale.
+ * - Never shallower than reality: `drawnDepth ≥ trueDepth` for a measured cut.
+ * - Placeholder cuts (Ø 0) draw at [UNDERCUT_PLACEHOLDER_OF_EXAGGERATION] of the sheet's
+ *   exaggeration (never below [UNDERCUT_PLACEHOLDER_MIN_DRAWN_FRAC]) and are excluded
+ *   from [deepestUndercutDepthMm], so an unmeasured cut can't squash the real ones.
+ *
+ * Applied by every notch draw site AFTER `notchProfiles` computes the drawable regions
+ * from the TRUE floor — region topology stays truthful (a cut that never touched the
+ * neighboring stock must not draw into it); only the floor line and shoulders deepen.
+ * Ø callouts keep printing the stored value; golden rule untouched.
+ */
+fun normalizedNotchFloorDiaMm(
+    diaMm: Float,
+    minSurfaceDiaMm: Float,
+    deepestDepthMm: Float,
+    exaggerationFrac: Float,
+): Float {
+    if (minSurfaceDiaMm <= 0f) return diaMm
+    val ex = exaggerationFrac.coerceIn(0f, UNDERCUT_EXAGGERATION_MAX_FRAC)
+    val drawnDepth = if (diaMm <= 0f) {
+        minSurfaceDiaMm * max(ex * UNDERCUT_PLACEHOLDER_OF_EXAGGERATION, UNDERCUT_PLACEHOLDER_MIN_DRAWN_FRAC)
+    } else {
+        val trueDepth = (minSurfaceDiaMm - diaMm).coerceAtLeast(0f)
+        val ratio = if (deepestDepthMm > 0f) (trueDepth / deepestDepthMm).coerceIn(0f, 1f) else 1f
+        val share = if (trueDepth > 0f) max(sqrt(ratio), UNDERCUT_MIN_SHARE_OF_EXAGGERATION) else 0f
+        max(trueDepth, minSurfaceDiaMm * ex * share)
+    }
+    return minSurfaceDiaMm - drawnDepth
+}
