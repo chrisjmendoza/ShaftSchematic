@@ -6,6 +6,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-01 (undercut PDF — single-level fallback values above the line)
+
+### fix(pdf): chain fallback values go above the rail when it's the only label level
+
+On-device report: a small value that can't seat in its span's break (a narrow pad like
+1 ⅛") was pushed under the dimension line even when nothing sat above the rail, reading
+as orphaned. `planUndercutRailRows` now puts fallback rows ABOVE the line when the chain
+has no total rail over it (single-cut cluster), reserving the band above via
+`chainAboveBandPt`; with a total rail present they tuck below as before. Row pitch,
+level separation and the started strip's hand-draw band are unchanged.
+
+---
+
 ## 2026-08-01 (undercut PDF — rails pulled in close to the shaft)
 
 ### fix(pdf): undercut rail height cut roughly in half, level spacing kept

@@ -187,10 +187,14 @@ class UndercutStripSvgPreviewTest {
             text(s.labelCxPt, railY + textH * 0.35f, s.label)
         } else {
             line(s.x0Pt, railY, s.x1Pt, railY, w = 0.7f)
+            val row = s.labelRow.coerceIn(0, WEAR_RAIL_MAX_LABEL_ROWS - 1)
             if (labelAbove) {
-                text(s.labelCxPt, railY - arrow * 0.5f - labelGap - textH * 0.25f, s.label)
+                text(
+                    s.labelCxPt,
+                    railY - arrow * 0.5f - labelGap - textH * 0.25f - row * UNDERCUT_RAIL_ROW_HEIGHT_PT,
+                    s.label,
+                )
             } else {
-                val row = s.labelRow.coerceIn(0, WEAR_RAIL_MAX_LABEL_ROWS - 1)
                 text(s.labelCxPt, railY + arrow + labelGap + textH + row * UNDERCUT_RAIL_ROW_HEIGHT_PT, s.label)
             }
         }
@@ -226,6 +230,8 @@ class UndercutStripSvgPreviewTest {
         val railInsideChain: Boolean,
         val compressed: Boolean,
         val hasTotal: Boolean,
+        /** Fallback rows stacked ABOVE the chain rail line (`planUndercutRailRows`). */
+        val fallbackRowsAbove: Int,
         /** Narrower of the two drawn pads (chain datum → break edge), points. */
         val minPadPt: Float,
         /**
@@ -286,11 +292,14 @@ class UndercutStripSvgPreviewTest {
         val railSpans = if (started) emptyList()
         else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, unit)
         val totalSpan = if (started) null else buildUndercutTotalSpan(spans, unit)
-        // Chain before the vertical split, composer order: the split reserves the rows used.
+        // Chain before the vertical split, composer order: the split reserves the rows used,
+        // on the side of the line the plan puts them.
         val chain = layoutWearStripRail(railSpans, xAtStripMm = ::xAt, labelWidthPt = ::labelW)
+        val railPlan = planUndercutRailRows(chain, started, hasTotalRail = totalSpan != null)
         val inner = computeUndercutStripInnerLayout(
             stripTop, stripBottom, titleHeightPt = titleH, hasTotalRail = totalSpan != null, diaBandPt = diaBand,
-            maxLabelRows = undercutRailRowBudget(chain, started),
+            maxLabelRows = railPlan.belowRows,
+            chainAboveBandPt = railPlan.aboveRows * UNDERCUT_RAIL_ROW_HEIGHT_PT,
         )
 
         val cy = (inner.cylTop + inner.cylBottom) / 2f
@@ -420,7 +429,7 @@ class UndercutStripSvgPreviewTest {
                 svg.line(xAt(mm), inner.cylTop - 3f, xAt(mm), inner.chainRailY, w = 0.6f)
             }
         }
-        chain.forEach { svg.railSpan(it, inner.cylTop - 3f, inner.chainRailY, labelAbove = false) }
+        chain.forEach { svg.railSpan(it, inner.cylTop - 3f, inner.chainRailY, labelAbove = railPlan.aboveRows > 0) }
         totalSpan?.let { ts ->
             layoutWearStripRail(listOf(ts), xAtStripMm = ::xAt, labelWidthPt = ::labelW)
                 .forEach { svg.railSpan(it, inner.chainRailY, inner.totalRailY, labelAbove = true) }
@@ -458,6 +467,7 @@ class UndercutStripSvgPreviewTest {
             },
             compressed = plan?.compressed ?: false,
             hasTotal = totalSpan != null,
+            fallbackRowsAbove = railPlan.aboveRows,
             minPadPt = minOf(
                 xAt(strip.chainStartMm) - xAt(drawStartMm),
                 xAt(drawEndMm) - xAt(strip.chainEndMm),
@@ -552,7 +562,20 @@ class UndercutStripSvgPreviewTest {
         // body under it) right across that station.
         assertTrue("a real strip still draws the liner surface", a.surfaceLinesAtLinerMid > 0)
 
+        // F) SINGLE cut in the liner, half-width grid cell: no total rail, and the narrow AFT
+        //    pad's value can't seat in its break — with the chain the only label level, that
+        //    fallback stacks ABOVE the line (on-device report: it read as orphaned pushed
+        //    underneath). Contrast: A's chain sits under a total, so its fallbacks stay below.
+        val f = renderStrip(
+            listOf(Undercut(id = "s1", startFromAftMm = 630f, lengthMm = 320f, diaMm = 176f)),
+            stripLeft = 36f, stripRight = 385f, stripTop = BAND_TOP, stripBottom = BAND_BOTTOM,
+        )
+        File(outDir, "f-liner-strip-singlecut-gridcell.svg").writeText(f.svg)
+        assertFalse("a single cut prints no total span", f.hasTotal)
+        assertTrue("the narrow pad's value must stack above the line", f.fallbackRowsAbove >= 1)
+        assertEquals("fallbacks under a total rail stay below", 0, a.fallbackRowsAbove)
+
         assertNotNull(outDir.listFiles())
-        assertEquals(5, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
+        assertEquals(6, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
     }
 }

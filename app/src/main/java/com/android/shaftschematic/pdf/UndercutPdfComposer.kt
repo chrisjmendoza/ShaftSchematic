@@ -812,18 +812,21 @@ private fun drawUndercutDetailStrip(
     val totalSpan = if (startedStrip) null else buildUndercutTotalSpan(spans, unit)
 
     // Chain resolved before the vertical split (it is pure horizontal geometry), so the split
-    // reserves only the fallback rows these labels actually use — see `undercutRailRowBudget`.
+    // reserves only the fallback rows these labels actually use, on the side of the line the
+    // plan puts them — see `planUndercutRailRows`.
     val railLayout = layoutWearStripRail(
         railSpans,
         xAtStripMm = { mm -> xAtStrip(mm) },
         labelWidthPt = { s -> dimText.measureText(s) },
     )
+    val railPlan = planUndercutRailRows(railLayout, startedStrip, hasTotalRail = totalSpan != null)
     val inner = computeUndercutStripInnerLayout(
         stripTop, stripBottom,
         titleHeightPt = titleText.textSize,
         hasTotalRail = totalSpan != null,
         diaBandPt = diaBandPt,
-        maxLabelRows = undercutRailRowBudget(railLayout, startedStrip),
+        maxLabelRows = railPlan.belowRows,
+        chainAboveBandPt = railPlan.aboveRows * UNDERCUT_RAIL_ROW_HEIGHT_PT,
     )
     val cy = (inner.cylTop + inner.cylBottom) / 2f
     val rCap = ((inner.cylBottom - inner.cylTop) / 2f).coerceAtLeast(0f)
@@ -919,8 +922,9 @@ private fun drawUndercutDetailStrip(
         c, dim, dimText, railLayout,
         witnessBottomY = inner.cylTop - UC_RAIL_WITNESS_GAP_PT,
         railY = inner.chainRailY,
-        maxLabelRows = inner.railLabelRows,
+        maxLabelRows = if (railPlan.aboveRows > 0) railPlan.aboveRows else inner.railLabelRows,
         drawLabels = !blankValues,
+        fallbackLabelAbove = railPlan.aboveRows > 0,
     )
     if (totalSpan != null) {
         val totalLayout = layoutWearStripRail(
@@ -1097,9 +1101,11 @@ private fun drawUndercutWindowEnd(
  * (the inward-arrow test, which also guarantees stub room at [DIM_BREAK_TEXT_PAD_PT])
  * **seats in a break cut in the line**, vertically centred — the schematic's
  * value-in-a-break convention. A label wider than its span falls back to the stacked rows
- * `layoutWearStripRail` assigned, clamped to [maxLabelRows]; on the total-span rail
- * ([fallbackLabelAbove]) it goes ABOVE the line instead, since the chained rail occupies
- * the space below it.
+ * `layoutWearStripRail` assigned, clamped to [maxLabelRows]. [fallbackLabelAbove] stacks
+ * those rows ABOVE the line instead of below — the total-span rail (whose space below is
+ * the chained rail's) and a single-level chain with no total above it (`planUndercutRailRows`:
+ * a small value pushed under the span line reads as orphaned when nothing sits above the
+ * rail — on-device report).
  *
  * [drawLabels] = false (blank write-in draft) keeps every line and arrowhead but skips the
  * values — the lines-in/values-out template rule.
@@ -1165,13 +1171,15 @@ private fun drawUndercutRail(
             c.drawText(s.label, s.labelCxPt - lw * 0.5f, railY - (fm.ascent + fm.descent) * 0.5f, dimText)
             return@forEach
         }
+        val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
+        if (row < 0) return@forEach
         val baselineY = if (fallbackLabelAbove) {
-            // Above the line, clear of the arrowheads straddling it — the total rail's own
-            // band ([UNDERCUT_TOTAL_RAIL_ABOVE_PT]) is sized to hold exactly this.
-            railY - arrow * 0.5f - labelGapPt - fm.descent
+            // Above the line, clear of the arrowheads straddling it, stacking upward. On the
+            // total-span rail (always one span) row 0 is the whole band
+            // ([UNDERCUT_TOTAL_RAIL_ABOVE_PT] is sized to hold exactly it); on a single-level
+            // chain the rows come from the reserved `chainAboveBandPt`.
+            railY - arrow * 0.5f - labelGapPt - fm.descent - row * rowStepPt
         } else {
-            val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
-            if (row < 0) return@forEach
             // First row starts clear of the outward arrowheads straddling the rail line.
             railY + arrow + labelGapPt + dimText.textSize + row * rowStepPt
         }

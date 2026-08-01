@@ -575,13 +575,20 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   (`drawUndercutRail`), so they cannot drift. A fallback label starts clear of the outward
   arrowheads straddling the line (`UC_RAIL_LABEL_GAP_PT` = 5 pt past the arrowhead) — the
   narrow-gap value ("2″") used to sit on the rail.
-- **Rows-used reservation** (`undercutRailRowBudget`, 2026-08-01): the chain is resolved
+- **Rows-used reservation** (`planUndercutRailRows`, 2026-08-01): the chain is resolved
   (`layoutWearStripRail`, pure horizontal geometry) *before* the vertical split, and the rail
-  reserves only the fallback rows its labels actually landed on — minimum 1 row so the rail line
-  keeps clear air off the shaft, maximum the wear budget (`WEAR_RAIL_MAX_LABEL_ROWS` = 2). The
+  reserves only the fallback rows its labels actually landed on — minimum 1 row below so the rail
+  line keeps clear air off the shaft, maximum the wear budget (`WEAR_RAIL_MAX_LABEL_ROWS` = 2). The
   fixed always-2-rows budget reserved crowding air most strips never used, floating the rail
   figures far above the surface they dimension (on-device report). A **started** strip keeps the
-  full 2-row budget: its band is the machinist's to hand-draw a chain into.
+  full 2-row budget below: its band is the machinist's to hand-draw a chain into.
+- **Fallback side follows the levels** (same date, on-device report): when a **total rail** sits
+  above the chain, fallback values tuck BELOW the line (the total's figure owns the space above) —
+  but when the chain is the sheet's **only label level** (single-cut cluster → no total span),
+  a value pushed under the span line read as orphaned, so fallbacks stack ABOVE the line instead
+  (`drawUndercutRail`'s `fallbackLabelAbove`, rows upward on the 17 pt pitch; the band above the
+  rail is reserved via `chainAboveBandPt`, mutually exclusive with the total band; below keeps
+  just the 1-row clear air).
 - **Cylinder cap** — `max(UNDERCUT_CYL_MAX_FLOOR_PT, min(band × UNDERCUT_CYL_MAX_HEIGHT_FRAC,
   UNDERCUT_CYL_MAX_ABS_PT))`: 0.38 of the strip's band, never past 170 pt, never below the 96 pt
   floor (so a full-width strip draws ≈ 157 pt rather than the ≈ 207 pt a half-band fraction gave —
