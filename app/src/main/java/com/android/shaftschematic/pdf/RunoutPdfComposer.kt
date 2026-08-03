@@ -362,11 +362,9 @@ private fun drawOalSpanLine(
         c.drawLine(x0, y, mid - gapHalf, y, dim)
         c.drawLine(mid + gapHalf, y, x1, y, dim)
     } else {
-        val label = if (unit == UnitSystem.INCHES) {
-            "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
-        } else {
-            "OAL: ${"%.2f".format(oalMm)} mm"
-        }
+        // Same formatter as the schematic's OAL rail — inches print as mixed fractions
+        // (falling back to 3 decimals), never raw 4-decimal.
+        val label = "OAL: ${formatLenDim(oalMm.toDouble(), unit)}"
         val lw = text.measureText(label)
         val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
         if ((mid - gapHalf) - x0 >= arrowLen + 2f) {

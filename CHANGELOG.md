@@ -6,6 +6,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-03 (secondary sheets — OAL label matches the schematic)
+
+### fix(pdf): runout/wear/undercut OAL prints fractions like the schematic
+
+On-device report from printed test documents: a 158 ⅛" shaft printed its OAL as
+`158.1250"` on the runout and wear sheets (raw 4-decimal, while the schematic showed the
+fraction). All three secondary composers (`RunoutPdfComposer`, `WearPdfComposer`,
+`UndercutPdfComposer`) hand-rolled the label with `%.4f`; they now route through the same
+`formatLenDim` the schematic's OAL rail uses — inches snap to mixed sixteenth fractions
+with a 3-decimal fallback, mm gains a decimal (2 → 3) to match. The `OAL:` prefix and the
+seat-in-the-break layout are unchanged.
+
+---
+
 ## 2026-08-01 (undercut drawing — boxed cut sections)
 
 ### fix(undercut): cut sections drawn as complete boxes
