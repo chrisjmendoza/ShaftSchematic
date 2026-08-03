@@ -6,6 +6,25 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-03 (undercut editor — Length edits no longer rewrite the Distance field)
+
+### fix(undercut): golden rule — length edit keeps the authored Distance fixed
+
+On-device report (step-by-step screenshots): with the Distance authored against Liner FWD,
+shortening Length 12 → 10 rewrote the Distance field 5 → 7. The displayed distance under a
+FWD-flavored reference is `fwdRef − canonicalStart − length`, and the Length commit held
+canonical `startFromAftMm` fixed — so the derived Distance absorbed the length delta,
+rewriting a typed value. The Length field now re-derives canonical from the active
+reference at the new length (`undercutCanonicalForNewLength` in `geom/UndercutMath.kt`,
+the existing conversion pair composed): the authored Distance never moves, the cut's FWD
+end stays pinned where it was located, and the cut grows/shrinks AFT-ward. Exact no-op
+under AFT-flavored references. The Length validator now checks the recomputed canonical
+(it previously validated the wrong resulting span under FWD references). Pinned in
+`UndercutMathTest`; "canonical never moves" clarified (reference switching only) in
+`CLAUDE.md` + `docs/UndercutDrawing.md`.
+
+---
+
 ## 2026-08-03 (undercut sheet — liner strip titles locate the liner, not the cut)
 
 ### fix(undercut): liner strip anchor is the liner's own edge-to-SET datum

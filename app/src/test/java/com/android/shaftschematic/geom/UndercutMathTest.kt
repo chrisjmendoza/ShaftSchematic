@@ -75,6 +75,53 @@ class UndercutMathTest {
         assertEquals(910f, canonical, 1e-4f)
     }
 
+    // ── Length edits keep the authored Distance fixed ──
+
+    @Test
+    fun `length edit keeps the displayed distance unchanged for all references`() {
+        for (ref in UndercutReference.entries) {
+            val canonical = undercutStartToCanonicalMm(
+                ref, enteredMm = 127f, lengthMm = 304.8f, aftSetXMm = 50f, fwdSetXMm = 1900f,
+                linerStartMm = 600f, linerEndMm = 1000f,
+            )
+            val newCanonical = undercutCanonicalForNewLength(
+                ref, canonical, oldLengthMm = 304.8f, newLengthMm = 254f,
+                aftSetXMm = 50f, fwdSetXMm = 1900f, linerStartMm = 600f, linerEndMm = 1000f,
+            )
+            val redisplayed = canonicalToUndercutStartMm(
+                ref, newCanonical, lengthMm = 254f, aftSetXMm = 50f, fwdSetXMm = 1900f,
+                linerStartMm = 600f, linerEndMm = 1000f,
+            )
+            assertEquals("ref=$ref", 127f, redisplayed, 1e-3f)
+        }
+    }
+
+    @Test
+    fun `length edit under an AFT reference leaves canonical untouched`() {
+        for (ref in listOf(UndercutReference.AFT_SET, UndercutReference.LINER_AFT)) {
+            val newCanonical = undercutCanonicalForNewLength(
+                ref, canonicalStartMm = 700f, oldLengthMm = 60f, newLengthMm = 90f,
+                aftSetXMm = 50f, fwdSetXMm = 1900f, linerStartMm = 600f, linerEndMm = 1000f,
+            )
+            assertEquals("ref=$ref", 700f, newCanonical, 1e-4f)
+        }
+    }
+
+    @Test
+    fun `length edit under a FWD reference pins the cut's FWD end`() {
+        // The on-device report's shape: liner-FWD reference, Distance 5 units, Length 12 -> 10.
+        // The FWD end (linerEnd - distance) must stay put; the AFT start absorbs the delta.
+        val canonical = undercutStartToCanonicalMm(
+            UndercutReference.LINER_FWD, enteredMm = 127f, lengthMm = 304.8f,
+            aftSetXMm = 0f, fwdSetXMm = 0f, linerStartMm = 600f, linerEndMm = 1000f,
+        )
+        val newCanonical = undercutCanonicalForNewLength(
+            UndercutReference.LINER_FWD, canonical, oldLengthMm = 304.8f, newLengthMm = 254f,
+            aftSetXMm = 0f, fwdSetXMm = 0f, linerStartMm = 600f, linerEndMm = 1000f,
+        )
+        assertEquals(canonical + 304.8f, newCanonical + 254f, 1e-3f)
+    }
+
     // ── Validation ──
 
     @Test

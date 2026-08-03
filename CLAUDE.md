@@ -100,8 +100,11 @@ live outside `ShaftSpec` in their own envelope field (`undercut_record`, sibling
 `startFromAftMm` (an undercut may cross a liner edge or span components), so there are no
 orphans and nothing is pruned at decode. The Distance field is authored against one of four
 references — `AFT_SET`/`FWD_SET` or a reference liner's `LINER_AFT`/`LINER_FWD` edge
-(display-only metadata; canonical never moves — the `WearSpotReference` pattern, conversion
-pair in `geom/UndercutMath.kt`). Detail strips are liner-anchored: a cut inside a liner draws
+(display-only metadata; canonical never moves on a reference *switch* — the
+`WearSpotReference` pattern, conversion pair in `geom/UndercutMath.kt`. A **Length edit**
+is different: it re-derives canonical at the new length (`undercutCanonicalForNewLength`)
+so the authored Distance never rewrites itself — under a FWD reference the cut's FWD end
+stays pinned and the cut grows AFT-ward). Detail strips are liner-anchored: a cut inside a liner draws
 that liner's whole span (`buildUndercutStrips`), not just a padded window; bare-shaft cuts still
 cluster into padded windows. `diaMm` is a typed
 measurement — stored **verbatim** (golden rule); `0` = placed-but-empty, drawn with a

@@ -462,7 +462,15 @@ Each card:
   that could never be confirmed has no business entering the draft) while the **overlap** check
   is confirm-time only — a cut is legitimately moved past a neighbour by two separate field
   edits.
-- **Length** field: validator runs `undercutSpanIssue` against the draft's canonical start.
+- **Length** field: a length edit keeps the **authored Distance** fixed — the commit re-derives
+  canonical `startFromAftMm` from the active reference at the new length
+  (`undercutCanonicalForNewLength`, the conversion pair composed). Identity under an AFT-flavored
+  reference; under a FWD-flavored one the cut's FWD end (the datum the Distance was authored
+  against) stays pinned and the cut grows/shrinks AFT-ward. Committing the new length against
+  the old canonical would rewrite the displayed Distance by the length delta (on-device report:
+  Distance 5 / Length 12 under Liner FWD became Distance 7 after shortening to 10) — a
+  golden-rule violation. The "canonical never moves" rule covers reference *switching* only.
+  The validator runs `undercutSpanIssue` against the same recomputed canonical.
 - **Measured Ø** field: **no validator** — any parseable value ≥ 0 enters the draft verbatim
   (golden rule). Initial display is blank when `diaMm == 0` (unentered), else the formatted value.
   Because the underlying `NumericInputField` requires `parseValid` to accept the text to commit

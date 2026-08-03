@@ -91,6 +91,7 @@ import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
+import com.android.shaftschematic.geom.undercutCanonicalForNewLength
 import com.android.shaftschematic.geom.undercutOverlapIssue
 import com.android.shaftschematic.geom.undercutSpanIssue
 import com.android.shaftschematic.geom.undercutStartToCanonicalMm
@@ -1334,15 +1335,32 @@ private fun UndercutDraftCard(
                 onDraftChange(draft.copy(startFromAftMm = canonicalMm))
             }
 
+            // A length edit keeps the AUTHORED Distance fixed: canonical start is re-derived
+            // from the active reference at the new length (identity under an AFT reference;
+            // under a FWD reference the cut's FWD end stays pinned and the cut grows/shrinks
+            // AFT-ward). Committing the new length against the old canonical would rewrite
+            // the displayed Distance by the length delta — golden-rule violation (on-device
+            // report). Validation runs against the same recomputed canonical.
+            fun canonicalAtLength(newLenMm: Float): Float = undercutCanonicalForNewLength(
+                draft.reference, draft.startFromAftMm, draft.lengthMm, newLenMm,
+                aftSetXMm, fwdSetXMm, refLinerStartMm, refLinerEndMm,
+            )
             WearNum(
                 label = "Length (${abbr(unit)})",
                 initialDisplay = disp(draft.lengthMm, unit),
                 validator = { raw ->
                     val enteredLenMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
-                    undercutSpanIssue(draft.startFromAftMm, enteredLenMm, oalMm)
+                    undercutSpanIssue(canonicalAtLength(enteredLenMm), enteredLenMm, oalMm)
                 },
             ) { s ->
-                toMmOrNull(s, unit)?.let { onDraftChange(draft.copy(lengthMm = it)) }
+                toMmOrNull(s, unit)?.let { newLenMm ->
+                    onDraftChange(
+                        draft.copy(
+                            startFromAftMm = canonicalAtLength(newLenMm),
+                            lengthMm = newLenMm,
+                        ),
+                    )
+                }
             }
 
             // Measured Ø — a measurement, so any parseable value ≥ 0 lands **verbatim**

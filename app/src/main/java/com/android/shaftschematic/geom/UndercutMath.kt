@@ -103,6 +103,38 @@ fun canonicalToUndercutStartMm(
     UndercutReference.LINER_FWD -> linerEndMm - canonicalStartMm - lengthMm
 }
 
+/**
+ * Canonical start after a LENGTH edit that must keep the authored Distance fixed: project
+ * the current canonical to the displayed distance under [reference] at the OLD length,
+ * then back to canonical at the NEW length.
+ *
+ * Under an AFT-flavored reference this is the identity — the distance doesn't involve the
+ * length. Under a FWD-flavored one it pins the cut's FWD end (the datum the distance was
+ * authored against) and grows/shrinks the cut AFT-ward. Committing a new length while
+ * keeping the old canonical would instead slide the FWD end and rewrite the displayed
+ * Distance by the length delta — a golden-rule violation (on-device report: Distance 5 /
+ * Length 12 under a liner-FWD reference became Distance 7 after shortening Length to 10).
+ * The "canonical never moves" rule covers reference *switching* (display re-projection),
+ * not length edits.
+ */
+fun undercutCanonicalForNewLength(
+    reference: UndercutReference,
+    canonicalStartMm: Float,
+    oldLengthMm: Float,
+    newLengthMm: Float,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+    linerStartMm: Float = 0f,
+    linerEndMm: Float = 0f,
+): Float {
+    val distanceMm = canonicalToUndercutStartMm(
+        reference, canonicalStartMm, oldLengthMm, aftSetXMm, fwdSetXMm, linerStartMm, linerEndMm,
+    )
+    return undercutStartToCanonicalMm(
+        reference, distanceMm, newLengthMm, aftSetXMm, fwdSetXMm, linerStartMm, linerEndMm,
+    )
+}
+
 // ── Validation ──
 
 /**
