@@ -284,7 +284,14 @@ fun UndercutRoute(
     // Capture theme colors before the Canvas block (DrawScope is not composable) — same
     // technique as WearRoute's overview canvas.
     val outlineArgb    = MaterialTheme.colorScheme.onSurface.toArgb()
-    val bodyFillArgb   = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f).toArgb()
+    // Component fills are fixed black-alpha, not theme colors: the overview canvas is a
+    // paper-white sheet in both themes, so a dark-theme tint (near-white onSurface) would
+    // vanish into the paper and the pure-white notch voids would lose the grey they read
+    // against. The liner takes the PDF shade fill's weight (argb 40) — grey liner, white cut
+    // sections (on-device request); bodies/tapers stay lighter so the liner still reads as the
+    // outer surface.
+    val bodyFillArgb   = Color.Black.copy(alpha = 0.08f).toArgb()
+    val linerFillArgb  = Color.Black.copy(alpha = 0.16f).toArgb()
     val hatchArgb      = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f).toArgb()
     val outlineColor   = MaterialTheme.colorScheme.onSurface
     val tapTintColor   = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
@@ -293,13 +300,13 @@ fun UndercutRoute(
     val badgeTextArgb  = MaterialTheme.colorScheme.onPrimary.toArgb()
     val previewShape   = MaterialTheme.shapes.medium
 
-    val previewOpts = remember(outlineArgb, bodyFillArgb, hatchArgb) {
+    val previewOpts = remember(outlineArgb, bodyFillArgb, linerFillArgb, hatchArgb) {
         RenderOptions(
             outlineColor        = outlineArgb,
             outlineWidthPx      = 1.5f,
             bodyFillColor       = bodyFillArgb,
             taperFillColor      = bodyFillArgb,
-            linerFillColor      = bodyFillArgb,
+            linerFillColor      = linerFillArgb,
             threadFillColor     = 0x00000000,
             threadHatchColor    = hatchArgb,
         )

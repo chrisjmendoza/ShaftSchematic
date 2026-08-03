@@ -6,6 +6,30 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-01 (undercut drawing — boxed cut sections)
+
+### fix(undercut): cut sections drawn as complete boxes
+
+On-device request, referencing the feature's original hand sketch: every undercut section
+now closes into a full outlined rectangle. The notch outline gains a top edge along the
+region's surface polyline — so a cut crossing a liner edge steps over that edge rather than
+closing on a straight chord — joining the two shoulders and the floor, mirrored top and
+bottom, at the notch outline's own weight and colour. The void fill still overdraws the
+*component's* surface stroke, so the closing line is the notch's, not a leftover half-stroke;
+a draft's dash and status colour apply to it too, making a provisional cut a dashed box.
+Canvas (`drawUndercutNotches`, shared by the route overview and the detail overlay), PDF
+(`UndercutPdfComposer`) and the SVG preview move in lockstep. No other geometry changed.
+
+Follow-up on-device request — "keep the liner grey, make the undercuts white": a real detail
+strip now always shades its liner span (no longer gated on the `shadedLiners` pref; bodies and
+tapers stay pref-driven, the blank template's edges-only strip stays clear paper) while the
+notch voids stay pure white, so the boxed sections read as cuts. Both undercut canvases paint
+on a hard-coded white sheet, so their component fills became fixed black-alpha instead of theme
+colours — a dark-theme tint washed into the paper and left the white voids nothing to contrast
+against; the liner takes the PDF shade fill's weight, the overview's bodies/tapers stay lighter.
+
+---
+
 ## 2026-08-01 (undercut PDF — single-level fallback values above the line)
 
 ### fix(pdf): chain fallback values go above the rail when it's the only label level

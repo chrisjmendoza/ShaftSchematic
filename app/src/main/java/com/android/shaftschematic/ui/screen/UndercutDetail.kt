@@ -416,7 +416,12 @@ fun UndercutWindowDetailOverlay(
 
     // ── Theme colors captured here — the Canvas draw scope must not read MaterialTheme ──
     val outlineColor = MaterialTheme.colorScheme.onSurface
-    val linerFillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.30f)
+    // The liner shade is deliberately NOT a theme color: the strip canvas is a paper-white
+    // sheet in both themes, and a theme tint (dark theme's near-white tertiary) washes out to
+    // nothing on white — the pure-white notch voids would then have no grey to read against.
+    // Fixed black-alpha at the PDF shade fill's weight (argb 40) keeps the on-screen strip and
+    // the printed strip alike: grey liner, white cut sections (on-device request).
+    val linerFillColor = Color.Black.copy(alpha = 0.16f)
     val railColor = outlineColor.copy(alpha = 0.65f)
     val witnessColor = outlineColor.copy(alpha = 0.35f)
     val selectColor = MaterialTheme.colorScheme.primary
@@ -1721,10 +1726,10 @@ internal fun buildUndercutNotches(
 
 /**
  * Draw notches as **voids**: [voidColor] fill from the local surface down to the floor (mirrored
- * about the centreline), erasing the profile strokes inside the cut, then the outline — shoulder
- * at each end plus the floor line, top and bottom. Coordinate mapping is supplied by the caller
- * ([xPx]/[rPx]) so the overview canvas and the zoomed window run the same construction at their
- * own scales.
+ * about the centreline), erasing the profile strokes inside the cut, then the outline — a closed
+ * box per region: the top edge along the surface polyline, a shoulder at each end, and the floor
+ * line, mirrored top and bottom. Coordinate mapping is supplied by the caller ([xPx]/[rPx]) so the
+ * overview canvas and the zoomed window run the same construction at their own scales.
  */
 internal fun DrawScope.drawUndercutNotches(
     notches: List<UndercutNotch>,
@@ -1749,8 +1754,9 @@ internal fun DrawScope.drawUndercutNotches(
             val rSurfEnd = rPx(p.surface.last().diaMm)
             // The void's surface boundary overdraws OUTWARD by the stroke width: the
             // component outline is stroked centred on the surface line, so a fill that
-            // stops exactly there leaves half the stroke as a line across the notch
-            // mouth (on-device report) — the cut removed that surface, the mouth is open.
+            // stops exactly there would leave half of the *component's* stroke ragged
+            // across the mouth. The mouth is then closed by the notch's own top edge
+            // below, at the notch outline's weight/colour.
             val od = strokeWidthPx
 
             val topVoid = Path().apply {
@@ -1773,6 +1779,24 @@ internal fun DrawScope.drawUndercutNotches(
             }
             drawPath(topVoid, color = voidColor)
             drawPath(botVoid, color = voidColor)
+
+            // The top edge follows the surface polyline, so a cut crossing a liner edge
+            // closes over that step instead of across a straight chord (the hand-sketch
+            // convention: every cut section reads as a complete rectangle — on-device
+            // request). Stroked as one path so a draft's dash runs unbroken over the steps.
+            listOf(-1f, 1f).forEach { sign ->
+                val top = Path().apply {
+                    moveTo(xPx(p.surface.first().xMm), cy + sign * rPx(p.surface.first().diaMm))
+                    for (i in 1 until p.surface.size) {
+                        lineTo(xPx(p.surface[i].xMm), cy + sign * rPx(p.surface[i].diaMm))
+                    }
+                }
+                drawPath(
+                    top,
+                    color = outlineColor,
+                    style = Stroke(width = strokeWidthPx, pathEffect = pathEffect),
+                )
+            }
 
             drawLine(outlineColor, Offset(x0, cy - rSurfStart), Offset(x0, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)
             drawLine(outlineColor, Offset(x1, cy - rSurfEnd), Offset(x1, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)
