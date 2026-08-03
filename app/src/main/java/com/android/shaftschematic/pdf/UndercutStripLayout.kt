@@ -4,8 +4,10 @@ package com.android.shaftschematic.pdf
 import com.android.shaftschematic.geom.ClampedUndercutSpanMm
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.UndercutSpanMm
+import com.android.shaftschematic.geom.nearestSetReference
 import com.android.shaftschematic.model.LinerAnchor
 import com.android.shaftschematic.model.Undercut
+import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
 
@@ -579,9 +581,11 @@ fun undercutAnchorFor(
     aftSetXMm: Float,
     fwdSetXMm: Float,
 ): UndercutAnchor {
-    val clusterMid = (firstShoulderMm + lastShoulderMm) * 0.5f
-    val setMid = (aftSetXMm + fwdSetXMm) * 0.5f
-    return if (clusterMid <= setMid) {
+    // Side choice delegates to the shared proximity rule (`geom/UndercutMath.kt`), the same
+    // one that seeds a bare-shaft cut's default Distance reference in the editor — so the
+    // printed anchor and the card's default always read from the same SET.
+    val side = nearestSetReference(firstShoulderMm, lastShoulderMm, aftSetXMm, fwdSetXMm)
+    return if (side == UndercutReference.AFT_SET) {
         UndercutAnchor(UndercutAnchorSide.AFT_SET, abs(firstShoulderMm - aftSetXMm))
     } else {
         UndercutAnchor(UndercutAnchorSide.FWD_SET, abs(fwdSetXMm - lastShoulderMm))

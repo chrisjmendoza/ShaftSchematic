@@ -135,6 +135,25 @@ fun undercutCanonicalForNewLength(
     )
 }
 
+/**
+ * The S.E.T. a **bare-shaft** (body-only) cut authors its Distance against by default:
+ * the nearer one — [UndercutReference.AFT_SET] when the span's midpoint sits in the AFT
+ * half of the SET-to-SET window, [UndercutReference.FWD_SET] otherwise. A body cut has no
+ * liner edge to measure from, so the SETs are its only datums; picking by proximity is the
+ * same rule the printed sheet's `undercutAnchorFor` uses to anchor a bare-shaft strip's
+ * title (which delegates here), so the card's default Distance reads from the SET the
+ * sheet will anchor to. Liner cuts don't use this — they author against the liner edge
+ * the machinist is standing at (LINER_AFT).
+ */
+fun nearestSetReference(
+    startMm: Float,
+    endMm: Float,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+): UndercutReference =
+    if ((startMm + endMm) * 0.5f <= (aftSetXMm + fwdSetXMm) * 0.5f) UndercutReference.AFT_SET
+    else UndercutReference.FWD_SET
+
 // ── Validation ──
 
 /**

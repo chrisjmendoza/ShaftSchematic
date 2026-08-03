@@ -122,6 +122,32 @@ class UndercutMathTest {
         assertEquals(canonical + 304.8f, newCanonical + 254f, 1e-3f)
     }
 
+    // ── Nearest-SET default for bare-shaft cuts ──
+
+    @Test
+    fun `bare-shaft cut in the AFT half defaults to the AFT SET`() {
+        assertEquals(
+            UndercutReference.AFT_SET,
+            nearestSetReference(startMm = 300f, endMm = 360f, aftSetXMm = 100f, fwdSetXMm = 1900f),
+        )
+    }
+
+    @Test
+    fun `bare-shaft cut in the FWD half defaults to the FWD SET`() {
+        assertEquals(
+            UndercutReference.FWD_SET,
+            nearestSetReference(startMm = 1500f, endMm = 1560f, aftSetXMm = 100f, fwdSetXMm = 1900f),
+        )
+    }
+
+    @Test
+    fun `bare-shaft cut straddling the midpoint breaks the tie to the AFT SET`() {
+        assertEquals(
+            UndercutReference.AFT_SET,
+            nearestSetReference(startMm = 970f, endMm = 1030f, aftSetXMm = 100f, fwdSetXMm = 1900f),
+        )
+    }
+
     // ── Preview draw range (overlay window follows the previewed spans) ──
 
     @Test
