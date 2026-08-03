@@ -23,9 +23,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
@@ -33,6 +35,8 @@ import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,6 +67,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
@@ -304,6 +309,7 @@ fun PdfPreviewScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .then(gestures)
+                            .testTag("pdf_preview_canvas")
                     ) {
                         val imgW = currentBitmap.width.toFloat()
                         val imgH = currentBitmap.height.toFloat()
@@ -334,6 +340,30 @@ fun PdfPreviewScreen(
                     }
                 }
             }
+
+            // Always-visible blank-draft toggle, overlaid on the preview — the SAME
+            // session-only state as the options sheet's switch, so the two can never
+            // disagree. Surfaced here because the sheet buried it (on-device report:
+            // hard to find, even when demoing the app). Toggling re-renders the
+            // preview live, so what's shown is always what will print.
+            FilterChip(
+                selected = pdfBlankDraft,
+                onClick = { vm.setPdfBlankDraft(!pdfBlankDraft) },
+                label = { Text("Blank draft (write-in)") },
+                leadingIcon = if (pdfBlankDraft) {
+                    {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(FilterChipDefaults.IconSize),
+                        )
+                    }
+                } else null,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 4.dp)
+                    .testTag("pdf_blank_toggle"),
+            )
         }
     }
 

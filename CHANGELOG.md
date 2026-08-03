@@ -6,6 +6,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-03 (PDF preview — blank-draft toggle surfaced on the preview itself)
+
+### feat(pdf): always-visible "Blank draft (write-in)" chip on the schematic preview
+
+On-device report: the blank-template output was reachable only through the Tune options
+sheet — hard to find, even when demoing the app. The schematic PDF preview now overlays a
+labeled FilterChip (top-center, checkmark when active, testTag `pdf_blank_toggle`) that
+drives the same session-only `pdfBlankDraft` state as the sheet's switch — the two can
+never disagree, and toggling re-renders the preview live. Blank mode itself is unchanged
+(session-only, `_BlankDraft` filename suffix).
+
+---
+
 ## 2026-08-03 (undercut editor — body-only cuts default to the nearer S.E.T.)
 
 ### feat(undercut): bare-shaft cut's Distance reference picked by SET proximity

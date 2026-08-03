@@ -238,6 +238,11 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   `ShaftViewModel.pdfBlankDraft`, runout/wear: local screen state) — a forgotten sticky
   toggle would silently blank every future export. Blank exports get a `_BlankDraft`
   filename suffix.
+- On the schematic PDF preview the toggle surfaces **twice from one state**: an
+  always-visible `FilterChip` overlaid top-center on the preview itself (testTag
+  `pdf_blank_toggle` — added because the options-sheet switch alone was too hard to find,
+  on-device report) and the original switch in the Tune options sheet. Both drive
+  `setPdfBlankDraft`, so they can never disagree; toggling re-renders the preview live.
 
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
 `PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print
