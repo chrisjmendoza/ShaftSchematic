@@ -84,6 +84,7 @@ import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.deepestUndercutDepthMm
 import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
+import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.minOuterDiaOver
 import com.android.shaftschematic.geom.nearestSetReference
@@ -1756,11 +1757,16 @@ internal fun buildUndercutNotches(
 }
 
 /**
- * Draw notches as **voids**: [voidColor] fill from the local surface down to the floor (mirrored
- * about the centreline), erasing the profile strokes inside the cut, then the outline — a closed
- * box per region: the top edge along the surface polyline, a shoulder at each end, and the floor
- * line, mirrored top and bottom. Coordinate mapping is supplied by the caller ([xPx]/[rPx]) so the
- * overview canvas and the zoomed window run the same construction at their own scales.
+ * Draw notches as **steps in the silhouette**: [voidColor] fill from the local surface down to
+ * the floor (mirrored about the centreline), erasing the profile strokes inside the cut — the
+ * mouth stays OPEN at the surface, never closed by a lid — then the outline: a full-height
+ * **section face** at each region end (top surface to bottom surface, like any machined
+ * diameter step, only where that end's surface stands above the floor) and the floor lines
+ * across the span. Each cut reads as its own reduced-Ø rectangle section between two faces —
+ * the hand-sketch convention (on-device report: a lid along the surface read as a white box
+ * pasted ON the liner instead of material removed FROM it). Coordinate mapping is supplied by
+ * the caller ([xPx]/[rPx]) so the overview canvas and the zoomed window run the same
+ * construction at their own scales.
  */
 internal fun DrawScope.drawUndercutNotches(
     notches: List<UndercutNotch>,
@@ -1811,29 +1817,15 @@ internal fun DrawScope.drawUndercutNotches(
             drawPath(topVoid, color = voidColor)
             drawPath(botVoid, color = voidColor)
 
-            // The top edge follows the surface polyline, so a cut crossing a liner edge
-            // closes over that step instead of across a straight chord (the hand-sketch
-            // convention: every cut section reads as a complete rectangle — on-device
-            // request). Stroked as one path so a draft's dash runs unbroken over the steps.
-            listOf(-1f, 1f).forEach { sign ->
-                val top = Path().apply {
-                    moveTo(xPx(p.surface.first().xMm), cy + sign * rPx(p.surface.first().diaMm))
-                    for (i in 1 until p.surface.size) {
-                        lineTo(xPx(p.surface[i].xMm), cy + sign * rPx(p.surface[i].diaMm))
-                    }
-                }
-                drawPath(
-                    top,
-                    color = outlineColor,
-                    style = Stroke(width = strokeWidthPx, pathEffect = pathEffect),
-                )
+            // Step-section outline: full-height faces where the surface stands above the
+            // floor, then the floor lines. No lid — the mouth stays open.
+            if (rSurfStart > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+                drawLine(outlineColor, Offset(x0, cy - rSurfStart), Offset(x0, cy + rSurfStart), strokeWidthPx, pathEffect = pathEffect)
             }
-
-            drawLine(outlineColor, Offset(x0, cy - rSurfStart), Offset(x0, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)
-            drawLine(outlineColor, Offset(x1, cy - rSurfEnd), Offset(x1, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)
+            if (rSurfEnd > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+                drawLine(outlineColor, Offset(x1, cy - rSurfEnd), Offset(x1, cy + rSurfEnd), strokeWidthPx, pathEffect = pathEffect)
+            }
             drawLine(outlineColor, Offset(x0, cy - rFloor), Offset(x1, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)
-            drawLine(outlineColor, Offset(x0, cy + rSurfStart), Offset(x0, cy + rFloor), strokeWidthPx, pathEffect = pathEffect)
-            drawLine(outlineColor, Offset(x1, cy + rSurfEnd), Offset(x1, cy + rFloor), strokeWidthPx, pathEffect = pathEffect)
             drawLine(outlineColor, Offset(x0, cy + rFloor), Offset(x1, cy + rFloor), strokeWidthPx, pathEffect = pathEffect)
         }
     }

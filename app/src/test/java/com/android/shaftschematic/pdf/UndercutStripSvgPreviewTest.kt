@@ -1,5 +1,6 @@
 package com.android.shaftschematic.pdf
 
+import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
@@ -388,11 +389,11 @@ class UndercutStripSvgPreviewTest {
             svg.breakEdge(xAt(atMm), cy - r, cy + r, minOf(r * 0.6f, UNDERCUT_BREAK_AMP_MAX_PT), eyeAtTop)
         }
 
-        // Notches — white void from surface to floor, mirrored, then the closed box: the top
-        // edge along the surface polyline (stepping where the cut crosses a liner edge),
-        // shoulders + floor. Regions come from the TRUE floor; the drawn floor is
-        // depth-exaggerated against the sheet's deepest cut and the void overdraws the surface
-        // stroke, all mirroring the composer.
+        // Notches — white void from surface to floor, mirrored (mouth stays OPEN — no lid),
+        // then the step-section outline: a full-height face at each region end where the
+        // surface stands above the floor, and the floor lines. Regions come from the TRUE
+        // floor; the drawn floor is depth-exaggerated against the sheet's deepest cut and
+        // the void overdraws the surface stroke, all mirroring the composer.
         spans.forEach { s ->
             val u = undercuts.first { it.id == s.id }
             val minSurface = minOuterDiaOver(segs, s.startMm, s.endMm)
@@ -409,15 +410,14 @@ class UndercutStripSvgPreviewTest {
                 }
                 val r0 = rAt(np.surface.first().diaMm)
                 val r1 = rAt(np.surface.last().diaMm)
+                if (r0 > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+                    svg.line(xAt(np.startMm), cy - r0, xAt(np.startMm), cy + r0)
+                }
+                if (r1 > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+                    svg.line(xAt(np.endMm), cy - r1, xAt(np.endMm), cy + r1)
+                }
                 listOf(-1f, 1f).forEach { sign ->
-                    val d = np.surface.mapIndexed { i, sp ->
-                        val cmd = if (i == 0) "M" else "L"
-                        "$cmd ${xAt(sp.xMm)} ${cy + sign * rAt(sp.diaMm)}"
-                    }.joinToString(" ")
-                    svg.path(d, w = 0.8f)
-                    svg.line(xAt(np.startMm), cy + sign * r0, xAt(np.startMm), cy + sign * rFloor)
                     svg.line(xAt(np.startMm), cy + sign * rFloor, xAt(np.endMm), cy + sign * rFloor)
-                    svg.line(xAt(np.endMm), cy + sign * rFloor, xAt(np.endMm), cy + sign * r1)
                 }
             }
         }
