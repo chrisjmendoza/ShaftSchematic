@@ -60,6 +60,9 @@ class UndercutStripSvgPreviewTest {
     /** The sheet's drawn-depth exaggeration, the record's default (`exaggerationFrac`). */
     private val exaggerationFrac = 0.25f
 
+    /** The composer's shade fill, `Color.argb(40, 0, 0, 0)`, in SVG terms. */
+    private val SHADE_FILL = "rgba(0,0,0,0.157)"
+
     /** Stand-in for Paint.measureText at 8pt sans — close enough for preview spreads. */
     private fun labelW(s: String): Float = s.length * textH * 0.58f
 
@@ -240,6 +243,11 @@ class UndercutStripSvgPreviewTest {
          * paper — including for a body running underneath the liner.
          */
         val surfaceLinesAtLinerMid: Int,
+        /**
+         * Shade-fill rectangles painted for the liner. A real detail strip always shades its
+         * liner (grey liner, white cut sections); the blank write-in template shades nothing.
+         */
+        val linerFills: Int,
     )
 
     private fun renderStrip(
@@ -329,6 +337,7 @@ class UndercutStripSvgPreviewTest {
             )
         val linerMidMm = (linerAftMm + linerFwdMm) / 2f
         var surfaceLinesAtLinerMid = 0
+        var linerFills = 0
         profileBands.forEach { (bandStartMm, bandEndMm) ->
             components.forEach { comp ->
                 val dia = when (comp) {
@@ -340,6 +349,14 @@ class UndercutStripSvgPreviewTest {
                 val b = minOf(comp.endMmPhysical, bandEndMm)
                 if (b <= a) return@forEach
                 val r = rAt(dia)
+                // A detail strip ALWAYS shades its liner (the composer's `stripLinerFill`,
+                // pref-independent) so the pure-white notch voids read as cut sections against
+                // it. The blank template never reaches here for the liner — its span is not a
+                // profile band — so it stays clear paper.
+                if (comp is ResolvedLiner) {
+                    svg.rect(xAt(a), cy - r, xAt(b) - xAt(a), 2f * r, stroke = "none", fill = SHADE_FILL)
+                    linerFills++
+                }
                 svg.line(xAt(a), cy - r, xAt(b), cy - r)
                 svg.line(xAt(a), cy + r, xAt(b), cy + r)
                 if (a < linerMidMm && b > linerMidMm) surfaceLinesAtLinerMid += 2
@@ -368,10 +385,11 @@ class UndercutStripSvgPreviewTest {
             svg.breakEdge(xAt(atMm), cy - r, cy + r, minOf(r * 0.6f, UNDERCUT_BREAK_AMP_MAX_PT), eyeAtTop)
         }
 
-        // Notches — white void from surface to floor, mirrored, then shoulders + floor.
-        // Regions come from the TRUE floor; the drawn floor is depth-exaggerated against the
-        // sheet's deepest cut and the void overdraws the surface stroke, both mirroring the
-        // composer.
+        // Notches — white void from surface to floor, mirrored, then the closed box: the top
+        // edge along the surface polyline (stepping where the cut crosses a liner edge),
+        // shoulders + floor. Regions come from the TRUE floor; the drawn floor is
+        // depth-exaggerated against the sheet's deepest cut and the void overdraws the surface
+        // stroke, all mirroring the composer.
         spans.forEach { s ->
             val u = undercuts.first { it.id == s.id }
             val minSurface = minOuterDiaOver(segs, s.startMm, s.endMm)
@@ -389,6 +407,11 @@ class UndercutStripSvgPreviewTest {
                 val r0 = rAt(np.surface.first().diaMm)
                 val r1 = rAt(np.surface.last().diaMm)
                 listOf(-1f, 1f).forEach { sign ->
+                    val d = np.surface.mapIndexed { i, sp ->
+                        val cmd = if (i == 0) "M" else "L"
+                        "$cmd ${xAt(sp.xMm)} ${cy + sign * rAt(sp.diaMm)}"
+                    }.joinToString(" ")
+                    svg.path(d, w = 0.8f)
                     svg.line(xAt(np.startMm), cy + sign * r0, xAt(np.startMm), cy + sign * rFloor)
                     svg.line(xAt(np.startMm), cy + sign * rFloor, xAt(np.endMm), cy + sign * rFloor)
                     svg.line(xAt(np.endMm), cy + sign * rFloor, xAt(np.endMm), cy + sign * r1)
@@ -473,6 +496,7 @@ class UndercutStripSvgPreviewTest {
                 xAt(drawEndMm) - xAt(strip.chainEndMm),
             ),
             surfaceLinesAtLinerMid = surfaceLinesAtLinerMid,
+            linerFills = linerFills,
         )
     }
 
@@ -561,6 +585,10 @@ class UndercutStripSvgPreviewTest {
         // …and the contrast: a strip that is not the blank template draws the liner (and the
         // body under it) right across that station.
         assertTrue("a real strip still draws the liner surface", a.surfaceLinesAtLinerMid > 0)
+        // Grey liner, white cut sections: a real strip shades its liner whatever the shading
+        // prefs say; the blank template shades nothing (its liner span is clear paper).
+        assertTrue("a real strip must shade its liner", a.linerFills > 0)
+        assertEquals("the blank template shades nothing", 0, e.linerFills)
 
         // F) SINGLE cut in the liner, half-width grid cell: no total rail, and the narrow AFT
         //    pad's value can't seat in its break — with the chain the only label level, that

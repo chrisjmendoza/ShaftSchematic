@@ -170,6 +170,12 @@ fun composeUndercutPdf(
     val bodyFill: Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
     val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
     val linerFill: Paint? = if (pdfPrefs.shadedLiners) shadeFill() else null
+    // Detail strips ALWAYS shade the liner, whatever `shadedLiners` says: the notch voids are
+    // pure white, so the grey liner is what gives the boxed cut sections their contrast
+    // (on-device request). Bodies and tapers stay pref-driven, and the blank template's
+    // edges-only started strip draws no liner span at all, so it stays clear paper. The
+    // whole-shaft fallback form (no strips) keeps the pref.
+    val stripLinerFill = shadeFill()
     // A notch is a VOID: the removed material is painted out in the page colour so the
     // surface stroke and any shading fill are erased inside the cut, then the shoulders and
     // floor are outlined on top.
@@ -350,7 +356,7 @@ fun composeUndercutPdf(
             clampedById,
             cell.top, cell.bottom, cell.left, cell.right,
             unit, aftSetMm, fwdSetMm, text, outline, dim, diaText,
-            bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill,
+            bodyFill = bodyFill, taperFill = taperFill, linerFill = stripLinerFill,
             shaftExtentMm = shaftExtentMm,
             voidFill = voidFill,
             linerTitle = (strip as? UndercutStrip.LinerStrip)?.let { linerTitles[it.linerId] },
@@ -453,8 +459,9 @@ private fun drawUndercutOalLine(
         c.drawLine(x0, oalLineY, mid - gapHalf, oalLineY, dim)
         c.drawLine(mid + gapHalf, oalLineY, x1, oalLineY, dim)
     } else {
-        val label = if (unit == UnitSystem.INCHES) "OAL: ${"%.4f".format(oalMm / 25.4f)}\""
-        else "OAL: ${"%.2f".format(oalMm)} mm"
+        // Same formatter as the schematic's OAL rail — inches print as mixed fractions
+        // (falling back to 3 decimals), never raw 4-decimal.
+        val label = "OAL: ${formatLenDim(oalMm.toDouble(), unit)}"
         val lw = text.measureText(label)
         val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
         if ((mid - gapHalf) - x0 >= arrowLen + 2f) {
@@ -633,7 +640,8 @@ private fun notchFloorDiaMm(segs: List<SurfaceSeg>, cut: NotchCut): Float =
 /**
  * Draws every notch in [cuts] against the local outer surface [segs]: the removed material
  * is painted out in the page colour from the surface polyline down to the floor (mirrored
- * about the centreline), then the shoulders and floor are outlined on top. Portions where
+ * about the centreline), then each region is outlined as a closed box — the top edge along
+ * the surface polyline, a shoulder at each end, and the floor line. Portions where
  * the surface is already at or below the floor yield no region and draw nothing —
  * `notchProfiles` owns that rule, so a cut running off a liner onto smaller stock simply
  * stops at the liner edge.
@@ -677,7 +685,8 @@ private fun drawUndercutNotches(
             // Void fill, top half then its mirror below the centreline. The surface
             // boundary overdraws OUTWARD by the outline stroke width — the surface
             // stroke is centred on that line, and a fill stopping exactly there would
-            // leave half the stroke as a line across the notch mouth (on-device report).
+            // leave half of the *component's* stroke ragged across the mouth. The notch's
+            // own top edge below then closes the figure at the notch outline weight.
             val od = outline.strokeWidth
             listOf(-1f, 1f).forEach { sign ->
                 val path = Path()
@@ -691,12 +700,21 @@ private fun drawUndercutNotches(
                 c.drawPath(path, voidFill)
             }
 
-            // Outline: the two shoulders and the floor, top and bottom. A shoulder whose
-            // surface has run down to meet the floor (a taper dropping into the cut)
-            // degenerates to zero height and simply disappears.
+            // Outline: a closed box — the top edge along the surface polyline, the two
+            // shoulders and the floor, top and bottom. Following the polyline (rather than
+            // a straight chord) steps the top edge where the cut crosses a liner edge, so
+            // every section reads as a complete rectangle — the hand-sketch convention
+            // (on-device request). A shoulder whose surface has run down to meet the floor
+            // (a taper dropping into the cut) degenerates to zero height and disappears.
             val rSurf0 = rAt(np.surface.first().diaMm)
             val rSurf1 = rAt(np.surface.last().diaMm)
             listOf(-1f, 1f).forEach { sign ->
+                val top = Path()
+                np.surface.forEachIndexed { i, sp ->
+                    val y = cy + sign * rAt(sp.diaMm)
+                    if (i == 0) top.moveTo(xAt(sp.xMm), y) else top.lineTo(xAt(sp.xMm), y)
+                }
+                c.drawPath(top, outline)
                 c.drawLine(xStart, cy + sign * rSurf0, xStart, cy + sign * rFloor, outline)
                 c.drawLine(xStart, cy + sign * rFloor, xEnd, cy + sign * rFloor, outline)
                 c.drawLine(xEnd, cy + sign * rFloor, xEnd, cy + sign * rSurf1, outline)

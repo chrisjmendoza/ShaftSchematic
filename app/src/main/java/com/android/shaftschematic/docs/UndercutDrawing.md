@@ -211,9 +211,28 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   Region topology still comes from `notchProfiles` at the TRUE floor — a cut that never
   touched the neighboring stock must not draw into it; only the floor line and shoulders
   deepen. Ø callout leaders anchor on the drawn floor; labels print the stored value.
-  Display-only: canonical values and printed Ø are untouched (golden rule). The notch
-  **mouth is open**: the void fill overdraws the surface stroke across the cut, so no
-  outline runs across the top of an undercut in either draw site.
+  Display-only: canonical values and printed Ø are untouched (golden rule). Each notch region
+  is outlined as a **complete box**: top edge along the region's surface polyline, a shoulder
+  at each end, the floor line — mirrored top and bottom, all at the notch outline's
+  weight/colour. The top edge follows the polyline, so a cut crossing a liner edge steps over
+  it instead of closing on a straight chord. The void fill still overdraws the *component's*
+  surface stroke outward by one stroke width (it would otherwise leave half that stroke ragged
+  across the mouth); the notch's own top edge is what closes the figure. On-device request,
+  citing the feature's hand sketch, where every cut section is a complete rectangle. Same
+  construction in every draw site; the detail overlay's draft dash + status colour apply to the
+  top edge too, so a draft reads as a dashed box.
+
+  **Grey liner, white cuts** (on-device request): a real detail strip **always** shades its
+  liner span — the composer's `stripLinerFill`, not gated on `pdfPrefs.shadedLiners` (bodies and
+  tapers stay pref-driven; the blank template's edges-only started strip draws no liner span, so
+  it stays clear paper) — and the notch voids stay pure white, so the boxed sections pop. Both
+  canvases (route overview, detail overlay) paint onto a hard-coded white sheet, so their
+  component fills are fixed black-alpha rather than theme colours: a dark-theme tint
+  (near-white `onSurface`/`tertiary`) would wash into the paper and leave the white voids nothing
+  to read against. The liner uses the PDF shade fill's weight (`argb 40` ≈ 0.16 alpha); the
+  overview's bodies/tapers stay lighter (0.08) so the liner still reads as the outer surface. The
+  voids stay pure white in both themes because the sheet itself is white in both — no dark-theme
+  glare is introduced by the void that isn't already the sheet's.
 
 - **Strips — liner-anchored vs free windows.** The zoomed-view unit consumed by the overview
   affordances, the detail overlay, and the PDF is a sealed `UndercutStrip`, not a bare
@@ -722,7 +741,8 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
 - **A dirty draft is never silently committed OR silently dropped** — leaving a card commits it
   only while it clears `undercutConfirmIssue`; a blocked draft always asks (Keep editing /
   Discard), and dismissing the question keeps the edit.
-- **Draw-both-sites, in lockstep**: the notch (void fill + shoulders + floor, cut against the
+- **Draw-both-sites, in lockstep**: the notch (void fill + boxed outline — surface-polyline top
+  edge, shoulders, floor — cut against the
   local outer-surface envelope) renders identically in `UndercutRoute`/
   `UndercutWindowDetailOverlay` (canvas) and `UndercutPdfComposer` (PDF), from the one shared
   pure pipeline: `clampUndercutSpan` → `effectiveNotchDiaMm(diaMm, minOuterDiaOver(segs, …))` →
