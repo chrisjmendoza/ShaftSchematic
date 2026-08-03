@@ -6,6 +6,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-03 (undercut editor — preview window extends over liner-edge overhang)
+
+### fix(undercut): detail overlay widens live for a draft overhanging the liner
+
+On-device report: a cut edited past the liner's AFT edge (rare but legal) poked outside
+the zoomed strip's drawing, which stayed pinned to the stored record's range until
+Confirm. The overlay's window now follows what is **previewed** — the stored cuts with the
+live draft substituted — via `undercutPreviewDrawRange` (`geom/UndercutMath.kt`): widened,
+never narrowed, with the standard 1" pad of neighbour stock beyond the overhang, exactly
+the range a confirmed overhang gets when the strip rebuilds. PDF strips are unaffected
+(they only see confirmed cuts, already extended by `linerStripFor`). Pinned in
+`UndercutMathTest`.
+
+---
+
 ## 2026-08-03 (undercut editor — Length edits no longer rewrite the Distance field)
 
 ### fix(undercut): golden rule — length edit keeps the authored Distance fixed

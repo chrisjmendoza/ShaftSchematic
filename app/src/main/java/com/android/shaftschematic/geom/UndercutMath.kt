@@ -396,6 +396,30 @@ fun linerStripFor(
 }
 
 /**
+ * The draw range a detail overlay should render given the spans it is PREVIEWING — the
+ * stored cuts with any live draft substituted: the strip's own range, **widened, never
+ * narrowed**, so a cut edited past the strip's stored range (an overhang past a liner
+ * edge, mid-edit) stays inside the drawing with the standard [padMm] of neighbour stock
+ * beyond it — the same range a confirmed overhang gets when [linerStripFor] /
+ * [clusterUndercuts] rebuild the strip on commit. Never narrowing keeps the window stable
+ * while a draft shrinks a cut that had extended it; the rebuild on confirm re-tightens.
+ * Clamped to `[0, oalMm]`. Spans must already be render-clamped ([clampUndercutSpan]).
+ */
+fun undercutPreviewDrawRange(
+    strip: UndercutStrip,
+    previewSpans: List<UndercutSpanMm>,
+    oalMm: Float,
+    padMm: Float = UNDERCUT_WINDOW_PAD_MM,
+): Pair<Float, Float> {
+    val hi = oalMm.coerceAtLeast(0f)
+    val spansMin = previewSpans.minOfOrNull { it.startMm }
+        ?: return strip.drawStartMm to strip.drawEndMm
+    val spansMax = previewSpans.maxOf { it.endMm }
+    return min(strip.drawStartMm, spansMin - padMm).coerceIn(0f, hi) to
+        max(strip.drawEndMm, spansMax + padMm).coerceIn(0f, hi)
+}
+
+/**
  * Group cuts into detail strips: every cut overlapping a liner joins that liner's
  * [UndercutStrip.LinerStrip] (one strip per liner with ≥1 cut, covering the whole liner);
  * the remaining bare-shaft cuts cluster into [UndercutStrip.FreeStrip] windows via

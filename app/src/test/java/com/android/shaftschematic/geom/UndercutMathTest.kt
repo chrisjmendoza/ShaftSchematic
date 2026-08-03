@@ -122,6 +122,44 @@ class UndercutMathTest {
         assertEquals(canonical + 304.8f, newCanonical + 254f, 1e-3f)
     }
 
+    // ── Preview draw range (overlay window follows the previewed spans) ──
+
+    @Test
+    fun `preview range is the strip range while spans stay inside it`() {
+        val liner = UndercutLinerSpan("ln", 600f, 1000f)
+        val stored = listOf(UndercutSpanMm("u1", 700f, 760f))
+        val strip = linerStripFor(liner, stored, oalMm = 2000f)
+        val (start, end) = undercutPreviewDrawRange(strip, stored, oalMm = 2000f)
+        assertEquals(strip.drawStartMm, start, 1e-4f)
+        assertEquals(strip.drawEndMm, end, 1e-4f)
+    }
+
+    @Test
+    fun `draft overhanging the liner edge widens the preview range with the standard pad`() {
+        val liner = UndercutLinerSpan("ln", 600f, 1000f)
+        val strip = linerStripFor(liner, listOf(UndercutSpanMm("u1", 700f, 760f)), oalMm = 2000f)
+        // The draft slid the cut past the liner's AFT edge; the stored strip hasn't rebuilt.
+        val preview = listOf(UndercutSpanMm("u1", 575f, 635f))
+        val (start, end) = undercutPreviewDrawRange(strip, preview, oalMm = 2000f)
+        assertEquals(575f - UNDERCUT_WINDOW_PAD_MM, start, 1e-4f)
+        assertEquals(strip.drawEndMm, end, 1e-4f)
+    }
+
+    @Test
+    fun `preview range clamps to the shaft and never narrows`() {
+        val liner = UndercutLinerSpan("ln", 600f, 1000f)
+        val strip = linerStripFor(liner, listOf(UndercutSpanMm("u1", 700f, 760f)), oalMm = 2000f)
+        // Overhang near the shaft's AFT end: pad would go negative — clamp to 0.
+        val (start, _) = undercutPreviewDrawRange(
+            strip, listOf(UndercutSpanMm("u1", 10f, 50f)), oalMm = 2000f,
+        )
+        assertEquals(0f, start, 1e-4f)
+        // No spans at all (every preview span clamped away): the strip range, unchanged.
+        val (s2, e2) = undercutPreviewDrawRange(strip, emptyList(), oalMm = 2000f)
+        assertEquals(strip.drawStartMm, s2, 1e-4f)
+        assertEquals(strip.drawEndMm, e2, 1e-4f)
+    }
+
     // ── Validation ──
 
     @Test

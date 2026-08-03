@@ -254,6 +254,14 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   - `linerStripFor(liner, assignedSpans, oalMm, padMm)` — builds one `LinerStrip` for a liner
     and its assigned cuts (`assignedSpans` may be empty — used to zoom an undercut-free liner
     for authoring, in which case the chain/draw range is just the liner's own span, padded).
+  - `undercutPreviewDrawRange(strip, previewSpans, oalMm, padMm)` — the range the **detail
+    overlay** actually renders: the strip's draw range **widened, never narrowed**, to hold the
+    previewed spans (stored cuts with the live draft substituted). A draft edited past the
+    strip's stored range — a cut overhanging a liner edge mid-edit (on-device report) — stays
+    inside the drawing with the standard pad beyond it, the same range a confirmed overhang
+    gets when the strip rebuilds on commit; never narrowing keeps the window stable while a
+    draft shrinks a cut that had extended it. PDF strips don't need this (they only ever see
+    confirmed cuts, which `linerStripFor`/`clusterUndercuts` already extend for).
   - `buildUndercutStrips(spans, liners, oalMm, gapMm, padMm)` — every cut overlapping a liner
     joins that liner's `LinerStrip` (one strip per liner holding ≥1 cut); the remaining
     bare-shaft cuts cluster into `FreeStrip`s via `clusterUndercuts`. Result sorted aft → fwd by

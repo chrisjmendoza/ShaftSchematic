@@ -93,6 +93,7 @@ import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.undercutCanonicalForNewLength
 import com.android.shaftschematic.geom.undercutOverlapIssue
+import com.android.shaftschematic.geom.undercutPreviewDrawRange
 import com.android.shaftschematic.geom.undercutSpanIssue
 import com.android.shaftschematic.geom.undercutStartToCanonicalMm
 import com.android.shaftschematic.model.ShaftSpec
@@ -199,8 +200,6 @@ fun UndercutWindowDetailOverlay(
 ) {
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
     val segs = remember(resolvedComponents) { surfaceSegsFrom(resolvedComponents) }
-    val drawStartMm = strip.drawStartMm
-    val drawEndMm = strip.drawEndMm
 
     // Every liner on the shaft, in strip space — the pool the cards' liner references draw from.
     val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }
@@ -264,6 +263,13 @@ fun UndercutWindowDetailOverlay(
             val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
+    }
+    // The window follows what is PREVIEWED, not just what is stored: a draft edited past the
+    // strip's stored range (a cut overhanging the liner edge mid-edit — on-device report)
+    // widens the drawing live, with the standard pad of neighbour stock beyond it — the same
+    // range a confirmed overhang gets when the strip rebuilds. Never narrows while editing.
+    val (drawStartMm, drawEndMm) = remember(strip, spans, oalMm) {
+        undercutPreviewDrawRange(strip, spans, oalMm)
     }
     // Confirm-blocking status of the previewed draft: its notch draws dashed in the selection
     // color while valid, in the error color while this is non-null, and the status pill states
