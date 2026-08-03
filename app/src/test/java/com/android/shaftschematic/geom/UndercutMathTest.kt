@@ -75,6 +75,91 @@ class UndercutMathTest {
         assertEquals(910f, canonical, 1e-4f)
     }
 
+    // ── Length edits keep the authored Distance fixed ──
+
+    @Test
+    fun `length edit keeps the displayed distance unchanged for all references`() {
+        for (ref in UndercutReference.entries) {
+            val canonical = undercutStartToCanonicalMm(
+                ref, enteredMm = 127f, lengthMm = 304.8f, aftSetXMm = 50f, fwdSetXMm = 1900f,
+                linerStartMm = 600f, linerEndMm = 1000f,
+            )
+            val newCanonical = undercutCanonicalForNewLength(
+                ref, canonical, oldLengthMm = 304.8f, newLengthMm = 254f,
+                aftSetXMm = 50f, fwdSetXMm = 1900f, linerStartMm = 600f, linerEndMm = 1000f,
+            )
+            val redisplayed = canonicalToUndercutStartMm(
+                ref, newCanonical, lengthMm = 254f, aftSetXMm = 50f, fwdSetXMm = 1900f,
+                linerStartMm = 600f, linerEndMm = 1000f,
+            )
+            assertEquals("ref=$ref", 127f, redisplayed, 1e-3f)
+        }
+    }
+
+    @Test
+    fun `length edit under an AFT reference leaves canonical untouched`() {
+        for (ref in listOf(UndercutReference.AFT_SET, UndercutReference.LINER_AFT)) {
+            val newCanonical = undercutCanonicalForNewLength(
+                ref, canonicalStartMm = 700f, oldLengthMm = 60f, newLengthMm = 90f,
+                aftSetXMm = 50f, fwdSetXMm = 1900f, linerStartMm = 600f, linerEndMm = 1000f,
+            )
+            assertEquals("ref=$ref", 700f, newCanonical, 1e-4f)
+        }
+    }
+
+    @Test
+    fun `length edit under a FWD reference pins the cut's FWD end`() {
+        // The on-device report's shape: liner-FWD reference, Distance 5 units, Length 12 -> 10.
+        // The FWD end (linerEnd - distance) must stay put; the AFT start absorbs the delta.
+        val canonical = undercutStartToCanonicalMm(
+            UndercutReference.LINER_FWD, enteredMm = 127f, lengthMm = 304.8f,
+            aftSetXMm = 0f, fwdSetXMm = 0f, linerStartMm = 600f, linerEndMm = 1000f,
+        )
+        val newCanonical = undercutCanonicalForNewLength(
+            UndercutReference.LINER_FWD, canonical, oldLengthMm = 304.8f, newLengthMm = 254f,
+            aftSetXMm = 0f, fwdSetXMm = 0f, linerStartMm = 600f, linerEndMm = 1000f,
+        )
+        assertEquals(canonical + 304.8f, newCanonical + 254f, 1e-3f)
+    }
+
+    // ── Preview draw range (overlay window follows the previewed spans) ──
+
+    @Test
+    fun `preview range is the strip range while spans stay inside it`() {
+        val liner = UndercutLinerSpan("ln", 600f, 1000f)
+        val stored = listOf(UndercutSpanMm("u1", 700f, 760f))
+        val strip = linerStripFor(liner, stored, oalMm = 2000f)
+        val (start, end) = undercutPreviewDrawRange(strip, stored, oalMm = 2000f)
+        assertEquals(strip.drawStartMm, start, 1e-4f)
+        assertEquals(strip.drawEndMm, end, 1e-4f)
+    }
+
+    @Test
+    fun `draft overhanging the liner edge widens the preview range with the standard pad`() {
+        val liner = UndercutLinerSpan("ln", 600f, 1000f)
+        val strip = linerStripFor(liner, listOf(UndercutSpanMm("u1", 700f, 760f)), oalMm = 2000f)
+        // The draft slid the cut past the liner's AFT edge; the stored strip hasn't rebuilt.
+        val preview = listOf(UndercutSpanMm("u1", 575f, 635f))
+        val (start, end) = undercutPreviewDrawRange(strip, preview, oalMm = 2000f)
+        assertEquals(575f - UNDERCUT_WINDOW_PAD_MM, start, 1e-4f)
+        assertEquals(strip.drawEndMm, end, 1e-4f)
+    }
+
+    @Test
+    fun `preview range clamps to the shaft and never narrows`() {
+        val liner = UndercutLinerSpan("ln", 600f, 1000f)
+        val strip = linerStripFor(liner, listOf(UndercutSpanMm("u1", 700f, 760f)), oalMm = 2000f)
+        // Overhang near the shaft's AFT end: pad would go negative — clamp to 0.
+        val (start, _) = undercutPreviewDrawRange(
+            strip, listOf(UndercutSpanMm("u1", 10f, 50f)), oalMm = 2000f,
+        )
+        assertEquals(0f, start, 1e-4f)
+        // No spans at all (every preview span clamped away): the strip range, unchanged.
+        val (s2, e2) = undercutPreviewDrawRange(strip, emptyList(), oalMm = 2000f)
+        assertEquals(strip.drawStartMm, s2, 1e-4f)
+        assertEquals(strip.drawEndMm, e2, 1e-4f)
+    }
+
     // ── Validation ──
 
     @Test

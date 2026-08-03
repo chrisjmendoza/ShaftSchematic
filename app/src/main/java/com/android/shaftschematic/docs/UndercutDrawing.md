@@ -254,6 +254,14 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   - `linerStripFor(liner, assignedSpans, oalMm, padMm)` — builds one `LinerStrip` for a liner
     and its assigned cuts (`assignedSpans` may be empty — used to zoom an undercut-free liner
     for authoring, in which case the chain/draw range is just the liner's own span, padded).
+  - `undercutPreviewDrawRange(strip, previewSpans, oalMm, padMm)` — the range the **detail
+    overlay** actually renders: the strip's draw range **widened, never narrowed**, to hold the
+    previewed spans (stored cuts with the live draft substituted). A draft edited past the
+    strip's stored range — a cut overhanging a liner edge mid-edit (on-device report) — stays
+    inside the drawing with the standard pad beyond it, the same range a confirmed overhang
+    gets when the strip rebuilds on commit; never narrowing keeps the window stable while a
+    draft shrinks a cut that had extended it. PDF strips don't need this (they only ever see
+    confirmed cuts, which `linerStripFor`/`clusterUndercuts` already extend for).
   - `buildUndercutStrips(spans, liners, oalMm, gapMm, padMm)` — every cut overlapping a liner
     joins that liner's `LinerStrip` (one strip per liner holding ≥1 cut); the remaining
     bare-shaft cuts cluster into `FreeStrip`s via `clusterUndercuts`. Result sorted aft → fwd by
@@ -462,7 +470,15 @@ Each card:
   that could never be confirmed has no business entering the draft) while the **overlap** check
   is confirm-time only — a cut is legitimately moved past a neighbour by two separate field
   edits.
-- **Length** field: validator runs `undercutSpanIssue` against the draft's canonical start.
+- **Length** field: a length edit keeps the **authored Distance** fixed — the commit re-derives
+  canonical `startFromAftMm` from the active reference at the new length
+  (`undercutCanonicalForNewLength`, the conversion pair composed). Identity under an AFT-flavored
+  reference; under a FWD-flavored one the cut's FWD end (the datum the Distance was authored
+  against) stays pinned and the cut grows/shrinks AFT-ward. Committing the new length against
+  the old canonical would rewrite the displayed Distance by the length delta (on-device report:
+  Distance 5 / Length 12 under Liner FWD became Distance 7 after shortening to 10) — a
+  golden-rule violation. The "canonical never moves" rule covers reference *switching* only.
+  The validator runs `undercutSpanIssue` against the same recomputed canonical.
 - **Measured Ø** field: **no validator** — any parseable value ≥ 0 enters the draft verbatim
   (golden rule). Initial display is blank when `diaMm == 0` (unentered), else the formatted value.
   Because the underlying `NumericInputField` requires `parseValid` to accept the text to commit
@@ -694,15 +710,20 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   - **title at the bottom** (`buildUndercutStripTitle(linerTitle, anchorLabel)`): a `LinerStrip`
     prints `"<liner title> — <dist> FROM AFT/FWD S.E.T."` (e.g. `"AFT Liner — 250.0 FROM AFT
     S.E.T."`) — the same `name — anchor` construction the wear sheet uses for that liner, so it
-    reads identically wherever the liner is named. A `FreeStrip` has nothing to name (a
-    bare-shaft span carries no shop identity) and prints the anchor alone. The S.E.T. is chosen
-    by proximity (`undercutAnchorFor`: strip midpoint vs SET-to-SET midpoint), distance measured
-    to the strip's **near** shoulder, title aligned toward its SET (left for AFT, right for
-    FWD) — reported as a magnitude even when the strip sits outboard of its chosen SET. A liner
-    strip with zero drawable cuts (every assigned span clamped away) still prints just the liner
-    name, with no anchor. Blank mode: a writing rule + both directions printed for the
-    machinist to circle one, always left-aligned (a write-in sheet has no presumed measurement
-    direction).
+    reads identically wherever the liner is named. The distance is the **liner's own**
+    edge-to-SET datum (`buildLinerAnchorLabel` + `linerAnchorForPdf`, the exact figure the
+    schematic and wear sheet print for this liner), **never a cut's shoulder** — a title that
+    names the liner but measures to a cut reads as the liner sitting at the cut's position
+    (on-device report: a cut 11.5 in into a liner 20 in from the AFT SET printed the liner as
+    31.5 in out; cuts are located on the chain rail, from the liner's edges). A `FreeStrip`
+    has nothing to name (a bare-shaft span carries no shop identity) and prints the anchor
+    alone: its S.E.T. is chosen by proximity (`undercutAnchorFor`: strip midpoint vs
+    SET-to-SET midpoint), distance measured to the strip's **near** shoulder — reported as a
+    magnitude even when the strip sits outboard of its chosen SET. Either way the title aligns
+    toward its SET (left for AFT, right for FWD). A liner strip with zero drawable cuts (every
+    assigned span clamped away) still prints the liner name and its anchor. Blank mode: a
+    writing rule + both directions printed for the machinist to circle one, always
+    left-aligned (a write-in sheet has no presumed measurement direction).
 - **Blank/template mode** (`blankValues = true`): `effectiveRecord = UndercutRecord()` — the
   record is dropped before the strips are built (matching the wear sheet's decision that blank
   templates carry no recorded stations), so the page comes out as **started liner strips** with

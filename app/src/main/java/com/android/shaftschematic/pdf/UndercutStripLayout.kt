@@ -555,12 +555,19 @@ data class UndercutAnchor(val side: UndercutAnchorSide, val distanceMm: Float) {
 }
 
 /**
- * Picks the S.E.T. a strip's cuts are dimensioned from and measures to the **near**
- * shoulder — the shop sketch's long anchor dimension. The choice is by proximity: cuts
- * whose midpoint falls in the AFT half of the SET-to-SET span anchor to the AFT SET and are
- * measured from the first shoulder; otherwise they anchor to the FWD SET and are measured
+ * Picks the S.E.T. a **bare-shaft** strip's cuts are dimensioned from and measures to the
+ * **near** shoulder — the shop sketch's long anchor dimension. The choice is by proximity:
+ * cuts whose midpoint falls in the AFT half of the SET-to-SET span anchor to the AFT SET and
+ * are measured from the first shoulder; otherwise they anchor to the FWD SET and are measured
  * from the last shoulder (`linerAnchorForPdf`'s idea, applied to the cut run instead of a
  * liner).
+ *
+ * Bare-shaft (`FreeStrip`) titles only. A liner strip's title anchor is the LINER's own
+ * edge-to-SET datum (`buildLinerAnchorLabel` — the schematic's and wear sheet's figure),
+ * never a cut's shoulder: measuring to the cut while the title names the liner reads as the
+ * liner sitting at the cut's position (on-device report — a cut 11.5 in into a liner 20 in
+ * from the AFT SET printed the liner as 31.5 in out). Cuts inside a liner are located by the
+ * chain rail, from the liner's edges.
  *
  * The distance is reported as a magnitude: cuts sitting outboard of their SET (possible —
  * an undercut may be recorded anywhere on the shaft, while the SETs sit at the tapers)

@@ -103,6 +103,38 @@ fun canonicalToUndercutStartMm(
     UndercutReference.LINER_FWD -> linerEndMm - canonicalStartMm - lengthMm
 }
 
+/**
+ * Canonical start after a LENGTH edit that must keep the authored Distance fixed: project
+ * the current canonical to the displayed distance under [reference] at the OLD length,
+ * then back to canonical at the NEW length.
+ *
+ * Under an AFT-flavored reference this is the identity — the distance doesn't involve the
+ * length. Under a FWD-flavored one it pins the cut's FWD end (the datum the distance was
+ * authored against) and grows/shrinks the cut AFT-ward. Committing a new length while
+ * keeping the old canonical would instead slide the FWD end and rewrite the displayed
+ * Distance by the length delta — a golden-rule violation (on-device report: Distance 5 /
+ * Length 12 under a liner-FWD reference became Distance 7 after shortening Length to 10).
+ * The "canonical never moves" rule covers reference *switching* (display re-projection),
+ * not length edits.
+ */
+fun undercutCanonicalForNewLength(
+    reference: UndercutReference,
+    canonicalStartMm: Float,
+    oldLengthMm: Float,
+    newLengthMm: Float,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+    linerStartMm: Float = 0f,
+    linerEndMm: Float = 0f,
+): Float {
+    val distanceMm = canonicalToUndercutStartMm(
+        reference, canonicalStartMm, oldLengthMm, aftSetXMm, fwdSetXMm, linerStartMm, linerEndMm,
+    )
+    return undercutStartToCanonicalMm(
+        reference, distanceMm, newLengthMm, aftSetXMm, fwdSetXMm, linerStartMm, linerEndMm,
+    )
+}
+
 // ── Validation ──
 
 /**
@@ -361,6 +393,30 @@ fun linerStripFor(
         chainEndMm = chainEnd.coerceIn(0f, hi),
         undercutIds = assignedSpans.sortedBy { it.startMm }.map { it.id },
     )
+}
+
+/**
+ * The draw range a detail overlay should render given the spans it is PREVIEWING — the
+ * stored cuts with any live draft substituted: the strip's own range, **widened, never
+ * narrowed**, so a cut edited past the strip's stored range (an overhang past a liner
+ * edge, mid-edit) stays inside the drawing with the standard [padMm] of neighbour stock
+ * beyond it — the same range a confirmed overhang gets when [linerStripFor] /
+ * [clusterUndercuts] rebuild the strip on commit. Never narrowing keeps the window stable
+ * while a draft shrinks a cut that had extended it; the rebuild on confirm re-tightens.
+ * Clamped to `[0, oalMm]`. Spans must already be render-clamped ([clampUndercutSpan]).
+ */
+fun undercutPreviewDrawRange(
+    strip: UndercutStrip,
+    previewSpans: List<UndercutSpanMm>,
+    oalMm: Float,
+    padMm: Float = UNDERCUT_WINDOW_PAD_MM,
+): Pair<Float, Float> {
+    val hi = oalMm.coerceAtLeast(0f)
+    val spansMin = previewSpans.minOfOrNull { it.startMm }
+        ?: return strip.drawStartMm to strip.drawEndMm
+    val spansMax = previewSpans.maxOf { it.endMm }
+    return min(strip.drawStartMm, spansMin - padMm).coerceIn(0f, hi) to
+        max(strip.drawEndMm, spansMax + padMm).coerceIn(0f, hi)
 }
 
 /**

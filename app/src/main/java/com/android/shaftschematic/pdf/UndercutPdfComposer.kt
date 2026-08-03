@@ -350,6 +350,13 @@ fun composeUndercutPdf(
     // ── Detail strips, one per liner / bare-shaft cluster ────────────────────
     onPage.forEachIndexed { i, strip ->
         val cell = stripCells[i]
+        // A liner strip's title anchor is the LINER's own edge-to-SET datum — the same
+        // figure the schematic and the wear sheet print for this liner — never a cut's
+        // shoulder (on-device report: a cut 11.5 in into a liner 20 in from the AFT SET
+        // printed the liner as 31.5 in out). Cuts are located on the chain rail, measured
+        // from the liner's edges.
+        val stripLiner = (strip as? UndercutStrip.LinerStrip)
+            ?.let { ls -> docSpec.liners.firstOrNull { it.id == ls.linerId } }
         drawUndercutDetailStrip(
             c, docSpec, surfaceSegs, strip,
             strip.undercutIds.mapNotNull { id -> undercutById[id] },
@@ -360,6 +367,11 @@ fun composeUndercutPdf(
             shaftExtentMm = shaftExtentMm,
             voidFill = voidFill,
             linerTitle = (strip as? UndercutStrip.LinerStrip)?.let { linerTitles[it.linerId] },
+            linerAnchorLabel = stripLiner
+                ?.let { buildLinerAnchorLabel(docSpec, it, setPositions, unit) }
+                ?.takeIf { it.isNotBlank() },
+            linerAnchorAlignRight = stripLiner
+                ?.let { linerAnchorForPdf(docSpec, it) } == LinerAnchor.FWD_SET,
             // A started strip is a write-in figure whatever the caller asked for: its title is
             // the circle-one anchor rule, and it has no recorded value to print anywhere.
             blankValues = blankValues || startedPage,
@@ -782,6 +794,15 @@ private fun drawUndercutDetailStrip(
     shaftExtentMm: Float,
     voidFill: Paint,
     linerTitle: String?,
+    /**
+     * The liner's own edge-to-SET anchor label ("<dist> FROM … S.E.T.") for a liner strip —
+     * `buildLinerAnchorLabel`'s text, identical to the schematic's and wear sheet's figure
+     * for this liner. Null on a bare-shaft strip (no liner to reference), which titles
+     * itself from its cuts' near shoulder instead ([undercutAnchorFor]).
+     */
+    linerAnchorLabel: String?,
+    /** Direction cue for [linerAnchorLabel]: right-align a FWD-SET-referenced title. */
+    linerAnchorAlignRight: Boolean,
     blankValues: Boolean,
     startedStrip: Boolean,
     linerSpanBlank: Boolean,
@@ -972,7 +993,24 @@ private fun drawUndercutDetailStrip(
             ruleWidth = BLANK_DIM_GAP_PT, maxRight = stripRight,
         )
         c.drawText(WEAR_BLANK_ANCHOR_SUFFIX, afterRule - 8f, titleBaselineY, titleText)
+    } else if (linerAnchorLabel != null) {
+        // Liner strip: the anchor locates the LINER (its near edge from its SET), never a
+        // cut — a cut's position is read off the chain rail, from the liner's edges.
+        val label = ellipsizeToWidth(
+            buildUndercutStripTitle(linerTitle, linerAnchorLabel),
+            titleText,
+            stripRight - stripLeft,
+        )
+        if (linerAnchorAlignRight) {
+            titleText.textAlign = Paint.Align.RIGHT
+            c.drawText(label, stripRight, titleBaselineY, titleText)
+        } else {
+            titleText.textAlign = Paint.Align.LEFT
+            c.drawText(label, stripLeft, titleBaselineY, titleText)
+        }
     } else if (spans.isNotEmpty()) {
+        // Bare-shaft strip: no liner to reference, so the cut run itself anchors to the
+        // nearer SET, measured to its near shoulder.
         val anchor = undercutAnchorFor(
             firstShoulderMm = spans.first().startMm,
             lastShoulderMm = spans.last().endMm,
@@ -980,7 +1018,7 @@ private fun drawUndercutDetailStrip(
             fwdSetXMm = fwdSetMm,
         )
         val label = ellipsizeToWidth(
-            buildUndercutStripTitle(linerTitle, buildUndercutAnchorLabel(anchor, unit)),
+            buildUndercutStripTitle(null, buildUndercutAnchorLabel(anchor, unit)),
             titleText,
             stripRight - stripLeft,
         )

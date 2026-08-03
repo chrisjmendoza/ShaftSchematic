@@ -91,7 +91,9 @@ import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
+import com.android.shaftschematic.geom.undercutCanonicalForNewLength
 import com.android.shaftschematic.geom.undercutOverlapIssue
+import com.android.shaftschematic.geom.undercutPreviewDrawRange
 import com.android.shaftschematic.geom.undercutSpanIssue
 import com.android.shaftschematic.geom.undercutStartToCanonicalMm
 import com.android.shaftschematic.model.ShaftSpec
@@ -198,8 +200,6 @@ fun UndercutWindowDetailOverlay(
 ) {
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
     val segs = remember(resolvedComponents) { surfaceSegsFrom(resolvedComponents) }
-    val drawStartMm = strip.drawStartMm
-    val drawEndMm = strip.drawEndMm
 
     // Every liner on the shaft, in strip space — the pool the cards' liner references draw from.
     val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }
@@ -263,6 +263,13 @@ fun UndercutWindowDetailOverlay(
             val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
+    }
+    // The window follows what is PREVIEWED, not just what is stored: a draft edited past the
+    // strip's stored range (a cut overhanging the liner edge mid-edit — on-device report)
+    // widens the drawing live, with the standard pad of neighbour stock beyond it — the same
+    // range a confirmed overhang gets when the strip rebuilds. Never narrows while editing.
+    val (drawStartMm, drawEndMm) = remember(strip, spans, oalMm) {
+        undercutPreviewDrawRange(strip, spans, oalMm)
     }
     // Confirm-blocking status of the previewed draft: its notch draws dashed in the selection
     // color while valid, in the error color while this is non-null, and the status pill states
@@ -1334,15 +1341,32 @@ private fun UndercutDraftCard(
                 onDraftChange(draft.copy(startFromAftMm = canonicalMm))
             }
 
+            // A length edit keeps the AUTHORED Distance fixed: canonical start is re-derived
+            // from the active reference at the new length (identity under an AFT reference;
+            // under a FWD reference the cut's FWD end stays pinned and the cut grows/shrinks
+            // AFT-ward). Committing the new length against the old canonical would rewrite
+            // the displayed Distance by the length delta — golden-rule violation (on-device
+            // report). Validation runs against the same recomputed canonical.
+            fun canonicalAtLength(newLenMm: Float): Float = undercutCanonicalForNewLength(
+                draft.reference, draft.startFromAftMm, draft.lengthMm, newLenMm,
+                aftSetXMm, fwdSetXMm, refLinerStartMm, refLinerEndMm,
+            )
             WearNum(
                 label = "Length (${abbr(unit)})",
                 initialDisplay = disp(draft.lengthMm, unit),
                 validator = { raw ->
                     val enteredLenMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
-                    undercutSpanIssue(draft.startFromAftMm, enteredLenMm, oalMm)
+                    undercutSpanIssue(canonicalAtLength(enteredLenMm), enteredLenMm, oalMm)
                 },
             ) { s ->
-                toMmOrNull(s, unit)?.let { onDraftChange(draft.copy(lengthMm = it)) }
+                toMmOrNull(s, unit)?.let { newLenMm ->
+                    onDraftChange(
+                        draft.copy(
+                            startFromAftMm = canonicalAtLength(newLenMm),
+                            lengthMm = newLenMm,
+                        ),
+                    )
+                }
             }
 
             // Measured Ø — a measurement, so any parseable value ≥ 0 lands **verbatim**

@@ -6,6 +6,57 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-03 (undercut editor — preview window extends over liner-edge overhang)
+
+### fix(undercut): detail overlay widens live for a draft overhanging the liner
+
+On-device report: a cut edited past the liner's AFT edge (rare but legal) poked outside
+the zoomed strip's drawing, which stayed pinned to the stored record's range until
+Confirm. The overlay's window now follows what is **previewed** — the stored cuts with the
+live draft substituted — via `undercutPreviewDrawRange` (`geom/UndercutMath.kt`): widened,
+never narrowed, with the standard 1" pad of neighbour stock beyond the overhang, exactly
+the range a confirmed overhang gets when the strip rebuilds. PDF strips are unaffected
+(they only see confirmed cuts, already extended by `linerStripFor`). Pinned in
+`UndercutMathTest`.
+
+---
+
+## 2026-08-03 (undercut editor — Length edits no longer rewrite the Distance field)
+
+### fix(undercut): golden rule — length edit keeps the authored Distance fixed
+
+On-device report (step-by-step screenshots): with the Distance authored against Liner FWD,
+shortening Length 12 → 10 rewrote the Distance field 5 → 7. The displayed distance under a
+FWD-flavored reference is `fwdRef − canonicalStart − length`, and the Length commit held
+canonical `startFromAftMm` fixed — so the derived Distance absorbed the length delta,
+rewriting a typed value. The Length field now re-derives canonical from the active
+reference at the new length (`undercutCanonicalForNewLength` in `geom/UndercutMath.kt`,
+the existing conversion pair composed): the authored Distance never moves, the cut's FWD
+end stays pinned where it was located, and the cut grows/shrinks AFT-ward. Exact no-op
+under AFT-flavored references. The Length validator now checks the recomputed canonical
+(it previously validated the wrong resulting span under FWD references). Pinned in
+`UndercutMathTest`; "canonical never moves" clarified (reference switching only) in
+`CLAUDE.md` + `docs/UndercutDrawing.md`.
+
+---
+
+## 2026-08-03 (undercut sheet — liner strip titles locate the liner, not the cut)
+
+### fix(undercut): liner strip anchor is the liner's own edge-to-SET datum
+
+On-device report: a liner 20" from the AFT S.E.T. with its first cut 11.5" in from the
+liner edge printed as "AFT Liner — 31.5" FROM AFT S.E.T." — the title named the liner but
+measured to the cut's near shoulder, adding the two figures. A liner strip's title now
+carries the **liner's own** location (`buildLinerAnchorLabel` + `linerAnchorForPdf` — the
+identical number the schematic and wear sheet print for that liner, chosen from the same
+SET), and cuts stay located by the strip's chain rail, measured from the liner's edges
+(11.5" in this example). Bare-shaft strips keep the cut-proximity anchor
+(`undercutAnchorFor`) — there is no liner to reference. A liner strip whose cuts all clamp
+away now also prints its anchor, not just the bare name. SVG preview mirrors the same
+branch; `docs/UndercutDrawing.md` updated.
+
+---
+
 ## 2026-08-03 (schematic footer — shop notation for common taper rates)
 
 ### feat(pdf): 1:12 and 1:16 print as 1"/ft and ¾"/ft on inch drawings
