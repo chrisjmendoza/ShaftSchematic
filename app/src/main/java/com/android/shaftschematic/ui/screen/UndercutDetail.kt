@@ -85,6 +85,7 @@ import com.android.shaftschematic.geom.deepestUndercutDepthMm
 import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
+import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.minOuterDiaOver
 import com.android.shaftschematic.geom.nearestSetReference
@@ -1816,6 +1817,16 @@ internal fun DrawScope.drawUndercutNotches(
             }
             drawPath(topVoid, color = voidColor)
             drawPath(botVoid, color = voidColor)
+
+            // Remaining core: erased to the sheet colour, then refilled one step LIGHTER
+            // than the liner shade (UNDERCUT_SECTION_FILL_ALPHA — half its alpha) so the
+            // section reads distinct from the liner around it (on-device request).
+            drawRect(voidColor, topLeft = Offset(x0, cy - rFloor), size = Size(x1 - x0, 2f * rFloor))
+            drawRect(
+                Color.Black.copy(alpha = UNDERCUT_SECTION_FILL_ALPHA),
+                topLeft = Offset(x0, cy - rFloor),
+                size = Size(x1 - x0, 2f * rFloor),
+            )
 
             // Step-section outline: full-height faces where the surface stands above the
             // floor, then the floor lines. No lid — the mouth stays open.

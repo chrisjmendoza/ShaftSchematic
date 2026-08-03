@@ -178,6 +178,15 @@ data class NotchProfile(
 const val NOTCH_FACE_MIN_STEP_PX = 0.5f
 
 /**
+ * Alpha (black over the white sheet) filling an undercut section's remaining core — HALF
+ * the liner shade's 40/255, so the cut span reads one step lighter than the liner around
+ * it (on-device request: contrast between the section and the liner). The core is erased
+ * to white first, so this is the section's absolute tone, not a darkening overlay. Shared
+ * by every draw site (canvas overlays, PDF, SVG preview) so screen and print agree.
+ */
+const val UNDERCUT_SECTION_FILL_ALPHA = 20f / 255f
+
+/**
  * Compute the drawable notch region(s) for an undercut spanning `[x0Mm, x1Mm]` with
  * floor Ø [floorDiaMm]. Portions where the surface Ø is at or below the floor (no
  * material to remove — e.g. the span runs off a liner onto a smaller bare shaft, or an
