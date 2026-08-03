@@ -1255,7 +1255,7 @@ internal fun buildFooterEndColumns(
 
     fun taperLines(tp: Taper): List<String> = buildList {
         val ls = letSet(tp)
-        add(line("Rate:") { tp.taperRateText.trim().ifEmpty { rate1toN(tp) } })
+        add(line("Rate:") { printedTaperRate(tp.taperRateText.trim().ifEmpty { rate1toN(tp) }, unit) })
         add(line("L.E.T. (${ls.letFace}):") { formatDiaWithUnit(ls.let.toDouble(), unit) })
         add(line("S.E.T. (${ls.setFace}):") { formatDiaWithUnit(ls.set.toDouble(), unit) })
         add(line("Length:") { formatLenWithUnit(tp.lengthMm.toDouble(), unit) })
@@ -1367,6 +1367,19 @@ private fun letSet(t: Taper): LetSetResult =
         LetSetResult(t.startDiaMm, t.endDiaMm, "AFT", "FWD")
     else
         LetSetResult(t.endDiaMm, t.startDiaMm, "FWD", "AFT")
+
+/**
+ * Shop notation for the two most common tapers on inch drawings: 1:12 prints as 1"/ft and
+ * 1:16 as ¾"/ft — the way the shop hand-writes them. Every other rate keeps its ratio form
+ * (1:10, 1:20, exact 1:N.NNN, or the user's own manual text). Metric drawings keep the
+ * ratio for all rates; inch-per-foot notation would clash with mm dimensions.
+ */
+internal fun printedTaperRate(rateText: String, unit: UnitSystem): String = when {
+    unit != UnitSystem.INCHES -> rateText
+    rateText == "1:12" -> "1\"/ft"
+    rateText == "1:16" -> "¾\"/ft"
+    else -> rateText
+}
 
 // Delegate to the shared auto-rate formatter so a blank-rate taper prints the
 // same snapped/exact text the taper card's Auto mode shows on screen.
