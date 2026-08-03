@@ -6,6 +6,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-03 (undercut editor — body-only cuts default to the nearer S.E.T.)
+
+### feat(undercut): bare-shaft cut's Distance reference picked by SET proximity
+
+On-device request (covering the rare body-only cut): a cut outside any liner has no liner
+edge to measure from, so its Distance defaults to whichever S.E.T. is nearer —
+`nearestSetReference` in `geom/UndercutMath.kt`, midpoint-vs-midpoint, tie breaking AFT.
+The printed bare-shaft strip's title anchor (`undercutAnchorFor`) now delegates its side
+choice to the same helper, so the card's default Distance and the sheet's "FROM … S.E.T."
+always read from the same datum. Liner cuts are unchanged (`LINER_AFT` — the edge the
+machinist is standing at); stored references are never rewritten. Pinned in
+`UndercutMathTest`.
+
+---
+
 ## 2026-08-03 (undercut editor — preview window extends over liner-edge overhang)
 
 ### fix(undercut): detail overlay widens live for a draft overhanging the liner

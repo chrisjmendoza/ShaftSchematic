@@ -360,7 +360,10 @@ top nav group.
 `vm.addUndercut(startFromAftMm, lengthMm, reference = AFT_SET, referenceLinerId = "")` records
 a section at the AFT S.E.T. position (clamped to `[0, oalMm]`), length
 `DEFAULT_UNDERCUT_LENGTH_MM` = 25.4 mm (1 in, clamped to the remaining shaft extent), Ø `0`
-(unentered), and returns the new id. The route's global "Add undercut" button calls it with the
+(unentered), and returns the new id. `AFT_SET` here is consistent with the nearest-SET rule,
+not an exception to it — the seed sits AT the AFT SET, trivially the nearer datum; the
+overlay's free-strip add, whose seed can land anywhere, picks by proximity
+(`nearestSetReference`, see the overlay's Default section). The route's global "Add undercut" button calls it with the
 SET-based defaults **immediately** (it has no card to draft into); the overlay's "Add undercut…"
 button drafts first and calls it only on Confirm (below). Precision comes from the overlay's numeric fields
 afterward, never from the tap — the wear posture: a tap only opens/selects, typing does the
@@ -514,7 +517,13 @@ Default section (`defaultUndercutSpan`): centred in the aft-most free gap of the
 the widest gap left and shortened to fit — so a fresh draft never opens already overlapping a
 recorded cut, which would block confirming before a single value had been typed. Reference
 `LINER_AFT` + that liner's id on a liner strip (so the very first typed Distance reads against
-the datum the machinist is standing at), `AFT_SET` on a free strip.
+the datum the machinist is standing at); on a free strip the **nearer S.E.T.**
+(`nearestSetReference`, `geom/UndercutMath.kt`) — a body-only cut has no liner edge, so the SETs
+are its only datums, and the proximity rule is the same one `undercutAnchorFor` uses (it
+delegates to `nearestSetReference` for the side) to anchor the printed bare-shaft strip's title,
+so the card's default Distance and the sheet's anchor always read from the same SET. Midpoint
+tie breaks AFT. The route's global "Add undercut" seeds AT the AFT SET, where AFT_SET is
+trivially the nearer datum.
 
 ### Overlay canvas contents
 Aft → fwd: a **dimension rail above** — the strip total on the upper line when ≥ 2 undercuts,

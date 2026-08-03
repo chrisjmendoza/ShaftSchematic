@@ -86,6 +86,7 @@ import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.minOuterDiaOver
+import com.android.shaftschematic.geom.nearestSetReference
 import com.android.shaftschematic.geom.normalizedNotchFloorDiaMm
 import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
@@ -833,9 +834,15 @@ fun UndercutWindowDetailOverlay(
                                 note = "",
                                 // A liner strip authors against the datum the machinist is
                                 // standing at, so the very first typed Distance already reads
-                                // from the liner's own AFT edge.
+                                // from the liner's own AFT edge. A bare-shaft (body-only) cut
+                                // has no liner edge — its only datums are the SETs, so the
+                                // nearer one wins (the same proximity rule the printed strip's
+                                // title anchor uses, so card and sheet read from the same SET).
                                 reference = if (stripLiner != null) UndercutReference.LINER_AFT
-                                            else UndercutReference.AFT_SET,
+                                            else nearestSetReference(
+                                                span.startMm, span.startMm + span.lengthMm,
+                                                aftSetXMm, fwdSetXMm,
+                                            ),
                                 referenceLinerId = stripLiner?.id ?: "",
                             )
                             )
