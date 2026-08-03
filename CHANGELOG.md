@@ -6,6 +6,25 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-03 (undercut drawing — cuts are open silhouette steps, not boxes on the liner)
+
+### fix(undercut): each cut is its own stepped rectangle section — no lid, no liner outline across it
+
+On-device report (with the original hand sketch): the printed cuts read as white boxes
+pasted ON the liner — a lid drawn along the surface plus the liner outline surviving across
+the cut span. The "complete box" reading of the sketch was wrong: its rectangles are
+**silhouette steps**. A cut now draws as material removed — the void erases the surface
+stroke and fill down to the floor and the mouth stays **open** (nothing redraws over it), a
+full-height **section face** stands at each end (top surface to bottom surface, like any
+machined diameter step; skipped where a taper has run down to the floor —
+`NOTCH_FACE_MIN_STEP_PX` in `geom/SurfaceProfileMath.kt`), and the floor lines cross the
+span — so over the cut's span only the undercut section exists, its own reduced-Ø
+rectangle between two faces. Same construction in all draw sites (route overview + detail
+overlay canvases, PDF, SVG preview); the draft dash applies to faces and floor. Grey liner /
+white voids and depth exaggeration unchanged.
+
+---
+
 ## 2026-08-03 (PDF preview — blank-draft toggle surfaced on the preview itself)
 
 ### feat(pdf): always-visible "Blank draft (write-in)" chip on the schematic preview

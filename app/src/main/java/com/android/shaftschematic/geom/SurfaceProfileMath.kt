@@ -151,11 +151,15 @@ data class SurfacePoint(val xMm: Float, val diaMm: Float)
  * endpoints, every envelope breakpoint, and duplicated-x step points. Renderers draw:
  * - the **void fill** — the closed polygon `surface + (endMm, floor) + (startMm, floor)`
  *   (mirrored about the centerline for the bottom half), painted background/white so the
- *   original surface stroke and fills are erased inside the cut;
- * - the **outline** — shoulder at [startMm] (surface → floor), the floor line, shoulder
- *   at [endMm] (floor → surface). A region boundary caused by the surface *meeting* the
- *   floor (a taper running down to the undercut Ø) has a zero-height shoulder, which
- *   degenerates naturally.
+ *   original surface stroke and fills are erased inside the cut. Nothing redraws over the
+ *   mouth — the cut is OPEN at the surface, a step in the silhouette;
+ * - the **outline** — a full-height **section face** at [startMm] and [endMm] (one
+ *   vertical from top surface to bottom surface, like any machined diameter step, drawn
+ *   only where that end's surface stands at least [NOTCH_FACE_MIN_STEP_PX] above the
+ *   floor at draw scale), and the floor lines across the span, mirrored. Each cut thereby
+ *   reads as its own reduced-Ø rectangle section between two faces — the hand-sketch
+ *   convention. A region boundary caused by the surface *meeting* the floor (a taper
+ *   running down to the undercut Ø) draws no face there.
  */
 data class NotchProfile(
     val startMm: Float,
@@ -163,6 +167,15 @@ data class NotchProfile(
     val floorDiaMm: Float,
     val surface: List<SurfacePoint>,
 )
+
+/**
+ * Minimum drawn step (px) between a notch region's end surface and its floor for that end
+ * to draw a section face — below this the surface has effectively met the floor (a taper
+ * running down into the cut) and a full-height face line would be spurious. Px-space so
+ * every draw site (canvas overlays, PDF, SVG preview) applies the identical visibility
+ * rule at its own scale.
+ */
+const val NOTCH_FACE_MIN_STEP_PX = 0.5f
 
 /**
  * Compute the drawable notch region(s) for an undercut spanning `[x0Mm, x1Mm]` with

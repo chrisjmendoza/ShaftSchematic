@@ -209,23 +209,28 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   deepest-depth reference so an unmeasured cut can't squash the real ones.
 
   Region topology still comes from `notchProfiles` at the TRUE floor — a cut that never
-  touched the neighboring stock must not draw into it; only the floor line and shoulders
+  touched the neighboring stock must not draw into it; only the floor line and faces
   deepen. Ø callout leaders anchor on the drawn floor; labels print the stored value.
   Display-only: canonical values and printed Ø are untouched (golden rule). Each notch region
-  is outlined as a **complete box**: top edge along the region's surface polyline, a shoulder
-  at each end, the floor line — mirrored top and bottom, all at the notch outline's
-  weight/colour. The top edge follows the polyline, so a cut crossing a liner edge steps over
-  it instead of closing on a straight chord. The void fill still overdraws the *component's*
-  surface stroke outward by one stroke width (it would otherwise leave half that stroke ragged
-  across the mouth); the notch's own top edge is what closes the figure. On-device request,
-  citing the feature's hand sketch, where every cut section is a complete rectangle. Same
-  construction in every draw site; the detail overlay's draft dash + status colour apply to the
-  top edge too, so a draft reads as a dashed box.
+  draws as a **step in the silhouette** — the hand-sketch convention: the void erases
+  everything from the surface down to the floor (the void fill overdraws the *component's*
+  surface stroke outward by one stroke width, so no ragged half-stroke survives across the
+  mouth) and **nothing redraws over the mouth — the cut is OPEN at the surface, never closed
+  by a lid**. The outline is a full-height **section face** at each region end (one vertical
+  from top surface to bottom surface, like any machined diameter step, drawn only where that
+  end's surface stands `NOTCH_FACE_MIN_STEP_PX` above the floor — a taper that has run down to
+  the floor leaves no face) plus the floor lines across the span, mirrored. Each undercut
+  thereby reads as its own reduced-Ø rectangle section seated between two faces — over the
+  cut's span, only the undercut section exists (on-device report: a lid along the surface plus
+  the surviving liner outline read as a white box pasted ON the liner instead of material
+  removed FROM it — the "complete box" reading of the hand sketch was wrong; the sketch's
+  rectangles are silhouette steps). Same construction in every draw site; the detail overlay's
+  draft dash + status colour apply to the faces and floor, so a draft reads as a dashed step.
 
   **Grey liner, white cuts** (on-device request): a real detail strip **always** shades its
   liner span — the composer's `stripLinerFill`, not gated on `pdfPrefs.shadedLiners` (bodies and
   tapers stay pref-driven; the blank template's edges-only started strip draws no liner span, so
-  it stays clear paper) — and the notch voids stay pure white, so the boxed sections pop. Both
+  it stays clear paper) — and the notch voids stay pure white, so the stepped sections pop. Both
   canvases (route overview, detail overlay) paint onto a hard-coded white sheet, so their
   component fills are fixed black-alpha rather than theme colours: a dark-theme tint
   (near-white `onSurface`/`tertiary`) would wash into the paper and leave the white voids nothing

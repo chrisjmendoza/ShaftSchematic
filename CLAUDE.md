@@ -115,9 +115,10 @@ symbolic shallow floor in the overlay, never printed. Notch **depth is display-e
 shallower than true, region topology from the TRUE floor) because real cuts are hairline-thin
 at scale; printed Ø values stay the stored numbers. No carousel card and no Add dialog —
 undercuts are authored only on their tab, keeping them outside the add-dialog-parity
-invariant. The notch (void fill + a **complete box** outline — top edge along the surface
-polyline, two shoulders, floor — cut against the **local outer-surface
-envelope** so a cut crossing a liner edge shows stepped shoulders and a stepped top) must render
+invariant. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
+never closed by a lid — plus a full-height **section face** at each end and the floor lines,
+so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
+**local outer-surface envelope**) must render
 **identically** in all draw sites — `UndercutRoute`/`UndercutWindowDetailOverlay` (canvas)
 and `UndercutPdfComposer` (PDF) — from the shared pure pipeline `geom/SurfaceProfileMath.kt`
 + `geom/UndercutMath.kt` (cluster windows, clamps, hit-tests; no `pdf → ui` dep) with

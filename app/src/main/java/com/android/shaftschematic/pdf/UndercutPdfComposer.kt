@@ -19,6 +19,7 @@ import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.deepestUndercutDepthMm
 import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.linerStripFor
+import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.minOuterDiaOver
 import com.android.shaftschematic.geom.normalizedNotchFloorDiaMm
@@ -650,13 +651,20 @@ private fun notchFloorDiaMm(segs: List<SurfaceSeg>, cut: NotchCut): Float =
     effectiveNotchDiaMm(cut.diaMm, minOuterDiaOver(segs, cut.startMm, cut.endMm))
 
 /**
- * Draws every notch in [cuts] against the local outer surface [segs]: the removed material
- * is painted out in the page colour from the surface polyline down to the floor (mirrored
- * about the centreline), then each region is outlined as a closed box — the top edge along
- * the surface polyline, a shoulder at each end, and the floor line. Portions where
- * the surface is already at or below the floor yield no region and draw nothing —
- * `notchProfiles` owns that rule, so a cut running off a liner onto smaller stock simply
- * stops at the liner edge.
+ * Draws every notch in [cuts] against the local outer surface [segs] as a **step in the
+ * silhouette** — the hand-sketch convention: the removed material is painted out in the
+ * page colour from the surface polyline down to the floor (mirrored about the centreline,
+ * erasing the component's surface stroke across the mouth — the cut is OPEN at the
+ * surface, never closed by a lid), a full-height **section face** at each end (one
+ * vertical from top surface to bottom surface, like any machined diameter step), and the
+ * floor lines across the span. Each undercut thereby reads as its own reduced-Ø rectangle
+ * section seated between two faces — only the undercut section exists over that span
+ * (on-device report: a lid along the surface plus the surviving liner outline read as a
+ * white box pasted ON the liner instead of material removed FROM it). A face draws only
+ * where there is a real step (surface meaningfully above the floor); a taper that has run
+ * down to the floor leaves no face. Portions where the surface is already at or below the
+ * floor yield no region and draw nothing — `notchProfiles` owns that rule, so a cut
+ * running off a liner onto smaller stock simply stops at the liner edge.
  *
  * [deepestDepthMm]/[exaggerationFrac] carry the sheet's drawn-depth normalization
  * (`normalizedNotchFloorDiaMm`): the deepest measured cut draws at [exaggerationFrac] of its
@@ -697,8 +705,8 @@ private fun drawUndercutNotches(
             // Void fill, top half then its mirror below the centreline. The surface
             // boundary overdraws OUTWARD by the outline stroke width — the surface
             // stroke is centred on that line, and a fill stopping exactly there would
-            // leave half of the *component's* stroke ragged across the mouth. The notch's
-            // own top edge below then closes the figure at the notch outline weight.
+            // leave half of the *component's* stroke ragged across the mouth. Nothing
+            // redraws over the mouth: the cut stays OPEN at the surface.
             val od = outline.strokeWidth
             listOf(-1f, 1f).forEach { sign ->
                 val path = Path()
@@ -712,24 +720,21 @@ private fun drawUndercutNotches(
                 c.drawPath(path, voidFill)
             }
 
-            // Outline: a closed box — the top edge along the surface polyline, the two
-            // shoulders and the floor, top and bottom. Following the polyline (rather than
-            // a straight chord) steps the top edge where the cut crosses a liner edge, so
-            // every section reads as a complete rectangle — the hand-sketch convention
-            // (on-device request). A shoulder whose surface has run down to meet the floor
-            // (a taper dropping into the cut) degenerates to zero height and disappears.
+            // Outline — the step-section construction: a full-height section face at each
+            // end (top surface to bottom surface, through the core, only where the surface
+            // actually stands above the floor) and the floor lines across the span. No lid:
+            // the silhouette itself steps down, so each cut reads as its own reduced-Ø
+            // rectangle between two faces (the hand-sketch convention).
             val rSurf0 = rAt(np.surface.first().diaMm)
             val rSurf1 = rAt(np.surface.last().diaMm)
+            if (rSurf0 > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+                c.drawLine(xStart, cy - rSurf0, xStart, cy + rSurf0, outline)
+            }
+            if (rSurf1 > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+                c.drawLine(xEnd, cy - rSurf1, xEnd, cy + rSurf1, outline)
+            }
             listOf(-1f, 1f).forEach { sign ->
-                val top = Path()
-                np.surface.forEachIndexed { i, sp ->
-                    val y = cy + sign * rAt(sp.diaMm)
-                    if (i == 0) top.moveTo(xAt(sp.xMm), y) else top.lineTo(xAt(sp.xMm), y)
-                }
-                c.drawPath(top, outline)
-                c.drawLine(xStart, cy + sign * rSurf0, xStart, cy + sign * rFloor, outline)
                 c.drawLine(xStart, cy + sign * rFloor, xEnd, cy + sign * rFloor, outline)
-                c.drawLine(xEnd, cy + sign * rFloor, xEnd, cy + sign * rSurf1, outline)
             }
         }
     }
