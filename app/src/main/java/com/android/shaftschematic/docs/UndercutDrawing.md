@@ -694,15 +694,20 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   - **title at the bottom** (`buildUndercutStripTitle(linerTitle, anchorLabel)`): a `LinerStrip`
     prints `"<liner title> — <dist> FROM AFT/FWD S.E.T."` (e.g. `"AFT Liner — 250.0 FROM AFT
     S.E.T."`) — the same `name — anchor` construction the wear sheet uses for that liner, so it
-    reads identically wherever the liner is named. A `FreeStrip` has nothing to name (a
-    bare-shaft span carries no shop identity) and prints the anchor alone. The S.E.T. is chosen
-    by proximity (`undercutAnchorFor`: strip midpoint vs SET-to-SET midpoint), distance measured
-    to the strip's **near** shoulder, title aligned toward its SET (left for AFT, right for
-    FWD) — reported as a magnitude even when the strip sits outboard of its chosen SET. A liner
-    strip with zero drawable cuts (every assigned span clamped away) still prints just the liner
-    name, with no anchor. Blank mode: a writing rule + both directions printed for the
-    machinist to circle one, always left-aligned (a write-in sheet has no presumed measurement
-    direction).
+    reads identically wherever the liner is named. The distance is the **liner's own**
+    edge-to-SET datum (`buildLinerAnchorLabel` + `linerAnchorForPdf`, the exact figure the
+    schematic and wear sheet print for this liner), **never a cut's shoulder** — a title that
+    names the liner but measures to a cut reads as the liner sitting at the cut's position
+    (on-device report: a cut 11.5 in into a liner 20 in from the AFT SET printed the liner as
+    31.5 in out; cuts are located on the chain rail, from the liner's edges). A `FreeStrip`
+    has nothing to name (a bare-shaft span carries no shop identity) and prints the anchor
+    alone: its S.E.T. is chosen by proximity (`undercutAnchorFor`: strip midpoint vs
+    SET-to-SET midpoint), distance measured to the strip's **near** shoulder — reported as a
+    magnitude even when the strip sits outboard of its chosen SET. Either way the title aligns
+    toward its SET (left for AFT, right for FWD). A liner strip with zero drawable cuts (every
+    assigned span clamped away) still prints the liner name and its anchor. Blank mode: a
+    writing rule + both directions printed for the machinist to circle one, always
+    left-aligned (a write-in sheet has no presumed measurement direction).
 - **Blank/template mode** (`blankValues = true`): `effectiveRecord = UndercutRecord()` — the
   record is dropped before the strips are built (matching the wear sheet's decision that blank
   templates carry no recorded stations), so the page comes out as **started liner strips** with

@@ -6,6 +6,8 @@ import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.clampUndercutSpan
+import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.deepestUndercutDepthMm
 import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.linerStripFor
@@ -17,6 +19,7 @@ import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
+import com.android.shaftschematic.model.LinerAnchor
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.ui.resolved.ResolvedBody
@@ -469,10 +472,26 @@ class UndercutStripSvgPreviewTest {
             svg.line(ruleX0, titleY + 1f, ruleX0 + BLANK_DIM_GAP_PT, titleY + 1f, w = 0.7f)
             svg.text(ruleX0 + BLANK_DIM_GAP_PT + 4f, titleY, WEAR_BLANK_ANCHOR_SUFFIX, size = titleH, anchor = "start")
         } else {
-            val anchor = undercutAnchorFor(spans.first().startMm, spans.last().endMm, aftSetMm, fwdSetMm)
-            val title = buildUndercutStripTitle(linerTitle, buildUndercutAnchorLabel(anchor, unit))
-            if (anchor.alignRight) svg.text(stripRight, titleY, title, size = titleH, anchor = "end")
-            else svg.text(stripLeft, titleY, title, size = titleH, anchor = "start")
+            val stripLiner = (strip as? UndercutStrip.LinerStrip)
+                ?.let { ls -> spec.liners.firstOrNull { it.id == ls.linerId } }
+            if (stripLiner != null) {
+                // Liner strip: the anchor is the LINER's own edge-to-SET datum — the same
+                // figure the schematic and wear sheet print — never a cut's shoulder.
+                val sets = computeSetPositionsInMeasureSpace(computeOalWindow(spec), spec)
+                val title = buildUndercutStripTitle(
+                    linerTitle, buildLinerAnchorLabel(spec, stripLiner, sets, unit),
+                )
+                if (linerAnchorForPdf(spec, stripLiner) == LinerAnchor.FWD_SET) {
+                    svg.text(stripRight, titleY, title, size = titleH, anchor = "end")
+                } else {
+                    svg.text(stripLeft, titleY, title, size = titleH, anchor = "start")
+                }
+            } else {
+                val anchor = undercutAnchorFor(spans.first().startMm, spans.last().endMm, aftSetMm, fwdSetMm)
+                val title = buildUndercutStripTitle(null, buildUndercutAnchorLabel(anchor, unit))
+                if (anchor.alignRight) svg.text(stripRight, titleY, title, size = titleH, anchor = "end")
+                else svg.text(stripLeft, titleY, title, size = titleH, anchor = "start")
+            }
         }
 
         val chainLen = railSpans.sumOf { (it.endMm - it.startMm).toDouble() }.toFloat()
