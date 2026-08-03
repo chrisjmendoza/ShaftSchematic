@@ -227,10 +227,14 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   rectangles are silhouette steps). Same construction in every draw site; the detail overlay's
   draft dash + status colour apply to the faces and floor, so a draft reads as a dashed step.
 
-  **Grey liner, white cuts** (on-device request): a real detail strip **always** shades its
-  liner span — the composer's `stripLinerFill`, not gated on `pdfPrefs.shadedLiners` (bodies and
-  tapers stay pref-driven; the blank template's edges-only started strip draws no liner span, so
-  it stays clear paper) — and the notch voids stay pure white, so the stepped sections pop. Both
+  **Grey liner, white cuts, light-grey section core** (on-device requests): a real detail strip
+  **always** shades its liner span — the composer's `stripLinerFill`, not gated on
+  `pdfPrefs.shadedLiners` (bodies and tapers stay pref-driven; the blank template's edges-only
+  started strip draws no liner span, so it stays clear paper) — the notch voids stay pure white,
+  and the section's remaining core (between the floor lines) fills one step **lighter** than the
+  liner: erased to the sheet colour, then refilled at `UNDERCUT_SECTION_FILL_ALPHA`
+  (`geom/SurfaceProfileMath.kt`, half the liner shade's 40/255) so the cut span reads distinct
+  from the liner around it. Same tone in every draw site. Both
   canvases (route overview, detail overlay) paint onto a hard-coded white sheet, so their
   component fills are fixed black-alpha rather than theme colours: a dark-theme tint
   (near-white `onSurface`/`tertiary`) would wash into the paper and leave the white voids nothing

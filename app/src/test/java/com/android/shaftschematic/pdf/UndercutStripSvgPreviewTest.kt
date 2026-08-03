@@ -1,6 +1,7 @@
 package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
+import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
@@ -408,6 +409,12 @@ class UndercutStripSvgPreviewTest {
                         listOf(xAt(np.endMm) to cy + sign * rFloor, xAt(np.startMm) to cy + sign * rFloor)
                     svg.poly(pts, fill = "white")
                 }
+                // Remaining core: erased to the sheet, then one step lighter than the liner
+                // shade — mirroring the composer's section fill.
+                svg.rect(xAt(np.startMm), cy - rFloor, xAt(np.endMm) - xAt(np.startMm), 2f * rFloor,
+                    stroke = "none", fill = "white")
+                svg.rect(xAt(np.startMm), cy - rFloor, xAt(np.endMm) - xAt(np.startMm), 2f * rFloor,
+                    stroke = "none", fill = "rgba(0,0,0,$UNDERCUT_SECTION_FILL_ALPHA)")
                 val r0 = rAt(np.surface.first().diaMm)
                 val r1 = rAt(np.surface.last().diaMm)
                 if (r0 > rFloor + NOTCH_FACE_MIN_STEP_PX) {

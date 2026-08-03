@@ -118,7 +118,8 @@ undercuts are authored only on their tab, keeping them outside the add-dialog-pa
 invariant. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
 never closed by a lid — plus a full-height **section face** at each end and the floor lines,
 so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
-**local outer-surface envelope**) must render
+**local outer-surface envelope**; the section's core fills one step **lighter** than the
+liner shade — `UNDERCUT_SECTION_FILL_ALPHA`, half the liner's alpha) must render
 **identically** in all draw sites — `UndercutRoute`/`UndercutWindowDetailOverlay` (canvas)
 and `UndercutPdfComposer` (PDF) — from the shared pure pipeline `geom/SurfaceProfileMath.kt`
 + `geom/UndercutMath.kt` (cluster windows, clamps, hit-tests; no `pdf → ui` dep) with

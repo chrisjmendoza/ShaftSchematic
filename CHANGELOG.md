@@ -6,6 +6,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-03 (undercut drawing — section cores fill one step lighter than the liner)
+
+### feat(undercut): 50%-lighter grey fill inside each cut section
+
+On-device request: the section's remaining core (between the floor lines) drew at the same
+grey as the liner, so the step read only through its outline. The core is now erased to
+the sheet colour and refilled at half the liner shade's alpha
+(`UNDERCUT_SECTION_FILL_ALPHA` = 20/255 in `geom/SurfaceProfileMath.kt`), so every cut
+span reads one step lighter than the liner around it. Applied identically in all draw
+sites (route overview + detail overlay canvases, PDF, SVG preview); voids stay pure white,
+liner shade unchanged.
+
+---
+
 ## 2026-08-03 (undercut drawing — cuts are open silhouette steps, not boxes on the liner)
 
 ### fix(undercut): each cut is its own stepped rectangle section — no lid, no liner outline across it

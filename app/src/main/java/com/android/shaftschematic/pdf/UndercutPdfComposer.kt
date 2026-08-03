@@ -20,6 +20,7 @@ import com.android.shaftschematic.geom.deepestUndercutDepthMm
 import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
+import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.minOuterDiaOver
 import com.android.shaftschematic.geom.normalizedNotchFloorDiaMm
@@ -38,6 +39,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Public entry point
@@ -686,6 +688,12 @@ private fun drawUndercutNotches(
     exaggerationFrac: Float,
 ) {
     if (cuts.isEmpty() || segs.isEmpty()) return
+    // One step LIGHTER than the liner shade (half its 40/255 alpha): the section's core is
+    // erased to the page colour first, so this is its absolute tone, not a darkening overlay.
+    val sectionFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.argb((UNDERCUT_SECTION_FILL_ALPHA * 255f).roundToInt(), 0, 0, 0)
+    }
     cuts.forEach { cut ->
         val floorDia = notchFloorDiaMm(segs, cut)
         if (floorDia <= 0f) return@forEach
@@ -719,6 +727,11 @@ private fun drawUndercutNotches(
                 path.close()
                 c.drawPath(path, voidFill)
             }
+
+            // Remaining core: erased to the page colour, then refilled one step lighter
+            // than the liner shade so the section reads distinct (on-device request).
+            c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, voidFill)
+            c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, sectionFill)
 
             // Outline — the step-section construction: a full-height section face at each
             // end (top surface to bottom surface, through the core, only where the surface
