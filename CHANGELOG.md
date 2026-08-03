@@ -6,6 +6,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-03 (schematic footer — shop notation for common taper rates)
+
+### feat(pdf): 1:12 and 1:16 print as 1"/ft and ¾"/ft on inch drawings
+
+On-device request: the two rates the shop uses most now print in taper-per-foot form —
+`Rate: 1"/ft` for 1:12 and `Rate: ¾"/ft` for 1:16 (real fraction character) — matching how
+they're hand-written. Applies whether the rate is auto-snapped or typed as `1:12`/`1:16`;
+every other rate keeps its ratio form (1:10, 1:20, exact `1:N.NNN`, or the user's own
+manual text, verbatim). Metric drawings keep the ratio for all rates — inch-per-foot
+notation would clash with mm dimensions. Print-layer only (`printedTaperRate` in
+`ShaftPdfComposer`): the stored `taperRateText`, the carousel/dialog rate fields, and the
+`TaperRateAuto` contract are untouched. Pinned by `TaperRatePrintNotationTest`.
+
+---
+
 ## 2026-08-03 (secondary sheets — OAL label matches the schematic)
 
 ### fix(pdf): runout/wear/undercut OAL prints fractions like the schematic
