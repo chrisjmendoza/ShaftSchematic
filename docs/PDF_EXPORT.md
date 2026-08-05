@@ -252,6 +252,56 @@ therefore identical.
 
 ---
 
+# 5.6 The Consolidated Output tab (variants + batch export)
+
+The **Consolidated Output** tab (`EditorTab.OUTPUT`, `ui/screen/OutputRoute.kt`) is the
+one-stop surface for the consolidated sheet; every original tab keeps its own hard-wired
+preview/print/export producing its own document (the Runout tab's is the **classic**
+standalone runout sheet, `composeRunoutPdf(consolidated = false)`, suffix `_runout`).
+
+**Sheet content** (`ConsolidatedVariant`): the schematic's dimension rails + spec footer
+are always on; the runout bubbles/TIR line and the wear info (marks, worn sections,
+in-profile Ø values) are each electable — **All three** (default) | Schematic + Runout |
+Schematic + Wear. Electing bubbles out returns their lanes to the shaft area. Selection
+is session-only (resets to All three).
+
+**Also on this tab**: the per-job "Shaft height" slider (§5.7), the worn-section editor
+(sections print on this sheet), the blank-draft toggle, and **Export all** — checkboxes
+for the five documents (consolidated [current variant], schematic, runout, wear,
+undercut; all on by default) written to one picked folder (`OpenDocumentTree` +
+`createPdfInTree`), each through the hardened write path, with a written/failed result
+line. Nothing auto-opens after a batch.
+
+**Hardened writes everywhere**: every SAF export in the app goes through
+`util/PdfSafExport.writeShaftPdfToUri` — a composer throw repaints the page as a valid
+"PDF export failed" error page and still writes it, so a truncated/unopenable file is
+never left behind; success-only follow-ups (auto-open, the first-PDF achievement) key off
+its Boolean. The collision export gate (`exportPdfGate`) guards the schematic, runout,
+wear, undercut, and consolidated surfaces alike.
+
+---
+
+# 5.7 "Shaft height" slider (per-job profile exaggeration)
+
+`RunoutConfig.heightScale` (per-job, in the `.shaft` envelope; legacy files default to
+100%) multiplies the solved profile scale on the **runout/consolidated sheets AND the
+schematic** — one value behind every drawing output (slider on the Consolidated Output
+tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
+
+- Range 50%–300% (`PROFILE_HEIGHT_SCALE_MIN/MAX`).
+- The **1.5" ceiling is absolute** (`PROFILE_MAX_SHAFT_HEIGHT_PT` = 108 pt): the drawn
+  shaft never exceeds 1.5" on paper at any slider position — a short shaft whose
+  width-fit would draw taller is capped too, keeps true proportion, and simply doesn't
+  span the page (room for the dimension rails). The page budget caps everything.
+  Pure arithmetic: `exaggeratedProfileScale` (`geom/ProfileCompression.kt`).
+- Slider UX: the track ends where the ceiling engages for the current shaft
+  (`effectiveHeightScaleMax` — the limit reads on the control); commits within ±5% of
+  100% snap to exactly 1.0 (`snappedHeightScale`); a Reset button commits 100%.
+
+---
+
+---
+
 # 6. PDF Rendering Invariants
 
 1. Export is **single page** only.

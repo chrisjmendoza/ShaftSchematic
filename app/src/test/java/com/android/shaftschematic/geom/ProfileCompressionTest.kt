@@ -155,9 +155,10 @@ class ProfileCompressionTest {
     }
 
     @Test
-    fun `pinned liners force the scale down until they fit - height yields, never the liner`() {
-        // Three pinned liners totaling 2100mm on a 700pt page: at the desired 0.4 the
-        // liners alone need 840pt → the solve must come back below 700/2100 ≈ 0.333.
+    fun `pinned spans force the scale down until they fit - height yields, never the pinned span`() {
+        // Three pinned spans (keyway-bearing bodies) totaling 2100mm on a 700pt page: at the
+        // desired 0.4 the pinned spans alone need 840pt → the solve must come back below
+        // 700/2100 ≈ 0.333.
         val features = listOf(
             feature(100f, 800f, Float.MAX_VALUE),
             feature(1000f, 1700f, Float.MAX_VALUE),
@@ -168,7 +169,7 @@ class ProfileCompressionTest {
             features = features, contentWidth = 700f, scaleHi = 0.4f,
         )
         assertTrue(scale < 0.34f)
-        // At the solved scale the map keeps every liner at TRUE width.
+        // At the solved scale the map keeps every pinned span at TRUE width.
         val map = buildCompressedProfileXMap(0f, 3000f, features, 0f, 700f, scale)
         features.forEach { f ->
             val seg = map.segments.first { it.startMm == f.startMm }
@@ -186,6 +187,127 @@ class ProfileCompressionTest {
             contentWidth = 700f, scaleHi = 0.4f,
         )
         assertEquals(0.4f, scale, 1e-6f)
+    }
+
+    @Test
+    fun `liners compress in size above their floor - never pinned, never below the writable minimum`() {
+        // on-device clarification: liners must never get body-style S-break cutouts (that
+        // glyph is body-only) — the finite PROFILE_MIN_LINER_PT floor gives them SIZE
+        // compression only, same posture as any other floored span.
+        val features = listOf(feature(500f, 1500f, PROFILE_MIN_LINER_PT)) // 1000mm liner
+        val map = buildCompressedProfileXMap(
+            windowStartMm = 0f, windowEndMm = 3000f,
+            features = features,
+            contentLeft = 0f, contentRight = 400f, // heavy squeeze vs. 3000pt true total
+            diaPtPerMm = 1f,
+        )
+        val liner = map.segments.first { it.startMm == 500f }
+        val drawnWidth = liner.x1 - liner.x0
+        assertTrue("liner compresses under heavy squeeze", drawnWidth < 1000f)
+        assertTrue("liner never draws below its writable floor", drawnWidth >= PROFILE_MIN_LINER_PT - 1e-2f)
+        assertTrue("liner segment is marked compressed", liner.compressed)
+    }
+
+    // ── exaggeratedProfileScale (the "Shaft height" slider) ────────────────────
+
+    @Test
+    fun `heightFrac of 1 with a generous budget returns baseScale unchanged`() {
+        val scale = exaggeratedProfileScale(
+            baseScale = 0.4f, heightFrac = 1.0f, budgetCapPt = 1000f, maxDiaMm = 50f,
+        )
+        assertEquals(0.4f, scale, 1e-6f)
+    }
+
+    @Test
+    fun `heightFrac of 2 doubles the scale when both caps allow`() {
+        val scale = exaggeratedProfileScale(
+            baseScale = 0.4f, heightFrac = 2.0f, budgetCapPt = 1000f, maxDiaMm = 50f,
+        )
+        assertEquals(0.8f, scale, 1e-6f)
+    }
+
+    @Test
+    fun `the ceiling is absolute - drawn height never exceeds 108pt at any frac`() {
+        // base x frac x dia = 0_4 x 3_0 x 200 = 240pt, way past the 108pt (1_5in) ceiling —
+        // capped no matter how generous the budget is.
+        val scale = exaggeratedProfileScale(
+            baseScale = 0.4f, heightFrac = 3.0f, budgetCapPt = 1000f, maxDiaMm = 200f,
+        )
+        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT / 200f, scale, 1e-6f)
+    }
+
+    @Test
+    fun `a short shaft's width-fit base is capped too - proportion kept, page width unspanned`() {
+        // base = 1_0 x 200mm = 200pt: a stub shaft whose width-fit would draw far taller
+        // than the ceiling. On-device direction: cap it even at 100% — the drawing then
+        // simply doesn't span the page, leaving room for the dimension rails.
+        val at100 = exaggeratedProfileScale(
+            baseScale = 1.0f, heightFrac = 1.0f, budgetCapPt = 10000f, maxDiaMm = 200f,
+        )
+        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT / 200f, at100, 1e-6f)
+        // And no slider position pushes past the ceiling either.
+        val at200 = exaggeratedProfileScale(
+            baseScale = 1.0f, heightFrac = 2.0f, budgetCapPt = 10000f, maxDiaMm = 200f,
+        )
+        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT / 200f, at200, 1e-6f)
+    }
+
+    // ── effectiveHeightScaleMax (slider track end where the cap engages) ───────
+
+    @Test
+    fun `slider max lands where the ceiling engages`() {
+        // 8in shaft at the 0_4 visual scale: cap engages at 108 / (203_2 x 0_4) ≈ 1_33.
+        val max = effectiveHeightScaleMax(baseScale = 0.4f, budgetCapPt = 1000f, maxDiaMm = 203.2f)
+        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT / (203.2f * 0.4f), max, 1e-4f)
+        // The slider's whole point: dragging to this max yields exactly the capped scale.
+        val atMax = exaggeratedProfileScale(0.4f, max, 1000f, 203.2f)
+        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT / 203.2f, atMax, 1e-4f)
+    }
+
+    @Test
+    fun `slider max clamps to the full range for small shafts`() {
+        // 2in shaft: even 300% stays under the ceiling → the track keeps its full range.
+        val max = effectiveHeightScaleMax(baseScale = 0.4f, budgetCapPt = 1000f, maxDiaMm = 50f)
+        assertEquals(PROFILE_HEIGHT_SCALE_MAX, max, 1e-6f)
+    }
+
+    @Test
+    fun `slider max never collapses below a working range`() {
+        // Degenerate: base already far above the cap → the track still keeps a usable
+        // shrink range instead of collapsing to a point.
+        val max = effectiveHeightScaleMax(baseScale = 5f, budgetCapPt = 1000f, maxDiaMm = 200f)
+        assertEquals(PROFILE_HEIGHT_SCALE_MIN + 0.1f, max, 1e-6f)
+    }
+
+    @Test
+    fun `a budget cap below 108pt dominates the absolute ceiling`() {
+        val scale = exaggeratedProfileScale(
+            baseScale = 1.0f, heightFrac = 1.0f, budgetCapPt = 20f, maxDiaMm = 50f,
+        )
+        assertEquals(20f / 50f, scale, 1e-6f)
+        assertTrue(scale < PROFILE_MAX_SHAFT_HEIGHT_PT / 50f)
+    }
+
+    @Test
+    fun `out-of-range fracs coerce to the slider bounds`() {
+        val base = 0.4f
+        val maxDia = 50f
+        val budget = 1000f
+        val low = exaggeratedProfileScale(base, heightFrac = 0.1f, budgetCapPt = budget, maxDiaMm = maxDia)
+        val lowClamped =
+            exaggeratedProfileScale(base, heightFrac = PROFILE_HEIGHT_SCALE_MIN, budgetCapPt = budget, maxDiaMm = maxDia)
+        assertEquals(lowClamped, low, 1e-6f)
+
+        val high = exaggeratedProfileScale(base, heightFrac = 10f, budgetCapPt = budget, maxDiaMm = maxDia)
+        val highClamped =
+            exaggeratedProfileScale(base, heightFrac = PROFILE_HEIGHT_SCALE_MAX, budgetCapPt = budget, maxDiaMm = maxDia)
+        assertEquals(highClamped, high, 1e-6f)
+    }
+
+    @Test
+    fun `maxDiaMm zero returns baseScale unchanged`() {
+        val scale = exaggeratedProfileScale(baseScale = 0.7f, heightFrac = 2.0f, budgetCapPt = 500f, maxDiaMm = 0f)
+        assertEquals(0.7f, scale, 1e-6f)
     }
 
     @Test

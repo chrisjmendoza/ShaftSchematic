@@ -44,16 +44,17 @@ import kotlin.math.min
  *    page), spacing compresses uniformly and the plan flags itself
  *    ([RunoutBubblePlan.compressed]; [RunoutBubbleResult.unresolvedCollisions] reports
  *    anything the repair pass could not fix in that degenerate state).
- * 7. `crossRowPitch` is the geometric MINIMUM that keeps a deeper bubble's leader from
- *    touching a shallower neighbour — enough for the plan to be correct, but not enough
- *    for a machinist to write a reading beside that neighbour without the pen crossing the
- *    leader. When a row has horizontal slack (stations far enough apart that the pitch
- *    constraint isn't binding at the sheet's edges), cross-row adjacent gaps are widened by
- *    up to [RunoutBubbleGeometry.leaderClearance] on top of `crossRowPitch`, split evenly
- *    across the slack-eligible gaps and capped so the total never exceeds the available
- *    span. This can only ever grow a gap, never shrink one below its geometric minimum, so
- *    it changes zero collision guarantees — it degrades to exactly the base minimum-pitch
- *    layout the moment a row is tight (no free slack to spend).
+ * 7. Even-spread waterfill (on-device request, hand-sheet reference): the minimum pitches
+ *    are collision floors, not a layout goal — a sheet that packs its bubbles at the
+ *    minimums under compressed runs leaves the rest of the width empty and the leaders
+ *    tangled. When the page has slack, every adjacent gap floor rises toward one common
+ *    level (Σ max(gap_i, L) = available, capped at [RunoutBubbleGeometry.spreadPitch]),
+ *    so bubbles distribute the space under the shaft evenly — leaders stay straight
+ *    wherever they clear, and a rerouted one is the clean vertical-drop dogleg.
+ *    A dense sheet divides the width evenly among its bubbles; a sparse sheet
+ *    spreads comfortably near its stations (the cap), never flung to the page corners.
+ *    Floors only ever grow — never below the geometric minimum — so no collision
+ *    guarantee changes, and a page with no slack keeps the exact minimum-pitch layout.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,19 +65,21 @@ import kotlin.math.min
 const val RUNOUT_EDGE_INSET_MAX_FRACTION = 0.20f
 
 /**
- * Multiplier on [RunoutBubbleGeometry.minGap] used to derive [RunoutBubbleGeometry.leaderClearance]
- * — the extra breathing room (beyond the geometric minimum) a bubble edge should keep from a
- * FOREIGN leader's leg when the row has slack to spare. Expressed as a factor of `minGap`
- * (rather than a fixed output-unit constant) so it scales correctly whether the caller is
- * working in PDF points or canvas px. At the PDF's `minGap = 5f`, this evaluates to 8f.
+ * Multiplier on [RunoutBubbleGeometry.sameRowPitch] that caps the even-spread waterfill
+ * level ([RunoutBubbleGeometry.spreadPitch]): on a page with room to spare, adjacent
+ * bubbles spread apart up to this comfortable pitch — near their stations, never flung to
+ * the page corners. A dense sheet's level lands below this cap (the width simply divides
+ * among the bubbles, the hand-sheet look); a sparse sheet stops here.
  */
-const val LEADER_CLEARANCE_FACTOR = 1.6f
+const val BUBBLE_SPREAD_PITCH_CAP_FACTOR = 1.5f
 
 /**
  * Axial mm positions of [count] measurement stations within one component.
  *
  * - Bodies (`useEdgeInset = false`): cell midpoints, `(i + 0.5) · length / count`,
- *   evenly covering the full length.
+ *   evenly covering the full length. (When the caller can invert its x mapping,
+ *   [collectRunoutStations] instead places body stations evenly across the DRAWN span —
+ *   see its KDoc.)
  * - Tapers / liners (`useEdgeInset = true`): first/last stations inset from each edge by
  *   `min(edgeInsetMm, length × 20%)` so readings land on the cylindrical run, not the
  *   transition slope; interior stations spread linearly between.
@@ -127,11 +130,22 @@ data class RunoutStationX(
 /**
  * Expand component spans into the flat station list, applying per-component count
  * overrides and the default counts from [RunoutConfig].
+ *
+ * Station placement per kind (on-device request):
+ * - **Tapers / liners**: physical mm with the edge inset — the worn areas usually don't
+ *   reach a liner's very edges, so near-edge readings are the best runout spots.
+ * - **Bodies**: a body surface is uniform, so the exact physical spot is free — stations
+ *   spread **evenly across the DRAWN span** (cell midpoints in output x, inverted back to
+ *   mm via [mmAtX]). Under the compressed hand-sheet mapping, physical midpoints bunch
+ *   into the foreshortened run; drawn-even placement keeps the sheet readable. When the
+ *   caller has no inverse ([mmAtX] = null), bodies fall back to physical cell midpoints
+ *   (identical under a linear mapping).
  */
 fun collectRunoutStations(
     spans: List<RunoutComponentSpan>,
     overrides: Map<String, Int>,
     xAtMm: (Float) -> Float,
+    mmAtX: ((Float) -> Float)? = null,
 ): List<RunoutStationX> {
     val out = mutableListOf<RunoutStationX>()
     for (span in spans.filter { it.lengthMm > 0f }.sortedBy { it.startMm }) {
@@ -140,13 +154,22 @@ fun collectRunoutStations(
             RunoutComponentKind.TAPER -> RunoutConfig.TAPER_DEFAULT_COUNT
             RunoutComponentKind.LINER -> RunoutConfig.LINER_DEFAULT_COUNT
         }
-        runoutStationPositionsMm(
-            startMm = span.startMm,
-            lengthMm = span.lengthMm,
-            count = count,
-            useEdgeInset = span.kind != RunoutComponentKind.BODY,
-        ).forEachIndexed { idx, mm ->
-            out.add(RunoutStationX(span.id, mm, xAtMm(mm), stationIndex = idx))
+        if (span.kind == RunoutComponentKind.BODY && mmAtX != null && count > 0) {
+            val x0 = xAtMm(span.startMm)
+            val x1 = xAtMm(span.startMm + span.lengthMm)
+            repeat(count) { idx ->
+                val xs = x0 + (idx + 0.5f) * (x1 - x0) / count
+                out.add(RunoutStationX(span.id, mmAtX(xs), xs, stationIndex = idx))
+            }
+        } else {
+            runoutStationPositionsMm(
+                startMm = span.startMm,
+                lengthMm = span.lengthMm,
+                count = count,
+                useEdgeInset = span.kind != RunoutComponentKind.BODY,
+            ).forEachIndexed { idx, mm ->
+                out.add(RunoutStationX(span.id, mm, xAtMm(mm), stationIndex = idx))
+            }
         }
     }
     return out
@@ -183,12 +206,11 @@ data class RunoutBubbleGeometry(
     val rowStep: Float get() = 2f * radius + minGap
 
     /**
-     * Extra clearance (beyond `crossRowPitch`'s geometric minimum) a bubble edge should keep
-     * from a foreign bubble's leader leg, spent only when the row has slack to spare
-     * (see [planRunoutBubbles] rule 7). Comfort margin for a hand-written reading, not a
-     * collision requirement.
+     * Cap on the even-spread waterfill level (see [planRunoutBubbles] rule 7): the widest
+     * pitch a sparse page spreads adjacent bubbles to. Comfort spacing for hand-written
+     * readings, not a collision requirement.
      */
-    val leaderClearance: Float get() = minGap * LEADER_CLEARANCE_FACTOR
+    val spreadPitch: Float get() = sameRowPitch * BUBBLE_SPREAD_PITCH_CAP_FACTOR
 }
 
 /** One vertex of a leader polyline. */
@@ -246,19 +268,35 @@ fun planRunoutBubbles(
         if (rows[i + 1] == rows[i]) geom.sameRowPitch else geom.crossRowPitch
     }
 
-    // Leader-clearance spread (see class KDoc rule 7): a cross-row adjacent gap sitting at
-    // exactly `crossRowPitch` is the bare geometric minimum for "leader doesn't touch the
-    // neighbour" — widen it towards `leaderClearance` extra whenever the row has slack, so a
-    // machinist has room to write a reading beside the bubble. Bounded by the ACTUAL slack
-    // (available − baseNeeded) split evenly across eligible gaps, so this can only grow gaps
-    // that were already going to fit — it never pushes a previously-uncompressed layout into
-    // compression, and a tight layout (no slack) gets zero widening, i.e. today's behaviour.
-    val crossRowGapIdx = gaps.indices.filter { rows[it + 1] != rows[it] }
+    // Even-spread waterfill (see class KDoc rule 7): raise every adjacent gap floor toward
+    // one common level so the bubbles distribute the width under the shaft evenly instead
+    // of bunching beneath compressed runs (on-device request, hand-sheet reference: the
+    // circles spread across the sheet and the pointer lines stay easy to follow). The
+    // level solves Σ max(gap_i, L) = available, capped at `spreadPitch` — a dense sheet
+    // divides the width evenly among its bubbles, a sparse sheet spreads comfortably near
+    // its stations, never flung to the page corners. Floors only ever GROW here (never
+    // below the geometric minimum), so every collision guarantee is untouched, and a page
+    // with no slack gets zero widening.
     val baseNeeded = gaps.sum()
-    val slack = available - baseNeeded
-    if (slack > 0f && crossRowGapIdx.isNotEmpty()) {
-        val extra = min(geom.leaderClearance, slack / crossRowGapIdx.size)
-        for (i in crossRowGapIdx) gaps[i] += extra
+    if (available - baseNeeded > 0f && n > 1) {
+        fun totalAt(level: Float): Float {
+            var t = 0f
+            for (g in gaps) t += max(g, level)
+            return t
+        }
+        val cap = geom.spreadPitch
+        val level = if (totalAt(cap) <= available) {
+            cap
+        } else {
+            var lo = 0f
+            var hi = cap
+            repeat(30) {
+                val mid = (lo + hi) / 2f
+                if (totalAt(mid) <= available) lo = mid else hi = mid
+            }
+            lo
+        }
+        for (i in gaps.indices) gaps[i] = max(gaps[i], level)
     }
 
     // Degenerate fallback: compress uniformly so the group still fits the page.

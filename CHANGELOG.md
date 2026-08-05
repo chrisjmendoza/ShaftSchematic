@@ -6,6 +6,109 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-05 (morning review — Consolidated Output tab, absolute height cap, bubble spread)
+
+### feat(output): the Consolidated Output tab — sheet-content variants + Export all
+
+On-device review of the overnight wave ("one more output tab… consolidated output where
+the user can select which I want… and see the preview"; "Export-all would live under the
+prior new tab"). New `EditorTab.OUTPUT` (`ui/screen/OutputRoute.kt`, last in the
+sidebar): consolidated-sheet content election (`ConsolidatedVariant` — **All three**
+default | Schematic + Runout | Schematic + Wear; rails + footer always on, bubbles/TIR
+and wear info each electable via `composeRunoutPdf(includeBubbles/includeWearInfo)`;
+elected-out bubbles return their lanes to the shaft), the worn-section editor (moved
+from the Runout tab), the "Shaft height" slider, blank draft, preview/print/export, and
+**Export all** — five document checkboxes batch-written to one picked folder
+(`OpenDocumentTree` + `createPdfInTree`), each through the hardened write. The Runout
+tab returns to **runouts only** ("the runout editor should only focus on the runouts"):
+bubble canvas (wear overlays now render on the Output tab's true-PDF preview), TIR,
+station counts, and the classic runout sheet as its own document. Supersedes the
+overnight wave's on-tab output picker.
+
+### feat(pdf): schematic follows the "Shaft height" slider; the 1.5" ceiling is absolute
+
+On-device review: "I intended this" (schematic slider) and "width can be limited when
+height limit is reached to keep proportionality" (cap). `composeShaftPdf` takes the same
+per-job `heightScale`; the slider also lives in the schematic preview's Tune sheet. The
+1.5" ceiling (`PROFILE_MAX_SHAFT_HEIGHT_PT`) is now ABSOLUTE — a short shaft whose
+width-fit would draw taller is capped, keeps true proportion, and simply doesn't span
+the page — replacing the overnight growth-only cap. Slider UX: shared
+`ShaftHeightSlider` with the track ending where the cap engages for the current shaft
+(`effectiveHeightScaleMax` — "informs me the limit"), commits within ±5% of 100%
+snapping to exactly 1.0 + a Reset button ("don't want to fight the slider").
+
+### feat(export): hardened SAF writes + collision gate on every export surface
+
+On-device request ("please unify"). One write path (`util/PdfSafExport.writeShaftPdfToUri`)
+for the schematic, runout, wear, undercut, consolidated, and batch exports: a composer
+throw repaints the page as a valid "PDF export failed" error page and still writes —
+never a truncated/unopenable file — with success-only follow-ups (auto-open, first-PDF
+achievement) keyed off the result. The collision export gate now also disables the wear
+and undercut tabs' buttons with the standard message.
+
+### feat(runout): bubbles distribute the width evenly; body stations spread over the drawn span
+
+On-device request with the hand-drawn reference ("more even distribution of the space
+under the shaft… keep the pointer lines straight"). (1) **Even-spread waterfill**
+(`geom/RunoutBubbleLayout.kt` rule 7): with page slack, every adjacent bubble-gap floor
+rises to one common level (Σ max(gap, L) = available, capped at `spreadPitch` = 1.5 ×
+sameRowPitch) — a dense sheet divides the width evenly among its bubbles (the hand-sheet
+look), a sparse sheet spreads comfortably near its stations; floors only ever grow, so
+the engine's no-contact/no-crossing guarantees are untouched, leaders stay straight
+wherever they clear, and a rerouted one keeps the clean vertical-drop dogleg. Replaces
+the cross-row-only leader-clearance widening. (2) **Body stations**
+place evenly across each body's DRAWN span (cell midpoints in page x, inverted to
+physical mm via the new `CompressedProfileXMap.mmAt`) — body surfaces are uniform, and
+physical midpoints bunched into foreshortened runs. Liners/tapers keep the physical
+edge-inset convention (worn areas rarely reach a liner's edges — the best reading
+spots). Both bubble draw sites share the engine, so preview and PDF stay identical.
+
+---
+
+## 2026-08-05 (output picker + shaft-height slider + liner size compression)
+
+### feat(runout): output selection on the Runout tab — Consolidated (default) | Runout only | Schematic | Wear
+
+On-device request ("pick from the original outputs as individuals, and the consolidated
+page… we put so much work into designing and implementing them"). The Runout tab's
+Preview / Print / Export buttons now act on a selected output (`ui/screen/OutputDoc.kt`,
+FilterChip row): the consolidated ONE-SHEET stays the default; the **classic runout
+sheet** returns as "Runout only" (`composeRunoutPdf(consolidated = false)` — one-line
+header + raised OAL span line + profile/bubbles/TIR, no rails/footer/wear, restored
+`drawRunoutHeader`/`drawOalSpanLine`); the Schematic (honoring the persisted
+Standard/Template mode) and the Wear Document export from here too. Selection is
+session-only (resets to Consolidated — the blank-draft posture); the original tabs keep
+their own buttons; Undercut deliberately stays off the picker. Filenames via
+`buildOutputFilename` (consolidated takes `_consolidated`, freeing `_runout` for the
+classic sheet). The schematic's export gate (components + no collisions) now guards this
+whole surface — the consolidated sheet embeds schematic dimensions. See
+`docs/PDF_EXPORT.md` §5.6 and `docs/RunoutSheet.md` (Consolidation step 4).
+
+### feat(runout): "Shaft height" slider — exaggerate or shrink the drawn shaft, capped at 1.5"
+
+On-device request. `RunoutConfig.heightScale` (per-job, rides the `.shaft` envelope like
+the undercut exaggeration slider; legacy files default to 1.0) multiplies the sheet's
+solved profile scale — 50%–300%, applied after the conventional max(width-fit, visual
+scale, value-need) solve. The `PROFILE_MAX_SHAFT_HEIGHT_PT` ceiling (108 pt = 1.5" on
+paper) is **absolute** (on-device direction, review follow-up): a short shaft whose
+width-fit would draw taller is capped too — it keeps true proportion and simply doesn't
+span the page, leaving room for the dimension rails — and the page budget caps
+everything. Pure arithmetic in `exaggeratedProfileScale`
+(`geom/ProfileCompression.kt`, unit-tested); commit-on-release slider on the Runout tab,
+shown for the Consolidated / Runout outputs it affects.
+
+### fix(pdf): liners compress in SIZE — the pin was a misreading of the no-compression rule
+
+On-device clarification: "no compressing liners" meant no **body-style S-break cutouts**
+— proportional size compression is fine. Both composers drop the liner `Float.MAX_VALUE`
+pin for a finite `PROFILE_MIN_LINER_PT` floor (100 pt — room to write wear values in):
+liners foreshorten in proportion above the floor, never draw an S-break (a body-only draw
+path), and the height-yield solve (`solveMaxProfileScale`) now serves keyway-bearing
+bodies alone. Dimension labels still print TRUE lengths; the footer compression note keys
+off actual foreshortening, liners included.
+
+---
+
 ## 2026-08-04 (both PDFs — visual diameter scale + proportional compression v2)
 
 ### fix(pdf): schematic gets the hand-sheet sizing too; body runs keep writable width and show relative length

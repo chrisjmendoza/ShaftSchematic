@@ -399,6 +399,22 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutConfig.update { it.copy(tirDirection = direction) }
     }
 
+    /**
+     * "Shaft height" slider — exaggerate or shrink the drawn shaft on the runout/
+     * consolidated sheet. Clamped to the geom slider bounds; the composer additionally
+     * hard-caps the drawn height at 1.5" and the page budget.
+     */
+    fun setRunoutHeightScale(scale: Float) {
+        _runoutConfig.update {
+            it.copy(
+                heightScale = scale.coerceIn(
+                    com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MIN,
+                    com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MAX,
+                )
+            )
+        }
+    }
+
     // ── Runout per-station readings (bubble value + high-spot marker) ──────────
     // Reference-only data, same posture as _wearRecord below: plain state updates, no
     // geometry side effects. Keyed by (componentId, stationIndex). Both fields optional;

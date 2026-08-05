@@ -289,6 +289,109 @@ through a measurement number ("the lines will not draw where the numbers are").
   and no Add-component dialog — outside the add-dialog-parity invariant, like undercuts.
 - **Blank draft**: boundaries print (they are the write-in areas), values drop — same rule
   as the write-in bubbles.
+### Consolidation step 5 (2026-08-05, morning review) — Consolidated Output tab, variants, batch export, bubble spread
+
+Same-day review feedback on step 4; supersedes step 4's picker placement:
+
+- **The Consolidated Output tab** (`EditorTab.OUTPUT`, `ui/screen/OutputRoute.kt`, last in
+  the sidebar, enabled when built): the Runout tab's step-4 output picker moved here and
+  reshaped. The tab carries the consolidated sheet's **content election**
+  (`ConsolidatedVariant`: **All three** (default) | Schematic + Runout | Schematic + Wear
+  — the schematic rails + footer are always on; bubbles/TIR and wear info each electable
+  via `composeRunoutPdf(includeBubbles/includeWearInfo)`; electing bubbles out returns
+  their lanes to the shaft area), the **"Shaft height" slider**, the **worn-section
+  editor** (moved from the Runout tab — sections print on this sheet), blank draft, and
+  Preview/Print/Export of the consolidated sheet.
+- **"Export all"** (same tab): checkboxes for the five documents (consolidated [current
+  variant], schematic, runout, wear, undercut — all on by default) + one folder pick
+  (`OpenDocumentTree` + `createPdfInTree`); each file goes through the hardened write, so
+  one composer failure costs one file (an error page inside it), never the batch. A
+  result line reports written/failed counts; nothing auto-opens.
+- **The Runout tab returns to runouts only** ("the runout editor should only focus on
+  the runouts"): live bubble canvas (wear overlays removed — they render on the Output
+  tab's true-PDF preview), TIR selector, station counts, bubble value entry, and
+  Preview/Print/Export of the **classic runout sheet** (`consolidated = false`,
+  suffix `_runout`).
+- **Shaft-height slider everywhere it matters**: the schematic composer takes the same
+  per-job value (`composeShaftPdf(heightScale)`, slider also in the schematic PDF
+  preview's Tune sheet — "I intended this"). The **1.5" ceiling is ABSOLUTE** (review
+  correction of step 4's growth-only cap): a short shaft whose width-fit would draw
+  taller is capped and simply doesn't span the page — "we still need room for the
+  dimensional rails". Slider UX: shared `ShaftHeightSlider` — track ends where the cap
+  engages for THIS shaft (`effectiveHeightScaleMax`), commits within ±5% of 100% snap to
+  exactly 1.0 (`snappedHeightScale` — "don't want to fight the slider"), plus a Reset
+  button.
+- **Export hardening unified** ("please unify"): every SAF export (schematic, runout,
+  wear, undercut, consolidated, batch) writes through
+  `util/PdfSafExport.writeShaftPdfToUri` — a composer throw yields a valid error page,
+  never a truncated file — and the collision export gate now guards the wear and
+  undercut tabs too.
+- **Runout bubble algorithm** (on-device request with the hand-drawn reference):
+  - *Body stations place evenly across the DRAWN span* — cell midpoints in page x,
+    inverted to physical mm (`CompressedProfileXMap.mmAt`) — because a body surface is
+    uniform and physical midpoints bunch into foreshortened runs. Liners/tapers keep the
+    physical edge-inset convention (worn areas rarely reach a liner's edges — those are
+    the best reading spots).
+  - *Even-spread waterfill* (`RunoutBubbleLayout` rule 7): every adjacent bubble gap
+    floor rises toward one common level (Σ max(gap, L) = available, capped at
+    `spreadPitch` = 1.5 × sameRowPitch) so bubbles distribute the width under the shaft
+    evenly instead of bunching; leaders stay straight wherever they clear, and a
+    rerouted one keeps the clean vertical-drop dogleg. Floors only ever grow — no
+    collision guarantee changes ("I did have two make contact" — the engine still makes
+    contact geometrically impossible).
+
+---
+
+### Consolidation step 4 (2026-08-05) — output picker, shaft-height slider, liner size compression
+
+Overnight wave (on-device request), three features on the Runout tab:
+
+- **Output picker** — the tab's Preview / Print / Export buttons now act on a selected
+  output: **Consolidated** (default), **Runout only**, **Schematic**, **Wear**
+  (`ui/screen/OutputDoc.kt`; FilterChip row above the blank-draft toggle). The original
+  outputs stay first-class alternatives — "we put so much work into designing and
+  implementing them". Session-scoped selection (resets to Consolidated; a persisted
+  sticky pick would silently export the wrong document later — the blank-draft posture).
+  The Schematic / Wear / Undercut tabs keep their own hard-wired buttons; the Undercut
+  Drawing is deliberately absent from the picker (it authors on its own tab). Filenames
+  follow each document's historical shape via `buildOutputFilename`
+  (`{customer_vessel_job | fallback}_{suffix}[_BlankDraft].pdf`; the consolidated sheet
+  takes the `_consolidated` suffix, freeing `_runout` for the classic sheet). Because the
+  consolidated sheet embeds the schematic's dimensions, the schematic's export gate
+  (`exportPdfGate` — components exist, no collisions) now guards this whole surface.
+- **Classic runout sheet restored** — `composeRunoutPdf(..., consolidated = false)`
+  prints the original standalone layout: one-line job header, raised OAL span line
+  (witness lines to the SET faces, value-in-break), profile + bubbles + TIR only — no
+  dimension rails, no footer, no wear info (`drawRunoutHeader` / `drawOalSpanLine`,
+  restored with the layout constants `HEADER_HEIGHT_PT` / `OAL_GAP_PT` /
+  `OAL_LINE_SPACE_PT`). Both modes share the compressed profile, the bubble engine, and
+  the shaft-height slider; blank-draft rules per mode are unchanged from each layout's
+  own history.
+- **"Shaft height" slider** — `RunoutConfig.heightScale` (per-job, rides the `.shaft`
+  envelope like the undercut sheet's exaggeration slider; additive field, legacy files
+  default to 1.0). A multiplier on the sheet's solved profile scale: 50%–300%
+  (`PROFILE_HEIGHT_SCALE_MIN/MAX`), applied AFTER the conventional
+  max(width-fit, visual scale, value-need) solve. The
+  `PROFILE_MAX_SHAFT_HEIGHT_PT` = 108 pt ceiling is **absolute** (on-device direction):
+  a short shaft whose width-fit would draw taller is capped too — it keeps true
+  proportion and simply doesn't span the page width, leaving room for the dimension
+  rails and the rest of the sheet; the page budget caps everything. The slider UIs end
+  their track where the ceiling engages (`effectiveHeightScaleMax`) so the limit reads
+  on the control itself. Pure arithmetic in
+  `exaggeratedProfileScale` (`geom/ProfileCompression.kt`, unit-tested). Slider UI on the
+  Runout tab (drag-local, commit-on-release), shown only for the Consolidated / Runout
+  outputs it affects. The schematic keeps its fixed convention.
+- **Liner size compression** (both composers) — on-device clarification of the earlier
+  "no compressing liners" rule: what liners must never get is a **body-style S-break
+  cutout**; proportional **size** compression is fine. Liners drop their `Float.MAX_VALUE`
+  pin for a finite `PROFILE_MIN_LINER_PT` (100 pt) floor — they foreshorten in proportion
+  above it, never draw an S-break (that glyph remains a body-only draw path), and the
+  height-yield solve now serves keyway-bearing bodies alone. Dimension labels still print
+  TRUE lengths, and the footer compression note keys off actual foreshortening, liners
+  included.
+
+---
+
 ### Consolidation step 3 (2026-08-04) — the ONE-SHEET: schematic rails + footer join
 
 On-device request ("If I can fit all this by hand, then our app should have no problem",
@@ -350,16 +453,18 @@ On-device request following the worn-sections review:
     drawn shaft **height is proportional to TRUE diameter** at the fixed visual scale
     `VISUAL_DIA_SCALE_PT_PER_MM` (0.40 pt/mm: 8" → ~1.13" tall, 7" → ~1", 6" → ~0.85",
     5" → ~0.71" — the on-device rule, confirmed with rulered hand sketches) and is never
-    diluted by shaft length — EXCEPT when pinned liners need the room: **liners never
-    compress** (on-device rule) and the height yields instead (`solveMaxProfileScale`
-    bisects the largest scale that still lays out; "doesn't have to be perfectly
-    proportional, just close"). The x axis is otherwise schematic: spans may foreshorten
-    but each kind keeps a writable minimum drawn width (`PROFILE_MIN_TAPER_PT` 80;
-    `PROFILE_MIN_THREAD_PT` 36; `PROFILE_MIN_BODY_RUN_PT` 64 — room to write diameters
-    and hang runout leaders, on-device request), liners and keyway-bearing bodies pin at
-    true scale, and **above the floors width distributes in proportion to true length** — a
-    longer body run draws visibly longer, equal runs draw equal (on-device request), no
-    span ever stretches past true scale. Pure engine `geom/ProfileCompression.kt`
+    diluted by shaft length — EXCEPT when a pinned span (a keyway-bearing body, whose
+    drawn slot geometry must stay real) needs the room: then the height yields instead
+    (`solveMaxProfileScale` bisects the largest scale that still lays out; "doesn't have
+    to be perfectly proportional, just close"). The x axis is otherwise schematic: spans
+    may foreshorten but each kind keeps a writable minimum drawn width
+    (`PROFILE_MIN_TAPER_PT` 80; `PROFILE_MIN_THREAD_PT` 36; `PROFILE_MIN_BODY_RUN_PT` 64
+    — room to write diameters and hang runout leaders, on-device request;
+    `PROFILE_MIN_LINER_PT` 100 — room to write wear values in, see the 2026-08-05 liner
+    clarification below), keyway-bearing bodies pin at true scale, and **above the floors
+    width distributes in proportion to true length** — a longer body run draws visibly
+    longer, equal runs draw equal (on-device request), no span ever stretches past true
+    scale. Pure engine `geom/ProfileCompression.kt`
     (`buildCompressedProfileXMap` + monotone `solveSpanWidths` bisection, unit-tested);
     only BODY runs get the S-break pair when foreshortened (`drawBodiesForRunout` /
     the schematic's `drawBodiesCompressedCenterBreak` trigger on actual foreshortening);

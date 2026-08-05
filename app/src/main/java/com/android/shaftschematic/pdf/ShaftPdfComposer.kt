@@ -8,11 +8,13 @@ import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.END_EPS_MM
 import com.android.shaftschematic.geom.KeywaySilhouetteNotch
 import com.android.shaftschematic.geom.KeywaySilhouettePoint
+import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_TAPER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
 import com.android.shaftschematic.geom.ProfileFeatureSpan
 import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
 import com.android.shaftschematic.geom.buildCompressedProfileXMap
+import com.android.shaftschematic.geom.exaggeratedProfileScale
 import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -82,6 +84,12 @@ fun composeShaftPdf(
     options: PdfExportOptions = PdfExportOptions(),
     resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
+    /**
+     * "Shaft height" slider — the same per-job multiplier the runout/consolidated sheets
+     * use (`RunoutConfig.heightScale`): exaggerate or shrink the drawn shaft, hard-capped
+     * at 1.5" on paper and by the page budget (`exaggeratedProfileScale`).
+     */
+    heightScale: Float = 1.0f,
 ) {
     val effectiveOptions = when (options.mode) {
         PdfExportMode.Template -> options.copy(
@@ -176,9 +184,10 @@ fun composeShaftPdf(
         spec.tapers.forEach {
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_TAPER_PT))
         }
-        // Liners are PINNED at true scale — never compressed (on-device rule).
+        // Liners compress in SIZE only — proportional foreshortening above their floor,
+        // never a body-style S-break cutout (on-device clarification).
         spec.liners.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE))
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_LINER_PT))
         }
         spec.threads.forEach {
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_THREAD_PT))
@@ -188,9 +197,16 @@ fun composeShaftPdf(
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE))
         }
     }
-    // Liners pinned at true width → when they need the room, the HEIGHT yields
-    // ("doesn't have to be perfectly proportional, just close" — on-device rule).
-    val desiredScale = minOf(VISUAL_DIA_SCALE_PT_PER_MM, geomRect.height() / maxDiaMm)
+    // Keyway-bearing bodies pinned at true width → when one needs the room, the HEIGHT
+    // yields ("doesn't have to be perfectly proportional, just close" — on-device rule).
+    // The per-job "Shaft height" slider multiplies the visual scale; the 1.5" ceiling and
+    // the page budget cap the result (exaggeratedProfileScale, pure, unit-tested).
+    val desiredScale = exaggeratedProfileScale(
+        baseScale = VISUAL_DIA_SCALE_PT_PER_MM,
+        heightFrac = heightScale,
+        budgetCapPt = geomRect.height(),
+        maxDiaMm = maxDiaMm,
+    )
     val diaPtPerMm = solveMaxProfileScale(
         windowStartMm = contentMinMm, windowEndMm = contentMaxMm,
         features = featureSpans, contentWidth = geomRect.width(), scaleHi = desiredScale,

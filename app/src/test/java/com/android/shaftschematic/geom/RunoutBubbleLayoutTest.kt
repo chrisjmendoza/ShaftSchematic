@@ -183,9 +183,9 @@ class RunoutBubbleLayoutTest {
 
     @Test
     fun `dense cluster stays centred over its stations`() {
-        // Two stations 10pt apart: must spread past crossRowPitch (25) but stay centred at 400.
-        // Content span here (36..756) has ample slack, so the leader-clearance spread (rule 7)
-        // takes the full gap to crossRowPitch + leaderClearance, not the bare crossRowPitch.
+        // Two stations 10pt apart: must spread past crossRowPitch (25) but stay centred at
+        // 400. Content span here (36..756) has ample slack, so the even-spread waterfill
+        // (rule 7) takes the gap all the way to the spreadPitch cap.
         val stations = listOf(
             RunoutStationX("t1", 100f, 395f),
             RunoutStationX("t1", 110f, 405f),
@@ -193,19 +193,15 @@ class RunoutBubbleLayoutTest {
         val plan = planRunoutBubbles(stations, geom)
         val mid = (plan.bubbleX[0] + plan.bubbleX[1]) / 2f
         assertEquals(400f, mid, 1e-2f)
-        assertEquals(
-            geom.crossRowPitch + geom.leaderClearance,
-            plan.bubbleX[1] - plan.bubbleX[0],
-            1e-2f,
-        )
+        assertEquals(geom.spreadPitch, plan.bubbleX[1] - plan.bubbleX[0], 1e-2f)
     }
 
     @Test
     fun `ample slack spreads a bubble clear of a foreign leader's leg`() {
         // Mirrors the reported field defect: two liners' worth of stations mid-shaft, packed
         // just tight enough to alternate rows, but with a wide-open page around them. With
-        // room to spare, every cross-row adjacent pair should land leaderClearance beyond the
-        // bare crossRowPitch minimum — enough room for a hand-written reading beside the bubble
+        // room to spare, every adjacent pair rises to the spreadPitch cap — far beyond the
+        // bare crossRowPitch minimum — so a hand-written reading fits beside the bubble
         // without the pen crossing the neighbour's leader.
         val stations = listOf(
             RunoutStationX("linerA", 400f, 400f),
@@ -215,35 +211,81 @@ class RunoutBubbleLayoutTest {
         )
         val plan = planRunoutBubbles(stations, geom)
         for (i in 0 until plan.bubbleX.size - 1) {
-            if (plan.rows[i + 1] != plan.rows[i]) {
-                val dx = plan.bubbleX[i + 1] - plan.bubbleX[i]
-                assertTrue(
-                    "cross-row gap $i..${i + 1} = $dx wants >= ${geom.crossRowPitch + geom.leaderClearance}",
-                    dx >= geom.crossRowPitch + geom.leaderClearance - 1e-2f,
-                )
-            }
+            val dx = plan.bubbleX[i + 1] - plan.bubbleX[i]
+            assertTrue(
+                "gap $i..${i + 1} = $dx wants >= ${geom.spreadPitch}",
+                dx >= geom.spreadPitch - 1e-2f,
+            )
         }
         assertInvariants(place(stations))
     }
 
     @Test
-    fun `tight page barely spreads and still resolves with zero unresolved collisions`() {
+    fun `tight page divides its width evenly and still resolves with zero collisions`() {
         // A narrow content window (160pt available) with 6 alternating-row stations needing
-        // 5 * crossRowPitch(25) = 125pt minimum — only 35pt of slack, not the 5 * 8 = 40pt
-        // the full leaderClearance spread would want. The widening must degrade to exactly
-        // what fits (7pt/gap, not 8), never compress, never collide — the no-new-collisions
-        // guarantee must hold regardless of how much clearance-spread widening is applied.
+        // 5 * crossRowPitch(25) = 125pt minimum. The waterfill raises every gap to the
+        // common level that exactly consumes the width (160 / 5 = 32pt), never compresses,
+        // never collides.
         val tight = geom.copy(contentLeft = 0f, contentRight = 200f)
         val stations = List(6) { i -> RunoutStationX("c0", i * 20f, i * 20f + 10f) }
         val plan = planRunoutBubbles(stations, tight)
         assertTrue("should not need to compress", !plan.compressed)
-        val expectedGap = tight.crossRowPitch + 7f // 35pt slack / 5 gaps = 7pt each, capped below leaderClearance(8)
+        val expectedGap = 160f / 5f
         for (i in 1 until plan.bubbleX.size) {
-            assertEquals(expectedGap, plan.bubbleX[i] - plan.bubbleX[i - 1], 1e-2f)
+            assertEquals(expectedGap, plan.bubbleX[i] - plan.bubbleX[i - 1], 1e-1f)
         }
         val result = plan.finish(300f) { 300f }
         assertEquals(0, result.unresolvedCollisions)
         assertInvariants(result, tight)
+    }
+
+    @Test
+    fun `waterfill distributes a bunched sheet evenly - the hand-sheet spread`() {
+        // 12 stations bunched into 150pt of page (compressed runs) on a wide sheet: the
+        // even-spread waterfill must pull the bubbles apart to one common pitch instead of
+        // leaving them packed at the minimums under the bunch (on-device request, from the
+        // hand-drawn reference: circles distribute the space under the shaft evenly).
+        val stations = List(12) { i -> RunoutStationX("c${i / 3}", i * 10f, 300f + i * 12f) }
+        val plan = planRunoutBubbles(stations, geom)
+        val gaps = (1 until plan.bubbleX.size).map { plan.bubbleX[it] - plan.bubbleX[it - 1] }
+        // One common level: every gap equal (all floors below the level here)…
+        for (g in gaps) assertEquals(gaps[0], g, 1e-1f)
+        // …and well above the bare cross-row minimum.
+        assertTrue("spread level ${gaps[0]} should exceed crossRowPitch", gaps[0] > geom.crossRowPitch + 1f)
+        assertInvariants(place(stations))
+    }
+
+    @Test
+    fun `body stations place evenly across the DRAWN span under a compressed mapping`() {
+        // Piecewise map compressing 0..1000mm into 100pt and stretching 1000..2000mm into
+        // 500pt. Physical midpoints would bunch the first body's stations into the squeezed
+        // 100pt; drawn-space placement spreads them evenly across it and inverts to mm.
+        fun xAt(mm: Float) = if (mm <= 1000f) mm * 0.1f else 100f + (mm - 1000f) * 0.5f
+        fun mmAt(x: Float) = if (x <= 100f) x / 0.1f else 1000f + (x - 100f) / 0.5f
+        val spans = listOf(RunoutComponentSpan("b1", RunoutComponentKind.BODY, 0f, 1000f))
+        val stations = collectRunoutStations(spans, mapOf("b1" to 4), ::xAt, ::mmAt)
+        assertEquals(4, stations.size)
+        // Evenly spaced in DRAWN x: 12.5, 37.5, 62.5, 87.5 across the 100pt span.
+        stations.forEachIndexed { i, st ->
+            assertEquals(12.5f + i * 25f, st.stationX, 1e-3f)
+            // And the mm is the true inverse of that drawn position.
+            assertEquals(mmAt(st.stationX), st.stationMm, 1e-3f)
+        }
+        // Without an inverse, bodies fall back to physical cell midpoints.
+        val fallback = collectRunoutStations(spans, mapOf("b1" to 4), ::xAt)
+        assertEquals(125f, fallback[0].stationMm, 1e-3f)
+    }
+
+    @Test
+    fun `taper and liner stations keep their physical edge-inset placement`() {
+        // The drawn-space rule is bodies-only: liners/tapers measure near their physical
+        // edges (best runout spots — worn areas rarely reach the very edge).
+        fun xAt(mm: Float) = mm * 0.3f
+        fun mmAt(x: Float) = x / 0.3f
+        val spans = listOf(RunoutComponentSpan("ln", RunoutComponentKind.LINER, 100f, 500f))
+        val stations = collectRunoutStations(spans, emptyMap(), ::xAt, ::mmAt)
+        assertEquals(125.4f, stations[0].stationMm, 1e-3f)   // 100 + 1in inset
+        assertEquals(574.6f, stations[1].stationMm, 1e-3f)   // 600 − 1in inset
     }
 
     @Test

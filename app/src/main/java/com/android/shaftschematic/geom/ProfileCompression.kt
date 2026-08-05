@@ -30,12 +30,65 @@ package com.android.shaftschematic.geom
 const val VISUAL_DIA_SCALE_PT_PER_MM = 0.40f
 
 // Per-kind minimum drawn widths (pt). A span whose TRUE width is smaller than its floor
-// simply draws true — floors never stretch anything. Liners have NO floor entry: they are
-// PINNED at true scale (`Float.MAX_VALUE` floor — "no compressing liners", on-device rule;
-// when liners need the room, the drawn height yields via [solveMaxProfileScale]).
+// simply draws true — floors never stretch anything. Liners compress in SIZE only
+// (proportional foreshortening above their floor, on-device clarification: "compressed
+// like bodies" — an S-break cutout — is what liners must never get; the S-break glyph is
+// a body-only draw path). Keyway-bearing bodies stay PINNED at true scale
+// (`Float.MAX_VALUE` floor); when a pinned span needs the room, the drawn height yields
+// via [solveMaxProfileScale].
 const val PROFILE_MIN_TAPER_PT = 80f    // keeps the taper read (slope may steepen)
 const val PROFILE_MIN_THREAD_PT = 36f   // hatched stub stays legible
 const val PROFILE_MIN_BODY_RUN_PT = 64f // write a diameter, hang runout leaders
+const val PROFILE_MIN_LINER_PT = 100f   // room to write wear values in / read the liner
+
+// "Shaft height" slider bounds (multiplier on the solved profile scale) and the absolute
+// cap on the drawn shaft height — grown to at most 1.5" on paper (on-device request).
+const val PROFILE_HEIGHT_SCALE_MIN = 0.5f
+const val PROFILE_HEIGHT_SCALE_MAX = 3.0f
+const val PROFILE_MAX_SHAFT_HEIGHT_PT = 108f  // 1.5 in
+
+/**
+ * Apply the "Shaft height" exaggeration slider to a solved base scale: multiply by
+ * [heightFrac] (clamped to the slider bounds), then cap so the drawn shaft height
+ * ([maxDiaMm] × scale) never exceeds [PROFILE_MAX_SHAFT_HEIGHT_PT] (1.5" on paper) or
+ * the page budget ([budgetCapPt]).
+ *
+ * The ceiling is ABSOLUTE (on-device direction): a short shaft whose width-fit would
+ * draw taller is capped too — it then simply doesn't span the page width, keeping true
+ * proportion and leaving room for the dimension rails and the rest of the sheet.
+ * Pure — the composer scale solve and any preview share this exact arithmetic.
+ */
+fun exaggeratedProfileScale(
+    baseScale: Float,
+    heightFrac: Float,
+    budgetCapPt: Float,
+    maxDiaMm: Float,
+): Float {
+    if (maxDiaMm <= 0f) return baseScale
+    val frac = heightFrac.coerceIn(PROFILE_HEIGHT_SCALE_MIN, PROFILE_HEIGHT_SCALE_MAX)
+    val capScale = (minOf(budgetCapPt, PROFILE_MAX_SHAFT_HEIGHT_PT) / maxDiaMm)
+        .coerceAtLeast(1e-4f)
+    return (baseScale * frac).coerceAtMost(capScale)
+}
+
+/**
+ * The largest slider fraction that still changes the drawing for a given base solve —
+ * past it the [PROFILE_MAX_SHAFT_HEIGHT_PT] ceiling (or the page budget) holds the scale
+ * flat. The slider UIs end their track here so the dead zone reads as a limit instead of
+ * an inert drag ("informs me the limit of the zoom slider range" — on-device request).
+ * Never below [PROFILE_HEIGHT_SCALE_MIN] + a working margin, never above
+ * [PROFILE_HEIGHT_SCALE_MAX].
+ */
+fun effectiveHeightScaleMax(
+    baseScale: Float,
+    budgetCapPt: Float,
+    maxDiaMm: Float,
+): Float {
+    if (maxDiaMm <= 0f || baseScale <= 0f) return PROFILE_HEIGHT_SCALE_MAX
+    val capScale = (minOf(budgetCapPt, PROFILE_MAX_SHAFT_HEIGHT_PT) / maxDiaMm)
+        .coerceAtLeast(1e-4f)
+    return (capScale / baseScale).coerceIn(PROFILE_HEIGHT_SCALE_MIN + 0.1f, PROFILE_HEIGHT_SCALE_MAX)
+}
 
 /**
  * A feature span the caller wants width-managed individually. [minWidthPt] is its floor;
@@ -80,6 +133,22 @@ class CompressedProfileXMap internal constructor(val segments: List<ProfileXSegm
     /** True when any part of [startMm]..[endMm] draws foreshortened. */
     fun isCompressedOver(startMm: Float, endMm: Float): Boolean =
         segments.any { it.compressed && it.startMm < endMm && it.endMm > startMm }
+
+    /**
+     * Inverse of [xAt] — page x → shaft-space mm. Well-defined because the mapping is
+     * strictly monotonic; positions outside the drawn window invert at the edge scale.
+     * Lets consumers place marks evenly in DRAWN space (e.g. body runout stations) and
+     * recover the physical mm they landed on.
+     */
+    fun mmAt(x: Float): Float {
+        val first = segments.first()
+        if (x <= first.x0) return first.startMm - (first.x0 - x) / edgeScale(first).coerceAtLeast(1e-6f)
+        val last = segments.last()
+        if (x >= last.x1) return last.endMm + (x - last.x1) / edgeScale(last).coerceAtLeast(1e-6f)
+        val seg = segments.first { x <= it.x1 + 1e-4f }
+        val ppm = seg.ptPerMm
+        return if (ppm > 0f) seg.startMm + (x - seg.x0) / ppm else seg.startMm
+    }
 
     private fun edgeScale(seg: ProfileXSegment): Float =
         seg.ptPerMm.takeIf { it > 0f }
@@ -171,12 +240,12 @@ internal fun walkSpans(
 
 /**
  * Largest diameter scale at which the window can still lay out inside [contentWidth]:
- * a PINNED span (`minWidthPt == Float.MAX_VALUE` — liners, keyway-bearing bodies) demands
- * its full true width at the scale ("no compressing liners" — on-device rule; the drawn
- * HEIGHT yields instead when liners need the room), every other span demands at most its
- * floor. The demand is monotone in scale, so bisection finds the ceiling; [scaleHi] (the
- * desired visual scale, pre-capped by the height budget) is returned whenever it already
- * fits.
+ * a PINNED span (`minWidthPt == Float.MAX_VALUE` — keyway-bearing bodies, whose drawn
+ * slot geometry must stay real) demands its full true width at the scale (the drawn
+ * HEIGHT yields instead when a pinned span needs the room), every other span — liners
+ * included — demands at most its floor. The demand is monotone in scale, so bisection
+ * finds the ceiling; [scaleHi] (the desired visual scale, pre-capped by the height
+ * budget) is returned whenever it already fits.
  */
 fun solveMaxProfileScale(
     windowStartMm: Float,

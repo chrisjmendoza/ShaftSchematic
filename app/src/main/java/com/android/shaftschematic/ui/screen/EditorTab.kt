@@ -9,8 +9,9 @@ package com.android.shaftschematic.ui.screen
  *
  * Enabling rules:
  * - [SCHEMATIC] is always enabled (you can edit even an empty spec).
- * - [RUNOUT], [WEAR], and [UNDERCUT] are disabled until the shaft is "built" (has at least
- *   one component and a non-zero OAL), because a blank spec produces a meaningless document.
+ * - [RUNOUT], [WEAR], [UNDERCUT], and [OUTPUT] are disabled until the shaft is "built"
+ *   (has at least one component and a non-zero OAL), because a blank spec produces a
+ *   meaningless document.
  * - [WEAR] can be hidden via [WEAR_TAB_ENABLED] when full consolidation retires it.
  */
 
@@ -45,5 +46,9 @@ enum class EditorTab(
     UNDERCUT(
         label = "Undercut Drawing",
         contentDescription = "Shaft undercut sections drawing",
+    ),
+    OUTPUT(
+        label = "Consolidated Output",
+        contentDescription = "Consolidated sheet preview, variants, and batch export",
     ),
 }

@@ -102,6 +102,11 @@ fun ShaftEditorRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
             )
+
+            EditorTab.OUTPUT -> OutputRoute(
+                vm = vm,
+                onOpenSidebar = { sidebarOpen = true },
+            )
         }
 
         // ── Overlay sidebar (handle tab when closed, modal panel when open) ──

@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Schema
 import androidx.compose.material.icons.filled.Settings
@@ -186,6 +187,14 @@ fun EditorSidebarOverlay(
                             selected = selectedTab == EditorTab.UNDERCUT,
                             enabled = runoutEnabled,
                             onClick = { if (runoutEnabled) { onTabSelected(EditorTab.UNDERCUT); onClose() } },
+                            disabledHint = "Add components first",
+                        )
+                        NavItem(
+                            icon = Icons.Filled.PictureAsPdf,
+                            label = EditorTab.OUTPUT.label,
+                            selected = selectedTab == EditorTab.OUTPUT,
+                            enabled = runoutEnabled,
+                            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.OUTPUT); onClose() } },
                             disabledHint = "Add components first",
                         )
 

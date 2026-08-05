@@ -116,15 +116,33 @@ last** — wear-area bands and pit X's (migrated from the retired wear tab,
 knockout halos (worn values, then `drawDiaReadingsInProfile`); do not draw any mark after
 the text passes. Values **auto-fit their local band** (`fittedValueTextSize`, floor
 `WORN_VALUE_MIN_TEXT_PT`/14 px canvas); the PDF profile follows the **hand-sheet
-compression convention** — shaft drawn ~1.25" tall (`RUNOUT_TARGET_SHAFT_HEIGHT_PT`),
-details at true proportion, body runs foreshortened with S-breaks via the pure equal-cap
-mapping `geom/ProfileCompression.kt`, everything through the one piecewise `xAt`; liners
-draw **unfilled on this sheet** regardless of `shadedLiners` so halos don't read as
-pasted boxes. Division of labor: the Wear page is the **authoring surface** for
+compression convention** — drawn height proportional to TRUE diameter at
+`VISUAL_DIA_SCALE_PT_PER_MM`, spans foreshortened above per-kind width floors via the
+pure mapping `geom/ProfileCompression.kt`, everything through the one piecewise `xAt`.
+**Liners compress in SIZE only** (finite `PROFILE_MIN_LINER_PT` floor — proportional
+foreshortening, NEVER a body-style S-break cutout; the S-break glyph is a body-only draw
+path); keyway-bearing bodies stay pinned at true width with the height yielding
+(`solveMaxProfileScale`). The **"Shaft height" slider** (`RunoutConfig.heightScale`,
+per-job in the envelope — ONE value behind the runout/consolidated sheets AND the
+schematic, `composeShaftPdf(heightScale)`) multiplies the solved scale; the drawn shaft
+is hard-capped at **1.5" on paper** (`PROFILE_MAX_SHAFT_HEIGHT_PT`, an ABSOLUTE ceiling
+— a short shaft that would draw taller at width-fit is capped and simply doesn't span
+the page) and by the page budget (`exaggeratedProfileScale`, pure/unit-tested; slider
+tracks end where the cap engages via `effectiveHeightScaleMax`, commits snap to 100%
+within ±5%). Liners draw **unfilled on this sheet**
+regardless of `shadedLiners` so halos don't read as pasted boxes. Division of labor: the Wear page is the **authoring surface** for
 spots/pits/point-readings (tab visible; `WEAR_TAB_ENABLED` in `EditorTab.kt` is the
-one-line retirement switch for a future full consolidation), while the Runout sheet is
-the consolidated **output** featuring that wear information. See `docs/RunoutSheet.md`
-(Worn Sections).
+one-line retirement switch for a future full consolidation); the Runout tab authors
+**runouts only** (its buttons produce the classic standalone runout sheet,
+`composeRunoutPdf(consolidated = false)`); and the **Consolidated Output tab**
+(`EditorTab.OUTPUT`, `ui/screen/OutputRoute.kt`) owns the consolidated sheet — content
+election (`ConsolidatedVariant`: All three (default) | Schematic + Runout | Schematic +
+Wear, via `includeBubbles`/`includeWearInfo`), the worn-section editor, the "Shaft
+height" slider, and **Export all** (checked documents batch-written to a picked folder).
+Every SAF export goes through the hardened `util/PdfSafExport.writeShaftPdfToUri`
+(composer throw → valid error page, never a truncated file) and the collision export
+gate guards every export surface. See `docs/RunoutSheet.md` (Consolidation step 5) and
+`docs/PDF_EXPORT.md` §5.6–5.7.
 
 ### Undercuts are reference features
 Undercut sections (`UndercutRecord.undercuts` — an `Undercut` per machined-below-surface

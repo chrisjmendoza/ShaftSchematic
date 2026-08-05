@@ -26,11 +26,22 @@ import kotlinx.serialization.Serializable
  *   normally get bubbles; 0 hides that component's stations entirely.
  * @param tirDirection Which direction the indicator was run when taking readings.
  *   Printed as "TIR's taken looking: ___" at the bottom of the runout sheet.
+ * @param heightScale "Shaft height" slider — a multiplier on the solved profile scale so
+ *   the drawn shaft can be exaggerated (grown) or shrunk as a whole, on the runout/
+ *   consolidated sheets AND the schematic (one per-job value for every drawing output).
+ *   1.0 = the standard convention. Clamped to the geom slider bounds
+ *   (`PROFILE_HEIGHT_SCALE_MIN`..`MAX`); the drawn height is hard-capped at
+ *   `PROFILE_MAX_SHAFT_HEIGHT_PT` (1.5" on paper — an ABSOLUTE ceiling: a short shaft
+ *   that would draw taller keeps proportion and simply doesn't span the page) and by the
+ *   page budget (`exaggeratedProfileScale`). Per-job (rides the .shaft envelope) so a
+ *   reopened document reprints identically — same posture as the undercut sheet's
+ *   exaggeration slider.
  */
 @Serializable
 data class RunoutConfig(
     val componentOverrides: Map<String, Int> = emptyMap(),
     val tirDirection: TirDirection = TirDirection.UNSET,
+    val heightScale: Float = 1.0f,
 ) {
     companion object {
         /**

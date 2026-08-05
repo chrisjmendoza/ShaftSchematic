@@ -89,6 +89,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
+import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeUndercutPdf
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
@@ -96,11 +97,13 @@ import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
+import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.printShaftPdfPage
+import com.android.shaftschematic.util.writeShaftPdfToUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -173,6 +176,11 @@ fun UndercutRoute(
     var anchorLinerId by rememberSaveable { mutableStateOf<String?>(null) }
     var anchorUndercutId by rememberSaveable { mutableStateOf<String?>(null) }
 
+    // Collisions corrupt any drawing, so the shared export gate guards this surface too —
+    // the same posture as the runout and schematic surfaces.
+    val collidingIds = remember(spec) { spec.collidingIds() }
+    val gate = remember(spec, collidingIds) { exportPdfGate(spec, collidingIds) }
+
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
     val segs = remember(resolvedComponents) { surfaceSegsFrom(resolvedComponents) }
     val notches = remember(undercutRecord, segs, oalMm) {
@@ -229,32 +237,22 @@ fun UndercutRoute(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
         if (uri != null) {
-            runCatching {
-                ctx.contentResolver.openOutputStream(uri)?.use { out ->
-                    val doc = PdfDocument()
-                    try {
-                        val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
-                        val page = doc.startPage(pageInfo)
-                        composeUndercutPdf(
-                            page = page, spec = spec,
-                            project = ProjectInfo(customer = customer, vessel = vessel,
-                                jobNumber = jobNumber, side = shaftPosition),
-                            unit = unit,
-                            pdfPrefs = vm.currentPdfPrefs,
-                            resolvedComponents = resolvedComponents,
-                            undercutRecord = undercutRecord,
-                            lineThicknessScale = lineThicknessScale,
-                            blankValues = blankDraft,
-                        )
-                        doc.finishPage(page)
-                        doc.writeTo(out)
-                    } finally {
-                        try { out.flush() } catch (_: Throwable) {}
-                        doc.close()
-                    }
-                }
-                if (openAfterExport) openUndercutPdf(ctx, uri)
+            // Hardened write: a composer throw yields a valid error page, never a
+            // truncated file (util/PdfSafExport.kt — one implementation for every tab).
+            val wrote = writeShaftPdfToUri(ctx, uri) { page ->
+                composeUndercutPdf(
+                    page = page, spec = spec,
+                    project = ProjectInfo(customer = customer, vessel = vessel,
+                        jobNumber = jobNumber, side = shaftPosition),
+                    unit = unit,
+                    pdfPrefs = vm.currentPdfPrefs,
+                    resolvedComponents = resolvedComponents,
+                    undercutRecord = undercutRecord,
+                    lineThicknessScale = lineThicknessScale,
+                    blankValues = blankDraft,
+                )
             }
+            if (wrote && openAfterExport) openUndercutPdf(ctx, uri)
         }
     }
 
@@ -553,8 +551,18 @@ fun UndercutRoute(
                 }
             }
 
+            // ── Export gate ───────────────────────────────────────────────────
+            if (!gate.enabled) {
+                Text(
+                    gate.disabledMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
             OutlinedButton(
                 onClick = { showPreview = true },
+                enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Outlined.Preview, contentDescription = null)
@@ -589,6 +597,7 @@ fun UndercutRoute(
                         )
                     }
                 },
+                enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Filled.Print, contentDescription = null)
@@ -598,6 +607,7 @@ fun UndercutRoute(
 
             Button(
                 onClick = { launcher.launch(buildUndercutFilename(customer, vessel, jobNumber, blankDraft)) },
+                enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)

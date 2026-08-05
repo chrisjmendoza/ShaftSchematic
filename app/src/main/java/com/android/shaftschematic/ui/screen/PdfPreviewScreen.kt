@@ -69,8 +69,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
+import com.android.shaftschematic.geom.effectiveHeightScaleMax
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.maxOuterDiaMm
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.settings.PdfPrefs
@@ -121,6 +124,9 @@ fun PdfPreviewScreen(
 
     val spec by vm.spec.collectAsState()
     val unit by vm.unit.collectAsState()
+    // The per-job "Shaft height" multiplier lives in RunoutConfig — ONE value behind the
+    // schematic, the runout sheet, and the consolidated output.
+    val runoutConfig by vm.runoutConfig.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val pdfBlankDraft by vm.pdfBlankDraft.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -150,12 +156,14 @@ fun PdfPreviewScreen(
 
     LaunchedEffect(spec, unit, project, options, resolvedComponents, lineThicknessScale,
                    pdfShowComponentTitles, pdfTieringMode,
-                   pdfShadedBodies, pdfShadedTapers, pdfShadedLiners) {
+                   pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
+                   runoutConfig.heightScale) {
         isLoading = true
         errorMessage = null
         // Snapshot on the main thread before switching to IO.
         val pdfPrefsSnapshot = vm.currentPdfPrefs
         val thicknessScaleSnapshot = lineThicknessScale
+        val heightScaleSnapshot = runoutConfig.heightScale
         val bmp = withContext(Dispatchers.IO) {
             renderPdfPreviewBitmap(
                 context = ctx,
@@ -167,6 +175,7 @@ fun PdfPreviewScreen(
                 options = options,
                 resolvedComponents = resolvedComponents,
                 lineThicknessScale = thicknessScaleSnapshot,
+                heightScale = heightScaleSnapshot,
             )
         }
         if (bmp != null) {
@@ -252,6 +261,7 @@ fun PdfPreviewScreen(
                         val resolvedSnapshot = resolvedComponents.takeIf { it.isNotEmpty() }
                         val prefsSnapshot = vm.currentPdfPrefs
                         val thicknessSnapshot = lineThicknessScale
+                        val heightSnapshot = runoutConfig.heightScale
                         val versionSnapshot = appVersionName(ctx)
                         printShaftPdfPage(ctx, jobName) { page ->
                             composeShaftPdf(
@@ -265,6 +275,7 @@ fun PdfPreviewScreen(
                                 options = optionsSnapshot,
                                 resolvedComponents = resolvedSnapshot,
                                 lineThicknessScale = thicknessSnapshot,
+                                heightScale = heightSnapshot,
                             )
                         }
                     }) {
@@ -374,9 +385,11 @@ fun PdfPreviewScreen(
         ) {
             PdfOptionsSheet(
                 vm = vm,
+                spec = spec,
                 pdfShowComponentTitles = pdfShowComponentTitles,
                 pdfTieringMode = pdfTieringMode,
                 lineThicknessScale = lineThicknessScale,
+                heightScale = runoutConfig.heightScale,
                 pdfShadedBodies = pdfShadedBodies,
                 pdfShadedTapers = pdfShadedTapers,
                 pdfShadedLiners = pdfShadedLiners,
@@ -404,6 +417,7 @@ private fun renderPdfPreviewBitmap(
     options: PdfExportOptions,
     resolvedComponents: List<ResolvedComponent>,
     lineThicknessScale: Float = 1.0f,
+    heightScale: Float = 1.0f,
 ): Bitmap? = runCatching {
     // Step 1 – compose the PDF into a temp file.
     // Use createTempFile so concurrent preview renders don't collide on the same path.
@@ -424,6 +438,7 @@ private fun renderPdfPreviewBitmap(
             options = options,
             resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
             lineThicknessScale = lineThicknessScale,
+            heightScale = heightScale,
         )
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
@@ -470,9 +485,11 @@ private fun appVersionName(context: Context): String = runCatching {
 @Composable
 private fun PdfOptionsSheet(
     vm: ShaftViewModel,
+    spec: ShaftSpec,
     pdfShowComponentTitles: Boolean,
     pdfTieringMode: PdfTieringMode,
     lineThicknessScale: Float,
+    heightScale: Float,
     pdfShadedBodies: Boolean,
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
@@ -545,6 +562,29 @@ private fun PdfOptionsSheet(
             )
             Text("200%", style = MaterialTheme.typography.bodySmall)
         }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Shaft height ─────────────────────────────────────────────────────
+        // The same per-job multiplier the runout / consolidated sheets carry
+        // (`RunoutConfig.heightScale`) — one slider value behind every drawing
+        // (on-device request: the schematic was meant to follow it too). The schematic's
+        // base is the fixed visual diameter scale, so the track ends where the 1.5 in
+        // paper ceiling engages for this shaft; no width-fit term enters here.
+        val heightSliderMax = remember(spec) {
+            effectiveHeightScaleMax(
+                baseScale = VISUAL_DIA_SCALE_PT_PER_MM,
+                budgetCapPt = Float.MAX_VALUE,
+                maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(10f),
+            )
+        }
+        ShaftHeightSlider(
+            heightScale = heightScale,
+            effectiveMax = heightSliderMax,
+            onCommit = { vm.setRunoutHeightScale(it) },
+        )
 
         Spacer(Modifier.height(12.dp))
         HorizontalDivider()

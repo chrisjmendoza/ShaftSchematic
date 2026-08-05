@@ -219,10 +219,21 @@ private val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Export, print, and blank templates",
                 "Each document (Shaft, Wear, Runout, Undercut) exports to PDF or prints " +
-                    "directly. The preview shows the actual page. Template mode prints the " +
-                    "shaft only (no dimensions); Blank draft prints the drawing with empty " +
-                    "write-in value slots. PDF styling options (shading, tiering, titles) " +
-                    "live in Settings → PDF Export Options."
+                    "directly from its own tab. The preview shows the actual page. Template " +
+                    "mode prints the shaft only (no dimensions); Blank draft prints the " +
+                    "drawing with empty write-in value slots. PDF styling options (shading, " +
+                    "tiering, titles) live in Settings → PDF Export Options."
+            ),
+            HelpTopic(
+                "Consolidated output and Export all",
+                "The Consolidated Output tab prints the schematic's dimensions, runout " +
+                    "bubbles, and wear info together on one sheet — choose All three, " +
+                    "Schematic + Runout, or Schematic + Wear, and preview before printing. " +
+                    "Worn sections (measured areas whose Ø values print inside the profile) " +
+                    "are added on this tab. Export all writes every checked document to one " +
+                    "folder in a single step. The Shaft height slider exaggerates or shrinks " +
+                    "the drawn shaft on the schematic and consolidated/runout sheets — " +
+                    "growth caps at 1.5 in on paper, and Reset returns to the standard 100%."
             ),
             HelpTopic(
                 "Back up and restore",
