@@ -10,7 +10,8 @@ Version: v1.0 (2026-07-18) — consolidates the former `ShaftDrawing.md`,
 `ShaftLayout.md`, `ShaftRenderer.md`, and `RenderOptions.md` into one doc.
 
 > **PDF is a separate path.** The PDF composers (`ShaftPdfComposer`,
-> `RunoutPdfComposer`, `WearPdfComposer`) share the model and layout *concepts* but use
+> `RunoutPdfComposer`, `WearPdfComposer`, `UndercutPdfComposer`) share the model and
+> layout *concepts* but use
 > their own Canvas drawing code and fit functions — they never call
 > `ShaftLayout.compute()` or `ShaftRenderer`. A fix here does not propagate to PDF.
 

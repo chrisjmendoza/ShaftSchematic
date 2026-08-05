@@ -62,6 +62,40 @@ fixed at 4"/8" and the absolute 1.5" ceiling still caps everything. An inverted 
 with an inline warning; a "Standard (0.75″ / 1.25″)" button restores the defaults.
 A live example line shows what a 6" shaft would draw as the sliders move.
 
+### chore(repo): day-run polish — dead code removed, comments and docs trued up
+
+Overnight repo sweep (on-device request: dead code, out-of-date inline comments,
+"thorough document combing", heavy polish; agents + review). **Dead code removed** (all
+verified zero live callers): `formatDim`, `drawBodiesPlain`, `KEYWAY_SQUARE_SIZE_PT`,
+`Achievements.byId`, `SEEDED_SAMPLE_NOTES_PREFIX` (intent folded into
+`isSeededSampleNotes` KDoc), and from `ShaftViewModel`: `hasDraft`,
+`clearRunoutReading`, `updateWearPitSize`, `snapChainFrom`/`snapChainFromId`,
+`moveComponentUp`/`Down`/`moveComponent`; plus 11 unused imports. Deliberately kept:
+`VerboseLog.w` (facade symmetry), `specWarningMessages` (staged seam),
+`setPdfOalSpacingFactor` and the long-body bubble constants (open product decisions —
+see the new `docs/REFACTOR_CANDIDATES.md`, which also catalogs behavior-preserving
+refactor options that want their own review). **Comments**: ~40 stale/convention
+violations fixed across pdf/ui/data (wrong height-scale claims, phantom "output
+picker", phase labels, date stamp, prior-code narratives). **Docs**: 20+ files trued
+to the code — five tabs/five documents everywhere, phantom fit functions removed,
+render-field renames, envelope records completed (worn sections + undercuts), version
+claims fixed, contract-doc path references made resolvable.
+
+### fix(pdf): drawing height takes precedence — liner proportionality is best-effort
+
+On-device direction ("make sure our proportional controls aren't interfering with our
+drawing height, that one takes precedence, the liner compression is secondary").
+The liner pair no longer trades drawn height: the scale solve ignores the liner
+raises entirely (`solveMaxProfileScale` is frac-blind again), and at the solved scale
+the raised liner floors λ-fit whatever room the page has (`fracFitLambda`/
+`fracFitFactor`, pure, unit-tested) — shrinking themselves, never the shaft; flat
+floors and keyway pins are untouched, and only keyway-pinned bodies may still yield
+the height (the documented invariant). "Keep liners proportional lengthwise" now
+means: as proportional as the page affords at the selected height. The slider readout
+reports what liners actually keep ("Liners keep at least ~N% of true length. The
+drawn height never changes." — `estimatedLinerKeptFracOfTrue`, replacing the
+height-cost readout, which is obsolete by design).
+
 ### fix(ui): liner slider shows its height cost; options sheets stop below the status bar
 
 On-device review of the liner control ("gives no indication on how it's changing the

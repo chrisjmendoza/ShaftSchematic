@@ -120,6 +120,10 @@ object ShaftRenderer {
         val L = from(layout)
         val cy = L.centerlineYPx
 
+        // Z-order inside every component block below: fill first, then the highlight
+        // under-stroke, then the outline/edges last — a highlight glow drawn after the
+        // outline would swallow it, and a fill drawn late would cover its own edges.
+
         // Resolve palette from opts (legacy ARGB Int → Color)
         val outline      = Color(opts.outlineColor)
         val outlineW     = opts.outlineWidthPx
@@ -151,7 +155,6 @@ object ShaftRenderer {
                 val size = Size(x1 - x0, r * 2f)
                 val topLeft = Offset(x0, top)
 
-                // Fill
                 drawRect(color = bodyFill, topLeft = topLeft, size = size)
 
                 // Highlight under-stroke
@@ -164,7 +167,6 @@ object ShaftRenderer {
                     )
                 }
 
-                // Outline on top
                 drawRect(color = outline, topLeft = topLeft, size = size, style = Stroke(width = outlineW))
             }
         } else {
@@ -176,7 +178,6 @@ object ShaftRenderer {
             val size = Size(x1 - x0, r * 2f)
             val topLeft = Offset(x0, top)
 
-            // Fill
             drawRect(color = bodyFill, topLeft = topLeft, size = size)
 
             // Highlight under-stroke
@@ -189,7 +190,6 @@ object ShaftRenderer {
                 )
             }
 
-            // Outline on top
                 drawRect(color = outline, topLeft = topLeft, size = size, style = Stroke(width = outlineW))
             }
         }
@@ -231,7 +231,6 @@ object ShaftRenderer {
                     moveTo(x0, top0); lineTo(x1, top1); lineTo(x1, bot1); lineTo(x0, bot0); close()
                 }
 
-                // Fill
                 drawPath(path, color = taperFill)
 
                 // Highlight under-stroke
@@ -243,7 +242,6 @@ object ShaftRenderer {
                     )
                 }
 
-                // Edges on top
                 drawLine(outline, Offset(x0, top0), Offset(x1, top1), strokeWidth = outlineW)
                 drawLine(outline, Offset(x0, bot0), Offset(x1, bot1), strokeWidth = outlineW)
                 drawLine(outline, Offset(x0, top0), Offset(x0, bot0), strokeWidth = outlineW)
@@ -273,7 +271,6 @@ object ShaftRenderer {
                 moveTo(x0, top0); lineTo(x1, top1); lineTo(x1, bot1); lineTo(x0, bot0); close()
             }
 
-            // Fill
             drawPath(path, color = taperFill)
 
             // Highlight under-stroke
@@ -285,7 +282,6 @@ object ShaftRenderer {
                 )
             }
 
-            // Edges on top
             drawLine(outline, Offset(x0, top0), Offset(x1, top1), strokeWidth = outlineW)
             drawLine(outline, Offset(x0, bot0), Offset(x1, bot1), strokeWidth = outlineW)
             drawLine(outline, Offset(x0, top0), Offset(x0, bot0), strokeWidth = outlineW)
@@ -404,7 +400,6 @@ object ShaftRenderer {
                 val size = Size(x1 - x0, r * 2f)
                 val topLeft = Offset(x0, top)
 
-                // Fill
                 drawRect(color = linerFill, topLeft = topLeft, size = size)
 
                 // Highlight under-stroke
@@ -417,7 +412,6 @@ object ShaftRenderer {
                     )
                 }
 
-                // Outline on top
                 drawRect(color = outline, topLeft = topLeft, size = size, style = Stroke(width = outlineW))
             }
         } else {
@@ -429,7 +423,6 @@ object ShaftRenderer {
             val size = Size(x1 - x0, r * 2f)
             val topLeft = Offset(x0, top)
 
-            // Fill
             drawRect(color = linerFill, topLeft = topLeft, size = size)
 
             // Highlight under-stroke
@@ -442,7 +435,6 @@ object ShaftRenderer {
                 )
             }
 
-            // Outline
                 drawRect(color = outline, topLeft = topLeft, size = size, style = Stroke(width = outlineW))
             }
         }

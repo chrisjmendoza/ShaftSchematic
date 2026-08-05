@@ -1,6 +1,6 @@
 # ShaftSchematic Roadmap
 Version: v0.5.x  
-Last updated: 2026-07-11
+Last updated: 2026-08-05
 
 This roadmap defines the grounded, realistic, and approved feature trajectory for ShaftSchematic.
 
@@ -33,6 +33,31 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - [ ] **Preview panel + event wiring extraction** — remaining ShaftScreen refactor work (lower priority)
 
 **Delivered in v0.5.x so far:**
+- Undercut Drawing — its own editor tab and PDF (`UndercutPdfComposer`) for
+  machined-below-surface cuts: shaft-space spans (a cut may cross a liner edge), the settled
+  open-notch convention (silhouette step + full-height section faces, mouth never lidded),
+  liner-anchored detail strips, a per-sheet cut-depth exaggeration slider, and user-selectable
+  shading / line-art styles
+- Consolidated Output tab — one sheet carrying the schematic's rails and footer plus the
+  elected runout/wear content (`ConsolidatedVariant`: All three | Schematic + Runout |
+  Schematic + Wear), the worn-section editor (values printed inside the profile over
+  knockout halos), and **Export all** — the checked documents batch-written to one picked
+  folder. The classic standalone runout sheet stays on the Runout tab
+- Profile sizing round — per-job value-based "Shaft height" slider (in paper inches, hard
+  capped at 1.5"), a default sizing curve (4" → 0.75", 8" → 1.25") with user-adjustable
+  anchors in Settings → PDF Export → "Default drawing size", the liner-compression control
+  with height precedence (it never lowers the drawn height), an S-break pair minimum gap,
+  and even-spread runout bubbles
+- Appearance settings — System/Light/Dark + high contrast for the Compose chrome, with the
+  white paper sheets pinned to fixed ink so dark mode can never print invisible drawings
+- Help screen and Achievements screen
+- Hardened exports — every SAF write goes through `util/PdfSafExport` (a composer throw
+  yields a valid error page, never a truncated file) and the collision export gate now
+  guards every export surface
+- Undo/redo — session-scoped `SessionHistory` over an `EditState` snapshot (spec + wear +
+  runout + order), 600 ms coalescing, 50-step cap, exposed as an editor history menu
+- Machining heuristic warnings — Ø-step and liner-OD-vs-shaft rules shipped on carousel
+  cards (`ui/util/ComponentWarnings.kt`)
 - Keyways 90° apart — spec-level clocking note alongside Keyways 180° apart (mutually
   exclusive), with a CW/CCW direction chip pair measured from the AFT keyway, viewed from
   aft; renders as a depth-deep notch on the silhouette's top/bottom edge (not a hidden
@@ -63,7 +88,8 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Selection highlight — single thin ring, seeded on file load
 - Warning badge system — yellow per-component chips, 3-state free-to-end badge
 - ShaftScreen.kt carousel extracted to `ComponentCarousel.kt`
-- Sidebar nav (3 tabs: Schematic / Runout Sheet / Wear Document)
+- Sidebar nav (5 tabs: Schematic / Runout Sheet / Wear Document / Undercut Drawing /
+  Consolidated Output)
 - Runout drawing — inline shaft preview, scrollable layout, collision-free alternating bubble placement (shared `geom/RunoutBubbleLayout.kt` engine), TIR direction label
 - Wear document — shaft profile + header + dye-pen PASS/FAIL checkboxes
 - Liner wear areas — tap-to-inspect liners, wear-spot recording (SET/liner-edge
@@ -90,8 +116,9 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 
 - Component presets (commonly used taper rates, diameters)
 - Reference geometry overlays (ghosted previous measurement)
-- Undo/redo architecture
-- Machining heuristic warnings: diameter discontinuity, liner OD vs shaft, steep taper
+- Machining heuristic warnings: steep taper (diameter discontinuity and liner-OD-vs-shaft
+  shipped in v0.5.x; the taper-vs-body Ø-mismatch advisory was removed by product decision
+  and is not planned)
 - Dual-unit display (primary inch, secondary mm in smaller text)
 
 ---

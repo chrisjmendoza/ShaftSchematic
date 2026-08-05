@@ -55,7 +55,7 @@ but they **never** affect overall length (`coverageEndMm` ignores them), **never
 bodies, and **never** collide with other components (`collisionGroup() → null`). Do not
 add them to `coverageEndMm`, `ensureOverall`, body-split/merge, or overlap validation.
 They are resolved as `ResolvedCouplerBoltSlot` *after* body resolution so they stay out
-of auto-body/subtraction geometry. See `docs/CouplerBoltSlot.md`.
+of auto-body/subtraction geometry. See `CouplerBoltSlot.md`.
 
 ### Wear pits are reference features
 Wear pits (`WearRecord.pits` — a `WearPit` "X" marker per pit/dye-failure, small or large) are
@@ -72,7 +72,7 @@ be drawn **identically** (same crossed-line construction, same small:large ratio
 `ComponentWearDetailOverlay`'s `drawPitX` (canvas), `WearPdfComposer`'s `drawWearPitsOnProfile` +
 strip pits (PDF), and the consolidated runout sheet (canvas + PDF), which reuses
 `drawWearPitsOnProfile` itself (per-surface `smallHalf`). Pure sizing/hit-test/clamp math lives in `geom/WearPitMath.kt` (shared, no
-`pdf → ui` dep). See `docs/RunoutSheet.md` (Wear Pits).
+`pdf → ui` dep). See `RunoutSheet.md` (Wear Pits).
 
 ### Wear diameter readings are reference features
 Measured-Ø readings (`WearRecord.diaReadings` — a `WearDiaReading` per measured station,
@@ -92,8 +92,8 @@ use `formatDiaWithUnit`, no `Ø` prefix. On the **consolidated runout sheet** th
 readings instead draw INSIDE the profile at their station — one rotated haloed column via
 `drawDiaReadingsInProfile` (`RunoutPdfComposer`), liners included, `Ø`-prefixed — replacing
 below-shaft callouts there; the wear document itself (the authoring surface) keeps its
-callout engine unchanged. See `docs/RunoutSheet.md` (Wear Diameter
-Measurements) and `docs/WearDiaMeasurements_PLAN.md`.
+callout engine unchanged. See `RunoutSheet.md` (Wear Diameter
+Measurements) and `WearDiaMeasurements_PLAN.md`.
 
 ### Worn sections are reference features
 Worn sections (`WearRecord.wornSections` — a `WornSection` per designated measured area,
@@ -133,10 +133,12 @@ foreshortening, NEVER a body-style S-break cutout; the S-break glyph is a body-o
 path); the per-job **"Liner compression" pair** (`RunoutConfig.linersProportional` +
 `linerCompression` → derived `linerMinFracOfTrue`, fed to
 `ProfileFeatureSpan.minWidthFracOfTrue`) can raise the liner floor toward true width —
-checkbox = pinned proportional (height yields, keyway-body posture), slider = how far
-liners may foreshorten; control on the Output tab + schematic Tune sheet; keyway-bearing
-bodies stay pinned at true width with the height yielding
-(`solveMaxProfileScale`). The **"Shaft height" slider** (`RunoutConfig.heightScale`,
+**the drawing height takes PRECEDENCE**: the raises are best-effort, never enter the
+scale solve, and λ-fit whatever room the page has at the selected height
+(`fracFitFactor`) — do not let a liner demand lower the drawn shaft; control on the
+Output tab + schematic Tune sheet with a live kept-% readout
+(`estimatedLinerKeptFracOfTrue`); ONLY keyway-bearing bodies stay pinned at true width
+with the height yielding (`solveMaxProfileScale`). The **"Shaft height" slider** (`RunoutConfig.heightScale`,
 per-job in the envelope — ONE value behind the runout/consolidated sheets AND the
 schematic, `composeShaftPdf(heightScale)`) multiplies the solved scale; the drawn shaft
 is hard-capped at **1.5" on paper** (`PROFILE_MAX_SHAFT_HEIGHT_PT`, an ABSOLUTE ceiling
@@ -156,7 +158,7 @@ Wear, via `includeBubbles`/`includeWearInfo`), the worn-section editor, the "Sha
 height" slider, and **Export all** (checked documents batch-written to a picked folder).
 Every SAF export goes through the hardened `util/PdfSafExport.writeShaftPdfToUri`
 (composer throw → valid error page, never a truncated file) and the collision export
-gate guards every export surface. See `docs/RunoutSheet.md` (Consolidation step 5) and
+gate guards every export surface. See `RunoutSheet.md` (Consolidation step 5) and
 `docs/PDF_EXPORT.md` §5.6–5.7.
 
 ### Undercuts are reference features
@@ -193,7 +195,7 @@ liner shade — `UNDERCUT_SECTION_FILL_ALPHA`, half the liner's alpha) must rend
 and `UndercutPdfComposer` (PDF) — from the shared pure pipeline `geom/SurfaceProfileMath.kt`
 + `geom/UndercutMath.kt` (cluster windows, clamps, hit-tests; no `pdf → ui` dep) with
 `ui/resolved/SurfaceSegs.kt` as the single resolved→surface mapping. See
-`docs/UndercutDrawing_PLAN.md`.
+`UndercutDrawing_PLAN.md`.
 
 ### Paper sheets are theme-independent
 The app theme (Settings → Appearance: System/Light/Dark + high contrast; default Light =
@@ -205,7 +207,7 @@ fills are additionally user-styled via `util/UndercutStyle.kt` (shade color/inte
 line-art mode; the Standard/Grey default reproduces the historical fixed shades, and the
 section core stays half the liner alpha at every intensity — `UndercutStyleTest`) — still
 fixed inks, never theme roles, and never leaking into the PDF composers. See
-`docs/Appearance.md`.
+`Appearance.md`.
 
 ### Runout readings are reference features
 Per-station runout readings (`RunoutReadings` in the doc envelope — a TIR value + high-spot
@@ -217,7 +219,7 @@ fine with neither. Keyed by `(componentId, stationIndex)` with render-layer orph
 and the keyway cutout must be drawn **identically in both bubble draw sites** —
 `RunoutRoute.drawRunoutMarkers` (canvas) and `RunoutPdfComposer.drawPlacedBubbles` (PDF).
 Pure clock/hit-test math lives in `geom/RunoutReadingMath.kt` (shared, no `pdf → ui` dep);
-value formatting in `util/RunoutValueFormat.kt`. See `docs/RunoutSheet.md` (Runout Bubble
+value formatting in `util/RunoutValueFormat.kt`. See `RunoutSheet.md` (Runout Bubble
 Editor) and `docs/RunoutBubbleEditor_PLAN.md`.
 
 ### Spooned keyways are a draw-only variant
@@ -271,7 +273,7 @@ FWD-referenced taper by less than the tolerance snapped its start back to the ol
 boundary, undoing the edit entirely. Snapping is for coarse gestures only (tap-to-add,
 `ui/viewmodel/SnapUtils.kt`). Same posture as the 2026-06-19 removal of the
 `snapForwardFrom` cascade from ViewModel updates: positions are user-authored; nothing
-mutates them except a direct user action. See `docs/ShaftScreen.md`.
+mutates them except a direct user action. See `ShaftScreen.md`.
 
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus

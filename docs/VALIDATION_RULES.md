@@ -1,8 +1,9 @@
 # Validation Rules  
 Version: v0.5.x
-Last updated: 2026-07-25 — §3.3 taper-vs-body mismatch now compares the *physical* face
-diameter (`taperFaceDiametersMm`, SET-by-shaft-half convention) instead of the raw stored
-`startDiaMm`/`endDiaMm`, fixing a false positive on FWD-half tapers. 2026-07-24 — corrected two stale "`ShaftSpec.validate()` is dead code" claims
+Last updated: 2026-08-05 — removed a stale header claim that §3.3's taper-vs-body Ø mismatch
+advisory compares a "physical face diameter (`taperFaceDiametersMm`)": that advisory was
+**removed entirely 2026-07-26** by product decision and no such helper exists. §3.3's body
+already records the removal correctly. 2026-07-24 — corrected two stale "`ShaftSpec.validate()` is dead code" claims
 (§1.1, §3.1): it is not called by production code, but it **is** exercised by unit tests
 (`ShaftSpecTest`, `SampleShaftAssetsTest` bundled-sample sanity checks) — test-only, kept
 deliberately (confirmed in the 2026-07-24 dead-code sweep, not deleted). 2026-07-24 — §3.2/§3.3/§3.5/§4.3: the five warning rules flagged

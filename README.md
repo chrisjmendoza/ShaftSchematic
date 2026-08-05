@@ -24,10 +24,12 @@ Editing Workflow
 
 Documents
 
-- Shaft drawing: one-page landscape technical PDF with dimension tiers, callouts, grid, and title block
+- Shaft drawing: one-page landscape technical PDF with dimension tiers, Ø callouts, and title block
 - Runout sheet: inline shaft preview with collision-free alternating runout bubbles and TIR label; tap a bubble to record its TIR value + high-spot marker
-- Wear document: shaft profile + per-liner detail strips, tap-to-record wear bands, pit "X" markers, and measured-Ø readings (value callouts with leaders); PASS/FAIL dye-pen checkboxes and field notes; blank write-in variants of all three documents
-- All three reachable from the editor sidebar (Schematic / Runout / Wear tabs)
+- Wear document: shaft profile + per-liner detail strips, tap-to-record wear bands, pit "X" markers, and measured-Ø readings (value callouts with leaders); PASS/FAIL dye-pen checkboxes and field notes; blank write-in variants
+- Undercut drawing: machined-below-surface cuts as open silhouette steps with liner-anchored detail strips, a per-sheet cut-depth exaggeration slider, and user-selectable shading / line-art styles
+- Consolidated output: one sheet carrying the schematic's rails and footer plus the elected runout and wear information (All three / Schematic + Runout / Schematic + Wear), worn-section values printed inside the profile, a per-job "Shaft height" + liner-compression control, and "Export all" to batch-write the checked documents into one picked folder
+- All five reachable from the editor sidebar (Schematic / Runout Sheet / Wear Document / Undercut Drawing / Consolidated Output tabs)
 
 Persistence & Data Safety
 
@@ -37,7 +39,8 @@ Persistence & Data Safety
 
 Misc
 
-- Settings screen (units, grid, preview colors, PDF prefs, line thickness), Developer Options, Achievements screen, Project-Info sheet
+- Settings screen — units, grid, preview colors, line thickness, Appearance (System/Light/Dark + high contrast; the white paper sheets keep fixed ink either way), undercut drawing styles, and PDF Export prefs including "Default drawing size" (the 4" → 0.75" / 8" → 1.25" sizing curve anchors); plus Data backup/restore
+- Help screen, Developer Options, Achievements screen, Project-Info sheet
 - Portrait-locked UI (landscape is currently disabled)
 
 📂 Project Structure
@@ -46,20 +49,24 @@ app/
 └─ com.android.shaftschematic/
    ├─ MainActivity.kt (single-activity host)
    ├─ model/     → ShaftSpec (root aggregate, mm), Body, Taper, Threads, Liner,
-   │              CouplerBoltSlot, ProjectInfo, migrations
+   │              CouplerBoltSlot, Undercut, WearSpot, WornSection, RunoutReading,
+   │              ProjectInfo, migrations
    ├─ geom/      → pure geometry: OAL computations, SET positions,
-   │              dimension-tier assignment, runout bubble layout
+   │              dimension-tier assignment, runout bubble layout,
+   │              profile compression, undercut/surface + worn-section math
    ├─ doc/       → ShaftDocCodec (JSON serialization + format migrations)
    ├─ io/        → InternalStorage (app-private .shaft library), ShaftBackup
    ├─ data/      → SettingsStore (DataStore), AutosaveManager
-   ├─ pdf/       → ShaftPdfComposer, RunoutPdfComposer, WearPdfComposer
+   ├─ pdf/       → ShaftPdfComposer, RunoutPdfComposer, WearPdfComposer,
+   │              UndercutPdfComposer
    │              + dim/, notes/, render/ (dimension & annotation rendering)
-   ├─ settings/  → PdfPrefs, RunoutConfig
+   ├─ settings/  → PdfPrefs, RunoutConfig, AppearancePrefs
    ├─ ui/
    │   ├─ drawing/   → compose/ShaftDrawing (preview host),
    │   │              render/ (ShaftLayout, ShaftRenderer, GridRenderer)
    │   ├─ screen/    → StartScreen, ShaftEditorRoute (sidebar + tabs), ShaftScreen,
-   │   │              ComponentCarousel, AddComponentDialogs, Runout/Wear/Settings routes
+   │   │              ComponentCarousel, AddComponentDialogs,
+   │   │              Runout/Wear/Undercut/Output/Settings/Help routes
    │   ├─ input/     → NumericInputField (commit-on-blur numeric entry)
    │   ├─ resolved/  → ResolvedComponent (derived auto-body pipeline)
    │   ├─ order/     → ComponentOrder (component identity/ordering layer)
@@ -119,7 +126,7 @@ Run on a device or emulator
 2. Set the overall shaft length (manual, or auto from components)
 3. Add bodies, tapers, threads, liners, or coupler bolt slots via + Add Component
 4. Edit any component in the carousel; switch units anytime
-5. Use the sidebar to switch between Schematic, Runout, and Wear tabs
+5. Use the sidebar to switch between the Schematic, Runout Sheet, Wear Document, Undercut Drawing, and Consolidated Output tabs
 6. Export the current document to PDF from the top bar (SAF picker)
 7. Back up or restore your shaft library from Settings → Data
 

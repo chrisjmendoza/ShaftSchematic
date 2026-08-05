@@ -18,10 +18,11 @@ package com.android.shaftschematic.ui.screen
 /**
  * Consolidation posture (on-device request): the Wear page stays as the **authoring
  * surface** for wear data — spots, pits, and point Ø readings are placed/edited there —
- * while the Runout sheet is the consolidated **output**, featuring that wear information
- * on its profile (bands, X's, in-profile readings) alongside worn sections and bubbles.
- * This flag exists so a future full consolidation can retire the tab in one line without
- * touching the wear code paths.
+ * while the [OUTPUT] tab (`OutputRoute`) owns the consolidated **output**, featuring that
+ * wear information on its profile (bands, X's, in-profile readings) alongside worn
+ * sections and bubbles. The [RUNOUT] tab authors runouts only and prints the classic
+ * standalone runout sheet. This flag exists so a future full consolidation can retire the
+ * Wear tab in one line without touching the wear code paths.
  */
 const val WEAR_TAB_ENABLED = true
 

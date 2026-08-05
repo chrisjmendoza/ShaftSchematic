@@ -366,8 +366,8 @@ fun OutputRoute(
             LinerCompressionControl(
                 linersProportional = runoutConfig.linersProportional,
                 linerCompression = runoutConfig.linerCompression,
-                estimateHeightIn = { frac ->
-                    estimatedShaftHeightIn(spec, heightSliderBase, runoutConfig.heightScale, frac)
+                estimateKeptFrac = { frac ->
+                    estimatedLinerKeptFracOfTrue(spec, heightSliderBase, runoutConfig.heightScale, frac)
                 },
                 onSetProportional = { vm.setLinersProportional(it) },
                 onSetCompression = { vm.setLinerCompression(it) },

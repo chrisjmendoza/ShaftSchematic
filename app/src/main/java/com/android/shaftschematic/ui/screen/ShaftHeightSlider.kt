@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.drawnShaftHeightPt
 import com.android.shaftschematic.geom.exaggeratedProfileScale
+import com.android.shaftschematic.geom.fracFitFactor
 import com.android.shaftschematic.geom.heightFracForDrawnHeight
 import com.android.shaftschematic.geom.ProfileFeatureSpan
 import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MAX
@@ -57,8 +58,8 @@ internal fun snappedHeightScale(rawCommit: Float): Float =
  * ([PROFILE_MAX_SHAFT_HEIGHT_PT]) — or to the most this shaft can reach at 300% when
  * that is less — and the picked value converts back to the stored per-job multiplier
  * ([heightFracForDrawnHeight]). [baseScale] is the surface's conventional solve (pt/mm):
- * the fixed visual scale on the schematic; max(width-fit, visual scale) on the
- * runout/consolidated sheets.
+ * the sizing-curve scale at the configured anchor heights on the schematic;
+ * max(width-fit, curve scale) on the runout/consolidated sheets.
  *
  * Drag-local value, committed once on release (per-frame commits would re-render the PDF
  * preview every frame); commits near the standard height snap exactly to it; Reset
@@ -128,18 +129,21 @@ private fun fmtIn(inches: Float): String = "%.2f″".format(inches)
  * [ShaftHeightSlider] (one `RunoutConfig` pair behind both). The measured components —
  * tapers and liners — are what the sheet is about, so liners can be held proportional:
  *
- * - Checkbox "Keep liners proportional lengthwise" (`linersProportional`): liners demand
- *   full true-scale width; the drawn height yields when the page can't fit them (the
- *   keyway-body posture). While checked the slider is disabled — it has no effect.
+ * - Checkbox "Keep liners proportional lengthwise" (`linersProportional`): liners
+ *   request full true-scale width. Best-effort — the request never enters the scale
+ *   solve, so the drawn height does not yield; the floors λ-shrink instead. While
+ *   checked the slider is disabled.
  * - Slider "Liner compression" (`linerCompression`, 0–100%): how far liners may
  *   foreshorten when the page needs the room — 100% = down to the writable floor (the
- *   default, the historical behavior), 0% = not at all (same drawing as the checkbox).
+ *   default), 0% = not at all (same drawing as the checkbox).
  *
- * [estimateHeightIn] maps a liner width-floor fraction to the drawn shaft height (paper
- * inches) it produces — see [estimatedShaftHeightIn]. The readout under the slider shows
- * that height LIVE during the drag, because the height cost is the whole trade this
- * control makes (on-device report: the slider "gives no indication on how it's changing
- * the height of the schematic").
+ * The drawing height takes PRECEDENCE (on-device direction): this control never changes
+ * the drawn shaft height — liner floors take only the room the page has at the selected
+ * height, shrinking themselves (never the shaft) when the full request doesn't fit.
+ * [estimateKeptFrac] maps a requested width-floor fraction to the fraction liners
+ * actually keep at this height — see [estimatedLinerKeptFracOfTrue]; the readout under
+ * the slider shows it LIVE during the drag (on-device report: the slider "gives no
+ * indication" of its effect).
  *
  * Drag-local value, committed once on release, same posture as the height slider.
  */
@@ -147,7 +151,7 @@ private fun fmtIn(inches: Float): String = "%.2f″".format(inches)
 internal fun LinerCompressionControl(
     linersProportional: Boolean,
     linerCompression: Float,
-    estimateHeightIn: (linerMinFracOfTrue: Float) -> Float,
+    estimateKeptFrac: (requestedFracOfTrue: Float) -> Float,
     onSetProportional: (Boolean) -> Unit,
     onSetCompression: (Float) -> Unit,
 ) {
@@ -180,23 +184,25 @@ internal fun LinerCompressionControl(
             )
             Text("100%", style = MaterialTheme.typography.bodySmall)
         }
-        val fracShown = if (linersProportional) 1f else 1f - shown
-        val atIn = estimateHeightIn(fracShown)
-        val freeIn = estimateHeightIn(0f)
-        val costsHeight = atIn < freeIn - 0.005f
+        val requested = if (linersProportional) 1f else 1f - shown
+        val kept = estimateKeptFrac(requested)
+        val keptPct = (kept * 100).roundToInt()
+        val shortfall = kept < requested - 0.005f
         Text(
             when {
-                linersProportional && costsHeight ->
-                    "Liners hold true scale — the shaft draws ~${fmtIn(atIn)} tall " +
-                        "(${fmtIn(freeIn)} with compression)."
-                linersProportional ->
-                    "Liners hold true scale — full height keeps (~${fmtIn(atIn)})."
-                costsHeight ->
-                    "At this setting the shaft draws ~${fmtIn(atIn)} tall " +
-                        "(${fmtIn(freeIn)} at 100%). Wider liners trade drawn height."
+                requested <= 0.005f ->
+                    "Liners may compress to the writable floor. The drawn height " +
+                        "never changes."
+                !shortfall && requested >= 0.995f ->
+                    "Liners draw fully proportional at this height. The drawn height " +
+                        "never changes."
+                !shortfall ->
+                    "Liners keep at least ~$keptPct% of true length. The drawn height " +
+                        "never changes."
                 else ->
-                    "Full height keeps at this setting (~${fmtIn(atIn)}). 0% holds " +
-                        "liners fully proportional."
+                    "The page affords liners ~$keptPct% of true length at this height " +
+                        "(of the ${(requested * 100).roundToInt()}% asked). The drawn " +
+                        "height never changes."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -205,22 +211,26 @@ internal fun LinerCompressionControl(
 }
 
 /**
- * Estimated drawn shaft height (paper inches) at a given liner width-floor fraction —
- * the same `solveMaxProfileScale` arithmetic the composers run, over an approximate
+ * Estimated fraction of TRUE length liners actually keep for a requested width-floor
+ * fraction — requested × the λ fit ([fracFitFactor]) at the height-precedence scale
+ * (the solve ignores the liner raises entirely, so the drawn height never moves with
+ * this control). Same feature construction the composers use, over an approximate
  * window (0..OAL, standard content width): tapers/threads/liners at their kind floors,
- * liners raised by [linerMinFracOfTrue], keyway-bearing bodies pinned. An estimate — the
- * composers' exact windows and budgets differ by hairs — but it moves precisely when the
- * liner demand starts costing height, which is what the readout is for.
+ * keyway-bearing bodies pinned. An estimate — the composers' exact windows differ by
+ * hairs — but it moves exactly when the page starts shorting the request, which is what
+ * the readout is for.
  */
-internal fun estimatedShaftHeightIn(
+internal fun estimatedLinerKeptFracOfTrue(
     spec: ShaftSpec,
     baseScale: Float,
     heightScale: Float,
-    linerMinFracOfTrue: Float,
+    requestedFracOfTrue: Float,
     contentWidthPt: Float = 720f,
 ): Float {
+    if (requestedFracOfTrue <= 0f) return 0f
     val maxDia = spec.maxOuterDiaMm().coerceAtLeast(10f)
     val desired = exaggeratedProfileScale(baseScale, heightScale, Float.MAX_VALUE, maxDia)
+    val windowEnd = spec.overallLengthMm.coerceAtLeast(1f)
     val features = buildList {
         spec.tapers.forEach {
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_TAPER_PT))
@@ -229,7 +239,7 @@ internal fun estimatedShaftHeightIn(
             add(
                 ProfileFeatureSpan(
                     it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_LINER_PT,
-                    minWidthFracOfTrue = linerMinFracOfTrue,
+                    minWidthFracOfTrue = requestedFracOfTrue,
                 )
             )
         }
@@ -241,8 +251,12 @@ internal fun estimatedShaftHeightIn(
         }
     }
     val solved = solveMaxProfileScale(
-        windowStartMm = 0f, windowEndMm = spec.overallLengthMm.coerceAtLeast(1f),
+        windowStartMm = 0f, windowEndMm = windowEnd,
         features = features, contentWidth = contentWidthPt, scaleHi = desired,
     )
-    return maxDia * solved / 72f
+    val lambda = fracFitFactor(
+        windowStartMm = 0f, windowEndMm = windowEnd,
+        features = features, contentWidthPt = contentWidthPt, diaPtPerMm = solved,
+    )
+    return requestedFracOfTrue * lambda
 }

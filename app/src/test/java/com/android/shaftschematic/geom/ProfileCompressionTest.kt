@@ -434,19 +434,63 @@ class ProfileCompressionTest {
     }
 
     @Test
-    fun `frac demand lowers the max profile scale like a pin`() {
+    fun `frac demand never lowers the max profile scale - height precedence`() {
+        // The drawing height takes precedence (on-device direction): a full-true liner
+        // request must NOT drag the scale down the way a keyway pin does.
         val free = solveMaxProfileScale(
             0f, 2000f,
             listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 0f)),
             contentWidth = 700f, scaleHi = 1f,
         )
-        val pinned = solveMaxProfileScale(
+        val requested = solveMaxProfileScale(
             0f, 2000f,
             listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 1f)),
             contentWidth = 700f, scaleHi = 1f,
         )
         assertEquals(1f, free, 1e-4f)
-        assertTrue("pinned scale $pinned must drop below free $free", pinned < free - 1e-3f)
+        assertEquals("frac must be scale-blind", free, requested, 1e-4f)
+        // A true pin (MAX_VALUE) still yields the height — the documented keyway posture.
+        val pinned = solveMaxProfileScale(
+            0f, 2000f,
+            listOf(ProfileFeatureSpan(700f, 1300f, Float.MAX_VALUE)),
+            contentWidth = 700f, scaleHi = 1f,
+        )
+        assertTrue("keyway pin still yields ($pinned)", pinned < free - 1e-3f)
+    }
+
+    @Test
+    fun `overflowing frac raises lambda-fit the page - other floors intact`() {
+        // Liner frac 1 wants 600pt but flat floors (64 + 600 + 64) overflow the 700pt
+        // page: the raise shrinks to fit (liner ≈ 572pt), the gap floors keep their 64,
+        // and the page is consumed exactly — the scale was never touched.
+        val map = buildCompressedProfileXMap(
+            windowStartMm = 0f, windowEndMm = 2000f,
+            features = listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 1f)),
+            contentLeft = 0f, contentRight = 700f,
+            diaPtPerMm = 1f,
+        )
+        val liner = map.xAt(1300f) - map.xAt(700f)
+        val gapA = map.xAt(700f) - map.xAt(0f)
+        val gapB = map.xAt(2000f) - map.xAt(1300f)
+        assertEquals(572f, liner, 1.0f)
+        assertTrue("gap floors hold ($gapA / $gapB)", gapA >= 64f - 0.5f && gapB >= 64f - 0.5f)
+        assertEquals(700f, map.x1, 0.1f)
+    }
+
+    @Test
+    fun `fracFitFactor reports the applied lambda`() {
+        val overflowing = fracFitFactor(
+            windowStartMm = 0f, windowEndMm = 2000f,
+            features = listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 1f)),
+            contentWidthPt = 700f, diaPtPerMm = 1f,
+        )
+        assertEquals(572f / 600f, overflowing, 5e-3f)
+        val fitting = fracFitFactor(
+            windowStartMm = 0f, windowEndMm = 2000f,
+            features = listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 0.4f)),
+            contentWidthPt = 700f, diaPtPerMm = 1f,
+        )
+        assertEquals(1f, fitting, 1e-4f)
     }
 
     @Test

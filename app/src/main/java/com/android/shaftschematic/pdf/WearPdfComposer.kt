@@ -55,10 +55,6 @@ import kotlin.math.min
  * └─────────────────────────────────────────────────────────────────────────────┘
  * ```
  *
- * ## Future enhancements (Phase 2)
- * - Digital damage annotation: tap to mark damage zones, severity selector, dye-pen pass/fail toggle.
- * - Damage zones render as coloured overlays on the shaft profile, printed with a legend.
- *
  * @param page    Target PDF page (US Letter landscape, already started).
  * @param spec    Shaft specification in millimeters.
  * @param project Job information (customer, vessel, job#, side).
@@ -1172,7 +1168,7 @@ private const val WEAR_STRIP_HEIGHT_MAX_PT = 170f   // per-strip growth cap when
 private const val WEAR_NOTES_BOTTOM_OFFSET_PT = 24f   // notes baseline above contentBot
 private const val WEAR_NOTES_GAP_PT           = 28f   // gap from drawing area bottom to notes
 
-// Wear detail strips (Phase 4) — sizing/pagination constants live in WearStripLayout.kt
+// Wear detail strips — sizing/pagination constants live in WearStripLayout.kt
 // (WEAR_STRIP_MAX_PER_PAGE, WEAR_STRIP_HEIGHT_PT, WEAR_MIN_PROFILE_HEIGHT_PT, etc.) since
 // that file's layout math is what the unit tests exercise directly. These two are purely
 // about THIS composer's own reserved space and stay local.
@@ -1180,6 +1176,7 @@ private const val WEAR_OVERFLOW_NOTE_HEIGHT_PT   = 16f  // reserved band for the
 private const val WEAR_PROFILE_RADIUS_MARGIN_PT  = 8f   // headroom above/below the shaft's actual drawn radius
 
 private const val COMPRESS_TRIGGER_PT = 220f
+// Classic central gap; breakPairLayout may widen it to keep the pair clear.
 private const val ZIGZAG_GAP_MAX_PT   = 20f
 
 // Measured-Ø callouts (geom/WearDiaCalloutLayout.kt drives placement; these size the text

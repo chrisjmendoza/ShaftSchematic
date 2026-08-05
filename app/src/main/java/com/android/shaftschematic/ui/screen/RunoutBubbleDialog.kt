@@ -43,7 +43,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.android.shaftschematic.geom.RUNOUT_CLOCK_TICKS
 import com.android.shaftschematic.geom.bubbleAngleDeg
-import com.android.shaftschematic.geom.clockTickAngleDeg
 import com.android.shaftschematic.geom.clockTickLabel
 import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.isOnRingBand

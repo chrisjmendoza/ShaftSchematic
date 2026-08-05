@@ -1313,6 +1313,7 @@ private const val UC_OVERFLOW_NOTE_HEIGHT_PT = 16f   // reserved band for the "+
 private const val UC_PROFILE_RADIUS_MARGIN_PT = 8f   // headroom above/below the shaft's drawn radius
 
 private const val UC_COMPRESS_TRIGGER_PT = 220f
+// Classic central gap; breakPairLayout may widen it to keep the pair clear.
 private const val UC_ZIGZAG_GAP_MAX_PT = 20f
 
 private const val UC_RAIL_WITNESS_GAP_PT = 3f        // clear gap between the drawn surface and a witness line

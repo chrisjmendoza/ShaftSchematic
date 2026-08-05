@@ -1,13 +1,17 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-08-05 — §5.7 gains the default sizing curve (4" → 0.75", 8" → 1.25",
+Last updated: 2026-08-05 (b) — §1/§3 name the single real fit function
+(`computeDetailPtPerMm`; the `computeBodyOnlyPtPerMm`/`computePdfPtPerMmFitAxes` names never
+existed); §4 units corrected (printed values follow the document's ACTIVE unit, not always
+mm); §5.5 gains the Tune options-sheet inventory; §5.7 names only the public
+`fracFitFactor`. 2026-08-05 — §5.7 gains the default sizing curve (4" → 0.75", 8" → 1.25",
 linear, superseding the flat visual scale as the 100% base) with user-adjustable anchor
 heights (Settings → PDF Export → "Default drawing size", `PdfPrefs.curveLo/HiHeightIn`);
 §6.4 documents the S-break pair's minimum-gap layout (`breakPairLayout`, ≥ 1 pt of
 daylight) and the foreshortening trigger. Previously 2026-07-28 — §5.5 wear-document blank-draft bullet corrected (blank mode keeps
 the profile AND every liner's detail strip since 2026-07-28, values-out only) and extended
 for measured-Ø readings; §5.3 gains a pointer to the wear document's own measured-Ø callout
-system. 2026-07-22 — added §5.4 Inline Dimension Text (dimension values now seated in a break in the line, drafting-convention style, PDF export + preview); added §5.3 On-Shaft Diameter Callouts (body/liner OD leaders now all-BELOW, ≤3-decimal formatting, two-tier stacking); previously 2026-07-18 fixed page orientation (landscape, not portrait), clarified preview/PDF as separate drawing paths (named the three fit functions), replaced the "no display compression" invariant with the actual round-stock S-break behavior, fixed the AUDIT.md path.
+system. 2026-07-22 — added §5.4 Inline Dimension Text (dimension values now seated in a break in the line, drafting-convention style, PDF export + preview); added §5.3 On-Shaft Diameter Callouts (body/liner OD leaders now all-BELOW, ≤3-decimal formatting, two-tier stacking); previously 2026-07-18 fixed page orientation (landscape, not portrait), clarified preview/PDF as separate drawing paths (fit functions named; corrected 2026-08-05), replaced the "no display compression" invariant with the actual round-stock S-break behavior, fixed the AUDIT.md path.
 
 ## Purpose
 Defines the **single-page** PDF export process.  
@@ -23,12 +27,13 @@ Preview rendering (`ShaftLayout` + `ShaftRenderer`) and the PDF composers (`Shaf
 `RunoutPdfComposer`, `WearPdfComposer`) are **SEPARATE drawing paths**. They share model geometry
 (mm) and layout-math *concepts* but not code:
 - `ShaftPdfComposer` never calls `ShaftLayout.compute()`. It computes its own point-per-mm scale
-  via three fit functions: `computeBodyOnlyPtPerMm`, `computeDetailPtPerMm`,
-  `computePdfPtPerMmFitAxes` (which one is used depends on export mode/body-only vs. detail).
+  via a single fit function, `computeDetailPtPerMm`, which fits `overallLengthMm` /
+  `maxOuterDiaMm` into the geometry rect. (The height it actually draws at is then set by the
+  sizing curve + "Shaft height" slider — see §5.7.)
 - Unit formatting conventions match the preview, but the pixel/point math is independent.
 
-**Note:** `ShaftPdfComposer` contains its own geometry drawing functions (`drawBodiesPlain`,
-`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) separate from
+**Note:** `ShaftPdfComposer` contains its own geometry drawing functions
+(`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) separate from
 `ShaftRenderer`. This is an intentional architectural split, not a bug to unify — see
 `docs/archive/AUDIT.md` §4.4 for history.
 
@@ -57,11 +62,11 @@ PDF uses its own fixed black-and-white styling inside `ShaftPdfComposer`.
 # 3. Layout Flow
 
 1. Define content bounds based on margins.
-2. Compute `ptPerMm` using one of `ShaftPdfComposer`'s own fit functions (not `ShaftLayout`):
-   `computeBodyOnlyPtPerMm`, `computeDetailPtPerMm`, or `computePdfPtPerMmFitAxes`, each taking
-   the geometry rect's width/height in points and fitting `overallLengthMm` / `maxOuterDiaMm`.
-3. Draw shaft geometry using `ShaftPdfComposer`'s own drawing functions (`drawBodiesPlain` /
-   `drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) — **not**
+2. Compute `ptPerMm` with `ShaftPdfComposer`'s own fit function (not `ShaftLayout`):
+   `computeDetailPtPerMm`, taking the geometry rect's width/height in points and fitting
+   `overallLengthMm` / `maxOuterDiaMm`.
+3. Draw shaft geometry using `ShaftPdfComposer`'s own drawing functions
+   (`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) — **not**
    `ShaftRenderer`.
 4. Draw title block.
 
@@ -76,7 +81,9 @@ Top of page, full width.
 - Project / Drawing Title
 - Description (optional)
 - Date
-- Units (always “mm”)
+- Units — printed values follow the document's **active unit** (inches or mm), not always
+  mm. Every printed length/diameter goes through `formatLenWithUnit` / `formatDiaWithUnit`
+  with the document's `UnitSystem`; only the model layer is unconditionally mm.
 - Overall Length
 - Scale (“1:1”, “2:1”, or “Scale to Fit”)
 - Drawn By (optional)
@@ -248,6 +255,12 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   on-device report) and the original switch in the Tune options sheet. Both drive
   `setPdfBlankDraft`, so they can never disagree; toggling re-renders the preview live.
 
+**The Tune options sheet** (`PdfPreviewScreen.kt`) hosts, in order: Blank draft (write-in),
+Component labels, Line thickness, the **"Shaft height" slider** and the **liner compression**
+control (both §5.7 — the same per-job `RunoutConfig` values the Consolidated Output tab
+exposes, §5.6), Measurement reference, and the Shade-in-PDF checkboxes. The sheet scrolls,
+capped at 78% of screen height so it never covers the preview entirely.
+
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
 `PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print
 framework — Print buttons live on the PDF preview top bar and the runout/wear screens.
@@ -320,20 +333,24 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
   the default.
 - **Liner compression (per-job pair, same two surfaces)**: the measured components —
   tapers and liners — are what the sheets are about, so liners can be held proportional
-  lengthwise. Checkbox "Keep liners proportional lengthwise"
-  (`RunoutConfig.linersProportional`): liners demand full true-scale width and the drawn
-  HEIGHT yields when the page can't fit them (the keyway-body posture); the slider is
+  lengthwise. **The drawing height takes precedence; liner compression is secondary**
+  (on-device direction): neither control ever changes the drawn shaft height. Checkbox
+  "Keep liners proportional lengthwise" (`RunoutConfig.linersProportional`): liners hold
+  true-scale width up to what the page affords at the selected height; the slider is
   disabled while checked. Slider "Liner compression" (`RunoutConfig.linerCompression`,
   0–100%, default 100%): how far liners may foreshorten below true scale — 100% = down
   to the 100 pt writable floor (historical behavior), 0% = not at all. Both feed the
   derived `linerMinFracOfTrue` → `ProfileFeatureSpan.minWidthFracOfTrue` (geom,
-  unit-tested): the liner's width floor becomes `max(100pt, frac × true width)`. Applies
-  to the schematic (`composeShaftPdf(linerMinFracOfTrue)`) and the runout/consolidated
-  sheets (from `config`); rides the `.shaft` envelope (additive, legacy default = free
-  compression). The readout under the slider shows the drawn shaft height LIVE during
-  the drag (`estimatedShaftHeightIn`, `ShaftHeightSlider.kt` — the composers'
-  `solveMaxProfileScale` arithmetic over the spec), so the height cost of wider liners
-  is visible the moment it starts.
+  unit-tested): a BEST-EFFORT width floor of `max(100pt, frac × true width)` — the
+  scale solve ignores it entirely, and when the raised floors don't fit at the solved
+  scale they shrink uniformly to fit (`fracFitFactor`); flat floors
+  and keyway pins are untouched, and only keyway pins may still yield the height.
+  Applies to the schematic (`composeShaftPdf(linerMinFracOfTrue)`) and the
+  runout/consolidated sheets (from `config`); rides the `.shaft` envelope (additive,
+  legacy default = free compression). The readout under the slider shows LIVE what
+  liners actually keep — "Liners keep at least ~N% of true length. The drawn height
+  never changes." (`estimatedLinerKeptFracOfTrue`, `ShaftHeightSlider.kt`,
+  unit-tested).
 
 ---
 

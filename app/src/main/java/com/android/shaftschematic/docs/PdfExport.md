@@ -43,16 +43,24 @@ the per-job "Shaft height" slider multiplies on top).
 Full-resolution in-memory preview via `PdfDocument` + `PdfRenderer` (2× raster),
 pinch-to-zoom 0.5×–8×, double-tap reset.
 
-- **Options sheet (Tune icon):** component labels, line thickness (50–200%),
-  measurement reference (Auto/AFT/FWD), shade bodies/tapers/liners — all bound to
-  `PdfPrefs` via VM setters, persisted to DataStore, applied live (each option is a
-  `LaunchedEffect` key).
+- **Options sheet (Tune icon):** blank draft (write-in) toggle, component labels, line
+  thickness (50–200%), "Shaft height" slider, liner compression control, measurement
+  reference (Auto/AFT/FWD), shade bodies/tapers/liners — bound to `PdfPrefs` (or, for the
+  height/liner-compression pair, the per-job `RunoutConfig`) via VM setters, persisted,
+  applied live (each option is a `LaunchedEffect` key). Blank draft is session-scoped, not
+  persisted.
+  - The sheet's content is taller than a phone screen, so it carries its own
+    `verticalScroll` plus `navigationBarsPadding()` — without them the bottom rows clip
+    mid-checkbox behind the navigation bar. Its height is capped at **78% of the screen**
+    (`LocalConfiguration.screenHeightDp * 0.78f`): a sheet expanded to the status bar
+    leaves no edge to swipe it back down by (on-device report).
 - **Orientation:** `DisposableEffect` unlocks rotation on entry and restores the
   portrait lock on dispose — every other screen stays portrait-only.
 - **Pipeline:** snapshot `vm.currentPdfPrefs` on main thread → `Dispatchers.IO` →
   temp PDF via `composeShaftPdf` → rasterize page 0 at 2× → pan/zoom Canvas.
   Temp file deleted after rasterization; failures show an error, never crash.
-- **Top bar:** Back · Tune · Refresh (reset zoom/pan) · PDF (`onExport()` → SAF).
+- **Top bar:** Back · Tune · Refresh (reset zoom/pan) · Print (system print of a freshly
+  composed page, state snapshotted on the UI thread) · PDF (`onExport()` → SAF).
 
 ## Invariants
 - No model state mutated in either screen — rendering and preference changes only.

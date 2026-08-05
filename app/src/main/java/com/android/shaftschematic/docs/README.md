@@ -1,4 +1,4 @@
-# ShaftSchematic – Contracts Pack (v1.0, 2026-07-18)
+# ShaftSchematic – Contracts Pack (v1.1, 2026-08-05)
 
 **Purpose:** The authoritative per-subsystem contracts — invariants, behaviors, and
 product decisions that the code alone can't express. Read the relevant doc before
@@ -6,9 +6,11 @@ editing a subsystem, and update it in the same change if behavior changes.
 Project-wide invariants live in `CLAUDE.md`; repo-level references (architecture,
 data model, validation, glossary, roadmap) live in `docs/` at the repo root.
 
-**v1.0 consolidation:** the pack was reorganized from 31 micro-docs down to the 16
-below — per-file API restatements were merged into subsystem contracts or deleted
-where they merely mirrored code. (Sweep record in git history.)
+**v1.0 consolidation:** the pack was reorganized from 31 micro-docs down to the
+per-subsystem contracts below (16 at the time, **18** today) — per-file API restatements
+were merged into subsystem contracts or deleted where they merely mirrored code.
+(Sweep record in git history.) Design plans (`*_PLAN.md`) are not contracts; each is
+listed under the contract it belongs to.
 
 ## Screen & editing
 
@@ -38,8 +40,10 @@ where they merely mirrored code. (Sweep record in git history.)
 
 - **Rendering.md** — preview pipeline: ShaftDrawing host, ShaftLayout math,
   ShaftRenderer geometry, RenderOptions styling. PDF is a separate drawing path.
-- **RunoutSheet.md** — runout + wear tabs, bubble collision engine
-  (`geom/RunoutBubbleLayout.kt`), OAL alignment, PDF appearance options
+- **RunoutSheet.md** — runout + wear tabs **and the Consolidated Output tab** (consolidated
+  sheet variants, worn sections, shaft-height slider, Export all), bubble collision engine
+  (`geom/RunoutBubbleLayout.kt`), profile compression, OAL alignment, PDF appearance
+  options. Design plan: `WearDiaMeasurements_PLAN.md`.
 - **UndercutDrawing.md** — Undercut Drawing tab/PDF: shaft-space (not component-keyed)
   undercut sections, cluster-window zoom, notch geometry against the local outer surface,
   chained + total dimension rails. Design plan: `UndercutDrawing_PLAN.md`.

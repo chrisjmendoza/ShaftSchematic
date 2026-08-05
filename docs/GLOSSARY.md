@@ -1,6 +1,10 @@
 # Glossary
 Version: v0.5.x
-Last updated: 2026-07-28 — added the reference-only inspection terms (wear spot/pit,
+Last updated: 2026-08-05 — renderer stroke terms corrected to the actual `RenderOptions`
+field names (`outlineWidthPx`/`dimLineWidthPx`); reference-only feature kinds went from five
+to **seven** (worn sections, undercuts); added the consolidated-sheet paper terms
+(consolidated sheet, S-break, default sizing curve, Shaft height slider, liner
+compression). 2026-07-28 — added the reference-only inspection terms (wear spot/pit,
 measured-Ø reading, runout reading, witness tick); corrected auto-body promotion to the
 checkbox-only "Explicit body" path. 2026-07-21 — Keyway entry: body-hosted keyways now shipped (were shelved); added keyways-180°-apart notes; corrected explicit-vs-auto-body entry after the "non-negotiable bodies" revert (bodies are fluid fillers, never collide).
 
@@ -76,11 +80,13 @@ collisions, and never splits bodies. Position is authored from the AFT or FWD en
 
 # 3. Rendering Terms
 
-### shaftWidth
-Primary stroke thickness for bodies, tapers, liners’ top/bottom.
+### outlineWidthPx
+`RenderOptions` field: primary outline stroke thickness (px) for bodies, tapers, liners’
+top/bottom, and envelopes.
 
-### dimWidth
-Stroke thickness for ticks, hatch, and dimension lines.
+### dimLineWidthPx
+`RenderOptions` field: stroke thickness (px) for auxiliary/secondary lines — ticks, hatch,
+and dimension lines.
 
 ### Hatch
 45° angled lines used to denote thread region (decorative, not mechanically accurate).
@@ -113,6 +119,41 @@ Header region containing metadata: date, units, scale, title.
 
 ### Scale to Fit
 Non-integer scale factor used when geometry cannot be full-size.
+
+### Consolidated Sheet
+The single-page output that carries the schematic's dimension rails + spec footer plus the
+elected runout and/or wear content (`ConsolidatedVariant`: All three | Schematic + Runout |
+Schematic + Wear). Composed by `composeRunoutPdf(consolidated = true)` and owned by the
+Consolidated Output tab; the Runout tab's own buttons still produce the **classic**
+standalone runout sheet.
+
+### S-break (round-stock break)
+The S-curve end-cap glyph (`pdf/BreakSymbol.kt`, `drawBreakEdge()`) that replaces a straight
+end cap when a long body is drawn foreshortened, so the drawing reads as a shortened
+cylindrical bar rather than a literal-length rectangle. **Bodies only** — tapers, threads,
+and liners are never broken this way. Liners foreshorten in *size* only, down to a finite
+width floor.
+
+### Default sizing curve
+The 100% base for drawn shaft height (`defaultShaftHeightPt` / `defaultVisualScale`,
+`geom/ProfileCompression.kt`): drawn height is linear in true diameter through 4" → 0.75"
+and 8" → 1.25" on paper, continuing past both anchors and meeting the 1.5" ceiling at 10".
+The anchor **heights** are user settings (Settings → PDF Export → "Default drawing size");
+the anchor diameters stay fixed at 4"/8".
+
+### Shaft height slider
+The per-job multiplier (`RunoutConfig.heightScale`, 50–300%) applied to the solved profile
+scale on the runout/consolidated sheets **and** the schematic — one value behind every
+drawing output. Selected by drawn-height **value in paper inches**; commits near the
+standard height snap to exactly 100%. The drawn shaft is hard-capped at 1.5" on paper
+(`PROFILE_MAX_SHAFT_HEIGHT_PT`, an absolute ceiling).
+
+### Liner compression
+The per-job pair (`RunoutConfig.linersProportional` / `linerCompression`) controlling how
+far liners may foreshorten below true length. Feeds a **best-effort** width floor
+(`linerMinFracOfTrue` → `ProfileFeatureSpan.minWidthFracOfTrue`) that the scale solve
+ignores; raised floors that don't fit shrink uniformly (`fracFitFactor`). Drawing height
+takes precedence — neither control ever changes the drawn shaft height.
 
 ---
 
@@ -166,9 +207,9 @@ collision warnings on normal drafts.)
 
 ### Reference-only feature
 A record that is drawn on the shaft but never participates in geometry: it does not affect
-OAL/`coverageEndMm`, body resolution, collision, or the Free-to-End badge. Five kinds:
+OAL/`coverageEndMm`, body resolution, collision, or the Free-to-End badge. Seven kinds:
 coupler bolt slots (in `ShaftSpec`), and — in the document envelope — wear spots, wear pits,
-measured-Ø readings, and runout readings.
+measured-Ø readings, worn sections, runout readings, and undercuts.
 
 ### Wear Spot
 A recorded liner wear band (`WearSpot` in `WearRecord.spots`): liner-local start/length from
@@ -193,10 +234,26 @@ The typed value is stored verbatim (golden rule); `diaMm = 0` = placed-but-empty
 The thin vertical line across a component's full drawn height marking where a measured-Ø
 reading was taken — the anchor the callout leader points at.
 
+### Worn Section
+A designated measured area (`WornSection` in `WearRecord.wornSections`) authored on the
+Consolidated Output tab. **Shaft-space** (`startFromAftMm` + `lengthMm`) — it may cross
+component edges, so it has no orphans and is never pruned at decode. Carries a **list** of
+measured diameters, stored verbatim (golden rule); values ≤ 0 never print. Drawn on the
+consolidated sheet as boundary lines at the span ends with the values rotated 90° inside
+the profile over knockout halos.
+
 ### Runout Reading
 A per-station TIR value + high-spot clock marker (`RunoutReading`), recorded by tapping a
 bubble on the runout sheet. Keyed by `(componentId, stationIndex)`; 30-minute clock ticks
 for the high spot.
+
+### Undercut
+A machined-below-surface span (`Undercut` in `UndercutRecord.undercuts`) printed on its own
+Undercut Drawing tab/PDF. Reference-only and **shaft-space** (canonical `startFromAftMm`),
+so a cut may span components; no orphans, never pruned at decode. Drawn as an **open**
+silhouette step — void fill plus full-height section faces and floor lines, never closed by
+a lid. Drawn depth is display-exaggerated per sheet (`UndercutRecord.exaggerationFrac`);
+printed Ø values stay the stored numbers.
 
 ### Pilot Diameter (future)
 Centering diameter for couplings.

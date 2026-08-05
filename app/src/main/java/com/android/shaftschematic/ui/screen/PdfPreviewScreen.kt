@@ -615,8 +615,8 @@ private fun PdfOptionsSheet(
         LinerCompressionControl(
             linersProportional = linersProportional,
             linerCompression = linerCompression,
-            estimateHeightIn = { frac ->
-                estimatedShaftHeightIn(spec, sliderBase, heightScale, frac)
+            estimateKeptFrac = { frac ->
+                estimatedLinerKeptFracOfTrue(spec, sliderBase, heightScale, frac)
             },
             onSetProportional = { vm.setLinersProportional(it) },
             onSetCompression = { vm.setLinerCompression(it) },

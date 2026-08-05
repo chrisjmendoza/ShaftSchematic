@@ -36,16 +36,19 @@ import kotlinx.serialization.Serializable
  *   page budget (`exaggeratedProfileScale`). Per-job (rides the .shaft envelope) so a
  *   reopened document reprints identically — same posture as the undercut sheet's
  *   exaggeration slider.
- * @param linersProportional "Keep liners proportional lengthwise" — liners demand their
- *   full true-scale drawn width (the key measured components stay proportional); the
- *   drawn HEIGHT yields when the page can't fit them, same as keyway-pinned bodies.
- *   Overrides [linerCompression] while checked.
+ * @param linersProportional "Keep liners proportional lengthwise" — liners hold their
+ *   true-scale drawn width up to what the page affords AT the selected drawn height.
+ *   The height takes PRECEDENCE (on-device direction): this never lowers the drawn
+ *   shaft; when the full request doesn't fit, the liner floors shrink uniformly instead
+ *   (`fracFitFactor`). Only keyway-pinned bodies may yield the height. Overrides
+ *   [linerCompression] while checked.
  * @param linerCompression "Liner compression" slider — how far liners may foreshorten
  *   below true scale when the page needs the room. 1.0 = fully (down to the
- *   `PROFILE_MIN_LINER_PT` writable floor — the historical behavior), 0.0 = not at all
- *   (equivalent to [linersProportional]). Applied as a per-liner width floor of
- *   (1 − value) × true width; the geometry consumes [linerMinFracOfTrue]. Per-job, on
- *   the runout/consolidated sheets AND the schematic, like [heightScale].
+ *   `PROFILE_MIN_LINER_PT` writable floor — the default), 0.0 = not at all
+ *   (equivalent to [linersProportional]). Applied as a best-effort per-liner width
+ *   floor of (1 − value) × true width; the geometry consumes [linerMinFracOfTrue] and
+ *   never trades drawn height for it. Per-job, on the runout/consolidated sheets AND
+ *   the schematic, like [heightScale].
  */
 @Serializable
 data class RunoutConfig(
@@ -58,7 +61,8 @@ data class RunoutConfig(
     /**
      * The liner width floor as a fraction of true drawn width — what the composers hand
      * to `ProfileFeatureSpan.minWidthFracOfTrue`. 0 = compress freely (floor only),
-     * 1 = pinned at true scale.
+     * 1 = request full true width (best-effort; λ-fitted, never lowers the drawn
+     * height).
      */
     val linerMinFracOfTrue: Float
         get() = if (linersProportional) 1f else (1f - linerCompression).coerceIn(0f, 1f)

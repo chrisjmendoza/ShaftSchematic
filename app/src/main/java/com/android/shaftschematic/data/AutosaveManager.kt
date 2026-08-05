@@ -21,11 +21,11 @@ private val Context.dataStore by preferencesDataStore(name = "autosave_datastore
 /**
  * AutosaveManager — draft history (v2).
  *
- * The single-slot autosave (`autosave_last_session`) was replaced by a ring of up
- * to [DEFAULT_DRAFT_RING_MAX] [DraftEntry] records under [DRAFTS_KEY]. Each editing session
- * owns a stable `draftId`, so opening/creating a document upserts only *its* entry and can
- * never clobber another document's draft. Legacy single-slot drafts migrate into the ring on
- * first [loadDrafts]. See docs/Autosave_Incident_2026-07-25.md.
+ * Drafts live in a ring of up to [DEFAULT_DRAFT_RING_MAX] [DraftEntry] records under
+ * [DRAFTS_KEY]. Each editing session owns a stable `draftId`, so opening/creating a document
+ * upserts only *its* entry and can never clobber another document's draft. Legacy
+ * single-slot drafts (`autosave_last_session`) migrate into the ring on first [loadDrafts].
+ * See docs/Autosave_Incident_2026-07-25.md.
  */
 object AutosaveManager {
     private val json = Json {
@@ -50,7 +50,7 @@ object AutosaveManager {
         val vessel: String,
         val jobNumber: String,
         val notes: String,
-        // Added 2026-07: absent in older drafts; defaults keep them decodable.
+        // Absent in older drafts; defaults keep them decodable.
         val runoutConfig: RunoutConfig = RunoutConfig(),
         val unitLocked: Boolean = false,
         val overallIsManual: Boolean = false,
@@ -69,7 +69,7 @@ object AutosaveManager {
      * One unsaved editing session's autosaved state, keyed by [draftId] (a per-session
      * identity minted on new/open). [documentName] is the file name when the session was
      * opened from a saved doc (null for a brand-new drawing). [updatedAtEpochMs] drives ring
-     * eviction (oldest-first). The [snapshot] is the exact session state, unchanged from v1.
+     * eviction (oldest-first). The [snapshot] is the exact session state.
      */
     @Serializable
     data class DraftEntry(

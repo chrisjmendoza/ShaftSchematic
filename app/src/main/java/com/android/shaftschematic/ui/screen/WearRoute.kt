@@ -93,11 +93,13 @@ import java.io.File
  * Screen for the Shaft Wear / Inspection Document tab.
  *
  * ## Purpose
- * Produces a blank shaft outline form for field use — the machinist marks damage,
- * pitting, and dye-penetrant inspection results by hand on the printed page.
+ * The authoring surface for wear data — wear spots, pits, and measured-Ø readings are
+ * placed in-app here and print at their true position on the document. Blank draft mode
+ * prints the same drawing as a write-in form, for marking damage, pitting, and
+ * dye-penetrant results by hand on the page.
  *
  * ## Layout
- * - **Interactive shaft canvas** (Phase 2, `docs/LinerWearAreas_Proposal.md`) — same pattern as
+ * - **Interactive shaft canvas** (`docs/LinerWearAreas_Proposal.md`) — same pattern as
  *   `RunoutRoute`'s preview canvas: `ShaftLayout.compute` + `ShaftRenderer.draw` against
  *   `resolvedComponents` (never raw spec). Liners are tap targets (faint tint affordance); a
  *   tap hit-tests in mm space via [ShaftLayout.Result.xMmFromPx] + [pickLinerIdAtMm] and opens
@@ -106,7 +108,7 @@ import java.io.File
  * - **Preview PDF** — verify layout before saving.
  * - **Export PDF** — SAF file picker to save the file.
  *
- * ## Phase 3
+ * ## Liner detail overlay
  * [LinerWearDetailOverlay] — full-screen "zoom in" on one liner: broken-out liner with neighbor
  * stubs, wear bands, and editable spot cards. Not a nav destination; dismissed via its own
  * `BackHandler` or back-arrow button.

@@ -15,7 +15,8 @@ Responsibilities
 - Hold `ShaftSpec`, `UnitSystem`, `showGrid`, and project meta fields.  
 - Commit APIs accept raw text (e.g., `onSetOverallLengthRaw`), parse, convert, clamp, and update.  
 - Expose derived values (e.g., `freeToEndMm`) from the model.  
-- Load/save specs via `ShaftRepository`.
+- Load/save documents via `io/InternalStorage.kt` (atomic internal `.shaft` saves, listing,
+  delete/rename) and `io/ShaftBackup.kt` (zip backup/restore). There is no repository class.
 - Hold persisted display settings: `lineThicknessScale` (0.5–2.0, applied to preview and PDF stroke widths; 1.0 = default thin weight, 2.0 = original thick weight).
 - Own autosave/draft-history state (`data/AutosaveManager.kt`, `data/DraftRing.kt`;
   full contract in `docs/Persistence.md`, incident background in
@@ -55,9 +56,9 @@ Responsibilities
     universal unsaved-changes guard in `AppNav.kt` (`docs/Navigation.md`). See
     `docs/Autosave_Incident_2026-07-25.md` (root cause #4) for why the old
     partial comparison mattered.
-  - `drafts: StateFlow<List<AutosaveManager.DraftEntry>>` (+ derived `hasDraft:
-    StateFlow<Boolean>`) — replaces the old single-slot `_hasDraft` boolean; backs
-    the StartScreen "Unsaved drafts" list (up to 3).
+  - `drafts: StateFlow<List<AutosaveManager.DraftEntry>>` — replaces the old
+    single-slot `_hasDraft` boolean; backs the StartScreen "Unsaved drafts" list
+    (up to 3). Boolean-only callers derive from `drafts` directly.
   - `continueDraft(draftId)` — restores a specific ring entry into the editor and
     adopts its `draftId`/document name; session stays dirty until an explicit save.
   - `discardDraft(draftId)` — removes exactly one ring entry; if it was the current
@@ -135,7 +136,7 @@ Change Log
 - Autosave draft-history rework (fixes the 2026-07-25 data-loss incident — see
   `docs/Autosave_Incident_2026-07-25.md`): `currentDraftId` (per-session identity)
   and `savedSnapshot` (dirty-gate baseline) added; `_hasDraft` boolean replaced by
-  `drafts: StateFlow<List<AutosaveManager.DraftEntry>>` (+ derived `hasDraft`); new
+  `drafts: StateFlow<List<AutosaveManager.DraftEntry>>`; new
   `continueDraft(id)`/`discardDraft(id)`, no-arg `discardDraft()` kept. The autosave
   observer now writes only when dirty (`shouldWriteDraft`) and removes the entry on
   the dirty→clean transition, instead of unconditionally overwriting a single slot
@@ -146,7 +147,7 @@ Change Log
 
 **v0.4 (2026-06-19)**
 - `updateBody()`, `updateTaper()`, `updateLiner()`, `updateThread()` — removed `snapForwardFrom()` cascade. Editing a component now mutates only that component; other components' positions are completely untouched.
-- Removed `_autoSnap` StateFlow, `autoSnap` property, and `setAutoSnap()`. Snap is now purely explicit via `snapChainFrom()` / `snapChainFromId()`.
+- Removed `_autoSnap` StateFlow, `autoSnap` property, and `setAutoSnap()`. (The explicit `snapChainFrom()` / `snapChainFromId()` entry points that briefly replaced auto-snap were themselves later removed unused — snapping lives only in coarse gestures, `ui/viewmodel/SnapUtils.kt`; the model-layer `ShaftSpec.snapForwardFrom` extension remains, exercised by tests.)
 
 **v0.3 (2026-06-19)**
 - `updateTaperAuthoredReference()` added — persists the user's AFT/FWD carousel reference toggle on `Taper.authoredReference`.

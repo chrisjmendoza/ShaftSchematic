@@ -93,7 +93,9 @@ fun composeShaftPdf(
     /**
      * "Liner compression" control — the per-job liner width floor as a fraction of true
      * drawn width (`RunoutConfig.linerMinFracOfTrue`): 0 = liners may foreshorten to the
-     * writable floor (default), 1 = liners pinned at true scale (the height yields).
+     * writable floor (default), 1 = liners ask for full true-scale width. Best-effort:
+     * the drawn height takes precedence — the raise never enters the scale solve and
+     * λ-fits the room the page has (`fracFitFactor`).
      */
     linerMinFracOfTrue: Float = 0f,
 ) {
@@ -130,9 +132,10 @@ fun composeShaftPdf(
         pageH - PAGE_MARGIN_PT - footerBlockPt
     )
 
-    // PDF-only guard: a shaft with exactly one Body and no other detail components.
-    // For body-only shafts there is nothing to "make room for", so do not apply
-    // any body compression/break logic.
+    // PDF-only classification: a shaft with exactly one Body and no other detail
+    // components. Body-only shafts still go through the same body draw path (center
+    // breaks included); the flag only suppresses the footer's compression note, since
+    // there is nothing else on the sheet the squeeze needs explaining against.
     val resolvedBodies = resolvedComponents
         ?.filterIsInstance<ResolvedBody>()
         ?.map { b ->
@@ -179,9 +182,10 @@ fun composeShaftPdf(
     val contentSpanMm = (contentMaxMm - contentMinMm).coerceAtLeast(1f)
 
     // ── Visual diameter scale + compressed x mapping (hand-sheet convention) ──
-    // On-device rule (with rulered reference sketches): drawn shaft height is proportional
-    // to TRUE diameter at a fixed visual scale — a 7-8" shaft prints ~1" tall, 5-6" ~3/4" —
-    // and is never diluted by shaft length. The x axis is schematic: every feature keeps a
+    // On-device rule (with rulered reference sketches): drawn shaft height follows TRUE
+    // diameter on the default sizing curve (`defaultShaftHeightPt`; standard 4" → 0.75",
+    // 8" → 1.25", anchor heights user-adjustable) and is never diluted by shaft length.
+    // The x axis is schematic: every feature keeps a
     // per-kind minimum drawn width and foreshortens above it in proportion to true length
     // (geom/ProfileCompression.kt); plain body runs absorb the squeeze with center-breaks.
     // Shafts that fit at the visual scale keep a plain linear map.
@@ -192,7 +196,8 @@ fun composeShaftPdf(
         }
         // Liners compress in SIZE only — proportional foreshortening above their floor,
         // never a body-style S-break cutout (on-device clarification). The per-job
-        // "Liner compression" control raises the floor toward true width (1 = pinned).
+        // "Liner compression" control raises the floor toward true width — best-effort,
+        // λ-fitted; the drawn height never yields to it.
         spec.liners.forEach {
             add(
                 ProfileFeatureSpan(
@@ -266,7 +271,6 @@ fun composeShaftPdf(
     fun xAt(mm: Float) = xMap.xAt(mm)
     fun rPx(d: Float)  = (d * 0.5f) * diaPtPerMm
 
-    // geometry
     c.save()
     if (shaftTranslateY != 0f) {
         c.translate(0f, shaftTranslateY)
@@ -423,7 +427,6 @@ fun composeShaftPdf(
     }
 
     if (effectiveOptions.showFooter) {
-        // footer
         // Test the same body list the geometry pass drew (resolved incl. auto-bodies),
         // so the note and the drawn center breaks can't disagree.
         val showCompressionNote = !bodyOnly && bodiesForPdf.any { b ->
@@ -472,13 +475,13 @@ fun composeShaftPdf(
 
 private const val MM_PER_IN = 25.4f
 
-// Body-only PDF rendering uses a stable, fixed target drawing height.
-// 1.25 in keeps the shaft visible without eating the page.
+// Target drawing height used by computeDetailPtPerMm (the scaling tests' reference
+// solve); the composer sizes shafts from the sizing curve.
 private const val BODY_ONLY_TARGET_HEIGHT_PT = 1.25f * 72f
 
 // Strokes / text
-private const val OUTLINE_PT_BASE = 1.25f  // 100% default; slider goes to 200% (original 2.5pt)
-private const val DIM_PT_BASE = 0.8f       // 100% default; slider goes to 200% (original 1.6pt)
+private const val OUTLINE_PT_BASE = 1.25f  // 100% default; slider goes to 200%
+private const val DIM_PT_BASE = 0.8f       // 100% default; slider goes to 200%
 private const val TEXT_PT = 12f
 
 // Layout
@@ -572,7 +575,7 @@ private fun drawComponentLabelsPdf(
 
 // Compression (paper-space heuristic; bodies only)
 private const val COMPRESS_TRIGGER_PT = 220f // if body length on paper ≥ this, show center-break
-private const val ZIGZAG_GAP_MAX_PT = 20f    // max central gap width
+private const val ZIGZAG_GAP_MAX_PT = 20f    // classic central gap; breakPairLayout may widen it to keep the pair clear
 
 // Label collision avoidance
 
@@ -642,31 +645,6 @@ internal fun computeDetailPtPerMm(spec: ShaftSpec, geomWidthPt: Float, geomHeigh
 private fun requireFinite(name: String, v: Float): Float {
     if (!v.isFinite()) throw IllegalArgumentException("$name is not finite: $v")
     return v
-}
-
-private fun drawBodiesPlain(
-    c: Canvas,
-    bodies: List<Body>,
-    cy: Float,
-    xAt: (Float) -> Float,
-    rPx: (Float) -> Float,
-    outline: Paint,
-    fill: Paint? = null,
-) {
-    bodies.forEach { b ->
-        if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
-        val x0 = xAt(b.startFromAftMm)
-        val x1 = xAt(b.startFromAftMm + b.lengthMm)
-        val r = rPx(b.diaMm)
-        val top = cy - r
-        val bot = cy + r
-
-        if (fill != null) c.drawRect(x0, top, x1, bot, fill)
-        c.drawLine(x0, top, x1, top, outline)
-        c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, outline)
-        c.drawLine(x1, top, x1, bot, outline)
-    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

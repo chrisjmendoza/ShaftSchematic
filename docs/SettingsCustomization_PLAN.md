@@ -1,7 +1,8 @@
 # Settings Customization & Accessibility — Plan
 
 Date: 2026-08-04
-Status: Phase 1 implemented (uncommitted, pending review); Phases 2+ are proposals.
+Status: Phase 1 **shipped** — committed on `feat/settings-customization` (2026-08-05,
+`824937b`); Phases 2+ are proposals.
 
 Scope requested (on-device request): extend user-settings customization beyond the
 existing preview "material colors" — undercut colors, a color-removal mode, app theme

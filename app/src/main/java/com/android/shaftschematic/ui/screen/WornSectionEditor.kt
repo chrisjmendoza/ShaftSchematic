@@ -32,8 +32,7 @@ import com.android.shaftschematic.util.UnitSystem
 
 /**
  * Worn-section editor (list row + add/edit dialog) — authored on the Consolidated Output
- * tab, where the sections print (inside the consolidated sheet's profile). Extracted from
- * the Runout tab when that tab returned to runouts-only.
+ * tab, where the sections print (inside the consolidated sheet's profile).
  */
 
 /**

@@ -22,7 +22,6 @@ import com.android.shaftschematic.model.*
 import com.android.shaftschematic.model.snapForwardFrom
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
-import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.clampPitAcrossFrac
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -39,7 +38,6 @@ import android.util.Log
 import com.android.shaftschematic.data.AutosaveManager
 import com.android.shaftschematic.data.isDefaultSession
 import com.android.shaftschematic.data.shouldWriteDraft
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.collectLatest
@@ -84,11 +82,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // docs/Autosave_Incident_2026-07-25.md.
     private val _drafts = MutableStateFlow<List<AutosaveManager.DraftEntry>>(emptyList())
     val drafts: StateFlow<List<AutosaveManager.DraftEntry>> = _drafts.asStateFlow()
-
-    /** Derived convenience: whether any draft exists (for Boolean-only callers). */
-    val hasDraft: StateFlow<Boolean> = _drafts
-        .map { it.isNotEmpty() }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // Per-editing-session draft identity. Minted on construction, re-minted on newDocument()
     // and importJson() so working on one document can never touch another's draft entry.
@@ -179,8 +172,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _savedSnapshot.value = buildCurrentSnapshot()
         // Remove this session's draft-ring entry NOW. The autosave observer only reaches its
         // dirty→clean removal branch on the next combine emission, which never comes when the
-        // user saves and navigates away without another edit — that left saved documents
-        // sitting in "Unsaved drafts" as stale "Untitled draft" rows. newDocument()/importJson()
+        // user saves and navigates away without another edit — deferring the removal would
+        // leave saved documents sitting in "Unsaved drafts" as stale "Untitled draft" rows.
+        // newDocument()/importJson()
         // drop draftPersisted to false *before* calling this, so an open/new never deletes the
         // previous session's safety-net draft.
         if (draftPersisted) {
@@ -406,9 +400,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * "Shaft height" slider — exaggerate or shrink the drawn shaft on the runout/
-     * consolidated sheet. Clamped to the geom slider bounds; the composer additionally
-     * hard-caps the drawn height at 1.5" and the page budget.
+     * "Shaft height" slider — exaggerate or shrink the drawn shaft on every drawing
+     * output: schematic, runout, and consolidated sheets (one per-job value). Clamped to
+     * the geom slider bounds; the composer additionally hard-caps the drawn height at 1.5"
+     * and the page budget.
      */
     fun setRunoutHeightScale(scale: Float) {
         _runoutConfig.update {
@@ -462,11 +457,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
         }
-    }
-
-    /** Remove the runout reading for a bubble. No-op if none recorded. */
-    fun clearRunoutReading(componentId: String, stationIndex: Int) {
-        _runoutReadings.update { it.without(componentId, stationIndex) }
     }
 
     // ── Liner wear inspection record ──────────────────────────────────────────
@@ -566,13 +556,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     size = size,
                 )
             )
-        }
-    }
-
-    /** Change an existing pit's drawn size by [id]. No-op if the id is absent. */
-    fun updateWearPitSize(id: String, size: PitSize) {
-        _wearRecord.update { rec ->
-            rec.copy(pits = rec.pits.map { if (it.id == id) it.copy(size = size) else it })
         }
     }
 
@@ -1356,8 +1339,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun restoreSnapshot(snapshot: AutosaveManager.SessionSnapshot) {
         // Session boundary: a selection carried over from the previous content would be an
-        // orphaned id — no highlight, and (before the CarouselSelectionSync orphan fix)
-        // bricked swipe adoption. Clearing lets the carousel's seed effect reselect.
+        // orphaned id — no highlight. Clearing lets the carousel's seed effect reselect.
         _selectedComponentId.value = null
         _spec.value = snapshot.shaftSpec
         _unit.value = snapshot.unitSystem
@@ -1397,17 +1379,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectComponentById(componentId: String?) {
         _selectedComponentId.value = componentId
-    }
-
-    /** Explicitly snap forward from the given anchor key, end-to-end along the chain. */
-    fun snapChainFrom(anchor: ComponentKey) {
-        _spec.update { base -> base.snapForwardFrom(anchor) }
-    }
-
-    /** Convenience: snap forward from a component id by looking up its kind in UI order. */
-    fun snapChainFromId(id: String) {
-        val key = _componentOrder.value.firstOrNull { it.id == id }
-        if (key != null) snapChainFrom(key)
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -2516,22 +2487,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
         if (cur != _componentOrder.value) {
             _componentOrder.value = cur
-        }
-    }
-
-    // Move controls (used by screen buttons; future enhancement may expose drag-drop)
-    fun moveComponentUp(id: String)   = moveComponent(id, -1)
-    fun moveComponentDown(id: String) = moveComponent(id, +1)
-    private fun moveComponent(id: String, delta: Int) {
-        _componentOrder.update { list ->
-            val i = list.indexOfFirst { it.id == id }
-            if (i < 0) return@update list
-            val j = (i + delta).coerceIn(0, list.lastIndex)
-            if (i == j) return@update list
-            val m = list.toMutableList()
-            val item = m.removeAt(i)
-            m.add(j, item)
-            m
         }
     }
 

@@ -1,6 +1,9 @@
 # ShaftSchematic Data Model
 Version: v0.5.x
-Last updated: 2026-07-30 — added `keyways90Apart`/`keyways90Cw` (90°-apart clocking,
+Last updated: 2026-08-05 — envelope listing gains `undercutRecord`
+(`@SerialName("undercut_record")`) and `WearRecord.wornSections`; added the `UndercutRecord`
+and `WornSection` bullets (shaft-space spans, no orphans, never pruned at decode).
+2026-07-30 — added `keyways90Apart`/`keyways90Cw` (90°-apart clocking,
 mutually exclusive with `keyways180Apart`). 2026-07-28 — ShaftSpec sample corrected to include `keyways180Apart` +
 `autoBodyDiaMm`; documented the document envelope's reference-only records (WearRecord
 spots/pits/measured-Ø readings, RunoutReadings) and their orphan policies; auto-body
@@ -282,23 +285,41 @@ data class ShaftDocV1(
     val spec: ShaftSpec,
     val runoutConfig: RunoutConfig = RunoutConfig(),     // @SerialName("runout_config")
     val wearRecord: WearRecord = WearRecord(),           // @SerialName("wear_record")
-    val runoutReadings: RunoutReadings = RunoutReadings() // @SerialName("runout_readings")
+    val runoutReadings: RunoutReadings = RunoutReadings(),// @SerialName("runout_readings")
+    val undercutRecord: UndercutRecord = UndercutRecord() // @SerialName("undercut_record")
 )
 
 **Reference-only inspection records** live in the envelope, never in `ShaftSpec`, so they
 can never affect geometry resolution:
 
-- `WearRecord(spots, pits, diaReadings)` — liner wear bands (`WearSpot`, keyed by
-  `linerId`), pit "X" markers (`WearPit`), and measured-diameter readings
-  (`WearDiaReading`) — the latter two keyed by *resolved* component id with
-  component-local `axialMm`.
+- `WearRecord(spots, pits, diaReadings, wornSections)` — liner wear bands (`WearSpot`,
+  keyed by `linerId`), pit "X" markers (`WearPit`), measured-diameter readings
+  (`WearDiaReading`) — the middle two keyed by *resolved* component id with
+  component-local `axialMm` — and worn sections (`WornSection`).
+- `WornSection` — a designated measured area authored on the Consolidated Output tab. Unlike
+  the other wear marks it is **shaft-space** (`startFromAftMm` + `lengthMm`), so it may
+  cross component edges: no component key, no orphans. `authoredReference` reuses
+  `UndercutReference` SET values as display-only Distance metadata (canonical never moves on
+  a reference switch). `diaMm` is a **list** of typed measurements stored verbatim (golden
+  rule); values ≤ 0 never print.
 - `RunoutReadings` — per-station TIR value + high-spot marker, keyed by
   `(componentId, stationIndex)`.
+- `UndercutRecord(undercuts, exaggerationFrac)` — its own envelope field
+  (`@SerialName("undercut_record")`), sibling of `wear_record`. Each `Undercut` is a
+  machined-below-surface span stored in **shaft space** (`startFromAftMm` + `lengthMm`) — a
+  cut may sit inside a liner or straddle a component edge, so undercuts are deliberately
+  **not** component-keyed: there are no orphans and nothing is pruned at decode. The
+  authored Distance reference (AFT/FWD SET or a reference liner's edge) is display-only
+  metadata; canonical geometry never moves on a reference switch. `diaMm` is a typed
+  measurement stored verbatim (`0` = placed-but-empty, never printed).
+  `exaggerationFrac` (`0..UNDERCUT_EXAGGERATION_MAX_FRAC` = 0.25, default 0.25) is a
+  per-sheet **drawn-depth** exaggeration only — printed Ø values stay the stored numbers.
 
 **Orphan policy** differs by key type: wear *spots* (liner-id-keyed, ids the codec knows)
 are pruned at **decode**; pits, measured-Ø readings, and runout readings key on resolved
 ids (incl. auto-bodies) the codec cannot know, so their orphans are skipped at the
-**render layer** and survive decode untouched.
+**render layer** and survive decode untouched. Worn sections and undercuts are shaft-space,
+so the question does not arise — they are never pruned.
 
 Migration:
 

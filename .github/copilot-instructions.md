@@ -2,7 +2,8 @@
 
 ## Project Overview
 Android app for modeling marine prop-shaft assemblies with real-time preview and PDF
-export (shaft drawing, runout sheet, wear document). Single-activity Compose app using
+export — five documents: shaft drawing, classic runout sheet, wear document, undercut
+drawing, and the consolidated output sheet. Single-activity Compose app using
 Material3, targeting Android 8.0+ (API 28), Target SDK 36.
 
 Authoritative sources, in order:
@@ -20,15 +21,18 @@ Authoritative sources, in order:
 - Never store or calculate geometry in inches
 
 ### Rendering: Two Separate Drawing Paths
-Preview and PDF share the same model and layout math but have **separate Canvas code**:
+Preview and PDF share the same model but compute their scale independently and have
+**separate Canvas code**:
 
 ```
-ui/drawing/render/ShaftLayout.kt   → mm→px mapping, layout bounds (shared math)
+ui/drawing/render/ShaftLayout.kt   → mm→px mapping, layout bounds (preview only)
 ui/drawing/render/ShaftRenderer.kt → preview geometry (DrawScope)
 ui/drawing/compose/ShaftDrawing.kt → Compose host; grid + axis labels only
 pdf/ShaftPdfComposer.kt            → shaft drawing PDF (own drawing code)
-pdf/RunoutPdfComposer.kt           → runout sheet PDF
+pdf/RunoutPdfComposer.kt           → runout sheet PDF + the consolidated sheet
+                                     (composeRunoutPdf(consolidated = true))
 pdf/WearPdfComposer.kt             → wear document PDF
+pdf/UndercutPdfComposer.kt         → undercut drawing PDF
 ```
 
 A fix in `ShaftRenderer` does **not** propagate to the PDF composers automatically
@@ -44,11 +48,12 @@ com.android.shaftschematic/
 ├─ io/        ← InternalStorage (.shaft library), ShaftBackup
 ├─ data/      ← SettingsStore (DataStore), AutosaveManager
 ├─ pdf/       ← PDF composers + dim/, notes/, render/
-├─ settings/  ← PdfPrefs, RunoutConfig
+├─ settings/  ← PdfPrefs, RunoutConfig, AppearancePrefs
 ├─ ui/
 │  ├─ drawing/   ← compose/ (hosts), render/ (layout + renderers)
-│  ├─ screen/    ← StartScreen, ShaftEditorRoute, ShaftScreen, ComponentCarousel,
-│  │              AddComponentDialogs, Runout/Wear/Settings routes
+│  ├─ screen/    ← StartScreen, ShaftEditorRoute (5 tabs, EditorTab.kt), ShaftScreen,
+│  │              ComponentCarousel, AddComponentDialogs,
+│  │              Runout/Wear/Undercut/Output/Settings/Help routes
 │  ├─ input/     ← NumericInputField (commit-on-blur numeric entry)
 │  ├─ resolved/  ← ResolvedComponent (derived auto-body pipeline)
 │  ├─ order/     ← ComponentOrder
@@ -65,7 +70,8 @@ Match package declaration to folder structure exactly.
 - State exposed via `StateFlow`; mutate with `.update { it.copy(...) }`
 - **Commit-on-blur** for numeric inputs: no VM mutation while typing;
   `ui/input/NumericInputField.kt` implements this, and a tap-and-leave with no edit
-  must be a no-op (critical invariant — see `docs/NumberField.md`)
+  must be a no-op (critical invariant — see
+  `app/src/main/java/com/android/shaftschematic/docs/NumberField.md`)
 - Exception: the OAL field commits on every keystroke in manual mode (intentional)
 
 ## Persistence

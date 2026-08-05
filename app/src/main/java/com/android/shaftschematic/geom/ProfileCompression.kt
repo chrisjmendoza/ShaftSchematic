@@ -23,9 +23,9 @@ package com.android.shaftschematic.geom
  */
 
 /**
- * Legacy flat visual diameter scale (pt per mm of TRUE diameter) — superseded as the
- * default by the [defaultShaftHeightPt] sizing curve; kept as the degenerate-diameter
- * fallback in [defaultVisualScale].
+ * Flat visual diameter scale (pt per mm of TRUE diameter) — the degenerate-diameter
+ * fallback in [defaultVisualScale]; the sizing curve ([defaultShaftHeightPt]) is the
+ * default.
  */
 const val VISUAL_DIA_SCALE_PT_PER_MM = 0.40f
 
@@ -146,10 +146,13 @@ fun heightFracForDrawnHeight(baseScale: Float, targetHeightPt: Float, maxDiaMm: 
  * drawn slot geometry must stay real).
  *
  * [minWidthFracOfTrue] raises the floor to a fraction of the span's TRUE drawn width at
- * the solved scale (0 = the flat [minWidthPt] floor alone; 1 = pinned at true scale) —
- * the "Liner compression" control: liners may only foreshorten this far. The effective
- * floor is `min(true, max(minWidthPt, true × frac))`, still monotone in the scale, so
- * both solves keep their bisection contracts.
+ * the solved scale (0 = the flat [minWidthPt] floor alone; 1 = true scale) — the "Liner
+ * compression" control: liners may only foreshorten this far. The fraction is
+ * BEST-EFFORT and secondary to the drawing height (on-device direction: "that one takes
+ * precedence"): it never enters the scale solve ([solveMaxProfileScale] ignores it), and
+ * when the raised floors don't fit the page at the solved scale, the raises shrink
+ * uniformly until they do ([fracFitFactor]) — flat floors and pins are untouched. Only a
+ * `Float.MAX_VALUE` pin may yield the height.
  */
 data class ProfileFeatureSpan(
     val startMm: Float,
@@ -253,11 +256,12 @@ fun buildCompressedProfileXMap(
     }
 
     // Width solve: width_i(K) = clamp(K·len_i, min(floor_i, true_i), true_i), Σ = width.
-    // A span's floor is its flat pt floor raised by its fraction-of-true demand.
+    // A span's floor is its flat pt floor raised by its fraction-of-true demand; the
+    // raises are best-effort — λ-fitted so they never overflow the page (height
+    // precedence: the scale was solved without them and must not be re-litigated).
     val trues = spans.map { it.lenMm * diaPtPerMm }
-    val floors = spans.mapIndexed { i, s ->
-        minOf(maxOf(s.floorPt, trues[i] * s.fracOfTrue), trues[i])
-    }
+    val lambda = fracFitLambda(spans, trues, width)
+    val floors = spans.mapIndexed { i, s -> effectiveFloor(s, trues[i], lambda) }
     val widths = solveSpanWidths(spans.map { it.lenMm }, floors, trues, width)
 
     val segments = mutableListOf<ProfileXSegment>()
@@ -272,6 +276,54 @@ fun buildCompressedProfileXMap(
         x += w
     }
     return CompressedProfileXMap(segments)
+}
+
+/**
+ * Effective width floor for a span at frac-raise factor [lambda]:
+ * `min(true, max(flatFloor, true × frac × λ))`. A `Float.MAX_VALUE` pin resolves to the
+ * span's true width regardless of λ — pins are guarantees, not raises.
+ */
+private fun effectiveFloor(span: WalkSpan, truePt: Float, lambda: Float): Float =
+    minOf(maxOf(minOf(span.floorPt, truePt), truePt * span.fracOfTrue * lambda), truePt)
+
+/**
+ * Largest uniform factor λ ∈ [0,1] on the fraction-of-true floor raises such that the
+ * floors still fit [width] — the height-precedence rule (on-device direction): the scale
+ * is solved without the raises, and the raises then take only the room the page has at
+ * that scale. Flat floors and pins never shrink here; if they alone overflow,
+ * [solveSpanWidths]' degenerate squeeze remains the last resort.
+ */
+internal fun fracFitLambda(spans: List<WalkSpan>, trues: List<Float>, width: Float): Float {
+    fun floorsSum(lambda: Float): Float =
+        spans.indices.sumOf { effectiveFloor(spans[it], trues[it], lambda).toDouble() }.toFloat()
+    if (spans.none { it.fracOfTrue > 0f } || floorsSum(1f) <= width) return 1f
+    if (floorsSum(0f) >= width) return 0f
+    var lo = 0f
+    var hi = 1f
+    repeat(30) {
+        val mid = (lo + hi) / 2f
+        if (floorsSum(mid) <= width) lo = mid else hi = mid
+    }
+    return lo
+}
+
+/**
+ * The λ the map build will apply to this window's fraction-of-true floors — exposed pure
+ * so UI readouts can report the proportionality liners actually achieve at a given scale
+ * (requested fraction × λ). 1 = the full requested fractions fit.
+ */
+fun fracFitFactor(
+    windowStartMm: Float,
+    windowEndMm: Float,
+    features: List<ProfileFeatureSpan>,
+    contentWidthPt: Float,
+    diaPtPerMm: Float,
+    gapMinWidthPt: Float = PROFILE_MIN_BODY_RUN_PT,
+): Float {
+    if (windowEndMm - windowStartMm <= 1e-4f || contentWidthPt <= 1e-4f || diaPtPerMm <= 0f) return 1f
+    val spans = walkSpans(windowStartMm, windowEndMm, features, gapMinWidthPt)
+    val trues = spans.map { it.lenMm * diaPtPerMm }
+    return fracFitLambda(spans, trues, contentWidthPt)
 }
 
 /** One walked span: a feature (with its floors) or a plain body gap between features. */
@@ -308,11 +360,12 @@ internal fun walkSpans(
  * a PINNED span (`minWidthPt == Float.MAX_VALUE` — keyway-bearing bodies, whose drawn
  * slot geometry must stay real) demands its full true width at the scale (the drawn
  * HEIGHT yields instead when a pinned span needs the room), every other span — liners
- * included — demands at most its floor, raised by any fraction-of-true demand
- * ([ProfileFeatureSpan.minWidthFracOfTrue] — proportional liners demand true width the
- * same way a pin does). The demand is monotone in scale, so bisection finds the
- * ceiling; [scaleHi] (the desired visual scale, pre-capped by the height budget) is
- * returned whenever it already fits.
+ * included — demands at most its FLAT floor. Fraction-of-true raises
+ * ([ProfileFeatureSpan.minWidthFracOfTrue]) are deliberately IGNORED here — the drawing
+ * height takes precedence over liner proportionality (on-device direction); the raises
+ * λ-fit whatever room remains at the solved scale ([fracFitFactor]). The demand is
+ * monotone in scale, so bisection finds the ceiling; [scaleHi] (the desired visual
+ * scale, pre-capped by the height budget) is returned whenever it already fits.
  */
 fun solveMaxProfileScale(
     windowStartMm: Float,
@@ -327,10 +380,7 @@ fun solveMaxProfileScale(
 
     fun minWidthAt(s: Float): Float = spans.sumOf { span ->
         val truePt = span.lenMm * s
-        val demand =
-            if (span.floorPt == Float.MAX_VALUE) truePt
-            else minOf(truePt, maxOf(minOf(span.floorPt, truePt), truePt * span.fracOfTrue))
-        demand.toDouble()
+        (if (span.floorPt == Float.MAX_VALUE) truePt else minOf(span.floorPt, truePt)).toDouble()
     }.toFloat()
 
     if (minWidthAt(scaleHi) <= contentWidth) return scaleHi

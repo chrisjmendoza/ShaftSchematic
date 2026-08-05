@@ -40,7 +40,6 @@ import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
-import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.formatRunoutValue
 import java.text.SimpleDateFormat
@@ -88,9 +87,9 @@ import kotlin.math.min
  * └───────────────────────────────────────────────────────────────────────────┘
  * ```
  *
- * No dimension rails, no footer, and no wear info in classic mode — the original
- * standalone sheet, selectable from the Runout tab's output picker. Both modes share the
- * compressed profile, the bubble engine, and the "Shaft height" slider.
+ * No dimension rails, no footer, and no wear info in classic mode — the standalone sheet
+ * the Runout tab prints (and the Runout document in the Output tab's batch export). Both
+ * modes share the compressed profile, the bubble engine, and the "Shaft height" slider.
  *
  * ## Bubble placement convention
  * - **Tapers**: two stations inset from each edge by [RunoutConfig.RUNOUT_EDGE_INSET_MM].
@@ -117,9 +116,9 @@ import kotlin.math.min
  *
  * ## Keyway reference marker
  * An open square notch straddling each circle's rim at 12-o'clock indicates
- * keyway-at-top centre, matching the hand-drawn shop sheets. In Phase 2 (value entry),
- * a radial line will be added inside the circle to indicate the high-spot direction
- * relative to this reference.
+ * keyway-at-top centre, matching the hand-drawn shop sheets. A recorded high spot prints
+ * as a short dash straddling the rim at its clock position; the notch is the 12-o'clock
+ * reference.
  *
  * @param page     Target PDF page (US Letter landscape, already started).
  * @param spec     Shaft specification in millimeters.
@@ -321,7 +320,8 @@ fun composeRunoutPdf(
 
     // ── Diameter scale + compressed x mapping ─────────────────────────────────
     // The hand-sheet convention (on-device request, with the shop's reference sketch):
-    // the shaft prints ~1–1.25" tall whatever its true length. Details (tapers, liners,
+    // the shaft's drawn height follows its true diameter on the default sizing curve,
+    // never diluted by length. Details (tapers, liners,
     // threads) keep TRUE proportions at the diameter scale; the plain body runs between
     // them absorb the horizontal overflow — foreshortened with S-break glyphs
     // ("compressed to give the impression of a thicker shaft"). Short shafts whose
@@ -340,7 +340,8 @@ fun composeRunoutPdf(
         }
         // Liners compress in SIZE only — proportional foreshortening above their floor,
         // never a body-style S-break cutout (on-device clarification). The per-job
-        // "Liner compression" control raises the floor toward true width (1 = pinned).
+        // "Liner compression" control raises the floor toward true width — best-effort,
+        // λ-fitted; the drawn height never yields to it.
         docSpec.liners.forEach {
             add(
                 ProfileFeatureSpan(
@@ -443,7 +444,8 @@ fun composeRunoutPdf(
     fun shaftOuterRPxAt(mm: Float): Float = rPx(outerDiaMmAt(mm))
 
     // ── Classic sheet: one-line job header + raised OAL span line ─────────────
-    // The original standalone runout layout, kept selectable from the output picker.
+    // The standalone runout layout — what the Runout tab prints; the Consolidated Output
+    // tab owns the consolidated election.
     if (!consolidated) {
         drawRunoutHeader(c, text, contentLeft, contentRight,
             margin, HEADER_HEIGHT_PT, project, blankValues)
@@ -1125,7 +1127,7 @@ private fun drawTapersForRunout(
 /**
  * Draw all placed runout bubbles: leader polylines, the circle with a keyway cutout at 12
  * o'clock, and — when recorded in [readings] — the TIR value (centred, formatted in [unit]) and
- * the high-spot marker (radial line + rim dot).
+ * the high-spot marker (a short dash straddling the rim at the clock position).
  *
  * Placement comes from the shared engine (`geom/RunoutBubbleLayout.kt`), which guarantees bubbles
  * never touch and leaders never enter a bubble or cross each other. A leader polyline is either a
@@ -1267,7 +1269,6 @@ private const val OAL_LINE_SPACE_PT = 90f   // OAL line height above shaft top (
 private const val BUBBLE_RADIUS_PT      = 23f  // 46 pt ≈ 0.64 inch diameter (roomy to hand-write a value in)
 private const val BUBBLE_MIN_GAP_PT     = 5f   // Minimum clear distance between circle edges
 private const val SHORT_LEADER_PT       = 18f  // Deepest shaft surface → top of bubble row 0
-private const val KEYWAY_SQUARE_SIZE_PT = 7f   // Open square notch straddling the rim at 12-o'clock
 
 // Extra space below the last bubble row
 private const val BUBBLE_GAP_PT         = 8f
@@ -1281,6 +1282,8 @@ private const val RUNOUT_BASE_DIM_OFFSET_PT = 22f
 private const val RUNOUT_RAIL_GAP_PT = 18f
 private const val RUNOUT_OAL_EXTRA_PT = 14f
 private const val RUNOUT_DIM_TEXT_PT = 8.5f
+
+// Classic central gap; breakPairLayout may widen it to keep the pair clear.
 private const val ZIGZAG_GAP_MAX_PT   = 20f
 
 

@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
@@ -48,7 +47,8 @@ import androidx.compose.ui.unit.dp
  * EditorSidebarOverlay
  *
  * A modal overlay navigation drawer for the shaft editor's document views
- * (Schematic, Runout Sheet, Wear Document, Undercut Drawing) plus Home and Settings shortcuts.
+ * (Schematic, Runout Sheet, Wear Document, Undercut Drawing, Consolidated Output) plus
+ * Home and Settings shortcuts.
  *
  * ## Layout strategy
  * The sidebar does NOT push content. It overlays as a modal:
@@ -65,13 +65,16 @@ import androidx.compose.ui.unit.dp
  * the phone's notification bar area.
  *
  * ## Items
- * Top group:  Home · Schematic · Runout Sheet · Wear Document · Undercut Drawing
+ * Top group:  Home · Schematic · Runout Sheet · Wear Document · Undercut Drawing ·
+ *             Consolidated Output
  * Bottom group: Settings
- * Runout, Wear, and Undercut are dimmed when [runoutEnabled] is false (shaft not yet built).
+ * Runout, Wear, Undercut, and Consolidated Output are dimmed when [runoutEnabled] is
+ * false (shaft not yet built).
  *
  * @param open          Whether the sidebar is currently visible.
  * @param selectedTab   Which document tab is active (highlighted).
- * @param runoutEnabled Whether the Runout, Wear, and Undercut tabs respond to taps.
+ * @param runoutEnabled Whether the Runout, Wear, Undercut, and Consolidated Output tabs
+ *                      respond to taps.
  * @param onOpen        Called when the user taps the collapsed handle tab.
  * @param onClose       Called when the user taps the scrim or any active nav item.
  * @param onTabSelected Called with the newly selected [EditorTab].
@@ -168,9 +171,10 @@ fun EditorSidebarOverlay(
                             onClick = { if (runoutEnabled) { onTabSelected(EditorTab.RUNOUT); onClose() } },
                             disabledHint = "Add components first",
                         )
-                        // The Wear page is the authoring surface for wear data; the Runout
-                        // sheet features that data on its output. WEAR_TAB_ENABLED
-                        // (EditorTab.kt) can retire this entry when full consolidation lands.
+                        // The Wear page is the authoring surface for wear data; the
+                        // Consolidated Output tab features that data on its sheet.
+                        // WEAR_TAB_ENABLED (EditorTab.kt) can retire this entry when full
+                        // consolidation lands.
                         if (WEAR_TAB_ENABLED) {
                             NavItem(
                                 icon = Icons.Filled.Article,

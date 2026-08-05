@@ -1,6 +1,8 @@
 # UI Contract
 Version: v0.5.x
-Last updated: 2026-07-28 — added §7.5 pointing the Runout Sheet / Wear Document tab
+Last updated: 2026-08-05 — the editor now has **five** tabs: §7.6 (Undercut Drawing) and
+§7.7 (Consolidated Output) added, §7.5 notes the `WEAR_TAB_ENABLED` retirement switch, and
+§5.2 points at the app-theme / sheet-ink contract. 2026-07-28 — added §7.5 pointing the Runout Sheet / Wear Document tab
 interactions (incl. the wear overlay's Add X / Remove X / Add Ø tools) at the in-source
 `RunoutSheet.md` contract. 2026-07-21 — §3.1.4 corrected after the "non-negotiable bodies" revert: bodies are fluid fillers (no collision, plain bodies split around sacred components, keyed bodies protected); removed `bodyOverlapErrorMm`/liner↔body-negotiation references. 2026-07-18 — §5.2 "Planned Preview Tap + Implicit Bodies" documented as shipped and merged into §3.1.1 (also fixes broken section numbering, a 5.2 appearing before 5.1); §§3.2–3.6 trimmed to summaries pointing at the more current in-source `AddComponentDialogs.md`.
 
@@ -221,6 +223,21 @@ Preview color preferences apply to the on-screen Preview only.
 
 ---
 
+# 5.2 App Theme (Settings → Appearance)
+
+The app theme (System / Light / Dark + High contrast, persisted by
+`settings/AppearancePrefs.kt`) styles **Compose chrome only**. The white-sheet document
+canvases (undercut overview/detail, wear overview/detail, runout preview) draw with fixed
+ink from `ui/theme/SheetInk.kt` and must **never** read `MaterialTheme.colorScheme` — dark
+theme's near-white `onSurface` would print invisible ink on a white sheet. The undercut
+sheets' fills are additionally user-styled via `util/UndercutStyle.kt` (still fixed inks,
+never theme roles, and never leaking into the PDF composers).
+
+Authoritative contract:
+`app/src/main/java/com/android/shaftschematic/docs/Appearance.md`.
+
+---
+
 # 6. Validation Feedback
 
 ### 6.1 Blocking Errors
@@ -258,7 +275,8 @@ No other responsibilities.
 
 # 7.5 Runout Sheet & Wear Document Tabs
 
-This contract predates the sidebar's two inspection tabs; their UI behavior is owned by the
+This contract predates the sidebar's document tabs (`EditorTab` — Schematic, Runout Sheet,
+Wear Document, Undercut Drawing, Consolidated Output); their UI behavior is owned by the
 in-source `app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md` (authoritative)
 rather than duplicated here. Summary of the boundaries, which follow the same rules as above:
 
@@ -274,6 +292,55 @@ rather than duplicated here. Summary of the boundaries, which follow the same ru
 - Both tabs preview by **rasterizing the real composed PDF** (`PdfPreviewOverlay`) — the
   UI never re-draws document geometry itself, and all hit-testing/placement math lives in
   `geom/` (`WearPitMath`, `WearDiaMath`, `WearDiaCalloutLayout`, `RunoutReadingMath`).
+- The Wear tab is the **authoring surface** for wear data; the single flag
+  `WEAR_TAB_ENABLED` (`ui/screen/EditorTab.kt`, currently `true`) hides the tab in one line
+  when a future full consolidation retires it, without touching the wear code paths.
+
+---
+
+# 7.6 Undercut Drawing Tab
+
+`EditorTab.UNDERCUT` / `ui/screen/UndercutRoute.kt`. Authoring surface for undercut
+sections; behavior owned by
+`app/src/main/java/com/android/shaftschematic/docs/UndercutDrawing.md` (authoritative).
+Boundary summary:
+
+- Undercuts are authored **only here** — no carousel card and no Add dialog, so they sit
+  outside the add-dialog-parity invariant. The tab offers a list-row editor alongside the
+  canvas (the list rows are also the TalkBack-accessible path).
+- The Distance field is authored against one of four references (AFT/FWD SET or a reference
+  liner's AFT/FWD edge). Switching the reference is **display-only** — the UI never moves
+  canonical shaft-space geometry (`geom/UndercutMath.kt` owns the conversion pair).
+- Drawn notch depth is display-exaggerated by the per-sheet "Cut depth exaggeration" slider
+  (`UndercutRecord.exaggerationFrac`); the UI reads the exaggeration, it never computes the
+  normalization (`geom/SurfaceProfileMath.kt` + `geom/UndercutMath.kt` do).
+- Canvas and PDF share one pure pipeline; the route performs no clustering, clamping, or
+  hit-test math of its own.
+
+---
+
+# 7.7 Consolidated Output Tab
+
+`EditorTab.OUTPUT` / `ui/screen/OutputRoute.kt`. The one-stop surface for the consolidated
+sheet; behavior owned by
+`app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md` (Consolidation step 5),
+with the export/paper rules in `docs/PDF_EXPORT.md` §5.6–5.7. Boundary summary:
+
+- **Content election** (`ConsolidatedVariant`): All three (default) | Schematic + Runout |
+  Schematic + Wear. Session-only state; it selects what the composer draws, it does not
+  change stored data.
+- **Worn-section editor** — the authoring surface for `WearRecord.wornSections`
+  (reference-only, shaft-space spans). Layout is pure math in `geom/WornSectionMath.kt`;
+  the route never places values itself.
+- **"Shaft height" slider** (`RunoutConfig.heightScale`, per-job) and the **liner
+  compression** control — the same per-job values the schematic preview's Tune sheet
+  exposes (`ShaftHeightSlider` / `LinerCompressionControl`); both commit through the
+  ViewModel, and all scale solving is pure (`geom/ProfileCompression.kt`).
+- **Blank-draft toggle** and **Export all** — checkboxes for the five documents written to
+  one picked folder. Every export goes through `util/PdfSafExport.writeShaftPdfToUri` and
+  the shared collision export gate; the UI presents the written/failed result only.
+- Like the other document tabs, the preview **rasterizes the real composed PDF** — no
+  parallel UI draw path.
 
 ---
 

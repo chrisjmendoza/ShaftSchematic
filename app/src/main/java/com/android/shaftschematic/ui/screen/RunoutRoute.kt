@@ -654,8 +654,8 @@ private fun runoutSpans(components: List<ResolvedComponent>): List<RunoutCompone
     components.mapNotNull { rc ->
         val lengthMm = rc.endMmPhysical - rc.startMmPhysical
         when (rc) {
-            // Body fragments keep the stored body's id here (suffix stripped) so runout
-            // station keys stay exactly as they were before fragment ids became unique.
+            // Body fragments key off the base id (suffix stripped) so all fragments of one
+            // stored body share a single station key.
             is ResolvedBody  -> RunoutComponentSpan(resolvedBodyBaseId(rc.id), RunoutComponentKind.BODY,  rc.startMmPhysical, lengthMm)
             is ResolvedTaper -> RunoutComponentSpan(rc.id, RunoutComponentKind.TAPER, rc.startMmPhysical, lengthMm)
             is ResolvedLiner -> RunoutComponentSpan(rc.id, RunoutComponentKind.LINER, rc.startMmPhysical, lengthMm)
@@ -760,7 +760,8 @@ private fun runoutMaxOdMm(components: List<ResolvedComponent>): Float =
 
 /**
  * Draw the planned runout bubbles: leader polylines, the circle with a keyway cutout at 12 o'clock,
- * and — when recorded — the TIR value (centred) and high-spot marker (radial line + rim dot). The
+ * and — when recorded — the TIR value (centred) and the high-spot marker (a short dash straddling
+ * the rim at the clock position). The
  * keyway cutout and marker geometry mirror the PDF (`RunoutPdfComposer.drawPlacedBubbles`) so the
  * preview matches the export exactly.
  */
