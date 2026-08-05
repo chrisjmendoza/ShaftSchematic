@@ -155,6 +155,40 @@ class ProfileCompressionTest {
     }
 
     @Test
+    fun `pinned liners force the scale down until they fit - height yields, never the liner`() {
+        // Three pinned liners totaling 2100mm on a 700pt page: at the desired 0.4 the
+        // liners alone need 840pt → the solve must come back below 700/2100 ≈ 0.333.
+        val features = listOf(
+            feature(100f, 800f, Float.MAX_VALUE),
+            feature(1000f, 1700f, Float.MAX_VALUE),
+            feature(2000f, 2700f, Float.MAX_VALUE),
+        )
+        val scale = solveMaxProfileScale(
+            windowStartMm = 0f, windowEndMm = 3000f,
+            features = features, contentWidth = 700f, scaleHi = 0.4f,
+        )
+        assertTrue(scale < 0.34f)
+        // At the solved scale the map keeps every liner at TRUE width.
+        val map = buildCompressedProfileXMap(0f, 3000f, features, 0f, 700f, scale)
+        features.forEach { f ->
+            val seg = map.segments.first { it.startMm == f.startMm }
+            assertEquals((f.endMm - f.startMm) * scale, seg.x1 - seg.x0, 0.5f)
+            assertFalse(seg.compressed)
+        }
+        assertEquals(700f, map.x1, 1.5f)
+    }
+
+    @Test
+    fun `scale solve returns the desired scale when everything already fits`() {
+        val scale = solveMaxProfileScale(
+            windowStartMm = 0f, windowEndMm = 500f,
+            features = listOf(feature(100f, 300f, Float.MAX_VALUE)),
+            contentWidth = 700f, scaleHi = 0.4f,
+        )
+        assertEquals(0.4f, scale, 1e-6f)
+    }
+
+    @Test
     fun `width solve consumes the target exactly and respects clamps`() {
         val lens = listOf(300f, 300f, 900f, 20f)
         val caps = lens.map { it * 1f }

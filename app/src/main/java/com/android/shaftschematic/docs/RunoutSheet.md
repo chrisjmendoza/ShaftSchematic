@@ -350,12 +350,14 @@ On-device request following the worn-sections review:
     drawn shaft **height is proportional to TRUE diameter** at the fixed visual scale
     `VISUAL_DIA_SCALE_PT_PER_MM` (0.40 pt/mm: 8" → ~1.13" tall, 7" → ~1", 6" → ~0.85",
     5" → ~0.71" — the on-device rule, confirmed with rulered hand sketches) and is never
-    diluted by shaft length. The x axis is schematic: EVERY span may foreshorten, but
-    each kind keeps a writable minimum drawn width (`PROFILE_MIN_LINER_PT` 100 —
-    in-liner values + wear writing; `PROFILE_MIN_TAPER_PT` 80; `PROFILE_MIN_THREAD_PT`
-    36; `PROFILE_MIN_BODY_RUN_PT` 64 — room to write diameters and hang runout leaders,
-    on-device request), a keyway-bearing body pins at true scale (slot geometry is
-    real), and **above the floors width distributes in proportion to true length** — a
+    diluted by shaft length — EXCEPT when pinned liners need the room: **liners never
+    compress** (on-device rule) and the height yields instead (`solveMaxProfileScale`
+    bisects the largest scale that still lays out; "doesn't have to be perfectly
+    proportional, just close"). The x axis is otherwise schematic: spans may foreshorten
+    but each kind keeps a writable minimum drawn width (`PROFILE_MIN_TAPER_PT` 80;
+    `PROFILE_MIN_THREAD_PT` 36; `PROFILE_MIN_BODY_RUN_PT` 64 — room to write diameters
+    and hang runout leaders, on-device request), liners and keyway-bearing bodies pin at
+    true scale, and **above the floors width distributes in proportion to true length** — a
     longer body run draws visibly longer, equal runs draw equal (on-device request), no
     span ever stretches past true scale. Pure engine `geom/ProfileCompression.kt`
     (`buildCompressedProfileXMap` + monotone `solveSpanWidths` bisection, unit-tested);

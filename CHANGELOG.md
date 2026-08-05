@@ -18,13 +18,15 @@ runout sheet: drawn height proportional to TRUE diameter (`VISUAL_DIA_SCALE_PT_P
 consumers (dimension rails, Ø-callout leaders, keyways, threads, compression footer note)
 riding the compressed piecewise `xAt`; the old `computeDetailPtPerMm` width-fit dilution
 is gone, and body-only shafts break-compress too. (2) **Allocation v2**
-(`geom/ProfileCompression.kt`): every span kind may foreshorten but keeps a writable
-minimum (`PROFILE_MIN_LINER_PT` 100 / `PROFILE_MIN_TAPER_PT` 80 / `PROFILE_MIN_THREAD_PT`
-36 / `PROFILE_MIN_BODY_RUN_PT` 64), keyway-bearing bodies pin at true scale, and above
-the floors width distributes **in proportion to true length** (monotone bisection solve —
+(`geom/ProfileCompression.kt`): **liners never compress** (pinned at true scale — when
+they need the room the drawn height yields via the `solveMaxProfileScale` bisection;
+"doesn't have to be perfectly proportional, just close"); tapers/threads/body runs may
+foreshorten but keep writable floors (`PROFILE_MIN_TAPER_PT` 80 / `PROFILE_MIN_THREAD_PT`
+36 / `PROFILE_MIN_BODY_RUN_PT` 64), keyway-bearing bodies pin like liners, and above the
+floors width distributes **in proportion to true length** (monotone bisection solve —
 longer runs draw visibly longer, equal runs equal, nothing stretches past true scale);
 replaces the equal-cap waterfill and the height-diluting width pre-clamp. Only body runs
-draw the S-break pair; liners/tapers/threads foreshorten silently, per the hand sheets.
+draw the S-break pair; tapers/threads foreshorten silently, per the hand sheets.
 
 ---
 

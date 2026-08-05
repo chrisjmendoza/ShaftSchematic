@@ -30,8 +30,9 @@ package com.android.shaftschematic.geom
 const val VISUAL_DIA_SCALE_PT_PER_MM = 0.40f
 
 // Per-kind minimum drawn widths (pt). A span whose TRUE width is smaller than its floor
-// simply draws true — floors never stretch anything.
-const val PROFILE_MIN_LINER_PT = 100f   // room for in-liner wear values + writing
+// simply draws true — floors never stretch anything. Liners have NO floor entry: they are
+// PINNED at true scale (`Float.MAX_VALUE` floor — "no compressing liners", on-device rule;
+// when liners need the room, the drawn height yields via [solveMaxProfileScale]).
 const val PROFILE_MIN_TAPER_PT = 80f    // keeps the taper read (slope may steepen)
 const val PROFILE_MIN_THREAD_PT = 36f   // hatched stub stays legible
 const val PROFILE_MIN_BODY_RUN_PT = 64f // write a diameter, hang runout leaders
@@ -109,21 +110,7 @@ fun buildCompressedProfileXMap(
         )
     }
 
-    // Normalize features to the window, then walk it: features + the gaps between them.
-    data class Span(val startMm: Float, val endMm: Float, val floorPt: Float) {
-        val lenMm get() = endMm - startMm
-    }
-
-    val normalized = normalizeFeatures(windowStartMm, windowEndMm, features)
-    val spans = buildList {
-        var cursor = windowStartMm
-        normalized.forEach { f ->
-            if (f.startMm > cursor + 1e-4f) add(Span(cursor, f.startMm, gapMinWidthPt))
-            add(Span(maxOf(f.startMm, cursor), f.endMm, f.minWidthPt))
-            cursor = maxOf(cursor, f.endMm)
-        }
-        if (windowEndMm > cursor + 1e-4f) add(Span(cursor, windowEndMm, gapMinWidthPt))
-    }
+    val spans = walkSpans(windowStartMm, windowEndMm, features, gapMinWidthPt)
 
     // Everything fits at true scale → plain linear map (may end short of contentRight).
     val totalTruePt = winLen * diaPtPerMm
@@ -156,6 +143,65 @@ fun buildCompressedProfileXMap(
         x += w
     }
     return CompressedProfileXMap(segments)
+}
+
+/** One walked span: a feature (with its floor) or a plain body gap between features. */
+internal data class WalkSpan(val startMm: Float, val endMm: Float, val floorPt: Float) {
+    val lenMm get() = endMm - startMm
+}
+
+/** Normalize features to the window and walk it: features + the gaps between them. */
+internal fun walkSpans(
+    windowStartMm: Float,
+    windowEndMm: Float,
+    features: List<ProfileFeatureSpan>,
+    gapMinWidthPt: Float,
+): List<WalkSpan> {
+    val normalized = normalizeFeatures(windowStartMm, windowEndMm, features)
+    return buildList {
+        var cursor = windowStartMm
+        normalized.forEach { f ->
+            if (f.startMm > cursor + 1e-4f) add(WalkSpan(cursor, f.startMm, gapMinWidthPt))
+            add(WalkSpan(maxOf(f.startMm, cursor), f.endMm, f.minWidthPt))
+            cursor = maxOf(cursor, f.endMm)
+        }
+        if (windowEndMm > cursor + 1e-4f) add(WalkSpan(cursor, windowEndMm, gapMinWidthPt))
+    }
+}
+
+/**
+ * Largest diameter scale at which the window can still lay out inside [contentWidth]:
+ * a PINNED span (`minWidthPt == Float.MAX_VALUE` — liners, keyway-bearing bodies) demands
+ * its full true width at the scale ("no compressing liners" — on-device rule; the drawn
+ * HEIGHT yields instead when liners need the room), every other span demands at most its
+ * floor. The demand is monotone in scale, so bisection finds the ceiling; [scaleHi] (the
+ * desired visual scale, pre-capped by the height budget) is returned whenever it already
+ * fits.
+ */
+fun solveMaxProfileScale(
+    windowStartMm: Float,
+    windowEndMm: Float,
+    features: List<ProfileFeatureSpan>,
+    contentWidth: Float,
+    scaleHi: Float,
+    gapMinWidthPt: Float = PROFILE_MIN_BODY_RUN_PT,
+): Float {
+    if (windowEndMm - windowStartMm <= 1e-4f || contentWidth <= 1e-4f || scaleHi <= 0f) return scaleHi
+    val spans = walkSpans(windowStartMm, windowEndMm, features, gapMinWidthPt)
+
+    fun minWidthAt(s: Float): Float = spans.sumOf { span ->
+        val truePt = span.lenMm * s
+        (if (span.floorPt == Float.MAX_VALUE) truePt else minOf(span.floorPt, truePt)).toDouble()
+    }.toFloat()
+
+    if (minWidthAt(scaleHi) <= contentWidth) return scaleHi
+    var lo = 0f
+    var hi = scaleHi
+    repeat(40) {
+        val mid = (lo + hi) / 2f
+        if (minWidthAt(mid) <= contentWidth) lo = mid else hi = mid
+    }
+    return lo
 }
 
 /** Clip to the window, drop empties, sort, and merge overlaps (keeping the larger floor). */

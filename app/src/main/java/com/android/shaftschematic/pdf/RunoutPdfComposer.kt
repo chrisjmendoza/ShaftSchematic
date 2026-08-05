@@ -15,12 +15,12 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.computeOalWindow
-import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_TAPER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
 import com.android.shaftschematic.geom.ProfileFeatureSpan
 import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
 import com.android.shaftschematic.geom.buildCompressedProfileXMap
+import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.WORN_VALUE_BAND_FIT_FRAC
 import com.android.shaftschematic.geom.WornValueColumn
@@ -279,8 +279,9 @@ fun composeRunoutPdf(
         docSpec.tapers.forEach {
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_TAPER_PT))
         }
+        // Liners are PINNED at true scale — never compressed (on-device rule).
         docSpec.liners.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_LINER_PT))
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE))
         }
         docSpec.threads.forEach {
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_THREAD_PT))
@@ -321,12 +322,17 @@ fun composeRunoutPdf(
     }
 
     // Visual-scale rule (shared with the schematic): height proportional to TRUE diameter.
-    // The width solve inside the map guarantees fit, so no width cap dilutes the height.
+    // Liners are pinned at true width, so when they need the room the HEIGHT yields —
+    // solveMaxProfileScale finds the largest scale that still lays out on the page
+    // ("doesn't have to be perfectly proportional, just close").
     val targetScale    = VISUAL_DIA_SCALE_PT_PER_MM
     val heightCapScale = ((shaftAreaBudgetH - 12f) / maxOuterDiaMm).coerceAtLeast(1e-4f)
-    val diaPtPerMm = maxOf(widthFitPtPerMm, targetScale, valueNeedScale)
+    val desiredScale   = maxOf(widthFitPtPerMm, targetScale, valueNeedScale)
         .coerceAtMost(heightCapScale)
-        .coerceAtLeast(1e-5f)
+    val diaPtPerMm = solveMaxProfileScale(
+        windowStartMm = aftSetMm, windowEndMm = fwdSetMm,
+        features = featureSpans, contentWidth = contentW, scaleHi = desiredScale,
+    ).coerceAtLeast(1e-5f)
 
     val xMap = buildCompressedProfileXMap(
         windowStartMm = aftSetMm, windowEndMm = fwdSetMm,

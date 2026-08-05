@@ -8,12 +8,12 @@ import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.END_EPS_MM
 import com.android.shaftschematic.geom.KeywaySilhouetteNotch
 import com.android.shaftschematic.geom.KeywaySilhouettePoint
-import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_TAPER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
 import com.android.shaftschematic.geom.ProfileFeatureSpan
 import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
 import com.android.shaftschematic.geom.buildCompressedProfileXMap
+import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.fillPolygonMm
@@ -176,8 +176,9 @@ fun composeShaftPdf(
         spec.tapers.forEach {
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_TAPER_PT))
         }
+        // Liners are PINNED at true scale — never compressed (on-device rule).
         spec.liners.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_LINER_PT))
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE))
         }
         spec.threads.forEach {
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_THREAD_PT))
@@ -187,9 +188,12 @@ fun composeShaftPdf(
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE))
         }
     }
-    val diaPtPerMm = minOf(
-        VISUAL_DIA_SCALE_PT_PER_MM,
-        geomRect.height() / maxDiaMm,
+    // Liners pinned at true width → when they need the room, the HEIGHT yields
+    // ("doesn't have to be perfectly proportional, just close" — on-device rule).
+    val desiredScale = minOf(VISUAL_DIA_SCALE_PT_PER_MM, geomRect.height() / maxDiaMm)
+    val diaPtPerMm = solveMaxProfileScale(
+        windowStartMm = contentMinMm, windowEndMm = contentMaxMm,
+        features = featureSpans, contentWidth = geomRect.width(), scaleHi = desiredScale,
     ).coerceAtLeast(1e-6f)
     val xMap = buildCompressedProfileXMap(
         windowStartMm = contentMinMm, windowEndMm = contentMaxMm,
