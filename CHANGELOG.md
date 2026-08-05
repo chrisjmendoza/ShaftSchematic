@@ -62,6 +62,17 @@ fixed at 4"/8" and the absolute 1.5" ceiling still caps everything. An inverted 
 with an inline warning; a "Standard (0.75″ / 1.25″)" button restores the defaults.
 A live example line shows what a 6" shaft would draw as the sliders move.
 
+### fix(ui): liner slider shows its height cost; options sheets stop below the status bar
+
+On-device review of the liner control ("gives no indication on how it's changing the
+height of the schematic"; the sheet "goes all the way up to my notification bar").
+(1) The "Liner compression" readout now shows the drawn shaft height LIVE during the
+drag — `estimatedShaftHeightIn` (unit-tested) runs the composers' `solveMaxProfileScale`
+arithmetic over the spec, so the line reads "Full height keeps (~1.25″)" until the liner
+demand actually starts trading height, then "the shaft draws ~1.13″ tall (1.25″ at
+100%)". (2) Both PDF Options sheets cap their expanded height at ~78% of the screen —
+a sheet that reached the status bar left no edge to swipe it back down by.
+
 ### fix(ui): PDF Options sheets scroll — bottom checkboxes no longer clip
 
 On-device report ("I can't scroll down further and that is what the check boxes look

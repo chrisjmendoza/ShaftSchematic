@@ -330,7 +330,10 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
   unit-tested): the liner's width floor becomes `max(100pt, frac × true width)`. Applies
   to the schematic (`composeShaftPdf(linerMinFracOfTrue)`) and the runout/consolidated
   sheets (from `config`); rides the `.shaft` envelope (additive, legacy default = free
-  compression).
+  compression). The readout under the slider shows the drawn shaft height LIVE during
+  the drag (`estimatedShaftHeightIn`, `ShaftHeightSlider.kt` — the composers'
+  `solveMaxProfileScale` arithmetic over the spec), so the height cost of wider liners
+  is visible the moment it starts.
 
 ---
 

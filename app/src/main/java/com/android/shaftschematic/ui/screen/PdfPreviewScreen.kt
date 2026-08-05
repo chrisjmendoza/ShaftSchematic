@@ -23,11 +23,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -509,9 +511,13 @@ private fun PdfOptionsSheet(
 ) {
     // Scrollable + inset-padded: the sheet's content is taller than a phone screen, so
     // without its own scroll the bottom rows clip mid-checkbox behind the navigation bar.
+    // Height is capped below full screen — a sheet expanded to the status bar leaves no
+    // edge to swipe it back down by (on-device report).
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.78f).dp
     Column(
         Modifier
             .fillMaxWidth()
+            .heightIn(max = maxSheetHeight)
             .verticalScroll(rememberScrollState())
             .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),
@@ -592,9 +598,10 @@ private fun PdfOptionsSheet(
         val sliderDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) }
         val curveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
         val curveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
+        val sliderBase = defaultVisualScale(sliderDiaMm, curveLoHeightIn * 72f, curveHiHeightIn * 72f)
         ShaftHeightSlider(
             heightScale = heightScale,
-            baseScale = defaultVisualScale(sliderDiaMm, curveLoHeightIn * 72f, curveHiHeightIn * 72f),
+            baseScale = sliderBase,
             maxDiaMm = sliderDiaMm,
             onCommit = { vm.setRunoutHeightScale(it) },
         )
@@ -608,6 +615,9 @@ private fun PdfOptionsSheet(
         LinerCompressionControl(
             linersProportional = linersProportional,
             linerCompression = linerCompression,
+            estimateHeightIn = { frac ->
+                estimatedShaftHeightIn(spec, sliderBase, heightScale, frac)
+            },
             onSetProportional = { vm.setLinersProportional(it) },
             onSetCompression = { vm.setLinerCompression(it) },
         )

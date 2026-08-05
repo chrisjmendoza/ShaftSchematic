@@ -32,9 +32,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -1048,9 +1050,12 @@ internal fun RunoutWearOptionsSheet(
 ) {
     // Scrollable + inset-padded: without its own scroll a short screen clips the bottom
     // rows mid-checkbox behind the navigation bar (same posture as PdfOptionsSheet).
+    // Height capped below full screen so the sheet never reaches the status bar.
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.78f).dp
     Column(
         Modifier
             .fillMaxWidth()
+            .heightIn(max = maxSheetHeight)
             .verticalScroll(rememberScrollState())
             .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),
