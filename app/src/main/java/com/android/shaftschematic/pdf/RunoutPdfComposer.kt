@@ -24,11 +24,16 @@ import com.android.shaftschematic.geom.fittedValueTextSize
 import com.android.shaftschematic.geom.layoutWornSectionValues
 import com.android.shaftschematic.geom.planRunoutBubbles
 import com.android.shaftschematic.geom.wornValueBandHeightNeeded
+import com.android.shaftschematic.pdf.dim.RailPlanner
+import com.android.shaftschematic.pdf.dim.buildLinerSpans
+import com.android.shaftschematic.pdf.dim.oalSpan
+import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.formatRunoutValue
@@ -160,11 +165,6 @@ fun composeRunoutPdf(
     val contentRight = pageW - margin
     val contentW     = contentRight - contentLeft
 
-    // Header strip (job info, compact single area at the very top)
-    val headerTop    = margin
-    val headerHeight = HEADER_HEIGHT_PT
-    val headerBottom = headerTop + headerHeight
-
     // ── Compute shaft scale ───────────────────────────────────────────────────
     // The runout sheet spans the SET-to-SET measurement window (AFT SET face → FWD SET face).
     // Thread components outside this window are not drawn on the runout profile.
@@ -191,14 +191,44 @@ fun composeRunoutPdf(
         contentRight = contentRight,
     )
 
+    // ── Consolidated sheet layout (on-device request, hand-drawn reference) ───
+    // One page carries everything: schematic dimension rails ABOVE the shaft (OAL topmost,
+    // datum + length tiers beneath — the schematic's own span builders and tier engine),
+    // the compressed profile with wear info, runout bubbles BELOW, the TIR line, and the
+    // schematic's 3-column footer (AFT taper | job info | FWD taper) at the bottom.
+    //
+    //   margin → OAL rail → dim tiers → [shaft] → bubbles → TIR line → footer → margin
+
+    // Dimension spans are mm-space and independent of the x mapping, so the rail count is
+    // known before any scale is chosen.
+    val measureFromMode = pdfPrefs.tieringMode
+    val dimSpans = buildLinerSpans(
+        liners = mapToLinerDimsForPdf(spec, measureFromMode),
+        sets = setPositions,
+        unit = unit,
+        measureFrom = measureFromMode,
+    ) + buildTaperLengthSpans(spec, oalWindow, unit)
+    val railAssignments = RailPlanner().assignAll(
+        dimSpans, tierOriginMmFor(measureFromMode, oalWindow.oalMm),
+    )
+    val maxRail = railAssignments.maxOfOrNull { it.rail } ?: -1
+    val railGap = RUNOUT_RAIL_GAP_PT
+    // Height reserved above the shaft: first-rail offset + tier rows + the OAL lane.
+    val railsBlockH = RUNOUT_BASE_DIM_OFFSET_PT + railGap * (maxRail + 1) + RUNOUT_OAL_EXTRA_PT + 8f
+
+    // Footer block pinned to the page bottom; the TIR line sits directly above it.
+    val footerBlockH = if (blankValues) FOOTER_BLOCK_BLANK_PT else FOOTER_BLOCK_PT
+    val footerTop = pageH - margin - footerBlockH
+    val tirY = footerTop - TIR_LINE_HEIGHT_PT
+
     // ── Vertical budget ───────────────────────────────────────────────────────
     // The diameter scale needs the shaft's height budget, the budget needs the bubble row
     // count, and the final bubble x positions need the (scale-dependent) compressed
     // mapping — a cycle. Break it with a prelim linear-map plan for the BUDGET only; the
     // plan used for drawing is re-solved on the real mapping below.
     val maxOuterDiaMm  = docSpec.maxOuterDiaMm().coerceAtLeast(10f)
-    val tirY           = pageH - margin - TIR_LINE_HEIGHT_PT
-    val availableH     = tirY - (headerBottom + OAL_GAP_PT + OAL_LINE_SPACE_PT)
+    val shaftTopBudgetY = margin + railsBlockH
+    val availableH     = tirY - shaftTopBudgetY
     val prelimPlan     = planRunoutBubbles(
         collectRunoutStations(stationSpans, config.componentOverrides, ::xAtLinear),
         bubbleGeom,
@@ -314,8 +344,7 @@ fun composeRunoutPdf(
     )
     val shaftAreaH  = availableH - bubblePlan.sectionHeight(BUBBLE_GAP_PT)
     val shaftHalfPt = rPx(maxOuterDiaMm)  // drawn half-height of the shaft
-    val shaftCy     = headerBottom + OAL_GAP_PT + OAL_LINE_SPACE_PT +
-                      (shaftAreaH / 2f).coerceAtLeast(shaftHalfPt + 4f)
+    val shaftCy     = shaftTopBudgetY + (shaftAreaH / 2f).coerceAtLeast(shaftHalfPt + 4f)
 
     val geomRect = RectF(contentLeft, margin, contentRight, pageH - margin)
 
@@ -323,24 +352,42 @@ fun composeRunoutPdf(
     // Used so leader lines originate from the shaft's visible outline, not a fixed y.
     fun shaftOuterRPxAt(mm: Float): Float = rPx(outerDiaMmAt(mm))
 
-    // ── Draw header ───────────────────────────────────────────────────────────
-    drawRunoutHeader(c, text, contentLeft, contentRight,
-        headerTop, headerHeight, project, blankValues)
-
-    // ── Draw OAL span line — raised well above the shaft, with witness lines ──
-    // The arrows bracket the drawn SET-to-SET span, and the printed label (bare value, no
-    // "OAL" prefix — position implies it) is always the typed OAL — same rule as the main
-    // schematic (the OAL number is sacred and never changes; see docs/OverallLength.md).
-    // Witness (extension) lines drop to the shaft's actual top edge at each SET face,
-    // matching the schematic/wear-document convention.
-    val oalLineY = shaftCy - shaftHalfPt - OAL_LINE_SPACE_PT
-    drawOalSpanLine(
-        c, dim, text, xMap.x0, xMap.x1, oalLineY,
-        aftShaftTopY = shaftCy - shaftOuterRPxAt(aftSetMm),
-        fwdShaftTopY = shaftCy - shaftOuterRPxAt(fwdSetMm),
-        unit = unit, oalMm = spec.overallLengthMm,
-        blankValues = blankValues,
-    )
+    // ── Dimension rails ABOVE the shaft — the schematic's own span/tier/renderer ──
+    // Labels always print TRUE (typed) lengths; the drawn spans ride the compressed
+    // mapping, exactly like the hand sheets (a foreshortened liner still reads 29").
+    // Value-in-break, blank-draft write-in gaps, and tiering rules all come with the
+    // shared PdfDimensionRenderer.
+    run {
+        val yTopOfShaft = shaftCy - shaftHalfPt
+        val railBaseY = yTopOfShaft - RUNOUT_BASE_DIM_OFFSET_PT
+        val topRailY = (railBaseY - railGap * (maxRail + 1) - RUNOUT_OAL_EXTRA_PT)
+            .coerceAtLeast(margin + 8f)
+        val dimText = Paint(text).apply { textSize = RUNOUT_DIM_TEXT_PT }
+        val renderer = PdfDimensionRenderer(
+            pageX = { dimMm -> xAt((dimMm + oalWindow.measureStartMm).toFloat()) },
+            baseY = railBaseY,
+            railDy = railGap,
+            topRailY = topRailY,
+            linePaint = dim,
+            textPaint = dimText,
+            objectTopY = yTopOfShaft,
+            contentTopPx = margin,
+            objectClearance = 4f,
+            blankLabels = blankValues,
+            blankLabelWidthPx = BLANK_DIM_GAP_PT,
+        )
+        railAssignments.forEach { renderer.drawOnRail(c, it.rail, it.span, true) }
+        // OAL topmost — brackets the SET-to-SET span, label is ALWAYS the typed OAL
+        // (the number is sacred; see docs/OverallLength.md).
+        renderer.drawTop(
+            c,
+            oalSpan(
+                setPositions.aftSETxMm, setPositions.fwdSETxMm, unit,
+                labelMm = spec.overallLengthMm.toDouble(),
+            ),
+            true,
+        )
+    }
 
     // ── Draw shaft profile ────────────────────────────────────────────────────
     drawShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
@@ -388,9 +435,42 @@ fun composeRunoutPdf(
     val effectiveReadings = if (blankValues) RunoutReadings() else runoutReadings
     drawPlacedBubbles(c, bubbleResult.bubbles, outline, effectiveReadings, unit)
 
-    // ── Draw TIR direction line ───────────────────────────────────────────────
+    // ── Draw TIR direction line (directly above the footer block) ─────────────
     val effectiveTir = if (blankValues) TirDirection.UNSET else config.tirDirection
     drawTirLine(c, text, contentLeft, contentRight, tirY, effectiveTir)
+
+    // ── Footer — the schematic's 3-column block (AFT taper | job info | FWD taper) ──
+    // One shared implementation (ShaftPdfComposer.drawFooter): taper Rate/L.E.T./S.E.T./
+    // Length/KW/Threads columns, work-order center (Customer/Vessel/Job#/Date/Side, keyway
+    // clocking note), blank-draft write-in rules. Replaces this sheet's old one-line header.
+    run {
+        val footerBodyDiasMm = (
+            resolvedComponents
+                ?.filterIsInstance<ResolvedBody>()
+                ?.filter {
+                    it.source == ResolvedComponentSource.EXPLICIT &&
+                        it.endMmPhysical - it.startMmPhysical > 0f && it.diaMm > 0f
+                }
+                ?.map { it.diaMm }
+                ?: spec.bodies.filter { it.lengthMm > 0f && it.diaMm > 0f }.map { it.diaMm }
+            ).distinct().sorted()
+        val footerTapers = selectFooterTapers(spec)
+        val footerCfg = FooterConfig(
+            bodyDiasMm = footerBodyDiasMm,
+            showAftThread = hasAftThread(spec),
+            showFwdThread = hasFwdThread(spec),
+            showAftTaper = footerTapers.aft != null,
+            showFwdTaper = footerTapers.fwd != null,
+            // The note keys off ACTUAL foreshortening in the compressed mapping.
+            showCompressionNote = xMap.isCompressedOver(aftSetMm, fwdSetMm),
+        )
+        drawFooter(
+            c, RectF(contentLeft, footerTop, contentRight, pageH - margin),
+            spec, unit, project,
+            filename = "", appVersion = "",
+            text = text, cfg = footerCfg, blankValues = blankValues,
+        )
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -634,122 +714,9 @@ internal fun drawDiaReadingsInProfile(
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Header drawing
-// ──────────────────────────────────────────────────────────────────────────────
-
-/**
- * Draw the job-info header strip at the top of the runout page.
- *
- * Format (single line):  Customer: ___  |  Vessel: ___  |  Job #: ___  |  Date  |  STBD/PORT
- * (The OAL is drawn separately by the OAL span line, not in this header.)
- */
-private fun drawRunoutHeader(
-    c: Canvas,
-    text: Paint,
-    left: Float,
-    right: Float,
-    top: Float,
-    height: Float,
-    project: ProjectInfo,
-    blankValues: Boolean = false,
-) {
-    val y = top + text.textSize + 2f
-
-    if (blankValues) {
-        // Blank draft: every job-info label prints with a writing rule, regardless of what
-        // the current document holds — the draft may be used on a different shaft.
-        var x = left
-        listOf("Customer:", "Vessel:", "Job #:", "Date:", "Side:").forEach { label ->
-            x = drawLabelWithRule(c, label, x, y, text, maxRight = right)
-        }
-    } else {
-        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
-
-        val headerText = buildString {
-            if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
-            if (project.vessel.isNotBlank())   append("Vessel: ${project.vessel}   ")
-            if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
-            append("Date: $date$side")
-        }
-        c.drawText(ellipsizeToWidth(headerText, text, right - left), left, y, text)
-    }
-
-    // Thin rule below header
-    val ruleY = top + height
-    c.drawLine(left, ruleY, right, ruleY, Paint(text).apply {
-        style = Paint.Style.STROKE; strokeWidth = 0.5f
-    })
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// OAL span line
-// ──────────────────────────────────────────────────────────────────────────────
-
-/**
- * Draw a single OAL dimension arrow spanning the full SET-to-SET measurement window,
- * with witness (extension) lines dropping to the shaft's top edge at each SET face —
- * the same convention as the main schematic and the wear document.
- *
- * This is the only dimension shown on the runout sheet — everything else the field crew
- * needs is on the main schematic page.
- */
-private fun drawOalSpanLine(
-    c: Canvas,
-    dim: Paint,
-    text: Paint,
-    x0: Float,
-    x1: Float,
-    y: Float,
-    aftShaftTopY: Float,
-    fwdShaftTopY: Float,
-    unit: UnitSystem,
-    oalMm: Float,
-    blankValues: Boolean = false,
-) {
-    val arrowLen = 8f
-    val witnessGap = 3f   // gap between shaft edge and witness line start
-    val witnessExt = 5f   // how far the witness line extends past the dimension line
-
-    // Witness lines from the shaft's local top edge up past the dimension line
-    c.drawLine(x0, aftShaftTopY - witnessGap, x0, y - witnessExt, dim)
-    c.drawLine(x1, fwdShaftTopY - witnessGap, x1, y - witnessExt, dim)
-
-    // Both modes cut a break mid-span — the schematic's dimension-value convention, kept
-    // consistent across drawing outputs. Blank: an empty writable gap (no wording where
-    // handwriting goes). Printed: the "OAL: value" label seats IN the gap, vertically
-    // centred on the line (the small printed prefix is a deliberate visual identifier).
-    val mid = (x0 + x1) * 0.5f
-    if (blankValues) {
-        val gapHalf = BLANK_DIM_GAP_PT * 0.5f
-        c.drawLine(x0, y, mid - gapHalf, y, dim)
-        c.drawLine(mid + gapHalf, y, x1, y, dim)
-    } else {
-        // Same formatter as the schematic's OAL rail — inches print as mixed fractions
-        // (falling back to 3 decimals), never raw 4-decimal.
-        val label = "OAL: ${formatLenDim(oalMm.toDouble(), unit)}"
-        val lw = text.measureText(label)
-        val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
-        if ((mid - gapHalf) - x0 >= arrowLen + 2f) {
-            c.drawLine(x0, y, mid - gapHalf, y, dim)
-            c.drawLine(mid + gapHalf, y, x1, y, dim)
-            val fm = text.fontMetrics
-            c.drawText(label, mid - lw * 0.5f, y - (fm.ascent + fm.descent) * 0.5f, text)
-        } else {
-            // Fallback for a span too short to host the break + inward arrows: continuous
-            // line, label above — mirrors PdfDimensionRenderer's fallback rule.
-            c.drawLine(x0, y, x1, y, dim)
-            c.drawText(label, mid - lw * 0.5f, y - 4f, text)
-        }
-    }
-    // Left arrowhead
-    c.drawLine(x0, y, x0 + arrowLen, y - arrowLen * 0.5f, dim)
-    c.drawLine(x0, y, x0 + arrowLen, y + arrowLen * 0.5f, dim)
-    // Right arrowhead
-    c.drawLine(x1, y, x1 - arrowLen, y - arrowLen * 0.5f, dim)
-    c.drawLine(x1, y, x1 - arrowLen, y + arrowLen * 0.5f, dim)
-}
+// (The old one-line header strip and standalone OAL span line are gone: the consolidated
+// sheet prints the schematic's footer block for job info and runs the OAL through the
+// shared PdfDimensionRenderer's top rail with the component dimension tiers.)
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Shaft profile drawing
@@ -1061,9 +1028,6 @@ private const val TEXT_PT    = 10f
 
 // Page layout
 private const val PAGE_MARGIN_PT   = 36f    // 0.5 in margins
-private const val HEADER_HEIGHT_PT = 22f    // Compact single-line header
-private const val OAL_GAP_PT       = 6f     // Gap from header rule to OAL line
-private const val OAL_LINE_SPACE_PT = 90f   // OAL line height above shaft top (≈1.25 in — raised so the dimension doesn't crowd the profile)
 private const val TIR_LINE_HEIGHT_PT = 20f  // Space for TIR direction line at bottom
 
 // Bubble geometry — sized to hold hand-written decimal readings (e.g. .016)
@@ -1083,6 +1047,13 @@ private const val COMPRESS_TRIGGER_PT = 220f
 // compressed body run keeps so a break glyph always has room to read.
 private const val RUNOUT_TARGET_SHAFT_HEIGHT_PT = 1.25f * 72f
 private const val MIN_COMPRESSED_BODY_PT = 36f
+
+// Consolidated-sheet dimension rails (above the shaft; compact versions of the
+// schematic's lane constants so the rails, bubbles, and footer share one page).
+private const val RUNOUT_BASE_DIM_OFFSET_PT = 22f
+private const val RUNOUT_RAIL_GAP_PT = 18f
+private const val RUNOUT_OAL_EXTRA_PT = 14f
+private const val RUNOUT_DIM_TEXT_PT = 8.5f
 private const val ZIGZAG_GAP_MAX_PT   = 20f
 
 

@@ -6,6 +6,26 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-04 (runout sheet — the consolidated ONE-SHEET: schematic rails + footer join)
+
+### feat(runout): full consolidated drawing — dimensions above, wear inside, bubbles below, spec footer
+
+On-device request, with the complete hand-drawn reference ("If I can fit all this by
+hand, then our app should have no problem"). The runout sheet now prints the whole story
+on one page: the schematic's dimension system runs ABOVE the shaft (liner/taper span
+builders + RailPlanner tiers + PdfDimensionRenderer with value-in-break and blank-draft
+write-in gaps; OAL on the topmost rail, replacing the old standalone OAL line), labels
+print true typed lengths while the drawn spans ride the compressed mapping; and the
+schematic's 3-column footer block draws at the bottom (drawFooter made internal — one
+implementation for both documents: taper Rate/L.E.T./S.E.T./Length/KW/Threads columns,
+work-order center with bold Side and keyway-clocking note, blank write-in rules),
+replacing the sheet's one-line header. TIR line sits directly above the footer. Rail
+count feeds the vertical budget before the diameter-scale solve. Wear marks, worn
+sections, in-profile Ø values, and bubbles are unchanged. See `docs/RunoutSheet.md`
+(Consolidation step 3).
+
+---
+
 ## 2026-08-04 (runout sheet — hand-sheet body compression, shaft prints ~1.25" tall)
 
 ### fix(runout): real body compression replaces the vertical stretch — an 8" shaft never looks tiny

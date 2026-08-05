@@ -289,6 +289,32 @@ through a measurement number ("the lines will not draw where the numbers are").
   and no Add-component dialog — outside the add-dialog-parity invariant, like undercuts.
 - **Blank draft**: boundaries print (they are the write-in areas), values drop — same rule
   as the write-in bubbles.
+### Consolidation step 3 (2026-08-04) — the ONE-SHEET: schematic rails + footer join
+
+On-device request ("If I can fit all this by hand, then our app should have no problem",
+with the full hand-drawn consolidated sheet): the runout sheet now prints the complete
+consolidated drawing —
+
+- **Dimension rails ABOVE the shaft** — the schematic's own system verbatim:
+  `buildLinerSpans` + `buildTaperLengthSpans` spans, `RailPlanner` tier assignment
+  (honoring `pdfPrefs.tieringMode`), `PdfDimensionRenderer` (value-in-break, smart
+  arrows, blank-draft write-in gaps). OAL rides the topmost rail (`oalSpan`, label always
+  the typed OAL). Labels print TRUE lengths while the drawn spans ride the compressed
+  mapping — a foreshortened liner still reads its full length, exactly like the hand
+  sheets. Compact lane constants (`RUNOUT_RAIL_GAP_PT` etc.) keep the block tight. This
+  replaces the old standalone OAL span line.
+- **Footer block at the bottom** — the schematic's `drawFooter` itself (made internal;
+  ONE implementation for both documents): AFT/FWD taper columns (Rate, L.E.T., S.E.T.,
+  Length, KW incl. spooned note, Threads), work-order center (Customer/Vessel/Job#/Date,
+  bold Side, keyway-clocking note, Body Ø line), blank-draft write-in rules. Replaces
+  the sheet's old one-line header; the footer's compression note keys off ACTUAL
+  foreshortening (`xMap.isCompressedOver`). The TIR line sits directly above the footer.
+- **Page order:** margin → OAL rail → dim tiers → shaft (compressed, with wear info) →
+  bubbles → TIR line → footer → margin. Rail count feeds the vertical budget before the
+  diameter-scale solve, so tall tier stacks squeeze the shaft area, not the page.
+
+---
+
 ### Consolidation step 2 (2026-08-04, same day) — wear marks migrate, wear tab retired
 
 On-device request following the worn-sections review:

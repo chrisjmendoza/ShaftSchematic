@@ -435,9 +435,9 @@ private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
 // Component title labels (PDF only)
 private const val COMPONENT_LABEL_OFFSET_PT = 32f
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
-private const val FOOTER_BLOCK_PT = 96f
+internal const val FOOTER_BLOCK_PT = 96f
 // Blank drafts reserve a taller footer band: line spacing opens up for handwriting.
-private const val FOOTER_BLOCK_BLANK_PT = 150f
+internal const val FOOTER_BLOCK_BLANK_PT = 150f
 private const val FOOTER_LINE_FACTOR = 1.35f
 private const val FOOTER_LINE_FACTOR_BLANK = 1.8f
 
@@ -747,7 +747,7 @@ internal fun mapToLinerDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode):
  * - FWD → OAL
  * - AUTO → null (preserve existing left-to-right tiering)
  */
-private fun tierOriginMmFor(mode: PdfTieringMode, oalMm: Double): Double? = when (mode) {
+internal fun tierOriginMmFor(mode: PdfTieringMode, oalMm: Double): Double? = when (mode) {
     PdfTieringMode.AFT -> 0.0
     PdfTieringMode.FWD -> oalMm
     PdfTieringMode.AUTO -> null
@@ -1103,7 +1103,9 @@ private fun drawLiners(
 // Footer (3 columns; center column is work-order info)
 // ──────────────────────────────────────────────────────────────────────────────
 
-private fun drawFooter(
+// Internal (not private): the consolidated runout sheet prints the SAME footer block —
+// one footer implementation for both documents, so the spec lines can never drift apart.
+internal fun drawFooter(
     c: Canvas,
     rect: RectF,
     spec: ShaftSpec,
@@ -1443,10 +1445,10 @@ private fun ShaftSpec.maxOuterDiaMm(): Float {
 }
 
 /** Presence checks for end features. */
-private fun hasAftThread(spec: ShaftSpec): Boolean =
+internal fun hasAftThread(spec: ShaftSpec): Boolean =
     spec.threads.any { it.startFromAftMm <= 0.5f }    // thread touches AFT end
 
-private fun hasFwdThread(spec: ShaftSpec): Boolean {
+internal fun hasFwdThread(spec: ShaftSpec): Boolean {
     val oal = spec.overallLengthMm
     return spec.threads.any { (it.startFromAftMm + it.lengthMm) >= (oal - 0.5f) } // thread touches FWD end
 }
