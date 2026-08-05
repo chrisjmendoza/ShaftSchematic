@@ -312,6 +312,24 @@ On-device request following the worn-sections review:
   and the PDF (shared implementations via `nativeCanvas`).
 - **Blank drafts** drop bands/X's/readings entirely (the wear doc's blank rule) and keep
   only worn-section boundaries as write-in areas.
+- **Legibility (on-device report — values towered over the thin proportional profile,
+  halos read as pasted white boxes):**
+  - *Auto-fit:* every value shrinks until it (plus halo) sits inside its local band —
+    surface-to-surface × `WORN_VALUE_BAND_FIT_FRAC` — via the pure
+    `fittedValueTextSize` (`geom/WornSectionMath.kt`, unit-tested); one size per worn
+    section (its longest value governs), per-station for point readings. Floored at
+    `WORN_VALUE_MIN_TEXT_PT` (6 pt PDF) / 14 px canvas so numbers never become dust; at
+    the floor a slight halo overhang is accepted.
+  - *Vertical exaggeration (PDF only):* when in-profile values exist, the whole profile
+    stretches vertically (`vShaftScale` solve in `composeRunoutPdf` — smallest scale that
+    seats every value at full text size, capped by the space above the bubble section).
+    Proportionality is **deliberately sacrificed** for legibility (on-device decision);
+    dia-to-dia ratios are preserved, and sheets without values keep true proportions
+    (scale 1). Everything vertical (profile, witness lines, leader origins) rides the
+    scaled `rPx`, so the sheet stays coherent.
+  - *No liner grey on this sheet:* liners draw unfilled on both the canvas preview and
+    the PDF regardless of the `shadedLiners` pref — against a grey liner every white
+    knockout read as a pasted box (on-device request). Bodies/tapers keep the pref.
 - **Division of labor (on-device decision):** the Wear page **stays** as the authoring
   surface — spots, pits, and point Ø readings are placed/edited there, and its own PDF is
   unchanged — while the Runout sheet is the consolidated **output** that features that

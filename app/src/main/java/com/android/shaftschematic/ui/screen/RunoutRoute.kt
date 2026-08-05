@@ -155,6 +155,9 @@ import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
+/** Smallest legible in-profile value text on the preview canvas (px; canvas is zoomable). */
+private const val WORN_VALUE_MIN_TEXT_CANVAS_PX = 14f
+
 private data class RunoutComponentEntry(
     val id: String,
     val label: String,
@@ -266,7 +269,9 @@ fun RunoutRoute(
     // theme, and dark theme's near-white onSurface would print invisible ink on it.
     val outlineArgb   = SheetInk.Outline.toArgb()
     val bodyFillArgb  = SheetInk.Outline.copy(alpha = 0.08f).toArgb()
-    val linerFillArgb = SheetInk.LinerTint.copy(alpha = 0.16f).toArgb()
+    // Liners draw unfilled on this sheet (on-device request): the in-profile value halos
+    // are sheet-white, and against a tinted liner every knockout reads as a pasted box.
+    val linerFillArgb = Color.Transparent.toArgb()
     val hatchArgb     = SheetInk.Outline.copy(alpha = 0.55f).toArgb()
     val previewShape  = MaterialTheme.shapes.medium
     val textMeasurer  = rememberTextMeasurer()
@@ -463,10 +468,14 @@ fun RunoutRoute(
                                 cy = cyPx,
                                 outline = wornOutlinePaint, text = wornTextPaint,
                                 includeValues = true,
+                                minTextSize = WORN_VALUE_MIN_TEXT_CANVAS_PX,
                             )
                             drawDiaReadingsInProfile(
                                 nc, wearRecord.diaReadings, resolvedComponents,
-                                cy = cyPx, xAt = xAtPx, unit = unit, text = wornTextPaint,
+                                cy = cyPx, xAt = xAtPx,
+                                surfaceRAt = { mm -> preview.layout.rPx(outerDiaAt(segs, mm)) },
+                                unit = unit, text = wornTextPaint,
+                                minTextSize = WORN_VALUE_MIN_TEXT_CANVAS_PX,
                             )
                         }
                         drawRunoutMarkers(preview.bubbles, preview.geom, runoutReadings, unit, textMeasurer)

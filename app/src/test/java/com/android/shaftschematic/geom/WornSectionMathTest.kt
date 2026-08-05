@@ -77,6 +77,32 @@ class WornSectionMathTest {
         assertTrue(col.haloBottom > col.haloTop)
     }
 
+    // ── Value text fitting (band-height auto-fit) ─────────────────────────────
+
+    @Test
+    fun `text keeps its base size when the value already fits the band`() {
+        // needed = 60 + 2*0.3*12 = 67.2 < 100 → no shrink.
+        assertEquals(10f, fittedValueTextSize(10f, 6f, 60f, 12f, 100f), 1e-4f)
+    }
+
+    @Test
+    fun `text shrinks proportionally when the band is too short`() {
+        val fitted = fittedValueTextSize(10f, 1f, 60f, 12f, 33.6f)
+        // needed at base = 67.2; band = 33.6 → exactly half size.
+        assertEquals(5f, fitted, 1e-4f)
+    }
+
+    @Test
+    fun `shrink floors at the minimum legible size`() {
+        assertEquals(6f, fittedValueTextSize(10f, 6f, 60f, 12f, 10f), 1e-4f)
+    }
+
+    @Test
+    fun `degenerate inputs keep the base size`() {
+        assertEquals(10f, fittedValueTextSize(10f, 6f, 0f, 12f, 50f), 1e-4f)
+        assertEquals(10f, fittedValueTextSize(10f, 6f, 60f, 12f, 0f), 1e-4f)
+    }
+
     @Test
     fun `overflow flags when the group is wider than the span`() {
         val narrow = layoutWornSectionValues(0f, 30f, 50f, listOf(60f, 60f, 60f), lineH)

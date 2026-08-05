@@ -6,6 +6,24 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-04 (runout sheet — in-profile value legibility polish)
+
+### fix(runout): values fit the profile — auto-fit text, vertical exaggeration, no liner grey
+
+On-device report (first build test): in-profile Ø values towered past the thin
+proportional profile, and their white halos read as pasted boxes against grey liners.
+Three changes: (1) every value now auto-fits its local band — shrunk until value + halo
+sit inside the surface lines (`fittedValueTextSize` in `geom/WornSectionMath.kt`,
+per-section for worn values / per-station for readings, floored at 6 pt PDF / 14 px
+canvas); (2) the PDF profile stretches vertically when in-profile values exist
+(`vShaftScale` — smallest scale that seats every value at full text size, capped by the
+space above the bubbles; proportionality deliberately sacrificed per on-device decision,
+dia-to-dia ratios kept, value-less sheets stay true-scale); (3) liners draw unfilled on
+this sheet regardless of the `shadedLiners` pref, canvas and PDF, so knockouts blend into
+the paper. See `docs/RunoutSheet.md` (Legibility).
+
+---
+
 ## 2026-08-04 (runout sheet — wear marks migrate, in-profile readings; consolidation step 2)
 
 ### feat(runout): dia readings inside the profile, wear bands + pit X's on the sheet, wear tab retired

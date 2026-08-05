@@ -23,6 +23,40 @@ const val WORN_VALUE_COLUMN_PITCH_FACTOR = 1.7f
 /** Halo padding around the rotated text, as a multiple of the text line height. */
 const val WORN_VALUE_HALO_PAD_FACTOR = 0.3f
 
+/**
+ * Fraction of the local band height (surface line to surface line) a value + halo may
+ * occupy — the remainder keeps the halo just inside the profile strokes, so the knockout
+ * never cuts the surface lines.
+ */
+const val WORN_VALUE_BAND_FIT_FRAC = 0.94f
+
+/**
+ * Band height (same unit as the inputs) a value needs to sit fully inside the profile:
+ * its rotated length plus the halo padding both sides.
+ */
+fun wornValueBandHeightNeeded(labelLength: Float, lineHeight: Float): Float =
+    labelLength + 2f * WORN_VALUE_HALO_PAD_FACTOR * lineHeight
+
+/**
+ * Text size at which a value fits the local [bandHeight]: [baseTextSize] when it already
+ * fits, otherwise shrunk proportionally (label length and line height both scale linearly
+ * with text size), floored at [minTextSize] — below that the number is unreadable, and a
+ * slight halo overhang is the lesser evil. Inputs are measured at [baseTextSize].
+ */
+fun fittedValueTextSize(
+    baseTextSize: Float,
+    minTextSize: Float,
+    labelLengthAtBase: Float,
+    lineHeightAtBase: Float,
+    bandHeight: Float,
+): Float {
+    if (labelLengthAtBase <= 0f || bandHeight <= 0f) return baseTextSize
+    val neededAtBase = wornValueBandHeightNeeded(labelLengthAtBase, lineHeightAtBase)
+    if (neededAtBase <= bandHeight) return baseTextSize
+    return (baseTextSize * bandHeight / neededAtBase)
+        .coerceIn(minTextSize.coerceAtMost(baseTextSize), baseTextSize)
+}
+
 /** One rotated value column: text center + the knockout rect behind it. */
 data class WornValueColumn(
     val cx: Float,

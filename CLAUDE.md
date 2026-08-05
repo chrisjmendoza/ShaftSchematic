@@ -114,7 +114,11 @@ line crosses a number. ONE draw implementation for both sites — `drawWornSecti
 last** — wear-area bands and pit X's (migrated from the retired wear tab,
 `drawWearMarksOnRunoutProfile`), then worn-section boundaries, then ALL value text over
 knockout halos (worn values, then `drawDiaReadingsInProfile`); do not draw any mark after
-the text passes. Division of labor: the Wear page is the **authoring surface** for
+the text passes. Values **auto-fit their local band** (`fittedValueTextSize`, floor
+`WORN_VALUE_MIN_TEXT_PT`/14 px canvas) and the PDF **stretches the profile vertically**
+(`vShaftScale`) when values are present — proportionality deliberately sacrificed for
+legibility (on-device decision); liners draw **unfilled on this sheet** regardless of
+`shadedLiners` so halos don't read as pasted boxes. Division of labor: the Wear page is the **authoring surface** for
 spots/pits/point-readings (tab visible; `WEAR_TAB_ENABLED` in `EditorTab.kt` is the
 one-line retirement switch for a future full consolidation), while the Runout sheet is
 the consolidated **output** featuring that wear information. See `docs/RunoutSheet.md`

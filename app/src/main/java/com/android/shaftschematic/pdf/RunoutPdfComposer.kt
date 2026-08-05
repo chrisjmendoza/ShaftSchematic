@@ -16,9 +16,12 @@ import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.WORN_VALUE_BAND_FIT_FRAC
 import com.android.shaftschematic.geom.WornValueColumn
+import com.android.shaftschematic.geom.fittedValueTextSize
 import com.android.shaftschematic.geom.layoutWornSectionValues
 import com.android.shaftschematic.geom.planRunoutBubbles
+import com.android.shaftschematic.geom.wornValueBandHeightNeeded
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
@@ -138,7 +141,10 @@ fun composeRunoutPdf(
     }
     val bodyFill : Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
     val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
-    val linerFill: Paint? = if (pdfPrefs.shadedLiners) shadeFill() else null
+    // Liners deliberately NEVER shade on this sheet, whatever `shadedLiners` says
+    // (on-device request): the in-profile value halos are sheet-white, and against a grey
+    // liner every knockout reads as a pasted white box instead of clear paper.
+    val linerFill: Paint? = null
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         textSize = TEXT_PT
@@ -170,8 +176,8 @@ fun composeRunoutPdf(
     /** Convert physical shaft mm → page-x points. Anchored at the AFT SET face. */
     fun xAt(mm: Float): Float = contentLeft + (mm - measureStartMm) * ptPerMm
 
-    /** Convert a diameter mm → radius in points. */
-    fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * ptPerMm
+    /** Convert a diameter mm → radius in points at TRUE proportional scale. */
+    fun rPxBase(diaMm: Float): Float = (diaMm * 0.5f) * ptPerMm
 
     // ── Bubble plan — horizontal solve first (rows + bubble x need only ptPerMm) ─
     // The shared engine (geom/RunoutBubbleLayout.kt) is also used by the RunoutRoute
@@ -195,16 +201,18 @@ fun composeRunoutPdf(
 
     // ── Vertical layout — shaft centred, bubbles below, TIR at bottom ─────────
     //
-    // The shaft is drawn at its ACTUAL outer diameter (not a fixed height) so the
-    // profile looks proportionally correct. We then compute the remaining vertical
-    // space and split it between the bubble area and breathing room.
+    // The shaft is normally drawn at its ACTUAL outer diameter so the profile looks
+    // proportionally correct — EXCEPT when in-profile wear values are present: the
+    // profile then stretches vertically (proportionality deliberately sacrificed,
+    // on-device request — the readings must be legible) until the longest value fits
+    // inside its local band, capped by the space left above the bubble section.
+    // Sheets without wear values keep true proportions (scale stays 1).
     //
     // Layout (top → bottom):
     //   margin → header → OAL line → [shaftTop … shaftCy … shaftBottom] →
     //   bubble area (rows from the plan) → TIR line → margin
 
     val maxOuterDiaMm  = docSpec.maxOuterDiaMm().coerceAtLeast(10f)
-    val shaftHalfPt    = rPx(maxOuterDiaMm)  // actual half-height of the shaft drawing
 
     // Vertical space from below the OAL line to the bottom margin
     val tirY           = pageH - margin - TIR_LINE_HEIGHT_PT
@@ -213,34 +221,77 @@ fun composeRunoutPdf(
     // How tall the bubble section is: leader gap + however many rows the plan needs
     val bubbleSectionH = bubblePlan.sectionHeight(BUBBLE_GAP_PT)
 
-    // Place the shaft centred in the top part of the available space
+    // Vertical budget for the shaft drawing
     val shaftAreaH     = availableH - bubbleSectionH
-    val shaftCy        = headerBottom + OAL_GAP_PT + OAL_LINE_SPACE_PT +
-                         (shaftAreaH / 2f).coerceAtLeast(shaftHalfPt + 4f)
 
-    val geomRect = RectF(contentLeft, margin, contentRight, pageH - margin)
-
-    // ── Outer-radius lookup — returns the ACTUAL shaft surface y for a given mm ─
-    // Used so leader lines originate from the shaft's visible outline, not a fixed y.
-    fun shaftOuterRPxAt(mm: Float): Float {
-        var maxR = 0f
+    // ── Outer envelope diameter (mm) at a station — scale solve + drawing share it ─
+    fun outerDiaMmAt(mm: Float): Float {
+        var maxDia = 0f
         docSpec.bodies.forEach { b ->
             if (mm >= b.startFromAftMm - 0.1f && mm <= b.startFromAftMm + b.lengthMm + 0.1f)
-                maxR = maxOf(maxR, rPx(b.diaMm))
+                maxDia = maxOf(maxDia, b.diaMm)
         }
         docSpec.tapers.forEach { t ->
             val s = t.startFromAftMm; val e = s + t.lengthMm
             if (mm >= s - 0.1f && mm <= e + 0.1f) {
                 val frac = ((mm - s) / (e - s)).coerceIn(0f, 1f)
-                maxR = maxOf(maxR, rPx(t.startDiaMm + (t.endDiaMm - t.startDiaMm) * frac))
+                maxDia = maxOf(maxDia, t.startDiaMm + (t.endDiaMm - t.startDiaMm) * frac)
             }
         }
         docSpec.liners.forEach { ln ->
             if (mm >= ln.startFromAftMm - 0.1f && mm <= ln.startFromAftMm + ln.lengthMm + 0.1f)
-                maxR = maxOf(maxR, rPx(ln.odMm))
+                maxDia = maxOf(maxDia, ln.odMm)
         }
-        return maxR.coerceAtLeast(shaftHalfPt * 0.1f)
+        return maxDia.coerceAtLeast(maxOuterDiaMm * 0.1f)
     }
+
+    // ── Vertical exaggeration solve — smallest scale that seats every value ───
+    val vShaftScale: Float = run {
+        if (blankValues) return@run 1f
+        val fm = text.fontMetrics
+        val baseLine = fm.descent - fm.ascent
+        var need = 1f
+        fun consider(labels: List<String>, stationDiaMm: Float) {
+            if (labels.isEmpty() || stationDiaMm <= 0f) return
+            val bandBase = 2f * rPxBase(stationDiaMm) * WORN_VALUE_BAND_FIT_FRAC
+            if (bandBase <= 0f) return
+            val needed = labels.maxOf { wornValueBandHeightNeeded(text.measureText(it), baseLine) }
+            need = maxOf(need, needed / bandBase)
+        }
+        wearRecord.wornSections.forEach { s ->
+            val clamped = clampUndercutSpan(s.startFromAftMm, s.lengthMm, spec.overallLengthMm)
+            if (clamped.isEmpty) return@forEach
+            val startMm = maxOf(clamped.startMm, aftSetMm)
+            val endMm = minOf(clamped.endMm, fwdSetMm)
+            if (endMm - startMm <= 1e-3f) return@forEach
+            consider(wornSectionValueLabels(s.diaMm, unit), outerDiaMmAt((startMm + endMm) / 2f))
+        }
+        resolvedComponents?.associateBy { it.id }?.let { byId ->
+            wearRecord.diaReadings.forEach { r ->
+                if (r.diaMm <= 0f) return@forEach
+                val rc = byId[r.componentId] ?: return@forEach
+                val lenMm = (rc.endMmPhysical - rc.startMmPhysical).coerceAtLeast(0.001f)
+                val stationMm = rc.startMmPhysical + r.axialMm.coerceIn(0f, lenMm)
+                consider(listOf(diaReadingValueLabel(r.diaMm, unit)), outerDiaMmAt(stationMm))
+            }
+        }
+        val baseHalf = rPxBase(maxOuterDiaMm)
+        val capScale = if (baseHalf > 0f) maxOf(1f, (shaftAreaH / 2f - 6f) / baseHalf) else 1f
+        need.coerceIn(1f, capScale)
+    }
+
+    /** Convert a diameter mm → DRAWN radius pt (vertical exaggeration applied). */
+    fun rPx(diaMm: Float): Float = rPxBase(diaMm) * vShaftScale
+
+    val shaftHalfPt    = rPx(maxOuterDiaMm)  // drawn half-height of the shaft
+    val shaftCy        = headerBottom + OAL_GAP_PT + OAL_LINE_SPACE_PT +
+                         (shaftAreaH / 2f).coerceAtLeast(shaftHalfPt + 4f)
+
+    val geomRect = RectF(contentLeft, margin, contentRight, pageH - margin)
+
+    // ── Outer-radius lookup — returns the ACTUAL drawn surface y for a given mm ─
+    // Used so leader lines originate from the shaft's visible outline, not a fixed y.
+    fun shaftOuterRPxAt(mm: Float): Float = rPx(outerDiaMmAt(mm))
 
     // ── Draw header ───────────────────────────────────────────────────────────
     drawRunoutHeader(c, text, contentLeft, contentRight,
@@ -286,11 +337,14 @@ fun composeRunoutPdf(
         xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt, cy = shaftCy,
         outline = outline, text = text,
         includeValues = !blankValues,
+        minTextSize = WORN_VALUE_MIN_TEXT_PT,
     )
     if (!blankValues) {
         drawDiaReadingsInProfile(
             c, wearRecord.diaReadings, resolvedComponents,
-            cy = shaftCy, xAt = ::xAt, unit = unit, text = text,
+            cy = shaftCy, xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt,
+            unit = unit, text = text,
+            minTextSize = WORN_VALUE_MIN_TEXT_PT,
         )
     }
 
@@ -332,6 +386,17 @@ fun composeRunoutPdf(
  *   area, same posture as the write-in bubbles.
  * - Value text: "Ø" + [formatDiaWithUnit] — the measurement verbatim, never re-derived.
  */
+/** Smallest legible in-profile value text on the printed page (pt). */
+internal const val WORN_VALUE_MIN_TEXT_PT = 6f
+
+/** Printable value labels for a worn section — the shared solve/draw source of truth. */
+internal fun wornSectionValueLabels(diaMm: List<Float>, unit: UnitSystem): List<String> =
+    diaMm.filter { it > 0f }.map { "Ø" + formatDiaWithUnit(it.toDouble(), unit) }
+
+/** Printable label for one measured-Ø point reading. */
+internal fun diaReadingValueLabel(diaMm: Float, unit: UnitSystem): String =
+    "Ø" + formatDiaWithUnit(diaMm.toDouble(), unit)
+
 internal fun drawWornSections(
     c: Canvas,
     sections: List<WornSection>,
@@ -345,6 +410,13 @@ internal fun drawWornSections(
     outline: Paint,
     text: Paint,
     includeValues: Boolean,
+    /**
+     * Floor for the per-section value auto-fit ([fittedValueTextSize]): each section's
+     * values shrink together until the longest sits inside the local band
+     * (surface-to-surface at the span midpoint × [WORN_VALUE_BAND_FIT_FRAC]), never
+     * below this size — the numbers must stay legible even if the halo then overhangs.
+     */
+    minTextSize: Float,
 ) {
     if (sections.isEmpty()) return
     val eps = 1e-3f
@@ -352,9 +424,9 @@ internal fun drawWornSections(
         style = Paint.Style.FILL
         color = Color.WHITE
     }
-    val valueText = Paint(text).apply { textAlign = Paint.Align.CENTER }
-    val fm = valueText.fontMetrics
-    val lineHeight = fm.descent - fm.ascent
+    val baseText = Paint(text).apply { textAlign = Paint.Align.CENTER }
+    val baseFm = baseText.fontMetrics
+    val baseLine = baseFm.descent - baseFm.ascent
 
     sections.forEach { section ->
         val clamped = clampUndercutSpan(section.startFromAftMm, section.lengthMm, oalMm)
@@ -373,14 +445,26 @@ internal fun drawWornSections(
         c.drawLine(x1, cy - r1, x1, cy + r1, outline)
 
         if (!includeValues) return@forEach
-        val labels = section.diaMm.filter { it > 0f }
-            .map { "Ø" + formatDiaWithUnit(it.toDouble(), unit) }
+        val labels = wornSectionValueLabels(section.diaMm, unit)
         if (labels.isEmpty()) return@forEach
+
+        // Auto-fit: one size per section, from its longest value against the local band.
+        val bandPx = 2f * surfaceRAt((startMm + endMm) / 2f) * WORN_VALUE_BAND_FIT_FRAC
+        val fitted = fittedValueTextSize(
+            baseTextSize = baseText.textSize,
+            minTextSize = minTextSize,
+            labelLengthAtBase = labels.maxOf(baseText::measureText),
+            lineHeightAtBase = baseLine,
+            bandHeight = bandPx,
+        )
+        val valueText = if (fitted == baseText.textSize) baseText
+                        else Paint(baseText).apply { textSize = fitted }
+        val fm = valueText.fontMetrics
 
         val layout = layoutWornSectionValues(
             x0 = x0, x1 = x1, cy = cy,
             labelLengths = labels.map(valueText::measureText),
-            lineHeight = lineHeight,
+            lineHeight = fm.descent - fm.ascent,
         )
         layout.columns.forEachIndexed { i, col ->
             drawRotatedValueColumn(c, col, labels[i], valueText, halo)
@@ -472,8 +556,11 @@ internal fun drawDiaReadingsInProfile(
     components: List<ResolvedComponent>?,
     cy: Float,
     xAt: (Float) -> Float,
+    surfaceRAt: (Float) -> Float,
     unit: UnitSystem,
     text: Paint,
+    /** Auto-fit floor, same rule as [drawWornSections] — fitted per reading. */
+    minTextSize: Float,
 ) {
     if (readings.isEmpty() || components == null) return
     val byId = components.associateBy { it.id }
@@ -481,22 +568,36 @@ internal fun drawDiaReadingsInProfile(
         style = Paint.Style.FILL
         color = Color.WHITE
     }
-    val valueText = Paint(text).apply { textAlign = Paint.Align.CENTER }
-    val fm = valueText.fontMetrics
-    val lineHeight = fm.descent - fm.ascent
+    val baseText = Paint(text).apply { textAlign = Paint.Align.CENTER }
+    val baseFm = baseText.fontMetrics
+    val baseLine = baseFm.descent - baseFm.ascent
 
     readings.forEach { r ->
         if (r.diaMm <= 0f) return@forEach
         val rc = byId[r.componentId] ?: return@forEach
         val lenMm = (rc.endMmPhysical - rc.startMmPhysical).coerceAtLeast(0.001f)
         val local = r.axialMm.coerceIn(0f, lenMm)
-        val stationX = xAt(rc.startMmPhysical + local)
-        val label = "Ø" + formatDiaWithUnit(r.diaMm.toDouble(), unit)
+        val stationMm = rc.startMmPhysical + local
+        val stationX = xAt(stationMm)
+        val label = diaReadingValueLabel(r.diaMm, unit)
+
+        val bandPx = 2f * surfaceRAt(stationMm) * WORN_VALUE_BAND_FIT_FRAC
+        val fitted = fittedValueTextSize(
+            baseTextSize = baseText.textSize,
+            minTextSize = minTextSize,
+            labelLengthAtBase = baseText.measureText(label),
+            lineHeightAtBase = baseLine,
+            bandHeight = bandPx,
+        )
+        val valueText = if (fitted == baseText.textSize) baseText
+                        else Paint(baseText).apply { textSize = fitted }
+        val fm = valueText.fontMetrics
+
         // Degenerate span → the single column centers exactly on the station.
         val layout = layoutWornSectionValues(
             x0 = stationX, x1 = stationX, cy = cy,
             labelLengths = listOf(valueText.measureText(label)),
-            lineHeight = lineHeight,
+            lineHeight = fm.descent - fm.ascent,
         )
         drawRotatedValueColumn(c, layout.columns.single(), label, valueText, halo)
     }
