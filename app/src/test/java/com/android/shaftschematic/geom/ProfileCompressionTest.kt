@@ -344,4 +344,64 @@ class ProfileCompressionTest {
         assertEquals("equal lengths → equal widths", w[0], w[1], 1e-2f)
         assertTrue("longer → wider", w[2] > w[0])
     }
+
+    // ── defaultShaftHeightPt / defaultVisualScale (default sizing curve) ──────
+
+    @Test
+    fun `sizing curve anchors - 8in draws 1_25in, 4in draws 0_75in`() {
+        assertEquals(90f, defaultShaftHeightPt(203.2f), 1e-3f)
+        assertEquals(54f, defaultShaftHeightPt(101.6f), 1e-3f)
+    }
+
+    @Test
+    fun `sizing curve interpolates linearly between the anchors`() {
+        // 6in sits midway → midway height: 72pt (1.0in on paper).
+        assertEquals(72f, defaultShaftHeightPt(152.4f), 1e-3f)
+    }
+
+    @Test
+    fun `sizing curve continues past both anchors so sizes differentiate`() {
+        // 3in keeps shrinking below the low anchor; 9in keeps growing above the high one.
+        assertEquals(45f, defaultShaftHeightPt(76.2f), 1e-2f)
+        assertEquals(99f, defaultShaftHeightPt(228.6f), 1e-2f)
+        assertTrue(defaultShaftHeightPt(76.2f) < defaultShaftHeightPt(101.6f))
+        assertTrue(defaultShaftHeightPt(228.6f) > defaultShaftHeightPt(203.2f))
+    }
+
+    @Test
+    fun `sizing curve meets the absolute ceiling at 10in and stays capped above`() {
+        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(254f), 1e-2f)
+        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(400f), 1e-3f)
+    }
+
+    @Test
+    fun `default visual scale is the curve height over the diameter`() {
+        assertEquals(90f / 203.2f, defaultVisualScale(203.2f), 1e-5f)
+        assertEquals(54f / 101.6f, defaultVisualScale(101.6f), 1e-5f)
+        // Degenerate diameter falls back to the legacy flat scale.
+        assertEquals(VISUAL_DIA_SCALE_PT_PER_MM, defaultVisualScale(0f), 1e-6f)
+    }
+
+    @Test
+    fun `sizing curve anchor heights are adjustable`() {
+        // On-device request: the anchor heights are settings (e.g. 4" shafts default to
+        // 0.5"). The line re-derives: 4"→36pt, 8"→90pt, 6" midway →63pt.
+        assertEquals(36f, defaultShaftHeightPt(101.6f, loHeightPt = 36f, hiHeightPt = 90f), 1e-3f)
+        assertEquals(90f, defaultShaftHeightPt(203.2f, loHeightPt = 36f, hiHeightPt = 90f), 1e-3f)
+        assertEquals(63f, defaultShaftHeightPt(152.4f, 36f, 90f), 1e-3f)
+        assertEquals(63f / 152.4f, defaultVisualScale(152.4f, 36f, 90f), 1e-5f)
+    }
+
+    @Test
+    fun `inverted anchor pair flattens at the low anchor - larger never draws smaller`() {
+        assertEquals(72f, defaultShaftHeightPt(101.6f, loHeightPt = 72f, hiHeightPt = 36f), 1e-3f)
+        assertEquals(72f, defaultShaftHeightPt(203.2f, 72f, 36f), 1e-3f)
+        assertEquals(72f, defaultShaftHeightPt(300f, 72f, 36f), 1e-3f)
+    }
+
+    @Test
+    fun `custom anchors still cap at the absolute ceiling`() {
+        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(203.2f, 54f, 200f), 1e-3f)
+        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(500f, 54f, 90f), 1e-3f)
+    }
 }

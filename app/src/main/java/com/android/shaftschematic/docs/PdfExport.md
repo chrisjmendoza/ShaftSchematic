@@ -29,8 +29,12 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `shadedTapers` | `false` | Fill taper trapezoids with light grey |
 | `shadedLiners` | `false` | Fill liner sections with light grey |
 | `oalSpacingFactor` | `2.5` | Extra gap above OAL rail (1.0–6.0) |
+| `curveLoHeightIn` | `0.75` | Sizing-curve anchor: drawn height (paper in) of a 4" shaft at 100% (0.25–1.5) |
+| `curveHiHeightIn` | `1.25` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
 
-All fields are also reachable in the preview screen's Tune sheet.
+All fields are also reachable in the preview screen's Tune sheet, except the sizing-curve
+anchors, which live in Settings → PDF Export → "Default drawing size" (app-level default;
+the per-job "Shaft height" slider multiplies on top).
 
 ---
 

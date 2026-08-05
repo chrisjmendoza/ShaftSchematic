@@ -42,6 +42,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,7 +66,11 @@ import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.ui.viewmodel.*
+import com.android.shaftschematic.geom.defaultShaftHeightPt
 import com.android.shaftschematic.settings.AppThemeMode
+import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
+import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
@@ -127,6 +132,8 @@ fun SettingsRoute(
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
+    val pdfCurveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
+    val pdfCurveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -563,6 +570,57 @@ fun SettingsRoute(
                         Text("Liners")
                     }
 
+                    HorizontalDivider()
+                    Text(
+                        "Default drawing size",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                    )
+                    Text(
+                        "Drawn shaft height on paper at 100% “Shaft height”. Set what a " +
+                            "4″ and an 8″ shaft draw; sizes between and beyond follow " +
+                            "the line, capped at 1.5″ on paper.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    CurveAnchorControl(
+                        label = "4″ shaft draws",
+                        valueIn = pdfCurveLoHeightIn,
+                        onCommit = { vm.setPdfCurveLoHeightIn(it) },
+                    )
+                    CurveAnchorControl(
+                        label = "8″ shaft draws",
+                        valueIn = pdfCurveHiHeightIn,
+                        onCommit = { vm.setPdfCurveHiHeightIn(it) },
+                    )
+                    if (pdfCurveHiHeightIn < pdfCurveLoHeightIn) {
+                        Text(
+                            "8″ is set below 4″ — larger shafts never draw smaller, so " +
+                                "drawings flatten the line at the 4″ value.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val sixInHeight = defaultShaftHeightPt(
+                            152.4f, pdfCurveLoHeightIn * 72f, pdfCurveHiHeightIn * 72f
+                        ) / 72f
+                        Text(
+                            "Example: a 6″ shaft draws ${fmtCurveInches(sixInHeight)}.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            onClick = {
+                                vm.setPdfCurveLoHeightIn(PdfPrefs().curveLoHeightIn)
+                                vm.setPdfCurveHiHeightIn(PdfPrefs().curveHiHeightIn)
+                            },
+                            enabled = pdfCurveLoHeightIn != PdfPrefs().curveLoHeightIn ||
+                                pdfCurveHiHeightIn != PdfPrefs().curveHiHeightIn,
+                        ) { Text("Standard (0.75″ / 1.25″)") }
+                    }
+
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Switch(
                             checked = pdfExportMode == PdfExportMode.Template,
@@ -610,6 +668,44 @@ fun SettingsRoute(
 }
 
 private enum class SettingsPage { MAIN, PREVIEW_COLORS, PDF_EXPORT }
+
+/**
+ * One sizing-curve anchor: label + value readout and a slider over the settable range,
+ * quantized to 1/16″. Commits once on release — the drag is local, same posture as
+ * [LineThicknessControl] (per-frame commits would write DataStore every frame).
+ */
+@Composable
+private fun CurveAnchorControl(
+    label: String,
+    valueIn: Float,
+    onCommit: (Float) -> Unit,
+) {
+    var drag by remember { mutableStateOf<Float?>(null) }
+    val shown = drag ?: valueIn
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text("$label  ${fmtCurveInches(shown)}", style = MaterialTheme.typography.bodyMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(fmtCurveInches(PDF_CURVE_HEIGHT_MIN_IN), style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { drag = (it * 16f).roundToInt() / 16f },
+                onValueChangeFinished = {
+                    drag?.let(onCommit)
+                    drag = null
+                },
+                valueRange = PDF_CURVE_HEIGHT_MIN_IN..PDF_CURVE_HEIGHT_MAX_IN,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+            )
+            Text(fmtCurveInches(PDF_CURVE_HEIGHT_MAX_IN), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/** Trimmed paper inches with the double-prime mark: 0.75″, 0.5″, 1.0625″. */
+private fun fmtCurveInches(v: Float): String =
+    String.format(java.util.Locale.US, "%.4f", v).trimEnd('0').trimEnd('.') + "″"
 
 @Composable
 private fun LineThicknessControl(

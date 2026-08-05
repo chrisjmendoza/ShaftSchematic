@@ -77,3 +77,49 @@ private const val RETURN_SWEEP_FULLNESS = 1.5f
 
 /** Light translucent wash inside the eye (~18% black; matches shaded-body recipe). */
 private const val EYE_SHADE_COLOR = 0x2E000000
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Paired-break layout — the two edges must never overlap
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * How far a break edge's curves reach horizontally INWARD toward its partner, as a
+ * fraction of the amplitude — the pair's combined reach in each half of the shaft.
+ * Derived from the cubics in [drawBreakEdge]: the main S peaks at √3/6 of its ±amplitude
+ * controls, and the return sweep (controls at [RETURN_SWEEP_FULLNESS]·amp/2 and /4) at
+ * [RETURN_SWEEP_FULLNESS]·√3/6; one edge contributes its S while the other contributes
+ * its sweep in the same half, so the pair closes (1 + fullness)·√3/6 of the amplitude.
+ * Changing the glyph's control geometry changes this fraction.
+ */
+internal val BREAK_PAIR_REACH_FRAC = (1f + RETURN_SWEEP_FULLNESS) * (kotlin.math.sqrt(3f) / 6f)
+
+/** Minimum daylight between the pair's nearest curves ("at worst 1px" — on-device report). */
+internal const val BREAK_PAIR_MIN_CLEAR_PT = 1f
+
+internal data class BreakPairLayout(val gapPt: Float, val amplitudePt: Float)
+
+/**
+ * Gap and amplitude for the paired break glyph on a compressed body run. A pair set
+ * `gap` apart keeps `gap − [BREAK_PAIR_REACH_FRAC]·amplitude − strokeWidth` of white
+ * between its nearest curves; drawn closer, the glyphs cross (on-device report:
+ * overlapping S-breaks on a tall shaft's narrow compressed runs).
+ *
+ * The classic gap widens when the full amplitude needs more room — up to half the run,
+ * so each stub keeps at least a quarter — and the amplitude then clamps to whatever the
+ * final gap can host with [BREAK_PAIR_MIN_CLEAR_PT] of daylight: on a run too narrow to
+ * host the full glyph, the S flattens slightly rather than ever overlap.
+ */
+internal fun breakPairLayout(
+    runLenPt: Float,
+    desiredAmplitudePt: Float,
+    classicGapPt: Float,
+    strokeWidthPt: Float,
+): BreakPairLayout {
+    val neededGap = desiredAmplitudePt * BREAK_PAIR_REACH_FRAC + strokeWidthPt + BREAK_PAIR_MIN_CLEAR_PT
+    val gap = maxOf(classicGapPt, minOf(neededGap, runLenPt * 0.5f))
+    val amp = minOf(
+        desiredAmplitudePt,
+        ((gap - strokeWidthPt - BREAK_PAIR_MIN_CLEAR_PT) / BREAK_PAIR_REACH_FRAC).coerceAtLeast(0f),
+    )
+    return BreakPairLayout(gapPt = gap, amplitudePt = amp)
+}

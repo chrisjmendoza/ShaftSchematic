@@ -116,9 +116,18 @@ last** — wear-area bands and pit X's (migrated from the retired wear tab,
 knockout halos (worn values, then `drawDiaReadingsInProfile`); do not draw any mark after
 the text passes. Values **auto-fit their local band** (`fittedValueTextSize`, floor
 `WORN_VALUE_MIN_TEXT_PT`/14 px canvas); the PDF profile follows the **hand-sheet
-compression convention** — drawn height proportional to TRUE diameter at
-`VISUAL_DIA_SCALE_PT_PER_MM`, spans foreshortened above per-kind width floors via the
+compression convention** — drawn height follows TRUE diameter on the **default sizing
+curve** (`defaultShaftHeightPt`: linear through 4" → 0.75" and 8" → 1.25" on paper,
+continuing past both anchors, meeting the 1.5" ceiling at 10"; `defaultVisualScale`
+supersedes the flat `VISUAL_DIA_SCALE_PT_PER_MM`, now only the degenerate fallback;
+the anchor HEIGHTS are app-level settings — Settings → PDF Export "Default drawing
+size", `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn` — and an inverted pair flattens
+at the low anchor: a larger shaft never draws smaller),
+spans foreshortened above per-kind width floors via the
 pure mapping `geom/ProfileCompression.kt`, everything through the one piecewise `xAt`.
+Foreshortened body runs draw the S-break pair laid out by `breakPairLayout`
+(`pdf/BreakSymbol.kt`) — gap widens up to half the run, then amplitude flattens, so the
+two edges always keep ≥ 1 pt of daylight and never overlap.
 **Liners compress in SIZE only** (finite `PROFILE_MIN_LINER_PT` floor — proportional
 foreshortening, NEVER a body-style S-break cutout; the S-break glyph is a body-only draw
 path); keyway-bearing bodies stay pinned at true width with the height yielding

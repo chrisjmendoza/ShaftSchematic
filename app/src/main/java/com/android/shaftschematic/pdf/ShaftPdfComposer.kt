@@ -12,7 +12,7 @@ import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_TAPER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
 import com.android.shaftschematic.geom.ProfileFeatureSpan
-import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
+import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.geom.buildCompressedProfileXMap
 import com.android.shaftschematic.geom.exaggeratedProfileScale
 import com.android.shaftschematic.geom.solveMaxProfileScale
@@ -199,10 +199,12 @@ fun composeShaftPdf(
     }
     // Keyway-bearing bodies pinned at true width → when one needs the room, the HEIGHT
     // yields ("doesn't have to be perfectly proportional, just close" — on-device rule).
-    // The per-job "Shaft height" slider multiplies the visual scale; the 1.5" ceiling and
-    // the page budget cap the result (exaggeratedProfileScale, pure, unit-tested).
+    // The per-job "Shaft height" slider multiplies the default sizing curve (standard:
+    // 8" → 1.25", 4" → 0.75", linear between; anchor heights user-adjustable via
+    // Settings → PDF Export); the 1.5" ceiling and the page budget cap the result
+    // (exaggeratedProfileScale, pure, unit-tested).
     val desiredScale = exaggeratedProfileScale(
-        baseScale = VISUAL_DIA_SCALE_PT_PER_MM,
+        baseScale = defaultVisualScale(maxDiaMm, pdfPrefs.curveLoHeightPt, pdfPrefs.curveHiHeightPt),
         heightFrac = heightScale,
         budgetCapPt = geomRect.height(),
         maxDiaMm = maxDiaMm,
@@ -691,11 +693,15 @@ private fun drawBodiesCompressedCenterBreak(
         } else {
             // centered break: two stubs, each with an S-curve end instead of a straight cap
             val mid = (x0 + x1) * 0.5f
-            val gap = min(ZIGZAG_GAP_MAX_PT, 0.25f * bodyLenPt)
+            val (gap, amp) = breakPairLayout(
+                runLenPt = bodyLenPt,
+                desiredAmplitudePt = r * 0.6f,
+                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * bodyLenPt),
+                strokeWidthPt = capPaint.strokeWidth,
+            )
             val half = 0.5f * gap
             val leftEnd  = (mid - half).coerceIn(geomRect.left, geomRect.right)
             val rightBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
-            val amp = r * 0.6f
 
             // Left stub — S-curve on right end
             if (fill != null) c.drawRect(x0, top, leftEnd, bot, fill)

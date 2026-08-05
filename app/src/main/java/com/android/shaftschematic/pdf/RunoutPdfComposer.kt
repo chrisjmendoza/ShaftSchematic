@@ -19,7 +19,7 @@ import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_TAPER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
 import com.android.shaftschematic.geom.ProfileFeatureSpan
-import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
+import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.geom.buildCompressedProfileXMap
 import com.android.shaftschematic.geom.exaggeratedProfileScale
 import com.android.shaftschematic.geom.solveMaxProfileScale
@@ -382,16 +382,18 @@ fun composeRunoutPdf(
         need
     }
 
-    // Visual-scale rule (shared with the schematic): height proportional to TRUE diameter.
-    // Keyway-bearing bodies stay pinned at true width, so when one needs the room the
-    // HEIGHT yields — solveMaxProfileScale finds the largest scale that still lays out on
-    // the page ("doesn't have to be perfectly proportional, just close").
+    // Sizing rule (shared with the schematic): height follows TRUE diameter on the
+    // default curve (standard: 8" → 1.25", 4" → 0.75", linear between; anchor heights
+    // user-adjustable via Settings → PDF Export). Keyway-bearing bodies stay
+    // pinned at true width, so when one needs the room the HEIGHT yields —
+    // solveMaxProfileScale finds the largest scale that still lays out on the page
+    // ("doesn't have to be perfectly proportional, just close").
     //
     // The "Shaft height" slider (config.heightScale) then multiplies the conventional
     // scale — exaggerate or shrink the whole drawn shaft. The 1.5" ceiling is ABSOLUTE:
     // even a short shaft's width-fit is capped, keeping proportion without spanning the
     // page; the page budget caps everything (exaggeratedProfileScale, pure, unit-tested).
-    val targetScale  = VISUAL_DIA_SCALE_PT_PER_MM
+    val targetScale  = defaultVisualScale(maxOuterDiaMm, pdfPrefs.curveLoHeightPt, pdfPrefs.curveHiHeightPt)
     val desiredScale = exaggeratedProfileScale(
         baseScale = maxOf(widthFitPtPerMm, targetScale, valueNeedScale),
         heightFrac = config.heightScale,
@@ -1063,11 +1065,15 @@ private fun drawBodiesForRunout(
         } else {
             // Centre break (same S-curve logic as the main schematic PDF)
             val mid   = (x0 + x1) * 0.5f
-            val gap   = min(ZIGZAG_GAP_MAX_PT, 0.25f * lenPt)
+            val (gap, amp) = breakPairLayout(
+                runLenPt = lenPt,
+                desiredAmplitudePt = r * 0.6f,
+                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * lenPt),
+                strokeWidthPt = capPaint.strokeWidth,
+            )
             val half  = gap * 0.5f
             val lEnd  = (mid - half).coerceIn(geomRect.left, geomRect.right)
             val rBeg  = (mid + half).coerceIn(geomRect.left, geomRect.right)
-            val amp   = r * 0.6f
 
             c.drawLine(x0, top, lEnd, top, outline)
             c.drawLine(x0, bot, lEnd, bot, outline)

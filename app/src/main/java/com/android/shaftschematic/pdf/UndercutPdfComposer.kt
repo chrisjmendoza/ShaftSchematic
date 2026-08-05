@@ -567,8 +567,14 @@ private fun drawUndercutShaftProfile(
             c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
             c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
         } else {
-            val mid = (x0 + x1) * 0.5f; val gap = min(UC_ZIGZAG_GAP_MAX_PT, 0.25f * lenPt)
-            val half = gap * 0.5f; val amp = r * 0.6f
+            val mid = (x0 + x1) * 0.5f
+            val (gap, amp) = breakPairLayout(
+                runLenPt = lenPt,
+                desiredAmplitudePt = r * 0.6f,
+                classicGapPt = min(UC_ZIGZAG_GAP_MAX_PT, 0.25f * lenPt),
+                strokeWidthPt = capPaint.strokeWidth,
+            )
+            val half = gap * 0.5f
             val lEnd = (mid - half).coerceIn(geomRect.left, geomRect.right)
             val rBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
             c.drawLine(x0, top, lEnd, top, outline); c.drawLine(x0, bot, lEnd, bot, outline)

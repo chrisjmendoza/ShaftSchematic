@@ -23,8 +23,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -69,7 +72,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
+import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.maxOuterDiaMm
@@ -494,9 +497,13 @@ private fun PdfOptionsSheet(
     pdfShadedLiners: Boolean,
     pdfBlankDraft: Boolean,
 ) {
+    // Scrollable + inset-padded: the sheet's content is taller than a phone screen, so
+    // without its own scroll the bottom rows clip mid-checkbox behind the navigation bar.
     Column(
         Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
         Text("PDF Options", style = MaterialTheme.typography.titleMedium)
@@ -570,12 +577,15 @@ private fun PdfOptionsSheet(
         // The same per-job multiplier the runout / consolidated sheets carry
         // (`RunoutConfig.heightScale`) — one slider value behind every drawing
         // (on-device request: the schematic was meant to follow it too). Selected by
-        // drawn-height VALUE in paper inches; the schematic's base is the fixed visual
-        // diameter scale, no width-fit term.
+        // drawn-height VALUE in paper inches; the schematic's base is the default
+        // sizing curve at the configured anchor heights, no width-fit term.
+        val sliderDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) }
+        val curveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
+        val curveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
         ShaftHeightSlider(
             heightScale = heightScale,
-            baseScale = VISUAL_DIA_SCALE_PT_PER_MM,
-            maxDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) },
+            baseScale = defaultVisualScale(sliderDiaMm, curveLoHeightIn * 72f, curveHiHeightIn * 72f),
+            maxDiaMm = sliderDiaMm,
             onCommit = { vm.setRunoutHeightScale(it) },
         )
 

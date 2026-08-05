@@ -14,6 +14,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.android.shaftschematic.settings.AppThemeMode
+import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
+import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
@@ -77,6 +79,8 @@ object SettingsStore {
     private val KEY_PDF_SHADED_BODIES  = booleanPreferencesKey("pdf_shaded_bodies")
     private val KEY_PDF_SHADED_TAPERS  = booleanPreferencesKey("pdf_shaded_tapers")
     private val KEY_PDF_SHADED_LINERS  = booleanPreferencesKey("pdf_shaded_liners")
+    private val KEY_PDF_CURVE_LO_HEIGHT_IN = floatPreferencesKey("pdf_curve_lo_height_in")
+    private val KEY_PDF_CURVE_HI_HEIGHT_IN = floatPreferencesKey("pdf_curve_hi_height_in")
 
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
@@ -112,6 +116,23 @@ object SettingsStore {
         ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SHADED_LINERS] ?: false }
     suspend fun setPdfShadedLiners(ctx: Context, v: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_PDF_SHADED_LINERS] = v }
+    }
+
+    // Sizing-curve anchor heights (paper inches): what a 4" / 8" shaft draws by default.
+    fun pdfCurveLoHeightInFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_CURVE_LO_HEIGHT_IN] ?: PdfPrefs().curveLoHeightIn }
+    suspend fun setPdfCurveLoHeightIn(ctx: Context, v: Float) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PDF_CURVE_LO_HEIGHT_IN] = v.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN)
+        }
+    }
+
+    fun pdfCurveHiHeightInFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_CURVE_HI_HEIGHT_IN] ?: PdfPrefs().curveHiHeightIn }
+    suspend fun setPdfCurveHiHeightIn(ctx: Context, v: Float) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PDF_CURVE_HI_HEIGHT_IN] = v.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN)
+        }
     }
 
     fun pdfExportModeFlow(ctx: Context): Flow<PdfExportMode> =

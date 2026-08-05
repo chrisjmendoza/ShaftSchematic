@@ -247,6 +247,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfShadedLiners = MutableStateFlow(false)
     val pdfShadedLiners: StateFlow<Boolean> = _pdfShadedLiners.asStateFlow()
 
+    // Sizing-curve anchor heights (paper inches): what a 4" / 8" shaft draws by default.
+    internal val _pdfCurveLoHeightIn = MutableStateFlow(PdfPrefs().curveLoHeightIn)
+    val pdfCurveLoHeightIn: StateFlow<Float> = _pdfCurveLoHeightIn.asStateFlow()
+    internal val _pdfCurveHiHeightIn = MutableStateFlow(PdfPrefs().curveHiHeightIn)
+    val pdfCurveHiHeightIn: StateFlow<Float> = _pdfCurveHiHeightIn.asStateFlow()
+
     internal val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
 
@@ -1138,6 +1144,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfShadedLinersFlow(getApplication()).collectLatest { persisted ->
                 _pdfShadedLiners.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(shadedLiners = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfCurveLoHeightInFlow(getApplication()).collectLatest { persisted ->
+                _pdfCurveLoHeightIn.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(curveLoHeightIn = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfCurveHiHeightInFlow(getApplication()).collectLatest { persisted ->
+                _pdfCurveHiHeightIn.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(curveHiHeightIn = persisted) }
             }
         }
         viewModelScope.launch {

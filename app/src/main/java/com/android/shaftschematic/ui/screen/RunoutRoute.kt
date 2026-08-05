@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
@@ -1045,9 +1046,13 @@ internal fun RunoutWearOptionsSheet(
     pdfShadedLiners: Boolean,
     vm: ShaftViewModel,
 ) {
+    // Scrollable + inset-padded: without its own scroll a short screen clips the bottom
+    // rows mid-checkbox behind the navigation bar (same posture as PdfOptionsSheet).
     Column(
         Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
         Text("PDF Options", style = MaterialTheme.typography.titleMedium)

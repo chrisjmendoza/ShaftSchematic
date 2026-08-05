@@ -1,6 +1,10 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-07-28 — §5.5 wear-document blank-draft bullet corrected (blank mode keeps
+Last updated: 2026-08-05 — §5.7 gains the default sizing curve (4" → 0.75", 8" → 1.25",
+linear, superseding the flat visual scale as the 100% base) with user-adjustable anchor
+heights (Settings → PDF Export → "Default drawing size", `PdfPrefs.curveLo/HiHeightIn`);
+§6.4 documents the S-break pair's minimum-gap layout (`breakPairLayout`, ≥ 1 pt of
+daylight) and the foreshortening trigger. Previously 2026-07-28 — §5.5 wear-document blank-draft bullet corrected (blank mode keeps
 the profile AND every liner's detail strip since 2026-07-28, values-out only) and extended
 for measured-Ø readings; §5.3 gains a pointer to the wear document's own measured-Ø callout
 system. 2026-07-22 — added §5.4 Inline Dimension Text (dimension values now seated in a break in the line, drafting-convention style, PDF export + preview); added §5.3 On-Shaft Diameter Callouts (body/liner OD leaders now all-BELOW, ≤3-decimal formatting, two-tier stacking); previously 2026-07-18 fixed page orientation (landscape, not portrait), clarified preview/PDF as separate drawing paths (named the three fit functions), replaced the "no display compression" invariant with the actual round-stock S-break behavior, fixed the AUDIT.md path.
@@ -289,6 +293,20 @@ schematic** — one value behind every drawing output (slider on the Consolidate
 tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
 
 - Range 50%–300% (`PROFILE_HEIGHT_SCALE_MIN/MAX`).
+- **100% = the default sizing curve** (`defaultShaftHeightPt`, `geom/ProfileCompression.kt`):
+  drawn height is linear in true diameter through 4" → 0.75" and 8" → 1.25" on paper
+  (6" → 1"), continues past both anchors so sizes always differentiate, and meets the
+  1.5" ceiling exactly at 10". `defaultVisualScale` feeds every composer solve and both
+  slider surfaces — the runout/consolidated sheet maxes it with the width-fit and
+  in-profile value demands; the schematic uses the curve alone. Supersedes the flat
+  0.40 pt/mm `VISUAL_DIA_SCALE_PT_PER_MM` (now only the degenerate-diameter fallback).
+- **The anchor heights are settings** (Settings → PDF Export → "Default drawing size";
+  `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`, persisted app-wide, standard 0.75"/1.25",
+  settable 0.25"–1.5" in 1/16" steps): change what a 4" and an 8" shaft draw and the
+  whole line re-derives — no code edit. The anchor DIAMETERS stay fixed at 4"/8". An
+  inverted pair (8" set below 4") flattens the line at the 4" value in the geometry —
+  a larger shaft never draws smaller — and the Settings page warns inline. A "Standard"
+  button restores 0.75"/1.25".
 - The **1.5" ceiling is absolute** (`PROFILE_MAX_SHAFT_HEIGHT_PT` = 108 pt): the drawn
   shaft never exceeds 1.5" on paper at any slider position — a short shaft whose
   width-fit would draw taller is capped too, keeps true proportion, and simply doesn't
@@ -312,10 +330,15 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
 3. No BOM tables.
 4. **Round-stock display compression exists for long bodies** (this replaces an earlier "no
    display compression" claim, which is no longer true). `ShaftPdfComposer.drawBodiesCompressedCenterBreak()`
-   triggers per-body when that body's on-paper length reaches `COMPRESS_TRIGGER_PT` (220 pt): the
+   triggers per-body when that body's on-paper length reaches `COMPRESS_TRIGGER_PT` (220 pt) —
+   or whenever the compressed profile x-map actually foreshortens it, whichever comes first: the
    body is drawn as two shortened stubs, each capped with an S-curve "round-stock break" symbol
    (`pdf/BreakSymbol.kt`, `drawBreakEdge()`) instead of a straight end cap, so the drawing reads as
-   a foreshortened cylindrical bar rather than a literal-length rectangle. The footer prints an
+   a foreshortened cylindrical bar rather than a literal-length rectangle. The pair's gap and
+   amplitude come from `breakPairLayout` (same file, unit-tested): the classic gap (≤ 20 pt,
+   ≤ ¼ of the run) widens up to half the run when the glyph needs the room, then the amplitude
+   flattens, so the two edges' curves always keep ≥ 1 pt of daylight and never overlap
+   (on-device report). The footer prints an
    explanatory compression note (`showCompressionNote`) whenever any drawn body triggers this.
    Only bodies are compressed this way — tapers/threads/liners are never broken.
 5. No component overlays, cross-sections, or detailed machinist symbols (aside from the

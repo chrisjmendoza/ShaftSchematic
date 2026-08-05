@@ -452,10 +452,15 @@ On-device request following the worn-sections review:
     `WORN_VALUE_MIN_TEXT_PT` (6 pt PDF) / 14 px canvas so numbers never become dust; at
     the floor a slight halo overhang is accepted.
   - *Profile compression — the hand-sheet convention (PDF; both composers share it):*
-    drawn shaft **height is proportional to TRUE diameter** at the fixed visual scale
-    `VISUAL_DIA_SCALE_PT_PER_MM` (0.40 pt/mm: 8" → ~1.13" tall, 7" → ~1", 6" → ~0.85",
-    5" → ~0.71" — the on-device rule, confirmed with rulered hand sketches) and is never
-    diluted by shaft length — EXCEPT when a pinned span (a keyway-bearing body, whose
+    drawn shaft **height follows TRUE diameter on the default sizing curve**
+    (`defaultShaftHeightPt`, linear through 4" → 0.75" and 8" → 1.25" on paper, 6" → 1";
+    the line continues past both anchors so sizes always differentiate and meets the
+    absolute 1.5" ceiling exactly at 10" — on-device direction, superseding the flat
+    0.40 pt/mm `VISUAL_DIA_SCALE_PT_PER_MM`, which remains only as the
+    degenerate-diameter fallback in `defaultVisualScale`; the anchor HEIGHTS are
+    user-adjustable app-wide via Settings → PDF Export → "Default drawing size" —
+    `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`, an inverted pair flattens at the low
+    anchor) and is never diluted by shaft length — EXCEPT when a pinned span (a keyway-bearing body, whose
     drawn slot geometry must stay real) needs the room: then the height yields instead
     (`solveMaxProfileScale` bisects the largest scale that still lays out; "doesn't have
     to be perfectly proportional, just close"). The x axis is otherwise schematic: spans
@@ -469,7 +474,10 @@ On-device request following the worn-sections review:
     scale. Pure engine `geom/ProfileCompression.kt`
     (`buildCompressedProfileXMap` + monotone `solveSpanWidths` bisection, unit-tested);
     only BODY runs get the S-break pair when foreshortened (`drawBodiesForRunout` /
-    the schematic's `drawBodiesCompressedCenterBreak` trigger on actual foreshortening);
+    the schematic's `drawBodiesCompressedCenterBreak` trigger on actual foreshortening;
+    the pair lays out via `breakPairLayout` — `pdf/BreakSymbol.kt`, unit-tested — which
+    widens the classic gap up to half the run before flattening the glyph, so the two
+    edges' curves always keep ≥ 1 pt of daylight and never overlap, on-device report);
     liners/tapers/threads foreshorten silently, like the hand sheets. Everything rides
     the one `xAt` — dimension rails, bubble stations, worn sections, wear marks. The
     bubble-row budget is solved on a prelim linear map (scale ↔ rows cycle), and the

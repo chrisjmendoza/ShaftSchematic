@@ -4,6 +4,8 @@ import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.pdf.PdfExportMode
 import com.android.shaftschematic.settings.AppThemeMode
+import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
+import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UndercutShadeColor
@@ -73,6 +75,20 @@ fun ShaftViewModel.setPdfShadedLiners(v: Boolean, persist: Boolean = true) {
     _pdfShadedLiners.value = v
     SettingsStore.updatePdfPrefs { it.copy(shadedLiners = v) }
     if (persist) viewModelScope.launch { SettingsStore.setPdfShadedLiners(getApplication(), v) }
+}
+
+fun ShaftViewModel.setPdfCurveLoHeightIn(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN)
+    _pdfCurveLoHeightIn.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(curveLoHeightIn = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfCurveLoHeightIn(getApplication(), clamped) }
+}
+
+fun ShaftViewModel.setPdfCurveHiHeightIn(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN)
+    _pdfCurveHiHeightIn.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(curveHiHeightIn = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfCurveHiHeightIn(getApplication(), clamped) }
 }
 
 fun ShaftViewModel.setPdfOalSpacingFactor(factor: Float, persist: Boolean = true) {

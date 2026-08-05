@@ -48,7 +48,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
+import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.model.ProjectInfo
@@ -105,6 +105,8 @@ fun OutputRoute(
     val pdfShadedBodies    by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
+    val curveLoHeightIn    by vm.pdfCurveLoHeightIn.collectAsState()
+    val curveHiHeightIn    by vm.pdfCurveHiHeightIn.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
     val undercutRecord     by vm.undercutRecord.collectAsState()
@@ -142,14 +144,15 @@ fun OutputRoute(
     val fwdSetXMm = setPositions.fwdSETxMm.toFloat()
 
     // Height slider inputs: the base here approximates the composer's solve (width-fit
-    // vs the visual scale; the in-profile value demand and the page budget are ignored —
-    // both only ever LOWER the drawn height a hair in extreme layouts, never raise it).
-    val heightSliderBase = remember(spec) {
+    // vs the default sizing curve at the configured anchor heights; the in-profile value
+    // demand and the page budget are ignored — both only ever LOWER the drawn height a
+    // hair in extreme layouts, never raise it).
+    val heightSliderDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) }
+    val heightSliderBase = remember(spec, curveLoHeightIn, curveHiHeightIn) {
         val spanMm = (setPositions.fwdSETxMm - setPositions.aftSETxMm).toFloat().coerceAtLeast(1f)
         val contentW = 792f - 72f
-        maxOf(contentW / spanMm, VISUAL_DIA_SCALE_PT_PER_MM)
+        maxOf(contentW / spanMm, defaultVisualScale(heightSliderDiaMm, curveLoHeightIn * 72f, curveHiHeightIn * 72f))
     }
-    val heightSliderDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) }
 
     val outputFilename = buildOutputFilename(customer, vessel, jobNumber, OutputDoc.CONSOLIDATED, blankDraft)
 

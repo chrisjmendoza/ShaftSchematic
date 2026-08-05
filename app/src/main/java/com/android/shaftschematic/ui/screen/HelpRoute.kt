@@ -234,7 +234,9 @@ private val helpSections: List<HelpSection> = listOf(
                     "folder in a single step. The Shaft height slider sets the drawn shaft's " +
                     "height on paper directly, in inches, on the schematic and " +
                     "consolidated/runout sheets — up to 1.5 in at most — and the Standard " +
-                    "button restores the default size."
+                    "button restores the default size. That default follows a sizing curve " +
+                    "you can adjust in Settings → PDF Export → Default drawing size: set " +
+                    "what a 4 in and an 8 in shaft draw, and sizes in between follow."
             ),
             HelpTopic(
                 "Back up and restore",

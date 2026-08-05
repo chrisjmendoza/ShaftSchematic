@@ -6,6 +6,57 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-05 (evening — default sizing curve, S-break gap, options-sheet scroll)
+
+### feat(pdf): default sizing curve — 8" draws 1.25", 4" draws 0.75", linear between
+
+On-device request ("make 8\" shaft the default size of 1.25\" and proportionally work
+our way down to 4\" at .75\" and auto adjust the sizes in between… leave the adjustable
+slider setup for further customization"). `defaultShaftHeightPt` / `defaultVisualScale`
+(`geom/ProfileCompression.kt`, pure, unit-tested): drawn height is linear in true
+diameter through 4" → 0.75" and 8" → 1.25" on paper (6" → 1"), continues past both
+anchors so sizes always differentiate, and meets the absolute 1.5" ceiling exactly at
+10". Replaces the flat 0.40 pt/mm `VISUAL_DIA_SCALE_PT_PER_MM` (kept only as the
+degenerate-diameter fallback) as the 100% base in both composers and both height-slider
+surfaces; the "Shaft height" slider multiplies on top, unchanged.
+
+### fix(pdf): the S-break pair always keeps daylight — the two edges never overlap
+
+On-device report (schematic screenshot — the paired break glyphs crossed on a tall
+shaft's narrow compressed runs). Each edge's curves reach inward toward its partner —
+the main S by √3/6 of the amplitude, the return sweep by 1.5·√3/6 — so the classic
+`min(20pt, len/4)` gap could be narrower than the glyphs themselves. New
+`breakPairLayout` (`pdf/BreakSymbol.kt`, unit-tested `BreakPairLayoutTest`): the gap
+widens up to half the run when the full glyph needs the room, then the amplitude
+flattens, keeping ≥ 1 pt of daylight ("at worst 1px") between the nearest curves plus
+the stroke width. Applied at all four pair sites (schematic, runout/consolidated, wear,
+undercut composers); single-edge draws (liner strips) are unaffected.
+
+### feat(settings): sizing-curve anchor heights are user-adjustable
+
+On-device follow-up ("say I decide I want to make 4\" shafts a default of .5\"… set
+that up programmatically so I don't have to come back"). New Settings → PDF Export →
+**"Default drawing size"**: two sliders set what a 4" and an 8" shaft draw on paper
+(0.25"–1.5" in 1/16" steps, standard 0.75"/1.25") and the whole curve re-derives —
+`defaultShaftHeightPt`/`defaultVisualScale` now take the anchor heights as parameters
+(`PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`, persisted app-wide via DataStore, fed to
+both composers and both "Shaft height" slider surfaces). The anchor diameters stay
+fixed at 4"/8" and the absolute 1.5" ceiling still caps everything. An inverted pair
+(8" below 4") flattens the line at the 4" value — a larger shaft never draws smaller —
+with an inline warning; a "Standard (0.75″ / 1.25″)" button restores the defaults.
+A live example line shows what a 6" shaft would draw as the sliders move.
+
+### fix(ui): PDF Options sheets scroll — bottom checkboxes no longer clip
+
+On-device report ("I can't scroll down further and that is what the check boxes look
+like" — the Shade-in-PDF rows clipped mid-checkbox behind the navigation bar, the
+Liners box peeking out under Tapers). The schematic preview's `PdfOptionsSheet` had
+outgrown a phone screen (Shaft height slider) with no scroll of its own; it and the
+shared `RunoutWearOptionsSheet` now wrap in `verticalScroll` + `navigationBarsPadding`,
+same posture as the project-info sheet.
+
+---
+
 ## 2026-08-05 (morning review — Consolidated Output tab, absolute height cap, bubble spread)
 
 ### feat(output): the Consolidated Output tab — sheet-content variants + Export all

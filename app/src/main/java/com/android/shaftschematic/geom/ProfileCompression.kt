@@ -4,9 +4,9 @@ package com.android.shaftschematic.geom
  * ProfileCompression — the piecewise x mapping behind the hand-sheet drawing convention
  * (on-device request, with rulered reference sketches):
  *
- * - The shaft's drawn HEIGHT is proportional to its true diameter at a fixed visual scale
- *   ([VISUAL_DIA_SCALE_PT_PER_MM]) — an 8" shaft prints ~1.1" tall, a 5–6" shaft ~3/4" —
- *   and is never diluted by shaft length.
+ * - The shaft's drawn HEIGHT follows its true diameter on the default sizing curve
+ *   ([defaultShaftHeightPt]) — an 8" shaft prints 1.25" tall, a 4" shaft 3/4" — and is
+ *   never diluted by shaft length.
  * - The x axis is schematic: every span may foreshorten, but each KIND keeps a minimum
  *   drawn width (liners stay wide enough to write wear values in, body runs wide enough
  *   to write diameters and hang runout leaders from, tapers keep their read).
@@ -23,11 +23,58 @@ package com.android.shaftschematic.geom
  */
 
 /**
- * Fixed visual diameter scale (pt per mm of TRUE diameter) — the hand-sheet sizing rule:
- * at 0.40 pt/mm an 8" shaft prints ~1.13" tall, 7" → ~1", 6" → ~0.85", 5" → ~0.71" —
- * "7–8 inch shafts about an inch tall, 5–6 inch about three-quarters".
+ * Legacy flat visual diameter scale (pt per mm of TRUE diameter) — superseded as the
+ * default by the [defaultShaftHeightPt] sizing curve; kept as the degenerate-diameter
+ * fallback in [defaultVisualScale].
  */
 const val VISUAL_DIA_SCALE_PT_PER_MM = 0.40f
+
+// Default sizing curve anchors (on-device request): an 8" shaft defaults to 1.25" of
+// drawn height, a 4" shaft to 0.75", linear between — and the same line continues past
+// both anchors so sizes always differentiate (a 3" shaft keeps shrinking, a 9" keeps
+// growing) until the absolute [PROFILE_MAX_SHAFT_HEIGHT_PT] ceiling, which the standard
+// line meets exactly at 10" of true diameter. The anchor DIAMETERS are fixed; the anchor
+// HEIGHTS are user-adjustable (Settings → PDF Export → Default drawing size,
+// `PdfPrefs.curveLoHeightIn/curveHiHeightIn`) with these as the standard values. The
+// "Shaft height" slider multiplies on top.
+const val PROFILE_DEFAULT_HEIGHT_LO_DIA_MM = 101.6f  // 4 in
+const val PROFILE_DEFAULT_HEIGHT_LO_PT = 54f         // 0.75 in
+const val PROFILE_DEFAULT_HEIGHT_HI_DIA_MM = 203.2f  // 8 in
+const val PROFILE_DEFAULT_HEIGHT_HI_PT = 90f         // 1.25 in
+
+/**
+ * Default drawn shaft height (pt) for a true max diameter — the sizing-curve line
+ * through 4" → [loHeightPt] and 8" → [hiHeightPt]. Anchor heights are sanitized here so
+ * every configured pair yields a sane drawing: each is capped at the absolute ceiling,
+ * and [hiHeightPt] never drops below [loHeightPt] (a larger shaft never draws smaller —
+ * an inverted pair flattens the line at the low anchor instead).
+ */
+fun defaultShaftHeightPt(
+    maxDiaMm: Float,
+    loHeightPt: Float = PROFILE_DEFAULT_HEIGHT_LO_PT,
+    hiHeightPt: Float = PROFILE_DEFAULT_HEIGHT_HI_PT,
+): Float {
+    if (maxDiaMm <= 0f) return 0f
+    val lo = loHeightPt.coerceIn(1f, PROFILE_MAX_SHAFT_HEIGHT_PT)
+    val hi = hiHeightPt.coerceIn(lo, PROFILE_MAX_SHAFT_HEIGHT_PT)
+    val slope = (hi - lo) /
+        (PROFILE_DEFAULT_HEIGHT_HI_DIA_MM - PROFILE_DEFAULT_HEIGHT_LO_DIA_MM)
+    return (lo + (maxDiaMm - PROFILE_DEFAULT_HEIGHT_LO_DIA_MM) * slope)
+        .coerceIn(1f, PROFILE_MAX_SHAFT_HEIGHT_PT)
+}
+
+/**
+ * The sizing curve expressed as a diameter scale (pt per mm) — the base every composer
+ * solve and height-slider surface starts from. Falls back to the legacy flat scale when
+ * the diameter is degenerate.
+ */
+fun defaultVisualScale(
+    maxDiaMm: Float,
+    loHeightPt: Float = PROFILE_DEFAULT_HEIGHT_LO_PT,
+    hiHeightPt: Float = PROFILE_DEFAULT_HEIGHT_HI_PT,
+): Float =
+    if (maxDiaMm <= 0f) VISUAL_DIA_SCALE_PT_PER_MM
+    else defaultShaftHeightPt(maxDiaMm, loHeightPt, hiHeightPt) / maxDiaMm
 
 // Per-kind minimum drawn widths (pt). A span whose TRUE width is smaller than its floor
 // simply draws true — floors never stretch anything. Liners compress in SIZE only
