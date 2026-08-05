@@ -15,8 +15,12 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
+import com.android.shaftschematic.geom.PROFILE_MIN_TAPER_PT
+import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
+import com.android.shaftschematic.geom.ProfileFeatureSpan
+import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
 import com.android.shaftschematic.geom.buildCompressedProfileXMap
-import com.android.shaftschematic.geom.compressedProfilePlanStats
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.WORN_VALUE_BAND_FIT_FRAC
 import com.android.shaftschematic.geom.WornValueColumn
@@ -268,16 +272,23 @@ fun composeRunoutPdf(
     // sets a minimum band height at its station, so readings print at full text size
     // whenever the page allows (auto-fit in the draw functions stays as the backstop).
 
-    // Detail spans that must never compress — resolved components when available (their
-    // drawn spans are already subtracted/split), stored spec spans otherwise.
-    val fixedSpansMm: List<Pair<Float, Float>> = resolvedComponents
-        ?.filter { it !is ResolvedBody && it !is ResolvedCouplerBoltSlot }
-        ?.map { it.startMmPhysical to it.endMmPhysical }
-        ?: buildList {
-            docSpec.tapers.forEach { add(it.startFromAftMm to (it.startFromAftMm + it.lengthMm)) }
-            docSpec.liners.forEach { add(it.startFromAftMm to (it.startFromAftMm + it.lengthMm)) }
-            docSpec.threads.forEach { add(it.startFromAftMm to (it.startFromAftMm + it.lengthMm)) }
+    // Feature spans with per-kind width floors: everything may foreshorten (the hand-sheet
+    // x axis is schematic) but each kind keeps a writable minimum, and a keyway-bearing
+    // body pins at true scale so its drawn slot geometry stays real.
+    val featureSpans: List<ProfileFeatureSpan> = buildList {
+        docSpec.tapers.forEach {
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_TAPER_PT))
         }
+        docSpec.liners.forEach {
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_LINER_PT))
+        }
+        docSpec.threads.forEach {
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_THREAD_PT))
+        }
+        docSpec.bodies.filter { it.hasKeyway }.forEach {
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE))
+        }
+    }
 
     val valueNeedScale: Float = run {
         if (blankValues) return@run 0f
@@ -309,22 +320,17 @@ fun composeRunoutPdf(
         need
     }
 
-    val targetScale    = RUNOUT_TARGET_SHAFT_HEIGHT_PT / maxOuterDiaMm
+    // Visual-scale rule (shared with the schematic): height proportional to TRUE diameter.
+    // The width solve inside the map guarantees fit, so no width cap dilutes the height.
+    val targetScale    = VISUAL_DIA_SCALE_PT_PER_MM
     val heightCapScale = ((shaftAreaBudgetH - 12f) / maxOuterDiaMm).coerceAtLeast(1e-4f)
-    // Width cap: the never-compressed details plus a floor width per body run must fit.
-    val planStats = compressedProfilePlanStats(aftSetMm, fwdSetMm, fixedSpansMm)
-    val widthCapScale = if (planStats.fixedLenMm > 1e-3f) {
-        ((contentW - planStats.compressibleGapCount * MIN_COMPRESSED_BODY_PT) / planStats.fixedLenMm)
-            .coerceAtLeast(1e-4f)
-    } else Float.MAX_VALUE
     val diaPtPerMm = maxOf(widthFitPtPerMm, targetScale, valueNeedScale)
         .coerceAtMost(heightCapScale)
-        .coerceAtMost(widthCapScale)
         .coerceAtLeast(1e-5f)
 
     val xMap = buildCompressedProfileXMap(
         windowStartMm = aftSetMm, windowEndMm = fwdSetMm,
-        fixedSpansMm = fixedSpansMm,
+        features = featureSpans,
         contentLeft = contentLeft, contentRight = contentRight,
         diaPtPerMm = diaPtPerMm,
     )
@@ -1042,11 +1048,6 @@ private const val BUBBLE_GAP_PT         = 8f
 
 // Body compression break (matches ShaftPdfComposer threshold)
 private const val COMPRESS_TRIGGER_PT = 220f
-
-// Hand-sheet drawing convention: target drawn shaft height (~1.25"), and the floor width a
-// compressed body run keeps so a break glyph always has room to read.
-private const val RUNOUT_TARGET_SHAFT_HEIGHT_PT = 1.25f * 72f
-private const val MIN_COMPRESSED_BODY_PT = 36f
 
 // Consolidated-sheet dimension rails (above the shaft; compact versions of the
 // schematic's lane constants so the rails, bubbles, and footer share one page).

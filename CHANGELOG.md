@@ -6,6 +6,28 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-04 (both PDFs — visual diameter scale + proportional compression v2)
+
+### fix(pdf): schematic gets the hand-sheet sizing too; body runs keep writable width and show relative length
+
+On-device reports (schematic's 8" shaft still printed tiny; compressed body runs too
+narrow to write diameters in, and equal-cap allocation hid which run was longer).
+(1) The **schematic composer** now uses the same visual-scale + compression engine as the
+runout sheet: drawn height proportional to TRUE diameter (`VISUAL_DIA_SCALE_PT_PER_MM`,
+0.40 pt/mm — 7-8" shafts ≈ 1"+ tall, 5-6" ≈ 3/4", per the rulered hand sketches), all
+consumers (dimension rails, Ø-callout leaders, keyways, threads, compression footer note)
+riding the compressed piecewise `xAt`; the old `computeDetailPtPerMm` width-fit dilution
+is gone, and body-only shafts break-compress too. (2) **Allocation v2**
+(`geom/ProfileCompression.kt`): every span kind may foreshorten but keeps a writable
+minimum (`PROFILE_MIN_LINER_PT` 100 / `PROFILE_MIN_TAPER_PT` 80 / `PROFILE_MIN_THREAD_PT`
+36 / `PROFILE_MIN_BODY_RUN_PT` 64), keyway-bearing bodies pin at true scale, and above
+the floors width distributes **in proportion to true length** (monotone bisection solve —
+longer runs draw visibly longer, equal runs equal, nothing stretches past true scale);
+replaces the equal-cap waterfill and the height-diluting width pre-clamp. Only body runs
+draw the S-break pair; liners/tapers/threads foreshorten silently, per the hand sheets.
+
+---
+
 ## 2026-08-04 (runout sheet — the consolidated ONE-SHEET: schematic rails + footer join)
 
 ### feat(runout): full consolidated drawing — dimensions above, wear inside, bubbles below, spec footer

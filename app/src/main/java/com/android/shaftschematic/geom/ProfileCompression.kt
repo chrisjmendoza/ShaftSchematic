@@ -1,24 +1,51 @@
 package com.android.shaftschematic.geom
 
 /**
- * ProfileCompression — the piecewise x mapping behind the hand-sheet drawing convention:
- * the shaft prints ~1–1.25" tall regardless of its true length, detail features (tapers,
- * liners, threads) keep TRUE proportions at that diameter scale, and the plain body runs
- * between them absorb the horizontal overflow — drawn foreshortened with S-break glyphs,
- * "compressed to give the impression of a thicker shaft" (on-device request, with the
- * shop's hand-drawn reference sheet).
+ * ProfileCompression — the piecewise x mapping behind the hand-sheet drawing convention
+ * (on-device request, with rulered reference sketches):
  *
- * Pure and android-free (geom posture) so the allocation rules are directly unit-testable:
- * - Detail ("fixed") spans always draw at the supplied diameter scale — never distorted.
- * - When everything fits at that scale, the whole window maps linearly (no compression).
- * - Otherwise the compressible gaps share the remaining width by an equal-cap waterfill:
- *   every run keeps its true drawn length up to a common cap, and only runs longer than
- *   the cap are foreshortened — a short body between two liners never shrinks while a
- *   10-foot run takes the whole squeeze.
+ * - The shaft's drawn HEIGHT is proportional to its true diameter at a fixed visual scale
+ *   ([VISUAL_DIA_SCALE_PT_PER_MM]) — an 8" shaft prints ~1.1" tall, a 5–6" shaft ~3/4" —
+ *   and is never diluted by shaft length.
+ * - The x axis is schematic: every span may foreshorten, but each KIND keeps a minimum
+ *   drawn width (liners stay wide enough to write wear values in, body runs wide enough
+ *   to write diameters and hang runout leaders from, tapers keep their read).
+ * - Above the floors, remaining width distributes in proportion to TRUE length — a longer
+ *   body run visibly draws longer than a shorter one, and equal runs draw equal
+ *   (on-device request). No span ever draws LONGER than its true scale.
  *
- * The map is strictly monotonic, so every consumer (bubble stations, worn sections, wear
- * marks, witness lines) can use `xAt` interchangeably with the old linear mapping.
+ * Pure and android-free (geom posture); the width solve is a single monotone parameter
+ * (a horizontal pt-per-mm K): width_i(K) = clamp(K·len_i, min(floor_i, true_i), true_i),
+ * with K found by bisection so Σ width_i equals the page width exactly.
+ *
+ * The map is strictly monotonic, so every consumer (dimension rails, bubble stations,
+ * worn sections, wear marks, witness lines) can use `xAt` like a linear mapping.
  */
+
+/**
+ * Fixed visual diameter scale (pt per mm of TRUE diameter) — the hand-sheet sizing rule:
+ * at 0.40 pt/mm an 8" shaft prints ~1.13" tall, 7" → ~1", 6" → ~0.85", 5" → ~0.71" —
+ * "7–8 inch shafts about an inch tall, 5–6 inch about three-quarters".
+ */
+const val VISUAL_DIA_SCALE_PT_PER_MM = 0.40f
+
+// Per-kind minimum drawn widths (pt). A span whose TRUE width is smaller than its floor
+// simply draws true — floors never stretch anything.
+const val PROFILE_MIN_LINER_PT = 100f   // room for in-liner wear values + writing
+const val PROFILE_MIN_TAPER_PT = 80f    // keeps the taper read (slope may steepen)
+const val PROFILE_MIN_THREAD_PT = 36f   // hatched stub stays legible
+const val PROFILE_MIN_BODY_RUN_PT = 64f // write a diameter, hang runout leaders
+
+/**
+ * A feature span the caller wants width-managed individually. [minWidthPt] is its floor;
+ * pass `Float.MAX_VALUE` to pin the span at true scale (e.g. a keyway-bearing body whose
+ * drawn slot geometry must stay real).
+ */
+data class ProfileFeatureSpan(
+    val startMm: Float,
+    val endMm: Float,
+    val minWidthPt: Float,
+)
 
 /** One monotonic piece of the compressed-profile x mapping. */
 data class ProfileXSegment(
@@ -26,7 +53,7 @@ data class ProfileXSegment(
     val endMm: Float,
     val x0: Float,
     val x1: Float,
-    /** True when this span draws below true scale (a foreshortened body run). */
+    /** True when this span draws below true scale (foreshortened). */
     val compressed: Boolean,
 ) {
     val ptPerMm: Float get() = if (endMm > startMm) (x1 - x0) / (endMm - startMm) else 0f
@@ -59,41 +86,20 @@ class CompressedProfileXMap internal constructor(val segments: List<ProfileXSegm
 }
 
 /**
- * Fixed-span statistics used by callers to pre-clamp the diameter scale before building:
- * total never-compressed length (mm, clipped + merged) and the number of compressible
- * gaps in the window.
- */
-data class ProfilePlanStats(val fixedLenMm: Float, val compressibleGapCount: Int)
-
-fun compressedProfilePlanStats(
-    windowStartMm: Float,
-    windowEndMm: Float,
-    fixedSpansMm: List<Pair<Float, Float>>,
-): ProfilePlanStats {
-    val fixed = normalizeFixedSpans(windowStartMm, windowEndMm, fixedSpansMm)
-    val fixedLen = fixed.sumOf { (it.second - it.first).toDouble() }.toFloat()
-    var gaps = 0
-    var cursor = windowStartMm
-    fixed.forEach { (s, e) ->
-        if (s > cursor + 1e-4f) gaps++
-        cursor = maxOf(cursor, e)
-    }
-    if (windowEndMm > cursor + 1e-4f) gaps++
-    return ProfilePlanStats(fixedLen, gaps)
-}
-
-/**
  * Build the piecewise mapping for [windowStartMm]..[windowEndMm] into
- * [contentLeft]..[contentRight], drawing [fixedSpansMm] (and, when everything fits, the
- * whole window) at [diaPtPerMm].
+ * [contentLeft]..[contentRight]. [features] are the individually-floored spans (tapers,
+ * liners, threads, pinned bodies); the gaps between them are plain body runs floored at
+ * [gapMinWidthPt]. [diaPtPerMm] is the TRUE horizontal scale (the visual diameter scale) —
+ * every span's width cap, and the uniform scale when the whole window fits.
  */
 fun buildCompressedProfileXMap(
     windowStartMm: Float,
     windowEndMm: Float,
-    fixedSpansMm: List<Pair<Float, Float>>,
+    features: List<ProfileFeatureSpan>,
     contentLeft: Float,
     contentRight: Float,
     diaPtPerMm: Float,
+    gapMinWidthPt: Float = PROFILE_MIN_BODY_RUN_PT,
 ): CompressedProfileXMap {
     val width = contentRight - contentLeft
     val winLen = windowEndMm - windowStartMm
@@ -103,20 +109,20 @@ fun buildCompressedProfileXMap(
         )
     }
 
-    // Alternating span walk: fixed spans at true scale, gaps compressible.
-    data class Span(val startMm: Float, val endMm: Float, val fixed: Boolean) {
+    // Normalize features to the window, then walk it: features + the gaps between them.
+    data class Span(val startMm: Float, val endMm: Float, val floorPt: Float) {
         val lenMm get() = endMm - startMm
     }
 
-    val fixed = normalizeFixedSpans(windowStartMm, windowEndMm, fixedSpansMm)
+    val normalized = normalizeFeatures(windowStartMm, windowEndMm, features)
     val spans = buildList {
         var cursor = windowStartMm
-        fixed.forEach { (s, e) ->
-            if (s > cursor + 1e-4f) add(Span(cursor, s, fixed = false))
-            add(Span(maxOf(s, cursor), e, fixed = true))
-            cursor = maxOf(cursor, e)
+        normalized.forEach { f ->
+            if (f.startMm > cursor + 1e-4f) add(Span(cursor, f.startMm, gapMinWidthPt))
+            add(Span(maxOf(f.startMm, cursor), f.endMm, f.minWidthPt))
+            cursor = maxOf(cursor, f.endMm)
         }
-        if (windowEndMm > cursor + 1e-4f) add(Span(cursor, windowEndMm, fixed = false))
+        if (windowEndMm > cursor + 1e-4f) add(Span(cursor, windowEndMm, gapMinWidthPt))
     }
 
     // Everything fits at true scale → plain linear map (may end short of contentRight).
@@ -133,77 +139,90 @@ fun buildCompressedProfileXMap(
         )
     }
 
-    val fixedPt = spans.filter { it.fixed }.sumOf { (it.lenMm * diaPtPerMm).toDouble() }.toFloat()
-    val gaps = spans.filter { !it.fixed }
-    val availPt = width - fixedPt
+    // Width solve: width_i(K) = clamp(K·len_i, min(floor_i, true_i), true_i), Σ = width.
+    val trues = spans.map { it.lenMm * diaPtPerMm }
+    val floors = spans.mapIndexed { i, s -> minOf(s.floorPt, trues[i]) }
+    val widths = solveSpanWidths(spans.map { it.lenMm }, floors, trues, width)
 
-    // Defensive fallback: detail spans alone (nearly) fill the page — the caller should
-    // have pre-clamped the scale; degrade to the classic width-fit linear map.
-    if (gaps.isEmpty() || availPt < gaps.size * 8f) {
-        return CompressedProfileXMap(
-            listOf(ProfileXSegment(windowStartMm, windowEndMm, contentLeft, contentRight, compressed = false))
-        )
-    }
-
-    // Equal-cap waterfill: each gap keeps its true width up to a common cap chosen so the
-    // capped widths exactly consume the available width. Only runs above the cap compress.
-    val trueWidths = gaps.map { it.lenMm * diaPtPerMm }
-    val cap = solveEqualCap(trueWidths, availPt)
-    val gapWidths = trueWidths.map { minOf(it, cap) }
-
-    // Walk the spans, laying x left → right.
     val segments = mutableListOf<ProfileXSegment>()
     var x = contentLeft
-    var gapIdx = 0
-    spans.forEach { span ->
-        val w = if (span.fixed) span.lenMm * diaPtPerMm else gapWidths[gapIdx++]
-        val truePt = span.lenMm * diaPtPerMm
+    spans.forEachIndexed { i, span ->
+        val w = widths[i]
         segments += ProfileXSegment(
             startMm = span.startMm, endMm = span.endMm,
             x0 = x, x1 = x + w,
-            compressed = !span.fixed && w < truePt - 0.25f,
+            compressed = w < trues[i] - 0.25f,
         )
         x += w
     }
     return CompressedProfileXMap(segments)
 }
 
-/** Clip to the window, drop empties, sort, and merge overlapping/touching spans. */
-private fun normalizeFixedSpans(
+/** Clip to the window, drop empties, sort, and merge overlaps (keeping the larger floor). */
+private fun normalizeFeatures(
     windowStartMm: Float,
     windowEndMm: Float,
-    spans: List<Pair<Float, Float>>,
-): List<Pair<Float, Float>> {
-    val clipped = spans
-        .map { (s, e) -> maxOf(s, windowStartMm) to minOf(e, windowEndMm) }
-        .filter { (s, e) -> e - s > 1e-4f }
-        .sortedBy { it.first }
+    features: List<ProfileFeatureSpan>,
+): List<ProfileFeatureSpan> {
+    val clipped = features
+        .map { ProfileFeatureSpan(maxOf(it.startMm, windowStartMm), minOf(it.endMm, windowEndMm), it.minWidthPt) }
+        .filter { it.endMm - it.startMm > 1e-4f }
+        .sortedBy { it.startMm }
     if (clipped.isEmpty()) return emptyList()
     val merged = mutableListOf(clipped.first())
-    clipped.drop(1).forEach { (s, e) ->
+    clipped.drop(1).forEach { f ->
         val last = merged.last()
-        if (s <= last.second + 1e-4f) {
-            if (e > last.second) merged[merged.lastIndex] = last.first to e
+        if (f.startMm <= last.endMm + 1e-4f) {
+            merged[merged.lastIndex] = ProfileFeatureSpan(
+                last.startMm, maxOf(last.endMm, f.endMm), maxOf(last.minWidthPt, f.minWidthPt),
+            )
         } else {
-            merged += s to e
+            merged += f
         }
     }
     return merged
 }
 
 /**
- * Find the common cap so that `Σ min(width_i, cap) == avail`. Assumes
- * `Σ width_i > avail` (the compression branch) and `avail > 0`.
+ * Solve per-span widths: `clamp(K·len_i, floor_i, cap_i)` with the single scale K found by
+ * bisection so the total equals [targetWidth]. Floors are pre-clamped to caps by the
+ * caller. Monotone in K, so bisection converges; when even the floors alone exceed the
+ * page (extreme feature counts) every floor scales down proportionally instead.
  */
-internal fun solveEqualCap(trueWidths: List<Float>, avail: Float): Float {
-    val sorted = trueWidths.sorted()
-    var accumulated = 0f
-    sorted.forEachIndexed { idx, w ->
-        val remaining = sorted.size - idx
-        if (accumulated + w * remaining >= avail) {
-            return (avail - accumulated) / remaining
-        }
-        accumulated += w
+internal fun solveSpanWidths(
+    lensMm: List<Float>,
+    floors: List<Float>,
+    caps: List<Float>,
+    targetWidth: Float,
+): List<Float> {
+    fun widthsAt(k: Float): List<Float> =
+        lensMm.mapIndexed { i, len -> (k * len).coerceIn(floors[i], caps[i]) }
+
+    val minTotal = floors.sum()
+    if (minTotal >= targetWidth) {
+        // Degenerate: floors alone overflow — squeeze everything proportionally.
+        val s = targetWidth / minTotal.coerceAtLeast(1e-4f)
+        return floors.map { it * s }
     }
-    return sorted.last()
+    val maxTotal = caps.sum()
+    if (maxTotal <= targetWidth) return caps.toList()
+
+    var lo = 0f
+    var hi = caps.max() / lensMm.filter { it > 0f }.min().coerceAtLeast(1e-4f)
+    repeat(40) {
+        val mid = (lo + hi) / 2f
+        if (widthsAt(mid).sum() < targetWidth) lo = mid else hi = mid
+    }
+    val k = (lo + hi) / 2f
+    // Exact-fit residue: spread the tiny bisection remainder over the unclamped spans.
+    val w = widthsAt(k).toMutableList()
+    val residue = targetWidth - w.sum()
+    if (kotlin.math.abs(residue) > 1e-3f) {
+        val free = w.indices.filter { w[it] > floors[it] + 1e-4f && w[it] < caps[it] - 1e-4f }
+        if (free.isNotEmpty()) {
+            val share = residue / free.size
+            free.forEach { w[it] = (w[it] + share).coerceIn(floors[it], caps[it]) }
+        }
+    }
+    return w
 }

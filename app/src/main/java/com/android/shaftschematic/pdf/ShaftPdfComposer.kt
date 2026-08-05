@@ -8,6 +8,12 @@ import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.END_EPS_MM
 import com.android.shaftschematic.geom.KeywaySilhouetteNotch
 import com.android.shaftschematic.geom.KeywaySilhouettePoint
+import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
+import com.android.shaftschematic.geom.PROFILE_MIN_TAPER_PT
+import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
+import com.android.shaftschematic.geom.ProfileFeatureSpan
+import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
+import com.android.shaftschematic.geom.buildCompressedProfileXMap
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.fillPolygonMm
@@ -158,35 +164,47 @@ fun composeShaftPdf(
     )
     val contentSpanMm = (contentMaxMm - contentMinMm).coerceAtLeast(1f)
 
-    // For the width-fit constraint, shrink the available page width proportionally so that
-    // the scale derived from the shaft OAL alone (used by computeDetailPtPerMm) still fits
-    // the full content span inside geomRect.  Scaling identity:
-    //   ptPerMm = geomWidth / contentSpanMm  =  (geomWidth × oal/contentSpan) / oal
-    val oalMmClamped = max(1f, spec.overallLengthMm)
-    val effectiveGeomWidthPt = geomRect.width() * (oalMmClamped / contentSpanMm)
-
-    val ptPerMm = when {
-        bodyOnly || hasNonBodyDetail -> {
-            // Target a stable drawn shaft height (~1.25") while never exceeding the page width
-            // or the full content span (including excluded end threads).
-            computeDetailPtPerMm(spec, effectiveGeomWidthPt, geomRect.height())
+    // ── Visual diameter scale + compressed x mapping (hand-sheet convention) ──
+    // On-device rule (with rulered reference sketches): drawn shaft height is proportional
+    // to TRUE diameter at a fixed visual scale — a 7-8" shaft prints ~1" tall, 5-6" ~3/4" —
+    // and is never diluted by shaft length. The x axis is schematic: every feature keeps a
+    // per-kind minimum drawn width and foreshortens above it in proportion to true length
+    // (geom/ProfileCompression.kt); plain body runs absorb the squeeze with center-breaks.
+    // Shafts that fit at the visual scale keep a plain linear map.
+    val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
+    val featureSpans: List<ProfileFeatureSpan> = buildList {
+        spec.tapers.forEach {
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_TAPER_PT))
         }
-        else -> {
-            // Bodies-only: classic width-fit to the full content span.
-            geomRect.width() / contentSpanMm
+        spec.liners.forEach {
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_LINER_PT))
+        }
+        spec.threads.forEach {
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_THREAD_PT))
+        }
+        // A keyway-bearing body pins at true scale — its drawn slot geometry is real.
+        bodiesForPdf.filter { it.hasKeyway }.forEach {
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE))
         }
     }
-    // Origin offset: shift right so excluded AFT threads (at negative mm) have drawing room.
-    val left = geomRect.left + (-contentMinMm * ptPerMm).coerceAtLeast(0f)
+    val diaPtPerMm = minOf(
+        VISUAL_DIA_SCALE_PT_PER_MM,
+        geomRect.height() / maxDiaMm,
+    ).coerceAtLeast(1e-6f)
+    val xMap = buildCompressedProfileXMap(
+        windowStartMm = contentMinMm, windowEndMm = contentMaxMm,
+        features = featureSpans,
+        contentLeft = geomRect.left, contentRight = geomRect.right,
+        diaPtPerMm = diaPtPerMm,
+    )
 
     val winDbg = computeOalWindow(spec)
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
-        "layout: geomRect=${geomRect.width().toInt()}x${geomRect.height().toInt()}pt ptPerMm=${"%.4f".format(ptPerMm)} maxDiaMm=${"%.3f".format(spec.maxOuterDiaMm())}" +
+        "layout: geomRect=${geomRect.width().toInt()}x${geomRect.height().toInt()}pt diaPtPerMm=${"%.4f".format(diaPtPerMm)} span=${"%.1f".format(contentSpanMm)}mm maxDiaMm=${"%.3f".format(spec.maxOuterDiaMm())}" +
             " oalWindow(start=${"%.3f".format(winDbg.measureStartMm)}, end=${"%.3f".format(winDbg.measureEndMm)}, oal=${"%.3f".format(winDbg.oalMm)})"
     }
 
-    val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
-    val halfHeightPx = (maxDiaMm * 0.5f) * ptPerMm
+    val halfHeightPx = (maxDiaMm * 0.5f) * diaPtPerMm
     // Place the shaft centered on the paper when possible.
     // Clamp so the shaft stays inside geomRect and the footer block can still fit below.
     val minCy = geomRect.top + halfHeightPx
@@ -199,7 +217,7 @@ fun composeShaftPdf(
     val yTopOfShaft = cy - halfHeightPx
 
     val pageDrawableHeightPx = geomRect.height()
-    val shaftBoundsHeightPx = maxDiaMm * ptPerMm
+    val shaftBoundsHeightPx = maxDiaMm * diaPtPerMm
     val verticalOffsetPx = if (effectiveOptions.mode == PdfExportMode.Template) {
         (pageDrawableHeightPx - shaftBoundsHeightPx) / 2f
     } else {
@@ -211,8 +229,8 @@ fun composeShaftPdf(
         0f
     }
 
-    fun xAt(mm: Float) = left + mm * ptPerMm
-    fun rPx(d: Float)  = (d * 0.5f) * ptPerMm
+    fun xAt(mm: Float) = xMap.xAt(mm)
+    fun rPx(d: Float)  = (d * 0.5f) * diaPtPerMm
 
     // geometry
     c.save()
@@ -224,11 +242,14 @@ fun composeShaftPdf(
     val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
     val linerFill: Paint? = if (pdfPrefs.shadedLiners)  shadeFill() else null
 
-    if (bodyOnly || singleTaperOnly) {
-        drawBodiesPlain(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, bodyFill)
-    } else {
-        drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect, bodyFill)
-    }
+    // One body path: plain rectangles when a body draws at true scale under the break
+    // threshold, the center-break pair when foreshortened by the compressed mapping or
+    // traditionally long — body-only shafts included (a long body-only shaft compresses
+    // too under the visual-scale rule).
+    drawBodiesCompressedCenterBreak(
+        c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect, bodyFill,
+        truePtPerMm = diaPtPerMm,
+    )
     // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every other
     // host is a secondary. At 180° a secondary renders hidden (dashed, no fill); at 90° it renders
     // as a notch cut into a silhouette edge. Mirrors the canvas renderer.
@@ -241,7 +262,7 @@ fun composeShaftPdf(
     spec.bodies.filter { it.hasKeyway }.forEach { b ->
         if (silhouetteKeyways && b.id in secondaryKeywayIds) {
             b.keywaySilhouetteNotch(clocking)?.let {
-                drawKeywaySilhouetteNotchPdf(c, it, ::xAt, ptPerMm, cy, outline)
+                drawKeywaySilhouetteNotchPdf(c, it, ::xAt, diaPtPerMm, cy, outline)
             }
         } else {
             drawKeywayNotchBodyPdf(c, b, ::xAt, cy, outline, hidden = b.id in hiddenKeywayIds)
@@ -249,9 +270,9 @@ fun composeShaftPdf(
     }
     drawTapers(
         c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill,
-        hiddenKeywayIds, clocking, secondaryKeywayIds, ptPerMm,
+        hiddenKeywayIds, clocking, secondaryKeywayIds, diaPtPerMm,
     )
-    drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
+    drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, diaPtPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill)
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill(), bodies = bodiesForPdf)
     c.restore()
@@ -288,7 +309,7 @@ fun composeShaftPdf(
         val linerDims = mapToLinerDimsForPdf(spec, measureFromMode)
         val win  = computeOalWindow(spec)
         val pageX: (Double) -> Float = { dimMm ->
-            (left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
+            xAt((dimMm + win.measureStartMm).toFloat())
         }
         val sets = computeSetPositionsInMeasureSpace(win, spec)
         val spans = buildLinerSpans(
@@ -356,9 +377,9 @@ fun composeShaftPdf(
                 color = 0xFF000000.toInt()
             }
             val leader = DiameterLeaderRenderer(
-                pageX = { mm -> (left + (mm.toFloat() * ptPerMm)) },
+                pageX = { mm -> xAt(mm.toFloat()) },
                 shaftTopY = yTopOfShaft,
-                shaftBottomY = cy + (maxDiaMm * 0.5f) * ptPerMm,
+                shaftBottomY = cy + halfHeightPx,
                 linePaint = dim,
                 textPaint = leaderText,
                 blankValues = blank
@@ -371,7 +392,10 @@ fun composeShaftPdf(
         // footer
         // Test the same body list the geometry pass drew (resolved incl. auto-bodies),
         // so the note and the drawn center breaks can't disagree.
-        val showCompressionNote = !bodyOnly && bodiesForPdf.any { b -> b.lengthMm * ptPerMm >= COMPRESS_TRIGGER_PT }
+        val showCompressionNote = !bodyOnly && bodiesForPdf.any { b ->
+            val drawnPt = abs(xAt(b.startFromAftMm + b.lengthMm) - xAt(b.startFromAftMm))
+            drawnPt < b.lengthMm * diaPtPerMm - 1f || drawnPt >= COMPRESS_TRIGGER_PT
+        }
 
         // Footer "Body:" diameters — authored bodies as actually drawn. Raw spec.bodies
         // can hold degenerate rows (zero-length, or fully swallowed by body subtraction
@@ -624,6 +648,8 @@ private fun drawBodiesCompressedCenterBreak(
     outline: Paint,
     geomRect: RectF,
     fill: Paint? = null,
+    /** True-scale pt/mm — a body drawn shorter than this is foreshortened and MUST break. */
+    truePtPerMm: Float = 0f,
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
     bodies.forEach { b ->
@@ -632,7 +658,8 @@ private fun drawBodiesCompressedCenterBreak(
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
 
         val bodyLenPt = abs(x1 - x0)
-        val compress = bodyLenPt >= COMPRESS_TRIGGER_PT
+        val foreshortened = truePtPerMm > 0f && bodyLenPt < b.lengthMm * truePtPerMm - 1f
+        val compress = foreshortened || bodyLenPt >= COMPRESS_TRIGGER_PT
 
         if (!compress) {
             // classic rectangle body

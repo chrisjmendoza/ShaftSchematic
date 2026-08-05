@@ -346,23 +346,27 @@ On-device request following the worn-sections review:
     section (its longest value governs), per-station for point readings. Floored at
     `WORN_VALUE_MIN_TEXT_PT` (6 pt PDF) / 14 px canvas so numbers never become dust; at
     the floor a slight halo overhang is accepted.
-  - *Body compression — the hand-sheet convention (PDF, supersedes the earlier
-    vertical-exaggeration pass):* the shaft prints ~1–1.25" tall
-    (`RUNOUT_TARGET_SHAFT_HEIGHT_PT`) whatever its true length — an 8" shaft must never
-    look tiny (on-device report with the shop's hand-drawn reference sheet). The diameter
-    scale is solved from the target height, the in-profile value needs, and the page caps
-    (height budget above the bubbles; width cap keeping `MIN_COMPRESSED_BODY_PT` per body
-    run). Detail features (tapers, liners, threads) keep TRUE proportions at that scale;
-    the plain body runs between them absorb the horizontal overflow via the pure
-    piecewise mapping `geom/ProfileCompression.kt` (`buildCompressedProfileXMap`,
-    unit-tested): **equal-cap waterfill** — every run keeps its true drawn width up to a
-    common cap, so a short body between liners never shrinks while long runs share the
-    squeeze, drawn with the S-break pair (`drawBodiesForRunout` triggers on actual
-    foreshortening, not just drawn length). Everything rides the one `xAt` — bubble
-    stations, worn sections, wear marks, witness lines — so the sheet stays coherent;
-    short shafts whose width-fit already meets the target keep the classic linear map
-    unchanged. The bubble-row budget is solved on a prelim linear map (scale ↔ rows
-    cycle), and the drawing plan re-solves on the real mapping.
+  - *Profile compression — the hand-sheet convention (PDF; both composers share it):*
+    drawn shaft **height is proportional to TRUE diameter** at the fixed visual scale
+    `VISUAL_DIA_SCALE_PT_PER_MM` (0.40 pt/mm: 8" → ~1.13" tall, 7" → ~1", 6" → ~0.85",
+    5" → ~0.71" — the on-device rule, confirmed with rulered hand sketches) and is never
+    diluted by shaft length. The x axis is schematic: EVERY span may foreshorten, but
+    each kind keeps a writable minimum drawn width (`PROFILE_MIN_LINER_PT` 100 —
+    in-liner values + wear writing; `PROFILE_MIN_TAPER_PT` 80; `PROFILE_MIN_THREAD_PT`
+    36; `PROFILE_MIN_BODY_RUN_PT` 64 — room to write diameters and hang runout leaders,
+    on-device request), a keyway-bearing body pins at true scale (slot geometry is
+    real), and **above the floors width distributes in proportion to true length** — a
+    longer body run draws visibly longer, equal runs draw equal (on-device request), no
+    span ever stretches past true scale. Pure engine `geom/ProfileCompression.kt`
+    (`buildCompressedProfileXMap` + monotone `solveSpanWidths` bisection, unit-tested);
+    only BODY runs get the S-break pair when foreshortened (`drawBodiesForRunout` /
+    the schematic's `drawBodiesCompressedCenterBreak` trigger on actual foreshortening);
+    liners/tapers/threads foreshorten silently, like the hand sheets. Everything rides
+    the one `xAt` — dimension rails, bubble stations, worn sections, wear marks. The
+    bubble-row budget is solved on a prelim linear map (scale ↔ rows cycle), and the
+    drawing plan re-solves on the real mapping. The SCHEMATIC composer uses the same
+    scale + engine (`ShaftPdfComposer` — dims, callout leaders, keyways, and the
+    compression footer note all ride the compressed `xAt`).
   - *No liner grey on this sheet:* liners draw unfilled on both the canvas preview and
     the PDF regardless of the `shadedLiners` pref — against a grey liner every white
     knockout read as a pasted box (on-device request). Bodies/tapers keep the pref.
