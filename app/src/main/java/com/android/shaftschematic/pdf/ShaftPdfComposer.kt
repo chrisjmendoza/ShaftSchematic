@@ -90,6 +90,12 @@ fun composeShaftPdf(
      * at 1.5" on paper and by the page budget (`exaggeratedProfileScale`).
      */
     heightScale: Float = 1.0f,
+    /**
+     * "Liner compression" control — the per-job liner width floor as a fraction of true
+     * drawn width (`RunoutConfig.linerMinFracOfTrue`): 0 = liners may foreshorten to the
+     * writable floor (default), 1 = liners pinned at true scale (the height yields).
+     */
+    linerMinFracOfTrue: Float = 0f,
 ) {
     val effectiveOptions = when (options.mode) {
         PdfExportMode.Template -> options.copy(
@@ -185,9 +191,15 @@ fun composeShaftPdf(
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_TAPER_PT))
         }
         // Liners compress in SIZE only — proportional foreshortening above their floor,
-        // never a body-style S-break cutout (on-device clarification).
+        // never a body-style S-break cutout (on-device clarification). The per-job
+        // "Liner compression" control raises the floor toward true width (1 = pinned).
         spec.liners.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_LINER_PT))
+            add(
+                ProfileFeatureSpan(
+                    it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_LINER_PT,
+                    minWidthFracOfTrue = linerMinFracOfTrue,
+                )
+            )
         }
         spec.threads.forEach {
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_THREAD_PT))

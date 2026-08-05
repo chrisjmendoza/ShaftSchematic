@@ -2,7 +2,10 @@ package com.android.shaftschematic.ui.screen
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -21,6 +24,7 @@ import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MAX
 import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MIN
 import com.android.shaftschematic.geom.PROFILE_MAX_SHAFT_HEIGHT_PT
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Commits within this distance of the standard multiplier (1.0) snap to exactly 1.0 — a
@@ -109,3 +113,67 @@ internal fun ShaftHeightSlider(
 
 /** Paper-inch label, two decimals: 1.13″, 1.50″. */
 private fun fmtIn(inches: Float): String = "%.2f″".format(inches)
+
+/**
+ * The per-job "Liner compression" control, shared by the same two surfaces as
+ * [ShaftHeightSlider] (one `RunoutConfig` pair behind both). The measured components —
+ * tapers and liners — are what the sheet is about, so liners can be held proportional:
+ *
+ * - Checkbox "Keep liners proportional lengthwise" (`linersProportional`): liners demand
+ *   full true-scale width; the drawn height yields when the page can't fit them (the
+ *   keyway-body posture). While checked the slider is disabled — it has no effect.
+ * - Slider "Liner compression" (`linerCompression`, 0–100%): how far liners may
+ *   foreshorten when the page needs the room — 100% = down to the writable floor (the
+ *   default, the historical behavior), 0% = not at all (same drawing as the checkbox).
+ *
+ * Drag-local value, committed once on release, same posture as the height slider.
+ */
+@Composable
+internal fun LinerCompressionControl(
+    linersProportional: Boolean,
+    linerCompression: Float,
+    onSetProportional: (Boolean) -> Unit,
+    onSetCompression: (Float) -> Unit,
+) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = linersProportional, onCheckedChange = onSetProportional)
+            Spacer(Modifier.width(8.dp))
+            Text("Keep liners proportional lengthwise", style = MaterialTheme.typography.bodyLarge)
+        }
+        var compressionDrag by remember { mutableStateOf<Float?>(null) }
+        val shown = compressionDrag ?: linerCompression
+        Text(
+            "Liner compression  ${(shown * 100).roundToInt()}%",
+            style = MaterialTheme.typography.titleSmall,
+            color = if (linersProportional) MaterialTheme.colorScheme.onSurfaceVariant
+            else MaterialTheme.colorScheme.onSurface,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("0%", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { compressionDrag = it },
+                onValueChangeFinished = {
+                    compressionDrag?.let(onSetCompression)
+                    compressionDrag = null
+                },
+                valueRange = 0f..1f,
+                enabled = !linersProportional,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+            )
+            Text("100%", style = MaterialTheme.typography.bodySmall)
+        }
+        Text(
+            if (linersProportional) {
+                "Liners hold their true-scale length; the drawn height gives way when " +
+                    "the page runs out of width."
+            } else {
+                "How far liners may shorten below true scale when the page needs the " +
+                    "room. 0% keeps them fully proportional."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}

@@ -339,9 +339,15 @@ fun composeRunoutPdf(
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_TAPER_PT))
         }
         // Liners compress in SIZE only — proportional foreshortening above their floor,
-        // never a body-style S-break cutout (on-device clarification).
+        // never a body-style S-break cutout (on-device clarification). The per-job
+        // "Liner compression" control raises the floor toward true width (1 = pinned).
         docSpec.liners.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_LINER_PT))
+            add(
+                ProfileFeatureSpan(
+                    it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_LINER_PT,
+                    minWidthFracOfTrue = config.linerMinFracOfTrue,
+                )
+            )
         }
         docSpec.threads.forEach {
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_THREAD_PT))

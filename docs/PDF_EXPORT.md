@@ -318,6 +318,19 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
   (`drawnShaftHeightPt`/`heightFracForDrawnHeight`, pure). Commits near the standard
   height snap to exactly 100% (`snappedHeightScale`); a "Standard (X″)" button restores
   the default.
+- **Liner compression (per-job pair, same two surfaces)**: the measured components —
+  tapers and liners — are what the sheets are about, so liners can be held proportional
+  lengthwise. Checkbox "Keep liners proportional lengthwise"
+  (`RunoutConfig.linersProportional`): liners demand full true-scale width and the drawn
+  HEIGHT yields when the page can't fit them (the keyway-body posture); the slider is
+  disabled while checked. Slider "Liner compression" (`RunoutConfig.linerCompression`,
+  0–100%, default 100%): how far liners may foreshorten below true scale — 100% = down
+  to the 100 pt writable floor (historical behavior), 0% = not at all. Both feed the
+  derived `linerMinFracOfTrue` → `ProfileFeatureSpan.minWidthFracOfTrue` (geom,
+  unit-tested): the liner's width floor becomes `max(100pt, frac × true width)`. Applies
+  to the schematic (`composeShaftPdf(linerMinFracOfTrue)`) and the runout/consolidated
+  sheets (from `config`); rides the `.shaft` envelope (additive, legacy default = free
+  compression).
 
 ---
 

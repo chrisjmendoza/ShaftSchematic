@@ -236,7 +236,11 @@ private val helpSections: List<HelpSection> = listOf(
                     "consolidated/runout sheets — up to 1.5 in at most — and the Standard " +
                     "button restores the default size. That default follows a sizing curve " +
                     "you can adjust in Settings → PDF Export → Default drawing size: set " +
-                    "what a 4 in and an 8 in shaft draw, and sizes in between follow."
+                    "what a 4 in and an 8 in shaft draw, and sizes in between follow. " +
+                    "Liner compression (next to the height slider) keeps the measured " +
+                    "components readable: check \"Keep liners proportional lengthwise\" to " +
+                    "hold liners at true scale, or set how far they may shorten with the " +
+                    "slider."
             ),
             HelpTopic(
                 "Back up and restore",

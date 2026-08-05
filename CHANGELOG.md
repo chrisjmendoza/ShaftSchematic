@@ -8,6 +8,22 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-05 (evening — default sizing curve, S-break gap, options-sheet scroll)
 
+### feat(pdf): liner proportionality — per-job checkbox + compression slider
+
+On-device request ("add a checkbox to keep liners proportional lengthwise… the key
+components we are measuring are the tapers and liners"; "a liner compression slider
+would be a helpful tool as well"). New per-job pair beside the "Shaft height" slider
+(Consolidated Output tab + the schematic preview's Tune sheet, one `RunoutConfig` value
+behind both, rides the `.shaft` envelope): **"Keep liners proportional lengthwise"**
+pins liners at their true-scale drawn width — the drawn height yields when the page
+can't fit them, the keyway-body posture — and the **"Liner compression" slider**
+(0–100%, default 100% = historical behavior) bounds how far liners may foreshorten
+below true scale when unchecked. Engine: `ProfileFeatureSpan.minWidthFracOfTrue`
+(geom, unit-tested — a fraction-of-true width floor, monotone so both bisection solves
+keep their contracts); composers feed it from `RunoutConfig.linerMinFracOfTrue`.
+Applies to the schematic and the runout/consolidated sheets; legacy files decode to
+free compression. Liners still never get an S-break.
+
 ### feat(pdf): default sizing curve — 8" draws 1.25", 4" draws 0.75", linear between
 
 On-device request ("make 8\" shaft the default size of 1.25\" and proportionally work

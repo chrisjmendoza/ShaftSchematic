@@ -107,7 +107,8 @@ fun PdfExportRoute(
                     options = PdfExportOptions(mode = pdfExportMode, blankValues = pdfBlankDraft),
                     resolvedComponents = vm.resolvedComponents.value,
                     lineThicknessScale = vm.lineThicknessScale.value,
-                    heightScale = vm.runoutConfig.value.heightScale
+                    heightScale = vm.runoutConfig.value.heightScale,
+                    linerMinFracOfTrue = vm.runoutConfig.value.linerMinFracOfTrue,
                 )
             }
 

@@ -468,7 +468,12 @@ On-device request following the worn-sections review:
     (`PROFILE_MIN_TAPER_PT` 80; `PROFILE_MIN_THREAD_PT` 36; `PROFILE_MIN_BODY_RUN_PT` 64
     — room to write diameters and hang runout leaders, on-device request;
     `PROFILE_MIN_LINER_PT` 100 — room to write wear values in, see the 2026-08-05 liner
-    clarification below), keyway-bearing bodies pin at true scale, and **above the floors
+    clarification below; liners additionally honor the per-job **"Liner compression"
+    pair** — `RunoutConfig.linersProportional` checkbox pins them at true width with the
+    height yielding, and the `linerCompression` slider bounds how far they may
+    foreshorten via `ProfileFeatureSpan.minWidthFracOfTrue`, control on the Output tab +
+    schematic Tune sheet — "the key components we are measuring are the tapers and
+    liners"), keyway-bearing bodies pin at true scale, and **above the floors
     width distributes in proportion to true length** — a longer body run draws visibly
     longer, equal runs draw equal (on-device request), no span ever stretches past true
     scale. Pure engine `geom/ProfileCompression.kt`

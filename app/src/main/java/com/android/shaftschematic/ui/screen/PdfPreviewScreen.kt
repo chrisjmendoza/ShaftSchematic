@@ -159,13 +159,14 @@ fun PdfPreviewScreen(
     LaunchedEffect(spec, unit, project, options, resolvedComponents, lineThicknessScale,
                    pdfShowComponentTitles, pdfTieringMode,
                    pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   runoutConfig.heightScale) {
+                   runoutConfig.heightScale, runoutConfig.linerMinFracOfTrue) {
         isLoading = true
         errorMessage = null
         // Snapshot on the main thread before switching to IO.
         val pdfPrefsSnapshot = vm.currentPdfPrefs
         val thicknessScaleSnapshot = lineThicknessScale
         val heightScaleSnapshot = runoutConfig.heightScale
+        val linerFracSnapshot = runoutConfig.linerMinFracOfTrue
         val bmp = withContext(Dispatchers.IO) {
             renderPdfPreviewBitmap(
                 context = ctx,
@@ -178,6 +179,7 @@ fun PdfPreviewScreen(
                 resolvedComponents = resolvedComponents,
                 lineThicknessScale = thicknessScaleSnapshot,
                 heightScale = heightScaleSnapshot,
+                linerMinFracOfTrue = linerFracSnapshot,
             )
         }
         if (bmp != null) {
@@ -264,6 +266,7 @@ fun PdfPreviewScreen(
                         val prefsSnapshot = vm.currentPdfPrefs
                         val thicknessSnapshot = lineThicknessScale
                         val heightSnapshot = runoutConfig.heightScale
+                        val linerFracSnapshot = runoutConfig.linerMinFracOfTrue
                         val versionSnapshot = appVersionName(ctx)
                         printShaftPdfPage(ctx, jobName) { page ->
                             composeShaftPdf(
@@ -278,6 +281,7 @@ fun PdfPreviewScreen(
                                 resolvedComponents = resolvedSnapshot,
                                 lineThicknessScale = thicknessSnapshot,
                                 heightScale = heightSnapshot,
+                                linerMinFracOfTrue = linerFracSnapshot,
                             )
                         }
                     }) {
@@ -392,6 +396,8 @@ fun PdfPreviewScreen(
                 pdfTieringMode = pdfTieringMode,
                 lineThicknessScale = lineThicknessScale,
                 heightScale = runoutConfig.heightScale,
+                linersProportional = runoutConfig.linersProportional,
+                linerCompression = runoutConfig.linerCompression,
                 pdfShadedBodies = pdfShadedBodies,
                 pdfShadedTapers = pdfShadedTapers,
                 pdfShadedLiners = pdfShadedLiners,
@@ -420,6 +426,7 @@ private fun renderPdfPreviewBitmap(
     resolvedComponents: List<ResolvedComponent>,
     lineThicknessScale: Float = 1.0f,
     heightScale: Float = 1.0f,
+    linerMinFracOfTrue: Float = 0f,
 ): Bitmap? = runCatching {
     // Step 1 – compose the PDF into a temp file.
     // Use createTempFile so concurrent preview renders don't collide on the same path.
@@ -441,6 +448,7 @@ private fun renderPdfPreviewBitmap(
             resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
             lineThicknessScale = lineThicknessScale,
             heightScale = heightScale,
+            linerMinFracOfTrue = linerMinFracOfTrue,
         )
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
@@ -492,6 +500,8 @@ private fun PdfOptionsSheet(
     pdfTieringMode: PdfTieringMode,
     lineThicknessScale: Float,
     heightScale: Float,
+    linersProportional: Boolean,
+    linerCompression: Float,
     pdfShadedBodies: Boolean,
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
@@ -587,6 +597,19 @@ private fun PdfOptionsSheet(
             baseScale = defaultVisualScale(sliderDiaMm, curveLoHeightIn * 72f, curveHiHeightIn * 72f),
             maxDiaMm = sliderDiaMm,
             onCommit = { vm.setRunoutHeightScale(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Liner compression ────────────────────────────────────────────────
+        // Same per-job pair as the Consolidated Output tab (`RunoutConfig`).
+        LinerCompressionControl(
+            linersProportional = linersProportional,
+            linerCompression = linerCompression,
+            onSetProportional = { vm.setLinersProportional(it) },
+            onSetCompression = { vm.setLinerCompression(it) },
         )
 
         Spacer(Modifier.height(12.dp))

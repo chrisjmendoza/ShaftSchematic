@@ -144,11 +144,18 @@ fun heightFracForDrawnHeight(baseScale: Float, targetHeightPt: Float, maxDiaMm: 
  * A feature span the caller wants width-managed individually. [minWidthPt] is its floor;
  * pass `Float.MAX_VALUE` to pin the span at true scale (e.g. a keyway-bearing body whose
  * drawn slot geometry must stay real).
+ *
+ * [minWidthFracOfTrue] raises the floor to a fraction of the span's TRUE drawn width at
+ * the solved scale (0 = the flat [minWidthPt] floor alone; 1 = pinned at true scale) —
+ * the "Liner compression" control: liners may only foreshorten this far. The effective
+ * floor is `min(true, max(minWidthPt, true × frac))`, still monotone in the scale, so
+ * both solves keep their bisection contracts.
  */
 data class ProfileFeatureSpan(
     val startMm: Float,
     val endMm: Float,
     val minWidthPt: Float,
+    val minWidthFracOfTrue: Float = 0f,
 )
 
 /** One monotonic piece of the compressed-profile x mapping. */
@@ -246,8 +253,11 @@ fun buildCompressedProfileXMap(
     }
 
     // Width solve: width_i(K) = clamp(K·len_i, min(floor_i, true_i), true_i), Σ = width.
+    // A span's floor is its flat pt floor raised by its fraction-of-true demand.
     val trues = spans.map { it.lenMm * diaPtPerMm }
-    val floors = spans.mapIndexed { i, s -> minOf(s.floorPt, trues[i]) }
+    val floors = spans.mapIndexed { i, s ->
+        minOf(maxOf(s.floorPt, trues[i] * s.fracOfTrue), trues[i])
+    }
     val widths = solveSpanWidths(spans.map { it.lenMm }, floors, trues, width)
 
     val segments = mutableListOf<ProfileXSegment>()
@@ -264,8 +274,13 @@ fun buildCompressedProfileXMap(
     return CompressedProfileXMap(segments)
 }
 
-/** One walked span: a feature (with its floor) or a plain body gap between features. */
-internal data class WalkSpan(val startMm: Float, val endMm: Float, val floorPt: Float) {
+/** One walked span: a feature (with its floors) or a plain body gap between features. */
+internal data class WalkSpan(
+    val startMm: Float,
+    val endMm: Float,
+    val floorPt: Float,
+    val fracOfTrue: Float = 0f,
+) {
     val lenMm get() = endMm - startMm
 }
 
@@ -281,7 +296,7 @@ internal fun walkSpans(
         var cursor = windowStartMm
         normalized.forEach { f ->
             if (f.startMm > cursor + 1e-4f) add(WalkSpan(cursor, f.startMm, gapMinWidthPt))
-            add(WalkSpan(maxOf(f.startMm, cursor), f.endMm, f.minWidthPt))
+            add(WalkSpan(maxOf(f.startMm, cursor), f.endMm, f.minWidthPt, f.minWidthFracOfTrue))
             cursor = maxOf(cursor, f.endMm)
         }
         if (windowEndMm > cursor + 1e-4f) add(WalkSpan(cursor, windowEndMm, gapMinWidthPt))
@@ -293,9 +308,11 @@ internal fun walkSpans(
  * a PINNED span (`minWidthPt == Float.MAX_VALUE` — keyway-bearing bodies, whose drawn
  * slot geometry must stay real) demands its full true width at the scale (the drawn
  * HEIGHT yields instead when a pinned span needs the room), every other span — liners
- * included — demands at most its floor. The demand is monotone in scale, so bisection
- * finds the ceiling; [scaleHi] (the desired visual scale, pre-capped by the height
- * budget) is returned whenever it already fits.
+ * included — demands at most its floor, raised by any fraction-of-true demand
+ * ([ProfileFeatureSpan.minWidthFracOfTrue] — proportional liners demand true width the
+ * same way a pin does). The demand is monotone in scale, so bisection finds the
+ * ceiling; [scaleHi] (the desired visual scale, pre-capped by the height budget) is
+ * returned whenever it already fits.
  */
 fun solveMaxProfileScale(
     windowStartMm: Float,
@@ -310,7 +327,10 @@ fun solveMaxProfileScale(
 
     fun minWidthAt(s: Float): Float = spans.sumOf { span ->
         val truePt = span.lenMm * s
-        (if (span.floorPt == Float.MAX_VALUE) truePt else minOf(span.floorPt, truePt)).toDouble()
+        val demand =
+            if (span.floorPt == Float.MAX_VALUE) truePt
+            else minOf(truePt, maxOf(minOf(span.floorPt, truePt), truePt * span.fracOfTrue))
+        demand.toDouble()
     }.toFloat()
 
     if (minWidthAt(scaleHi) <= contentWidth) return scaleHi
@@ -323,14 +343,19 @@ fun solveMaxProfileScale(
     return lo
 }
 
-/** Clip to the window, drop empties, sort, and merge overlaps (keeping the larger floor). */
+/** Clip to the window, drop empties, sort, and merge overlaps (keeping the larger floors). */
 private fun normalizeFeatures(
     windowStartMm: Float,
     windowEndMm: Float,
     features: List<ProfileFeatureSpan>,
 ): List<ProfileFeatureSpan> {
     val clipped = features
-        .map { ProfileFeatureSpan(maxOf(it.startMm, windowStartMm), minOf(it.endMm, windowEndMm), it.minWidthPt) }
+        .map {
+            ProfileFeatureSpan(
+                maxOf(it.startMm, windowStartMm), minOf(it.endMm, windowEndMm),
+                it.minWidthPt, it.minWidthFracOfTrue,
+            )
+        }
         .filter { it.endMm - it.startMm > 1e-4f }
         .sortedBy { it.startMm }
     if (clipped.isEmpty()) return emptyList()
@@ -340,6 +365,7 @@ private fun normalizeFeatures(
         if (f.startMm <= last.endMm + 1e-4f) {
             merged[merged.lastIndex] = ProfileFeatureSpan(
                 last.startMm, maxOf(last.endMm, f.endMm), maxOf(last.minWidthPt, f.minWidthPt),
+                maxOf(last.minWidthFracOfTrue, f.minWidthFracOfTrue),
             )
         } else {
             merged += f

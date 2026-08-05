@@ -252,6 +252,7 @@ fun OutputRoute(
                             resolvedComponents = resolvedComponents,
                             lineThicknessScale = lineThicknessScale,
                             heightScale = runoutConfig.heightScale,
+                            linerMinFracOfTrue = runoutConfig.linerMinFracOfTrue,
                         )
                         OutputDoc.WEAR -> composeWearPdf(
                             page = page, spec = spec, project = project, unit = unit,
@@ -360,6 +361,13 @@ fun OutputRoute(
                 baseScale = heightSliderBase,
                 maxDiaMm = heightSliderDiaMm,
                 onCommit = { vm.setRunoutHeightScale(it) },
+            )
+
+            LinerCompressionControl(
+                linersProportional = runoutConfig.linersProportional,
+                linerCompression = runoutConfig.linerCompression,
+                onSetProportional = { vm.setLinersProportional(it) },
+                onSetCompression = { vm.setLinerCompression(it) },
             )
 
             // ── Worn sections — authored here, printed on this sheet ─────────

@@ -130,7 +130,12 @@ Foreshortened body runs draw the S-break pair laid out by `breakPairLayout`
 two edges always keep ≥ 1 pt of daylight and never overlap.
 **Liners compress in SIZE only** (finite `PROFILE_MIN_LINER_PT` floor — proportional
 foreshortening, NEVER a body-style S-break cutout; the S-break glyph is a body-only draw
-path); keyway-bearing bodies stay pinned at true width with the height yielding
+path); the per-job **"Liner compression" pair** (`RunoutConfig.linersProportional` +
+`linerCompression` → derived `linerMinFracOfTrue`, fed to
+`ProfileFeatureSpan.minWidthFracOfTrue`) can raise the liner floor toward true width —
+checkbox = pinned proportional (height yields, keyway-body posture), slider = how far
+liners may foreshorten; control on the Output tab + schematic Tune sheet; keyway-bearing
+bodies stay pinned at true width with the height yielding
 (`solveMaxProfileScale`). The **"Shaft height" slider** (`RunoutConfig.heightScale`,
 per-job in the envelope — ONE value behind the runout/consolidated sheets AND the
 schematic, `composeShaftPdf(heightScale)`) multiplies the solved scale; the drawn shaft

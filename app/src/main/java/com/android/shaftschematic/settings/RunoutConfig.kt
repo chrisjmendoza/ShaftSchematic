@@ -36,13 +36,33 @@ import kotlinx.serialization.Serializable
  *   page budget (`exaggeratedProfileScale`). Per-job (rides the .shaft envelope) so a
  *   reopened document reprints identically — same posture as the undercut sheet's
  *   exaggeration slider.
+ * @param linersProportional "Keep liners proportional lengthwise" — liners demand their
+ *   full true-scale drawn width (the key measured components stay proportional); the
+ *   drawn HEIGHT yields when the page can't fit them, same as keyway-pinned bodies.
+ *   Overrides [linerCompression] while checked.
+ * @param linerCompression "Liner compression" slider — how far liners may foreshorten
+ *   below true scale when the page needs the room. 1.0 = fully (down to the
+ *   `PROFILE_MIN_LINER_PT` writable floor — the historical behavior), 0.0 = not at all
+ *   (equivalent to [linersProportional]). Applied as a per-liner width floor of
+ *   (1 − value) × true width; the geometry consumes [linerMinFracOfTrue]. Per-job, on
+ *   the runout/consolidated sheets AND the schematic, like [heightScale].
  */
 @Serializable
 data class RunoutConfig(
     val componentOverrides: Map<String, Int> = emptyMap(),
     val tirDirection: TirDirection = TirDirection.UNSET,
     val heightScale: Float = 1.0f,
+    val linersProportional: Boolean = false,
+    val linerCompression: Float = 1.0f,
 ) {
+    /**
+     * The liner width floor as a fraction of true drawn width — what the composers hand
+     * to `ProfileFeatureSpan.minWidthFracOfTrue`. 0 = compress freely (floor only),
+     * 1 = pinned at true scale.
+     */
+    val linerMinFracOfTrue: Float
+        get() = if (linersProportional) 1f else (1f - linerCompression).coerceIn(0f, 1f)
+
     companion object {
         /**
          * Distance in mm from a component's physical edge to the first/last measurement station.

@@ -421,6 +421,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** "Keep liners proportional lengthwise" — see [RunoutConfig.linersProportional]. */
+    fun setLinersProportional(proportional: Boolean) {
+        _runoutConfig.update { it.copy(linersProportional = proportional) }
+    }
+
+    /** "Liner compression" slider — see [RunoutConfig.linerCompression]. */
+    fun setLinerCompression(fraction: Float) {
+        _runoutConfig.update { it.copy(linerCompression = fraction.coerceIn(0f, 1f)) }
+    }
+
     // ── Runout per-station readings (bubble value + high-spot marker) ──────────
     // Reference-only data, same posture as _wearRecord below: plain state updates, no
     // geometry side effects. Keyed by (componentId, stationIndex). Both fields optional;

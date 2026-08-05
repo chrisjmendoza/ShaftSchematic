@@ -404,4 +404,66 @@ class ProfileCompressionTest {
         assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(203.2f, 54f, 200f), 1e-3f)
         assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(500f, 54f, 90f), 1e-3f)
     }
+
+    // ── minWidthFracOfTrue (the "Liner compression" control) ──────────────────
+
+    @Test
+    fun `frac-of-true floor holds - the span keeps its fraction under squeeze`() {
+        // 2000mm window at 1 pt/mm true into 700pt. The 600mm liner (600pt true) with a
+        // 50% frac floor must draw ≥ 300pt even though its flat floor is only 100pt.
+        val map = buildCompressedProfileXMap(
+            windowStartMm = 0f, windowEndMm = 2000f,
+            features = listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 0.5f)),
+            contentLeft = 0f, contentRight = 700f,
+            diaPtPerMm = 1f,
+        )
+        val w = map.xAt(1300f) - map.xAt(700f)
+        assertTrue("liner drew $w, needs >= 300", w >= 300f - 0.5f)
+        assertEquals(700f, map.x1, 0.1f)
+    }
+
+    @Test
+    fun `frac 1 pins the span at true scale`() {
+        val map = buildCompressedProfileXMap(
+            windowStartMm = 0f, windowEndMm = 2000f,
+            features = listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 1f)),
+            contentLeft = 0f, contentRight = 800f,
+            diaPtPerMm = 1f,
+        )
+        assertEquals(600f, map.xAt(1300f) - map.xAt(700f), 0.5f)
+    }
+
+    @Test
+    fun `frac demand lowers the max profile scale like a pin`() {
+        val free = solveMaxProfileScale(
+            0f, 2000f,
+            listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 0f)),
+            contentWidth = 700f, scaleHi = 1f,
+        )
+        val pinned = solveMaxProfileScale(
+            0f, 2000f,
+            listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 1f)),
+            contentWidth = 700f, scaleHi = 1f,
+        )
+        assertEquals(1f, free, 1e-4f)
+        assertTrue("pinned scale $pinned must drop below free $free", pinned < free - 1e-3f)
+    }
+
+    @Test
+    fun `frac zero is bit-for-bit the flat-floor behavior`() {
+        val flat = buildCompressedProfileXMap(
+            0f, 2000f,
+            listOf(ProfileFeatureSpan(700f, 1300f, 100f)),
+            0f, 700f, 1f,
+        )
+        val zeroFrac = buildCompressedProfileXMap(
+            0f, 2000f,
+            listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 0f)),
+            0f, 700f, 1f,
+        )
+        flat.segments.zip(zeroFrac.segments).forEach { (a, b) ->
+            assertEquals(a.x0, b.x0, 1e-4f)
+            assertEquals(a.x1, b.x1, 1e-4f)
+        }
+    }
 }
