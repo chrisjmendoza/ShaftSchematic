@@ -115,10 +115,12 @@ last** — wear-area bands and pit X's (migrated from the retired wear tab,
 `drawWearMarksOnRunoutProfile`), then worn-section boundaries, then ALL value text over
 knockout halos (worn values, then `drawDiaReadingsInProfile`); do not draw any mark after
 the text passes. Values **auto-fit their local band** (`fittedValueTextSize`, floor
-`WORN_VALUE_MIN_TEXT_PT`/14 px canvas) and the PDF **stretches the profile vertically**
-(`vShaftScale`) when values are present — proportionality deliberately sacrificed for
-legibility (on-device decision); liners draw **unfilled on this sheet** regardless of
-`shadedLiners` so halos don't read as pasted boxes. Division of labor: the Wear page is the **authoring surface** for
+`WORN_VALUE_MIN_TEXT_PT`/14 px canvas); the PDF profile follows the **hand-sheet
+compression convention** — shaft drawn ~1.25" tall (`RUNOUT_TARGET_SHAFT_HEIGHT_PT`),
+details at true proportion, body runs foreshortened with S-breaks via the pure equal-cap
+mapping `geom/ProfileCompression.kt`, everything through the one piecewise `xAt`; liners
+draw **unfilled on this sheet** regardless of `shadedLiners` so halos don't read as
+pasted boxes. Division of labor: the Wear page is the **authoring surface** for
 spots/pits/point-readings (tab visible; `WEAR_TAB_ENABLED` in `EditorTab.kt` is the
 one-line retirement switch for a future full consolidation), while the Runout sheet is
 the consolidated **output** featuring that wear information. See `docs/RunoutSheet.md`

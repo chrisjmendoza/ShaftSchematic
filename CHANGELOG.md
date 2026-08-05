@@ -6,6 +6,27 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-04 (runout sheet — hand-sheet body compression, shaft prints ~1.25" tall)
+
+### fix(runout): real body compression replaces the vertical stretch — an 8" shaft never looks tiny
+
+On-device report (DEFENDER PORT build, with the shop's hand-drawn reference sheet): the
+runout profile drew at true SET-to-SET proportion, so a long 8" shaft came out sliver-thin
+— the drawing convention is the opposite: shaft ~1–1.25" tall, body sections compressed
+"to give the impression of a thicker shaft". The composer now solves a diameter scale from
+the target height (`RUNOUT_TARGET_SHAFT_HEIGHT_PT` = 1.25" — same target as the
+schematic's `BODY_ONLY_TARGET_HEIGHT_PT`), the in-profile value needs, and page caps, then
+maps x through the new pure piecewise engine `geom/ProfileCompression.kt`: detail features
+(tapers/liners/threads) keep TRUE proportions at that scale; body runs absorb the overflow
+by equal-cap waterfill (short bodies never shrink; long runs share the squeeze) and draw
+the S-break pair whenever actually foreshortened. Bubble stations, worn sections, wear
+marks, and witness lines all ride the same mapping. Short shafts that already meet the
+target keep the classic linear map. This supersedes the same-day `vShaftScale` vertical
+stretch (removed); per-value text auto-fit stays as the backstop. Canvas preview keeps its
+linear box-fit map (interactive surface; the PDF preview shows the real sheet).
+
+---
+
 ## 2026-08-04 (runout sheet — in-profile value legibility polish)
 
 ### fix(runout): values fit the profile — auto-fit text, vertical exaggeration, no liner grey

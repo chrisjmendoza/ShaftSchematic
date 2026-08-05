@@ -320,13 +320,23 @@ On-device request following the worn-sections review:
     section (its longest value governs), per-station for point readings. Floored at
     `WORN_VALUE_MIN_TEXT_PT` (6 pt PDF) / 14 px canvas so numbers never become dust; at
     the floor a slight halo overhang is accepted.
-  - *Vertical exaggeration (PDF only):* when in-profile values exist, the whole profile
-    stretches vertically (`vShaftScale` solve in `composeRunoutPdf` — smallest scale that
-    seats every value at full text size, capped by the space above the bubble section).
-    Proportionality is **deliberately sacrificed** for legibility (on-device decision);
-    dia-to-dia ratios are preserved, and sheets without values keep true proportions
-    (scale 1). Everything vertical (profile, witness lines, leader origins) rides the
-    scaled `rPx`, so the sheet stays coherent.
+  - *Body compression — the hand-sheet convention (PDF, supersedes the earlier
+    vertical-exaggeration pass):* the shaft prints ~1–1.25" tall
+    (`RUNOUT_TARGET_SHAFT_HEIGHT_PT`) whatever its true length — an 8" shaft must never
+    look tiny (on-device report with the shop's hand-drawn reference sheet). The diameter
+    scale is solved from the target height, the in-profile value needs, and the page caps
+    (height budget above the bubbles; width cap keeping `MIN_COMPRESSED_BODY_PT` per body
+    run). Detail features (tapers, liners, threads) keep TRUE proportions at that scale;
+    the plain body runs between them absorb the horizontal overflow via the pure
+    piecewise mapping `geom/ProfileCompression.kt` (`buildCompressedProfileXMap`,
+    unit-tested): **equal-cap waterfill** — every run keeps its true drawn width up to a
+    common cap, so a short body between liners never shrinks while long runs share the
+    squeeze, drawn with the S-break pair (`drawBodiesForRunout` triggers on actual
+    foreshortening, not just drawn length). Everything rides the one `xAt` — bubble
+    stations, worn sections, wear marks, witness lines — so the sheet stays coherent;
+    short shafts whose width-fit already meets the target keep the classic linear map
+    unchanged. The bubble-row budget is solved on a prelim linear map (scale ↔ rows
+    cycle), and the drawing plan re-solves on the real mapping.
   - *No liner grey on this sheet:* liners draw unfilled on both the canvas preview and
     the PDF regardless of the `shadedLiners` pref — against a grey liner every white
     knockout read as a pasted box (on-device request). Bodies/tapers keep the pref.

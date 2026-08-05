@@ -15,6 +15,8 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.buildCompressedProfileXMap
+import com.android.shaftschematic.geom.compressedProfilePlanStats
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.WORN_VALUE_BAND_FIT_FRAC
 import com.android.shaftschematic.geom.WornValueColumn
@@ -27,6 +29,7 @@ import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.formatRunoutValue
 import java.text.SimpleDateFormat
@@ -170,18 +173,11 @@ fun composeRunoutPdf(
     val aftSetMm       = setPositions.aftSETxMm.toFloat()
     val fwdSetMm       = setPositions.fwdSETxMm.toFloat()
     val drawSpanMm     = (fwdSetMm - aftSetMm).coerceAtLeast(1f)
-    val ptPerMm        = contentW / drawSpanMm
-    val measureStartMm = aftSetMm   // contentLeft ↔ AFT SET face, contentRight ↔ FWD SET face
+    val widthFitPtPerMm = contentW / drawSpanMm
 
-    /** Convert physical shaft mm → page-x points. Anchored at the AFT SET face. */
-    fun xAt(mm: Float): Float = contentLeft + (mm - measureStartMm) * ptPerMm
+    /** Prelim linear mapping — used ONLY for the bubble-row budget (see the cycle note below). */
+    fun xAtLinear(mm: Float): Float = contentLeft + (mm - aftSetMm) * widthFitPtPerMm
 
-    /** Convert a diameter mm → radius in points at TRUE proportional scale. */
-    fun rPxBase(diaMm: Float): Float = (diaMm * 0.5f) * ptPerMm
-
-    // ── Bubble plan — horizontal solve first (rows + bubble x need only ptPerMm) ─
-    // The shared engine (geom/RunoutBubbleLayout.kt) is also used by the RunoutRoute
-    // canvas preview, so both renderings are guaranteed identical.
     val stationSpans = buildList {
         docSpec.bodies.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.BODY, it.startFromAftMm, it.lengthMm)) }
         docSpec.tapers.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.TAPER, it.startFromAftMm, it.lengthMm)) }
@@ -194,35 +190,20 @@ fun composeRunoutPdf(
         contentLeft = contentLeft,
         contentRight = contentRight,
     )
-    val bubblePlan = planRunoutBubbles(
-        collectRunoutStations(stationSpans, config.componentOverrides, ::xAt),
-        bubbleGeom,
-    )
 
-    // ── Vertical layout — shaft centred, bubbles below, TIR at bottom ─────────
-    //
-    // The shaft is normally drawn at its ACTUAL outer diameter so the profile looks
-    // proportionally correct — EXCEPT when in-profile wear values are present: the
-    // profile then stretches vertically (proportionality deliberately sacrificed,
-    // on-device request — the readings must be legible) until the longest value fits
-    // inside its local band, capped by the space left above the bubble section.
-    // Sheets without wear values keep true proportions (scale stays 1).
-    //
-    // Layout (top → bottom):
-    //   margin → header → OAL line → [shaftTop … shaftCy … shaftBottom] →
-    //   bubble area (rows from the plan) → TIR line → margin
-
+    // ── Vertical budget ───────────────────────────────────────────────────────
+    // The diameter scale needs the shaft's height budget, the budget needs the bubble row
+    // count, and the final bubble x positions need the (scale-dependent) compressed
+    // mapping — a cycle. Break it with a prelim linear-map plan for the BUDGET only; the
+    // plan used for drawing is re-solved on the real mapping below.
     val maxOuterDiaMm  = docSpec.maxOuterDiaMm().coerceAtLeast(10f)
-
-    // Vertical space from below the OAL line to the bottom margin
     val tirY           = pageH - margin - TIR_LINE_HEIGHT_PT
     val availableH     = tirY - (headerBottom + OAL_GAP_PT + OAL_LINE_SPACE_PT)
-
-    // How tall the bubble section is: leader gap + however many rows the plan needs
-    val bubbleSectionH = bubblePlan.sectionHeight(BUBBLE_GAP_PT)
-
-    // Vertical budget for the shaft drawing
-    val shaftAreaH     = availableH - bubbleSectionH
+    val prelimPlan     = planRunoutBubbles(
+        collectRunoutStations(stationSpans, config.componentOverrides, ::xAtLinear),
+        bubbleGeom,
+    )
+    val shaftAreaBudgetH = availableH - prelimPlan.sectionHeight(BUBBLE_GAP_PT)
 
     // ── Outer envelope diameter (mm) at a station — scale solve + drawing share it ─
     fun outerDiaMmAt(mm: Float): Float {
@@ -245,18 +226,38 @@ fun composeRunoutPdf(
         return maxDia.coerceAtLeast(maxOuterDiaMm * 0.1f)
     }
 
-    // ── Vertical exaggeration solve — smallest scale that seats every value ───
-    val vShaftScale: Float = run {
-        if (blankValues) return@run 1f
+    // ── Diameter scale + compressed x mapping ─────────────────────────────────
+    // The hand-sheet convention (on-device request, with the shop's reference sketch):
+    // the shaft prints ~1–1.25" tall whatever its true length. Details (tapers, liners,
+    // threads) keep TRUE proportions at the diameter scale; the plain body runs between
+    // them absorb the horizontal overflow — foreshortened with S-break glyphs
+    // ("compressed to give the impression of a thicker shaft"). Short shafts whose
+    // width-fit already meets the target keep the classic linear map unchanged.
+    //
+    // The scale solve also folds in the in-profile wear values: a value's rotated length
+    // sets a minimum band height at its station, so readings print at full text size
+    // whenever the page allows (auto-fit in the draw functions stays as the backstop).
+
+    // Detail spans that must never compress — resolved components when available (their
+    // drawn spans are already subtracted/split), stored spec spans otherwise.
+    val fixedSpansMm: List<Pair<Float, Float>> = resolvedComponents
+        ?.filter { it !is ResolvedBody && it !is ResolvedCouplerBoltSlot }
+        ?.map { it.startMmPhysical to it.endMmPhysical }
+        ?: buildList {
+            docSpec.tapers.forEach { add(it.startFromAftMm to (it.startFromAftMm + it.lengthMm)) }
+            docSpec.liners.forEach { add(it.startFromAftMm to (it.startFromAftMm + it.lengthMm)) }
+            docSpec.threads.forEach { add(it.startFromAftMm to (it.startFromAftMm + it.lengthMm)) }
+        }
+
+    val valueNeedScale: Float = run {
+        if (blankValues) return@run 0f
         val fm = text.fontMetrics
         val baseLine = fm.descent - fm.ascent
-        var need = 1f
+        var need = 0f
         fun consider(labels: List<String>, stationDiaMm: Float) {
             if (labels.isEmpty() || stationDiaMm <= 0f) return
-            val bandBase = 2f * rPxBase(stationDiaMm) * WORN_VALUE_BAND_FIT_FRAC
-            if (bandBase <= 0f) return
-            val needed = labels.maxOf { wornValueBandHeightNeeded(text.measureText(it), baseLine) }
-            need = maxOf(need, needed / bandBase)
+            val neededPt = labels.maxOf { wornValueBandHeightNeeded(text.measureText(it), baseLine) }
+            need = maxOf(need, neededPt / (stationDiaMm * WORN_VALUE_BAND_FIT_FRAC))
         }
         wearRecord.wornSections.forEach { s ->
             val clamped = clampUndercutSpan(s.startFromAftMm, s.lengthMm, spec.overallLengthMm)
@@ -275,17 +276,46 @@ fun composeRunoutPdf(
                 consider(listOf(diaReadingValueLabel(r.diaMm, unit)), outerDiaMmAt(stationMm))
             }
         }
-        val baseHalf = rPxBase(maxOuterDiaMm)
-        val capScale = if (baseHalf > 0f) maxOf(1f, (shaftAreaH / 2f - 6f) / baseHalf) else 1f
-        need.coerceIn(1f, capScale)
+        need
     }
 
-    /** Convert a diameter mm → DRAWN radius pt (vertical exaggeration applied). */
-    fun rPx(diaMm: Float): Float = rPxBase(diaMm) * vShaftScale
+    val targetScale    = RUNOUT_TARGET_SHAFT_HEIGHT_PT / maxOuterDiaMm
+    val heightCapScale = ((shaftAreaBudgetH - 12f) / maxOuterDiaMm).coerceAtLeast(1e-4f)
+    // Width cap: the never-compressed details plus a floor width per body run must fit.
+    val planStats = compressedProfilePlanStats(aftSetMm, fwdSetMm, fixedSpansMm)
+    val widthCapScale = if (planStats.fixedLenMm > 1e-3f) {
+        ((contentW - planStats.compressibleGapCount * MIN_COMPRESSED_BODY_PT) / planStats.fixedLenMm)
+            .coerceAtLeast(1e-4f)
+    } else Float.MAX_VALUE
+    val diaPtPerMm = maxOf(widthFitPtPerMm, targetScale, valueNeedScale)
+        .coerceAtMost(heightCapScale)
+        .coerceAtMost(widthCapScale)
+        .coerceAtLeast(1e-5f)
 
-    val shaftHalfPt    = rPx(maxOuterDiaMm)  // drawn half-height of the shaft
-    val shaftCy        = headerBottom + OAL_GAP_PT + OAL_LINE_SPACE_PT +
-                         (shaftAreaH / 2f).coerceAtLeast(shaftHalfPt + 4f)
+    val xMap = buildCompressedProfileXMap(
+        windowStartMm = aftSetMm, windowEndMm = fwdSetMm,
+        fixedSpansMm = fixedSpansMm,
+        contentLeft = contentLeft, contentRight = contentRight,
+        diaPtPerMm = diaPtPerMm,
+    )
+
+    /** Physical shaft mm → page x through the compressed mapping. */
+    fun xAt(mm: Float): Float = xMap.xAt(mm)
+
+    /** Convert a diameter mm → drawn radius pt (the solved diameter scale). */
+    fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * diaPtPerMm
+
+    // Final bubble plan on the real mapping (stations inside compressed runs bunch with
+    // them, like the hand sheets). Row count can differ from the prelim by a hair; the
+    // shaftCy coerce below absorbs it.
+    val bubblePlan = planRunoutBubbles(
+        collectRunoutStations(stationSpans, config.componentOverrides, ::xAt),
+        bubbleGeom,
+    )
+    val shaftAreaH  = availableH - bubblePlan.sectionHeight(BUBBLE_GAP_PT)
+    val shaftHalfPt = rPx(maxOuterDiaMm)  // drawn half-height of the shaft
+    val shaftCy     = headerBottom + OAL_GAP_PT + OAL_LINE_SPACE_PT +
+                      (shaftAreaH / 2f).coerceAtLeast(shaftHalfPt + 4f)
 
     val geomRect = RectF(contentLeft, margin, contentRight, pageH - margin)
 
@@ -305,7 +335,7 @@ fun composeRunoutPdf(
     // matching the schematic/wear-document convention.
     val oalLineY = shaftCy - shaftHalfPt - OAL_LINE_SPACE_PT
     drawOalSpanLine(
-        c, dim, text, contentLeft, contentRight, oalLineY,
+        c, dim, text, xMap.x0, xMap.x1, oalLineY,
         aftShaftTopY = shaftCy - shaftOuterRPxAt(aftSetMm),
         fwdShaftTopY = shaftCy - shaftOuterRPxAt(fwdSetMm),
         unit = unit, oalMm = spec.overallLengthMm,
@@ -314,7 +344,8 @@ fun composeRunoutPdf(
 
     // ── Draw shaft profile ────────────────────────────────────────────────────
     drawShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
-        bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
+        bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill,
+        ptPerMm = diaPtPerMm, truePtPerMm = diaPtPerMm)
 
     // ── Wear marks + worn sections + in-profile values (consolidated sheet) ───
     // Z-order (on-device request): marks first — wear-area bands and pit X's — then the
@@ -746,6 +777,12 @@ private fun drawShaftProfile(
     taperFill: Paint? = null,
     linerFill: Paint? = null,
     ptPerMm: Float = 1f,
+    /**
+     * True-scale pt-per-mm of the diameter solve. A body whose drawn span falls short of
+     * its true length at this scale is foreshortened by the compressed x mapping, and
+     * MUST show the S-break pair. 0 disables the check (glyph on long spans only).
+     */
+    truePtPerMm: Float = 0f,
 ) {
     // ── Shade fills first (drawn under all outlines) ──────────────────────
     bodyFill?.let { f ->
@@ -775,8 +812,8 @@ private fun drawShaftProfile(
             c.drawRect(xAt(ln.startFromAftMm), cy - r, xAt(ln.startFromAftMm + ln.lengthMm), cy + r, f)
         }
     }
-    // Bodies — with compression breaks for long sections
-    drawBodiesForRunout(c, spec.bodies, cy, xAt, rPx, outline, geomRect)
+    // Bodies — with compression breaks for foreshortened (and very long) sections
+    drawBodiesForRunout(c, spec.bodies, cy, xAt, rPx, outline, geomRect, truePtPerMm)
     // Tapers
     drawTapersForRunout(c, spec, xAt, rPx, cy, outline)
     // Liners (elevated outline, thin end ticks)
@@ -813,7 +850,11 @@ private fun drawShaftProfile(
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, xAt, rPx, outline, slotFill)
 }
 
-/** Draw bodies using compression breaks for sections long enough to trigger it. */
+/**
+ * Draw bodies with the S-break pair on every foreshortened section (its drawn span is
+ * shorter than its true length at [truePtPerMm] — the compressed x mapping squeezed it)
+ * and on any traditionally long span ([COMPRESS_TRIGGER_PT]) — the hand-sheet convention.
+ */
 private fun drawBodiesForRunout(
     c: Canvas,
     bodies: List<Body>,
@@ -822,6 +863,7 @@ private fun drawBodiesForRunout(
     rPx: (Float) -> Float,
     outline: Paint,
     geomRect: RectF,
+    truePtPerMm: Float = 0f,
 ) {
     val capPaint = Paint(outline)
     bodies.forEach { b ->
@@ -829,8 +871,9 @@ private fun drawBodiesForRunout(
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r  = rPx(b.diaMm);          val top = cy - r; val bot = cy + r
         val lenPt = abs(x1 - x0)
+        val foreshortened = truePtPerMm > 0f && lenPt < b.lengthMm * truePtPerMm - 1f
 
-        if (lenPt < COMPRESS_TRIGGER_PT) {
+        if (!foreshortened && lenPt < COMPRESS_TRIGGER_PT) {
             c.drawLine(x0, top, x1, top, outline)
             c.drawLine(x0, bot, x1, bot, outline)
             c.drawLine(x0, top, x0, bot, outline)
@@ -1035,6 +1078,11 @@ private const val BUBBLE_GAP_PT         = 8f
 
 // Body compression break (matches ShaftPdfComposer threshold)
 private const val COMPRESS_TRIGGER_PT = 220f
+
+// Hand-sheet drawing convention: target drawn shaft height (~1.25"), and the floor width a
+// compressed body run keeps so a break glyph always has room to read.
+private const val RUNOUT_TARGET_SHAFT_HEIGHT_PT = 1.25f * 72f
+private const val MIN_COMPRESSED_BODY_PT = 36f
 private const val ZIGZAG_GAP_MAX_PT   = 20f
 
 
