@@ -11,10 +11,13 @@ import com.android.shaftschematic.geom.PlacedRunoutBubble
 import com.android.shaftschematic.geom.RunoutBubbleGeometry
 import com.android.shaftschematic.geom.RunoutComponentKind
 import com.android.shaftschematic.geom.RunoutComponentSpan
+import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.WornValueColumn
+import com.android.shaftschematic.geom.layoutWornSectionValues
 import com.android.shaftschematic.geom.planRunoutBubbles
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
@@ -101,6 +104,12 @@ fun composeRunoutPdf(
     resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
     runoutReadings: RunoutReadings = RunoutReadings(),
+    /**
+     * Wear record for the consolidated runout/wear sheet: designated worn sections print
+     * their measured Ø values inside the shaft profile (`WornSection`). Only
+     * `wornSections` is consumed here — spots/pits/diaReadings stay on the wear document.
+     */
+    wearRecord: WearRecord = WearRecord(),
     /**
      * Blank-draft (write-in) mode: header job info, the OAL value, recorded TIR readings, and
      * the TIR direction are all blanked so the whole sheet can be filled in by hand.
@@ -256,6 +265,35 @@ fun composeRunoutPdf(
     drawShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
 
+    // ── Wear marks + worn sections + in-profile values (consolidated sheet) ───
+    // Z-order (on-device request): marks first — wear-area bands and pit X's — then the
+    // worn-section boundaries, then ALL value text last: every value sits on a sheet-white
+    // halo that knocks out whatever lies beneath it, so the numbers always read. Blank
+    // drafts drop recorded wear data entirely (the wear document's blank rule) and keep
+    // only the worn-section boundaries as write-in areas.
+    if (!blankValues) {
+        drawWearMarksOnRunoutProfile(
+            c, wearRecord, docSpec.liners, resolvedComponents,
+            cy = shaftCy, xAt = ::xAt, rPx = ::rPx, outline = outline,
+            pitSmallHalf = WEAR_PIT_SMALL_HALF_PROFILE_PT,
+        )
+    }
+    drawWornSections(
+        c, wearRecord.wornSections,
+        oalMm = spec.overallLengthMm,
+        windowStartMm = aftSetMm, windowEndMm = fwdSetMm,
+        unit = unit,
+        xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt, cy = shaftCy,
+        outline = outline, text = text,
+        includeValues = !blankValues,
+    )
+    if (!blankValues) {
+        drawDiaReadingsInProfile(
+            c, wearRecord.diaReadings, resolvedComponents,
+            cy = shaftCy, xAt = ::xAt, unit = unit, text = text,
+        )
+    }
+
     // ── Fix vertical bubble positions, route leaders, draw ────────────────────
     val bubbleResult = bubblePlan.finish(
         anchorY = shaftCy + shaftHalfPt,
@@ -268,6 +306,200 @@ fun composeRunoutPdf(
     // ── Draw TIR direction line ───────────────────────────────────────────────
     val effectiveTir = if (blankValues) TirDirection.UNSET else config.tirDirection
     drawTirLine(c, text, contentLeft, contentRight, tirY, effectiveTir)
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Worn sections — measured Ø values inside the profile
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Draw designated worn sections on the shaft profile: a full-height boundary line at each
+ * end of the span, and the section's measured Ø values stacked across the span **inside**
+ * the profile — each value rotated 90° (reading bottom-to-top) with a sheet-white halo
+ * knocked out behind it, so no profile line runs through a measurement number.
+ *
+ * SINGLE draw implementation for both sites — the RunoutRoute preview calls this same
+ * function through its Compose canvas's `nativeCanvas`, so the on-screen sheet and the
+ * printed sheet are one construction by definition (the strongest form of the
+ * draw-both-sites rule). Layout comes from the pure engine `geom/WornSectionMath.kt`.
+ *
+ * Rules:
+ * - Span clamped to the shaft extent ([clampUndercutSpan] — stored record never mutated)
+ *   and to the drawn window ([windowStartMm]..[windowEndMm], the SET-to-SET profile span;
+ *   the preview canvas passes the full 0..OAL window).
+ * - Values ≤ 0 never print (placed-but-empty rule); an empty section draws boundaries
+ *   only — on a blank draft ([includeValues] = false) that clear interior IS the write-in
+ *   area, same posture as the write-in bubbles.
+ * - Value text: "Ø" + [formatDiaWithUnit] — the measurement verbatim, never re-derived.
+ */
+internal fun drawWornSections(
+    c: Canvas,
+    sections: List<WornSection>,
+    oalMm: Float,
+    windowStartMm: Float,
+    windowEndMm: Float,
+    unit: UnitSystem,
+    xAt: (Float) -> Float,
+    surfaceRAt: (Float) -> Float,
+    cy: Float,
+    outline: Paint,
+    text: Paint,
+    includeValues: Boolean,
+) {
+    if (sections.isEmpty()) return
+    val eps = 1e-3f
+    val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.WHITE
+    }
+    val valueText = Paint(text).apply { textAlign = Paint.Align.CENTER }
+    val fm = valueText.fontMetrics
+    val lineHeight = fm.descent - fm.ascent
+
+    sections.forEach { section ->
+        val clamped = clampUndercutSpan(section.startFromAftMm, section.lengthMm, oalMm)
+        if (clamped.isEmpty) return@forEach
+        val startMm = maxOf(clamped.startMm, windowStartMm)
+        val endMm = minOf(clamped.endMm, windowEndMm)
+        if (endMm - startMm <= eps) return@forEach
+
+        val x0 = xAt(startMm)
+        val x1 = xAt(endMm)
+
+        // Boundary lines at the section's ends, full local profile height.
+        val r0 = surfaceRAt(startMm)
+        val r1 = surfaceRAt(endMm)
+        c.drawLine(x0, cy - r0, x0, cy + r0, outline)
+        c.drawLine(x1, cy - r1, x1, cy + r1, outline)
+
+        if (!includeValues) return@forEach
+        val labels = section.diaMm.filter { it > 0f }
+            .map { "Ø" + formatDiaWithUnit(it.toDouble(), unit) }
+        if (labels.isEmpty()) return@forEach
+
+        val layout = layoutWornSectionValues(
+            x0 = x0, x1 = x1, cy = cy,
+            labelLengths = labels.map(valueText::measureText),
+            lineHeight = lineHeight,
+        )
+        layout.columns.forEachIndexed { i, col ->
+            drawRotatedValueColumn(c, col, labels[i], valueText, halo)
+        }
+    }
+}
+
+/**
+ * One in-profile value column: knockout halo first (erases every mark already drawn under
+ * the value — the "no lines through the numbers" rule), then the 90°-rotated text set into
+ * the cleared slot. Shared by the worn-section value pass and the migrated dia readings.
+ */
+private fun drawRotatedValueColumn(
+    c: Canvas,
+    col: WornValueColumn,
+    label: String,
+    valueText: Paint,
+    halo: Paint,
+) {
+    c.drawRect(col.haloLeft, col.haloTop, col.haloRight, col.haloBottom, halo)
+    val fm = valueText.fontMetrics
+    c.save()
+    c.rotate(-90f, col.cx, col.cy)
+    c.drawText(label, col.cx, col.cy - (fm.ascent + fm.descent) / 2f, valueText)
+    c.restore()
+}
+
+/**
+ * Wear marks migrated from the retired wear document onto the consolidated runout sheet:
+ * the vertical-line wear-area bands (each `WearSpot`, clamped to its liner's span — reuses
+ * the wear composer's [drawVerticalBand] construction) and the pit "X" markers (reuses
+ * [drawWearPitsOnProfile], so the X stays identical across every draw site per
+ * `geom/WearPitMath.kt`). Marks only — value text is drawn later, over halos, by
+ * [drawWornSections] / [drawDiaReadingsInProfile] (text always on top).
+ *
+ * Orphan spots (liner no longer in the spec) and orphan pits are simply skipped —
+ * render-layer orphan handling, stored record never mutated.
+ */
+internal fun drawWearMarksOnRunoutProfile(
+    c: Canvas,
+    record: WearRecord,
+    liners: List<Liner>,
+    components: List<ResolvedComponent>?,
+    cy: Float,
+    xAt: (Float) -> Float,
+    rPx: (Float) -> Float,
+    outline: Paint,
+    pitSmallHalf: Float,
+) {
+    // Wear areas — thin vertical strokes across the liner span, the shop's hand mark.
+    if (record.spots.isNotEmpty()) {
+        val bandLines = Paint(outline).apply { strokeWidth = outline.strokeWidth * 0.5f; alpha = 120 }
+        record.spots.forEach { spot ->
+            val ln = liners.firstOrNull { it.id == spot.linerId } ?: return@forEach
+            if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
+            val clamp = clampWearBandToLiner(spot.startMm, spot.lengthMm, ln.lengthMm)
+            if (clamp.lengthMm <= 0f) return@forEach
+            val r = rPx(ln.odMm)
+            drawVerticalBand(
+                c,
+                xAt(ln.startFromAftMm + clamp.startMm),
+                xAt(ln.startFromAftMm + clamp.startMm + clamp.lengthMm),
+                cy - r, cy + r,
+                bandLines, pitchPt = 6f,
+            )
+        }
+    }
+    // Pit X's — the exact wear-document profile construction.
+    if (record.pits.isNotEmpty() && components != null) {
+        val pitPaint = Paint(outline).apply { strokeCap = Paint.Cap.ROUND }
+        drawWearPitsOnProfile(c, record.pits, components, cy, xAt, rPx, pitPaint, smallHalf = pitSmallHalf)
+    }
+}
+
+/**
+ * Measured-Ø readings drawn INSIDE the profile at each reading's station — the consolidated
+ * sheet's replacement for the wear document's below-shaft leader callouts (on-device
+ * request: values live in the measured area, vertical, like the hand sketch). One rotated
+ * column per reading, centered on the station and the centerline, halo knockout first so
+ * no mark or line crosses the number. Liner readings draw here too (the retired wear
+ * document zoomed them onto detail strips instead).
+ *
+ * Value-less readings (`diaMm <= 0`) and orphans (unresolved componentId) are skipped —
+ * the placed-but-empty and render-layer-orphan rules.
+ */
+internal fun drawDiaReadingsInProfile(
+    c: Canvas,
+    readings: List<WearDiaReading>,
+    components: List<ResolvedComponent>?,
+    cy: Float,
+    xAt: (Float) -> Float,
+    unit: UnitSystem,
+    text: Paint,
+) {
+    if (readings.isEmpty() || components == null) return
+    val byId = components.associateBy { it.id }
+    val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.WHITE
+    }
+    val valueText = Paint(text).apply { textAlign = Paint.Align.CENTER }
+    val fm = valueText.fontMetrics
+    val lineHeight = fm.descent - fm.ascent
+
+    readings.forEach { r ->
+        if (r.diaMm <= 0f) return@forEach
+        val rc = byId[r.componentId] ?: return@forEach
+        val lenMm = (rc.endMmPhysical - rc.startMmPhysical).coerceAtLeast(0.001f)
+        val local = r.axialMm.coerceIn(0f, lenMm)
+        val stationX = xAt(rc.startMmPhysical + local)
+        val label = "Ø" + formatDiaWithUnit(r.diaMm.toDouble(), unit)
+        // Degenerate span → the single column centers exactly on the station.
+        val layout = layoutWornSectionValues(
+            x0 = stationX, x1 = stationX, cy = cy,
+            labelLengths = listOf(valueText.measureText(label)),
+            lineHeight = lineHeight,
+        )
+        drawRotatedValueColumn(c, layout.columns.single(), label, valueText, halo)
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

@@ -3,10 +3,10 @@ Navigation Contracts
 
 Files: AppNav.kt, InternalDocRoutes.kt, PdfExportRoute.kt (ui/nav/);
 ShaftEditorRoute.kt, ShaftRoute.kt, StartScreen.kt, RunoutRoute.kt, WearRoute.kt,
-UndercutRoute.kt (ui/screen/)  
+UndercutRoute.kt, HelpRoute.kt (ui/screen/)  
 Layer: UI → Nav
 
-Version: v0.4 (2026-07-30)
+Version: v0.5 (2026-08-04)
 
 Invariants
 - Routes are stable, typed constants or sealed routes.
@@ -25,6 +25,9 @@ Route graph (AppNav.kt NavHost)
     Runout/Wear
 - `settings` → SettingsRoute
 - `about` → AboutRoute
+- `help` → HelpRoute — static Help & FAQ content (no ViewModel); entered from Settings.
+  Topics restate current behavior — a behavior change must update the matching topic in
+  the same change (the screen is the user-facing summary of the contract docs).
 - `developerOptions` → DeveloperOptionsRoute
 - `achievements` → AchievementsRoute
 - `openLocal` / `saveLocal` → internal-storage document pickers (InternalDocRoutes.kt)

@@ -13,10 +13,13 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
+import com.android.shaftschematic.util.UndercutShadeColor
+import com.android.shaftschematic.util.UndercutShadeIntensity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -55,6 +58,15 @@ object SettingsStore {
 
     // Preview colors (theme roles; preview-only)
     private val KEY_PREVIEW_BW_ONLY = booleanPreferencesKey("preview_bw_only")
+
+    // Appearance (app-wide theme)
+    private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+    private val KEY_HIGH_CONTRAST = booleanPreferencesKey("high_contrast")
+
+    // Undercut drawing style (on-screen only; the printed PDF keeps standard drawing colors)
+    private val KEY_UNDERCUT_LINE_ART = booleanPreferencesKey("undercut_line_art")
+    private val KEY_UNDERCUT_SHADE_COLOR = stringPreferencesKey("undercut_shade_color")
+    private val KEY_UNDERCUT_SHADE_INTENSITY = stringPreferencesKey("undercut_shade_intensity")
 
     // PDF export
     private val KEY_OPEN_PDF_AFTER_EXPORT = booleanPreferencesKey("open_pdf_after_export")
@@ -224,6 +236,41 @@ object SettingsStore {
 
     fun previewBlackWhiteOnlyFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsDataStore.data.map { p -> p[KEY_PREVIEW_BW_ONLY] ?: false }
+
+    fun themeModeFlow(ctx: Context): Flow<AppThemeMode> =
+        ctx.settingsDataStore.data.map { p -> AppThemeMode.fromName(p[KEY_THEME_MODE]) }
+
+    suspend fun setThemeMode(ctx: Context, mode: AppThemeMode) {
+        ctx.settingsDataStore.edit { it[KEY_THEME_MODE] = mode.name }
+    }
+
+    fun highContrastFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_HIGH_CONTRAST] ?: false }
+
+    suspend fun setHighContrast(ctx: Context, enabled: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_HIGH_CONTRAST] = enabled }
+    }
+
+    fun undercutLineArtFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_UNDERCUT_LINE_ART] ?: false }
+
+    suspend fun setUndercutLineArt(ctx: Context, enabled: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_UNDERCUT_LINE_ART] = enabled }
+    }
+
+    fun undercutShadeColorFlow(ctx: Context): Flow<UndercutShadeColor> =
+        ctx.settingsDataStore.data.map { p -> UndercutShadeColor.fromName(p[KEY_UNDERCUT_SHADE_COLOR]) }
+
+    suspend fun setUndercutShadeColor(ctx: Context, color: UndercutShadeColor) {
+        ctx.settingsDataStore.edit { it[KEY_UNDERCUT_SHADE_COLOR] = color.name }
+    }
+
+    fun undercutShadeIntensityFlow(ctx: Context): Flow<UndercutShadeIntensity> =
+        ctx.settingsDataStore.data.map { p -> UndercutShadeIntensity.fromName(p[KEY_UNDERCUT_SHADE_INTENSITY]) }
+
+    suspend fun setUndercutShadeIntensity(ctx: Context, intensity: UndercutShadeIntensity) {
+        ctx.settingsDataStore.edit { it[KEY_UNDERCUT_SHADE_INTENSITY] = intensity.name }
+    }
 
     fun openPdfAfterExportFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsDataStore.data.map { p -> p[KEY_OPEN_PDF_AFTER_EXPORT] ?: false }

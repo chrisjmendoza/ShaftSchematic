@@ -170,10 +170,14 @@ data class WearDiaReading(
  *   envelope version bump.
  * @property diaReadings Measured-diameter readings on liners, tapers, and bodies (see
  *   [WearDiaReading]). Additive + defaulted, same no-version-bump rule as [pits].
+ * @property wornSections Designated worn areas whose measured Ø values print inside the
+ *   shaft profile on the runout sheet (see [WornSection] — shaft-space, never pruned at
+ *   decode). Additive + defaulted, same no-version-bump rule as [pits].
  */
 @Serializable
 data class WearRecord(
     val spots: List<WearSpot> = emptyList(),
     val pits: List<WearPit> = emptyList(),
     val diaReadings: List<WearDiaReading> = emptyList(),
+    val wornSections: List<WornSection> = emptyList(),
 )

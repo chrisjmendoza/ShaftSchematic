@@ -64,6 +64,12 @@ fun ShaftEditorRoute(
         activeTab = EditorTab.SCHEMATIC
     }
 
+    // The Wear tab is tucked away (WEAR_TAB_ENABLED) — a restored session that saved it as
+    // the active tab lands on the consolidated Runout sheet instead.
+    if (!WEAR_TAB_ENABLED && activeTab == EditorTab.WEAR) {
+        activeTab = EditorTab.RUNOUT
+    }
+
     // Full-size Box so the sidebar can overlay the content
     Box(Modifier.fillMaxSize()) {
 

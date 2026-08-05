@@ -30,6 +30,7 @@ import androidx.navigation.compose.rememberNavController
 import com.android.shaftschematic.ui.screen.AchievementsRoute
 import com.android.shaftschematic.ui.screen.AboutRoute
 import com.android.shaftschematic.ui.screen.DeveloperOptionsRoute
+import com.android.shaftschematic.ui.screen.HelpRoute
 import com.android.shaftschematic.ui.screen.PdfPreviewScreen
 import com.android.shaftschematic.ui.screen.SettingsRoute
 import com.android.shaftschematic.ui.screen.ShaftEditorRoute
@@ -232,6 +233,7 @@ fun AppNav(vm: ShaftViewModel) {
                 onBack = { nav.popBackStack() },
                 onOpenAchievements = { nav.navigate("achievements") },
                 onOpenAbout = { nav.navigate("about") },
+                onOpenHelp = { nav.navigate("help") },
                 onOpenDeveloperOptions = { nav.navigate("developerOptions") },
             )
         }
@@ -239,6 +241,11 @@ fun AppNav(vm: ShaftViewModel) {
         /* ───────── About ───────── */
         composable("about") {
             AboutRoute(vm = vm, onBack = { nav.popBackStack() })
+        }
+
+        /* ───────── Help & FAQ ───────── */
+        composable("help") {
+            HelpRoute(onBack = { nav.popBackStack() })
         }
 
         /* ───────── Developer Options ───────── */

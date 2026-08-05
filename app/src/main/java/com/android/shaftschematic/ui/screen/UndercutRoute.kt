@@ -155,6 +155,7 @@ fun UndercutRoute(
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val undercutRecord     by vm.undercutRecord.collectAsState()
+    val undercutStyle      by vm.undercutStyle.collectAsState()
 
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
@@ -281,19 +282,21 @@ fun UndercutRoute(
         previewLoading = false
     }
 
-    // Capture theme colors before the Canvas block (DrawScope is not composable) — same
-    // technique as WearRoute's overview canvas.
-    val outlineArgb    = MaterialTheme.colorScheme.onSurface.toArgb()
-    // Component fills are fixed black-alpha, not theme colors: the overview canvas is a
-    // paper-white sheet in both themes, so a dark-theme tint (near-white onSurface) would
-    // vanish into the paper and the pure-white notch voids would lose the grey they read
-    // against. The liner takes the PDF shade fill's weight (argb 40) — grey liner, white cut
-    // sections (on-device request); bodies/tapers stay lighter so the liner still reads as the
-    // outer surface.
-    val bodyFillArgb   = Color.Black.copy(alpha = 0.08f).toArgb()
-    val linerFillArgb  = Color.Black.copy(alpha = 0.16f).toArgb()
-    val hatchArgb      = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f).toArgb()
-    val outlineColor   = MaterialTheme.colorScheme.onSurface
+    // Capture colors before the Canvas block (DrawScope is not composable) — same technique
+    // as WearRoute's overview canvas. Sheet ink is FIXED black, never theme onSurface: the
+    // overview canvas is a paper-white sheet in every theme, and dark theme's near-white
+    // onSurface would print invisible ink on it.
+    // Component fills come from the user's Undercut Drawing style (Settings → Preview
+    // Colors): fixed ink colors on the white sheet, never theme roles — a dark-theme tint
+    // (near-white) would vanish into the paper and the pure-white notch voids would lose the
+    // shade they read against. Defaults reproduce the historical fixed shades — grey liner,
+    // white cut sections (on-device request); bodies/tapers stay lighter so the liner still
+    // reads as the outer surface. Line art empties every fill.
+    val outlineArgb    = Color.Black.toArgb()
+    val bodyFillArgb   = undercutStyle.bodyFill().toArgb()
+    val linerFillArgb  = undercutStyle.linerFill().toArgb()
+    val hatchArgb      = Color.Black.copy(alpha = 0.55f).toArgb()
+    val outlineColor   = Color.Black
     val tapTintColor   = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
     val tapBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
     val badgeColor     = MaterialTheme.colorScheme.primary
@@ -416,6 +419,7 @@ fun UndercutRoute(
                             voidColor = Color.White,
                             outlineColor = outlineColor,
                             strokeWidthPx = 1.5f,
+                            sectionFillColor = undercutStyle.sectionFill(),
                         )
                         drawUndercutStripAffordances(
                             layout = layout,
@@ -636,6 +640,7 @@ fun UndercutRoute(
             resolvedComponents = resolvedComponents,
             unit = unit,
             undercutRecord = undercutRecord,
+            style = undercutStyle,
             onAddUndercut = { startMm, lengthMm, reference, referenceLinerId ->
                 // Called when the overlay CONFIRMS a drafted new cut (a cancelled draft never
                 // reaches here, so the record gains no ghosts). The returned id lets the overlay

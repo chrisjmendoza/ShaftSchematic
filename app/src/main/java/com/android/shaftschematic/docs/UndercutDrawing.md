@@ -232,16 +232,30 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   `pdfPrefs.shadedLiners` (bodies and tapers stay pref-driven; the blank template's edges-only
   started strip draws no liner span, so it stays clear paper) — the notch voids stay pure white,
   and the section's remaining core (between the floor lines) fills one step **lighter** than the
-  liner: erased to the sheet colour, then refilled at `UNDERCUT_SECTION_FILL_ALPHA`
-  (`geom/SurfaceProfileMath.kt`, half the liner shade's 40/255) so the cut span reads distinct
-  from the liner around it. Same tone in every draw site. Both
+  liner: erased to the sheet colour, then refilled at half the liner shade so the cut span reads
+  distinct from the liner around it. Same tone in every draw site. Both
   canvases (route overview, detail overlay) paint onto a hard-coded white sheet, so their
-  component fills are fixed black-alpha rather than theme colours: a dark-theme tint
+  component fills are fixed ink colours rather than theme colours: a dark-theme tint
   (near-white `onSurface`/`tertiary`) would wash into the paper and leave the white voids nothing
-  to read against. The liner uses the PDF shade fill's weight (`argb 40` ≈ 0.16 alpha); the
-  overview's bodies/tapers stay lighter (0.08) so the liner still reads as the outer surface. The
-  voids stay pure white in both themes because the sheet itself is white in both — no dark-theme
-  glare is introduced by the void that isn't already the sheet's.
+  to read against. The
+  voids stay pure white in every theme because the sheet itself is white in every theme — no
+  dark-theme glare is introduced by the void that isn't already the sheet's.
+
+  **On-screen shade styling — `util/UndercutStyle.kt`** (Settings → Preview Colors → Undercut
+  Drawing): the two canvases take their fills from a persisted `UndercutStyle` —
+  shade colour (Grey default / Bronze / Blue — fixed ink bases, never theme roles), shade
+  intensity (Light / Standard / Dark), and **Line art** (the colour-removal mode: every fill
+  fully transparent, white drawing with black outlines only; outlines/text stay `SheetInk`
+  black — see `Appearance.md`). The alpha ladder hangs off `UNDERCUT_SECTION_FILL_ALPHA`
+  (`geom/SurfaceProfileMath.kt`): liner = 2 × constant × intensity multiplier, section core and
+  overview bodies/tapers = half the liner — so "core one step lighter than the liner" holds at
+  every intensity, and the STANDARD/GREY default reproduces the historical fixed shades (liner
+  ≈ the PDF `argb 40` weight, section = the constant exactly; pinned by `UndercutStyleTest`).
+  `drawUndercutNotches` takes the core fill as its `sectionFillColor` parameter. **The PDF is
+  deliberately not style-driven** — the printed drawing keeps the standard black-ink shading
+  (same posture as preview colors never leaking into `ShaftPdfComposer`); a PDF line-art option
+  is a considered follow-up in `docs/SettingsCustomization_PLAN.md`, complicated by the
+  strip's always-shaded-liner rule above.
 
 - **Strips — liner-anchored vs free windows.** The zoomed-view unit consumed by the overview
   affordances, the detail overlay, and the PDF is a sealed `UndercutStrip`, not a bare

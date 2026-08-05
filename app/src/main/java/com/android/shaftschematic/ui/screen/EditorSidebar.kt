@@ -167,14 +167,19 @@ fun EditorSidebarOverlay(
                             onClick = { if (runoutEnabled) { onTabSelected(EditorTab.RUNOUT); onClose() } },
                             disabledHint = "Add components first",
                         )
-                        NavItem(
-                            icon = Icons.Filled.Article,
-                            label = EditorTab.WEAR.label,
-                            selected = selectedTab == EditorTab.WEAR,
-                            enabled = runoutEnabled,
-                            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.WEAR); onClose() } },
-                            disabledHint = "Add components first",
-                        )
+                        // The Wear page is the authoring surface for wear data; the Runout
+                        // sheet features that data on its output. WEAR_TAB_ENABLED
+                        // (EditorTab.kt) can retire this entry when full consolidation lands.
+                        if (WEAR_TAB_ENABLED) {
+                            NavItem(
+                                icon = Icons.Filled.Article,
+                                label = EditorTab.WEAR.label,
+                                selected = selectedTab == EditorTab.WEAR,
+                                enabled = runoutEnabled,
+                                onClick = { if (runoutEnabled) { onTabSelected(EditorTab.WEAR); onClose() } },
+                                disabledHint = "Add components first",
+                            )
+                        }
                         NavItem(
                             icon = Icons.Filled.ContentCut,
                             label = EditorTab.UNDERCUT.label,

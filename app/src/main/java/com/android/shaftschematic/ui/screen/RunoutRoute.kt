@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -35,7 +36,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Print
@@ -43,17 +46,20 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -71,6 +77,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,7 +89,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -97,14 +106,25 @@ import com.android.shaftschematic.geom.RunoutBubbleGeometry
 import com.android.shaftschematic.geom.RunoutBubblePlan
 import com.android.shaftschematic.geom.RunoutComponentKind
 import com.android.shaftschematic.geom.RunoutComponentSpan
+import com.android.shaftschematic.geom.canonicalToUndercutStartMm
 import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
+import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickBubbleAt
 import com.android.shaftschematic.geom.planRunoutBubbles
+import com.android.shaftschematic.geom.undercutStartToCanonicalMm
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.UndercutReference
+import com.android.shaftschematic.model.WearRecord
+import com.android.shaftschematic.model.WornSection
 import com.android.shaftschematic.pdf.composeRunoutPdf
+import com.android.shaftschematic.pdf.drawDiaReadingsInProfile
+import com.android.shaftschematic.pdf.drawWearMarksOnRunoutProfile
+import com.android.shaftschematic.pdf.drawWornSections
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
@@ -114,9 +134,12 @@ import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
+import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
+import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
+import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
@@ -139,6 +162,9 @@ private data class RunoutComponentEntry(
     val startMm: Float,
 )
 
+/** Worn-section editor dialog target — [section] null means "add a new one". */
+private data class WornSectionDialogTarget(val section: WornSection?)
+
 @OptIn(ExperimentalTextApi::class)
 @Composable
 fun RunoutRoute(
@@ -159,9 +185,13 @@ fun RunoutRoute(
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
+    val wearRecord         by vm.wearRecord.collectAsState()
 
     // Which bubble's editor dialog is open, if any (component id + station index + display title).
     var editingBubble by remember { mutableStateOf<EditingRunoutBubble?>(null) }
+
+    // Worn-section editor dialog target: null = closed; a target with a null section = adding.
+    var wornSectionDialog by remember { mutableStateOf<WornSectionDialogTarget?>(null) }
 
     val ctx = LocalContext.current
     var showPreview    by rememberSaveable { mutableStateOf(false) }
@@ -191,6 +221,7 @@ fun RunoutRoute(
                             resolvedComponents = resolvedComponents,
                             lineThicknessScale = lineThicknessScale,
                             runoutReadings = runoutReadings,
+                            wearRecord = wearRecord,
                             blankValues = blankDraft,
                         )
                         doc.finishPage(page)
@@ -207,7 +238,7 @@ fun RunoutRoute(
 
     LaunchedEffect(showPreview, spec, runoutConfig, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   runoutReadings, blankDraft) {
+                   runoutReadings, wearRecord, blankDraft) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot  = vm.currentPdfPrefs
@@ -222,6 +253,7 @@ fun RunoutRoute(
                 resolvedComponents = resolvedComponents,
                 lineThicknessScale = thicknessSnapshot,
                 runoutReadings = runoutReadings,
+                wearRecord = wearRecord,
                 blankValues = blankDraft,
             )
         }
@@ -229,11 +261,13 @@ fun RunoutRoute(
         previewLoading = false
     }
 
-    // Capture theme colors before the Canvas block (DrawScope is not composable)
-    val outlineArgb   = MaterialTheme.colorScheme.onSurface.toArgb()
-    val bodyFillArgb  = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f).toArgb()
-    val linerFillArgb = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f).toArgb()
-    val hatchArgb     = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f).toArgb()
+    // Capture colors before the Canvas block (DrawScope is not composable). Sheet ink is
+    // FIXED (SheetInk), never theme colors: the canvas is a paper-white sheet in every
+    // theme, and dark theme's near-white onSurface would print invisible ink on it.
+    val outlineArgb   = SheetInk.Outline.toArgb()
+    val bodyFillArgb  = SheetInk.Outline.copy(alpha = 0.08f).toArgb()
+    val linerFillArgb = SheetInk.LinerTint.copy(alpha = 0.16f).toArgb()
+    val hatchArgb     = SheetInk.Outline.copy(alpha = 0.55f).toArgb()
     val previewShape  = MaterialTheme.shapes.medium
     val textMeasurer  = rememberTextMeasurer()
 
@@ -279,6 +313,32 @@ fun RunoutRoute(
                 }
             }
         }.distinctBy { it.id }.sortedBy { it.startMm }
+    }
+
+    // S.E.T. positions in shaft space — the worn-section Distance field's datums, and the
+    // list rows' displayed distances. Same source as the composer's SET-to-SET window.
+    val setPositions = remember(spec) { computeSetPositionsInMeasureSpace(computeOalWindow(spec), spec) }
+    val aftSetXMm = setPositions.aftSETxMm.toFloat()
+    val fwdSetXMm = setPositions.fwdSETxMm.toFloat()
+
+    // Surface envelope for the worn-section boundary heights on the preview canvas.
+    val segs = remember(resolvedComponents) { surfaceSegsFrom(resolvedComponents) }
+
+    // Sheet-ink paints for the shared worn-section draw (pdf/RunoutPdfComposer's
+    // drawWornSections runs on this canvas's nativeCanvas — one construction, both sites).
+    val wornOutlinePaint = remember {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 1.5f
+            color = android.graphics.Color.BLACK
+        }
+    }
+    val wornTextPaint = remember {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.FILL
+            textSize = 26f
+            color = android.graphics.Color.BLACK
+        }
     }
 
     // Zoom state for the shaft preview (hoisted so it survives spec updates)
@@ -376,6 +436,39 @@ fun RunoutRoute(
                         with(ShaftRenderer) {
                             draw(spec, preview.layout, previewOpts, resolvedComponents)
                         }
+                        // Consolidated wear rendering BEFORE the bubbles, in the printed
+                        // sheet's z-order: marks first (wear bands, pit X's), then the
+                        // worn-section boundaries, then ALL value text last over knockout
+                        // halos — same single implementations as the PDF, so preview and
+                        // print cannot diverge. Halos never erase a bubble leader (those
+                        // draw after).
+                        drawIntoCanvas { canvas ->
+                            val nc = canvas.nativeCanvas
+                            val xAtPx: (Float) -> Float = { mm -> preview.layout.xPx(mm) }
+                            val cyPx = preview.layout.centerlineYPx
+                            drawWearMarksOnRunoutProfile(
+                                nc, wearRecord, spec.liners, resolvedComponents,
+                                cy = cyPx, xAt = xAtPx,
+                                rPx = { dia -> preview.layout.rPx(dia) },
+                                outline = wornOutlinePaint,
+                                pitSmallHalf = 3f,
+                            )
+                            drawWornSections(
+                                nc, wearRecord.wornSections,
+                                oalMm = spec.overallLengthMm,
+                                windowStartMm = 0f, windowEndMm = spec.overallLengthMm,
+                                unit = unit,
+                                xAt = xAtPx,
+                                surfaceRAt = { mm -> preview.layout.rPx(outerDiaAt(segs, mm)) },
+                                cy = cyPx,
+                                outline = wornOutlinePaint, text = wornTextPaint,
+                                includeValues = true,
+                            )
+                            drawDiaReadingsInProfile(
+                                nc, wearRecord.diaReadings, resolvedComponents,
+                                cy = cyPx, xAt = xAtPx, unit = unit, text = wornTextPaint,
+                            )
+                        }
                         drawRunoutMarkers(preview.bubbles, preview.geom, runoutReadings, unit, textMeasurer)
                     }
 
@@ -427,6 +520,30 @@ fun RunoutRoute(
                 }
             }
 
+            // ── Worn sections — wear readings consolidated onto this sheet ────
+            Text("Worn sections", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Designate a measured area — its Ø readings print inside the shaft profile, " +
+                    "and no lines draw through the numbers.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            wearRecord.wornSections.forEachIndexed { i, section ->
+                WornSectionRow(
+                    index = i + 1,
+                    section = section,
+                    unit = unit,
+                    aftSetXMm = aftSetXMm,
+                    fwdSetXMm = fwdSetXMm,
+                    onClick = { wornSectionDialog = WornSectionDialogTarget(section) },
+                )
+            }
+            OutlinedButton(onClick = { wornSectionDialog = WornSectionDialogTarget(null) }) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Add worn section")
+            }
+
             Spacer(Modifier.height(4.dp))
 
             // ── Blank draft toggle ────────────────────────────────────────────
@@ -468,6 +585,7 @@ fun RunoutRoute(
                     val resolvedSnapshot = resolvedComponents
                     val thicknessSnapshot = lineThicknessScale
                     val readingsSnapshot = runoutReadings
+                    val wearSnapshot = wearRecord
                     val blankSnapshot = blankDraft
                     printShaftPdfPage(ctx, jobName) { page ->
                         composeRunoutPdf(
@@ -477,6 +595,7 @@ fun RunoutRoute(
                             resolvedComponents = resolvedSnapshot,
                             lineThicknessScale = thicknessSnapshot,
                             runoutReadings = readingsSnapshot,
+                            wearRecord = wearSnapshot,
                             blankValues = blankSnapshot,
                         )
                     }
@@ -498,6 +617,32 @@ fun RunoutRoute(
                 Text("Export Runout Sheet PDF")
             }
         }
+    }
+
+    // ── Worn-section editor dialog ────────────────────────────────────────────
+    wornSectionDialog?.let { target ->
+        WornSectionDialog(
+            existing = target.section,
+            unit = unit,
+            aftSetXMm = aftSetXMm,
+            fwdSetXMm = fwdSetXMm,
+            onSave = { startFromAftMm, lengthMm, values, reference ->
+                val ex = target.section
+                if (ex == null) {
+                    vm.addWornSection(startFromAftMm, lengthMm, values, reference)
+                } else {
+                    vm.updateWornSection(ex.id, startFromAftMm, lengthMm, values)
+                    if (ex.authoredReference != reference) {
+                        vm.updateWornSectionReference(ex.id, reference)
+                    }
+                }
+                wornSectionDialog = null
+            },
+            onDelete = target.section?.let { s ->
+                { vm.removeWornSection(s.id); wornSectionDialog = null }
+            },
+            onDismiss = { wornSectionDialog = null },
+        )
     }
 
     // ── Full-screen preview overlay ───────────────────────────────────────────
@@ -830,6 +975,194 @@ private fun openRunoutPdf(context: Context, uri: Uri) {
     catch (_: ActivityNotFoundException) {}
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Worn-section editor (list row + dialog)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One worn section in the list under the preview: displayed Distance is re-projected from
+ * canonical against the section's authored S.E.T. reference — display only, canonical
+ * never moves (the WearSpotReference pattern). Tap to edit.
+ */
+@Composable
+private fun WornSectionRow(
+    index: Int,
+    section: WornSection,
+    unit: UnitSystem,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+    onClick: () -> Unit,
+) {
+    val reference = wornSectionSetReference(section.authoredReference)
+    val distMm = canonicalToUndercutStartMm(
+        reference, section.startFromAftMm, section.lengthMm, aftSetXMm, fwdSetXMm,
+    )
+    val refLabel = if (reference == UndercutReference.FWD_SET) "FWD S.E.T." else "AFT S.E.T."
+    val values = section.diaMm.filter { it > 0f }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Worn section $index", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "${disp(distMm, unit)}${abbr(unit)} from $refLabel · " +
+                    "L ${disp(section.lengthMm, unit)}${abbr(unit)} · " +
+                    if (values.isEmpty()) "no readings yet" else "${values.size} Ø",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Worn sections author against the S.E.T.s only — map any non-SET value to AFT_SET. */
+private fun wornSectionSetReference(reference: UndercutReference): UndercutReference =
+    if (reference == UndercutReference.FWD_SET) UndercutReference.FWD_SET
+    else UndercutReference.AFT_SET
+
+/**
+ * Add/edit dialog for a worn section: S.E.T. reference chips, Distance + Length, and the
+ * measured Ø list. All fields are unit-aware text inputs parsed on Save — typed values are
+ * stored verbatim (golden rule); canonical start is derived from the authored Distance
+ * once, at commit. Switching the reference chips re-projects the DISPLAYED distance so
+ * the section never moves on a reference switch.
+ */
+@Composable
+private fun WornSectionDialog(
+    existing: WornSection?,
+    unit: UnitSystem,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+    onSave: (startFromAftMm: Float, lengthMm: Float, diaMm: List<Float>, reference: UndercutReference) -> Unit,
+    onDelete: (() -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    var reference by remember(existing?.id) {
+        mutableStateOf(wornSectionSetReference(existing?.authoredReference ?: UndercutReference.AFT_SET))
+    }
+    var distanceText by remember(existing?.id) {
+        mutableStateOf(
+            existing?.let {
+                disp(
+                    canonicalToUndercutStartMm(
+                        wornSectionSetReference(it.authoredReference),
+                        it.startFromAftMm, it.lengthMm, aftSetXMm, fwdSetXMm,
+                    ),
+                    unit,
+                )
+            } ?: ""
+        )
+    }
+    var lengthText by remember(existing?.id) {
+        mutableStateOf(existing?.let { disp(it.lengthMm, unit) } ?: "")
+    }
+    val valueTexts = remember(existing?.id) {
+        (existing?.diaMm?.map { disp(it, unit) } ?: emptyList())
+            .ifEmpty { listOf("", "", "") }
+            .toMutableStateList()
+    }
+
+    val distMm = toMmOrNull(distanceText, unit)
+    val lenMm = toMmOrNull(lengthText, unit)
+    val canSave = distMm != null && lenMm != null && lenMm > 0f
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (existing == null) "Add worn section" else "Edit worn section") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("Measure from", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        UndercutReference.AFT_SET to "AFT S.E.T.",
+                        UndercutReference.FWD_SET to "FWD S.E.T.",
+                    ).forEach { (ref, label) ->
+                        FilterChip(
+                            selected = reference == ref,
+                            onClick = {
+                                if (reference != ref) {
+                                    // Re-project the displayed distance under the new datum
+                                    // so the section stays put — the canonical position is
+                                    // what both projections share.
+                                    val d = toMmOrNull(distanceText, unit)
+                                    val l = toMmOrNull(lengthText, unit) ?: 0f
+                                    if (d != null) {
+                                        val canonical = undercutStartToCanonicalMm(
+                                            reference, d, l, aftSetXMm, fwdSetXMm,
+                                        )
+                                        distanceText = disp(
+                                            canonicalToUndercutStartMm(ref, canonical, l, aftSetXMm, fwdSetXMm),
+                                            unit,
+                                        )
+                                    }
+                                    reference = ref
+                                }
+                            },
+                            label = { Text(label) },
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = distanceText,
+                    onValueChange = { distanceText = it },
+                    label = { Text("Distance (${abbr(unit)})") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                )
+                OutlinedTextField(
+                    value = lengthText,
+                    onValueChange = { lengthText = it },
+                    label = { Text("Length (${abbr(unit)})") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                )
+                Text("Measured diameters", style = MaterialTheme.typography.labelLarge)
+                valueTexts.forEachIndexed { i, v ->
+                    OutlinedTextField(
+                        value = v,
+                        onValueChange = { valueTexts[i] = it },
+                        label = { Text("Ø ${i + 1} (${abbr(unit)})") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                    )
+                }
+                TextButton(
+                    onClick = { valueTexts.add("") },
+                    enabled = valueTexts.size < 6,
+                ) { Text("Add another Ø") }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = canSave,
+                onClick = {
+                    val canonical = undercutStartToCanonicalMm(
+                        reference, distMm ?: return@TextButton, lenMm ?: return@TextButton,
+                        aftSetXMm, fwdSetXMm,
+                    )
+                    val values = valueTexts.mapNotNull { toMmOrNull(it, unit) }.filter { it > 0f }
+                    onSave(canonical, lenMm, values, reference)
+                },
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (onDelete != null) {
+                    TextButton(onClick = onDelete) { Text("Delete") }
+                }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
+}
+
 private fun renderRunoutBitmap(
     context: Context,
     spec: ShaftSpec,
@@ -840,6 +1173,7 @@ private fun renderRunoutBitmap(
     resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
     runoutReadings: RunoutReadings = RunoutReadings(),
+    wearRecord: WearRecord = WearRecord(),
     blankValues: Boolean = false,
 ): Bitmap? = runCatching {
     val tempFile = File.createTempFile("runout_preview_", ".pdf", context.cacheDir)
@@ -850,7 +1184,7 @@ private fun renderRunoutBitmap(
         composeRunoutPdf(page = page, spec = spec, config = config, project = project, unit = unit,
             pdfPrefs = pdfPrefs, resolvedComponents = resolvedComponents,
             lineThicknessScale = lineThicknessScale, runoutReadings = runoutReadings,
-            blankValues = blankValues)
+            wearRecord = wearRecord, blankValues = blankValues)
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
     } finally {

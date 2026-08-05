@@ -70,7 +70,8 @@ skipped at the **render layer**, not pruned at decode (auto-body/taper ids aren'
 codec) — same rule as runout readings; wear spots, by contrast, ARE pruned at decode. The "X" must
 be drawn **identically** (same crossed-line construction, same small:large ratio) in all draw sites:
 `ComponentWearDetailOverlay`'s `drawPitX` (canvas), `WearPdfComposer`'s `drawWearPitsOnProfile` +
-strip pits (PDF). Pure sizing/hit-test/clamp math lives in `geom/WearPitMath.kt` (shared, no
+strip pits (PDF), and the consolidated runout sheet (canvas + PDF), which reuses
+`drawWearPitsOnProfile` itself (per-surface `smallHalf`). Pure sizing/hit-test/clamp math lives in `geom/WearPitMath.kt` (shared, no
 `pdf → ui` dep). See `docs/RunoutSheet.md` (Wear Pits).
 
 ### Wear diameter readings are reference features
@@ -87,8 +88,37 @@ printed. Callouts are placed by the shared pure engine `geom/WearDiaCalloutLayou
 (order-preserving spread, two-row stagger, dogleg leaders) and must render **identically**
 in both draw sites: `ComponentWearDetailOverlay` (canvas) and `WearPdfComposer` (liner
 readings → that liner's detail strip; body/taper readings → under the main profile). Labels
-use `formatDiaWithUnit`, no `Ø` prefix. See `docs/RunoutSheet.md` (Wear Diameter
+use `formatDiaWithUnit`, no `Ø` prefix. On the **consolidated runout sheet** the same
+readings instead draw INSIDE the profile at their station — one rotated haloed column via
+`drawDiaReadingsInProfile` (`RunoutPdfComposer`), liners included, `Ø`-prefixed — replacing
+below-shaft callouts there; the wear document itself (the authoring surface) keeps its
+callout engine unchanged. See `docs/RunoutSheet.md` (Wear Diameter
 Measurements) and `docs/WearDiaMeasurements_PLAN.md`.
+
+### Worn sections are reference features
+Worn sections (`WearRecord.wornSections` — a `WornSection` per designated measured area,
+step 1 of the runout/wear consolidation) are **reference-only**, the same posture as the
+other wear/runout marks. They **never** affect `coverageEndMm`/OAL, body resolution,
+collision, or the Free-to-End badge, and they ride the existing `wear_record` envelope
+field (additive `wornSections` list — no codec plumbing). Like undercuts they are
+**shaft-space** (`startFromAftMm` + `lengthMm`, may cross component edges, no orphans,
+never pruned at decode; `authoredReference` reuses `UndercutReference` SET values as
+display-only Distance metadata — canonical never moves on a reference switch). `diaMm` is
+a **list** of typed measurements — stored verbatim in list order (golden rule); values ≤ 0
+never print. They draw on the **runout sheet**: boundary lines at the span ends and the
+values **inside the profile**, rotated 90°, each over a sheet-white halo so no profile
+line crosses a number. ONE draw implementation for both sites — `drawWornSections`
+(`pdf/RunoutPdfComposer.kt`), called by the PDF and by the `RunoutRoute` canvas via
+`nativeCanvas`; pure layout in `geom/WornSectionMath.kt`. No carousel card, no Add dialog
+(outside the add-dialog-parity invariant). **Consolidated-sheet z-order: marks first, text
+last** — wear-area bands and pit X's (migrated from the retired wear tab,
+`drawWearMarksOnRunoutProfile`), then worn-section boundaries, then ALL value text over
+knockout halos (worn values, then `drawDiaReadingsInProfile`); do not draw any mark after
+the text passes. Division of labor: the Wear page is the **authoring surface** for
+spots/pits/point-readings (tab visible; `WEAR_TAB_ENABLED` in `EditorTab.kt` is the
+one-line retirement switch for a future full consolidation), while the Runout sheet is
+the consolidated **output** featuring that wear information. See `docs/RunoutSheet.md`
+(Worn Sections).
 
 ### Undercuts are reference features
 Undercut sections (`UndercutRecord.undercuts` — an `Undercut` per machined-below-surface
@@ -125,6 +155,18 @@ and `UndercutPdfComposer` (PDF) — from the shared pure pipeline `geom/SurfaceP
 + `geom/UndercutMath.kt` (cluster windows, clamps, hit-tests; no `pdf → ui` dep) with
 `ui/resolved/SurfaceSegs.kt` as the single resolved→surface mapping. See
 `docs/UndercutDrawing_PLAN.md`.
+
+### Paper sheets are theme-independent
+The app theme (Settings → Appearance: System/Light/Dark + high contrast; default Light =
+the historical look) styles Compose chrome only. The five white-sheet canvases (undercut
+overview/detail, wear overview/detail, runout preview) draw with fixed ink from
+`ui/theme/SheetInk.kt` — never `MaterialTheme.colorScheme` — because dark theme's
+near-white onSurface would print invisible ink on the white sheet. The undercut sheets'
+fills are additionally user-styled via `util/UndercutStyle.kt` (shade color/intensity +
+line-art mode; the Standard/Grey default reproduces the historical fixed shades, and the
+section core stays half the liner alpha at every intensity — `UndercutStyleTest`) — still
+fixed inks, never theme roles, and never leaking into the PDF composers. See
+`docs/Appearance.md`.
 
 ### Runout readings are reference features
 Per-station runout readings (`RunoutReadings` in the doc envelope — a TIR value + high-spot

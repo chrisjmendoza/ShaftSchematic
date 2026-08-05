@@ -125,9 +125,11 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 
 Waves 1–2 shipped (Wave 1 fixes 2026-07-11; Wave 2 deletion pass 2026-07-26, `ad5b198`). Remaining:
 
-- [ ] **Theme decision:** `ShaftSchematicTheme` exists but is never wired into `MainActivity`
-  (no dark mode). Wire it (one line, but needs a dark-mode visual check of preview colors —
-  PDF must stay theme-independent per §8) or delete `ui/theme`.
+- [x] **Theme decision:** resolved 2026-08-04 — `ShaftSchematicTheme` wired into
+  `MainActivity`, driven by the new Appearance setting (System/Light/Dark + high contrast,
+  default Light = historical look). Sheet canvases pinned to fixed ink (`SheetInk.kt`) so
+  dark mode can't blank the drawings; PDF untouched (theme-independent per §8). Remaining:
+  on-device visual pass of dark/high-contrast chrome — see `docs/Appearance.md`.
 - [ ] **Wave 3:** shared PDF profile-drawing helper across the three composers + parity
   controls; ViewModel update-method generics
 - [ ] **Wave 4:** structural splits of the remaining oversized files

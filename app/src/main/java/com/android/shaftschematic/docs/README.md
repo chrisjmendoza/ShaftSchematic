@@ -52,5 +52,7 @@ where they merely mirrored code. (Sweep record in git history.)
 - **Persistence.md** — internal `.shaft` storage (atomic saves, migration, sample
   seeding), doc envelope format, units policy
 - **Navigation.md** — route graph, editor container (sidebar + tabs), screen wiring
+- **Appearance.md** — app theme (System/Light/Dark + high contrast) and the sheet-ink
+  invariant: paper-sheet canvases draw fixed ink, never theme colors
 
 Pair each Kotlin file with a header comment referencing its contract doc and version.

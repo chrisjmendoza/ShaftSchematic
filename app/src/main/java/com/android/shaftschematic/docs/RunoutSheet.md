@@ -256,6 +256,80 @@ via an elbow above the row-0 band so drops provably clear every label; uniform c
 
 ---
 
+## Worn Sections (in-profile measured Ø, 2026-08-04 — runout/wear consolidation step 1)
+
+First step of consolidating the runout and wear sheets into one document (on-device
+request, with hand sketch): a **designated worn section** marks a measured area directly on
+the **runout sheet's** shaft profile, and its measured diameters print **inside** the
+profile — each value rotated 90° (reading bottom-to-top), stacked left→right across the
+span — with a sheet-white **halo** knocked out behind every value, so no profile line runs
+through a measurement number ("the lines will not draw where the numbers are").
+
+- **Model — `model/WornSection.kt`**, `WearRecord.wornSections` (additive envelope field on
+  `wear_record`, no codec change, never pruned at decode). A pure reference feature — the
+  standard contract: never affects OAL/coverage, body resolution, collision, or the badge.
+- **Coordinates**: shaft-space canonical `startFromAftMm` + `lengthMm` (the `Undercut`
+  convention — a worn area may cross component edges; no component key → no orphans).
+  `authoredReference` (reuses `UndercutReference`, SET values only: `AFT_SET`/`FWD_SET`) is
+  display metadata for the Distance field; switching it re-projects the displayed value via
+  the shared exact-inverse pair in `geom/UndercutMath.kt` — canonical never moves.
+- **Values**: `diaMm: List<Float>` — the machinist's typed measurements, stored verbatim in
+  list order (golden rule), printed as `Ø` + `formatDiaWithUnit`. Values ≤ 0 never print;
+  an empty section draws boundaries only. Render-layer clamp for OAL overrun
+  (`clampUndercutSpan`), plus a clamp to the drawn SET-to-SET window on the PDF.
+- **Drawing — ONE implementation for both sites**: `drawWornSections` in
+  `pdf/RunoutPdfComposer.kt` draws boundary lines (full local profile height at each end)
+  plus the halo-and-rotated-text columns; the `RunoutRoute` preview canvas calls the SAME
+  function through `nativeCanvas`, so preview and print cannot diverge. Halos are drawn
+  after the profile and before the bubbles — they erase profile lines behind values but
+  never a bubble or leader. Pure column/halo layout in `geom/WornSectionMath.kt`
+  (`layoutWornSectionValues`, unit-tested; overflow-flagged, never dropped or reordered).
+- **Editor**: "Worn sections" list on the runout screen + `WornSectionDialog` (S.E.T.
+  chips, Distance, Length, up to 6 Ø fields; delete inside the dialog). No carousel card
+  and no Add-component dialog — outside the add-dialog-parity invariant, like undercuts.
+- **Blank draft**: boundaries print (they are the write-in areas), values drop — same rule
+  as the write-in bubbles.
+### Consolidation step 2 (2026-08-04, same day) — wear marks migrate, wear tab retired
+
+On-device request following the worn-sections review:
+
+- **In-profile Ø readings replace below-shaft callouts on this sheet.** Every
+  `WearDiaReading` (body, taper, AND liner — the retired wear doc zoomed liner readings
+  onto detail strips instead) draws at its station INSIDE the profile as a single rotated
+  column over a knockout halo — `drawDiaReadingsInProfile` (`RunoutPdfComposer`), reusing
+  `layoutWornSectionValues` with a degenerate span so the column centers on the station.
+  Labels: `Ø` + `formatDiaWithUnit` (the wear doc's own callout engine keeps its
+  prefix-free labels; two conventions until consolidation settles). Value-less readings
+  and orphans skipped, as ever.
+- **Wear areas + pit X's migrate here** ("for now for testing"): `drawWearMarksOnRunoutProfile`
+  draws each spot's vertical-line band clamped to its liner span (reuses the wear
+  composer's `drawVerticalBand` construction) and each pit X via the wear composer's own
+  `drawWearPitsOnProfile` (made internal; per-surface `smallHalf`, `geom/WearPitMath.kt`
+  keeps every X identical).
+- **Z-order rule (text always on top):** marks first — bands, then X's — then worn-section
+  boundaries, then ALL value text last (worn-section values, then dia readings), each over
+  its sheet-white halo so nothing lines through a number. Same order on the preview canvas
+  and the PDF (shared implementations via `nativeCanvas`).
+- **Blank drafts** drop bands/X's/readings entirely (the wear doc's blank rule) and keep
+  only worn-section boundaries as write-in areas.
+- **Division of labor (on-device decision):** the Wear page **stays** as the authoring
+  surface — spots, pits, and point Ø readings are placed/edited there, and its own PDF is
+  unchanged — while the Runout sheet is the consolidated **output** that features that
+  wear information on its profile. Worn sections author on the Runout screen directly.
+  `WEAR_TAB_ENABLED` (`EditorTab.kt`, currently `true`) remains as the one-line switch
+  for a future full consolidation that retires the tab.
+- **Consolidation direction (on-device decisions, 2026-08-04, not scheduled):**
+  - *Liner detail strips (zoomed wear views):* the consolidated sheet starts WITHOUT
+    them — go by the drawing. Future options under consideration: inline zoomed sections
+    when only ≤ 2 liners carry wear ("it'll be tight"), or a **secondary print page
+    option** carrying just the strips.
+  - *Point readings (`WearDiaReading`):* to be migrated INTO worn sections over time (one
+    authoring model), UI to be worked out. Until then they stay their own in-profile mark.
+  - *North star:* ONE sheet — spec header + dimensioned schematic + runout + wear + notes
+    (second hand sketch, 2026-08-04). Explicitly deferred.
+
+---
+
 ## Runout Bubble Editor (interactive value + high-spot, 2026-07-21)
 
 Tapping a bubble on the `RunoutRoute` preview opens `RunoutBubbleDialog` — a "zoom-in" on that one

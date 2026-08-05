@@ -74,6 +74,7 @@ import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
+import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
@@ -196,11 +197,13 @@ fun WearRoute(
         previewLoading = false
     }
 
-    // Capture theme colors before the Canvas block (DrawScope is not composable) — same
-    // technique as RunoutRoute's live preview.
-    val outlineArgb    = MaterialTheme.colorScheme.onSurface.toArgb()
-    val bodyFillArgb   = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f).toArgb()
-    val hatchArgb      = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f).toArgb()
+    // Capture colors before the Canvas block (DrawScope is not composable) — same technique
+    // as RunoutRoute's live preview. Sheet ink is FIXED (SheetInk), never theme onSurface:
+    // the canvas is a paper-white sheet in every theme, and dark theme's near-white
+    // onSurface would print invisible ink on it.
+    val outlineArgb    = SheetInk.Outline.toArgb()
+    val bodyFillArgb   = SheetInk.Outline.copy(alpha = 0.08f).toArgb()
+    val hatchArgb      = SheetInk.Outline.copy(alpha = 0.55f).toArgb()
     val tapTintColor   = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
     val tapBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
     val badgeColor     = MaterialTheme.colorScheme.primary

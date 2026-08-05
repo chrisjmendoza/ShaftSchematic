@@ -1,4 +1,5 @@
 package com.android.shaftschematic.ui.viewmodel
+import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
@@ -29,6 +30,7 @@ import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorPreset
+import com.android.shaftschematic.util.UndercutStyle
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.parseToMm
@@ -255,6 +257,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     internal val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
+
+    // Appearance (app-wide theme; MainActivity collects these to pick the color scheme)
+    internal val _themeMode = MutableStateFlow(AppThemeMode.LIGHT)
+    val themeMode: StateFlow<AppThemeMode> = _themeMode.asStateFlow()
+
+    internal val _highContrast = MutableStateFlow(false)
+    val highContrast: StateFlow<Boolean> = _highContrast.asStateFlow()
+
+    // Undercut drawing style (on-screen sheet only; PDF keeps standard drawing colors)
+    internal val _undercutStyle = MutableStateFlow(UndercutStyle())
+    val undercutStyle: StateFlow<UndercutStyle> = _undercutStyle.asStateFlow()
 
     internal val _lineThicknessScale = MutableStateFlow(1.0f)
     val lineThicknessScale: StateFlow<Float> = _lineThicknessScale.asStateFlow()
@@ -568,6 +581,61 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /** Remove a reading by [id]. Confirm-free — deleted from its edit dialog. */
     fun removeWearDiaReading(id: String) {
         _wearRecord.update { rec -> rec.copy(diaReadings = rec.diaReadings.filterNot { it.id == id }) }
+    }
+
+    // ── Worn sections (consolidated runout/wear sheet) ─────────────────────────
+    // Reference-only, same posture as pits/diaReadings: plain _wearRecord updates, no
+    // geometry side effects. Shaft-space canonical (no component key → no orphans).
+    // See model/WornSection.kt and docs/RunoutSheet.md (Worn Sections).
+
+    /**
+     * Add a designated worn section. [diaMm] values are the machinist's typed measurements,
+     * stored verbatim in list order. Returns the new id so the editor can follow the row.
+     */
+    fun addWornSection(
+        startFromAftMm: Float,
+        lengthMm: Float,
+        diaMm: List<Float>,
+        reference: UndercutReference,
+    ): String {
+        val section = WornSection(
+            startFromAftMm = max(0f, startFromAftMm),
+            lengthMm = max(0f, lengthMm),
+            diaMm = diaMm,
+            authoredReference = reference,
+        )
+        _wearRecord.update { rec -> rec.copy(wornSections = rec.wornSections + section) }
+        return section.id
+    }
+
+    /** Replace a section's span and measured values by [id]. No-op if the id is absent. */
+    fun updateWornSection(id: String, startFromAftMm: Float, lengthMm: Float, diaMm: List<Float>) {
+        _wearRecord.update { rec ->
+            rec.copy(wornSections = rec.wornSections.map {
+                if (it.id == id) it.copy(
+                    startFromAftMm = max(0f, startFromAftMm),
+                    lengthMm = max(0f, lengthMm),
+                    diaMm = diaMm,
+                ) else it
+            })
+        }
+    }
+
+    /**
+     * Switch which S.E.T. the Distance field displays against — display metadata only,
+     * canonical position untouched (the WearSpotReference pattern).
+     */
+    fun updateWornSectionReference(id: String, reference: UndercutReference) {
+        _wearRecord.update { rec ->
+            rec.copy(wornSections = rec.wornSections.map {
+                if (it.id == id) it.copy(authoredReference = reference) else it
+            })
+        }
+    }
+
+    /** Remove a section by [id]. Confirm-free — deleted from its edit dialog. */
+    fun removeWornSection(id: String) {
+        _wearRecord.update { rec -> rec.copy(wornSections = rec.wornSections.filterNot { it.id == id }) }
     }
 
     // ── Undercut drawing record ────────────────────────────────────────────────
@@ -1071,6 +1139,36 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             SettingsStore.previewBlackWhiteOnlyFlow(getApplication()).collectLatest { persisted ->
                 _previewBlackWhiteOnly.value = persisted
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.themeModeFlow(getApplication()).collectLatest { persisted ->
+                _themeMode.value = persisted
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.highContrastFlow(getApplication()).collectLatest { persisted ->
+                _highContrast.value = persisted
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.undercutLineArtFlow(getApplication()).collectLatest { persisted ->
+                _undercutStyle.value = _undercutStyle.value.copy(lineArt = persisted)
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.undercutShadeColorFlow(getApplication()).collectLatest { persisted ->
+                _undercutStyle.value = _undercutStyle.value.copy(shadeColor = persisted)
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.undercutShadeIntensityFlow(getApplication()).collectLatest { persisted ->
+                _undercutStyle.value = _undercutStyle.value.copy(intensity = persisted)
             }
         }
 

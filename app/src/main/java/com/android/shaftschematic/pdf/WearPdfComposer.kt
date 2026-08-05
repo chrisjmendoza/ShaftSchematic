@@ -648,7 +648,7 @@ private fun drawWearBandsOnProfile(
 }
 
 /** SMALL pit half-arm (pt) on the main shaft profile; LARGE scales by the shared ratio. */
-private const val WEAR_PIT_SMALL_HALF_PROFILE_PT = 1.7f
+internal const val WEAR_PIT_SMALL_HALF_PROFILE_PT = 1.7f
 
 /** SMALL pit half-arm (pt) on a broken-out detail strip (zoomed, so a touch larger). */
 private const val WEAR_PIT_SMALL_HALF_STRIP_PT = 2.5f
@@ -659,8 +659,12 @@ private const val WEAR_PIT_SMALL_HALF_STRIP_PT = 2.5f
  * same posture as runout readings). Taper diameter is interpolated at the pit's axial position so
  * the X lands on the sloped surface. Drawn identically (by construction) to the detail-canvas and
  * strip draw sites — see `geom/WearPitMath.kt` and `ui/screen/LinerWearDetail.kt`.
+ *
+ * Internal (not private): the consolidated runout sheet reuses this exact construction for
+ * its migrated pit marks — [smallHalf] is the per-surface SMALL half-arm (pt on PDFs, px on
+ * the preview canvas), the `WearPitMath` caller-picks-scale rule.
  */
-private fun drawWearPitsOnProfile(
+internal fun drawWearPitsOnProfile(
     c: Canvas,
     pits: List<WearPit>,
     components: List<ResolvedComponent>,
@@ -668,6 +672,7 @@ private fun drawWearPitsOnProfile(
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
     pitPaint: Paint,
+    smallHalf: Float = WEAR_PIT_SMALL_HALF_PROFILE_PT,
 ) {
     if (pits.isEmpty()) return
     val byId = components.associateBy { it.id }
@@ -688,7 +693,7 @@ private fun drawWearPitsOnProfile(
         val cx = xAt(rc.startMmPhysical + local)
         val r = rPx(diaMm)
         val py = pitCenterY(cy - r, cy + r, pit.acrossFrac)
-        drawWearPitX(c, cx, py, pitHalfArm(pit.size, WEAR_PIT_SMALL_HALF_PROFILE_PT), pitPaint)
+        drawWearPitX(c, cx, py, pitHalfArm(pit.size, smallHalf), pitPaint)
     }
 }
 
@@ -1057,7 +1062,7 @@ private fun drawWearStripRail(
  * how the shop marks wear areas by hand (vertical strokes, not diagonal hatch). Evenly spaced at
  * [pitchPt], with both band edges drawn so the span reads closed.
  */
-private fun drawVerticalBand(c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, pitchPt: Float) {
+internal fun drawVerticalBand(c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, pitchPt: Float) {
     if (x1 <= x0) return
     var vx = x0
     while (vx < x1) {

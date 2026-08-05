@@ -65,9 +65,12 @@ import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.ui.viewmodel.*
+import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
+import com.android.shaftschematic.util.UndercutShadeColor
+import com.android.shaftschematic.util.UndercutShadeIntensity
 import com.android.shaftschematic.util.UnitSystem
 
 /**
@@ -94,9 +97,13 @@ fun SettingsRoute(
     onBack: () -> Unit,
     onOpenAchievements: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenHelp: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
 ) {
     val unit by vm.unit.collectAsState()
+    val themeMode by vm.themeMode.collectAsState()
+    val highContrast by vm.highContrast.collectAsState()
+    val undercutStyle by vm.undercutStyle.collectAsState()
     val showGrid by vm.showGrid.collectAsState()
     val showComponentArrows by vm.showComponentArrows.collectAsState()
     val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
@@ -190,6 +197,32 @@ fun SettingsRoute(
                             label = { Text("Inches") }
                         )
                     }
+
+                    HorizontalDivider()
+                    Text("Appearance", style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AppThemeMode.entries.forEach { mode ->
+                            FilterChip(
+                                selected = themeMode == mode,
+                                onClick = { vm.setThemeMode(mode) },
+                                label = { Text(mode.uiLabel()) }
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = highContrast,
+                            onCheckedChange = { vm.setHighContrast(it) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("High contrast")
+                    }
+                    Text(
+                        "High contrast boosts figure/ground separation for bright sunlight or " +
+                            "low-vision use. Drawing sheets and PDFs always stay white with dark ink.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
 
                     HorizontalDivider()
                     ListItem(
@@ -321,6 +354,15 @@ fun SettingsRoute(
 
                     HorizontalDivider()
                     ListItem(
+                        headlineContent = { Text("Help & FAQ") },
+                        supportingContent = { Text("How-to guides and common questions") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onOpenHelp)
+                    )
+
+                    HorizontalDivider()
+                    ListItem(
                         headlineContent = { Text("About ShaftSchematic") },
                         supportingContent = {
                             Text(
@@ -410,6 +452,66 @@ fun SettingsRoute(
                         onChanged = vm::setPreviewThreadHatchSetting,
                         enabled = !previewBlackWhiteOnly
                     )
+
+                    HorizontalDivider()
+                    Text("Undercut Drawing", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Styles the on-screen Undercut Drawing. The printed PDF keeps standard drawing colors.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = undercutStyle.lineArt,
+                            onCheckedChange = { vm.setUndercutLineArt(it) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Line art (no shading)")
+                    }
+                    if (undercutStyle.lineArt) {
+                        Text(
+                            "Everything draws white with black outlines only.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    Text("Shade color", style = MaterialTheme.typography.titleSmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        UndercutShadeColor.entries.forEach { color ->
+                            FilterChip(
+                                selected = undercutStyle.shadeColor == color,
+                                onClick = { vm.setUndercutShadeColor(color) },
+                                enabled = !undercutStyle.lineArt,
+                                label = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(12.dp)
+                                                .background(color = color.base, shape = CircleShape)
+                                        )
+                                        Text(color.uiLabel())
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    Text("Shade intensity", style = MaterialTheme.typography.titleSmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        UndercutShadeIntensity.entries.forEach { intensity ->
+                            FilterChip(
+                                selected = undercutStyle.intensity == intensity,
+                                onClick = { vm.setUndercutShadeIntensity(intensity) },
+                                enabled = !undercutStyle.lineArt,
+                                label = { Text(intensity.uiLabel()) }
+                            )
+                        }
+                    }
                 }
             }
 

@@ -5,10 +5,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.shaftschematic.ui.nav.AppNav
+import com.android.shaftschematic.ui.theme.ShaftSchematicTheme
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModelFactory
 
@@ -18,7 +20,8 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModelFactory
  * Purpose
  * Single-activity host for the Compose UI. Creates the app-scoped [ShaftViewModel]
  * using our factory (required because the ViewModel extends AndroidViewModel)
- * and passes it to the navigation graph.
+ * and passes it to the navigation graph, wrapped in the user-selected theme
+ * (Settings → Appearance).
  *
  * Contract
  * - No business logic here.
@@ -31,10 +34,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            MaterialTheme {
+            // IMPORTANT: use the factory so AndroidViewModel receives Application
+            val vm: ShaftViewModel = viewModel(factory = ShaftViewModelFactory)
+            val themeMode by vm.themeMode.collectAsState()
+            val highContrast by vm.highContrast.collectAsState()
+            ShaftSchematicTheme(themeMode = themeMode, highContrast = highContrast) {
                 Surface {
-                    // IMPORTANT: use the factory so AndroidViewModel receives Application
-                    val vm: ShaftViewModel = viewModel(factory = ShaftViewModelFactory)
                     AppNav(vm = vm)
                 }
             }

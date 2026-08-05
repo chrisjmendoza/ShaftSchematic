@@ -111,6 +111,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
+import com.android.shaftschematic.util.UndercutStyle
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import kotlin.math.max
@@ -190,6 +191,7 @@ fun UndercutWindowDetailOverlay(
     resolvedComponents: List<ResolvedComponent>,
     unit: UnitSystem,
     undercutRecord: UndercutRecord,
+    style: UndercutStyle = UndercutStyle(),
     onAddUndercut: (
         startFromAftMm: Float,
         lengthMm: Float,
@@ -424,19 +426,23 @@ fun UndercutWindowDetailOverlay(
 
     BackHandler(enabled = leavePrompt == null) { requestClose() }
 
-    // ── Theme colors captured here — the Canvas draw scope must not read MaterialTheme ──
-    val outlineColor = MaterialTheme.colorScheme.onSurface
-    // The liner shade is deliberately NOT a theme color: the strip canvas is a paper-white
-    // sheet in both themes, and a theme tint (dark theme's near-white tertiary) washes out to
-    // nothing on white — the pure-white notch voids would then have no grey to read against.
-    // Fixed black-alpha at the PDF shade fill's weight (argb 40) keeps the on-screen strip and
-    // the printed strip alike: grey liner, white cut sections (on-device request).
-    val linerFillColor = Color.Black.copy(alpha = 0.16f)
+    // ── Colors captured here — the Canvas draw scope must not read MaterialTheme ──
+    // Sheet ink is FIXED black, never theme onSurface: the strip canvas is a paper-white
+    // sheet in every theme, and dark theme's near-white onSurface would print invisible ink.
+    val outlineColor = Color.Black
+    // The liner shade comes from the user's Undercut Drawing style (Settings → Preview
+    // Colors) — a fixed ink color on the white sheet, deliberately NOT a theme role: a theme
+    // tint (dark theme's near-white tertiary) washes out to nothing on white, and the
+    // pure-white notch voids would then have no shade to read against. The default reproduces
+    // the historical fixed grey at the PDF shade fill's weight (argb 40), keeping the
+    // on-screen strip and the printed strip alike: grey liner, white cut sections (on-device
+    // request). Line art empties the fill entirely.
+    val linerFillColor = style.linerFill()
     val railColor = outlineColor.copy(alpha = 0.65f)
     val witnessColor = outlineColor.copy(alpha = 0.35f)
     val selectColor = MaterialTheme.colorScheme.primary
     val errorColor = MaterialTheme.colorScheme.error
-    val textColorArgb = MaterialTheme.colorScheme.onSurface.toArgb()
+    val textColorArgb = outlineColor.toArgb()
     val textPaint = remember(textColorArgb) {
         android.graphics.Paint().apply {
             isAntiAlias = true
@@ -651,6 +657,7 @@ fun UndercutWindowDetailOverlay(
                             voidColor = Color.White,
                             outlineColor = outlineColor,
                             strokeWidthPx = outlineWidthPx,
+                            sectionFillColor = style.sectionFill(),
                         )
                         if (draftId != null) {
                             drawUndercutNotches(
@@ -661,6 +668,7 @@ fun UndercutWindowDetailOverlay(
                                 voidColor = Color.White,
                                 outlineColor = if (activeDraftIssue != null) errorColor else selectColor,
                                 strokeWidthPx = outlineWidthPx,
+                                sectionFillColor = style.sectionFill(),
                                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f)),
                             )
                         }
@@ -1777,6 +1785,9 @@ internal fun DrawScope.drawUndercutNotches(
     voidColor: Color,
     outlineColor: Color,
     strokeWidthPx: Float,
+    // Section-core refill — one step lighter than the caller's liner shade (see
+    // UndercutStyle). Transparent in line-art mode, which leaves the core sheet-white.
+    sectionFillColor: Color = Color.Black.copy(alpha = UNDERCUT_SECTION_FILL_ALPHA),
     // Dashed shoulders/floor mark a DRAFT notch (provisional, not yet in the record) —
     // the overlay passes a dash + a status color (primary while valid, error while its
     // confirm check fails); settled notches and the overview pass neither.
@@ -1819,11 +1830,11 @@ internal fun DrawScope.drawUndercutNotches(
             drawPath(botVoid, color = voidColor)
 
             // Remaining core: erased to the sheet colour, then refilled one step LIGHTER
-            // than the liner shade (UNDERCUT_SECTION_FILL_ALPHA — half its alpha) so the
-            // section reads distinct from the liner around it (on-device request).
+            // than the liner shade ([sectionFillColor] — half its alpha) so the section
+            // reads distinct from the liner around it (on-device request).
             drawRect(voidColor, topLeft = Offset(x0, cy - rFloor), size = Size(x1 - x0, 2f * rFloor))
             drawRect(
-                Color.Black.copy(alpha = UNDERCUT_SECTION_FILL_ALPHA),
+                sectionFillColor,
                 topLeft = Offset(x0, cy - rFloor),
                 size = Size(x1 - x0, 2f * rFloor),
             )

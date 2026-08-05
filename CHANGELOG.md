@@ -6,6 +6,102 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-04 (runout sheet — wear marks migrate, in-profile readings; consolidation step 2)
+
+### feat(runout): dia readings inside the profile, wear bands + pit X's on the sheet, wear tab retired
+
+On-device request following the worn-sections review. Measured-Ø point readings
+(`WearDiaReading`) no longer print as below-shaft leader callouts on the consolidated
+sheet — each draws INSIDE the profile at its station as a single rotated, halo-backed
+column (`drawDiaReadingsInProfile`, reusing the worn-section layout engine with a
+degenerate span; liners included, `Ø`-prefixed). Wear-area bands (vertical-line marks,
+clamped to their liner span) and pit X's migrate onto the runout profile
+(`drawWearMarksOnRunoutProfile` — reuses the wear composer's `drawVerticalBand` and
+`drawWearPitsOnProfile` constructions, so every mark stays identical across sites).
+Z-order per request: marks first, then worn-section boundaries, then ALL value text last
+over knockout halos — text always readable. Same order and same shared implementations on
+the preview canvas and the PDF. Blank drafts drop the migrated wear data (wear-doc blank
+rule) and keep worn-section boundaries as write-in areas. Division of labor (follow-up
+on-device decision): the Wear page **stays as the authoring surface** for
+spots/pits/point-readings — its tab and PDF are unchanged — while the Runout sheet is the
+consolidated output featuring that wear information; `WEAR_TAB_ENABLED` (`EditorTab.kt`)
+remains as the one-line switch for a future full consolidation. See
+`docs/RunoutSheet.md` (Consolidation step 2).
+
+---
+
+## 2026-08-04 (runout sheet — worn sections with in-profile Ø values; consolidation step 1)
+
+### feat(runout): designated worn sections print measured diameters inside the profile
+
+On-device request (with hand sketch), first step of consolidating the runout and wear
+sheets into one document. A worn section marks a measured area on the runout sheet's shaft
+profile: a boundary line at each end and the section's measured Ø values printed INSIDE
+the profile — rotated 90°, stacked across the span, each value over a sheet-white halo so
+no profile line draws through a number. New reference-only `WornSection` model
+(`WearRecord.wornSections`, additive `wear_record` field, never pruned at decode) —
+shaft-space span like undercuts (crosses component edges, no orphans), S.E.T.-referenced
+Distance authoring via the shared exact-inverse conversion pair, measured values stored
+verbatim in list order (golden rule; ≤ 0 never prints). ONE draw implementation for both
+sites: `drawWornSections` in `RunoutPdfComposer` is also run by the RunoutRoute preview
+canvas through `nativeCanvas` — preview and print cannot diverge; pure column/halo layout
+in `geom/WornSectionMath.kt` (unit-tested). Editor: "Worn sections" list + add/edit dialog
+on the runout screen (S.E.T. chips, Distance/Length, up to 6 Ø fields). Blank drafts keep
+the boundaries (write-in areas) and drop values, same rule as write-in bubbles. Wear-doc
+strips/pits/callouts unchanged — their migration is the open consolidation question
+(`docs/RunoutSheet.md`, Worn Sections).
+
+---
+
+## 2026-08-04 (settings — appearance themes, undercut drawing style, help & FAQ)
+
+### feat(settings): Appearance — System/Light/Dark theme + High contrast
+
+On-device request (settings customization wave). New Appearance section on the main
+settings page: theme mode chips (System / Light / Dark) plus a High contrast switch, with
+four schemes in `ui/theme/Theme.kt` (high-contrast light = blue-on-white, high-contrast
+dark = amber-on-black, pure black/white grounds). `ShaftSchematicTheme` is now actually
+wired into `MainActivity` (it previously existed unwired — TODO §4.1b theme decision),
+driven by persisted `AppThemeMode`/`high_contrast` settings. Default is Light + off, which
+reproduces the historical bare-`MaterialTheme` look exactly — nothing changes until the
+user opts in. Dynamic (Material You) color dropped deliberately so the preview-color
+presets resolve predictably. Dark/high-contrast chrome still needs an on-device visual
+pass. New contract doc: `docs/Appearance.md`; plan: `docs/SettingsCustomization_PLAN.md`.
+
+### fix(theme): paper-sheet canvases pinned to fixed ink (`ui/theme/SheetInk.kt`)
+
+Prerequisite for dark mode: the five white-sheet canvases (undercut overview + detail,
+wear overview + detail, runout preview) captured `colorScheme.onSurface` (near-white in
+dark theme) as drawing ink — dark mode would have printed invisible lines on the white
+sheet. Sheet ink now comes from `SheetInk` (Outline = black; LinerTint / WearRed pinned to
+the historical light-theme tertiary / error values), so the sheets render identically in
+every theme. Interactive affordances (tap tints, selection, draft outlines) stay
+theme-driven. Light-theme rendering is visually unchanged (onSurface ≈ black → pure
+black is the only delta).
+
+### feat(undercut): user-stylable drawing shades + line-art (color-removal) mode
+
+On-device request. New "Undercut Drawing" block on Settings → Preview Colors: shade color
+(Grey default / Bronze / Blue), shade intensity (Light / Standard / Dark), and a
+**Line art (no shading)** switch that empties every fill — white drawing, black outlines
+only. Resolved by new pure `util/UndercutStyle.kt`; the alpha ladder hangs off
+`UNDERCUT_SECTION_FILL_ALPHA` so "section core one step lighter than the liner" holds at
+every intensity, and the Standard/Grey default reproduces the previous fixed shades
+(pinned by `UndercutStyleTest`). `drawUndercutNotches` gains a `sectionFillColor`
+parameter (was a hardcoded black-alpha). Screen-only: the printed undercut PDF keeps
+standard drawing colors (PDF line-art is a considered follow-up in the plan doc).
+
+### feat(help): in-app Help & FAQ screen
+
+On-device request. New `help` nav route + `HelpRoute.kt` (Settings → "Help & FAQ"):
+static expandable topic cards in three sections — Getting Started, How-To Guides, FAQ
+(~19 topics: units, carousel editing, bodies/auto-bodies, keyways, wear/runout/undercut
+recording, export/print/blank templates, backup, golden-rule and reference-feature
+explanations). No ViewModel; content restates current behavior and must be updated in the
+same change as a behavior change (noted in `docs/Navigation.md`).
+
+---
+
 ## 2026-08-03 (undercut drawing — section cores fill one step lighter than the liner)
 
 ### feat(undercut): 50%-lighter grey fill inside each cut section
