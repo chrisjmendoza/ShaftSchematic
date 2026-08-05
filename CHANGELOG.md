@@ -37,6 +37,17 @@ the page — replacing the overnight growth-only cap. Slider UX: shared
 (`effectiveHeightScaleMax` — "informs me the limit"), commits within ±5% of 100%
 snapping to exactly 1.0 + a Reset button ("don't want to fight the slider").
 
+### feat(ui): shaft-height slider selects by VALUE — inches on paper, not percentage
+
+On-device request ("the end of the slider would be 1.5\" and I can select the height by
+value, not percentage"). `ShaftHeightSlider` now reads and selects the drawn shaft
+height directly in paper inches: the track runs from the 50% height to 1.5" (or the
+shaft's 300% height when less), the title shows the picked value (e.g. 1.13″), and the
+reset button reads "Standard (X″)". The picked value converts back to the stored per-job
+multiplier (`drawnShaftHeightPt` / `heightFracForDrawnHeight`, pure geom, unit-tested —
+`effectiveHeightScaleMax` retired), so `RunoutConfig.heightScale` and every composer are
+unchanged; commits near the standard height still snap to exactly 100%.
+
 ### feat(export): hardened SAF writes + collision gate on every export surface
 
 On-device request ("please unify"). One write path (`util/PdfSafExport.writeShaftPdfToUri`)

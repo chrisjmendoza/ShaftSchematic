@@ -231,9 +231,10 @@ private val helpSections: List<HelpSection> = listOf(
                     "Schematic + Runout, or Schematic + Wear, and preview before printing. " +
                     "Worn sections (measured areas whose Ø values print inside the profile) " +
                     "are added on this tab. Export all writes every checked document to one " +
-                    "folder in a single step. The Shaft height slider exaggerates or shrinks " +
-                    "the drawn shaft on the schematic and consolidated/runout sheets — " +
-                    "growth caps at 1.5 in on paper, and Reset returns to the standard 100%."
+                    "folder in a single step. The Shaft height slider sets the drawn shaft's " +
+                    "height on paper directly, in inches, on the schematic and " +
+                    "consolidated/runout sheets — up to 1.5 in at most — and the Standard " +
+                    "button restores the default size."
             ),
             HelpTopic(
                 "Back up and restore",

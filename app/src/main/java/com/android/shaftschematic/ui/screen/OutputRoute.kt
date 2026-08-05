@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
-import com.android.shaftschematic.geom.effectiveHeightScaleMax
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
@@ -142,19 +141,15 @@ fun OutputRoute(
     val aftSetXMm = setPositions.aftSETxMm.toFloat()
     val fwdSetXMm = setPositions.fwdSETxMm.toFloat()
 
-    // Slider track end: where the 1.5" ceiling engages for THIS shaft. The base here
-    // approximates the composer's solve (width-fit vs the visual scale; the in-profile
-    // value demand and the page budget are ignored — both only ever LOWER the effective
-    // max, so the control may end a hair past the true limit, never short of it).
-    val heightSliderMax = remember(spec) {
+    // Height slider inputs: the base here approximates the composer's solve (width-fit
+    // vs the visual scale; the in-profile value demand and the page budget are ignored —
+    // both only ever LOWER the drawn height a hair in extreme layouts, never raise it).
+    val heightSliderBase = remember(spec) {
         val spanMm = (setPositions.fwdSETxMm - setPositions.aftSETxMm).toFloat().coerceAtLeast(1f)
         val contentW = 792f - 72f
-        effectiveHeightScaleMax(
-            baseScale = maxOf(contentW / spanMm, VISUAL_DIA_SCALE_PT_PER_MM),
-            budgetCapPt = Float.MAX_VALUE,
-            maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(10f),
-        )
+        maxOf(contentW / spanMm, VISUAL_DIA_SCALE_PT_PER_MM)
     }
+    val heightSliderDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) }
 
     val outputFilename = buildOutputFilename(customer, vessel, jobNumber, OutputDoc.CONSOLIDATED, blankDraft)
 
@@ -359,7 +354,8 @@ fun OutputRoute(
             // ── Shaft height (per-job, shared with the schematic PDF) ────────
             ShaftHeightSlider(
                 heightScale = runoutConfig.heightScale,
-                effectiveMax = heightSliderMax,
+                baseScale = heightSliderBase,
+                maxDiaMm = heightSliderDiaMm,
                 onCommit = { vm.setRunoutHeightScale(it) },
             )
 

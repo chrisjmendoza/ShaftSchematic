@@ -127,9 +127,10 @@ per-job in the envelope — ONE value behind the runout/consolidated sheets AND 
 schematic, `composeShaftPdf(heightScale)`) multiplies the solved scale; the drawn shaft
 is hard-capped at **1.5" on paper** (`PROFILE_MAX_SHAFT_HEIGHT_PT`, an ABSOLUTE ceiling
 — a short shaft that would draw taller at width-fit is capped and simply doesn't span
-the page) and by the page budget (`exaggeratedProfileScale`, pure/unit-tested; slider
-tracks end where the cap engages via `effectiveHeightScaleMax`, commits snap to 100%
-within ±5%). Liners draw **unfilled on this sheet**
+the page) and by the page budget (`exaggeratedProfileScale`, pure/unit-tested). The slider
+selects the drawn height by VALUE in paper inches — track ends at 1.5" or the shaft's
+300% height, whichever is less (`drawnShaftHeightPt`/`heightFracForDrawnHeight`);
+commits near the standard height snap to exactly 100%. Liners draw **unfilled on this sheet**
 regardless of `shadedLiners` so halos don't read as pasted boxes. Division of labor: the Wear page is the **authoring surface** for
 spots/pits/point-readings (tab visible; `WEAR_TAB_ENABLED` in `EditorTab.kt` is the
 one-line retirement switch for a future full consolidation); the Runout tab authors

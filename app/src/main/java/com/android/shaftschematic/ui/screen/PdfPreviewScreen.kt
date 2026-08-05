@@ -70,7 +70,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.VISUAL_DIA_SCALE_PT_PER_MM
-import com.android.shaftschematic.geom.effectiveHeightScaleMax
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.maxOuterDiaMm
@@ -570,19 +569,13 @@ private fun PdfOptionsSheet(
         // ── Shaft height ─────────────────────────────────────────────────────
         // The same per-job multiplier the runout / consolidated sheets carry
         // (`RunoutConfig.heightScale`) — one slider value behind every drawing
-        // (on-device request: the schematic was meant to follow it too). The schematic's
-        // base is the fixed visual diameter scale, so the track ends where the 1.5 in
-        // paper ceiling engages for this shaft; no width-fit term enters here.
-        val heightSliderMax = remember(spec) {
-            effectiveHeightScaleMax(
-                baseScale = VISUAL_DIA_SCALE_PT_PER_MM,
-                budgetCapPt = Float.MAX_VALUE,
-                maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(10f),
-            )
-        }
+        // (on-device request: the schematic was meant to follow it too). Selected by
+        // drawn-height VALUE in paper inches; the schematic's base is the fixed visual
+        // diameter scale, no width-fit term.
         ShaftHeightSlider(
             heightScale = heightScale,
-            effectiveMax = heightSliderMax,
+            baseScale = VISUAL_DIA_SCALE_PT_PER_MM,
+            maxDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) },
             onCommit = { vm.setRunoutHeightScale(it) },
         )
 

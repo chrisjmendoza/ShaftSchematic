@@ -72,22 +72,25 @@ fun exaggeratedProfileScale(
 }
 
 /**
- * The largest slider fraction that still changes the drawing for a given base solve —
- * past it the [PROFILE_MAX_SHAFT_HEIGHT_PT] ceiling (or the page budget) holds the scale
- * flat. The slider UIs end their track here so the dead zone reads as a limit instead of
- * an inert drag ("informs me the limit of the zoom slider range" — on-device request).
- * Never below [PROFILE_HEIGHT_SCALE_MIN] + a working margin, never above
- * [PROFILE_HEIGHT_SCALE_MAX].
+ * Drawn shaft height (pt) that [heightFrac] produces for a given base solve — the value
+ * the "Shaft height" slider displays. Mirrors [exaggeratedProfileScale] with an
+ * unbounded page budget (the UI can't know the final budget; it only ever lowers the
+ * result a hair in extreme layouts).
  */
-fun effectiveHeightScaleMax(
-    baseScale: Float,
-    budgetCapPt: Float,
-    maxDiaMm: Float,
-): Float {
-    if (maxDiaMm <= 0f || baseScale <= 0f) return PROFILE_HEIGHT_SCALE_MAX
-    val capScale = (minOf(budgetCapPt, PROFILE_MAX_SHAFT_HEIGHT_PT) / maxDiaMm)
-        .coerceAtLeast(1e-4f)
-    return (capScale / baseScale).coerceIn(PROFILE_HEIGHT_SCALE_MIN + 0.1f, PROFILE_HEIGHT_SCALE_MAX)
+fun drawnShaftHeightPt(baseScale: Float, heightFrac: Float, maxDiaMm: Float): Float =
+    exaggeratedProfileScale(baseScale, heightFrac, Float.MAX_VALUE, maxDiaMm) * maxDiaMm
+
+/**
+ * Inverse of [drawnShaftHeightPt]: the slider fraction that yields [targetHeightPt] for
+ * this base solve, clamped to the slider bounds. The slider UIs select the height by
+ * VALUE — the track runs to 1.5" on paper, or to the most this shaft can reach at 300%
+ * ("select the height by value, not percentage" — on-device request); this converts the
+ * picked value back to the stored per-job multiplier.
+ */
+fun heightFracForDrawnHeight(baseScale: Float, targetHeightPt: Float, maxDiaMm: Float): Float {
+    if (maxDiaMm <= 0f || baseScale <= 0f) return 1f
+    return (targetHeightPt / (maxDiaMm * baseScale))
+        .coerceIn(PROFILE_HEIGHT_SCALE_MIN, PROFILE_HEIGHT_SCALE_MAX)
 }
 
 /**

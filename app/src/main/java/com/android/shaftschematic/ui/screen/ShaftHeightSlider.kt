@@ -15,19 +15,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.drawnShaftHeightPt
+import com.android.shaftschematic.geom.heightFracForDrawnHeight
 import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MAX
 import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MIN
+import com.android.shaftschematic.geom.PROFILE_MAX_SHAFT_HEIGHT_PT
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 /**
- * Commits within this distance of 100% snap to exactly 1.0 — a magnetic detent so the
- * default never has to be fished for by pixel ("don't want to have to fight the slider" —
- * on-device request). The dedicated reset button is the guaranteed path.
+ * Commits within this distance of the standard multiplier (1.0) snap to exactly 1.0 — a
+ * magnetic detent so the default never has to be fished for by pixel ("don't want to
+ * have to fight the slider" — on-device request). The Reset button is the guaranteed path.
  */
 internal const val HEIGHT_SCALE_SNAP_TOLERANCE = 0.05f
 
-/** [rawCommit] with the 100% detent applied — the single snap rule for every slider site. */
+/** [rawCommit] with the standard-height detent applied — one snap rule for every site. */
 internal fun snappedHeightScale(rawCommit: Float): Float =
     if (abs(rawCommit - 1f) <= HEIGHT_SCALE_SNAP_TOLERANCE) 1f else rawCommit
 
@@ -35,59 +37,75 @@ internal fun snappedHeightScale(rawCommit: Float): Float =
  * The per-job "Shaft height" slider, shared by the Consolidated Output tab and the
  * schematic PDF options sheet (one `RunoutConfig.heightScale` value behind both).
  *
- * - Track ends at [effectiveMax] (`effectiveHeightScaleMax`): where the 1.5" ceiling
- *   engages for THIS shaft, so the limit reads on the control instead of a dead drag
- *   zone. Full 300% only when the shaft never reaches the ceiling.
- * - Drag-local value, committed once on release (committing per frame would re-render
- *   the PDF preview every frame); commits near 100% snap exactly to 1.0.
- * - The "Reset" action commits exactly 100%.
+ * The slider selects the drawn shaft height by VALUE, in inches on paper (on-device
+ * request: "the end of the slider would be 1.5\" and I can select the height by value,
+ * not percentage") — paper inches regardless of the document's display unit, because the
+ * cap is a paper measure. The track runs from the 50% height to 1.5"
+ * ([PROFILE_MAX_SHAFT_HEIGHT_PT]) — or to the most this shaft can reach at 300% when
+ * that is less — and the picked value converts back to the stored per-job multiplier
+ * ([heightFracForDrawnHeight]). [baseScale] is the surface's conventional solve (pt/mm):
+ * the fixed visual scale on the schematic; max(width-fit, visual scale) on the
+ * runout/consolidated sheets.
+ *
+ * Drag-local value, committed once on release (per-frame commits would re-render the PDF
+ * preview every frame); commits near the standard height snap exactly to it; Reset
+ * returns to standard.
  */
 @Composable
 internal fun ShaftHeightSlider(
     heightScale: Float,
-    effectiveMax: Float,
+    baseScale: Float,
+    maxDiaMm: Float,
     onCommit: (Float) -> Unit,
 ) {
+    fun heightIn(frac: Float) = drawnShaftHeightPt(baseScale, frac, maxDiaMm) / 72f
+    val minIn = heightIn(PROFILE_HEIGHT_SCALE_MIN)
+    val maxIn = heightIn(PROFILE_HEIGHT_SCALE_MAX)
+    val standardIn = heightIn(1f)
+
     var heightDrag by remember { mutableStateOf<Float?>(null) }
-    val trackMax = effectiveMax.coerceIn(PROFILE_HEIGHT_SCALE_MIN, PROFILE_HEIGHT_SCALE_MAX)
-    val shown = (heightDrag ?: heightScale).coerceIn(PROFILE_HEIGHT_SCALE_MIN, trackMax)
+    val shownIn = (heightDrag ?: heightIn(heightScale)).coerceIn(minIn, maxIn)
 
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Shaft height  ${(shown * 100).roundToInt()}%",
+                "Shaft height  ${fmtIn(shownIn)}",
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f),
             )
             TextButton(
                 onClick = { heightDrag = null; onCommit(1f) },
-                enabled = shown != 1f,
-            ) { Text("Reset") }
+                enabled = heightScale != 1f || heightDrag != null,
+            ) { Text("Standard (${fmtIn(standardIn)})") }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("50%", style = MaterialTheme.typography.bodySmall)
+            Text(fmtIn(minIn), style = MaterialTheme.typography.bodySmall)
             Slider(
-                value = shown,
+                value = shownIn,
                 onValueChange = { heightDrag = it },
                 onValueChangeFinished = {
-                    heightDrag?.let { onCommit(snappedHeightScale(it)) }
+                    heightDrag?.let {
+                        onCommit(snappedHeightScale(heightFracForDrawnHeight(baseScale, it * 72f, maxDiaMm)))
+                    }
                     heightDrag = null
                 },
-                valueRange = PROFILE_HEIGHT_SCALE_MIN..trackMax,
+                valueRange = minIn..maxIn,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
-            Text("${(trackMax * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall)
+            Text(fmtIn(maxIn), style = MaterialTheme.typography.bodySmall)
         }
         Text(
-            if (trackMax < PROFILE_HEIGHT_SCALE_MAX) {
-                "Exaggerate or shrink the drawn shaft as a whole. This shaft reaches the " +
-                    "1.5 in paper-height cap at ${(trackMax * 100).roundToInt()}%."
+            if (maxIn >= PROFILE_MAX_SHAFT_HEIGHT_PT / 72f - 1e-3f) {
+                "Drawn height of the shaft on paper. 1.5 in is the cap; the drawing keeps " +
+                    "true proportion and narrows instead of overflowing."
             } else {
-                "Exaggerate or shrink the drawn shaft as a whole. Drawn height caps at " +
-                    "1.5 in on paper."
+                "Drawn height of the shaft on paper. This shaft reaches ${fmtIn(maxIn)} at most."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
+
+/** Paper-inch label, two decimals: 1.13″, 1.50″. */
+private fun fmtIn(inches: Float): String = "%.2f″".format(inches)

@@ -252,31 +252,51 @@ class ProfileCompressionTest {
         assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT / 200f, at200, 1e-6f)
     }
 
-    // ── effectiveHeightScaleMax (slider track end where the cap engages) ───────
+    // ── drawnShaftHeightPt / heightFracForDrawnHeight (value-based slider) ────
 
     @Test
-    fun `slider max lands where the ceiling engages`() {
-        // 8in shaft at the 0_4 visual scale: cap engages at 108 / (203_2 x 0_4) ≈ 1_33.
-        val max = effectiveHeightScaleMax(baseScale = 0.4f, budgetCapPt = 1000f, maxDiaMm = 203.2f)
-        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT / (203.2f * 0.4f), max, 1e-4f)
-        // The slider's whole point: dragging to this max yields exactly the capped scale.
-        val atMax = exaggeratedProfileScale(0.4f, max, 1000f, 203.2f)
-        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT / 203.2f, atMax, 1e-4f)
+    fun `slider track far end is the 1_5 inch cap when the shaft can reach it`() {
+        // 8in shaft at the 0_4 visual scale: 300% would draw 244pt — capped at 108pt.
+        assertEquals(
+            PROFILE_MAX_SHAFT_HEIGHT_PT,
+            drawnShaftHeightPt(baseScale = 0.4f, heightFrac = PROFILE_HEIGHT_SCALE_MAX, maxDiaMm = 203.2f),
+            1e-3f,
+        )
     }
 
     @Test
-    fun `slider max clamps to the full range for small shafts`() {
-        // 2in shaft: even 300% stays under the ceiling → the track keeps its full range.
-        val max = effectiveHeightScaleMax(baseScale = 0.4f, budgetCapPt = 1000f, maxDiaMm = 50f)
-        assertEquals(PROFILE_HEIGHT_SCALE_MAX, max, 1e-6f)
+    fun `small shafts top out below the cap`() {
+        // 2in shaft: even 300% draws only 60pt — the track's far end shows that value.
+        assertEquals(
+            50f * 0.4f * 3f,
+            drawnShaftHeightPt(baseScale = 0.4f, heightFrac = PROFILE_HEIGHT_SCALE_MAX, maxDiaMm = 50f),
+            1e-3f,
+        )
     }
 
     @Test
-    fun `slider max never collapses below a working range`() {
-        // Degenerate: base already far above the cap → the track still keeps a usable
-        // shrink range instead of collapsing to a point.
-        val max = effectiveHeightScaleMax(baseScale = 5f, budgetCapPt = 1000f, maxDiaMm = 200f)
-        assertEquals(PROFILE_HEIGHT_SCALE_MIN + 0.1f, max, 1e-6f)
+    fun `picked height round-trips to the stored multiplier and back`() {
+        // The slider selects by VALUE (on-device request): picking 108pt on an 8in shaft
+        // stores frac 108/(203_2 x 0_4) ≈ 1_329, which draws exactly 108pt again.
+        val frac = heightFracForDrawnHeight(baseScale = 0.4f, targetHeightPt = 108f, maxDiaMm = 203.2f)
+        assertEquals(108f / (203.2f * 0.4f), frac, 1e-4f)
+        assertEquals(108f, drawnShaftHeightPt(0.4f, frac, 203.2f), 1e-2f)
+    }
+
+    @Test
+    fun `inverse clamps to the slider bounds and guards degenerate input`() {
+        // A target below the 50% height clamps to the bound; an absurd target to 300%.
+        assertEquals(
+            PROFILE_HEIGHT_SCALE_MIN,
+            heightFracForDrawnHeight(baseScale = 0.4f, targetHeightPt = 10f, maxDiaMm = 203.2f),
+            1e-6f,
+        )
+        assertEquals(
+            PROFILE_HEIGHT_SCALE_MAX,
+            heightFracForDrawnHeight(baseScale = 0.4f, targetHeightPt = 9999f, maxDiaMm = 203.2f),
+            1e-6f,
+        )
+        assertEquals(1f, heightFracForDrawnHeight(0.4f, 100f, maxDiaMm = 0f), 1e-6f)
     }
 
     @Test

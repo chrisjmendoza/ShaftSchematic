@@ -294,9 +294,12 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
   width-fit would draw taller is capped too, keeps true proportion, and simply doesn't
   span the page (room for the dimension rails). The page budget caps everything.
   Pure arithmetic: `exaggeratedProfileScale` (`geom/ProfileCompression.kt`).
-- Slider UX: the track ends where the ceiling engages for the current shaft
-  (`effectiveHeightScaleMax` — the limit reads on the control); commits within ±5% of
-  100% snap to exactly 1.0 (`snappedHeightScale`); a Reset button commits 100%.
+- Slider UX: selects the drawn height **by value in paper inches** — the track runs
+  from the 50% height to 1.5" (or the shaft's 300% height when less), and the picked
+  value converts back to the stored multiplier
+  (`drawnShaftHeightPt`/`heightFracForDrawnHeight`, pure). Commits near the standard
+  height snap to exactly 100% (`snappedHeightScale`); a "Standard (X″)" button restores
+  the default.
 
 ---
 
