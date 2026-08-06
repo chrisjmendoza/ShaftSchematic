@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-06
 
+### fix(pdf): OAL one-tier rule completed — hidden 2.5× spacing pref removed
+
+The "one regular tier bump" adjustment removed `OVERALL_EXTRA_PT` but missed the second
+padding source: `PdfPrefs.oalSpacingFactor` (default 2.5, no UI control — permanently at
+default for every user, catalogued as REFACTOR_CANDIDATES §5b) still added
+`0.75 × railGap` above the schematic's OAL rail via `extraClearRails`. The on-device
+one-tier rule settles that open decision: the pref is obsolete, so the field, DataStore
+key/flow, ViewModel collector, and `setPdfOalSpacingFactor` are removed and the
+schematic's OAL now truly rides `railGap × (maxRail + 1)`. The consolidated sheet was
+already correct (it never read the pref). §5b marked resolved.
+
 ### fix(pdf): dimension labels clear each other — slide along the span, lift the next tier
 
 On-device report, with screenshots of the consolidated sheet: two short spans on *different*

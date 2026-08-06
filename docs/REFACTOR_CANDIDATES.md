@@ -103,17 +103,15 @@ where no per-component override exists). Deleting is zero-risk.
 **Recommendation:** Product decision — implement or delete. (Both constants currently
 kept; nothing removed.)
 
-## 5b. OAL-spacing pref: build the control or drop the setter (decision needed)
+## 5b. OAL-spacing pref — RESOLVED (removed)
 
-**What:** `PdfPrefs.oalSpacingFactor` has a live READ side (persisted, consumed by
-`ShaftPdfComposer` for the gap above the OAL rail) but its ViewModel setter
-(`setPdfOalSpacingFactor`, `ShaftViewModelSettings.kt`) has **no UI caller** — the
-changelog records it as scaffolding "for future UI callers" that were never built. The
-pref is therefore permanently at its default (2.5) for every user.
-
-**Recommendation:** Product decision — add the Settings control (a small slider,
-1.0–6.0) or remove the setter + persistence and hard-code the factor. (Setter kept for
-now.)
+**Was:** `PdfPrefs.oalSpacingFactor` had a live READ side but no UI caller, so it sat
+permanently at its 2.5 default for every user. The on-device direction "the OAL is the
+topmost measurement, but it doesn't need such a large gap — one regular tier" made the
+pref obsolete: the OAL gap is now a fixed rule (one tier pitch; the dimension-label
+planner's lift is the only widener), so the field, DataStore key/flow, ViewModel
+collector, and setter were all removed. Old installs keep a harmless orphaned
+`pdf_oal_spacing_factor` key in DataStore.
 
 ## 5c. Height-slider track vs pinned-span ceiling (known drift)
 

@@ -28,7 +28,6 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `shadedBodies` | `false` | Fill body sections with light grey |
 | `shadedTapers` | `false` | Fill taper trapezoids with light grey |
 | `shadedLiners` | `false` | Fill liner sections with light grey |
-| `oalSpacingFactor` | `2.5` | Extra gap above OAL rail (1.0–6.0) |
 | `curveLoHeightIn` | `0.5` | Sizing-curve anchor: drawn height (paper in) of a 4" shaft at 100% (0.25–1.5) |
 | `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
 
