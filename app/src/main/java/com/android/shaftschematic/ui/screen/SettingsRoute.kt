@@ -721,7 +721,17 @@ private fun LineThicknessControl(
     var fieldText by remember(scale) { mutableStateOf((scale * 100).roundToInt().toString()) }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("Line Thickness", style = MaterialTheme.typography.titleSmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Line Thickness",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = { onScaleChange(1f) },
+                enabled = scale != 1f,
+            ) { Text("Default (100%)") }
+        }
         Text(
             "Applies to preview and PDF output. 100% = default thin weight; 200% = original thick weight.",
             style = MaterialTheme.typography.bodySmall,
@@ -741,7 +751,9 @@ private fun LineThicknessControl(
                     fieldText = (v * 100).roundToInt().toString()
                 },
                 onValueChangeFinished = {
-                    sliderDrag?.let(onScaleChange)
+                    // Slider commits share the 100% detent with the options-sheet
+                    // control; typed values in the % field are never snapped.
+                    sliderDrag?.let { onScaleChange(snappedLineThickness(it)) }
                     sliderDrag = null
                 },
                 valueRange = 0.5f..2.0f,

@@ -57,7 +57,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -1065,28 +1064,10 @@ internal fun RunoutWearOptionsSheet(
         Spacer(Modifier.height(12.dp))
 
         // ── Line thickness ───────────────────────────────────────────────────
-        // Track the drag locally; commit once on release. Committing per drag frame
-        // writes DataStore and re-renders the whole PDF preview each frame.
-        var thicknessDrag by remember { mutableStateOf<Float?>(null) }
-        Text(
-            "Line thickness  ${((thicknessDrag ?: lineThicknessScale) * 100).roundToInt()}%",
-            style = MaterialTheme.typography.titleSmall,
+        LineThicknessSlider(
+            scale = lineThicknessScale,
+            onCommit = { vm.setLineThicknessScale(it) },
         )
-        Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("50%", style = MaterialTheme.typography.bodySmall)
-            Slider(
-                value = thicknessDrag ?: lineThicknessScale,
-                onValueChange = { thicknessDrag = it },
-                onValueChangeFinished = {
-                    thicknessDrag?.let { vm.setLineThicknessScale(it) }
-                    thicknessDrag = null
-                },
-                valueRange = 0.5f..2.0f,
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-            )
-            Text("200%", style = MaterialTheme.typography.bodySmall)
-        }
 
         Spacer(Modifier.height(12.dp))
         HorizontalDivider()

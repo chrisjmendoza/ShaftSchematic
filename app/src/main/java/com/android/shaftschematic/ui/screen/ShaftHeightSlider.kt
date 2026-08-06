@@ -48,6 +48,60 @@ internal fun snappedHeightScale(rawCommit: Float): Float =
     if (abs(rawCommit - 1f) <= HEIGHT_SCALE_SNAP_TOLERANCE) 1f else rawCommit
 
 /**
+ * Line-thickness slider commits within this distance of the default multiplier (1.0)
+ * snap to exactly 1.0 — the shaft-height detent applied to thickness, so 100% never has
+ * to be fished for by pixel ("had some trouble landing on 100%" — on-device report).
+ * Typed values are never snapped; the Default button is the guaranteed path.
+ */
+internal const val LINE_THICKNESS_SNAP_TOLERANCE = 0.05f
+
+/** [rawCommit] with the 100% detent applied — one snap rule for every thickness site. */
+internal fun snappedLineThickness(rawCommit: Float): Float =
+    if (abs(rawCommit - 1f) <= LINE_THICKNESS_SNAP_TOLERANCE) 1f else rawCommit
+
+/**
+ * The "Line thickness" slider block shared by the schematic PDF options sheet and the
+ * runout/wear options sheet. (Settings keeps its own layout — it adds a typed % field —
+ * but shares [snappedLineThickness] and the Default button posture.) Drag is tracked
+ * locally and committed once on release so drag frames don't write DataStore or
+ * re-render an open PDF preview.
+ */
+@Composable
+internal fun LineThicknessSlider(
+    scale: Float,
+    onCommit: (Float) -> Unit,
+) {
+    var thicknessDrag by remember { mutableStateOf<Float?>(null) }
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Line thickness  ${((thicknessDrag ?: scale) * 100).roundToInt()}%",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = { thicknessDrag = null; onCommit(1f) },
+                enabled = scale != 1f || thicknessDrag != null,
+            ) { Text("Default (100%)") }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("50%", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = thicknessDrag ?: scale,
+                onValueChange = { thicknessDrag = it },
+                onValueChangeFinished = {
+                    thicknessDrag?.let { onCommit(snappedLineThickness(it)) }
+                    thicknessDrag = null
+                },
+                valueRange = 0.5f..2.0f,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+            )
+            Text("200%", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/**
  * The per-job "Shaft height" slider, shared by the Consolidated Output tab and the
  * schematic PDF options sheet (one `RunoutConfig.heightScale` value behind both).
  *

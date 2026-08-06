@@ -8,6 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-06
 
+### feat(ui): line thickness gets a Default (100%) button and a magnetic detent
+
+On-device report: "I tried messing with the line size and had some trouble landing on
+100%." Same treatment as the shaft-height slider's Standard button: every line-thickness
+surface now has a "Default (100%)" reset button, and slider commits within ±5% of 100%
+snap to exactly 100% (`snappedLineThickness`). The two options-sheet copies (schematic
+PDF preview, runout/wear sheets) are replaced by one shared `LineThicknessSlider`
+(`ShaftHeightSlider.kt`); the Settings → Editor Screen control keeps its typed % field —
+typed values are never snapped (golden rule) — but shares the button and detent.
+
 ### fix(pdf): balance — body runs join the λ pool; liners can't consume the page
 
 On-device report: "The output needs more body… I can't tell that the span between the

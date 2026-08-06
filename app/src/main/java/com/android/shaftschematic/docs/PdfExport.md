@@ -49,6 +49,12 @@ pinch-to-zoom 0.5×–8×, double-tap reset.
   height/liner-compression pair, the per-job `RunoutConfig`) via VM setters, persisted,
   applied live (each option is a `LaunchedEffect` key). Blank draft is session-scoped, not
   persisted.
+  - Line thickness is the shared `LineThicknessSlider` (`ShaftHeightSlider.kt`), used by
+    this sheet and the runout/wear options sheet: a "Default (100%)" reset button plus a
+    ±5% magnetic detent on slider release (`snappedLineThickness`), the same posture as
+    the shaft-height slider's Standard button, so 100% never has to be fished for by
+    pixel (on-device report). The Settings → Editor Screen control keeps its own layout
+    (it adds a typed % field, which is never snapped) but shares the detent and button.
   - The sheet's content is taller than a phone screen, so it carries its own
     `verticalScroll` plus `navigationBarsPadding()` — without them the bottom rows clip
     mid-checkbox behind the navigation bar. Its height is capped at **78% of the screen**
