@@ -1152,12 +1152,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            SettingsStore.pdfOalSpacingFactorFlow(getApplication()).collectLatest { persisted ->
-                SettingsStore.updatePdfPrefs { it.copy(oalSpacingFactor = persisted) }
-            }
-        }
-
-        viewModelScope.launch {
             SettingsStore.pdfExportModeFlow(getApplication()).collectLatest { persisted ->
                 _pdfExportMode.value = persisted
             }

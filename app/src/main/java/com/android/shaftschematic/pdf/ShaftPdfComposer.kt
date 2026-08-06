@@ -376,7 +376,6 @@ fun composeShaftPdf(
         val assignments = planner.assignAll(spans, tierOriginMm)
 
         val maxRail = assignments.maxOfOrNull { it.rail } ?: 0
-        val extraClearRails = (pdfPrefs.oalSpacingFactor.coerceIn(1.0f, 6.0f) - 1.0f) * 0.5f
 
         val renderer = PdfDimensionRenderer(
             pageX = pageX,
@@ -413,7 +412,7 @@ fun composeShaftPdf(
         // whitespace); the planner's lift adds a label band only when the tier below
         // floats a label into the lane.
         fun computeTopY(gap: Float): Float =
-            baseY - gap * (maxRail + 1f + extraClearRails)
+            baseY - gap * (maxRail + 1f)
 
         var topY = computeTopY(railGap) - liftFor(railGap)
         repeat(10) {

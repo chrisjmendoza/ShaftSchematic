@@ -18,12 +18,6 @@ const val PDF_CURVE_HEIGHT_MAX_IN = 1.5f
  * PDF-only preferences. Add more knobs here as you grow the exporter.
  */
 data class PdfPrefs(
-    /**
-     * Extra spacing between the OAL rail and the first liner rail,
-     * expressed as a multiple of the standard rail gap (>= 1.0).
-     * Example: 2.5f = OAL sits 2.5× the normal gap above the next rail.
-     */
-    val oalSpacingFactor: Float = 2.5f,
     val tieringMode: PdfTieringMode = PdfTieringMode.AUTO,
     val showComponentTitles: Boolean = true,
     val shadedBodies: Boolean = false,
@@ -47,7 +41,6 @@ data class PdfPrefs(
 
     fun clamped(): PdfPrefs =
         copy(
-            oalSpacingFactor = oalSpacingFactor.coerceIn(1.0f, 6.0f),
             curveLoHeightIn = curveLoHeightIn.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN),
             curveHiHeightIn = curveHiHeightIn.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN),
         )

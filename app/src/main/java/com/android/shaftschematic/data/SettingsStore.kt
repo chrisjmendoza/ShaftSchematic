@@ -75,7 +75,6 @@ object SettingsStore {
     private val KEY_PDF_TIERING_MODE = stringPreferencesKey("pdf_tiering_mode")
     private val KEY_PDF_SHOW_COMPONENT_TITLES = booleanPreferencesKey("pdf_show_component_titles")
     private val KEY_PDF_EXPORT_MODE = stringPreferencesKey("pdf_export_mode")
-    private val KEY_PDF_OAL_SPACING_FACTOR = floatPreferencesKey("pdf_oal_spacing_factor")
     private val KEY_PDF_SHADED_BODIES  = booleanPreferencesKey("pdf_shaded_bodies")
     private val KEY_PDF_SHADED_TAPERS  = booleanPreferencesKey("pdf_shaded_tapers")
     private val KEY_PDF_SHADED_LINERS  = booleanPreferencesKey("pdf_shaded_liners")
@@ -145,14 +144,6 @@ object SettingsStore {
         ctx.settingsDataStore.edit { it[KEY_PDF_EXPORT_MODE] = mode.name }
     }
 
-    fun pdfOalSpacingFactorFlow(ctx: Context): Flow<Float> =
-        ctx.settingsDataStore.data.map { p ->
-            p[KEY_PDF_OAL_SPACING_FACTOR] ?: PdfPrefs().oalSpacingFactor
-        }
-
-    suspend fun setPdfOalSpacingFactor(ctx: Context, factor: Float) {
-        ctx.settingsDataStore.edit { it[KEY_PDF_OAL_SPACING_FACTOR] = factor.coerceIn(1.0f, 6.0f) }
-    }
 
     fun lineThicknessScaleFlow(ctx: Context): Flow<Float> =
         ctx.settingsDataStore.data.map { p -> p[KEY_LINE_THICKNESS_SCALE] ?: 1.0f }

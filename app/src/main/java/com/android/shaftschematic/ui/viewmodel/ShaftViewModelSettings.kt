@@ -91,13 +91,6 @@ fun ShaftViewModel.setPdfCurveHiHeightIn(v: Float, persist: Boolean = true) {
     if (persist) viewModelScope.launch { SettingsStore.setPdfCurveHiHeightIn(getApplication(), clamped) }
 }
 
-fun ShaftViewModel.setPdfOalSpacingFactor(factor: Float, persist: Boolean = true) {
-    SettingsStore.updatePdfPrefs { it.copy(oalSpacingFactor = factor) }
-    if (persist) {
-        viewModelScope.launch { SettingsStore.setPdfOalSpacingFactor(getApplication(), factor) }
-    }
-}
-
 fun ShaftViewModel.setPdfExportMode(mode: PdfExportMode, persist: Boolean = true) {
     _pdfExportMode.value = mode
     if (persist) {
