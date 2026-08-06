@@ -409,11 +409,13 @@ class ProfileCompressionTest {
     fun `frac-of-true floor holds - the span keeps its fraction under squeeze`() {
         // 2000mm window at 1 pt/mm true into 700pt. The 600mm liner (600pt true) with a
         // 50% frac floor must draw ≥ 300pt even though its flat floor is only 100pt.
+        // (Gap fracs off — this test isolates the liner mechanism.)
         val map = buildCompressedProfileXMap(
             windowStartMm = 0f, windowEndMm = 2000f,
             features = listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 0.5f)),
             contentLeft = 0f, contentRight = 700f,
             diaPtPerMm = 1f,
+            gapMinFracOfTrue = 0f,
         )
         val w = map.xAt(1300f) - map.xAt(700f)
         assertTrue("liner drew $w, needs >= 300", w >= 300f - 0.5f)
@@ -427,6 +429,7 @@ class ProfileCompressionTest {
             features = listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 1f)),
             contentLeft = 0f, contentRight = 800f,
             diaPtPerMm = 1f,
+            gapMinFracOfTrue = 0f,
         )
         assertEquals(600f, map.xAt(1300f) - map.xAt(700f), 0.5f)
     }
@@ -458,14 +461,16 @@ class ProfileCompressionTest {
 
     @Test
     fun `overflowing frac raises lambda-fit the page - other floors intact`() {
-        // Liner frac 1 wants 600pt but flat floors (64 + 600 + 64) overflow the 700pt
-        // page: the raise shrinks to fit (liner ≈ 572pt), the gap floors keep their 64,
-        // and the page is consumed exactly — the scale was never touched.
+        // (Gap fracs off — isolates the liner raise.) Liner frac 1 wants 600pt but flat
+        // floors (64 + 600 + 64) overflow the 700pt page: the raise shrinks to fit
+        // (liner ≈ 572pt), the gap floors keep their 64, and the page is consumed
+        // exactly — the scale was never touched.
         val map = buildCompressedProfileXMap(
             windowStartMm = 0f, windowEndMm = 2000f,
             features = listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 1f)),
             contentLeft = 0f, contentRight = 700f,
             diaPtPerMm = 1f,
+            gapMinFracOfTrue = 0f,
         )
         val liner = map.xAt(1300f) - map.xAt(700f)
         val gapA = map.xAt(700f) - map.xAt(0f)
@@ -481,14 +486,42 @@ class ProfileCompressionTest {
             windowStartMm = 0f, windowEndMm = 2000f,
             features = listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 1f)),
             contentWidthPt = 700f, diaPtPerMm = 1f,
+            gapMinFracOfTrue = 0f,
         )
         assertEquals(572f / 600f, overflowing, 5e-3f)
         val fitting = fracFitFactor(
             windowStartMm = 0f, windowEndMm = 2000f,
             features = listOf(ProfileFeatureSpan(700f, 1300f, 100f, minWidthFracOfTrue = 0.4f)),
             contentWidthPt = 700f, diaPtPerMm = 1f,
+            gapMinFracOfTrue = 0f,
         )
         assertEquals(1f, fitting, 1e-4f)
+    }
+
+    @Test
+    fun `body gaps keep their relative lengths under liner pressure`() {
+        // The on-device report: with proportional liners, body runs collapsed to their
+        // flat floors — equalized, "I can't tell that the span between the aft and mid
+        // liner is longer." Gaps now join the λ pool (default gap frac): a 900mm and a
+        // 500mm body run keep their true 1.8 ratio, and both draw ABOVE the flat floor.
+        val map = buildCompressedProfileXMap(
+            windowStartMm = 0f, windowEndMm = 2600f,
+            features = listOf(
+                ProfileFeatureSpan(500f, 1200f, 100f, minWidthFracOfTrue = 1f),
+                ProfileFeatureSpan(2100f, 2400f, 100f, minWidthFracOfTrue = 1f),
+            ),
+            contentLeft = 0f, contentRight = 700f,
+            diaPtPerMm = 1f,
+        )
+        val gapAft = map.xAt(500f) - map.xAt(0f)      // 500mm run
+        val gapMid = map.xAt(2100f) - map.xAt(1200f)  // 900mm run
+        assertEquals("body runs keep true ratio", 900f / 500f, gapMid / gapAft, 0.02f)
+        assertTrue("runs draw above the flat floor ($gapAft)", gapAft > PROFILE_MIN_BODY_RUN_PT + 5f)
+        // Liners also keep their own ratio (700mm vs 300mm) under the shared λ.
+        val linerA = map.xAt(1200f) - map.xAt(500f)
+        val linerB = map.xAt(2400f) - map.xAt(2100f)
+        assertEquals(700f / 300f, linerA / linerB, 0.02f)
+        assertEquals(700f, map.x1, 0.1f)
     }
 
     @Test
@@ -504,6 +537,7 @@ class ProfileCompressionTest {
             ),
             contentLeft = 0f, contentRight = 700f,
             diaPtPerMm = 1f,
+            gapMinFracOfTrue = 0f,
         )
         val wAft = map.xAt(495f) - map.xAt(0f)
         val wFwd = map.xAt(1992f) - map.xAt(1700f)

@@ -332,6 +332,23 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
   `_BODY_RUN_PT` 40 / `_LINER_PT` 56) — its values live on dimension rails and
   callouts, so proportion wins there; the runout/consolidated sheet keeps the writable
   `PROFILE_MIN_*` floors for in-profile values.
+- **Body runs may shrink but never equalize either — balance** (on-device report: "the
+  liners are taking up way too much space… I can't tell that the span between the aft
+  and mid liner is longer. There has to be some kind of balance"): the body gaps between
+  features carry a ratio-preserving fraction-of-true floor of their own,
+  `PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` = 0.35, and it joins the **same single λ pool** as
+  the taper and liner raises (`walkSpans`/`buildCompressedProfileXMap`/`fracFitFactor`
+  take it as `gapMinFracOfTrue`). Two consequences. (1) A liner raise can no longer
+  consume the page: when the pool overflows, liners and body runs shrink *together*
+  under one λ instead of the liners taking all the slack and leaving every gap clamped
+  to its flat 64 pt floor — which is what equalized them. (2) Relative lengths always
+  read **within every kind** — a 900 mm body run still draws 1.8× a 500 mm one, exactly
+  as two unequal tapers keep their ratio, because a common λ scales them identically.
+  The "the page affords liners ~N% of true length" readout
+  (`estimatedLinerKeptFracOfTrue`) reports this shared λ, so it now settles lower than
+  it did with fixed gap floors — that lower number is the balance, not a regression.
+  Height precedence is untouched: `solveMaxProfileScale` stays frac-blind, so no body
+  run (short of a keyway pin) ever lowers the drawn shaft.
 - The **1.5" ceiling is absolute** (`PROFILE_MAX_SHAFT_HEIGHT_PT` = 108 pt): the drawn
   shaft never exceeds 1.5" on paper at any slider position — a short shaft whose
   width-fit would draw taller is capped too, keeps true proportion, and simply doesn't

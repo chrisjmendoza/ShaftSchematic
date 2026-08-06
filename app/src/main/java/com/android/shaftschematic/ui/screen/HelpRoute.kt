@@ -239,8 +239,10 @@ private val helpSections: List<HelpSection> = listOf(
                     "what a 4 in and an 8 in shaft draw, and sizes in between follow. " +
                     "Liner compression (next to the height slider) keeps the measured " +
                     "components readable: check \"Keep liners proportional lengthwise\" to " +
-                    "hold liners at true scale, or set how far they may shorten with the " +
-                    "slider."
+                    "ask for liners at true scale, or set how far they may shorten with " +
+                    "the slider. The page balances the request — liners keep as much true " +
+                    "length as fits, and the runs between them always keep their relative " +
+                    "lengths readable."
             ),
             HelpTopic(
                 "Back up and restore",

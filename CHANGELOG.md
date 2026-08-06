@@ -8,6 +8,26 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-06
 
+### fix(pdf): balance — body runs join the λ pool; liners can't consume the page
+
+On-device report: "The output needs more body… I can't tell that the span between the
+aft and mid liner is longer… The liners are taking up way too much space. There has to
+be some kind of balance." Root cause: the liner fraction-of-true raises λ-fit the page
+to the brim, so by the time the proportional-distribution phase ran there was zero
+slack left — every body run clamped to its flat `PROFILE_MIN_BODY_RUN_PT` floor and
+drew the same width, erasing the relative lengths that make a shaft readable. The
+liners hadn't taken *too much* by any single rule; they had simply taken it all first.
+Fix: body gaps now carry a ratio-preserving fraction-of-true floor of their own —
+`PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` = 0.35, threaded through `walkSpans` /
+`buildCompressedProfileXMap` / `fracFitFactor` as `gapMinFracOfTrue` — sharing the
+**single λ** with the liner and taper raises. Everything in the pool shrinks together
+under one factor, so relative lengths always read within every kind: a 900 mm body run
+draws 1.8× a 500 mm one exactly as two unequal tapers keep their ratio. The "the page
+affords liners ~N% of true length" readout now settles lower than it did against fixed
+gap floors — that lower number *is* the balance. Height precedence untouched:
+`solveMaxProfileScale` stays frac-blind, so only a keyway pin still yields the drawn
+shaft height.
+
 ### fix(pdf): standard drawn height finalized — 8" shaft draws 1" tall
 
 On-device verdict on the latest build ("this 1.25 just looks bad… make the 8"

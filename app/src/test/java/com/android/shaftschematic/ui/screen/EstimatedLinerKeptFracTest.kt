@@ -32,9 +32,11 @@ class EstimatedLinerKeptFracTest {
 
     @Test
     fun `page-limited request reports the shortened kept fraction`() {
+        // Body gaps share the λ pool (gap frac 0.35), so a full-proportional liner
+        // request settles lower than it would with fixed gap floors — the balance rule.
         val k = kept(1f)
         assertTrue("kept $k must be short of the full request", k < 1f - 0.01f)
-        assertEquals(0.905f, k, 0.02f)
+        assertEquals(0.748f, k, 0.02f)
     }
 
     @Test

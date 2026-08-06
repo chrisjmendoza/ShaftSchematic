@@ -489,7 +489,13 @@ On-device request following the worn-sections review:
     otherwise schematic: spans may foreshorten but each kind keeps a writable minimum
     drawn width
     (`PROFILE_MIN_THREAD_PT` 36; `PROFILE_MIN_BODY_RUN_PT` 64 — room to write
-    diameters and hang runout leaders, on-device request; `PROFILE_MIN_LINER_PT` 100 —
+    diameters and hang runout leaders, on-device request — and body runs additionally
+    carry a ratio-preserving fraction-of-true floor in the SHARED λ pool,
+    `PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` 0.35, the same mechanism tapers and liners use
+    (on-device report: with proportional liners the body runs starved down to their
+    flat floors — equalized slivers, "I can't tell that the span between the aft and
+    mid liner is longer"), so gaps and raises shrink TOGETHER under one λ and relative
+    body-run lengths always read; `PROFILE_MIN_LINER_PT` 100 —
     room to write wear values in, see the 2026-08-05 liner clarification below; the
     SCHEMATIC composer instead uses the lean `SCHEMATIC_MIN_*` floors — 28/40/56 —
     because its values live on rails and callouts, not inside spans, so proportion

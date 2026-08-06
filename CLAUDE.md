@@ -147,7 +147,10 @@ scale solve, and λ-fit whatever room the page has at the selected height
 (`fracFitFactor`) — do not let a liner demand lower the drawn shaft; control on the
 Output tab + schematic Tune sheet with a live kept-% readout
 (`estimatedLinerKeptFracOfTrue`); ONLY keyway-bearing bodies stay pinned at true width
-with the height yielding (`solveMaxProfileScale`). The **"Shaft height" slider** (`RunoutConfig.heightScale`,
+with the height yielding (`solveMaxProfileScale`). Body runs join the same λ pool
+(`PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` 0.35 — ratio-preserving gap floors), so liner raises
+can never consume the page and body-run relative lengths always read.
+The **"Shaft height" slider** (`RunoutConfig.heightScale`,
 per-job in the envelope — ONE value behind the runout/consolidated sheets AND the
 schematic, `composeShaftPdf(heightScale)`) multiplies the solved scale; the drawn shaft
 is hard-capped at **1.5" on paper** (`PROFILE_MAX_SHAFT_HEIGHT_PT`, an ABSOLUTE ceiling

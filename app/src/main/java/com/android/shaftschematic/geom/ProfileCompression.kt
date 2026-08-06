@@ -95,6 +95,14 @@ const val PROFILE_MIN_LINER_PT = 100f   // room to write wear values in / read t
 // width (λ-fit like the liner raises — the drawn height never yields to it).
 const val PROFILE_TAPER_MIN_FRAC_OF_TRUE = 0.5f
 
+// Ratio-preserving BODY-RUN floor: body gaps join the same λ pool so liner raises can
+// never consume the whole page (on-device report: with proportional liners the body
+// runs collapsed to their flat floors — equalized slivers, "I can't tell that the span
+// between the aft and mid liner is longer"). Body runs keep at least this fraction of
+// true width × λ, so their relative lengths always read; when space is tight, liners
+// and bodies shrink TOGETHER (one λ) instead of liners taking all the slack.
+const val PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE = 0.35f
+
 // Schematic-only lean floors (on-device direction, experiment: the schematic needs
 // PROPORTION more than write-in room — its values live on dimension rails and
 // below-shaft callouts, never inside spans — while the runout/consolidated sheet keeps
@@ -245,6 +253,7 @@ fun buildCompressedProfileXMap(
     contentRight: Float,
     diaPtPerMm: Float,
     gapMinWidthPt: Float = PROFILE_MIN_BODY_RUN_PT,
+    gapMinFracOfTrue: Float = PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE,
 ): CompressedProfileXMap {
     val width = contentRight - contentLeft
     val winLen = windowEndMm - windowStartMm
@@ -254,7 +263,7 @@ fun buildCompressedProfileXMap(
         )
     }
 
-    val spans = walkSpans(windowStartMm, windowEndMm, features, gapMinWidthPt)
+    val spans = walkSpans(windowStartMm, windowEndMm, features, gapMinWidthPt, gapMinFracOfTrue)
 
     // Everything fits at true scale → plain linear map (may end short of contentRight).
     val totalTruePt = winLen * diaPtPerMm
@@ -334,9 +343,10 @@ fun fracFitFactor(
     contentWidthPt: Float,
     diaPtPerMm: Float,
     gapMinWidthPt: Float = PROFILE_MIN_BODY_RUN_PT,
+    gapMinFracOfTrue: Float = PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE,
 ): Float {
     if (windowEndMm - windowStartMm <= 1e-4f || contentWidthPt <= 1e-4f || diaPtPerMm <= 0f) return 1f
-    val spans = walkSpans(windowStartMm, windowEndMm, features, gapMinWidthPt)
+    val spans = walkSpans(windowStartMm, windowEndMm, features, gapMinWidthPt, gapMinFracOfTrue)
     val trues = spans.map { it.lenMm * diaPtPerMm }
     return fracFitLambda(spans, trues, contentWidthPt)
 }
@@ -357,16 +367,21 @@ internal fun walkSpans(
     windowEndMm: Float,
     features: List<ProfileFeatureSpan>,
     gapMinWidthPt: Float,
+    gapMinFracOfTrue: Float = 0f,
 ): List<WalkSpan> {
     val normalized = normalizeFeatures(windowStartMm, windowEndMm, features)
     return buildList {
         var cursor = windowStartMm
         normalized.forEach { f ->
-            if (f.startMm > cursor + 1e-4f) add(WalkSpan(cursor, f.startMm, gapMinWidthPt))
+            if (f.startMm > cursor + 1e-4f) {
+                add(WalkSpan(cursor, f.startMm, gapMinWidthPt, gapMinFracOfTrue))
+            }
             add(WalkSpan(maxOf(f.startMm, cursor), f.endMm, f.minWidthPt, f.minWidthFracOfTrue))
             cursor = maxOf(cursor, f.endMm)
         }
-        if (windowEndMm > cursor + 1e-4f) add(WalkSpan(cursor, windowEndMm, gapMinWidthPt))
+        if (windowEndMm > cursor + 1e-4f) {
+            add(WalkSpan(cursor, windowEndMm, gapMinWidthPt, gapMinFracOfTrue))
+        }
     }
 }
 
