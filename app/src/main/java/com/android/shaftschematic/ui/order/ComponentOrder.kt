@@ -1,9 +1,15 @@
 package com.android.shaftschematic.ui.order
 
 /**
- * UI-order key used by the editor list. The ViewModel owns a `List<ComponentKey>` that
- * defines the **rendered order across types** (Body/Taper/Thread/Liner). The screen
- * renders strictly by this list with no geometry-based sorting.
+ * Component identity across types (Body/Taper/Thread/Liner/CouplerBoltSlot).
+ *
+ * [ComponentKind] tags rows, cards, snackbars and test tags. [ComponentKey] pairs a kind with
+ * a stable id for the model-layer physical ordering helpers (`ShaftSpec.buildPhysicalKeyOrder`,
+ * `snapForwardFrom`).
+ *
+ * It is NOT a display order: the carousel renders resolved components in physical position
+ * order along the shaft, so there is no stored cross-type order to keep in sync. See
+ * `docs/ComponentsOrdering.md`.
  */
 enum class ComponentKind { BODY, TAPER, THREAD, LINER, COUPLER_BOLT_SLOT }
 

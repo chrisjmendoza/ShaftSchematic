@@ -2,8 +2,17 @@
 
 **Source:** TODO §2.3 "Investigate renderer/storage taper orientation discrepancy"
 (discovered 2026-07-25 while fixing the §3.3 taper-vs-body warning false positive).
-**Status:** analysis only — no code changed. The canonical-convention decision is a
-product call and is left open at the bottom.
+
+**Status (2026-08-06): RESOLVED for new tapers.** Fix 1 and Fix 2 below are implemented —
+the Add dialog orders SET/LET by the taper's physical half (`taperAddDiameterOrder` over
+`classifyTaperSideByMidpoint`, judged against `oalAfterTaperAddMm`, the post-add OAL) and
+threads the measure-from chip through to `Taper.authoredReference`; the
+`rememberTaperDefaults` SET/LET mislabel is fixed on both the add and update paths; and
+`ShaftViewModel.taperSmallEndAtStart` now delegates to the one shared classifier instead of
+restating it. **Fix 3 (data repair) was declined** — existing documents keep loading exactly
+as stored (golden rule); a reversed pair from an older build is left alone. Pinned by
+`TaperAddOrientationTest` + `TaperAuthoredReferencePersistenceTest`. The sections below are
+kept as the record of the investigation.
 
 ---
 

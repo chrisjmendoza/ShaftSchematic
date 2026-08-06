@@ -20,7 +20,9 @@ import com.android.shaftschematic.io.ShaftBackup
 import java.io.File
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.model.snapForwardFrom
-import com.android.shaftschematic.ui.order.ComponentKey
+import com.android.shaftschematic.ui.input.TaperSide
+import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
+import com.android.shaftschematic.ui.input.oalAfterTaperAddMm
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.clampPitAcrossFrac
@@ -783,9 +785,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private val _editorResetNonce = MutableStateFlow(0)
     val editorResetNonce: StateFlow<Int> = _editorResetNonce.asStateFlow()
 
-    // Cross-type UI order (stable IDs) — source of truth for list rendering (newest-first).
-    private val _componentOrder = MutableStateFlow<List<ComponentKey>>(emptyList())
-    val componentOrder: StateFlow<List<ComponentKey>> = _componentOrder.asStateFlow()
+    // The carousel renders resolved components in PHYSICAL order (auto-bodies interleaved at
+    // their spans), so the ViewModel keeps no cross-type display order of its own. See
+    // `docs/ComponentsOrdering.md`.
 
     // One-shot UI events (snackbars, etc.)
     private val _uiEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)
@@ -794,7 +796,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ────────────────────────────────────────────────────────────────────────────
     // Session-scoped Undo / Redo (v2) — covers ALL drawing-state edits, not just deletes.
     //
-    // A single [SessionHistory] over [EditState] snapshots (spec + wear + runout + order +
+    // A single [SessionHistory] over [EditState] snapshots (spec + wear + runout + undercuts +
     // OAL mode). Snapshots are recorded centrally by a collector over those flows (see init),
     // with time-based coalescing living in SessionHistory (a typing burst = one undo step).
     // Undo/redo apply a restored EditState back onto the flows; the collector's re-emission
@@ -822,7 +824,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         wearRecord = _wearRecord.value,
         runoutReadings = _runoutReadings.value,
         undercutRecord = _undercutRecord.value,
-        componentOrder = _componentOrder.value,
         overallIsManual = _overallIsManual.value,
     )
 
@@ -845,14 +846,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             _wearRecord.value = e.wearRecord
             _runoutReadings.value = e.runoutReadings
             _undercutRecord.value = e.undercutRecord
-            _componentOrder.value = e.componentOrder
             _overallIsManual.value = e.overallIsManual
         } finally {
             isRestoringHistory = false
         }
     }
 
-    /** Undo the most recent edit step (spec / wear / runout / order / OAL mode). */
+    /** Undo the most recent edit step (spec / wear / runout / undercuts / OAL mode). */
     fun undoEdit() {
         val restored = editHistory.undo(currentEditState()) ?: return
         applyEditState(restored)
@@ -1003,19 +1003,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Restores (undo/redo) re-emit the restored state, but SessionHistory.record no-ops it
         // (equal to head) and isRestoringHistory guards the application block as well.
         viewModelScope.launch {
-            @Suppress("UNCHECKED_CAST")
-            // Flow.combine overload for >5 flows returns Array<Any?>
             combine(
-                spec, wearRecord, runoutReadings, undercutRecord, componentOrder, overallIsManual
-            ) { values: Array<Any?> ->
-                check(values.size == 6) { "Edit-history combine expected 6 values, got ${values.size}" }
+                spec, wearRecord, runoutReadings, undercutRecord, overallIsManual
+            ) { s, wear, runout, undercut, isManual ->
                 EditState(
-                    spec = values[0] as ShaftSpec,
-                    wearRecord = values[1] as WearRecord,
-                    runoutReadings = values[2] as RunoutReadings,
-                    undercutRecord = values[3] as UndercutRecord,
-                    componentOrder = values[4] as List<ComponentKey>,
-                    overallIsManual = values[5] as Boolean,
+                    spec = s,
+                    wearRecord = wear,
+                    runoutReadings = runout,
+                    undercutRecord = undercut,
+                    overallIsManual = isManual,
                 )
             }.collect { edit ->
                 if (isRestoringHistory) return@collect
@@ -1445,7 +1441,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         val id = newId()
         _spec.update { s ->
-            orderAdd(ComponentKind.BODY, id)
             s.copy(
                 bodies = listOf(
                     Body(
@@ -1465,7 +1460,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
         rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
         ensureOverall()
-        ensureOrderCoversSpec()
         _selectedComponentId.value = id
     }
 
@@ -1561,20 +1555,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         if (removed) {
-            // Remove from UI order AFTER spec update to avoid cross-state mutation
-            orderRemove(id)
             ensureOverall()
             emitDeletedSnack(ComponentKind.BODY)
         }
     }
 
     // Tapers
+    /**
+     * Add a taper. [startDiaMm]/[endDiaMm] arrive x-ordered AFT → FWD (the Add dialog orders
+     * the typed S.E.T./L.E.T. by the taper's physical half); [reference] records which end the
+     * user measured the start from, so the carousel card reopens in that frame.
+     */
     fun addTaperAt(
         startMm: Float,
         lengthMm: Float,
         startDiaMm: Float,
         endDiaMm: Float,
         rateText: String = "",
+        reference: LinerAuthoredReference = LinerAuthoredReference.AFT,
         keywayWidthMm: Float = 0f,
         keywayDepthMm: Float = 0f,
         keywayLengthMm: Float = 0f,
@@ -1582,16 +1580,26 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         keywaySpooned: Boolean = false,
     ) {
         val id = newId()
+        // Which end is the Small End follows the taper's physical half, judged against the OAL
+        // the shaft carries once this taper exists — in auto-OAL mode the add itself can grow
+        // the shaft, and the pre-add OAL would derive the missing diameter for the wrong face.
+        val smallEndAtStart = taperSmallEndAtStart(
+            startMm = startMm,
+            lengthMm = lengthMm,
+            overallLengthMm = oalAfterTaperAddMm(
+                currentOalMm = _spec.value.overallLengthMm,
+                overallIsManual = _overallIsManual.value,
+                startFromAftMm = startMm,
+                lengthMm = lengthMm,
+            ),
+        )
         _spec.update { s ->
             val split = s.splitBodiesAround(startMm, startMm + lengthMm) { newId() }
-            split.removedIds.forEach { orderRemove(it) }
-            split.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
 
-            orderAdd(ComponentKind.TAPER, id)
-            val (resolvedSet, resolvedLet) = deriveTaperDiameters(
+            val (resolvedStartDia, resolvedEndDia) = deriveTaperDiameters(
                 startDiaMm = startDiaMm, endDiaMm = endDiaMm,
                 lengthMm = lengthMm, rateText = rateText,
-                smallEndAtStart = taperSmallEndAtStart(startMm, lengthMm, s.overallLengthMm)
+                smallEndAtStart = smallEndAtStart
             )
             split.spec.copy(
                 tapers = listOf(
@@ -1599,21 +1607,27 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         id = id,
                         startFromAftMm = startMm,
                         lengthMm = max(0f, lengthMm),
-                        startDiaMm = max(0f, resolvedSet),
-                        endDiaMm = max(0f, resolvedLet),
+                        startDiaMm = max(0f, resolvedStartDia),
+                        endDiaMm = max(0f, resolvedEndDia),
                         keywayWidthMm = max(0f, keywayWidthMm),
                         keywayDepthMm = max(0f, keywayDepthMm),
                         keywayLengthMm = max(0f, keywayLengthMm),
                         keywayOffsetFromSetMm = max(0f, keywayOffsetFromSetMm),
                         keywaySpooned = keywaySpooned,
                         taperRateText = rateText,
+                        authoredReference = reference,
                     )
                 ) + split.spec.tapers
             )
         }
-        rememberTaperDefaults(lengthMm = lengthMm, setDiaMm = startDiaMm, letDiaMm = endDiaMm)
+        // Read the typed SET/LET back out of the x-ordered pair the same way it was put in, so
+        // a FWD-half add seeds the next dialog's SET default from a SET and not from a LET.
+        rememberTaperDefaults(
+            lengthMm = lengthMm,
+            setDiaMm = if (smallEndAtStart) startDiaMm else endDiaMm,
+            letDiaMm = if (smallEndAtStart) endDiaMm else startDiaMm,
+        )
         ensureOverall()
-        ensureOrderCoversSpec()
         _selectedComponentId.value = id
     }
 
@@ -1629,10 +1643,22 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val old = s.tapers[index]
             val effectiveRate = rateText.ifBlank { old.taperRateText }
 
-            val (resolvedSet, resolvedLet) = deriveTaperDiameters(
+            // Same frame as the add path: the half is judged against the OAL that will cover
+            // the edited span, so an edit that pushes the taper past the current end derives
+            // the missing diameter for the face the card will label.
+            val (resolvedStartDia, resolvedEndDia) = deriveTaperDiameters(
                 startDiaMm = startDiaMm, endDiaMm = endDiaMm,
                 lengthMm = lengthMm, rateText = effectiveRate,
-                smallEndAtStart = taperSmallEndAtStart(startMm, lengthMm, s.overallLengthMm)
+                smallEndAtStart = taperSmallEndAtStart(
+                    startMm = startMm,
+                    lengthMm = lengthMm,
+                    overallLengthMm = oalAfterTaperAddMm(
+                        currentOalMm = s.overallLengthMm,
+                        overallIsManual = _overallIsManual.value,
+                        startFromAftMm = startMm,
+                        lengthMm = lengthMm,
+                    ),
+                )
             )
 
             s.copy(
@@ -1640,8 +1666,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     list[index] = old.copy(
                         startFromAftMm = startMm,
                         lengthMm = max(0f, lengthMm),
-                        startDiaMm = max(0f, resolvedSet),
-                        endDiaMm = max(0f, resolvedLet),
+                        startDiaMm = max(0f, resolvedStartDia),
+                        endDiaMm = max(0f, resolvedEndDia),
                         taperRateText = effectiveRate,
                     )
                 }
@@ -1649,7 +1675,23 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.also {
         if (index in _spec.value.tapers.indices) {
-            rememberTaperDefaults(lengthMm = lengthMm, setDiaMm = startDiaMm, letDiaMm = endDiaMm)
+            // The x-ordered pair is read back as SET/LET through the taper's own half — seeding
+            // the SET default from startDiaMm alone would take a FWD-half taper's LET.
+            val smallEndAtStart = taperSmallEndAtStart(
+                startMm = startMm,
+                lengthMm = lengthMm,
+                overallLengthMm = oalAfterTaperAddMm(
+                    currentOalMm = _spec.value.overallLengthMm,
+                    overallIsManual = _overallIsManual.value,
+                    startFromAftMm = startMm,
+                    lengthMm = lengthMm,
+                ),
+            )
+            rememberTaperDefaults(
+                lengthMm = lengthMm,
+                setDiaMm = if (smallEndAtStart) startDiaMm else endDiaMm,
+                letDiaMm = if (smallEndAtStart) endDiaMm else startDiaMm,
+            )
         }
         ensureOverall()
     }
@@ -1710,13 +1752,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val taper = s.tapers[idx]
             val afterRemoval = s.copy(tapers = s.tapers.toMutableList().apply { removeAt(idx) })
             val merge = afterRemoval.mergeBodiesAround(taper.startFromAftMm, taper.startFromAftMm + taper.lengthMm) { newId() }
-            merge.removedIds.forEach { orderRemove(it) }
-            merge.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
             merge.spec
         }
 
         if (removed) {
-            orderRemove(id)
             ensureOverall()
             emitDeletedSnack(ComponentKind.TAPER)
         }
@@ -1749,10 +1788,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             // Excluded threads live outside the shaft envelope; they don't split in-shaft bodies.
             val split = if (!excludeFromOAL) s.splitBodiesAround(startMm, startMm + lengthMm) { newId() }
                         else BodySplitResult(s, emptyList(), emptyList())
-            split.removedIds.forEach { orderRemove(it) }
-            split.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
-
-            orderAdd(ComponentKind.THREAD, id)
             split.spec.copy(
                 threads = listOf(
                     Threads(
@@ -1769,7 +1804,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
         rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
         ensureOverall()
-        ensureOrderCoversSpec()
         _selectedComponentId.value = id
     }
 
@@ -1848,14 +1882,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val merge = if (!thread.excludeFromOAL)
                 afterRemoval.mergeBodiesAround(thread.startFromAftMm, thread.startFromAftMm + thread.lengthMm) { newId() }
             else BodySplitResult(afterRemoval, emptyList(), emptyList())
-            merge.removedIds.forEach { orderRemove(it) }
-            merge.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
             merge.spec
         }
 
         if (removed) {
-            // Update cross-type order, maintain coverage, and show the undo snackbar.
-            orderRemove(id)
+            // Maintain coverage and show the undo snackbar.
             ensureOverall()
             emitDeletedSnack(ComponentKind.THREAD)
         }
@@ -1872,10 +1903,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _spec.update { s ->
             val len = max(0f, lengthMm)
             val split = s.splitBodiesAround(startMm, startMm + len) { newId() }
-            split.removedIds.forEach { orderRemove(it) }
-            split.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
-
-            orderAdd(ComponentKind.LINER, id)
             val od = max(0f, odMm)
             val liner = Liner(
                 id = id,
@@ -1889,7 +1916,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
         rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
         ensureOverall()
-        ensureOrderCoversSpec()
         _selectedComponentId.value = id
     }
 
@@ -1995,13 +2021,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val liner = s.liners[idx]
             val afterRemoval = s.copy(liners = s.liners.toMutableList().apply { removeAt(idx) })
             val merge = afterRemoval.mergeBodiesAround(liner.startFromAftMm, liner.startFromAftMm + liner.lengthMm) { newId() }
-            merge.removedIds.forEach { orderRemove(it) }
-            merge.addedIds.forEach   { orderAdd(ComponentKind.BODY, it) }
             merge.spec
         }
 
         if (removed) {
-            orderRemove(id)
             ensureOverall()
             emitDeletedSnack(ComponentKind.LINER)
         }
@@ -2023,7 +2046,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         val id = newId()
         _spec.update { s ->
-            orderAdd(ComponentKind.COUPLER_BOLT_SLOT, id)
             val slot = CouplerBoltSlot(
                 id = id,
                 startFromAftMm = max(0f, startMm),
@@ -2039,7 +2061,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
         rememberSlotDefaults(holeDiaMm = holeDiaMm, spacingMm = spacingMm, depthMm = depthMm, count = count)
         // NOTE: deliberately no ensureOverall() — slots never drive OAL.
-        ensureOrderCoversSpec()
         _selectedComponentId.value = id
     }
 
@@ -2110,7 +2131,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         if (removed) {
-            orderRemove(id)
             // Slots never affect OAL, so no ensureOverall() here.
             emitDeletedSnack(ComponentKind.COUPLER_BOLT_SLOT)
         }
@@ -2303,9 +2323,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _overallIsManual.value =
             decoded.spec.overallLengthMm > coverageEndMm(decoded.spec) + 1e-3f
 
-        // Reset order to this document's components only
-        _componentOrder.value = emptyList()
-        ensureOrderCoversSpec(decoded.spec)
         markDocumentSaved()
     }
 
@@ -2348,8 +2365,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _notes.value = ""
         _overallIsManual.value = false
 
-        _componentOrder.value = emptyList()
-        ensureOrderCoversSpec(blankSpec)
         _currentDocumentName.value = null
         markDocumentSaved()
     }
@@ -2435,61 +2450,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         return end
     }
 
-    /**
-     * Record a newly-created component at the top of the cross-type order.
-     * Rationale: the editor list is newest-first; prepending preserves that mental model.
-     */
-    private fun orderAdd(kind: ComponentKind, id: String) {
-        _componentOrder.update { current -> listOf(ComponentKey(id, kind)) + current }
-    }
-
-    /** Remove a component id from the cross-type order (e.g., after deletion). */
-    private fun orderRemove(id: String) {
-        _componentOrder.update { list -> list.filterNot { it.id == id } }
-    }
-
-    /**
-     * Ensure the UI order contains every current component id (append any missing; keep sequence).
-     * Also drops any order entries whose ids are no longer present in the spec.
-     * Needed on load/import to seed order for legacy docs or externally-edited specs.
-     */
-    private fun ensureOrderCoversSpec(s: ShaftSpec = _spec.value) {
-        // Compute the set of ids that actually exist in the spec
-        val specIds = buildSet {
-            addAll(s.bodies.map { it.id })
-            addAll(s.tapers.map { it.id })
-            addAll(s.threads.map { it.id })
-            addAll(s.liners.map { it.id })
-            addAll(s.couplerBoltSlots.map { it.id })
-        }
-
-        // Start from current order, but drop any ids that no longer exist
-        val cur = _componentOrder.value
-            .filter { it.id in specIds }
-            .toMutableList()
-
-        val have = cur.mapTo(mutableSetOf()) { it.id }
-
-        fun addMissing(kind: ComponentKind, ids: List<String>) {
-            ids.forEach { id ->
-                if (id !in have) {
-                    cur += ComponentKey(id, kind)
-                    have += id
-                }
-            }
-        }
-
-        addMissing(ComponentKind.BODY,   s.bodies.map { it.id })
-        addMissing(ComponentKind.TAPER,  s.tapers.map { it.id })
-        addMissing(ComponentKind.THREAD, s.threads.map { it.id })
-        addMissing(ComponentKind.LINER,  s.liners.map { it.id })
-        addMissing(ComponentKind.COUPLER_BOLT_SLOT, s.couplerBoltSlots.map { it.id })
-
-        if (cur != _componentOrder.value) {
-            _componentOrder.value = cur
-        }
-    }
-
     /** Emits a deletion snackbar request for the given [ComponentKind]. */
     private fun emitDeletedSnack(kind: ComponentKind) {
         viewModelScope.launch {
@@ -2551,14 +2511,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
         /**
          * True when the taper's Small End faces the AFT end of the shaft — i.e. the taper sits
-         * in the AFT half. Mirrors the UI's SET/LET labeling rule
-         * ([com.android.shaftschematic.ui.input.taperSetLetMapping]): mid-point ≤ OAL/2 → AFT
-         * taper (SET at start). Falls back to AFT when OAL is unknown (0).
+         * in the AFT half. Shares the UI's SET/LET labeling rule
+         * ([com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint]) rather than
+         * restating it: mid-point ≤ OAL/2 → AFT taper (SET at start), AFT when OAL is unknown (0).
+         * A second copy of the rule would let derivation and labels drift apart.
          */
-        fun taperSmallEndAtStart(startMm: Float, lengthMm: Float, overallLengthMm: Float): Boolean {
-            if (overallLengthMm <= 0f) return true
-            return startMm + lengthMm * 0.5f <= overallLengthMm * 0.5f
-        }
+        fun taperSmallEndAtStart(startMm: Float, lengthMm: Float, overallLengthMm: Float): Boolean =
+            classifyTaperSideByMidpoint(startMm, lengthMm, overallLengthMm) == TaperSide.AFT
 
         /**
          * Parse a taper rate string into a dimensionless ratio (diameter change per length unit).

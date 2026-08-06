@@ -3,11 +3,7 @@ package com.android.shaftschematic.ui.screen
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.pdf.PdfDocument
-import android.graphics.pdf.PdfRenderer
 import android.net.Uri
-import android.os.ParcelFileDescriptor
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -68,7 +64,6 @@ import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeWearPdf
-import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
@@ -82,10 +77,10 @@ import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.printShaftPdfPage
+import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * WearRoute
@@ -180,18 +175,17 @@ fun WearRoute(
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
         val thicknessSnapshot = lineThicknessScale
+        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
+            jobNumber = jobNumber, side = shaftPosition)
         val bmp = withContext(Dispatchers.IO) {
-            renderWearBitmap(
-                context = ctx, spec = spec,
-                project = ProjectInfo(customer = customer, vessel = vessel,
-                    jobNumber = jobNumber, side = shaftPosition),
-                unit = unit,
-                pdfPrefs = prefsSnapshot,
-                resolvedComponents = resolvedComponents,
-                lineThicknessScale = thicknessSnapshot,
-                wearRecord = wearRecord,
-                blankValues = blankDraft,
-            )
+            renderPdfPageBitmap(ctx) { page ->
+                composeWearPdf(
+                    page = page, spec = spec, project = projectSnapshot, unit = unit,
+                    pdfPrefs = prefsSnapshot, resolvedComponents = resolvedComponents,
+                    lineThicknessScale = thicknessSnapshot, wearRecord = wearRecord,
+                    blankValues = blankDraft,
+                )
+            }
         }
         previewBitmap = bmp?.asImageBitmap()
         previewLoading = false
@@ -530,41 +524,3 @@ private fun DrawScope.drawWearAffordances(
         }
     }
 }
-
-private fun renderWearBitmap(
-    context: Context,
-    spec: com.android.shaftschematic.model.ShaftSpec,
-    project: ProjectInfo,
-    unit: com.android.shaftschematic.util.UnitSystem,
-    pdfPrefs: PdfPrefs = PdfPrefs(),
-    resolvedComponents: List<com.android.shaftschematic.ui.resolved.ResolvedComponent>? = null,
-    lineThicknessScale: Float = 1.0f,
-    wearRecord: WearRecord = WearRecord(),
-    blankValues: Boolean = false,
-): Bitmap? = runCatching {
-    val tempFile = File.createTempFile("wear_preview_", ".pdf", context.cacheDir)
-    val doc = PdfDocument()
-    try {
-        val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
-        val page = doc.startPage(pageInfo)
-        composeWearPdf(page = page, spec = spec, project = project, unit = unit,
-            pdfPrefs = pdfPrefs, resolvedComponents = resolvedComponents,
-            lineThicknessScale = lineThicknessScale, wearRecord = wearRecord,
-            blankValues = blankValues)
-        doc.finishPage(page)
-        tempFile.outputStream().buffered().use { doc.writeTo(it) }
-    } finally {
-        doc.close()
-    }
-    val pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
-    val renderer = PdfRenderer(pfd)
-    try {
-        val pdfPage = renderer.openPage(0)
-        try {
-            val bmp = Bitmap.createBitmap(pdfPage.width * 2, pdfPage.height * 2, Bitmap.Config.ARGB_8888)
-            bmp.eraseColor(android.graphics.Color.WHITE)
-            pdfPage.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            bmp
-        } finally { pdfPage.close() }
-    } finally { renderer.close(); pfd.close(); tempFile.delete() }
-}.getOrNull()

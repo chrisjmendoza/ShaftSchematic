@@ -1048,6 +1048,8 @@ Both routes pass `RunoutWearOptionsSheet` as the lambda:
 
 All four values are included in the `LaunchedEffect` key list so changing any option immediately re-renders the preview bitmap.
 
+Both option blocks are shared composables in `ui/screen/ShaftHeightSlider.kt` — `LineThicknessSlider` and `ShadeInPdfChecks` (heading + the three checkboxes + the `linerShadeLocked` behavior) — used by this sheet and by the schematic preview's `PdfOptionsSheet`, so an added option lands on both surfaces at once. Settings → PDF Export keeps its own copy of the checkbox rows: they sit in a `spacedBy(12.dp)` column with a padded heading, and adopting the sheets' tighter block would restyle that page. Same prefs, same setters.
+
 The Consolidated Output tab passes `linerShadeLocked = consolidatedSheetHasInProfileValues(…)` computed from the same inputs its composer call gets (wear record, resolved component ids, the elected variant's `includeWearInfo`, the blank-draft flag), so the checkbox can never show a shade the sheet won't draw. The other three callers (Runout, Wear, Undercut) leave the parameter at its `false` default.
 
 ---
@@ -1071,8 +1073,11 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
 - **Runout readings are reference-only** (like coupler bolt slots / wear spots): a per-station TIR value + high-spot marker that never affect OAL/`coverageEndMm`, body resolution, collision, or the Free-to-End badge. Both are optional and independent; a sheet exports fine with neither. See "Runout Bubble Editor".
 - Any recorded value/marker is drawn identically in BOTH draw sites (the two must stay in lockstep — `RunoutRoute.drawRunoutMarkers` ⇔ `RunoutPdfComposer.drawPlacedBubbles`).
 - OAL arrows bracket the SET-to-SET span, not the full `overallLengthMm`.
-- The preview bitmap is rendered at 2× raster scale for sharpness on high-density displays.
-- Temp PDF files used for preview rendering are deleted after rasterisation.
+- Every tab's preview bitmap comes from the ONE shared raster helper
+  `util/PdfRaster.renderPdfPageBitmap` (`composePage` lambda in, bitmap out) at
+  `PDF_PREVIEW_RENDER_SCALE` (2×) for sharpness on high-density displays. Its temp PDF is
+  deleted after rasterisation, and any failure returns null so the tab shows an error
+  instead of crashing.
 
 ---
 

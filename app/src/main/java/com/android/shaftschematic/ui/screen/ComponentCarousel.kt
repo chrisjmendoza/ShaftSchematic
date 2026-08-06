@@ -64,7 +64,6 @@ import com.android.shaftschematic.model.keywayCount
 import com.android.shaftschematic.ui.input.NumericInputField
 import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
-import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
@@ -148,7 +147,6 @@ internal fun ComponentCarouselPager(
     spec: ShaftSpec,
     resolvedComponents: List<ResolvedComponent>,
     unit: UnitSystem,
-    componentOrder: List<ComponentKey>,
     showEdgeArrows: Boolean,
     edgeArrowWidthDp: Int,
     showComponentDebugLabels: Boolean,

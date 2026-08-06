@@ -4,11 +4,7 @@ package com.android.shaftschematic.ui.screen
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
-import android.graphics.Bitmap
-import android.graphics.pdf.PdfDocument
-import android.graphics.pdf.PdfRenderer
 import android.os.Build
-import android.os.ParcelFileDescriptor
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
@@ -37,7 +33,6 @@ import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -79,17 +74,14 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.maxOuterDiaMm
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.pdf.composeShaftPdf
-import com.android.shaftschematic.settings.PdfPrefs
-import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.DocumentNaming
-import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.printShaftPdfPage
+import com.android.shaftschematic.util.renderPdfPageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import android.content.pm.PackageManager
 import kotlin.math.roundToInt
 
@@ -97,9 +89,10 @@ import kotlin.math.roundToInt
  * PdfPreviewScreen
  *
  * Purpose
- * Shows a full-resolution preview of the PDF that will be exported, rendered in-memory
- * via PdfDocument + PdfRenderer. Supports pinch-to-zoom (and double-tap to reset) so
- * users can inspect dimension labels before committing to an export.
+ * Shows a full-resolution preview of the PDF that will be exported, rasterized through the
+ * shared `util/PdfRaster.renderPdfPageBitmap` (the real composed page, never a separate
+ * draw path). Supports pinch-to-zoom (and double-tap to reset) so users can inspect
+ * dimension labels before committing to an export.
  *
  * Contract
  * - Rendering runs on Dispatchers.IO; a loading indicator is shown meanwhile.
@@ -168,20 +161,24 @@ fun PdfPreviewScreen(
         val thicknessScaleSnapshot = lineThicknessScale
         val heightScaleSnapshot = runoutConfig.heightScale
         val linerFracSnapshot = runoutConfig.linerMinFracOfTrue
+        val versionSnapshot = appVersionName(ctx)
         val bmp = withContext(Dispatchers.IO) {
-            renderPdfPreviewBitmap(
-                context = ctx,
-                spec = spec,
-                unit = unit,
-                project = project,
-                appVersion = appVersionName(ctx),
-                pdfPrefs = pdfPrefsSnapshot,
-                options = options,
-                resolvedComponents = resolvedComponents,
-                lineThicknessScale = thicknessScaleSnapshot,
-                heightScale = heightScaleSnapshot,
-                linerMinFracOfTrue = linerFracSnapshot,
-            )
+            renderPdfPageBitmap(ctx) { page ->
+                composeShaftPdf(
+                    page = page,
+                    spec = spec,
+                    unit = unit,
+                    project = project,
+                    appVersion = versionSnapshot,
+                    filename = "preview",
+                    pdfPrefs = pdfPrefsSnapshot,
+                    options = options,
+                    resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
+                    lineThicknessScale = thicknessScaleSnapshot,
+                    heightScale = heightScaleSnapshot,
+                    linerMinFracOfTrue = linerFracSnapshot,
+                )
+            }
         }
         if (bmp != null) {
             previewBitmap = bmp.asImageBitmap()
@@ -410,78 +407,6 @@ fun PdfPreviewScreen(
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Renders the shaft PDF to an Android [Bitmap] using [PdfDocument] + [PdfRenderer].
- *
- * Must be called off the main thread (use [Dispatchers.IO]).
- * Returns null on any failure so the caller can show an error message.
- */
-private fun renderPdfPreviewBitmap(
-    context: Context,
-    spec: ShaftSpec,
-    unit: UnitSystem,
-    project: ProjectInfo,
-    appVersion: String,
-    pdfPrefs: PdfPrefs,
-    options: PdfExportOptions,
-    resolvedComponents: List<ResolvedComponent>,
-    lineThicknessScale: Float = 1.0f,
-    heightScale: Float = 1.0f,
-    linerMinFracOfTrue: Float = 0f,
-): Bitmap? = runCatching {
-    // Step 1 – compose the PDF into a temp file.
-    // Use createTempFile so concurrent preview renders don't collide on the same path.
-    val tempFile = File.createTempFile("shaft_preview_", ".pdf", context.cacheDir)
-    val doc = PdfDocument()
-    try {
-        // US Letter landscape: 792 × 612 points (matches PdfExportRoute).
-        val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
-        val page = doc.startPage(pageInfo)
-        composeShaftPdf(
-            page = page,
-            spec = spec,
-            unit = unit,
-            project = project,
-            appVersion = appVersion,
-            filename = "preview",
-            pdfPrefs = pdfPrefs,
-            options = options,
-            resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
-            lineThicknessScale = lineThicknessScale,
-            heightScale = heightScale,
-            linerMinFracOfTrue = linerMinFracOfTrue,
-        )
-        doc.finishPage(page)
-        tempFile.outputStream().buffered().use { doc.writeTo(it) }
-    } finally {
-        doc.close()
-    }
-
-    // Step 2 – rasterise the first page via PdfRenderer at 2× resolution.
-    val pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
-    val renderer = PdfRenderer(pfd)
-    try {
-        val pdfPage = renderer.openPage(0)
-        try {
-            val renderScale = 2
-            val bitmap = Bitmap.createBitmap(
-                pdfPage.width * renderScale,
-                pdfPage.height * renderScale,
-                Bitmap.Config.ARGB_8888,
-            )
-            bitmap.eraseColor(android.graphics.Color.WHITE)
-            pdfPage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            bitmap
-        } finally {
-            pdfPage.close()
-        }
-    } finally {
-        renderer.close()
-        pfd.close()
-        tempFile.delete()
-    }
-}.getOrNull()
-
 private fun appVersionName(context: Context): String = runCatching {
     val pm = context.packageManager
     val pkg = context.packageName
@@ -628,24 +553,14 @@ private fun PdfOptionsSheet(
         Spacer(Modifier.height(12.dp))
 
         // ── Shade in PDF ─────────────────────────────────────────────────────
-        Text("Shade in PDF", style = MaterialTheme.typography.titleSmall)
-        Spacer(Modifier.height(4.dp))
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = pdfShadedBodies, onCheckedChange = { vm.setPdfShadedBodies(it) })
-            Spacer(Modifier.width(8.dp))
-            Text("Bodies", style = MaterialTheme.typography.bodyLarge)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = pdfShadedTapers, onCheckedChange = { vm.setPdfShadedTapers(it) })
-            Spacer(Modifier.width(8.dp))
-            Text("Tapers", style = MaterialTheme.typography.bodyLarge)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = pdfShadedLiners, onCheckedChange = { vm.setPdfShadedLiners(it) })
-            Spacer(Modifier.width(8.dp))
-            Text("Liners", style = MaterialTheme.typography.bodyLarge)
-        }
+        ShadeInPdfChecks(
+            pdfShadedBodies = pdfShadedBodies,
+            pdfShadedTapers = pdfShadedTapers,
+            pdfShadedLiners = pdfShadedLiners,
+            onSetShadedBodies = { vm.setPdfShadedBodies(it) },
+            onSetShadedTapers = { vm.setPdfShadedTapers(it) },
+            onSetShadedLiners = { vm.setPdfShadedLiners(it) },
+        )
 
         Spacer(Modifier.height(24.dp))
     }

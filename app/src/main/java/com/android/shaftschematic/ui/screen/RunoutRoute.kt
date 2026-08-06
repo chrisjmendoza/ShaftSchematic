@@ -5,11 +5,8 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.graphics.Bitmap
 import android.graphics.pdf.PdfDocument
-import android.graphics.pdf.PdfRenderer
 import android.net.Uri
-import android.os.ParcelFileDescriptor
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -47,7 +44,6 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -130,10 +126,10 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.printShaftPdfPage
+import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -862,39 +858,6 @@ internal fun openRunoutPdf(context: Context, uri: Uri) {
     catch (_: ActivityNotFoundException) {}
 }
 
-/**
- * Rasterize a one-page landscape-Letter PDF for the on-screen preview. [composePage] draws
- * the page, so the caller decides which document this is — the preview always shows the real
- * composed PDF, never a separate draw path.
- */
-internal fun renderPdfPageBitmap(
-    context: Context,
-    composePage: (PdfDocument.Page) -> Unit,
-): Bitmap? = runCatching {
-    val tempFile = File.createTempFile("runout_preview_", ".pdf", context.cacheDir)
-    val doc = PdfDocument()
-    try {
-        val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
-        val page = doc.startPage(pageInfo)
-        composePage(page)
-        doc.finishPage(page)
-        tempFile.outputStream().buffered().use { doc.writeTo(it) }
-    } finally {
-        doc.close()
-    }
-    val pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
-    val renderer = PdfRenderer(pfd)
-    try {
-        val pdfPage = renderer.openPage(0)
-        try {
-            val bmp = Bitmap.createBitmap(pdfPage.width * 2, pdfPage.height * 2, Bitmap.Config.ARGB_8888)
-            bmp.eraseColor(android.graphics.Color.WHITE)
-            pdfPage.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            bmp
-        } finally { pdfPage.close() }
-    } finally { renderer.close(); pfd.close(); tempFile.delete() }
-}.getOrNull()
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared PDF preview overlay (also used by WearRoute)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1046,13 +1009,7 @@ internal fun RunoutWearOptionsSheet(
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
     vm: ShaftViewModel,
-    /**
-     * Locks the "Liners" shade row on a document that prints measured Ø values inside the
-     * profile: their halos are sheet-white, so the composer draws liners unfilled there
-     * (`consolidatedSheetHasInProfileValues`). The row then reads unchecked and disabled —
-     * **display only**; the stored pref is never rewritten, so the user's choice returns as
-     * soon as the document stops printing in-profile values.
-     */
+    /** Locks the "Liners" shade row — see [ShadeInPdfChecks]. */
     linerShadeLocked: Boolean = false,
 ) {
     // Scrollable + inset-padded: without its own scroll a short screen clips the bottom
@@ -1081,37 +1038,15 @@ internal fun RunoutWearOptionsSheet(
         Spacer(Modifier.height(12.dp))
 
         // ── Shade in PDF ─────────────────────────────────────────────────────
-        Text("Shade in PDF", style = MaterialTheme.typography.titleSmall)
-        Spacer(Modifier.height(4.dp))
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = pdfShadedBodies, onCheckedChange = { vm.setPdfShadedBodies(it) })
-            Spacer(Modifier.width(8.dp))
-            Text("Bodies", style = MaterialTheme.typography.bodyLarge)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = pdfShadedTapers, onCheckedChange = { vm.setPdfShadedTapers(it) })
-            Spacer(Modifier.width(8.dp))
-            Text("Tapers", style = MaterialTheme.typography.bodyLarge)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(
-                checked = pdfShadedLiners && !linerShadeLocked,
-                onCheckedChange = { vm.setPdfShadedLiners(it) },
-                enabled = !linerShadeLocked,
-            )
-            Spacer(Modifier.width(8.dp))
-            Column {
-                Text("Liners", style = MaterialTheme.typography.bodyLarge)
-                if (linerShadeLocked) {
-                    Text(
-                        "Ø values print inside the profile on this sheet",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
+        ShadeInPdfChecks(
+            pdfShadedBodies = pdfShadedBodies,
+            pdfShadedTapers = pdfShadedTapers,
+            pdfShadedLiners = pdfShadedLiners,
+            onSetShadedBodies = { vm.setPdfShadedBodies(it) },
+            onSetShadedTapers = { vm.setPdfShadedTapers(it) },
+            onSetShadedLiners = { vm.setPdfShadedLiners(it) },
+            linerShadeLocked = linerShadeLocked,
+        )
 
         Spacer(Modifier.height(24.dp))
     }

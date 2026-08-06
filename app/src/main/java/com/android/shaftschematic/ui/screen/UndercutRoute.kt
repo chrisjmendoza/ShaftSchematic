@@ -4,11 +4,7 @@ package com.android.shaftschematic.ui.screen
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.pdf.PdfDocument
-import android.graphics.pdf.PdfRenderer
 import android.net.Uri
-import android.os.ParcelFileDescriptor
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -85,17 +81,13 @@ import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.pickUndercutStripAt
 import com.android.shaftschematic.model.ProjectInfo
-import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
-import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeUndercutPdf
-import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
-import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
@@ -103,10 +95,10 @@ import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.printShaftPdfPage
+import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import kotlin.math.roundToInt
 
 /**
@@ -263,18 +255,17 @@ fun UndercutRoute(
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
         val thicknessSnapshot = lineThicknessScale
+        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
+            jobNumber = jobNumber, side = shaftPosition)
         val bmp = withContext(Dispatchers.IO) {
-            renderUndercutBitmap(
-                context = ctx, spec = spec,
-                project = ProjectInfo(customer = customer, vessel = vessel,
-                    jobNumber = jobNumber, side = shaftPosition),
-                unit = unit,
-                pdfPrefs = prefsSnapshot,
-                resolvedComponents = resolvedComponents,
-                lineThicknessScale = thicknessSnapshot,
-                undercutRecord = undercutRecord,
-                blankValues = blankDraft,
-            )
+            renderPdfPageBitmap(ctx) { page ->
+                composeUndercutPdf(
+                    page = page, spec = spec, project = projectSnapshot, unit = unit,
+                    pdfPrefs = prefsSnapshot, resolvedComponents = resolvedComponents,
+                    undercutRecord = undercutRecord, lineThicknessScale = thicknessSnapshot,
+                    blankValues = blankDraft,
+                )
+            }
         }
         previewBitmap = bmp?.asImageBitmap()
         previewLoading = false
@@ -843,41 +834,3 @@ private fun DrawScope.drawUndercutStripAffordances(
     liners.forEach { ln -> target(ln.startMm, ln.endMm, cutCountByLiner[ln.id] ?: 0) }
     windows.forEach { w -> target(w.startMm, w.endMm, w.undercutIds.size) }
 }
-
-private fun renderUndercutBitmap(
-    context: Context,
-    spec: ShaftSpec,
-    project: ProjectInfo,
-    unit: UnitSystem,
-    pdfPrefs: PdfPrefs = PdfPrefs(),
-    resolvedComponents: List<ResolvedComponent>? = null,
-    lineThicknessScale: Float = 1.0f,
-    undercutRecord: UndercutRecord = UndercutRecord(),
-    blankValues: Boolean = false,
-): Bitmap? = runCatching {
-    val tempFile = File.createTempFile("undercut_preview_", ".pdf", context.cacheDir)
-    val doc = PdfDocument()
-    try {
-        val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
-        val page = doc.startPage(pageInfo)
-        composeUndercutPdf(page = page, spec = spec, project = project, unit = unit,
-            pdfPrefs = pdfPrefs, resolvedComponents = resolvedComponents,
-            undercutRecord = undercutRecord, lineThicknessScale = lineThicknessScale,
-            blankValues = blankValues)
-        doc.finishPage(page)
-        tempFile.outputStream().buffered().use { doc.writeTo(it) }
-    } finally {
-        doc.close()
-    }
-    val pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
-    val renderer = PdfRenderer(pfd)
-    try {
-        val pdfPage = renderer.openPage(0)
-        try {
-            val bmp = Bitmap.createBitmap(pdfPage.width * 2, pdfPage.height * 2, Bitmap.Config.ARGB_8888)
-            bmp.eraseColor(android.graphics.Color.WHITE)
-            pdfPage.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            bmp
-        } finally { pdfPage.close() }
-    } finally { renderer.close(); pfd.close(); tempFile.delete() }
-}.getOrNull()

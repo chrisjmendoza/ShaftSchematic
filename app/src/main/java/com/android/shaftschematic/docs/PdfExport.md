@@ -40,8 +40,8 @@ the per-job "Shaft height" slider multiplies on top).
 
 ## PdfPreviewScreen
 
-Full-resolution in-memory preview via `PdfDocument` + `PdfRenderer` (2× raster),
-pinch-to-zoom 0.5×–8×, double-tap reset.
+Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
+(`PdfDocument` + `PdfRenderer`, 2× raster), pinch-to-zoom 0.5×–8×, double-tap reset.
 
 - **Options sheet (Tune icon):** blank draft (write-in) toggle, component labels, line
   thickness (50–200%), "Shaft height" slider, liner compression control, measurement
@@ -55,6 +55,11 @@ pinch-to-zoom 0.5×–8×, double-tap reset.
     the shaft-height slider's Standard button, so 100% never has to be fished for by
     pixel (on-device report). The Settings → Editor Screen control keeps its own layout
     (it adds a typed % field, which is never snapped) but shares the detent and button.
+  - Shade bodies/tapers/liners is the shared `ShadeInPdfChecks` (`ShaftHeightSlider.kt`) —
+    heading, three checkbox rows, and the `linerShadeLocked` display-only lock the
+    consolidated sheet uses — the same block as the runout/wear options sheet. Settings →
+    PDF Export keeps its own copy (its rows live in a `spacedBy(12.dp)` column with a
+    padded heading); the prefs and setters are identical.
   - The sheet's content is taller than a phone screen, so it carries its own
     `verticalScroll` plus `navigationBarsPadding()` — without them the bottom rows clip
     mid-checkbox behind the navigation bar. Its height is capped at **78% of the screen**
@@ -63,8 +68,13 @@ pinch-to-zoom 0.5×–8×, double-tap reset.
 - **Orientation:** `DisposableEffect` unlocks rotation on entry and restores the
   portrait lock on dispose — every other screen stays portrait-only.
 - **Pipeline:** snapshot `vm.currentPdfPrefs` on main thread → `Dispatchers.IO` →
-  temp PDF via `composeShaftPdf` → rasterize page 0 at 2× → pan/zoom Canvas.
-  Temp file deleted after rasterization; failures show an error, never crash.
+  `renderPdfPageBitmap` (temp PDF via the `composeShaftPdf` lambda → rasterize page 0 at
+  `PDF_PREVIEW_RENDER_SCALE`) → pan/zoom Canvas. Temp file deleted after rasterization;
+  failures return null and show an error, never crash. **ONE raster helper**
+  (`util/PdfRaster.kt`) serves every tab's preview — schematic, runout, wear, undercut,
+  consolidated output — the raster sibling of the one hardened SAF write path
+  (`util/PdfSafExport.writeShaftPdfToUri`), and it takes the same `composePage` lambda, so
+  a preview always shows the real composed page.
 - **Top bar:** Back · Tune · Refresh (reset zoom/pan) · Print (system print of a freshly
   composed page, state snapshotted on the UI thread) · PDF (`onExport()` → SAF).
 

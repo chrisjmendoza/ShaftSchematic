@@ -3,6 +3,7 @@ package com.android.shaftschematic.ui.screen
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Checkbox
@@ -97,6 +98,64 @@ internal fun LineThicknessSlider(
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
             Text("200%", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/**
+ * The "Shade in PDF" heading + Bodies / Tapers / Liners checkbox group shared by the two
+ * PDF options sheets (`PdfOptionsSheet` on the schematic preview, `RunoutWearOptionsSheet`
+ * on the runout / wear / undercut / consolidated tabs). Settings → PDF Export keeps its own
+ * copy: its rows sit in a `spacedBy(12.dp)` column with a padded heading, so sharing this
+ * block there would retighten that page's spacing.
+ *
+ * [linerShadeLocked] locks the "Liners" row on a document that prints measured Ø values
+ * inside the profile: their halos are sheet-white, so the composer draws liners unfilled
+ * there (`consolidatedSheetHasInProfileValues`). The row then reads unchecked and disabled
+ * — **display only**; the stored pref is never rewritten, so the user's choice returns as
+ * soon as the document stops printing in-profile values.
+ */
+@Composable
+internal fun ShadeInPdfChecks(
+    pdfShadedBodies: Boolean,
+    pdfShadedTapers: Boolean,
+    pdfShadedLiners: Boolean,
+    onSetShadedBodies: (Boolean) -> Unit,
+    onSetShadedTapers: (Boolean) -> Unit,
+    onSetShadedLiners: (Boolean) -> Unit,
+    linerShadeLocked: Boolean = false,
+) {
+    Column {
+        Text("Shade in PDF", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pdfShadedBodies, onCheckedChange = onSetShadedBodies)
+            Spacer(Modifier.width(8.dp))
+            Text("Bodies", style = MaterialTheme.typography.bodyLarge)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pdfShadedTapers, onCheckedChange = onSetShadedTapers)
+            Spacer(Modifier.width(8.dp))
+            Text("Tapers", style = MaterialTheme.typography.bodyLarge)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = pdfShadedLiners && !linerShadeLocked,
+                onCheckedChange = onSetShadedLiners,
+                enabled = !linerShadeLocked,
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("Liners", style = MaterialTheme.typography.bodyLarge)
+                if (linerShadeLocked) {
+                    Text(
+                        "Ø values print inside the profile on this sheet",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }

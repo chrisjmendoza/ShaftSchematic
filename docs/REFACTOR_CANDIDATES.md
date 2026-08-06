@@ -4,31 +4,35 @@ Created 2026-08-05 (day-run polish, on-device request: "If there are places we c
 optimize with a refactor, I am open to it… if you think there are good options but are
 risky to try, document them instead into an md file for future review and direction.")
 
-**Nothing in this file has been applied.** Each entry is a behavior-preserving refactor
-that looked worthwhile but carries enough risk (multi-surface touch, drawing fidelity,
-product ambiguity) that it wants an explicit go-ahead and its own review cycle. Entries
-are ordered by recommendation strength.
+Each entry is a behavior-preserving refactor that looked worthwhile but carries enough
+risk (multi-surface touch, drawing fidelity, product ambiguity) that it wants an explicit
+go-ahead and its own review cycle. Entries are ordered by recommendation strength; ones
+that have since been applied are marked **DONE** and kept for the record.
 
 ---
 
-## 1. Unify the PDF→bitmap raster helpers
+## 1. Unify the PDF→bitmap raster helpers — **DONE**
 
-**What:** Two near-identical "compose a page → temp PDF → `PdfRenderer` raster at 2× →
-delete temp file" implementations exist: `renderPdfPreviewBitmap` (private,
-`ui/screen/PdfPreviewScreen.kt`) and `renderPdfPageBitmap` (internal,
-`ui/screen/RunoutRoute.kt`, also consumed by `OutputRoute`). Extract one helper (e.g.
-`util/PdfRaster.kt`) taking a `composePage: (PdfDocument.Page) -> Unit` lambda —
-the same shape `util/PdfSafExport.writeShaftPdfToUri` already uses.
+**What:** Near-identical "compose a page → temp PDF → `PdfRenderer` raster at 2× →
+delete temp file" implementations existed: `renderPdfPreviewBitmap` (private,
+`ui/screen/PdfPreviewScreen.kt`), `renderPdfPageBitmap` (internal,
+`ui/screen/RunoutRoute.kt`, also consumed by `OutputRoute`), and — found while doing the
+work — `renderWearBitmap` (`WearRoute.kt`) and `renderUndercutBitmap`
+(`UndercutRoute.kt`): **four** copies, not two.
 
-**Why:** One raster pipeline to harden (error page, temp-file hygiene, render scale)
-instead of two drifting copies.
+**Applied:** one `util/PdfRaster.renderPdfPageBitmap(context, composePage)` — the
+`composePage: (PdfDocument.Page) -> Unit` shape `util/PdfSafExport.writeShaftPdfToUri`
+already uses — now serves all five preview call sites (schematic, runout, wear, undercut,
+consolidated output); the four local helpers are deleted. The copies differed only in
+their temp-file prefix and in the schematic one taking compose arguments instead of a
+lambda; bitmap config (`ARGB_8888`), white `eraseColor`, 2× scale (now the named
+`PDF_PREVIEW_RENDER_SCALE`), 792 × 612 page (now `PDF_PAGE_WIDTH_PT`/`PDF_PAGE_HEIGHT_PT`),
+`runCatching{}.getOrNull()` failure posture, and close/delete order were identical.
 
-**Risk:** LOW-MEDIUM — pure plumbing, but it touches the preview paths of three tabs;
-subtle differences (bitmap config, background fill, scale) must be diffed carefully
-before merging them.
-
-**Recommendation:** Do it in a quiet window with on-device preview checks on all three
-surfaces. Good first candidate.
+**Left open:** the helper still leaks its temp file if `composePage` throws — the delete
+sits in the raster stage's `finally`, which the throw skips. Every copy behaved that way,
+so the unification kept it; harden it (one `try/finally` around both stages) as its own
+change if cache hygiene ever matters.
 
 ## 2. Shared spec → `ProfileFeatureSpan` builder
 
@@ -68,40 +72,37 @@ for review, per the drawing-change convention.
 **Recommendation:** Worth doing, but only with the artifact review; don't fold it into
 an unrelated wave.
 
-## 4. Options-sheet block extraction
+## 4. Options-sheet block extraction — **DONE**
 
 **What:** The line-thickness slider block and the Shade-in-PDF checkbox group each
-exist ~3×: `PdfOptionsSheet` (PdfPreviewScreen), `RunoutWearOptionsSheet`
-(RunoutRoute), and the Settings → PDF Export page. Extract `LineThicknessSliderRow` and
-`ShadeInPdfChecks` composables (same posture as the shared `ShaftHeightSlider` /
-`LinerCompressionControl`).
+existed ~3×: `PdfOptionsSheet` (PdfPreviewScreen), `RunoutWearOptionsSheet`
+(RunoutRoute), and the Settings → PDF Export page.
 
-**Why:** The 78%-height/scroll fix and any future option addition currently multiply
-across surfaces.
+**Applied:** the slider was already shared as `LineThicknessSlider`; the checkbox group is
+now `ShadeInPdfChecks` beside it in `ui/screen/ShaftHeightSlider.kt` (heading + Bodies /
+Tapers / Liners rows + the defaulted `linerShadeLocked` display-only lock, so the two
+sheets that don't lock are untouched by it). Both PDF options sheets use it; setters still
+go through `vm.setPdfShaded{Bodies,Tapers,Liners}`.
 
-**Risk:** LOW-MEDIUM — pure UI extraction, but the three surfaces have slightly
-different typography/spacing and the Settings page adds a text field; a shared
-composable needs those knobs or the surfaces converge visually (which may be fine —
-product call on whether they SHOULD look identical).
+**Convergence call:** the two sheets' rows were byte-identical, so they converged. **The
+Settings → PDF Export page stays bespoke** — its rows live in a `spacedBy(12.dp)` column
+under a `padding(start = 4.dp, top = 4.dp)` heading, so dropping the sheets' block in
+would have tightened its row gaps from 12 dp to 0 and changed the heading offset: a visual
+change, not a behavior-preserving extraction. Its wording, prefs, and setters are
+identical to the shared block, and a comment at the site records why it is separate.
 
-**Recommendation:** Fine to do whenever; pairs naturally with any next options-sheet
-change.
-
-## 5. Long-body bubble count — unimplemented product seam (decision needed)
+## 5. Long-body bubble count — **RESOLVED: deleted**
 
 **What:** `RunoutConfig.BODY_SHORT_THRESHOLD_MM` (914 mm) and
-`RunoutConfig.BODY_LONG_COUNT` are defined and documented ("Default for long bodies —
+`RunoutConfig.BODY_LONG_COUNT` were defined and documented ("Default for long bodies —
 user bumps this up as needed") but **never read** — the default-count logic uses
-`BODY_DEFAULT_COUNT` for every body regardless of length. Either implement the
-length-based bump (long bodies default to more stations) or delete the two constants.
+`BODY_DEFAULT_COUNT` for every body regardless of length.
 
-**Why:** As written the KDoc promises behavior the app doesn't have.
-
-**Risk:** Implementing it changes default bubble counts on existing jobs' sheets (only
-where no per-component override exists). Deleting is zero-risk.
-
-**Recommendation:** Product decision — implement or delete. (Both constants currently
-kept; nothing removed.)
+**Decision:** default bubble counts stay **uniform**; the user raises the count per
+component (`RunoutConfig.componentOverrides`) when a run wants extra readings. Both
+constants are deleted and `BODY_DEFAULT_COUNT`'s KDoc now says so, instead of promising a
+length-based bump the app never had. Zero readers existed in `app/src/main` or
+`app/src/test`, so nothing else moved.
 
 ## 5b. OAL-spacing pref: build the control or drop the setter (decision needed)
 

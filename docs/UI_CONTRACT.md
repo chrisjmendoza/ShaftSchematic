@@ -188,12 +188,10 @@ The component list reflects **spatial order** (AFT → FWD) derived from resolve
 Insertion order must never determine display ordering.
 
 ### 4.2 Reordering
-If reordering UI added later:
-- UI emits intent: `onReorder(fromIndex, toIndex)`
-- VM updates `_componentOrder`
-- NO geometry recalculation in UI layer
-
-Note: `_componentOrder` may remain as a stable tie-breaker, but spatial order is authoritative.
+There is no stored display order to reorder: the ViewModel keeps none, and rows are derived
+from the resolved components (`docs/ComponentsOrdering.md` v1.3). A reordering UI would have
+to introduce that state deliberately — UI emits an intent, the VM owns the list, and NO
+geometry recalculation happens in the UI layer. Spatial order stays authoritative.
 
 ---
 
