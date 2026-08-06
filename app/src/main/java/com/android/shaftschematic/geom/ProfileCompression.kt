@@ -5,8 +5,8 @@ package com.android.shaftschematic.geom
  * (on-device request, with rulered reference sketches):
  *
  * - The shaft's drawn HEIGHT follows its true diameter on the default sizing curve
- *   ([defaultShaftHeightPt]) — standard: proportional, an 8" shaft prints 1.125" tall,
- *   a 4" shaft 0.5625" — and is never diluted by shaft length.
+ *   ([defaultShaftHeightPt]) — standard: proportional, an 8" shaft prints 1" tall, a
+ *   6" shaft 3/4", a 4" shaft 1/2" — and is never diluted by shaft length.
  * - The x axis is schematic: every span may foreshorten, but each KIND keeps a minimum
  *   drawn width (liners stay wide enough to write wear values in, body runs wide enough
  *   to write diameters and hang runout leaders from, tapers keep their read).
@@ -30,18 +30,18 @@ package com.android.shaftschematic.geom
 const val VISUAL_DIA_SCALE_PT_PER_MM = 0.40f
 
 // Default sizing curve anchors. The STANDARD values put the line through the origin —
-// drawn height stays strictly proportional to true diameter (4" → 0.5625", 8" → 1.125",
-// the historical hand-sheet look; an on-device review found taller defaults read
-// "chubby") — and the line continues past both anchors until the absolute
-// [PROFILE_MAX_SHAFT_HEIGHT_PT] ceiling. The anchor DIAMETERS are fixed; the anchor
-// HEIGHTS are user-adjustable (Settings → PDF Export → Default drawing size,
+// drawn height stays strictly proportional to true diameter (8" → 1", 6" → 3/4",
+// 4" → 1/2" — the hand-sheet rule from the original rulered sketches; taller defaults
+// read "chubby" on-device) — and the line continues past both anchors until the
+// absolute [PROFILE_MAX_SHAFT_HEIGHT_PT] ceiling. The anchor DIAMETERS are fixed; the
+// anchor HEIGHTS are user-adjustable (Settings → PDF Export → Default drawing size,
 // `PdfPrefs.curveLoHeightIn/curveHiHeightIn`) with these as the standard values — a
 // non-proportional pair (e.g. 0.75"/1.25") is a deliberate choice there, never the
 // default. The "Shaft height" slider multiplies on top.
 const val PROFILE_DEFAULT_HEIGHT_LO_DIA_MM = 101.6f  // 4 in
-const val PROFILE_DEFAULT_HEIGHT_LO_PT = 40.5f       // 0.5625 in (9/16)
+const val PROFILE_DEFAULT_HEIGHT_LO_PT = 36f         // 0.5 in
 const val PROFILE_DEFAULT_HEIGHT_HI_DIA_MM = 203.2f  // 8 in
-const val PROFILE_DEFAULT_HEIGHT_HI_PT = 81f         // 1.125 in (1 1/8)
+const val PROFILE_DEFAULT_HEIGHT_HI_PT = 72f         // 1.0 in
 
 /**
  * Default drawn shaft height (pt) for a true max diameter — the sizing-curve line

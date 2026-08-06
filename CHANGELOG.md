@@ -6,6 +6,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-06
+
+### fix(pdf): standard drawn height finalized — 8" shaft draws 1" tall
+
+On-device verdict on the latest build ("this 1.25 just looks bad… make the 8"
+diameter a 1" height drawing"; 1.125" still read heavy). The standard sizing-curve
+anchors are now **4" → 0.5" / 8" → 1.0"** — still proportional through the origin, and
+exactly the rule from the original rulered hand sketches (8" → 1", 6" → 3/4",
+4" → 1/2"). Two-value default change (`PdfPrefs.curveLo/HiHeightIn`, geom consts
+36/72 pt); the anchors remain adjustable in Settings → "Default drawing size".
+
+---
+
 ## 2026-08-05 (evening — default sizing curve, S-break gap, options-sheet scroll)
 
 ### feat(pdf): liner proportionality — per-job checkbox + compression slider

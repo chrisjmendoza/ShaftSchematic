@@ -348,13 +348,13 @@ class ProfileCompressionTest {
     // ── defaultShaftHeightPt / defaultVisualScale (default sizing curve) ──────
 
     @Test
-    fun `standard anchors are proportional - 8in draws 1_125in, 4in draws 0_5625in`() {
+    fun `standard anchors are proportional - 8in draws 1in, 6in draws 3-4in, 4in draws 1-2in`() {
         // The standard line passes through the origin — drawn height stays strictly
-        // proportional to true diameter (the historical hand-sheet look; on-device
-        // review found taller defaults read "chubby").
-        assertEquals(81f, defaultShaftHeightPt(203.2f), 1e-3f)
-        assertEquals(40.5f, defaultShaftHeightPt(101.6f), 1e-3f)
-        assertEquals(60.75f, defaultShaftHeightPt(152.4f), 1e-3f)
+        // proportional to true diameter (the hand-sheet rule from the original rulered
+        // sketches; taller defaults read "chubby" on-device).
+        assertEquals(72f, defaultShaftHeightPt(203.2f), 1e-3f)
+        assertEquals(54f, defaultShaftHeightPt(152.4f), 1e-3f)
+        assertEquals(36f, defaultShaftHeightPt(101.6f), 1e-3f)
         // Through-origin: half the diameter draws half the height.
         assertEquals(defaultShaftHeightPt(203.2f) / 2f, defaultShaftHeightPt(101.6f), 1e-3f)
     }
@@ -367,14 +367,15 @@ class ProfileCompressionTest {
 
     @Test
     fun `sizing curve stays capped at the absolute ceiling`() {
-        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(300f), 1e-3f)
+        // The standard line reaches the 108pt cap at 12" of true diameter (304.8mm).
+        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(304.8f), 1e-2f)
         assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(400f), 1e-3f)
     }
 
     @Test
     fun `default visual scale is the curve height over the diameter`() {
-        assertEquals(81f / 203.2f, defaultVisualScale(203.2f), 1e-5f)
-        assertEquals(40.5f / 101.6f, defaultVisualScale(101.6f), 1e-5f)
+        assertEquals(72f / 203.2f, defaultVisualScale(203.2f), 1e-5f)
+        assertEquals(36f / 101.6f, defaultVisualScale(101.6f), 1e-5f)
         // Degenerate diameter falls back to the legacy flat scale.
         assertEquals(VISUAL_DIA_SCALE_PT_PER_MM, defaultVisualScale(0f), 1e-6f)
     }

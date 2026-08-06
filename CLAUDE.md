@@ -117,10 +117,10 @@ knockout halos (worn values, then `drawDiaReadingsInProfile`); do not draw any m
 the text passes. Values **auto-fit their local band** (`fittedValueTextSize`, floor
 `WORN_VALUE_MIN_TEXT_PT`/14 px canvas); the PDF profile follows the **hand-sheet
 compression convention** — drawn height follows TRUE diameter on the **default sizing
-curve** (`defaultShaftHeightPt`: STANDARD anchors are PROPORTIONAL — 4" → 0.5625",
-8" → 1.125", a line through the origin, the historical hand-sheet look; taller pairs
-like 0.75"/1.25" read "chubby" on-device and are a deliberate Settings choice, never
-the default — Settings → PDF Export "Default drawing size",
+curve** (`defaultShaftHeightPt`: STANDARD anchors are PROPORTIONAL — 8" → 1",
+6" → 3/4", 4" → 1/2", a line through the origin, the hand-sheet rule from the
+original rulered sketches; taller pairs read "chubby" on-device and are a deliberate
+Settings choice, never the default — Settings → PDF Export "Default drawing size",
 `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`; an inverted pair flattens at the low
 anchor: a larger shaft never draws smaller; `defaultVisualScale` keeps the flat
 `VISUAL_DIA_SCALE_PT_PER_MM` only as the degenerate fallback),

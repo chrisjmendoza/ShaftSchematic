@@ -307,16 +307,16 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
 
 - Range 50%–300% (`PROFILE_HEIGHT_SCALE_MIN/MAX`).
 - **100% = the default sizing curve** (`defaultShaftHeightPt`, `geom/ProfileCompression.kt`):
-  the STANDARD anchors are **proportional** — 4" → 0.5625" and 8" → 1.125" on paper, a
-  line through the origin (the historical hand-sheet look; an on-device review found
-  taller defaults read "chubby") — continuing past both anchors until the 1.5"
-  ceiling. `defaultVisualScale` feeds every composer solve and both slider surfaces —
+  the STANDARD anchors are **proportional** — 8" → 1", 6" → 3/4", 4" → 1/2" on paper,
+  a line through the origin (the hand-sheet rule from the original rulered sketches;
+  taller defaults read "chubby" on-device) — continuing past both anchors until the
+  1.5" ceiling. `defaultVisualScale` feeds every composer solve and both slider surfaces —
   the runout/consolidated sheet maxes it with the width-fit and in-profile value
   demands; the schematic uses the curve alone. The flat 0.40 pt/mm
   `VISUAL_DIA_SCALE_PT_PER_MM` remains only as the degenerate-diameter fallback.
 - **The anchor heights are settings** (Settings → PDF Export → "Default drawing size";
   `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`, persisted app-wide, standard
-  0.5625"/1.125", settable 0.25"–1.5" in 1/16" steps): change what a 4" and an 8"
+  0.5"/1.0", settable 0.25"–1.5" in 1/16" steps): change what a 4" and an 8"
   shaft draw and the whole line re-derives — no code edit (a taller pair like
   0.75"/1.25" is a deliberate choice here). The anchor DIAMETERS stay fixed at 4"/8".
   An inverted pair (8" set below 4") flattens the line at the 4" value in the

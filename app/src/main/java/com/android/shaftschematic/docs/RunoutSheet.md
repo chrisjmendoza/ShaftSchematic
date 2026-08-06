@@ -470,10 +470,10 @@ On-device request following the worn-sections review:
     the floor a slight halo overhang is accepted.
   - *Profile compression — the hand-sheet convention (PDF; both composers share it):*
     drawn shaft **height follows TRUE diameter on the default sizing curve**
-    (`defaultShaftHeightPt`; the STANDARD anchors are proportional — 4" → 0.5625" and
-    8" → 1.125", a line through the origin, the historical hand-sheet look (an
-    on-device review found taller defaults read "chubby") — the line continues past
-    both anchors until the absolute 1.5" ceiling; the flat 0.40 pt/mm
+    (`defaultShaftHeightPt`; the STANDARD anchors are proportional — 8" → 1",
+    6" → 3/4", 4" → 1/2", a line through the origin, the hand-sheet rule from the
+    original rulered sketches (taller defaults read "chubby" on-device) — the line
+    continues past both anchors until the absolute 1.5" ceiling; the flat 0.40 pt/mm
     `VISUAL_DIA_SCALE_PT_PER_MM` remains only as the degenerate-diameter fallback in
     `defaultVisualScale`; the anchor HEIGHTS are user-adjustable app-wide via
     Settings → PDF Export → "Default drawing size" —
