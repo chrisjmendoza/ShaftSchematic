@@ -11,12 +11,14 @@ import org.junit.Test
 class PdfPrefsCurveTest {
 
     @Test
-    fun `defaults are the standard hand-sheet anchors`() {
+    fun `defaults are the proportional hand-sheet anchors`() {
+        // 9/16" at 4", 1 1/8" at 8" — a line through the origin, so drawn height stays
+        // strictly proportional to true diameter by default.
         val p = PdfPrefs()
-        assertEquals(0.75f, p.curveLoHeightIn, 1e-6f)
-        assertEquals(1.25f, p.curveHiHeightIn, 1e-6f)
-        assertEquals(54f, p.curveLoHeightPt, 1e-4f)
-        assertEquals(90f, p.curveHiHeightPt, 1e-4f)
+        assertEquals(0.5625f, p.curveLoHeightIn, 1e-6f)
+        assertEquals(1.125f, p.curveHiHeightIn, 1e-6f)
+        assertEquals(40.5f, p.curveLoHeightPt, 1e-4f)
+        assertEquals(81f, p.curveHiHeightPt, 1e-4f)
     }
 
     @Test

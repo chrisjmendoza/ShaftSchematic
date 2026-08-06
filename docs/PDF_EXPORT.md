@@ -307,19 +307,31 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
 
 - Range 50%–300% (`PROFILE_HEIGHT_SCALE_MIN/MAX`).
 - **100% = the default sizing curve** (`defaultShaftHeightPt`, `geom/ProfileCompression.kt`):
-  drawn height is linear in true diameter through 4" → 0.75" and 8" → 1.25" on paper
-  (6" → 1"), continues past both anchors so sizes always differentiate, and meets the
-  1.5" ceiling exactly at 10". `defaultVisualScale` feeds every composer solve and both
-  slider surfaces — the runout/consolidated sheet maxes it with the width-fit and
-  in-profile value demands; the schematic uses the curve alone. Supersedes the flat
-  0.40 pt/mm `VISUAL_DIA_SCALE_PT_PER_MM` (now only the degenerate-diameter fallback).
+  the STANDARD anchors are **proportional** — 4" → 0.5625" and 8" → 1.125" on paper, a
+  line through the origin (the historical hand-sheet look; an on-device review found
+  taller defaults read "chubby") — continuing past both anchors until the 1.5"
+  ceiling. `defaultVisualScale` feeds every composer solve and both slider surfaces —
+  the runout/consolidated sheet maxes it with the width-fit and in-profile value
+  demands; the schematic uses the curve alone. The flat 0.40 pt/mm
+  `VISUAL_DIA_SCALE_PT_PER_MM` remains only as the degenerate-diameter fallback.
 - **The anchor heights are settings** (Settings → PDF Export → "Default drawing size";
-  `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`, persisted app-wide, standard 0.75"/1.25",
-  settable 0.25"–1.5" in 1/16" steps): change what a 4" and an 8" shaft draw and the
-  whole line re-derives — no code edit. The anchor DIAMETERS stay fixed at 4"/8". An
-  inverted pair (8" set below 4") flattens the line at the 4" value in the geometry —
-  a larger shaft never draws smaller — and the Settings page warns inline. A "Standard"
-  button restores 0.75"/1.25".
+  `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`, persisted app-wide, standard
+  0.5625"/1.125", settable 0.25"–1.5" in 1/16" steps): change what a 4" and an 8"
+  shaft draw and the whole line re-derives — no code edit (a taller pair like
+  0.75"/1.25" is a deliberate choice here). The anchor DIAMETERS stay fixed at 4"/8".
+  An inverted pair (8" set below 4") flattens the line at the 4" value in the
+  geometry — a larger shaft never draws smaller — and the Settings page warns inline.
+  A "Standard" button restores the proportional pair.
+- **Tapers may shrink but never equalize** (on-device direction: two very different
+  taper lengths must never draw equal): tapers carry NO flat width floor — a flat
+  floor equalizes unequal tapers when both clamp to it — and use a ratio-preserving
+  fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` = 0.5, λ-fit like
+  the liner raises, so the drawn height never yields to it; ratio preservation is
+  structural — both tapers scale by the same factor at every squeeze). The SCHEMATIC
+  composer additionally uses lean floors (`SCHEMATIC_MIN_THREAD_PT` 28 /
+  `_BODY_RUN_PT` 40 / `_LINER_PT` 56) — its values live on dimension rails and
+  callouts, so proportion wins there; the runout/consolidated sheet keeps the writable
+  `PROFILE_MIN_*` floors for in-profile values.
 - The **1.5" ceiling is absolute** (`PROFILE_MAX_SHAFT_HEIGHT_PT` = 108 pt): the drawn
   shaft never exceeds 1.5" on paper at any slider position — a short shaft whose
   width-fit would draw taller is capped too, keeps true proportion, and simply doesn't

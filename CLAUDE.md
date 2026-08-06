@@ -117,14 +117,23 @@ knockout halos (worn values, then `drawDiaReadingsInProfile`); do not draw any m
 the text passes. Values **auto-fit their local band** (`fittedValueTextSize`, floor
 `WORN_VALUE_MIN_TEXT_PT`/14 px canvas); the PDF profile follows the **hand-sheet
 compression convention** — drawn height follows TRUE diameter on the **default sizing
-curve** (`defaultShaftHeightPt`: linear through 4" → 0.75" and 8" → 1.25" on paper,
-continuing past both anchors, meeting the 1.5" ceiling at 10"; `defaultVisualScale`
-supersedes the flat `VISUAL_DIA_SCALE_PT_PER_MM`, now only the degenerate fallback;
-the anchor HEIGHTS are app-level settings — Settings → PDF Export "Default drawing
-size", `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn` — and an inverted pair flattens
-at the low anchor: a larger shaft never draws smaller),
+curve** (`defaultShaftHeightPt`: STANDARD anchors are PROPORTIONAL — 4" → 0.5625",
+8" → 1.125", a line through the origin, the historical hand-sheet look; taller pairs
+like 0.75"/1.25" read "chubby" on-device and are a deliberate Settings choice, never
+the default — Settings → PDF Export "Default drawing size",
+`PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`; an inverted pair flattens at the low
+anchor: a larger shaft never draws smaller; `defaultVisualScale` keeps the flat
+`VISUAL_DIA_SCALE_PT_PER_MM` only as the degenerate fallback),
 spans foreshortened above per-kind width floors via the
 pure mapping `geom/ProfileCompression.kt`, everything through the one piecewise `xAt`.
+**TAPERS may shrink but NEVER equalize** — they carry NO flat floor (a flat floor made
+a 19.5" and an 11.5" taper draw identical, on-device report); instead a
+ratio-preserving fraction-of-true floor (`PROFILE_TAPER_MIN_FRAC_OF_TRUE`, λ-fit like
+the liner raises — ratio preservation is structural: same λ, same K threshold, so
+relative taper widths always read true, and the drawn height never yields to it). The
+SCHEMATIC composer uses the lean `SCHEMATIC_MIN_*` floors (28/40/56 — its values live
+on rails/callouts, so proportion wins); the runout/consolidated sheet keeps the
+writable `PROFILE_MIN_*` floors.
 Foreshortened body runs draw the S-break pair laid out by `breakPairLayout`
 (`pdf/BreakSymbol.kt`) — gap widens up to half the run, then amplitude flattens, so the
 two edges always keep ≥ 1 pt of daylight and never overlap.

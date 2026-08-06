@@ -115,7 +115,24 @@ pref is therefore permanently at its default (2.5) for every user.
 1.0–6.0) or remove the setter + persistence and hard-code the factor. (Setter kept for
 now.)
 
-## 5c. Spec-level warnings: pick a UI surface (decision needed)
+## 5c. Height-slider track vs pinned-span ceiling (known drift)
+
+**What:** The "Shaft height" slider's track and readout come from
+`drawnShaftHeightPt`, which knows the sizing curve and the 1.5" cap but NOT the
+pinned spans (keyway-bearing bodies — tapers no longer pin; their frac floors don't
+touch the height). On a keyway-body-heavy shaft the composer's `solveMaxProfileScale`
+stops the real height below what the slider offers. The
+`estimatedLinerKeptFracOfTrue` machinery already runs the real solve in the UI — the
+slider could use the same estimate for its track maximum, showing the actual
+reachable ceiling per shaft.
+
+**Risk:** LOW-MEDIUM — display-only, but the track max becoming spec-dependent needs
+care around empty/degenerate specs.
+
+**Recommendation:** Do it with the next slider-UX pass; until then the slider is
+honest at the "~" level (the drawn height simply stops growing past the pin ceiling).
+
+## 5d. Spec-level warnings: pick a UI surface (decision needed)
 
 **What:** `specWarningMessages` (`ui/util/ComponentWarnings.kt`) is pure, unit-tested,
 and deliberately unwired — its siblings feed the carousel cards, but the spec-level

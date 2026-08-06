@@ -5,8 +5,8 @@ package com.android.shaftschematic.geom
  * (on-device request, with rulered reference sketches):
  *
  * - The shaft's drawn HEIGHT follows its true diameter on the default sizing curve
- *   ([defaultShaftHeightPt]) — an 8" shaft prints 1.25" tall, a 4" shaft 3/4" — and is
- *   never diluted by shaft length.
+ *   ([defaultShaftHeightPt]) — standard: proportional, an 8" shaft prints 1.125" tall,
+ *   a 4" shaft 0.5625" — and is never diluted by shaft length.
  * - The x axis is schematic: every span may foreshorten, but each KIND keeps a minimum
  *   drawn width (liners stay wide enough to write wear values in, body runs wide enough
  *   to write diameters and hang runout leaders from, tapers keep their read).
@@ -29,18 +29,19 @@ package com.android.shaftschematic.geom
  */
 const val VISUAL_DIA_SCALE_PT_PER_MM = 0.40f
 
-// Default sizing curve anchors (on-device request): an 8" shaft defaults to 1.25" of
-// drawn height, a 4" shaft to 0.75", linear between — and the same line continues past
-// both anchors so sizes always differentiate (a 3" shaft keeps shrinking, a 9" keeps
-// growing) until the absolute [PROFILE_MAX_SHAFT_HEIGHT_PT] ceiling, which the standard
-// line meets exactly at 10" of true diameter. The anchor DIAMETERS are fixed; the anchor
+// Default sizing curve anchors. The STANDARD values put the line through the origin —
+// drawn height stays strictly proportional to true diameter (4" → 0.5625", 8" → 1.125",
+// the historical hand-sheet look; an on-device review found taller defaults read
+// "chubby") — and the line continues past both anchors until the absolute
+// [PROFILE_MAX_SHAFT_HEIGHT_PT] ceiling. The anchor DIAMETERS are fixed; the anchor
 // HEIGHTS are user-adjustable (Settings → PDF Export → Default drawing size,
-// `PdfPrefs.curveLoHeightIn/curveHiHeightIn`) with these as the standard values. The
-// "Shaft height" slider multiplies on top.
+// `PdfPrefs.curveLoHeightIn/curveHiHeightIn`) with these as the standard values — a
+// non-proportional pair (e.g. 0.75"/1.25") is a deliberate choice there, never the
+// default. The "Shaft height" slider multiplies on top.
 const val PROFILE_DEFAULT_HEIGHT_LO_DIA_MM = 101.6f  // 4 in
-const val PROFILE_DEFAULT_HEIGHT_LO_PT = 54f         // 0.75 in
+const val PROFILE_DEFAULT_HEIGHT_LO_PT = 40.5f       // 0.5625 in (9/16)
 const val PROFILE_DEFAULT_HEIGHT_HI_DIA_MM = 203.2f  // 8 in
-const val PROFILE_DEFAULT_HEIGHT_HI_PT = 90f         // 1.25 in
+const val PROFILE_DEFAULT_HEIGHT_HI_PT = 81f         // 1.125 in (1 1/8)
 
 /**
  * Default drawn shaft height (pt) for a true max diameter — the sizing-curve line
@@ -80,13 +81,27 @@ fun defaultVisualScale(
 // simply draws true — floors never stretch anything. Liners compress in SIZE only
 // (proportional foreshortening above their floor, on-device clarification: "compressed
 // like bodies" — an S-break cutout — is what liners must never get; the S-break glyph is
-// a body-only draw path). Keyway-bearing bodies stay PINNED at true scale
-// (`Float.MAX_VALUE` floor); when a pinned span needs the room, the drawn height yields
-// via [solveMaxProfileScale].
-const val PROFILE_MIN_TAPER_PT = 80f    // keeps the taper read (slope may steepen)
+// a body-only draw path). TAPERS carry NO flat floor — a flat floor equalizes unequal
+// tapers when both clamp to it (on-device report: a 19.5" and an 11.5" taper drew
+// identical). They use [PROFILE_TAPER_MIN_FRAC_OF_TRUE] instead: a fraction-of-true
+// floor is ratio-preserving by construction — both tapers scale by the same factor at
+// every squeeze (same λ, same K threshold), so their relative widths always read true.
+// Tapers may shrink; they may never equalize.
 const val PROFILE_MIN_THREAD_PT = 36f   // hatched stub stays legible
 const val PROFILE_MIN_BODY_RUN_PT = 64f // write a diameter, hang runout leaders
 const val PROFILE_MIN_LINER_PT = 100f   // room to write wear values in / read the liner
+
+// Ratio-preserving taper floor: tapers keep at least this fraction of their true drawn
+// width (λ-fit like the liner raises — the drawn height never yields to it).
+const val PROFILE_TAPER_MIN_FRAC_OF_TRUE = 0.5f
+
+// Schematic-only lean floors (on-device direction, experiment: the schematic needs
+// PROPORTION more than write-in room — its values live on dimension rails and
+// below-shaft callouts, never inside spans — while the runout/consolidated sheet keeps
+// the writable floors above for in-profile values and hand-written bubbles).
+const val SCHEMATIC_MIN_THREAD_PT = 28f
+const val SCHEMATIC_MIN_BODY_RUN_PT = 40f
+const val SCHEMATIC_MIN_LINER_PT = 56f
 
 // "Shaft height" slider bounds (multiplier on the solved profile scale) and the absolute
 // cap on the drawn shaft height — grown to at most 1.5" on paper (on-device request).

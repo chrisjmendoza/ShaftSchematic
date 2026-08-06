@@ -27,8 +27,8 @@ import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MAX
 import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MIN
 import com.android.shaftschematic.geom.PROFILE_MAX_SHAFT_HEIGHT_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
-import com.android.shaftschematic.geom.PROFILE_MIN_TAPER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
+import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.hasKeyway
@@ -232,8 +232,14 @@ internal fun estimatedLinerKeptFracOfTrue(
     val desired = exaggeratedProfileScale(baseScale, heightScale, Float.MAX_VALUE, maxDia)
     val windowEnd = spec.overallLengthMm.coerceAtLeast(1f)
     val features = buildList {
+        // Tapers: ratio-preserving frac floor, no flat floor — same as the composers.
         spec.tapers.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_TAPER_PT))
+            add(
+                ProfileFeatureSpan(
+                    it.startFromAftMm, it.startFromAftMm + it.lengthMm, 0f,
+                    minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE,
+                )
+            )
         }
         spec.liners.forEach {
             add(

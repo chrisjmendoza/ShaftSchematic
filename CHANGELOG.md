@@ -62,6 +62,26 @@ fixed at 4"/8" and the absolute 1.5" ceiling still caps everything. An inverted 
 with an inline warning; a "Standard (0.75″ / 1.25″)" button restores the defaults.
 A live example line shows what a 6" shaft would draw as the sliders move.
 
+### fix(pdf): proportional defaults restored; tapers never compress; schematic lean floors
+
+On-device report with screenshot (8" shaft "looks so chubby and wrong, and the tapers
+look bad too… two very different lengths and you can't tell from the drawing").
+(1) **Default height restored to the proportional hand-sheet line**: the standard
+sizing-curve anchors are now 4" → 0.5625" / 8" → 1.125" — a line through the origin,
+matching the historical 0.40 pt/mm look within a half percent — replacing the
+0.75"/1.25" defaults, which remain one slider-tap away in Settings → "Default drawing
+size" for anyone who wants the taller read. (2) **Tapers may shrink but never
+equalize** (on-device refinement: "I don't mind if tapers shrink, I just want them to
+stay proportional to their relative widths"): tapers drop their flat 80 pt floor —
+which equalized unequal tapers when both clamped to it — for a ratio-preserving
+fraction-of-true floor (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` = 0.5, λ-fit like the liner
+raises; both tapers scale by the same factor at every squeeze, so a 19½" and an 11½"
+taper always visibly differ, and the drawn height never yields to it). (3) **Schematic
+lean floors** (experiment, `SCHEMATIC_MIN_*`: thread 28 / body run 40 / liner 56): the
+schematic's values live on rails and callouts — not inside spans — so it trades
+write-in floor room for proportion; the runout/consolidated sheet keeps the writable
+`PROFILE_MIN_*` floors.
+
 ### chore(repo): day-run polish — dead code removed, comments and docs trued up
 
 Overnight repo sweep (on-device request: dead code, out-of-date inline comments,

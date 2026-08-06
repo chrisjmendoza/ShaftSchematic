@@ -34,11 +34,12 @@ data class PdfPrefs(
      * "Shaft height" slider): a 4" shaft draws [curveLoHeightIn] tall, an 8" shaft
      * [curveHiHeightIn]; sizes between and beyond follow the line
      * (`geom/ProfileCompression.defaultShaftHeightPt`). Adjustable in
-     * Settings → PDF Export → Default drawing size; these defaults are the standard
-     * hand-sheet convention.
+     * Settings → PDF Export → Default drawing size; the standard pair is PROPORTIONAL
+     * (through the origin — the historical hand-sheet look; an on-device review found
+     * taller defaults read "chubby").
      */
-    val curveLoHeightIn: Float = 0.75f,
-    val curveHiHeightIn: Float = 1.25f,
+    val curveLoHeightIn: Float = 0.5625f,
+    val curveHiHeightIn: Float = 1.125f,
 ) {
     /** The anchor heights in PDF points (72 pt per paper inch) — what the geometry consumes. */
     val curveLoHeightPt: Float get() = curveLoHeightIn * 72f

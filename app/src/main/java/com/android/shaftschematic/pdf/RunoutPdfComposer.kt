@@ -16,7 +16,7 @@ import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
-import com.android.shaftschematic.geom.PROFILE_MIN_TAPER_PT
+import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
 import com.android.shaftschematic.geom.ProfileFeatureSpan
 import com.android.shaftschematic.geom.defaultVisualScale
@@ -335,8 +335,17 @@ fun composeRunoutPdf(
     // x axis is schematic) but each kind keeps a writable minimum, and a keyway-bearing
     // body pins at true scale so its drawn slot geometry stays real.
     val featureSpans: List<ProfileFeatureSpan> = buildList {
+        // Tapers may shrink but stay PROPORTIONAL to each other (on-device direction:
+        // two very different taper lengths must never draw equal). No flat floor — a
+        // ratio-preserving fraction-of-true floor instead, λ-fit like the liner raises;
+        // the drawn height never yields to it.
         docSpec.tapers.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_TAPER_PT))
+            add(
+                ProfileFeatureSpan(
+                    it.startFromAftMm, it.startFromAftMm + it.lengthMm, 0f,
+                    minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE,
+                )
+            )
         }
         // Liners compress in SIZE only — proportional foreshortening above their floor,
         // never a body-style S-break cutout (on-device clarification). The per-job

@@ -348,36 +348,33 @@ class ProfileCompressionTest {
     // ── defaultShaftHeightPt / defaultVisualScale (default sizing curve) ──────
 
     @Test
-    fun `sizing curve anchors - 8in draws 1_25in, 4in draws 0_75in`() {
-        assertEquals(90f, defaultShaftHeightPt(203.2f), 1e-3f)
-        assertEquals(54f, defaultShaftHeightPt(101.6f), 1e-3f)
-    }
-
-    @Test
-    fun `sizing curve interpolates linearly between the anchors`() {
-        // 6in sits midway → midway height: 72pt (1.0in on paper).
-        assertEquals(72f, defaultShaftHeightPt(152.4f), 1e-3f)
+    fun `standard anchors are proportional - 8in draws 1_125in, 4in draws 0_5625in`() {
+        // The standard line passes through the origin — drawn height stays strictly
+        // proportional to true diameter (the historical hand-sheet look; on-device
+        // review found taller defaults read "chubby").
+        assertEquals(81f, defaultShaftHeightPt(203.2f), 1e-3f)
+        assertEquals(40.5f, defaultShaftHeightPt(101.6f), 1e-3f)
+        assertEquals(60.75f, defaultShaftHeightPt(152.4f), 1e-3f)
+        // Through-origin: half the diameter draws half the height.
+        assertEquals(defaultShaftHeightPt(203.2f) / 2f, defaultShaftHeightPt(101.6f), 1e-3f)
     }
 
     @Test
     fun `sizing curve continues past both anchors so sizes differentiate`() {
-        // 3in keeps shrinking below the low anchor; 9in keeps growing above the high one.
-        assertEquals(45f, defaultShaftHeightPt(76.2f), 1e-2f)
-        assertEquals(99f, defaultShaftHeightPt(228.6f), 1e-2f)
         assertTrue(defaultShaftHeightPt(76.2f) < defaultShaftHeightPt(101.6f))
         assertTrue(defaultShaftHeightPt(228.6f) > defaultShaftHeightPt(203.2f))
     }
 
     @Test
-    fun `sizing curve meets the absolute ceiling at 10in and stays capped above`() {
-        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(254f), 1e-2f)
+    fun `sizing curve stays capped at the absolute ceiling`() {
+        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(300f), 1e-3f)
         assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, defaultShaftHeightPt(400f), 1e-3f)
     }
 
     @Test
     fun `default visual scale is the curve height over the diameter`() {
-        assertEquals(90f / 203.2f, defaultVisualScale(203.2f), 1e-5f)
-        assertEquals(54f / 101.6f, defaultVisualScale(101.6f), 1e-5f)
+        assertEquals(81f / 203.2f, defaultVisualScale(203.2f), 1e-5f)
+        assertEquals(40.5f / 101.6f, defaultVisualScale(101.6f), 1e-5f)
         // Degenerate diameter falls back to the legacy flat scale.
         assertEquals(VISUAL_DIA_SCALE_PT_PER_MM, defaultVisualScale(0f), 1e-6f)
     }
@@ -491,6 +488,26 @@ class ProfileCompressionTest {
             contentWidthPt = 700f, diaPtPerMm = 1f,
         )
         assertEquals(1f, fitting, 1e-4f)
+    }
+
+    @Test
+    fun `taper frac floors preserve relative widths under squeeze`() {
+        // Two frac-floored spans with NO flat floor (the taper posture) keep their TRUE
+        // ratio at any squeeze — a 495mm and a 292mm taper must never draw equal
+        // (on-device report: unequal tapers drew identical under the old flat floor).
+        val map = buildCompressedProfileXMap(
+            windowStartMm = 0f, windowEndMm = 2000f,
+            features = listOf(
+                ProfileFeatureSpan(0f, 495f, 0f, minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE),
+                ProfileFeatureSpan(1700f, 1992f, 0f, minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE),
+            ),
+            contentLeft = 0f, contentRight = 700f,
+            diaPtPerMm = 1f,
+        )
+        val wAft = map.xAt(495f) - map.xAt(0f)
+        val wFwd = map.xAt(1992f) - map.xAt(1700f)
+        assertEquals("true ratio must survive the squeeze", 495f / 292f, wAft / wFwd, 1e-2f)
+        assertTrue("frac floor holds", wAft >= 495f * PROFILE_TAPER_MIN_FRAC_OF_TRUE - 0.5f)
     }
 
     @Test

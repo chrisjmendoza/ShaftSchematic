@@ -618,7 +618,12 @@ fun SettingsRoute(
                             },
                             enabled = pdfCurveLoHeightIn != PdfPrefs().curveLoHeightIn ||
                                 pdfCurveHiHeightIn != PdfPrefs().curveHiHeightIn,
-                        ) { Text("Standard (0.75″ / 1.25″)") }
+                        ) {
+                            Text(
+                                "Standard (${fmtCurveInches(PdfPrefs().curveLoHeightIn)} / " +
+                                    fmtCurveInches(PdfPrefs().curveHiHeightIn) + ")"
+                            )
+                        }
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {

@@ -470,33 +470,40 @@ On-device request following the worn-sections review:
     the floor a slight halo overhang is accepted.
   - *Profile compression — the hand-sheet convention (PDF; both composers share it):*
     drawn shaft **height follows TRUE diameter on the default sizing curve**
-    (`defaultShaftHeightPt`, linear through 4" → 0.75" and 8" → 1.25" on paper, 6" → 1";
-    the line continues past both anchors so sizes always differentiate and meets the
-    absolute 1.5" ceiling exactly at 10" — on-device direction, superseding the flat
-    0.40 pt/mm `VISUAL_DIA_SCALE_PT_PER_MM`, which remains only as the
-    degenerate-diameter fallback in `defaultVisualScale`; the anchor HEIGHTS are
-    user-adjustable app-wide via Settings → PDF Export → "Default drawing size" —
+    (`defaultShaftHeightPt`; the STANDARD anchors are proportional — 4" → 0.5625" and
+    8" → 1.125", a line through the origin, the historical hand-sheet look (an
+    on-device review found taller defaults read "chubby") — the line continues past
+    both anchors until the absolute 1.5" ceiling; the flat 0.40 pt/mm
+    `VISUAL_DIA_SCALE_PT_PER_MM` remains only as the degenerate-diameter fallback in
+    `defaultVisualScale`; the anchor HEIGHTS are user-adjustable app-wide via
+    Settings → PDF Export → "Default drawing size" —
     `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`, an inverted pair flattens at the low
-    anchor) and is never diluted by shaft length — EXCEPT when a pinned span (a keyway-bearing body, whose
-    drawn slot geometry must stay real) needs the room: then the height yields instead
-    (`solveMaxProfileScale` bisects the largest scale that still lays out; "doesn't have
-    to be perfectly proportional, just close"). The x axis is otherwise schematic: spans
-    may foreshorten but each kind keeps a writable minimum drawn width
-    (`PROFILE_MIN_TAPER_PT` 80; `PROFILE_MIN_THREAD_PT` 36; `PROFILE_MIN_BODY_RUN_PT` 64
-    — room to write diameters and hang runout leaders, on-device request;
-    `PROFILE_MIN_LINER_PT` 100 — room to write wear values in, see the 2026-08-05 liner
-    clarification below; liners additionally honor the per-job **"Liner compression"
-    pair** — `RunoutConfig.linersProportional` checkbox holds them at true width and the
+    anchor) and is never diluted by shaft length — EXCEPT when a pinned span (a
+    **keyway-bearing body**, whose drawn slot geometry must stay real) needs the room:
+    then the height yields instead (`solveMaxProfileScale` bisects the largest scale
+    that still lays out; "doesn't have to be perfectly proportional, just close").
+    **Tapers may shrink but never equalize**: no flat floor (a flat floor equalizes
+    unequal tapers when both clamp to it — on-device report) — a ratio-preserving
+    fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE`, λ-fit, never
+    lowers the height; relative taper widths always read true). The x axis is
+    otherwise schematic: spans may foreshorten but each kind keeps a writable minimum
+    drawn width
+    (`PROFILE_MIN_THREAD_PT` 36; `PROFILE_MIN_BODY_RUN_PT` 64 — room to write
+    diameters and hang runout leaders, on-device request; `PROFILE_MIN_LINER_PT` 100 —
+    room to write wear values in, see the 2026-08-05 liner clarification below; the
+    SCHEMATIC composer instead uses the lean `SCHEMATIC_MIN_*` floors — 28/40/56 —
+    because its values live on rails and callouts, not inside spans, so proportion
+    wins there; liners additionally honor the per-job **"Liner compression" pair** —
+    `RunoutConfig.linersProportional` checkbox holds them at true width and the
     `linerCompression` slider bounds how far they may foreshorten via
     `ProfileFeatureSpan.minWidthFracOfTrue`, control on the Output tab + schematic Tune
     sheet — "the key components we are measuring are the tapers and liners"; the
     **drawing height takes precedence**: the raises are best-effort, ignored by the
     scale solve and λ-fitted to the room the page has at the selected height
-    (`fracFitFactor`) — a liner request never lowers the drawn shaft), keyway-bearing
-    bodies pin at true scale, and **above the floors
-    width distributes in proportion to true length** — a longer body run draws visibly
-    longer, equal runs draw equal (on-device request), no span ever stretches past true
-    scale. Pure engine `geom/ProfileCompression.kt`
+    (`fracFitFactor`) — a liner request never lowers the drawn shaft), and **above the
+    floors width distributes in proportion to true length** — a longer body run draws
+    visibly longer, equal runs draw equal (on-device request), no span ever stretches
+    past true scale. Pure engine `geom/ProfileCompression.kt`
     (`buildCompressedProfileXMap` + monotone `solveSpanWidths` bisection, unit-tested);
     only BODY runs get the S-break pair when foreshortened (`drawBodiesForRunout` /
     the schematic's `drawBodiesCompressedCenterBreak` trigger on actual foreshortening;
