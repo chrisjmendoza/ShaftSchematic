@@ -32,7 +32,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.android.shaftschematic.io.InternalStorage
-import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.unlockAchievement
 import com.android.shaftschematic.util.FeedbackIntentFactory

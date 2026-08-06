@@ -55,7 +55,7 @@ but they **never** affect overall length (`coverageEndMm` ignores them), **never
 bodies, and **never** collide with other components (`collisionGroup() → null`). Do not
 add them to `coverageEndMm`, `ensureOverall`, body-split/merge, or overlap validation.
 They are resolved as `ResolvedCouplerBoltSlot` *after* body resolution so they stay out
-of auto-body/subtraction geometry. See `docs/CouplerBoltSlot.md`.
+of auto-body/subtraction geometry. See `CouplerBoltSlot.md`.
 
 ### Wear pits are reference features
 Wear pits (`WearRecord.pits` — a `WearPit` "X" marker per pit/dye-failure, small or large) are
@@ -70,8 +70,9 @@ skipped at the **render layer**, not pruned at decode (auto-body/taper ids aren'
 codec) — same rule as runout readings; wear spots, by contrast, ARE pruned at decode. The "X" must
 be drawn **identically** (same crossed-line construction, same small:large ratio) in all draw sites:
 `ComponentWearDetailOverlay`'s `drawPitX` (canvas), `WearPdfComposer`'s `drawWearPitsOnProfile` +
-strip pits (PDF). Pure sizing/hit-test/clamp math lives in `geom/WearPitMath.kt` (shared, no
-`pdf → ui` dep). See `docs/RunoutSheet.md` (Wear Pits).
+strip pits (PDF), and the consolidated runout sheet (canvas + PDF), which reuses
+`drawWearPitsOnProfile` itself (per-surface `smallHalf`). Pure sizing/hit-test/clamp math lives in `geom/WearPitMath.kt` (shared, no
+`pdf → ui` dep). See `RunoutSheet.md` (Wear Pits).
 
 ### Wear diameter readings are reference features
 Measured-Ø readings (`WearRecord.diaReadings` — a `WearDiaReading` per measured station,
@@ -87,8 +88,90 @@ printed. Callouts are placed by the shared pure engine `geom/WearDiaCalloutLayou
 (order-preserving spread, two-row stagger, dogleg leaders) and must render **identically**
 in both draw sites: `ComponentWearDetailOverlay` (canvas) and `WearPdfComposer` (liner
 readings → that liner's detail strip; body/taper readings → under the main profile). Labels
-use `formatDiaWithUnit`, no `Ø` prefix. See `docs/RunoutSheet.md` (Wear Diameter
-Measurements) and `docs/WearDiaMeasurements_PLAN.md`.
+use `formatDiaWithUnit`, no `Ø` prefix. On the **consolidated runout sheet** the same
+readings instead draw INSIDE the profile at their station — one rotated haloed column via
+`drawDiaReadingsInProfile` (`RunoutPdfComposer`), liners included, `Ø`-prefixed — replacing
+below-shaft callouts there; the wear document itself (the authoring surface) keeps its
+callout engine unchanged. See `RunoutSheet.md` (Wear Diameter
+Measurements) and `WearDiaMeasurements_PLAN.md`.
+
+### Worn sections are reference features
+Worn sections (`WearRecord.wornSections` — a `WornSection` per designated measured area,
+step 1 of the runout/wear consolidation) are **reference-only**, the same posture as the
+other wear/runout marks. They **never** affect `coverageEndMm`/OAL, body resolution,
+collision, or the Free-to-End badge, and they ride the existing `wear_record` envelope
+field (additive `wornSections` list — no codec plumbing). Like undercuts they are
+**shaft-space** (`startFromAftMm` + `lengthMm`, may cross component edges, no orphans,
+never pruned at decode; `authoredReference` reuses `UndercutReference` SET values as
+display-only Distance metadata — canonical never moves on a reference switch). `diaMm` is
+a **list** of typed measurements — stored verbatim in list order (golden rule); values ≤ 0
+never print. They draw on the **runout sheet**: boundary lines at the span ends and the
+values **inside the profile**, rotated 90°, each over a sheet-white halo so no profile
+line crosses a number. ONE draw implementation for both sites — `drawWornSections`
+(`pdf/RunoutPdfComposer.kt`), called by the PDF and by the `RunoutRoute` canvas via
+`nativeCanvas`; pure layout in `geom/WornSectionMath.kt`. No carousel card, no Add dialog
+(outside the add-dialog-parity invariant). **Consolidated-sheet z-order: marks first, text
+last** — wear-area bands and pit X's (migrated from the retired wear tab,
+`drawWearMarksOnRunoutProfile`), then worn-section boundaries, then ALL value text over
+knockout halos (worn values, then `drawDiaReadingsInProfile`); do not draw any mark after
+the text passes. Values **auto-fit their local band** (`fittedValueTextSize`, floor
+`WORN_VALUE_MIN_TEXT_PT`/14 px canvas); the PDF profile follows the **hand-sheet
+compression convention** — drawn height follows TRUE diameter on the **default sizing
+curve** (`defaultShaftHeightPt`: STANDARD anchors are PROPORTIONAL — 8" → 1",
+6" → 3/4", 4" → 1/2", a line through the origin, the hand-sheet rule from the
+original rulered sketches; taller pairs read "chubby" on-device and are a deliberate
+Settings choice, never the default — Settings → PDF Export "Default drawing size",
+`PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`; an inverted pair flattens at the low
+anchor: a larger shaft never draws smaller; `defaultVisualScale` keeps the flat
+`VISUAL_DIA_SCALE_PT_PER_MM` only as the degenerate fallback),
+spans foreshortened above per-kind width floors via the
+pure mapping `geom/ProfileCompression.kt`, everything through the one piecewise `xAt`.
+**TAPERS may shrink but NEVER equalize** — they carry NO flat floor (a flat floor made
+a 19.5" and an 11.5" taper draw identical, on-device report); instead a
+ratio-preserving fraction-of-true floor (`PROFILE_TAPER_MIN_FRAC_OF_TRUE`, λ-fit like
+the liner raises — ratio preservation is structural: same λ, same K threshold, so
+relative taper widths always read true, and the drawn height never yields to it). The
+SCHEMATIC composer uses the lean `SCHEMATIC_MIN_*` floors (28/40/56 — its values live
+on rails/callouts, so proportion wins); the runout/consolidated sheet keeps the
+writable `PROFILE_MIN_*` floors.
+Foreshortened body runs draw the S-break pair laid out by `breakPairLayout`
+(`pdf/BreakSymbol.kt`) — gap widens up to half the run, then amplitude flattens, so the
+two edges always keep ≥ 1 pt of daylight and never overlap.
+**Liners compress in SIZE only** (finite `PROFILE_MIN_LINER_PT` floor — proportional
+foreshortening, NEVER a body-style S-break cutout; the S-break glyph is a body-only draw
+path); the per-job **"Liner compression" pair** (`RunoutConfig.linersProportional` +
+`linerCompression` → derived `linerMinFracOfTrue`, fed to
+`ProfileFeatureSpan.minWidthFracOfTrue`) can raise the liner floor toward true width —
+**the drawing height takes PRECEDENCE**: the raises are best-effort, never enter the
+scale solve, and λ-fit whatever room the page has at the selected height
+(`fracFitFactor`) — do not let a liner demand lower the drawn shaft; control on the
+Output tab + schematic Tune sheet with a live kept-% readout
+(`estimatedLinerKeptFracOfTrue`); ONLY keyway-bearing bodies stay pinned at true width
+with the height yielding (`solveMaxProfileScale`). Body runs join the same λ pool
+(`PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` 0.35 — ratio-preserving gap floors), so liner raises
+can never consume the page and body-run relative lengths always read.
+The **"Shaft height" slider** (`RunoutConfig.heightScale`,
+per-job in the envelope — ONE value behind the runout/consolidated sheets AND the
+schematic, `composeShaftPdf(heightScale)`) multiplies the solved scale; the drawn shaft
+is hard-capped at **1.5" on paper** (`PROFILE_MAX_SHAFT_HEIGHT_PT`, an ABSOLUTE ceiling
+— a short shaft that would draw taller at width-fit is capped and simply doesn't span
+the page) and by the page budget (`exaggeratedProfileScale`, pure/unit-tested). The slider
+selects the drawn height by VALUE in paper inches — track ends at 1.5" or the shaft's
+300% height, whichever is less (`drawnShaftHeightPt`/`heightFracForDrawnHeight`);
+commits near the standard height snap to exactly 100%. Liners draw **unfilled on this sheet**
+regardless of `shadedLiners` so halos don't read as pasted boxes. Division of labor: the Wear page is the **authoring surface** for
+spots/pits/point-readings (tab visible; `WEAR_TAB_ENABLED` in `EditorTab.kt` is the
+one-line retirement switch for a future full consolidation); the Runout tab authors
+**runouts only** (its buttons produce the classic standalone runout sheet,
+`composeRunoutPdf(consolidated = false)`); and the **Consolidated Output tab**
+(`EditorTab.OUTPUT`, `ui/screen/OutputRoute.kt`) owns the consolidated sheet — content
+election (`ConsolidatedVariant`: All three (default) | Schematic + Runout | Schematic +
+Wear, via `includeBubbles`/`includeWearInfo`), the worn-section editor, the "Shaft
+height" slider, and **Export all** (checked documents batch-written to a picked folder).
+Every SAF export goes through the hardened `util/PdfSafExport.writeShaftPdfToUri`
+(composer throw → valid error page, never a truncated file) and the collision export
+gate guards every export surface. See `RunoutSheet.md` (Consolidation step 5) and
+`docs/PDF_EXPORT.md` §5.6–5.7.
 
 ### Undercuts are reference features
 Undercut sections (`UndercutRecord.undercuts` — an `Undercut` per machined-below-surface
@@ -124,7 +207,19 @@ liner shade — `UNDERCUT_SECTION_FILL_ALPHA`, half the liner's alpha) must rend
 and `UndercutPdfComposer` (PDF) — from the shared pure pipeline `geom/SurfaceProfileMath.kt`
 + `geom/UndercutMath.kt` (cluster windows, clamps, hit-tests; no `pdf → ui` dep) with
 `ui/resolved/SurfaceSegs.kt` as the single resolved→surface mapping. See
-`docs/UndercutDrawing_PLAN.md`.
+`UndercutDrawing_PLAN.md`.
+
+### Paper sheets are theme-independent
+The app theme (Settings → Appearance: System/Light/Dark + high contrast; default Light =
+the historical look) styles Compose chrome only. The five white-sheet canvases (undercut
+overview/detail, wear overview/detail, runout preview) draw with fixed ink from
+`ui/theme/SheetInk.kt` — never `MaterialTheme.colorScheme` — because dark theme's
+near-white onSurface would print invisible ink on the white sheet. The undercut sheets'
+fills are additionally user-styled via `util/UndercutStyle.kt` (shade color/intensity +
+line-art mode; the Standard/Grey default reproduces the historical fixed shades, and the
+section core stays half the liner alpha at every intensity — `UndercutStyleTest`) — still
+fixed inks, never theme roles, and never leaking into the PDF composers. See
+`Appearance.md`.
 
 ### Runout readings are reference features
 Per-station runout readings (`RunoutReadings` in the doc envelope — a TIR value + high-spot
@@ -136,7 +231,7 @@ fine with neither. Keyed by `(componentId, stationIndex)` with render-layer orph
 and the keyway cutout must be drawn **identically in both bubble draw sites** —
 `RunoutRoute.drawRunoutMarkers` (canvas) and `RunoutPdfComposer.drawPlacedBubbles` (PDF).
 Pure clock/hit-test math lives in `geom/RunoutReadingMath.kt` (shared, no `pdf → ui` dep);
-value formatting in `util/RunoutValueFormat.kt`. See `docs/RunoutSheet.md` (Runout Bubble
+value formatting in `util/RunoutValueFormat.kt`. See `RunoutSheet.md` (Runout Bubble
 Editor) and `docs/RunoutBubbleEditor_PLAN.md`.
 
 ### Spooned keyways are a draw-only variant
@@ -190,7 +285,7 @@ FWD-referenced taper by less than the tolerance snapped its start back to the ol
 boundary, undoing the edit entirely. Snapping is for coarse gestures only (tap-to-add,
 `ui/viewmodel/SnapUtils.kt`). Same posture as the 2026-06-19 removal of the
 `snapForwardFrom` cascade from ViewModel updates: positions are user-authored; nothing
-mutates them except a direct user action. See `docs/ShaftScreen.md`.
+mutates them except a direct user action. See `ShaftScreen.md`.
 
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus

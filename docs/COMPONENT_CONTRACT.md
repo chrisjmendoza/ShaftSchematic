@@ -1,6 +1,8 @@
 # Component vs Feature Contract
 Version: v0.5.x
-Last updated: 2026-07-21 — reverted "explicit bodies are non-negotiable" (it raised false collision warnings on normal drafts); bodies are the fluid base again — they don't collide, and plain bodies split around sacred components while keyed bodies are protected.
+Last updated: 2026-08-05 — the "not components — envelope records" bullet now lists all
+reference-only kinds, adding **worn sections** (`WearRecord.wornSections`) and **undercuts**
+(`UndercutRecord`, its own `undercut_record` envelope field). 2026-07-21 — reverted "explicit bodies are non-negotiable" (it raised false collision warnings on normal drafts); bodies are the fluid base again — they don't collide, and plain bodies split around sacred components while keyed bodies are protected.
 
 This document is **normative**.
 It defines what constitutes a **component** versus a **feature** in ShaftSchematic.
@@ -53,11 +55,21 @@ Features:
   - Excluded from OAL/`coverageEndMm`, excluded from collision detection (`collisionGroup()` → null), and never splits or merges bodies.
   - Position authored from AFT/FWD (default FWD); `showDimensionRail` is deferred (no rail drawn in v1). See DATA_MODEL.md for the full field list.
 
-- **Not components — envelope records**: wear spots, wear pits, measured-Ø readings, and
-  runout readings are reference-only *inspection records* stored in the document envelope
-  (`WearRecord` / `RunoutReadings`), not in `ShaftSpec`, and are outside this contract —
-  they never resolve, collide, or occupy spans. See DATA_MODEL.md §Serialization and
-  `CLAUDE.md`.
+- **Not components — envelope records**: wear spots, wear pits, measured-Ø readings, worn
+  sections, runout readings, and undercuts are reference-only *inspection records* stored in
+  the document envelope (`WearRecord` / `RunoutReadings` / `UndercutRecord`), not in
+  `ShaftSpec`, and are outside this contract — they never resolve, collide, or occupy spans.
+  - **Worn sections** (`WearRecord.wornSections`) and **undercuts**
+    (`UndercutRecord.undercuts`, its own `undercut_record` envelope field) are additionally
+    **shaft-space**, not component-keyed: a span may cross component edges, so they have no
+    orphans and are never pruned at decode. Their authored Distance reference is
+    display-only metadata — canonical geometry never moves on a reference switch.
+  - Neither has a carousel card or an Add dialog — they are authored only on their own tab
+    (Consolidated Output / Undercut Drawing), which keeps them outside the
+    add-dialog-parity invariant.
+  - See DATA_MODEL.md §Serialization, `CLAUDE.md`, and the in-source
+    `app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md` /
+    `.../docs/UndercutDrawing.md`.
 
 ---
 

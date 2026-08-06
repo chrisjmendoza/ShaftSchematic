@@ -9,9 +9,23 @@ package com.android.shaftschematic.ui.screen
  *
  * Enabling rules:
  * - [SCHEMATIC] is always enabled (you can edit even an empty spec).
- * - [RUNOUT], [WEAR], and [UNDERCUT] are disabled until the shaft is "built" (has at least
- *   one component and a non-zero OAL), because a blank spec produces a meaningless document.
+ * - [RUNOUT], [WEAR], [UNDERCUT], and [OUTPUT] are disabled until the shaft is "built"
+ *   (has at least one component and a non-zero OAL), because a blank spec produces a
+ *   meaningless document.
+ * - [WEAR] can be hidden via [WEAR_TAB_ENABLED] when full consolidation retires it.
  */
+
+/**
+ * Consolidation posture (on-device request): the Wear page stays as the **authoring
+ * surface** for wear data — spots, pits, and point Ø readings are placed/edited there —
+ * while the [OUTPUT] tab (`OutputRoute`) owns the consolidated **output**, featuring that
+ * wear information on its profile (bands, X's, in-profile readings) alongside worn
+ * sections and bubbles. The [RUNOUT] tab authors runouts only and prints the classic
+ * standalone runout sheet. This flag exists so a future full consolidation can retire the
+ * Wear tab in one line without touching the wear code paths.
+ */
+const val WEAR_TAB_ENABLED = true
+
 enum class EditorTab(
     /** Short label shown in the expanded sidebar. */
     val label: String,
@@ -33,5 +47,9 @@ enum class EditorTab(
     UNDERCUT(
         label = "Undercut Drawing",
         contentDescription = "Shaft undercut sections drawing",
+    ),
+    OUTPUT(
+        label = "Consolidated Output",
+        contentDescription = "Consolidated sheet preview, variants, and batch export",
     ),
 }

@@ -4,11 +4,13 @@ import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.WearDiaReading
 import com.android.shaftschematic.model.WearPit
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.model.WearSpotReference
+import com.android.shaftschematic.model.WornSection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -294,5 +296,72 @@ class WearRecordPersistenceTest {
 
         assertEquals(1, decoded.wearRecord.diaReadings.size)
         assertEquals("auto_body_0.000_100.000", decoded.wearRecord.diaReadings.single().componentId)
+    }
+
+    // ── Worn sections (consolidated runout/wear sheet) ────────────────────────
+
+    @Test
+    fun `envelope round trip preserves worn sections verbatim`() {
+        val section = WornSection(
+            id = "worn-1",
+            startFromAftMm = 320f,
+            lengthMm = 85f,
+            diaMm = listOf(162.9156f, 162.941f, 162.9156f),
+            authoredReference = UndercutReference.FWD_SET,
+        )
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(wornSections = listOf(section)),
+        )
+
+        val raw = ShaftDocCodec.encodeV1(doc)
+        assertTrue("expected wornSections key in JSON", raw.contains("\"wornSections\""))
+
+        val decoded = ShaftDocCodec.decode(raw)
+        assertEquals(ShaftDocCodec.Format.ENVELOPE_V1, decoded.format)
+        val w = decoded.wearRecord.wornSections.single()
+        assertEquals("worn-1", w.id)
+        assertEquals(320f, w.startFromAftMm, 0.0001f)
+        assertEquals(85f, w.lengthMm, 0.0001f)
+        assertEquals(UndercutReference.FWD_SET, w.authoredReference)
+        // Golden rule: every typed measurement round-trips exactly, order preserved.
+        assertEquals(listOf(162.9156f, 162.941f, 162.9156f), w.diaMm)
+    }
+
+    @Test
+    fun `a wear_record json without wornSections decodes to an empty list`() {
+        // Simulates a file written before worn sections existed.
+        val raw = """
+            {
+              "version": 1, "preferred_unit": "INCHES", "unit_locked": true,
+              "job_number": "", "customer": "", "vessel": "", "shaft_position": "OTHER", "notes": "",
+              "spec": {
+                "overallLengthMm": 500.0,
+                "liners": [ { "id": "ln1", "startMmPhysical": 0.0, "lengthMm": 200.0, "odMm": 50.0, "endMmPhysical": 200.0 } ]
+              },
+              "wear_record": { "spots": [ { "id": "spot-1", "linerId": "ln1", "startMm": 25.0, "lengthMm": 40.0 } ] }
+            }
+        """.trimIndent()
+
+        val decoded = ShaftDocCodec.decode(raw)
+
+        assertEquals(1, decoded.wearRecord.spots.size)
+        assertTrue(decoded.wearRecord.wornSections.isEmpty())
+    }
+
+    @Test
+    fun `worn sections are never pruned at decode`() {
+        // Shaft-space, no component key — even a span past the current OAL survives decode
+        // (render-layer clamp only; the stored record is never mutated).
+        val overrun = WornSection(id = "w1", startFromAftMm = 900f, lengthMm = 300f)
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = ShaftSpec(overallLengthMm = 500f), // no liners, span past OAL
+            wearRecord = WearRecord(wornSections = listOf(overrun)),
+        )
+
+        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
+
+        assertEquals(1, decoded.wearRecord.wornSections.size)
+        assertEquals(900f, decoded.wearRecord.wornSections.single().startFromAftMm, 0.0001f)
     }
 }

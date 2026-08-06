@@ -1,13 +1,9 @@
 package com.android.shaftschematic.ui.nav
 
 import android.content.ActivityNotFoundException
-import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.pdf.PdfDocument
 import android.os.Build
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -31,7 +27,10 @@ import com.android.shaftschematic.ui.viewmodel.unlockAchievement
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.buildOpenPdfIntent
+import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
+import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.VerboseLog
+import com.android.shaftschematic.util.writeShaftPdfToUri
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -41,8 +40,10 @@ import java.util.Locale
  *
  * Notes for contributors
  * - Units: model geometry is always mm; the PDF composer handles unit labels/formatting.
- * - Robustness: if the composer throws, we still write a valid PDF with an error page
- *   (avoid leaving behind a truncated/unopenable file).
+ * - Robustness: the write goes through `util/PdfSafExport.writeShaftPdfToUri` — the one
+ *   hardened SAF path shared by every export surface. A composer throw still writes a
+ *   valid PDF carrying an error page, never a truncated/unopenable file, and returns
+ *   false so the success-only follow-ups (achievement, auto-open) are skipped.
  * - UX: the export flow may optionally open the resulting document in an external PDF
  *   viewer after a successful write; this is separate from PDF content/styling.
  */
@@ -69,88 +70,55 @@ fun PdfExportRoute(
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
-        runCatching {
-            var wrotePdf = false
-            if (uri != null) {
-                VerboseLog.d(VerboseLog.Category.IO, "PdfExport") { "picked uri=$uri" }
-                ctx.contentResolver.openOutputStream(uri)?.use { out ->
-                    val doc = PdfDocument()
-                    try {
-                        // US Letter (pt): 792×612 landscape
-                        val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
-                        val page = doc.startPage(pageInfo)
+        if (uri != null) {
+            VerboseLog.d(VerboseLog.Category.IO, "PdfExport") { "picked uri=$uri" }
 
-                        val filename = uri.lastPathSegment
-                            ?: defaultFilename(
-                                jobNumber = jobNumber,
-                                customer = customer,
-                                vessel = vessel,
-                                shaftPosition = shaftPosition,
-                                blankDraft = pdfBlankDraft
-                            )
-                        val project = ProjectInfo(
-                            customer = customer,
-                            vessel = vessel,
-                            side = shaftPosition,
-                            jobNumber = jobNumber
-                        )
+            val filename = uri.lastPathSegment
+                ?: defaultFilename(
+                    jobNumber = jobNumber,
+                    customer = customer,
+                    vessel = vessel,
+                    shaftPosition = shaftPosition,
+                    blankDraft = pdfBlankDraft
+                )
+            val project = ProjectInfo(
+                customer = customer,
+                vessel = vessel,
+                side = shaftPosition,
+                jobNumber = jobNumber
+            )
 
-                        VerboseLog.d(VerboseLog.Category.PDF, "PdfExport") {
-                            "writing: page=${pageInfo.pageWidth}x${pageInfo.pageHeight}pt filename=$filename"
-                        }
-
-                        val exportError = try {
-                            composeShaftPdf(
-                                page = page,
-                                spec = vm.spec.value,
-                                unit = vm.unit.value,
-                                project = project,
-                                appVersion = appVersionFromContext(ctx),
-                                filename = filename,
-                                pdfPrefs = vm.currentPdfPrefs,
-                                options = PdfExportOptions(mode = pdfExportMode, blankValues = pdfBlankDraft),
-                                resolvedComponents = vm.resolvedComponents.value,
-                                lineThicknessScale = vm.lineThicknessScale.value
-                            )
-                            null
-                        } catch (t: Throwable) {
-                            // Never leave a truncated/unopenable PDF behind.
-                            // Write a valid error page so the output opens and the user can see what failed.
-                            val canvas = page.canvas
-                            canvas.drawColor(Color.WHITE)
-                            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                color = Color.BLACK
-                                textSize = 14f
-                            }
-                            val header = "PDF export failed"
-                            val detail = "${t.javaClass.simpleName}: ${t.message ?: "(no message)"}"
-                            canvas.drawText(header, 48f, 96f, paint)
-                            canvas.drawText(detail, 48f, 120f, paint)
-                            t
-                        }
-
-                        doc.finishPage(page)
-                        doc.writeTo(out)
-
-                        wrotePdf = (exportError == null)
-                        if (exportError != null) throw exportError
-                    } finally {
-                        try { out.flush() } catch (_: Throwable) {}
-                        doc.close()
-                    }
-                }
+            VerboseLog.d(VerboseLog.Category.PDF, "PdfExport") {
+                "writing: page=${PDF_PAGE_WIDTH_PT}x${PDF_PAGE_HEIGHT_PT}pt filename=$filename"
             }
 
-            if (wrotePdf) {
+            // Hardened write: a composer throw yields a valid error page, never a
+            // truncated file (util/PdfSafExport.kt — one implementation for every tab).
+            val wrote = writeShaftPdfToUri(ctx, uri) { page ->
+                composeShaftPdf(
+                    page = page,
+                    spec = vm.spec.value,
+                    unit = vm.unit.value,
+                    project = project,
+                    appVersion = appVersionFromContext(ctx),
+                    filename = filename,
+                    pdfPrefs = vm.currentPdfPrefs,
+                    options = PdfExportOptions(mode = pdfExportMode, blankValues = pdfBlankDraft),
+                    resolvedComponents = vm.resolvedComponents.value,
+                    lineThicknessScale = vm.lineThicknessScale.value,
+                    heightScale = vm.runoutConfig.value.heightScale,
+                    linerMinFracOfTrue = vm.runoutConfig.value.linerMinFracOfTrue,
+                )
+            }
+
+            if (wrote) {
                 VerboseLog.i(VerboseLog.Category.PDF, "PdfExport") { "write complete" }
                 vm.unlockAchievement(Achievements.Id.FIRST_PDF)
 
-                if (openAfterExport && uri != null) {
-                    openPdf(ctx, uri)
-                }
+                if (openAfterExport) openPdf(ctx, uri)
+            } else {
+                VerboseLog.e(VerboseLog.Category.PDF, "PdfExport") { "failed: error page written to $uri" }
             }
-        }.onFailure {
-            VerboseLog.e(VerboseLog.Category.PDF, "PdfExport") { "failed: ${it.javaClass.simpleName}: ${it.message}" }
         }
         finished = true
     }
@@ -243,7 +211,11 @@ private fun defaultFilename(
     return (suggested ?: "Shaft_$stamp") + blankSuffix + ".pdf"
 }
 
-private fun appVersionFromContext(context: Context): String {
+/**
+ * App version string stamped into the schematic PDF footer. Shared with the Runout tab's
+ * Schematic output so both surfaces print the same footer.
+ */
+internal fun appVersionFromContext(context: Context): String {
     return try {
         val pm = context.packageManager
         val pkg = context.packageName

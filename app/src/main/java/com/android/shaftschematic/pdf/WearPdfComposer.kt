@@ -55,10 +55,6 @@ import kotlin.math.min
  * └─────────────────────────────────────────────────────────────────────────────┘
  * ```
  *
- * ## Future enhancements (Phase 2)
- * - Digital damage annotation: tap to mark damage zones, severity selector, dye-pen pass/fail toggle.
- * - Damage zones render as coloured overlays on the shaft profile, printed with a legend.
- *
  * @param page    Target PDF page (US Letter landscape, already started).
  * @param spec    Shaft specification in millimeters.
  * @param project Job information (customer, vessel, job#, side).
@@ -553,8 +549,14 @@ private fun drawWearShaftProfile(
             c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
             c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
         } else {
-            val mid = (x0 + x1) * 0.5f; val gap = min(ZIGZAG_GAP_MAX_PT, 0.25f * lenPt)
-            val half = gap * 0.5f; val amp = r * 0.6f
+            val mid = (x0 + x1) * 0.5f
+            val (gap, amp) = breakPairLayout(
+                runLenPt = lenPt,
+                desiredAmplitudePt = r * 0.6f,
+                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * lenPt),
+                strokeWidthPt = capPaint.strokeWidth,
+            )
+            val half = gap * 0.5f
             val lEnd = (mid - half).coerceIn(geomRect.left, geomRect.right)
             val rBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
             c.drawLine(x0, top, lEnd, top, outline); c.drawLine(x0, bot, lEnd, bot, outline)
@@ -648,7 +650,7 @@ private fun drawWearBandsOnProfile(
 }
 
 /** SMALL pit half-arm (pt) on the main shaft profile; LARGE scales by the shared ratio. */
-private const val WEAR_PIT_SMALL_HALF_PROFILE_PT = 1.7f
+internal const val WEAR_PIT_SMALL_HALF_PROFILE_PT = 1.7f
 
 /** SMALL pit half-arm (pt) on a broken-out detail strip (zoomed, so a touch larger). */
 private const val WEAR_PIT_SMALL_HALF_STRIP_PT = 2.5f
@@ -659,8 +661,12 @@ private const val WEAR_PIT_SMALL_HALF_STRIP_PT = 2.5f
  * same posture as runout readings). Taper diameter is interpolated at the pit's axial position so
  * the X lands on the sloped surface. Drawn identically (by construction) to the detail-canvas and
  * strip draw sites — see `geom/WearPitMath.kt` and `ui/screen/LinerWearDetail.kt`.
+ *
+ * Internal (not private): the consolidated runout sheet reuses this exact construction for
+ * its migrated pit marks — [smallHalf] is the per-surface SMALL half-arm (pt on PDFs, px on
+ * the preview canvas), the `WearPitMath` caller-picks-scale rule.
  */
-private fun drawWearPitsOnProfile(
+internal fun drawWearPitsOnProfile(
     c: Canvas,
     pits: List<WearPit>,
     components: List<ResolvedComponent>,
@@ -668,6 +674,7 @@ private fun drawWearPitsOnProfile(
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
     pitPaint: Paint,
+    smallHalf: Float = WEAR_PIT_SMALL_HALF_PROFILE_PT,
 ) {
     if (pits.isEmpty()) return
     val byId = components.associateBy { it.id }
@@ -688,7 +695,7 @@ private fun drawWearPitsOnProfile(
         val cx = xAt(rc.startMmPhysical + local)
         val r = rPx(diaMm)
         val py = pitCenterY(cy - r, cy + r, pit.acrossFrac)
-        drawWearPitX(c, cx, py, pitHalfArm(pit.size, WEAR_PIT_SMALL_HALF_PROFILE_PT), pitPaint)
+        drawWearPitX(c, cx, py, pitHalfArm(pit.size, smallHalf), pitPaint)
     }
 }
 
@@ -1057,7 +1064,7 @@ private fun drawWearStripRail(
  * how the shop marks wear areas by hand (vertical strokes, not diagonal hatch). Evenly spaced at
  * [pitchPt], with both band edges drawn so the span reads closed.
  */
-private fun drawVerticalBand(c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, pitchPt: Float) {
+internal fun drawVerticalBand(c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, pitchPt: Float) {
     if (x1 <= x0) return
     var vx = x0
     while (vx < x1) {
@@ -1161,7 +1168,7 @@ private const val WEAR_STRIP_HEIGHT_MAX_PT = 170f   // per-strip growth cap when
 private const val WEAR_NOTES_BOTTOM_OFFSET_PT = 24f   // notes baseline above contentBot
 private const val WEAR_NOTES_GAP_PT           = 28f   // gap from drawing area bottom to notes
 
-// Wear detail strips (Phase 4) — sizing/pagination constants live in WearStripLayout.kt
+// Wear detail strips — sizing/pagination constants live in WearStripLayout.kt
 // (WEAR_STRIP_MAX_PER_PAGE, WEAR_STRIP_HEIGHT_PT, WEAR_MIN_PROFILE_HEIGHT_PT, etc.) since
 // that file's layout math is what the unit tests exercise directly. These two are purely
 // about THIS composer's own reserved space and stay local.
@@ -1169,6 +1176,7 @@ private const val WEAR_OVERFLOW_NOTE_HEIGHT_PT   = 16f  // reserved band for the
 private const val WEAR_PROFILE_RADIUS_MARGIN_PT  = 8f   // headroom above/below the shaft's actual drawn radius
 
 private const val COMPRESS_TRIGGER_PT = 220f
+// Classic central gap; breakPairLayout may widen it to keep the pair clear.
 private const val ZIGZAG_GAP_MAX_PT   = 20f
 
 // Measured-Ø callouts (geom/WearDiaCalloutLayout.kt drives placement; these size the text

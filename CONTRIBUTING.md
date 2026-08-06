@@ -17,7 +17,8 @@ or renderers.
 **State/VM:** `ShaftViewModel` exposes StateFlow for spec, unit, grid, and project meta.
 The VM parses/normalizes UI input → mm. Always instantiate via `ShaftViewModelFactory`.
 
-**UI:** `ShaftEditorRoute` hosts the sidebar and the Schematic / Runout / Wear tabs;
+**UI:** `ShaftEditorRoute` hosts the sidebar and the five editor tabs (`EditorTab.kt`):
+Schematic / Runout Sheet / Wear Document / Undercut Drawing / Consolidated Output;
 `ShaftRoute` wires the VM to `ShaftScreen` and owns SAF PDF export. `ShaftScreen` is
 pure Compose Material3 UI. The carousel lives in `ComponentCarousel.kt`.
 
@@ -25,8 +26,10 @@ pure Compose Material3 UI. The carousel lives in `ComponentCarousel.kt`.
 
 - Preview: `ShaftDrawing` (Compose host) → `ShaftLayout.compute()` (mm→px mapping)
   → `ShaftRenderer` (DrawScope geometry).
-- PDF: `ShaftPdfComposer` / `RunoutPdfComposer` / `WearPdfComposer` use the same model
-  and layout math but draw with **their own Canvas code**.
+- PDF: `ShaftPdfComposer` / `RunoutPdfComposer` / `WearPdfComposer` /
+  `UndercutPdfComposer` use the same model but draw with **their own Canvas code** and
+  their own scale math (never `ShaftLayout`). Four composers, five documents — the
+  consolidated sheet is `composeRunoutPdf(consolidated = true)`.
 
 A fix in the preview renderer does **not** propagate to the PDF composers (or vice
 versa) automatically. When you change how a component draws, check both paths.
@@ -34,7 +37,8 @@ versa) automatically. When you change how a component draws, check both paths.
 ## Data flow
 
 1. User edits fields → `ShaftScreen` calls VM setters (commit-on-blur; see
-   `docs/NumberField.md` — a tap-and-leave with no edit must be a no-op).
+   `app/src/main/java/com/android/shaftschematic/docs/NumberField.md` — a tap-and-leave
+   with no edit must be a no-op).
 2. VM updates StateFlow → routes/screens recompose.
 3. Preview and documents render from the **resolved** component list
    (`ui/resolved/ResolvedComponent.kt`), which derives auto-bodies for unoccupied
@@ -67,7 +71,8 @@ versa) automatically. When you change how a component draws, check both paths.
 5. **PDF:** add drawing code to the PDF composer(s) — this is a separate path and
    will not pick up the preview code.
 6. **UI:** add the carousel card and the Add dialog. They must mirror each other
-   control-for-control (see `CLAUDE.md` invariants and `docs/AddComponentDialogs.md`).
+   control-for-control (see `CLAUDE.md` invariants and
+   `app/src/main/java/com/android/shaftschematic/docs/AddComponentDialogs.md`).
 7. **Validation:** update validation/warning rules if the component affects coverage
    or collisions.
 8. **Docs:** add or update the contract doc in the in-source `docs/` folder.

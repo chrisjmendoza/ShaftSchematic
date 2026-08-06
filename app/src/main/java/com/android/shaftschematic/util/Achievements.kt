@@ -35,6 +35,4 @@ object Achievements {
             description = "Unlock Developer options.",
         ),
     )
-
-    fun byId(id: String): Definition? = all.firstOrNull { it.id == id }
 }

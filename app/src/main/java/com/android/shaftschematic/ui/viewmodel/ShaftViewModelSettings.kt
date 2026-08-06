@@ -3,8 +3,13 @@ package com.android.shaftschematic.ui.viewmodel
 import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.pdf.PdfExportMode
+import com.android.shaftschematic.settings.AppThemeMode
+import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
+import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.PreviewColorSetting
+import com.android.shaftschematic.util.UndercutShadeColor
+import com.android.shaftschematic.util.UndercutShadeIntensity
 import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.launch
 
@@ -72,6 +77,20 @@ fun ShaftViewModel.setPdfShadedLiners(v: Boolean, persist: Boolean = true) {
     if (persist) viewModelScope.launch { SettingsStore.setPdfShadedLiners(getApplication(), v) }
 }
 
+fun ShaftViewModel.setPdfCurveLoHeightIn(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN)
+    _pdfCurveLoHeightIn.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(curveLoHeightIn = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfCurveLoHeightIn(getApplication(), clamped) }
+}
+
+fun ShaftViewModel.setPdfCurveHiHeightIn(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN)
+    _pdfCurveHiHeightIn.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(curveHiHeightIn = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfCurveHiHeightIn(getApplication(), clamped) }
+}
+
 fun ShaftViewModel.setPdfOalSpacingFactor(factor: Float, persist: Boolean = true) {
     SettingsStore.updatePdfPrefs { it.copy(oalSpacingFactor = factor) }
     if (persist) {
@@ -89,6 +108,45 @@ fun ShaftViewModel.setPdfExportMode(mode: PdfExportMode, persist: Boolean = true
 /** Session-only (never persisted) — see the [ShaftViewModel] property KDoc. */
 fun ShaftViewModel.setPdfBlankDraft(enabled: Boolean) {
     _pdfBlankDraft.value = enabled
+}
+
+// ── Appearance (app-wide theme) ──────────────────────────────────────────────
+
+fun ShaftViewModel.setThemeMode(mode: AppThemeMode, persist: Boolean = true) {
+    _themeMode.value = mode
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setThemeMode(getApplication(), mode) }
+    }
+}
+
+fun ShaftViewModel.setHighContrast(enabled: Boolean, persist: Boolean = true) {
+    _highContrast.value = enabled
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setHighContrast(getApplication(), enabled) }
+    }
+}
+
+// ── Undercut drawing style (on-screen sheet only) ────────────────────────────
+
+fun ShaftViewModel.setUndercutLineArt(enabled: Boolean, persist: Boolean = true) {
+    _undercutStyle.value = _undercutStyle.value.copy(lineArt = enabled)
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setUndercutLineArt(getApplication(), enabled) }
+    }
+}
+
+fun ShaftViewModel.setUndercutShadeColor(color: UndercutShadeColor, persist: Boolean = true) {
+    _undercutStyle.value = _undercutStyle.value.copy(shadeColor = color)
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setUndercutShadeColor(getApplication(), color) }
+    }
+}
+
+fun ShaftViewModel.setUndercutShadeIntensity(intensity: UndercutShadeIntensity, persist: Boolean = true) {
+    _undercutStyle.value = _undercutStyle.value.copy(intensity = intensity)
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setUndercutShadeIntensity(getApplication(), intensity) }
+    }
 }
 
 // ── Preview / rendering preferences ──────────────────────────────────────────

@@ -3,7 +3,6 @@ package com.android.shaftschematic.geom
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import kotlin.math.abs
-import kotlin.math.max
 
 private const val EPS_MM = 1e-3
 

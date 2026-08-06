@@ -81,7 +81,6 @@ import com.android.shaftschematic.geom.pickPitAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.model.WearDiaReading
 import com.android.shaftschematic.model.WearPit
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
@@ -89,6 +88,7 @@ import com.android.shaftschematic.model.WearSpotReference
 import com.android.shaftschematic.pdf.formatDiaWithUnit
 import com.android.shaftschematic.ui.input.NumericInputField
 import com.android.shaftschematic.ui.resolved.ResolvedBody
+import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
@@ -225,13 +225,15 @@ fun ComponentWearDetailOverlay(
         }
     }
 
-    // ── Theme colors captured here — the Canvas draw scope below must not read MaterialTheme ──
-    val outlineColor = MaterialTheme.colorScheme.onSurface
-    val fillColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f)
-    val wearTintColor = MaterialTheme.colorScheme.error.copy(alpha = 0.20f)
-    val wearHatchColor = MaterialTheme.colorScheme.error.copy(alpha = 0.80f)
-    val pitColor = MaterialTheme.colorScheme.error
-    val textColorArgb = MaterialTheme.colorScheme.onSurface.toArgb()
+    // ── Colors captured here — the Canvas draw scope below must not read MaterialTheme ──
+    // Sheet ink is FIXED (SheetInk), never theme colors: the canvas is a paper-white sheet
+    // in every theme, and dark theme's near-white onSurface would print invisible ink on it.
+    val outlineColor = SheetInk.Outline
+    val fillColor = SheetInk.LinerTint.copy(alpha = 0.18f)
+    val wearTintColor = SheetInk.WearRed.copy(alpha = 0.20f)
+    val wearHatchColor = SheetInk.WearRed.copy(alpha = 0.80f)
+    val pitColor = SheetInk.WearRed
+    val textColorArgb = SheetInk.Outline.toArgb()
     val textPaint = remember(textColorArgb) {
         android.graphics.Paint().apply {
             isAntiAlias = true

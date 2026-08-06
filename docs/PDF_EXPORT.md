@@ -1,9 +1,17 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-07-28 — §5.5 wear-document blank-draft bullet corrected (blank mode keeps
+Last updated: 2026-08-05 (b) — §1/§3 name the single real fit function
+(`computeDetailPtPerMm`; the `computeBodyOnlyPtPerMm`/`computePdfPtPerMmFitAxes` names never
+existed); §4 units corrected (printed values follow the document's ACTIVE unit, not always
+mm); §5.5 gains the Tune options-sheet inventory; §5.7 names only the public
+`fracFitFactor`. 2026-08-05 — §5.7 gains the default sizing curve (4" → 0.75", 8" → 1.25",
+linear, superseding the flat visual scale as the 100% base) with user-adjustable anchor
+heights (Settings → PDF Export → "Default drawing size", `PdfPrefs.curveLo/HiHeightIn`);
+§6.4 documents the S-break pair's minimum-gap layout (`breakPairLayout`, ≥ 1 pt of
+daylight) and the foreshortening trigger. Previously 2026-07-28 — §5.5 wear-document blank-draft bullet corrected (blank mode keeps
 the profile AND every liner's detail strip since 2026-07-28, values-out only) and extended
 for measured-Ø readings; §5.3 gains a pointer to the wear document's own measured-Ø callout
-system. 2026-07-22 — added §5.4 Inline Dimension Text (dimension values now seated in a break in the line, drafting-convention style, PDF export + preview); added §5.3 On-Shaft Diameter Callouts (body/liner OD leaders now all-BELOW, ≤3-decimal formatting, two-tier stacking); previously 2026-07-18 fixed page orientation (landscape, not portrait), clarified preview/PDF as separate drawing paths (named the three fit functions), replaced the "no display compression" invariant with the actual round-stock S-break behavior, fixed the AUDIT.md path.
+system. 2026-07-22 — added §5.4 Inline Dimension Text (dimension values now seated in a break in the line, drafting-convention style, PDF export + preview); added §5.3 On-Shaft Diameter Callouts (body/liner OD leaders now all-BELOW, ≤3-decimal formatting, two-tier stacking); previously 2026-07-18 fixed page orientation (landscape, not portrait), clarified preview/PDF as separate drawing paths (fit functions named; corrected 2026-08-05), replaced the "no display compression" invariant with the actual round-stock S-break behavior, fixed the AUDIT.md path.
 
 ## Purpose
 Defines the **single-page** PDF export process.  
@@ -19,12 +27,13 @@ Preview rendering (`ShaftLayout` + `ShaftRenderer`) and the PDF composers (`Shaf
 `RunoutPdfComposer`, `WearPdfComposer`) are **SEPARATE drawing paths**. They share model geometry
 (mm) and layout-math *concepts* but not code:
 - `ShaftPdfComposer` never calls `ShaftLayout.compute()`. It computes its own point-per-mm scale
-  via three fit functions: `computeBodyOnlyPtPerMm`, `computeDetailPtPerMm`,
-  `computePdfPtPerMmFitAxes` (which one is used depends on export mode/body-only vs. detail).
+  via a single fit function, `computeDetailPtPerMm`, which fits `overallLengthMm` /
+  `maxOuterDiaMm` into the geometry rect. (The height it actually draws at is then set by the
+  sizing curve + "Shaft height" slider — see §5.7.)
 - Unit formatting conventions match the preview, but the pixel/point math is independent.
 
-**Note:** `ShaftPdfComposer` contains its own geometry drawing functions (`drawBodiesPlain`,
-`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) separate from
+**Note:** `ShaftPdfComposer` contains its own geometry drawing functions
+(`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) separate from
 `ShaftRenderer`. This is an intentional architectural split, not a bug to unify — see
 `docs/archive/AUDIT.md` §4.4 for history.
 
@@ -53,11 +62,11 @@ PDF uses its own fixed black-and-white styling inside `ShaftPdfComposer`.
 # 3. Layout Flow
 
 1. Define content bounds based on margins.
-2. Compute `ptPerMm` using one of `ShaftPdfComposer`'s own fit functions (not `ShaftLayout`):
-   `computeBodyOnlyPtPerMm`, `computeDetailPtPerMm`, or `computePdfPtPerMmFitAxes`, each taking
-   the geometry rect's width/height in points and fitting `overallLengthMm` / `maxOuterDiaMm`.
-3. Draw shaft geometry using `ShaftPdfComposer`'s own drawing functions (`drawBodiesPlain` /
-   `drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) — **not**
+2. Compute `ptPerMm` with `ShaftPdfComposer`'s own fit function (not `ShaftLayout`):
+   `computeDetailPtPerMm`, taking the geometry rect's width/height in points and fitting
+   `overallLengthMm` / `maxOuterDiaMm`.
+3. Draw shaft geometry using `ShaftPdfComposer`'s own drawing functions
+   (`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) — **not**
    `ShaftRenderer`.
 4. Draw title block.
 
@@ -72,7 +81,9 @@ Top of page, full width.
 - Project / Drawing Title
 - Description (optional)
 - Date
-- Units (always “mm”)
+- Units — printed values follow the document's **active unit** (inches or mm), not always
+  mm. Every printed length/diameter goes through `formatLenWithUnit` / `formatDiaWithUnit`
+  with the document's `UnitSystem`; only the model layer is unconditionally mm.
 - Overall Length
 - Scale (“1:1”, “2:1”, or “Scale to Fit”)
 - Drawn By (optional)
@@ -244,11 +255,133 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   on-device report) and the original switch in the Tune options sheet. Both drive
   `setPdfBlankDraft`, so they can never disagree; toggling re-renders the preview live.
 
+**The Tune options sheet** (`PdfPreviewScreen.kt`) hosts, in order: Blank draft (write-in),
+Component labels, Line thickness, the **"Shaft height" slider** and the **liner compression**
+control (both §5.7 — the same per-job `RunoutConfig` values the Consolidated Output tab
+exposes, §5.6), Measurement reference, and the Shade-in-PDF checkboxes. The sheet scrolls,
+capped at 78% of screen height so it never covers the preview entirely.
+
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
 `PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print
 framework — Print buttons live on the PDF preview top bar and the runout/wear screens.
 A print and an export of the same document are composed by the same call and are
 therefore identical.
+
+---
+
+# 5.6 The Consolidated Output tab (variants + batch export)
+
+The **Consolidated Output** tab (`EditorTab.OUTPUT`, `ui/screen/OutputRoute.kt`) is the
+one-stop surface for the consolidated sheet; every original tab keeps its own hard-wired
+preview/print/export producing its own document (the Runout tab's is the **classic**
+standalone runout sheet, `composeRunoutPdf(consolidated = false)`, suffix `_runout`).
+
+**Sheet content** (`ConsolidatedVariant`): the schematic's dimension rails + spec footer
+are always on; the runout bubbles/TIR line and the wear info (marks, worn sections,
+in-profile Ø values) are each electable — **All three** (default) | Schematic + Runout |
+Schematic + Wear. Electing bubbles out returns their lanes to the shaft area. Selection
+is session-only (resets to All three).
+
+**Also on this tab**: the per-job "Shaft height" slider (§5.7), the worn-section editor
+(sections print on this sheet), the blank-draft toggle, and **Export all** — checkboxes
+for the five documents (consolidated [current variant], schematic, runout, wear,
+undercut; all on by default) written to one picked folder (`OpenDocumentTree` +
+`createPdfInTree`), each through the hardened write path, with a written/failed result
+line. Nothing auto-opens after a batch.
+
+**Hardened writes everywhere**: every SAF export in the app goes through
+`util/PdfSafExport.writeShaftPdfToUri` — a composer throw repaints the page as a valid
+"PDF export failed" error page and still writes it, so a truncated/unopenable file is
+never left behind; success-only follow-ups (auto-open, the first-PDF achievement) key off
+its Boolean. The collision export gate (`exportPdfGate`) guards the schematic, runout,
+wear, undercut, and consolidated surfaces alike.
+
+---
+
+# 5.7 "Shaft height" slider (per-job profile exaggeration)
+
+`RunoutConfig.heightScale` (per-job, in the `.shaft` envelope; legacy files default to
+100%) multiplies the solved profile scale on the **runout/consolidated sheets AND the
+schematic** — one value behind every drawing output (slider on the Consolidated Output
+tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
+
+- Range 50%–300% (`PROFILE_HEIGHT_SCALE_MIN/MAX`).
+- **100% = the default sizing curve** (`defaultShaftHeightPt`, `geom/ProfileCompression.kt`):
+  the STANDARD anchors are **proportional** — 8" → 1", 6" → 3/4", 4" → 1/2" on paper,
+  a line through the origin (the hand-sheet rule from the original rulered sketches;
+  taller defaults read "chubby" on-device) — continuing past both anchors until the
+  1.5" ceiling. `defaultVisualScale` feeds every composer solve and both slider surfaces —
+  the runout/consolidated sheet maxes it with the width-fit and in-profile value
+  demands; the schematic uses the curve alone. The flat 0.40 pt/mm
+  `VISUAL_DIA_SCALE_PT_PER_MM` remains only as the degenerate-diameter fallback.
+- **The anchor heights are settings** (Settings → PDF Export → "Default drawing size";
+  `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`, persisted app-wide, standard
+  0.5"/1.0", settable 0.25"–1.5" in 1/16" steps): change what a 4" and an 8"
+  shaft draw and the whole line re-derives — no code edit (a taller pair like
+  0.75"/1.25" is a deliberate choice here). The anchor DIAMETERS stay fixed at 4"/8".
+  An inverted pair (8" set below 4") flattens the line at the 4" value in the
+  geometry — a larger shaft never draws smaller — and the Settings page warns inline.
+  A "Standard" button restores the proportional pair.
+- **Tapers may shrink but never equalize** (on-device direction: two very different
+  taper lengths must never draw equal): tapers carry NO flat width floor — a flat
+  floor equalizes unequal tapers when both clamp to it — and use a ratio-preserving
+  fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` = 0.5, λ-fit like
+  the liner raises, so the drawn height never yields to it; ratio preservation is
+  structural — both tapers scale by the same factor at every squeeze). The SCHEMATIC
+  composer additionally uses lean floors (`SCHEMATIC_MIN_THREAD_PT` 28 /
+  `_BODY_RUN_PT` 40 / `_LINER_PT` 56) — its values live on dimension rails and
+  callouts, so proportion wins there; the runout/consolidated sheet keeps the writable
+  `PROFILE_MIN_*` floors for in-profile values.
+- **Body runs may shrink but never equalize either — balance** (on-device report: "the
+  liners are taking up way too much space… I can't tell that the span between the aft
+  and mid liner is longer. There has to be some kind of balance"): the body gaps between
+  features carry a ratio-preserving fraction-of-true floor of their own,
+  `PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` = 0.35, and it joins the **same single λ pool** as
+  the taper and liner raises (`walkSpans`/`buildCompressedProfileXMap`/`fracFitFactor`
+  take it as `gapMinFracOfTrue`). Two consequences. (1) A liner raise can no longer
+  consume the page: when the pool overflows, liners and body runs shrink *together*
+  under one λ instead of the liners taking all the slack and leaving every gap clamped
+  to its flat 64 pt floor — which is what equalized them. (2) Relative lengths always
+  read **within every kind** — a 900 mm body run still draws 1.8× a 500 mm one, exactly
+  as two unequal tapers keep their ratio, because a common λ scales them identically.
+  The "the page affords liners ~N% of true length" readout
+  (`estimatedLinerKeptFracOfTrue`) reports this shared λ, so it now settles lower than
+  it did with fixed gap floors — that lower number is the balance, not a regression.
+  Height precedence is untouched: `solveMaxProfileScale` stays frac-blind, so no body
+  run (short of a keyway pin) ever lowers the drawn shaft.
+- The **1.5" ceiling is absolute** (`PROFILE_MAX_SHAFT_HEIGHT_PT` = 108 pt): the drawn
+  shaft never exceeds 1.5" on paper at any slider position — a short shaft whose
+  width-fit would draw taller is capped too, keeps true proportion, and simply doesn't
+  span the page (room for the dimension rails). The page budget caps everything.
+  Pure arithmetic: `exaggeratedProfileScale` (`geom/ProfileCompression.kt`).
+- Slider UX: selects the drawn height **by value in paper inches** — the track runs
+  from the 50% height to 1.5" (or the shaft's 300% height when less), and the picked
+  value converts back to the stored multiplier
+  (`drawnShaftHeightPt`/`heightFracForDrawnHeight`, pure). Commits near the standard
+  height snap to exactly 100% (`snappedHeightScale`); a "Standard (X″)" button restores
+  the default.
+- **Liner compression (per-job pair, same two surfaces)**: the measured components —
+  tapers and liners — are what the sheets are about, so liners can be held proportional
+  lengthwise. **The drawing height takes precedence; liner compression is secondary**
+  (on-device direction): neither control ever changes the drawn shaft height. Checkbox
+  "Keep liners proportional lengthwise" (`RunoutConfig.linersProportional`): liners hold
+  true-scale width up to what the page affords at the selected height; the slider is
+  disabled while checked. Slider "Liner compression" (`RunoutConfig.linerCompression`,
+  0–100%, default 100%): how far liners may foreshorten below true scale — 100% = down
+  to the 100 pt writable floor (historical behavior), 0% = not at all. Both feed the
+  derived `linerMinFracOfTrue` → `ProfileFeatureSpan.minWidthFracOfTrue` (geom,
+  unit-tested): a BEST-EFFORT width floor of `max(100pt, frac × true width)` — the
+  scale solve ignores it entirely, and when the raised floors don't fit at the solved
+  scale they shrink uniformly to fit (`fracFitFactor`); flat floors
+  and keyway pins are untouched, and only keyway pins may still yield the height.
+  Applies to the schematic (`composeShaftPdf(linerMinFracOfTrue)`) and the
+  runout/consolidated sheets (from `config`); rides the `.shaft` envelope (additive,
+  legacy default = free compression). The readout under the slider shows LIVE what
+  liners actually keep — "Liners keep at least ~N% of true length. The drawn height
+  never changes." (`estimatedLinerKeptFracOfTrue`, `ShaftHeightSlider.kt`,
+  unit-tested).
+
+---
 
 ---
 
@@ -259,10 +392,15 @@ therefore identical.
 3. No BOM tables.
 4. **Round-stock display compression exists for long bodies** (this replaces an earlier "no
    display compression" claim, which is no longer true). `ShaftPdfComposer.drawBodiesCompressedCenterBreak()`
-   triggers per-body when that body's on-paper length reaches `COMPRESS_TRIGGER_PT` (220 pt): the
+   triggers per-body when that body's on-paper length reaches `COMPRESS_TRIGGER_PT` (220 pt) —
+   or whenever the compressed profile x-map actually foreshortens it, whichever comes first: the
    body is drawn as two shortened stubs, each capped with an S-curve "round-stock break" symbol
    (`pdf/BreakSymbol.kt`, `drawBreakEdge()`) instead of a straight end cap, so the drawing reads as
-   a foreshortened cylindrical bar rather than a literal-length rectangle. The footer prints an
+   a foreshortened cylindrical bar rather than a literal-length rectangle. The pair's gap and
+   amplitude come from `breakPairLayout` (same file, unit-tested): the classic gap (≤ 20 pt,
+   ≤ ¼ of the run) widens up to half the run when the glyph needs the room, then the amplitude
+   flattens, so the two edges' curves always keep ≥ 1 pt of daylight and never overlap
+   (on-device report). The footer prints an
    explanatory compression note (`showCompressionNote`) whenever any drawn body triggers this.
    Only bodies are compressed this way — tapers/threads/liners are never broken.
 5. No component overlays, cross-sections, or detailed machinist symbols (aside from the

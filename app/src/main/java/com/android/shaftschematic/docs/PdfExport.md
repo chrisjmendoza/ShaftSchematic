@@ -29,8 +29,12 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `shadedTapers` | `false` | Fill taper trapezoids with light grey |
 | `shadedLiners` | `false` | Fill liner sections with light grey |
 | `oalSpacingFactor` | `2.5` | Extra gap above OAL rail (1.0–6.0) |
+| `curveLoHeightIn` | `0.5` | Sizing-curve anchor: drawn height (paper in) of a 4" shaft at 100% (0.25–1.5) |
+| `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
 
-All fields are also reachable in the preview screen's Tune sheet.
+All fields are also reachable in the preview screen's Tune sheet, except the sizing-curve
+anchors, which live in Settings → PDF Export → "Default drawing size" (app-level default;
+the per-job "Shaft height" slider multiplies on top).
 
 ---
 
@@ -39,16 +43,30 @@ All fields are also reachable in the preview screen's Tune sheet.
 Full-resolution in-memory preview via `PdfDocument` + `PdfRenderer` (2× raster),
 pinch-to-zoom 0.5×–8×, double-tap reset.
 
-- **Options sheet (Tune icon):** component labels, line thickness (50–200%),
-  measurement reference (Auto/AFT/FWD), shade bodies/tapers/liners — all bound to
-  `PdfPrefs` via VM setters, persisted to DataStore, applied live (each option is a
-  `LaunchedEffect` key).
+- **Options sheet (Tune icon):** blank draft (write-in) toggle, component labels, line
+  thickness (50–200%), "Shaft height" slider, liner compression control, measurement
+  reference (Auto/AFT/FWD), shade bodies/tapers/liners — bound to `PdfPrefs` (or, for the
+  height/liner-compression pair, the per-job `RunoutConfig`) via VM setters, persisted,
+  applied live (each option is a `LaunchedEffect` key). Blank draft is session-scoped, not
+  persisted.
+  - Line thickness is the shared `LineThicknessSlider` (`ShaftHeightSlider.kt`), used by
+    this sheet and the runout/wear options sheet: a "Default (100%)" reset button plus a
+    ±5% magnetic detent on slider release (`snappedLineThickness`), the same posture as
+    the shaft-height slider's Standard button, so 100% never has to be fished for by
+    pixel (on-device report). The Settings → Editor Screen control keeps its own layout
+    (it adds a typed % field, which is never snapped) but shares the detent and button.
+  - The sheet's content is taller than a phone screen, so it carries its own
+    `verticalScroll` plus `navigationBarsPadding()` — without them the bottom rows clip
+    mid-checkbox behind the navigation bar. Its height is capped at **78% of the screen**
+    (`LocalConfiguration.screenHeightDp * 0.78f`): a sheet expanded to the status bar
+    leaves no edge to swipe it back down by (on-device report).
 - **Orientation:** `DisposableEffect` unlocks rotation on entry and restores the
   portrait lock on dispose — every other screen stays portrait-only.
 - **Pipeline:** snapshot `vm.currentPdfPrefs` on main thread → `Dispatchers.IO` →
   temp PDF via `composeShaftPdf` → rasterize page 0 at 2× → pan/zoom Canvas.
   Temp file deleted after rasterization; failures show an error, never crash.
-- **Top bar:** Back · Tune · Refresh (reset zoom/pan) · PDF (`onExport()` → SAF).
+- **Top bar:** Back · Tune · Refresh (reset zoom/pan) · Print (system print of a freshly
+  composed page, state snapshotted on the UI thread) · PDF (`onExport()` → SAF).
 
 ## Invariants
 - No model state mutated in either screen — rendering and preference changes only.

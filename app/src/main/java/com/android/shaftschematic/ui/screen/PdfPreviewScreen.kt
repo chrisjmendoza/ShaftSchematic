@@ -23,8 +23,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -44,7 +49,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -69,8 +73,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.maxOuterDiaMm
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.settings.PdfPrefs
@@ -121,6 +127,9 @@ fun PdfPreviewScreen(
 
     val spec by vm.spec.collectAsState()
     val unit by vm.unit.collectAsState()
+    // The per-job "Shaft height" multiplier lives in RunoutConfig — ONE value behind the
+    // schematic, the runout sheet, and the consolidated output.
+    val runoutConfig by vm.runoutConfig.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val pdfBlankDraft by vm.pdfBlankDraft.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -150,12 +159,15 @@ fun PdfPreviewScreen(
 
     LaunchedEffect(spec, unit, project, options, resolvedComponents, lineThicknessScale,
                    pdfShowComponentTitles, pdfTieringMode,
-                   pdfShadedBodies, pdfShadedTapers, pdfShadedLiners) {
+                   pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
+                   runoutConfig.heightScale, runoutConfig.linerMinFracOfTrue) {
         isLoading = true
         errorMessage = null
         // Snapshot on the main thread before switching to IO.
         val pdfPrefsSnapshot = vm.currentPdfPrefs
         val thicknessScaleSnapshot = lineThicknessScale
+        val heightScaleSnapshot = runoutConfig.heightScale
+        val linerFracSnapshot = runoutConfig.linerMinFracOfTrue
         val bmp = withContext(Dispatchers.IO) {
             renderPdfPreviewBitmap(
                 context = ctx,
@@ -167,6 +179,8 @@ fun PdfPreviewScreen(
                 options = options,
                 resolvedComponents = resolvedComponents,
                 lineThicknessScale = thicknessScaleSnapshot,
+                heightScale = heightScaleSnapshot,
+                linerMinFracOfTrue = linerFracSnapshot,
             )
         }
         if (bmp != null) {
@@ -252,6 +266,8 @@ fun PdfPreviewScreen(
                         val resolvedSnapshot = resolvedComponents.takeIf { it.isNotEmpty() }
                         val prefsSnapshot = vm.currentPdfPrefs
                         val thicknessSnapshot = lineThicknessScale
+                        val heightSnapshot = runoutConfig.heightScale
+                        val linerFracSnapshot = runoutConfig.linerMinFracOfTrue
                         val versionSnapshot = appVersionName(ctx)
                         printShaftPdfPage(ctx, jobName) { page ->
                             composeShaftPdf(
@@ -265,6 +281,8 @@ fun PdfPreviewScreen(
                                 options = optionsSnapshot,
                                 resolvedComponents = resolvedSnapshot,
                                 lineThicknessScale = thicknessSnapshot,
+                                heightScale = heightSnapshot,
+                                linerMinFracOfTrue = linerFracSnapshot,
                             )
                         }
                     }) {
@@ -374,9 +392,13 @@ fun PdfPreviewScreen(
         ) {
             PdfOptionsSheet(
                 vm = vm,
+                spec = spec,
                 pdfShowComponentTitles = pdfShowComponentTitles,
                 pdfTieringMode = pdfTieringMode,
                 lineThicknessScale = lineThicknessScale,
+                heightScale = runoutConfig.heightScale,
+                linersProportional = runoutConfig.linersProportional,
+                linerCompression = runoutConfig.linerCompression,
                 pdfShadedBodies = pdfShadedBodies,
                 pdfShadedTapers = pdfShadedTapers,
                 pdfShadedLiners = pdfShadedLiners,
@@ -404,6 +426,8 @@ private fun renderPdfPreviewBitmap(
     options: PdfExportOptions,
     resolvedComponents: List<ResolvedComponent>,
     lineThicknessScale: Float = 1.0f,
+    heightScale: Float = 1.0f,
+    linerMinFracOfTrue: Float = 0f,
 ): Bitmap? = runCatching {
     // Step 1 – compose the PDF into a temp file.
     // Use createTempFile so concurrent preview renders don't collide on the same path.
@@ -424,6 +448,8 @@ private fun renderPdfPreviewBitmap(
             options = options,
             resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
             lineThicknessScale = lineThicknessScale,
+            heightScale = heightScale,
+            linerMinFracOfTrue = linerMinFracOfTrue,
         )
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
@@ -470,17 +496,29 @@ private fun appVersionName(context: Context): String = runCatching {
 @Composable
 private fun PdfOptionsSheet(
     vm: ShaftViewModel,
+    spec: ShaftSpec,
     pdfShowComponentTitles: Boolean,
     pdfTieringMode: PdfTieringMode,
     lineThicknessScale: Float,
+    heightScale: Float,
+    linersProportional: Boolean,
+    linerCompression: Float,
     pdfShadedBodies: Boolean,
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
     pdfBlankDraft: Boolean,
 ) {
+    // Scrollable + inset-padded: the sheet's content is taller than a phone screen, so
+    // without its own scroll the bottom rows clip mid-checkbox behind the navigation bar.
+    // Height is capped below full screen — a sheet expanded to the status bar leaves no
+    // edge to swipe it back down by (on-device report).
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.78f).dp
     Column(
         Modifier
             .fillMaxWidth()
+            .heightIn(max = maxSheetHeight)
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
         Text("PDF Options", style = MaterialTheme.typography.titleMedium)
@@ -521,30 +559,47 @@ private fun PdfOptionsSheet(
         Spacer(Modifier.height(12.dp))
 
         // ── Line thickness ───────────────────────────────────────────────────
-        // Track the drag locally; commit once on release. Committing per drag frame
-        // writes DataStore and re-renders the whole PDF preview each frame.
-        var thicknessDrag by remember { mutableStateOf<Float?>(null) }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Line thickness  ${((thicknessDrag ?: lineThicknessScale) * 100).roundToInt()}%",
-                style = MaterialTheme.typography.titleSmall,
-            )
-        }
-        Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("50%", style = MaterialTheme.typography.bodySmall)
-            Slider(
-                value = thicknessDrag ?: lineThicknessScale,
-                onValueChange = { thicknessDrag = it },
-                onValueChangeFinished = {
-                    thicknessDrag?.let { vm.setLineThicknessScale(it) }
-                    thicknessDrag = null
-                },
-                valueRange = 0.5f..2.0f,
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-            )
-            Text("200%", style = MaterialTheme.typography.bodySmall)
-        }
+        LineThicknessSlider(
+            scale = lineThicknessScale,
+            onCommit = { vm.setLineThicknessScale(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Shaft height ─────────────────────────────────────────────────────
+        // The same per-job multiplier the runout / consolidated sheets carry
+        // (`RunoutConfig.heightScale`) — one slider value behind every drawing
+        // (on-device request: the schematic was meant to follow it too). Selected by
+        // drawn-height VALUE in paper inches; the schematic's base is the default
+        // sizing curve at the configured anchor heights, no width-fit term.
+        val sliderDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) }
+        val curveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
+        val curveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
+        val sliderBase = defaultVisualScale(sliderDiaMm, curveLoHeightIn * 72f, curveHiHeightIn * 72f)
+        ShaftHeightSlider(
+            heightScale = heightScale,
+            baseScale = sliderBase,
+            maxDiaMm = sliderDiaMm,
+            onCommit = { vm.setRunoutHeightScale(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Liner compression ────────────────────────────────────────────────
+        // Same per-job pair as the Consolidated Output tab (`RunoutConfig`).
+        LinerCompressionControl(
+            linersProportional = linersProportional,
+            linerCompression = linerCompression,
+            estimateKeptFrac = { frac ->
+                estimatedLinerKeptFracOfTrue(spec, sliderBase, heightScale, frac)
+            },
+            onSetProportional = { vm.setLinersProportional(it) },
+            onSetCompression = { vm.setLinerCompression(it) },
+        )
 
         Spacer(Modifier.height(12.dp))
         HorizontalDivider()

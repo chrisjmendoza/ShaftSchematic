@@ -18,7 +18,8 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
  * ShaftEditorRoute
  *
  * Top-level container for the editor document views:
- * Schematic (shaft editor), Runout Sheet, Wear Document, and Undercut Drawing.
+ * Schematic (shaft editor), Runout Sheet, Wear Document, Undercut Drawing, and
+ * Consolidated Output.
  *
  * ## Navigation model
  * Navigation is handled by [EditorSidebarOverlay], which is a modal overlay drawer.
@@ -29,9 +30,9 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
  * on phones, especially smaller devices.
  *
  * ## "Built" definition
- * The Runout, Wear, and Undercut tabs are enabled once the spec has ≥1 component and a
- * non-zero OAL. If the shaft loses "built" status (all components deleted) the active tab
- * reverts to Schematic automatically.
+ * The Runout, Wear, Undercut, and Consolidated Output tabs are enabled once the spec has
+ * ≥1 component and a non-zero OAL. If the shaft loses "built" status (all components
+ * deleted) the active tab reverts to Schematic automatically.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +65,12 @@ fun ShaftEditorRoute(
         activeTab = EditorTab.SCHEMATIC
     }
 
+    // Retirement fallback: if WEAR_TAB_ENABLED is turned off, a restored session whose
+    // active tab was Wear lands on the Runout tab.
+    if (!WEAR_TAB_ENABLED && activeTab == EditorTab.WEAR) {
+        activeTab = EditorTab.RUNOUT
+    }
+
     // Full-size Box so the sidebar can overlay the content
     Box(Modifier.fillMaxSize()) {
 
@@ -93,6 +100,11 @@ fun ShaftEditorRoute(
             )
 
             EditorTab.UNDERCUT -> UndercutRoute(
+                vm = vm,
+                onOpenSidebar = { sidebarOpen = true },
+            )
+
+            EditorTab.OUTPUT -> OutputRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
             )

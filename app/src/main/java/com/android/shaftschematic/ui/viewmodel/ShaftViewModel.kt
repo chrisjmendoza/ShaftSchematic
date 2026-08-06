@@ -1,4 +1,5 @@
 package com.android.shaftschematic.ui.viewmodel
+import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
@@ -21,7 +22,6 @@ import com.android.shaftschematic.model.*
 import com.android.shaftschematic.model.snapForwardFrom
 import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.order.ComponentKind
-import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.clampPitAcrossFrac
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -29,6 +29,7 @@ import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorPreset
+import com.android.shaftschematic.util.UndercutStyle
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.parseToMm
@@ -37,7 +38,6 @@ import android.util.Log
 import com.android.shaftschematic.data.AutosaveManager
 import com.android.shaftschematic.data.isDefaultSession
 import com.android.shaftschematic.data.shouldWriteDraft
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.collectLatest
@@ -82,11 +82,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // docs/Autosave_Incident_2026-07-25.md.
     private val _drafts = MutableStateFlow<List<AutosaveManager.DraftEntry>>(emptyList())
     val drafts: StateFlow<List<AutosaveManager.DraftEntry>> = _drafts.asStateFlow()
-
-    /** Derived convenience: whether any draft exists (for Boolean-only callers). */
-    val hasDraft: StateFlow<Boolean> = _drafts
-        .map { it.isNotEmpty() }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // Per-editing-session draft identity. Minted on construction, re-minted on newDocument()
     // and importJson() so working on one document can never touch another's draft entry.
@@ -177,8 +172,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _savedSnapshot.value = buildCurrentSnapshot()
         // Remove this session's draft-ring entry NOW. The autosave observer only reaches its
         // dirty→clean removal branch on the next combine emission, which never comes when the
-        // user saves and navigates away without another edit — that left saved documents
-        // sitting in "Unsaved drafts" as stale "Untitled draft" rows. newDocument()/importJson()
+        // user saves and navigates away without another edit — deferring the removal would
+        // leave saved documents sitting in "Unsaved drafts" as stale "Untitled draft" rows.
+        // newDocument()/importJson()
         // drop draftPersisted to false *before* calling this, so an open/new never deletes the
         // previous session's safety-net draft.
         if (draftPersisted) {
@@ -245,6 +241,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfShadedLiners = MutableStateFlow(false)
     val pdfShadedLiners: StateFlow<Boolean> = _pdfShadedLiners.asStateFlow()
 
+    // Sizing-curve anchor heights (paper inches): what a 4" / 8" shaft draws by default.
+    internal val _pdfCurveLoHeightIn = MutableStateFlow(PdfPrefs().curveLoHeightIn)
+    val pdfCurveLoHeightIn: StateFlow<Float> = _pdfCurveLoHeightIn.asStateFlow()
+    internal val _pdfCurveHiHeightIn = MutableStateFlow(PdfPrefs().curveHiHeightIn)
+    val pdfCurveHiHeightIn: StateFlow<Float> = _pdfCurveHiHeightIn.asStateFlow()
+
     internal val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
 
@@ -255,6 +257,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     internal val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
+
+    // Appearance (app-wide theme; MainActivity collects these to pick the color scheme)
+    internal val _themeMode = MutableStateFlow(AppThemeMode.LIGHT)
+    val themeMode: StateFlow<AppThemeMode> = _themeMode.asStateFlow()
+
+    internal val _highContrast = MutableStateFlow(false)
+    val highContrast: StateFlow<Boolean> = _highContrast.asStateFlow()
+
+    // Undercut drawing style (on-screen sheet only; PDF keeps standard drawing colors)
+    internal val _undercutStyle = MutableStateFlow(UndercutStyle())
+    val undercutStyle: StateFlow<UndercutStyle> = _undercutStyle.asStateFlow()
 
     internal val _lineThicknessScale = MutableStateFlow(1.0f)
     val lineThicknessScale: StateFlow<Float> = _lineThicknessScale.asStateFlow()
@@ -386,6 +399,33 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutConfig.update { it.copy(tirDirection = direction) }
     }
 
+    /**
+     * "Shaft height" slider — exaggerate or shrink the drawn shaft on every drawing
+     * output: schematic, runout, and consolidated sheets (one per-job value). Clamped to
+     * the geom slider bounds; the composer additionally hard-caps the drawn height at 1.5"
+     * and the page budget.
+     */
+    fun setRunoutHeightScale(scale: Float) {
+        _runoutConfig.update {
+            it.copy(
+                heightScale = scale.coerceIn(
+                    com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MIN,
+                    com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MAX,
+                )
+            )
+        }
+    }
+
+    /** "Keep liners proportional lengthwise" — see [RunoutConfig.linersProportional]. */
+    fun setLinersProportional(proportional: Boolean) {
+        _runoutConfig.update { it.copy(linersProportional = proportional) }
+    }
+
+    /** "Liner compression" slider — see [RunoutConfig.linerCompression]. */
+    fun setLinerCompression(fraction: Float) {
+        _runoutConfig.update { it.copy(linerCompression = fraction.coerceIn(0f, 1f)) }
+    }
+
     // ── Runout per-station readings (bubble value + high-spot marker) ──────────
     // Reference-only data, same posture as _wearRecord below: plain state updates, no
     // geometry side effects. Keyed by (componentId, stationIndex). Both fields optional;
@@ -417,11 +457,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
         }
-    }
-
-    /** Remove the runout reading for a bubble. No-op if none recorded. */
-    fun clearRunoutReading(componentId: String, stationIndex: Int) {
-        _runoutReadings.update { it.without(componentId, stationIndex) }
     }
 
     // ── Liner wear inspection record ──────────────────────────────────────────
@@ -524,13 +559,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Change an existing pit's drawn size by [id]. No-op if the id is absent. */
-    fun updateWearPitSize(id: String, size: PitSize) {
-        _wearRecord.update { rec ->
-            rec.copy(pits = rec.pits.map { if (it.id == id) it.copy(size = size) else it })
-        }
-    }
-
     /** Remove a pit by [id]. Confirm-free — the detail canvas removes a pit by tapping its "X". */
     fun removeWearPit(id: String) {
         _wearRecord.update { rec -> rec.copy(pits = rec.pits.filterNot { it.id == id }) }
@@ -568,6 +596,61 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /** Remove a reading by [id]. Confirm-free — deleted from its edit dialog. */
     fun removeWearDiaReading(id: String) {
         _wearRecord.update { rec -> rec.copy(diaReadings = rec.diaReadings.filterNot { it.id == id }) }
+    }
+
+    // ── Worn sections (consolidated runout/wear sheet) ─────────────────────────
+    // Reference-only, same posture as pits/diaReadings: plain _wearRecord updates, no
+    // geometry side effects. Shaft-space canonical (no component key → no orphans).
+    // See model/WornSection.kt and docs/RunoutSheet.md (Worn Sections).
+
+    /**
+     * Add a designated worn section. [diaMm] values are the machinist's typed measurements,
+     * stored verbatim in list order. Returns the new id so the editor can follow the row.
+     */
+    fun addWornSection(
+        startFromAftMm: Float,
+        lengthMm: Float,
+        diaMm: List<Float>,
+        reference: UndercutReference,
+    ): String {
+        val section = WornSection(
+            startFromAftMm = max(0f, startFromAftMm),
+            lengthMm = max(0f, lengthMm),
+            diaMm = diaMm,
+            authoredReference = reference,
+        )
+        _wearRecord.update { rec -> rec.copy(wornSections = rec.wornSections + section) }
+        return section.id
+    }
+
+    /** Replace a section's span and measured values by [id]. No-op if the id is absent. */
+    fun updateWornSection(id: String, startFromAftMm: Float, lengthMm: Float, diaMm: List<Float>) {
+        _wearRecord.update { rec ->
+            rec.copy(wornSections = rec.wornSections.map {
+                if (it.id == id) it.copy(
+                    startFromAftMm = max(0f, startFromAftMm),
+                    lengthMm = max(0f, lengthMm),
+                    diaMm = diaMm,
+                ) else it
+            })
+        }
+    }
+
+    /**
+     * Switch which S.E.T. the Distance field displays against — display metadata only,
+     * canonical position untouched (the WearSpotReference pattern).
+     */
+    fun updateWornSectionReference(id: String, reference: UndercutReference) {
+        _wearRecord.update { rec ->
+            rec.copy(wornSections = rec.wornSections.map {
+                if (it.id == id) it.copy(authoredReference = reference) else it
+            })
+        }
+    }
+
+    /** Remove a section by [id]. Confirm-free — deleted from its edit dialog. */
+    fun removeWornSection(id: String) {
+        _wearRecord.update { rec -> rec.copy(wornSections = rec.wornSections.filterNot { it.id == id }) }
     }
 
     // ── Undercut drawing record ────────────────────────────────────────────────
@@ -1057,6 +1140,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
+            SettingsStore.pdfCurveLoHeightInFlow(getApplication()).collectLatest { persisted ->
+                _pdfCurveLoHeightIn.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(curveLoHeightIn = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfCurveHiHeightInFlow(getApplication()).collectLatest { persisted ->
+                _pdfCurveHiHeightIn.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(curveHiHeightIn = persisted) }
+            }
+        }
+        viewModelScope.launch {
             SettingsStore.pdfOalSpacingFactorFlow(getApplication()).collectLatest { persisted ->
                 SettingsStore.updatePdfPrefs { it.copy(oalSpacingFactor = persisted) }
             }
@@ -1071,6 +1166,36 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             SettingsStore.previewBlackWhiteOnlyFlow(getApplication()).collectLatest { persisted ->
                 _previewBlackWhiteOnly.value = persisted
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.themeModeFlow(getApplication()).collectLatest { persisted ->
+                _themeMode.value = persisted
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.highContrastFlow(getApplication()).collectLatest { persisted ->
+                _highContrast.value = persisted
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.undercutLineArtFlow(getApplication()).collectLatest { persisted ->
+                _undercutStyle.value = _undercutStyle.value.copy(lineArt = persisted)
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.undercutShadeColorFlow(getApplication()).collectLatest { persisted ->
+                _undercutStyle.value = _undercutStyle.value.copy(shadeColor = persisted)
+            }
+        }
+
+        viewModelScope.launch {
+            SettingsStore.undercutShadeIntensityFlow(getApplication()).collectLatest { persisted ->
+                _undercutStyle.value = _undercutStyle.value.copy(intensity = persisted)
             }
         }
 
@@ -1214,8 +1339,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun restoreSnapshot(snapshot: AutosaveManager.SessionSnapshot) {
         // Session boundary: a selection carried over from the previous content would be an
-        // orphaned id — no highlight, and (before the CarouselSelectionSync orphan fix)
-        // bricked swipe adoption. Clearing lets the carousel's seed effect reselect.
+        // orphaned id — no highlight. Clearing lets the carousel's seed effect reselect.
         _selectedComponentId.value = null
         _spec.value = snapshot.shaftSpec
         _unit.value = snapshot.unitSystem
@@ -1255,17 +1379,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectComponentById(componentId: String?) {
         _selectedComponentId.value = componentId
-    }
-
-    /** Explicitly snap forward from the given anchor key, end-to-end along the chain. */
-    fun snapChainFrom(anchor: ComponentKey) {
-        _spec.update { base -> base.snapForwardFrom(anchor) }
-    }
-
-    /** Convenience: snap forward from a component id by looking up its kind in UI order. */
-    fun snapChainFromId(id: String) {
-        val key = _componentOrder.value.firstOrNull { it.id == id }
-        if (key != null) snapChainFrom(key)
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -2374,22 +2487,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
         if (cur != _componentOrder.value) {
             _componentOrder.value = cur
-        }
-    }
-
-    // Move controls (used by screen buttons; future enhancement may expose drag-drop)
-    fun moveComponentUp(id: String)   = moveComponent(id, -1)
-    fun moveComponentDown(id: String) = moveComponent(id, +1)
-    private fun moveComponent(id: String, delta: Int) {
-        _componentOrder.update { list ->
-            val i = list.indexOfFirst { it.id == id }
-            if (i < 0) return@update list
-            val j = (i + delta).coerceIn(0, list.lastIndex)
-            if (i == j) return@update list
-            val m = list.toMutableList()
-            val item = m.removeAt(i)
-            m.add(j, item)
-            m
         }
     }
 

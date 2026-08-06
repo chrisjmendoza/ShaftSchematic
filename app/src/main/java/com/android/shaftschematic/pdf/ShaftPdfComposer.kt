@@ -8,6 +8,15 @@ import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.END_EPS_MM
 import com.android.shaftschematic.geom.KeywaySilhouetteNotch
 import com.android.shaftschematic.geom.KeywaySilhouettePoint
+import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
+import com.android.shaftschematic.geom.SCHEMATIC_MIN_BODY_RUN_PT
+import com.android.shaftschematic.geom.SCHEMATIC_MIN_LINER_PT
+import com.android.shaftschematic.geom.SCHEMATIC_MIN_THREAD_PT
+import com.android.shaftschematic.geom.ProfileFeatureSpan
+import com.android.shaftschematic.geom.defaultVisualScale
+import com.android.shaftschematic.geom.buildCompressedProfileXMap
+import com.android.shaftschematic.geom.exaggeratedProfileScale
+import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.fillPolygonMm
@@ -76,6 +85,20 @@ fun composeShaftPdf(
     options: PdfExportOptions = PdfExportOptions(),
     resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
+    /**
+     * "Shaft height" slider — the same per-job multiplier the runout/consolidated sheets
+     * use (`RunoutConfig.heightScale`): exaggerate or shrink the drawn shaft, hard-capped
+     * at 1.5" on paper and by the page budget (`exaggeratedProfileScale`).
+     */
+    heightScale: Float = 1.0f,
+    /**
+     * "Liner compression" control — the per-job liner width floor as a fraction of true
+     * drawn width (`RunoutConfig.linerMinFracOfTrue`): 0 = liners may foreshorten to the
+     * writable floor (default), 1 = liners ask for full true-scale width. Best-effort:
+     * the drawn height takes precedence — the raise never enters the scale solve and
+     * λ-fits the room the page has (`fracFitFactor`).
+     */
+    linerMinFracOfTrue: Float = 0f,
 ) {
     val effectiveOptions = when (options.mode) {
         PdfExportMode.Template -> options.copy(
@@ -110,9 +133,10 @@ fun composeShaftPdf(
         pageH - PAGE_MARGIN_PT - footerBlockPt
     )
 
-    // PDF-only guard: a shaft with exactly one Body and no other detail components.
-    // For body-only shafts there is nothing to "make room for", so do not apply
-    // any body compression/break logic.
+    // PDF-only classification: a shaft with exactly one Body and no other detail
+    // components. Body-only shafts still go through the same body draw path (center
+    // breaks included); the flag only suppresses the footer's compression note, since
+    // there is nothing else on the sheet the squeeze needs explaining against.
     val resolvedBodies = resolvedComponents
         ?.filterIsInstance<ResolvedBody>()
         ?.map { b ->
@@ -158,35 +182,82 @@ fun composeShaftPdf(
     )
     val contentSpanMm = (contentMaxMm - contentMinMm).coerceAtLeast(1f)
 
-    // For the width-fit constraint, shrink the available page width proportionally so that
-    // the scale derived from the shaft OAL alone (used by computeDetailPtPerMm) still fits
-    // the full content span inside geomRect.  Scaling identity:
-    //   ptPerMm = geomWidth / contentSpanMm  =  (geomWidth × oal/contentSpan) / oal
-    val oalMmClamped = max(1f, spec.overallLengthMm)
-    val effectiveGeomWidthPt = geomRect.width() * (oalMmClamped / contentSpanMm)
-
-    val ptPerMm = when {
-        bodyOnly || hasNonBodyDetail -> {
-            // Target a stable drawn shaft height (~1.25") while never exceeding the page width
-            // or the full content span (including excluded end threads).
-            computeDetailPtPerMm(spec, effectiveGeomWidthPt, geomRect.height())
+    // ── Visual diameter scale + compressed x mapping (hand-sheet convention) ──
+    // On-device rule (with rulered reference sketches): drawn shaft height follows TRUE
+    // diameter on the default sizing curve (`defaultShaftHeightPt`; standard 4" → 0.75",
+    // 8" → 1.25", anchor heights user-adjustable) and is never diluted by shaft length.
+    // The x axis is schematic: every feature keeps a
+    // per-kind minimum drawn width and foreshortens above it in proportion to true length
+    // (geom/ProfileCompression.kt); plain body runs absorb the squeeze with center-breaks.
+    // Shafts that fit at the visual scale keep a plain linear map.
+    val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
+    val featureSpans: List<ProfileFeatureSpan> = buildList {
+        // Tapers may shrink but stay PROPORTIONAL to each other (on-device direction:
+        // two very different taper lengths must never draw equal). No flat floor — a
+        // ratio-preserving fraction-of-true floor instead, λ-fit like the liner raises;
+        // the drawn height never yields to it.
+        spec.tapers.forEach {
+            add(
+                ProfileFeatureSpan(
+                    it.startFromAftMm, it.startFromAftMm + it.lengthMm, 0f,
+                    minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE,
+                )
+            )
         }
-        else -> {
-            // Bodies-only: classic width-fit to the full content span.
-            geomRect.width() / contentSpanMm
+        // Liners compress in SIZE only — proportional foreshortening above their floor,
+        // never a body-style S-break cutout (on-device clarification). The per-job
+        // "Liner compression" control raises the floor toward true width — best-effort,
+        // λ-fitted; the drawn height never yields to it. The schematic uses the LEAN
+        // floors — its values live on rails and callouts, so proportion wins over
+        // write-in room here (the consolidated sheet keeps the writable floors).
+        spec.liners.forEach {
+            add(
+                ProfileFeatureSpan(
+                    it.startFromAftMm, it.startFromAftMm + it.lengthMm, SCHEMATIC_MIN_LINER_PT,
+                    minWidthFracOfTrue = linerMinFracOfTrue,
+                )
+            )
+        }
+        spec.threads.forEach {
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, SCHEMATIC_MIN_THREAD_PT))
+        }
+        // A keyway-bearing body pins at true scale — its drawn slot geometry is real.
+        bodiesForPdf.filter { it.hasKeyway }.forEach {
+            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE))
         }
     }
-    // Origin offset: shift right so excluded AFT threads (at negative mm) have drawing room.
-    val left = geomRect.left + (-contentMinMm * ptPerMm).coerceAtLeast(0f)
+    // Pinned spans (tapers, keyway bodies) demand true width → when one needs the room,
+    // the HEIGHT yields ("doesn't have to be perfectly proportional, just close" —
+    // on-device rule). The per-job "Shaft height" slider multiplies the default sizing
+    // curve (standard: proportional, 8" → 1.125"; anchor heights user-adjustable via
+    // Settings → PDF Export); the 1.5" ceiling and the page budget cap the result
+    // (exaggeratedProfileScale, pure, unit-tested).
+    val desiredScale = exaggeratedProfileScale(
+        baseScale = defaultVisualScale(maxDiaMm, pdfPrefs.curveLoHeightPt, pdfPrefs.curveHiHeightPt),
+        heightFrac = heightScale,
+        budgetCapPt = geomRect.height(),
+        maxDiaMm = maxDiaMm,
+    )
+    val diaPtPerMm = solveMaxProfileScale(
+        windowStartMm = contentMinMm, windowEndMm = contentMaxMm,
+        features = featureSpans, contentWidth = geomRect.width(), scaleHi = desiredScale,
+        gapMinWidthPt = SCHEMATIC_MIN_BODY_RUN_PT,
+    ).coerceAtLeast(1e-6f)
+    val xMap = buildCompressedProfileXMap(
+        windowStartMm = contentMinMm, windowEndMm = contentMaxMm,
+        features = featureSpans,
+        contentLeft = geomRect.left, contentRight = geomRect.right,
+        diaPtPerMm = diaPtPerMm,
+        gapMinWidthPt = SCHEMATIC_MIN_BODY_RUN_PT,
+    )
 
     val winDbg = computeOalWindow(spec)
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
-        "layout: geomRect=${geomRect.width().toInt()}x${geomRect.height().toInt()}pt ptPerMm=${"%.4f".format(ptPerMm)} maxDiaMm=${"%.3f".format(spec.maxOuterDiaMm())}" +
+        "layout: geomRect=${geomRect.width().toInt()}x${geomRect.height().toInt()}pt diaPtPerMm=${"%.4f".format(diaPtPerMm)} span=${"%.1f".format(contentSpanMm)}mm maxDiaMm=${"%.3f".format(spec.maxOuterDiaMm())}" +
             " oalWindow(start=${"%.3f".format(winDbg.measureStartMm)}, end=${"%.3f".format(winDbg.measureEndMm)}, oal=${"%.3f".format(winDbg.oalMm)})"
     }
 
-    val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
-    val halfHeightPx = (maxDiaMm * 0.5f) * ptPerMm
+    val halfHeightPx = (maxDiaMm * 0.5f) * diaPtPerMm
     // Place the shaft centered on the paper when possible.
     // Clamp so the shaft stays inside geomRect and the footer block can still fit below.
     val minCy = geomRect.top + halfHeightPx
@@ -199,7 +270,7 @@ fun composeShaftPdf(
     val yTopOfShaft = cy - halfHeightPx
 
     val pageDrawableHeightPx = geomRect.height()
-    val shaftBoundsHeightPx = maxDiaMm * ptPerMm
+    val shaftBoundsHeightPx = maxDiaMm * diaPtPerMm
     val verticalOffsetPx = if (effectiveOptions.mode == PdfExportMode.Template) {
         (pageDrawableHeightPx - shaftBoundsHeightPx) / 2f
     } else {
@@ -211,10 +282,9 @@ fun composeShaftPdf(
         0f
     }
 
-    fun xAt(mm: Float) = left + mm * ptPerMm
-    fun rPx(d: Float)  = (d * 0.5f) * ptPerMm
+    fun xAt(mm: Float) = xMap.xAt(mm)
+    fun rPx(d: Float)  = (d * 0.5f) * diaPtPerMm
 
-    // geometry
     c.save()
     if (shaftTranslateY != 0f) {
         c.translate(0f, shaftTranslateY)
@@ -224,11 +294,14 @@ fun composeShaftPdf(
     val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
     val linerFill: Paint? = if (pdfPrefs.shadedLiners)  shadeFill() else null
 
-    if (bodyOnly || singleTaperOnly) {
-        drawBodiesPlain(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, bodyFill)
-    } else {
-        drawBodiesCompressedCenterBreak(c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect, bodyFill)
-    }
+    // One body path: plain rectangles when a body draws at true scale under the break
+    // threshold, the center-break pair when foreshortened by the compressed mapping or
+    // traditionally long — body-only shafts included (a long body-only shaft compresses
+    // too under the visual-scale rule).
+    drawBodiesCompressedCenterBreak(
+        c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect, bodyFill,
+        truePtPerMm = diaPtPerMm,
+    )
     // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every other
     // host is a secondary. At 180° a secondary renders hidden (dashed, no fill); at 90° it renders
     // as a notch cut into a silhouette edge. Mirrors the canvas renderer.
@@ -241,7 +314,7 @@ fun composeShaftPdf(
     spec.bodies.filter { it.hasKeyway }.forEach { b ->
         if (silhouetteKeyways && b.id in secondaryKeywayIds) {
             b.keywaySilhouetteNotch(clocking)?.let {
-                drawKeywaySilhouetteNotchPdf(c, it, ::xAt, ptPerMm, cy, outline)
+                drawKeywaySilhouetteNotchPdf(c, it, ::xAt, diaPtPerMm, cy, outline)
             }
         } else {
             drawKeywayNotchBodyPdf(c, b, ::xAt, cy, outline, hidden = b.id in hiddenKeywayIds)
@@ -249,9 +322,9 @@ fun composeShaftPdf(
     }
     drawTapers(
         c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill,
-        hiddenKeywayIds, clocking, secondaryKeywayIds, ptPerMm,
+        hiddenKeywayIds, clocking, secondaryKeywayIds, diaPtPerMm,
     )
-    drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, ptPerMm)
+    drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, diaPtPerMm)
     drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill)
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill(), bodies = bodiesForPdf)
     c.restore()
@@ -288,7 +361,7 @@ fun composeShaftPdf(
         val linerDims = mapToLinerDimsForPdf(spec, measureFromMode)
         val win  = computeOalWindow(spec)
         val pageX: (Double) -> Float = { dimMm ->
-            (left + ((dimMm + win.measureStartMm).toFloat() * ptPerMm))
+            xAt((dimMm + win.measureStartMm).toFloat())
         }
         val sets = computeSetPositionsInMeasureSpace(win, spec)
         val spans = buildLinerSpans(
@@ -356,9 +429,9 @@ fun composeShaftPdf(
                 color = 0xFF000000.toInt()
             }
             val leader = DiameterLeaderRenderer(
-                pageX = { mm -> (left + (mm.toFloat() * ptPerMm)) },
+                pageX = { mm -> xAt(mm.toFloat()) },
                 shaftTopY = yTopOfShaft,
-                shaftBottomY = cy + (maxDiaMm * 0.5f) * ptPerMm,
+                shaftBottomY = cy + halfHeightPx,
                 linePaint = dim,
                 textPaint = leaderText,
                 blankValues = blank
@@ -368,10 +441,12 @@ fun composeShaftPdf(
     }
 
     if (effectiveOptions.showFooter) {
-        // footer
         // Test the same body list the geometry pass drew (resolved incl. auto-bodies),
         // so the note and the drawn center breaks can't disagree.
-        val showCompressionNote = !bodyOnly && bodiesForPdf.any { b -> b.lengthMm * ptPerMm >= COMPRESS_TRIGGER_PT }
+        val showCompressionNote = !bodyOnly && bodiesForPdf.any { b ->
+            val drawnPt = abs(xAt(b.startFromAftMm + b.lengthMm) - xAt(b.startFromAftMm))
+            drawnPt < b.lengthMm * diaPtPerMm - 1f || drawnPt >= COMPRESS_TRIGGER_PT
+        }
 
         // Footer "Body:" diameters — authored bodies as actually drawn. Raw spec.bodies
         // can hold degenerate rows (zero-length, or fully swallowed by body subtraction
@@ -414,13 +489,13 @@ fun composeShaftPdf(
 
 private const val MM_PER_IN = 25.4f
 
-// Body-only PDF rendering uses a stable, fixed target drawing height.
-// 1.25 in keeps the shaft visible without eating the page.
+// Target drawing height used by computeDetailPtPerMm (the scaling tests' reference
+// solve); the composer sizes shafts from the sizing curve.
 private const val BODY_ONLY_TARGET_HEIGHT_PT = 1.25f * 72f
 
 // Strokes / text
-private const val OUTLINE_PT_BASE = 1.25f  // 100% default; slider goes to 200% (original 2.5pt)
-private const val DIM_PT_BASE = 0.8f       // 100% default; slider goes to 200% (original 1.6pt)
+private const val OUTLINE_PT_BASE = 1.25f  // 100% default; slider goes to 200%
+private const val DIM_PT_BASE = 0.8f       // 100% default; slider goes to 200%
 private const val TEXT_PT = 12f
 
 // Layout
@@ -435,9 +510,9 @@ private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
 // Component title labels (PDF only)
 private const val COMPONENT_LABEL_OFFSET_PT = 32f
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
-private const val FOOTER_BLOCK_PT = 96f
+internal const val FOOTER_BLOCK_PT = 96f
 // Blank drafts reserve a taller footer band: line spacing opens up for handwriting.
-private const val FOOTER_BLOCK_BLANK_PT = 150f
+internal const val FOOTER_BLOCK_BLANK_PT = 150f
 private const val FOOTER_LINE_FACTOR = 1.35f
 private const val FOOTER_LINE_FACTOR_BLANK = 1.8f
 
@@ -514,7 +589,7 @@ private fun drawComponentLabelsPdf(
 
 // Compression (paper-space heuristic; bodies only)
 private const val COMPRESS_TRIGGER_PT = 220f // if body length on paper ≥ this, show center-break
-private const val ZIGZAG_GAP_MAX_PT = 20f    // max central gap width
+private const val ZIGZAG_GAP_MAX_PT = 20f    // classic central gap; breakPairLayout may widen it to keep the pair clear
 
 // Label collision avoidance
 
@@ -586,31 +661,6 @@ private fun requireFinite(name: String, v: Float): Float {
     return v
 }
 
-private fun drawBodiesPlain(
-    c: Canvas,
-    bodies: List<Body>,
-    cy: Float,
-    xAt: (Float) -> Float,
-    rPx: (Float) -> Float,
-    outline: Paint,
-    fill: Paint? = null,
-) {
-    bodies.forEach { b ->
-        if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
-        val x0 = xAt(b.startFromAftMm)
-        val x1 = xAt(b.startFromAftMm + b.lengthMm)
-        val r = rPx(b.diaMm)
-        val top = cy - r
-        val bot = cy + r
-
-        if (fill != null) c.drawRect(x0, top, x1, bot, fill)
-        c.drawLine(x0, top, x1, top, outline)
-        c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, outline)
-        c.drawLine(x1, top, x1, bot, outline)
-    }
-}
-
 // ──────────────────────────────────────────────────────────────────────────────
 // Geometry — bodies with centered long-break compression
 // ──────────────────────────────────────────────────────────────────────────────
@@ -624,6 +674,8 @@ private fun drawBodiesCompressedCenterBreak(
     outline: Paint,
     geomRect: RectF,
     fill: Paint? = null,
+    /** True-scale pt/mm — a body drawn shorter than this is foreshortened and MUST break. */
+    truePtPerMm: Float = 0f,
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
     bodies.forEach { b ->
@@ -632,7 +684,8 @@ private fun drawBodiesCompressedCenterBreak(
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
 
         val bodyLenPt = abs(x1 - x0)
-        val compress = bodyLenPt >= COMPRESS_TRIGGER_PT
+        val foreshortened = truePtPerMm > 0f && bodyLenPt < b.lengthMm * truePtPerMm - 1f
+        val compress = foreshortened || bodyLenPt >= COMPRESS_TRIGGER_PT
 
         if (!compress) {
             // classic rectangle body
@@ -644,11 +697,15 @@ private fun drawBodiesCompressedCenterBreak(
         } else {
             // centered break: two stubs, each with an S-curve end instead of a straight cap
             val mid = (x0 + x1) * 0.5f
-            val gap = min(ZIGZAG_GAP_MAX_PT, 0.25f * bodyLenPt)
+            val (gap, amp) = breakPairLayout(
+                runLenPt = bodyLenPt,
+                desiredAmplitudePt = r * 0.6f,
+                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * bodyLenPt),
+                strokeWidthPt = capPaint.strokeWidth,
+            )
             val half = 0.5f * gap
             val leftEnd  = (mid - half).coerceIn(geomRect.left, geomRect.right)
             val rightBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
-            val amp = r * 0.6f
 
             // Left stub — S-curve on right end
             if (fill != null) c.drawRect(x0, top, leftEnd, bot, fill)
@@ -747,7 +804,7 @@ internal fun mapToLinerDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode):
  * - FWD → OAL
  * - AUTO → null (preserve existing left-to-right tiering)
  */
-private fun tierOriginMmFor(mode: PdfTieringMode, oalMm: Double): Double? = when (mode) {
+internal fun tierOriginMmFor(mode: PdfTieringMode, oalMm: Double): Double? = when (mode) {
     PdfTieringMode.AFT -> 0.0
     PdfTieringMode.FWD -> oalMm
     PdfTieringMode.AUTO -> null
@@ -1103,7 +1160,9 @@ private fun drawLiners(
 // Footer (3 columns; center column is work-order info)
 // ──────────────────────────────────────────────────────────────────────────────
 
-private fun drawFooter(
+// Internal (not private): the consolidated runout sheet prints the SAME footer block —
+// one footer implementation for both documents, so the spec lines can never drift apart.
+internal fun drawFooter(
     c: Canvas,
     rect: RectF,
     spec: ShaftSpec,
@@ -1443,10 +1502,10 @@ private fun ShaftSpec.maxOuterDiaMm(): Float {
 }
 
 /** Presence checks for end features. */
-private fun hasAftThread(spec: ShaftSpec): Boolean =
+internal fun hasAftThread(spec: ShaftSpec): Boolean =
     spec.threads.any { it.startFromAftMm <= 0.5f }    // thread touches AFT end
 
-private fun hasFwdThread(spec: ShaftSpec): Boolean {
+internal fun hasFwdThread(spec: ShaftSpec): Boolean {
     val oal = spec.overallLengthMm
     return spec.threads.any { (it.startFromAftMm + it.lengthMm) >= (oal - 0.5f) } // thread touches FWD end
 }

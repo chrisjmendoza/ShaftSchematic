@@ -1,9 +1,14 @@
 # ShaftSchematic Architecture
 Version: v0.5.x
-Last updated: 2026-07-28 — documented the document envelope + reference-only record family
+Last updated: 2026-08-05 — five editor tabs (Schematic / Runout / Wear / Undercut /
+Consolidated Output) and the five-document PDF layer incl. `UndercutPdfComposer`; envelope
+family extended with `undercut_record` and worn sections; `geom/` list brought current;
+corrected the renderer's stroke fields, the PDF fit function (only `computeDetailPtPerMm`
+exists), and invariant 5 (profiles foreshorten spans by design — the compressed x-map).
+2026-07-28 — documented the document envelope + reference-only record family
 (wear spots/pits/measured-Ø readings, runout readings/config), the shared pure-math `geom/`
-layer and its draw-both-sites rule, the three-document PDF layer (schematic / runout / wear,
-blank drafts, preview-as-rasterized-PDF), and corrected auto-body promotion to the
+layer and its draw-both-sites rule, the multi-document PDF layer (blank drafts,
+preview-as-rasterized-PDF), and corrected auto-body promotion to the
 checkbox-only path ("Explicit body") with the no-snap golden rule. 2026-07-21 — reverted
 "explicit bodies are non-negotiable" in the ViewModel layer notes (bodies are fluid fillers
 again, no collision, plain bodies split around sacred components). 2026-07-18 —
@@ -25,9 +30,11 @@ All geometry is stored in **millimeters**. Rendering is performed at arbitrary r
 
 ## System Flow (End-to-End)
 
-User Input → ViewModel → ShaftSpec (model) → ShaftLayout (layout engine)
-→ ShaftRenderer (geometry) → ShaftDrawing (Compose Canvas)
-→ Screen → PDF Export (optional)
+User Input → ViewModel → ShaftSpec (model) → ShaftLayout (layout engine, preview only)
+→ ShaftRenderer (geometry) → ShaftDrawing (Compose Canvas) → Screen
+
+PDF export branches off the model + resolved component list into the composers, which
+compute their own point scale (they never call ShaftLayout).
 
  
 
@@ -47,13 +54,20 @@ never touches geometry resolution, so it lives beside the spec in the document e
 (`doc/ShaftDocCodec.ShaftDocV1`), not inside it:
 
 - `WearRecord` (`wear_record`): liner **wear spots** (bands, keyed by `linerId` — orphans
-  pruned at decode), **wear pits** ("X" markers), and **measured-Ø readings**
-  (`WearDiaReading` — value callouts with leaders on the wear document). Pits and readings
+  pruned at decode), **wear pits** ("X" markers), **measured-Ø readings**
+  (`WearDiaReading` — value callouts with leaders on the wear document), and **worn
+  sections** (`WornSection` — designated measured areas printed on the consolidated sheet;
+  shaft-space like undercuts, so no orphans). Pits and readings
   key on *resolved* component ids (liner/taper/body, explicit or auto), which the codec
   cannot know — their orphans are skipped at the **render layer**, never pruned at decode.
 - `RunoutReadings` (`runout_readings`): per-station TIR value + high-spot clock marker,
   keyed by `(componentId, stationIndex)`; render-layer orphan handling.
-- `RunoutConfig`: station-count overrides + TIR orientation.
+- `UndercutRecord` (`undercut_record`): machined-below-surface spans printed on the Undercut
+  Drawing, plus the per-sheet cut-depth exaggeration fraction. Deliberately **not**
+  component-keyed — canonical storage is shaft-space `startFromAftMm`, so a cut may cross a
+  liner edge and nothing is ever pruned.
+- `RunoutConfig`: station-count overrides, TIR orientation, and the per-job profile controls
+  ("Shaft height", liner compression) behind the runout/consolidated sheets and the schematic.
 
 All are additive/defaulted (no envelope version bumps) and share one contract: they never
 affect `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End badge. The
@@ -161,7 +175,8 @@ Renderer rules:
 - Consumes pixel coordinates ONLY from ShaftLayout.Result
 - Never calculates px-per-mm manually
 - Never reads mm fields directly for pixel math
-- Only uses `shaftWidth` and `dimWidth` from DrawingConfig
+- Takes stroke weights only from `RenderOptions` (`outlineWidthPx` for primary outlines,
+  `dimLineWidthPx` for auxiliary/secondary lines)
 
 Renderer does NOT:
 - Draw grid
@@ -186,7 +201,16 @@ shared engine — never re-implemented per renderer):
   the label-width-aware callout placement engine (single-row fan → two-row stagger with
   dogleg leaders → flagged compression), used by the wear overlay canvas, the wear PDF's
   liner strips, and its main-profile band.
-- `KeywaySpoonMath.kt` — spooned-keyway bowl math (schematic canvas ⇔ schematic PDF).
+- `KeywaySpoonMath.kt` / `KeywaySilhouetteMath.kt` — spooned-keyway bowl math and the
+  90°-clocked keyway's silhouette notch (schematic canvas ⇔ schematic PDF).
+- `WornSectionMath.kt` — worn-section span/label placement for the consolidated sheet
+  (runout canvas ⇔ runout PDF).
+- `UndercutMath.kt` + `SurfaceProfileMath.kt` — undercut cluster windows, clamps, hit-tests
+  and the resolved→outer-surface envelope the notches cut against (undercut canvas ⇔
+  undercut PDF).
+- `ProfileCompression.kt` — the PDF profile's compressed x-map: true-diameter visual height
+  at the default sizing curve, spans foreshortened above per-kind width floors, and the
+  height/scale solve behind the "Shaft height" slider.
 - `DiameterCalloutLayout.kt` / `DeterministicTierAssigner.kt` — schematic Ø-callout tiering
   and dimension-rail tier assignment (PDF-only consumers, kept here for JVM testability).
 
@@ -201,8 +225,12 @@ Responsibilities:
 - Handle text input with commit-on-blur
 - Display validation errors and warnings
 - Persist and expose user preferences (units, grid, preview colors)
-- Host the three document tabs (Schematic / Runout Sheet / Wear Document —
-  `ui/nav/`, `RunoutRoute.kt`, `WearRoute.kt`) and the full-screen
+- Host the five editor tabs (`ui/screen/EditorTab.kt`): Schematic / Runout Sheet
+  (`RunoutRoute.kt` — runouts only, the classic standalone sheet) / Wear Document
+  (`WearRoute.kt` — the authoring surface for wear data) / Undercut Drawing
+  (`UndercutRoute.kt`) / Consolidated Output (`OutputRoute.kt` — content-variant election,
+  worn-section editor, "Shaft height" + liner-compression controls, and the "Export all"
+  batch), plus the full-screen
   `ComponentWearDetailOverlay` (tap a component on the wear canvas → broken-out segment
   with explicit tool chips: Add X / Remove X pit markers, Add Ø measured-diameter readings)
 
@@ -223,31 +251,40 @@ spec + layoutResult + renderOptions → ShaftDrawing
 Purpose: Produce a **single-page** PDF export of the drawing.
 
 **Preview rendering (`ShaftLayout` + `ShaftRenderer`) and the PDF composers
-(`ShaftPdfComposer`, `RunoutPdfComposer`, `WearPdfComposer`) are SEPARATE drawing paths.**
+(`ShaftPdfComposer`, `RunoutPdfComposer`, `WearPdfComposer`, `UndercutPdfComposer`) are
+SEPARATE drawing paths.**
 They share model and layout-math *concepts* but not code: `ShaftPdfComposer` never calls
-`ShaftLayout.compute()` and instead has its own fit functions — `computeBodyOnlyPtPerMm`,
-`computeDetailPtPerMm`, `computePdfPtPerMmFitAxes` — and its own drawing functions
+`ShaftLayout.compute()` and instead has its own fit function — `computeDetailPtPerMm` — plus
+the shared compressed x-map (`geom/ProfileCompression.kt`) and its own drawing functions
 (`drawBodiesPlain`/`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`).
 
 Rules:
-- Computes its own `ptPerMm` from page content width/height and overallLengthMm (see the three
-  fit functions above); does not reuse `ShaftLayout`'s `pxPerMm`.
+- Computes its own `ptPerMm` from page content width/height and overallLengthMm
+  (`computeDetailPtPerMm`); does not reuse `ShaftLayout`'s `pxPerMm`.
 - Draws title block + shaft geometry using its own drawing routines
+- Draws no grid — the grid is a preview-only aid.
 
 The **runout sheet** and **wear document** composers scale to the **SET-to-SET span** (not
 `overallLengthMm`) because field measurements originate at the SET faces; both accept the
 resolved component list (auto-bodies included) and a `blankValues` write-in mode
 (lines-in/values-out hand-fill templates). The wear document's per-liner detail strips and
 measured-Ø callout bands are laid out by the pure `pdf/WearStripLayout.kt` +
-`geom/WearDiaCalloutLayout.kt`. All in-app PDF previews **rasterize the real composed PDF**
+`geom/WearDiaCalloutLayout.kt`. The **undercut drawing** (`UndercutPdfComposer`) prints the
+shaft-space cuts as open silhouette steps with liner-anchored detail strips
+(`pdf/UndercutStripLayout.kt`). The **consolidated output sheet** is the runout composer in
+its consolidated mode (`composeRunoutPdf(consolidated = true)`), which adds the schematic's
+dimension rails and footer plus the elected wear/runout content — five documents in all from
+four composers. All in-app PDF previews **rasterize the real composed PDF**
 (there is no separate preview draw path for these documents). Contracts:
-`docs/PDF_EXPORT.md` and the in-source `docs/RunoutSheet.md`.
+`docs/PDF_EXPORT.md` and the in-source
+`app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md`.
 
 PDF export does NOT:
 - Create multiple pages
 - Create a BOM table
 - Summarize components
-- Change geometry scale non-uniformly
+- Distort **diameters** — drawn height is proportional to true diameter at the sheet's
+  visual scale (only axial spans foreshorten; see invariant 5)
 
 ### Tiering & Measurement Invariants (PDF)
 Tier origin controls rail stacking only. Measurement reference controls numeric baselines. Units are independent of both. These concerns must never be conflated.
@@ -268,7 +305,13 @@ A separate StateFlow `_componentOrder` stores UI ordering for the component list
 2. Layout produces pixel coordinates only; never reads mm directly.
 3. Renderer consumes pixel coordinates only; never computes px-per-mm.
 4. UI performs no geometry or scaling logic.
-5. PDF export is single-page, exact-scale.
+5. PDF export is **single-page**. It is not exact-scale: the profile follows the hand-sheet
+   convention — drawn height is proportional to TRUE diameter at the sheet's visual scale,
+   while axial spans **foreshorten non-uniformly** above per-kind width floors through one
+   piecewise x-map (`geom/ProfileCompression.kt`), with long bodies capped by S-break
+   symbols. Every drawn x goes through that single mapping, so dimensions, callouts, and
+   marks stay consistent with the geometry. Printed values are always the stored numbers.
+   See `docs/PDF_EXPORT.md` §6.4.
 
 ---
 

@@ -32,8 +32,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -54,7 +57,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -104,6 +106,7 @@ import com.android.shaftschematic.geom.planRunoutBubbles
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
@@ -114,23 +117,26 @@ import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
+import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
+import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
+import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.printShaftPdfPage
+import com.android.shaftschematic.util.writeShaftPdfToUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 private data class RunoutComponentEntry(
     val id: String,
@@ -172,36 +178,53 @@ fun RunoutRoute(
     var previewBitmap  by remember { mutableStateOf<ImageBitmap?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
 
+    // This tab produces the classic standalone runout sheet; the consolidated sheet (and
+    // batch export) lives on the Consolidated Output tab. Collisions corrupt any drawing,
+    // so the shared export gate guards this surface too.
+    val collidingIds = remember(spec) { spec.collidingIds() }
+    val gate = remember(spec, collidingIds) { exportPdfGate(spec, collidingIds) }
+
+    val outputFilename = buildOutputFilename(customer, vessel, jobNumber, OutputDoc.RUNOUT, blankDraft)
+
+    /** The runout tab's one document: the classic standalone runout sheet. */
+    fun composeClassicRunout(
+        page: PdfDocument.Page,
+        specSnap: ShaftSpec,
+        configSnap: RunoutConfig,
+        projectSnap: ProjectInfo,
+        unitSnap: UnitSystem,
+        prefsSnap: PdfPrefs,
+        resolvedSnap: List<ResolvedComponent>,
+        thicknessSnap: Float,
+        readingsSnap: RunoutReadings,
+        blankSnap: Boolean,
+    ) = composeRunoutPdf(
+        page = page, spec = specSnap, config = configSnap, project = projectSnap,
+        unit = unitSnap,
+        pdfPrefs = prefsSnap,
+        resolvedComponents = resolvedSnap,
+        lineThicknessScale = thicknessSnap,
+        runoutReadings = readingsSnap,
+        blankValues = blankSnap,
+        consolidated = false,
+    )
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
         if (uri != null) {
-            runCatching {
-                ctx.contentResolver.openOutputStream(uri)?.use { out ->
-                    val doc = PdfDocument()
-                    try {
-                        val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
-                        val page = doc.startPage(pageInfo)
-                        composeRunoutPdf(
-                            page = page, spec = spec, config = runoutConfig,
-                            project = ProjectInfo(customer = customer, vessel = vessel,
-                                jobNumber = jobNumber, side = shaftPosition),
-                            unit = unit,
-                            pdfPrefs = vm.currentPdfPrefs,
-                            resolvedComponents = resolvedComponents,
-                            lineThicknessScale = lineThicknessScale,
-                            runoutReadings = runoutReadings,
-                            blankValues = blankDraft,
-                        )
-                        doc.finishPage(page)
-                        doc.writeTo(out)
-                    } finally {
-                        try { out.flush() } catch (_: Throwable) {}
-                        doc.close()
-                    }
-                }
-                if (openAfterExport) openRunoutPdf(ctx, uri)
+            // Hardened write: a composer throw yields a valid error page, never a
+            // truncated file (util/PdfSafExport.kt — one implementation for every tab).
+            val wrote = writeShaftPdfToUri(ctx, uri) { page ->
+                composeClassicRunout(
+                    page, spec, runoutConfig,
+                    ProjectInfo(customer = customer, vessel = vessel,
+                        jobNumber = jobNumber, side = shaftPosition),
+                    unit, vm.currentPdfPrefs, resolvedComponents,
+                    lineThicknessScale, runoutReadings, blankDraft,
+                )
             }
+            if (wrote && openAfterExport) openRunoutPdf(ctx, uri)
         }
     }
 
@@ -212,28 +235,29 @@ fun RunoutRoute(
         previewLoading = true
         val prefsSnapshot  = vm.currentPdfPrefs
         val thicknessSnapshot = lineThicknessScale
+        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
+            jobNumber = jobNumber, side = shaftPosition)
         val bmp = withContext(Dispatchers.IO) {
-            renderRunoutBitmap(
-                context = ctx, spec = spec, config = runoutConfig,
-                project = ProjectInfo(customer = customer, vessel = vessel,
-                    jobNumber = jobNumber, side = shaftPosition),
-                unit = unit,
-                pdfPrefs = prefsSnapshot,
-                resolvedComponents = resolvedComponents,
-                lineThicknessScale = thicknessSnapshot,
-                runoutReadings = runoutReadings,
-                blankValues = blankDraft,
-            )
+            renderPdfPageBitmap(ctx) { page ->
+                composeClassicRunout(
+                    page, spec, runoutConfig, projectSnapshot, unit, prefsSnapshot,
+                    resolvedComponents, thicknessSnapshot, runoutReadings, blankDraft,
+                )
+            }
         }
         previewBitmap = bmp?.asImageBitmap()
         previewLoading = false
     }
 
-    // Capture theme colors before the Canvas block (DrawScope is not composable)
-    val outlineArgb   = MaterialTheme.colorScheme.onSurface.toArgb()
-    val bodyFillArgb  = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f).toArgb()
-    val linerFillArgb = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f).toArgb()
-    val hatchArgb     = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f).toArgb()
+    // Capture colors before the Canvas block (DrawScope is not composable). Sheet ink is
+    // FIXED (SheetInk), never theme colors: the canvas is a paper-white sheet in every
+    // theme, and dark theme's near-white onSurface would print invisible ink on it.
+    val outlineArgb   = SheetInk.Outline.toArgb()
+    val bodyFillArgb  = SheetInk.Outline.copy(alpha = 0.08f).toArgb()
+    // Liners draw unfilled on this sheet (on-device request): the in-profile value halos
+    // are sheet-white, and against a tinted liner every knockout reads as a pasted box.
+    val linerFillArgb = Color.Transparent.toArgb()
+    val hatchArgb     = SheetInk.Outline.copy(alpha = 0.55f).toArgb()
     val previewShape  = MaterialTheme.shapes.medium
     val textMeasurer  = rememberTextMeasurer()
 
@@ -376,6 +400,10 @@ fun RunoutRoute(
                         with(ShaftRenderer) {
                             draw(spec, preview.layout, previewOpts, resolvedComponents)
                         }
+                        // Runouts only on this canvas: the tab is the runout authoring
+                        // surface, so the profile carries just the bubbles. The wear
+                        // marks/worn sections/in-profile values render on the Consolidated
+                        // Output tab's preview (the rasterized real PDF).
                         drawRunoutMarkers(preview.bubbles, preview.geom, runoutReadings, unit, textMeasurer)
                     }
 
@@ -427,6 +455,10 @@ fun RunoutRoute(
                 }
             }
 
+            // (Worn-section authoring, the consolidated variant picker, and the "Shaft
+            // height" slider live on the Consolidated Output tab — this tab is the runout
+            // authoring surface and produces the classic runout sheet.)
+
             Spacer(Modifier.height(4.dp))
 
             // ── Blank draft toggle ────────────────────────────────────────────
@@ -443,9 +475,19 @@ fun RunoutRoute(
                 }
             }
 
+            // ── Export gate ───────────────────────────────────────────────────
+            if (!gate.enabled) {
+                Text(
+                    gate.disabledMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
             // ── Preview button ────────────────────────────────────────────────
             OutlinedButton(
                 onClick = { showPreview = true },
+                enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Outlined.Preview, contentDescription = null)
@@ -456,8 +498,7 @@ fun RunoutRoute(
             // ── Print button ──────────────────────────────────────────────────
             OutlinedButton(
                 onClick = {
-                    val jobName = buildRunoutFilename(customer, vessel, jobNumber, blankDraft)
-                        .removeSuffix(".pdf")
+                    val jobName = outputFilename.removeSuffix(".pdf")
                     // Snapshot state on the UI thread; onWrite runs on a binder thread.
                     val specSnapshot = spec
                     val configSnapshot = runoutConfig
@@ -470,17 +511,14 @@ fun RunoutRoute(
                     val readingsSnapshot = runoutReadings
                     val blankSnapshot = blankDraft
                     printShaftPdfPage(ctx, jobName) { page ->
-                        composeRunoutPdf(
-                            page = page, spec = specSnapshot, config = configSnapshot,
-                            project = projectSnapshot, unit = unitSnapshot,
-                            pdfPrefs = prefsSnapshot,
-                            resolvedComponents = resolvedSnapshot,
-                            lineThicknessScale = thicknessSnapshot,
-                            runoutReadings = readingsSnapshot,
-                            blankValues = blankSnapshot,
+                        composeClassicRunout(
+                            page, specSnapshot, configSnapshot, projectSnapshot,
+                            unitSnapshot, prefsSnapshot, resolvedSnapshot,
+                            thicknessSnapshot, readingsSnapshot, blankSnapshot,
                         )
                     }
                 },
+                enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Filled.Print, contentDescription = null)
@@ -490,7 +528,8 @@ fun RunoutRoute(
 
             // ── Export button ─────────────────────────────────────────────────
             Button(
-                onClick = { launcher.launch(buildRunoutFilename(customer, vessel, jobNumber, blankDraft)) },
+                onClick = { launcher.launch(outputFilename) },
+                enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
@@ -510,7 +549,7 @@ fun RunoutRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(buildRunoutFilename(customer, vessel, jobNumber, blankDraft))
+                launcher.launch(outputFilename)
             },
             optionsSheet = {
                 RunoutWearOptionsSheet(
@@ -614,8 +653,8 @@ private fun runoutSpans(components: List<ResolvedComponent>): List<RunoutCompone
     components.mapNotNull { rc ->
         val lengthMm = rc.endMmPhysical - rc.startMmPhysical
         when (rc) {
-            // Body fragments keep the stored body's id here (suffix stripped) so runout
-            // station keys stay exactly as they were before fragment ids became unique.
+            // Body fragments key off the base id (suffix stripped) so all fragments of one
+            // stored body share a single station key.
             is ResolvedBody  -> RunoutComponentSpan(resolvedBodyBaseId(rc.id), RunoutComponentKind.BODY,  rc.startMmPhysical, lengthMm)
             is ResolvedTaper -> RunoutComponentSpan(rc.id, RunoutComponentKind.TAPER, rc.startMmPhysical, lengthMm)
             is ResolvedLiner -> RunoutComponentSpan(rc.id, RunoutComponentKind.LINER, rc.startMmPhysical, lengthMm)
@@ -662,7 +701,11 @@ private fun Density.computeRunoutPreview(
             bottomPx = heightPx - reservedH, marginPx = marginPx,
             resolvedComponents = resolvedComponents,
         )
-        val stations = collectRunoutStations(spans, overrides) { mm -> layout.xPx(mm) }
+        val stations = collectRunoutStations(
+            spans, overrides,
+            xAtMm = { mm -> layout.xPx(mm) },
+            mmAtX = { px -> layout.xMmFromPx(px) },
+        )
         return layout to planRunoutBubbles(stations, bubbleGeom)
     }
 
@@ -716,7 +759,8 @@ private fun runoutMaxOdMm(components: List<ResolvedComponent>): Float =
 
 /**
  * Draw the planned runout bubbles: leader polylines, the circle with a keyway cutout at 12 o'clock,
- * and — when recorded — the TIR value (centred) and high-spot marker (radial line + rim dot). The
+ * and — when recorded — the TIR value (centred) and the high-spot marker (a short dash straddling
+ * the rim at the clock position). The
  * keyway cutout and marker geometry mirror the PDF (`RunoutPdfComposer.drawPlacedBubbles`) so the
  * preview matches the export exactly.
  */
@@ -810,18 +854,7 @@ private fun DrawScope.drawRunoutBubbleRing(center: Offset, r: Float, color: Colo
 // Private helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-private fun buildRunoutFilename(
-    customer: String,
-    vessel: String,
-    jobNumber: String,
-    blankDraft: Boolean = false,
-): String {
-    val parts = listOf(customer, vessel, jobNumber).filter { it.isNotBlank() }
-    val blankSuffix = if (blankDraft) "_BlankDraft" else ""
-    return "${if (parts.isNotEmpty()) parts.joinToString("_") else "RunoutSheet"}_runout$blankSuffix.pdf"
-}
-
-private fun openRunoutPdf(context: Context, uri: Uri) {
+internal fun openRunoutPdf(context: Context, uri: Uri) {
     val intent = buildOpenPdfIntent(context, uri)
     context.packageManager.queryIntentActivities(intent, 0).forEach { ri ->
         runCatching { context.grantUriPermission(ri.activityInfo?.packageName ?: return@forEach, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
@@ -830,27 +863,21 @@ private fun openRunoutPdf(context: Context, uri: Uri) {
     catch (_: ActivityNotFoundException) {}
 }
 
-private fun renderRunoutBitmap(
+/**
+ * Rasterize a one-page landscape-Letter PDF for the on-screen preview. [composePage] draws
+ * the page, so the caller decides which document this is — the preview always shows the real
+ * composed PDF, never a separate draw path.
+ */
+internal fun renderPdfPageBitmap(
     context: Context,
-    spec: ShaftSpec,
-    config: RunoutConfig,
-    project: ProjectInfo,
-    unit: com.android.shaftschematic.util.UnitSystem,
-    pdfPrefs: PdfPrefs = PdfPrefs(),
-    resolvedComponents: List<ResolvedComponent>? = null,
-    lineThicknessScale: Float = 1.0f,
-    runoutReadings: RunoutReadings = RunoutReadings(),
-    blankValues: Boolean = false,
+    composePage: (PdfDocument.Page) -> Unit,
 ): Bitmap? = runCatching {
     val tempFile = File.createTempFile("runout_preview_", ".pdf", context.cacheDir)
     val doc = PdfDocument()
     try {
         val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
         val page = doc.startPage(pageInfo)
-        composeRunoutPdf(page = page, spec = spec, config = config, project = project, unit = unit,
-            pdfPrefs = pdfPrefs, resolvedComponents = resolvedComponents,
-            lineThicknessScale = lineThicknessScale, runoutReadings = runoutReadings,
-            blankValues = blankValues)
+        composePage(page)
         doc.finishPage(page)
         tempFile.outputStream().buffered().use { doc.writeTo(it) }
     } finally {
@@ -1021,37 +1048,26 @@ internal fun RunoutWearOptionsSheet(
     pdfShadedLiners: Boolean,
     vm: ShaftViewModel,
 ) {
+    // Scrollable + inset-padded: without its own scroll a short screen clips the bottom
+    // rows mid-checkbox behind the navigation bar (same posture as PdfOptionsSheet).
+    // Height capped below full screen so the sheet never reaches the status bar.
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.78f).dp
     Column(
         Modifier
             .fillMaxWidth()
+            .heightIn(max = maxSheetHeight)
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
         Text("PDF Options", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(12.dp))
 
         // ── Line thickness ───────────────────────────────────────────────────
-        // Track the drag locally; commit once on release. Committing per drag frame
-        // writes DataStore and re-renders the whole PDF preview each frame.
-        var thicknessDrag by remember { mutableStateOf<Float?>(null) }
-        Text(
-            "Line thickness  ${((thicknessDrag ?: lineThicknessScale) * 100).roundToInt()}%",
-            style = MaterialTheme.typography.titleSmall,
+        LineThicknessSlider(
+            scale = lineThicknessScale,
+            onCommit = { vm.setLineThicknessScale(it) },
         )
-        Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("50%", style = MaterialTheme.typography.bodySmall)
-            Slider(
-                value = thicknessDrag ?: lineThicknessScale,
-                onValueChange = { thicknessDrag = it },
-                onValueChangeFinished = {
-                    thicknessDrag?.let { vm.setLineThicknessScale(it) }
-                    thicknessDrag = null
-                },
-                valueRange = 0.5f..2.0f,
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-            )
-            Text("200%", style = MaterialTheme.typography.bodySmall)
-        }
 
         Spacer(Modifier.height(12.dp))
         HorizontalDivider()

@@ -567,8 +567,14 @@ private fun drawUndercutShaftProfile(
             c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
             c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
         } else {
-            val mid = (x0 + x1) * 0.5f; val gap = min(UC_ZIGZAG_GAP_MAX_PT, 0.25f * lenPt)
-            val half = gap * 0.5f; val amp = r * 0.6f
+            val mid = (x0 + x1) * 0.5f
+            val (gap, amp) = breakPairLayout(
+                runLenPt = lenPt,
+                desiredAmplitudePt = r * 0.6f,
+                classicGapPt = min(UC_ZIGZAG_GAP_MAX_PT, 0.25f * lenPt),
+                strokeWidthPt = capPaint.strokeWidth,
+            )
+            val half = gap * 0.5f
             val lEnd = (mid - half).coerceIn(geomRect.left, geomRect.right)
             val rBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
             c.drawLine(x0, top, lEnd, top, outline); c.drawLine(x0, bot, lEnd, bot, outline)
@@ -1307,6 +1313,7 @@ private const val UC_OVERFLOW_NOTE_HEIGHT_PT = 16f   // reserved band for the "+
 private const val UC_PROFILE_RADIUS_MARGIN_PT = 8f   // headroom above/below the shaft's drawn radius
 
 private const val UC_COMPRESS_TRIGGER_PT = 220f
+// Classic central gap; breakPairLayout may widen it to keep the pair clear.
 private const val UC_ZIGZAG_GAP_MAX_PT = 20f
 
 private const val UC_RAIL_WITNESS_GAP_PT = 3f        // clear gap between the drawn surface and a witness line

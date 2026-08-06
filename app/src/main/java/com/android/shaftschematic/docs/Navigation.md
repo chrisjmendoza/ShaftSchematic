@@ -3,28 +3,34 @@ Navigation Contracts
 
 Files: AppNav.kt, InternalDocRoutes.kt, PdfExportRoute.kt (ui/nav/);
 ShaftEditorRoute.kt, ShaftRoute.kt, StartScreen.kt, RunoutRoute.kt, WearRoute.kt,
-UndercutRoute.kt (ui/screen/)  
+UndercutRoute.kt, HelpRoute.kt (ui/screen/)  
 Layer: UI → Nav
 
-Version: v0.4 (2026-07-30)
+Version: v0.6 (2026-08-05)
 
 Invariants
 - Routes are stable, typed constants or sealed routes.
 - No heavy work in nav composables; they wire screens and VM scopes.
-- The Schematic / Runout / Wear / Undercut switch is **in-editor tab state** (sidebar), not
-  NavHost navigation — leaving the editor route discards tab state.
+- The Schematic / Runout / Wear / Undercut / Consolidated Output switch is **in-editor tab
+  state** (sidebar), not NavHost navigation — leaving the editor route discards tab state.
 
 Route graph (AppNav.kt NavHost)
 - `start` → StartScreen (New Drawing / Open / Unsaved drafts list (up to 3) / Settings)
 - `editor` → **ShaftEditorRoute** — the editor container. Owns the sidebar overlay
   (`EditorSidebarOverlay`) and the `EditorTab` state switching between:
   - Schematic tab → ShaftRoute → ShaftScreen
-  - Runout tab → RunoutRoute
+  - Runout tab → RunoutRoute (runout authoring; exports the classic runout sheet)
   - Wear tab → WearRoute
   - Undercut Drawing tab → UndercutRoute (`docs/UndercutDrawing.md`) — same "built" gating as
     Runout/Wear
+  - Consolidated Output tab → OutputRoute (`docs/RunoutSheet.md` Consolidation step 5) —
+    consolidated-sheet variants, worn-section editor, "Shaft height" slider, Export all;
+    same "built" gating, last in the sidebar
 - `settings` → SettingsRoute
 - `about` → AboutRoute
+- `help` → HelpRoute — static Help & FAQ content (no ViewModel); entered from Settings.
+  Topics restate current behavior — a behavior change must update the matching topic in
+  the same change (the screen is the user-facing summary of the contract docs).
 - `developerOptions` → DeveloperOptionsRoute
 - `achievements` → AchievementsRoute
 - `openLocal` / `saveLocal` → internal-storage document pickers (InternalDocRoutes.kt)

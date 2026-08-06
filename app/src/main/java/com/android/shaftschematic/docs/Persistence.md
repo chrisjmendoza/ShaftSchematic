@@ -128,8 +128,8 @@ design: `docs/Autosave_Incident_2026-07-25.md`.
 - **Restore-on-init**: same UX as before the rework — the newest draft auto-restores
   into a default/blank session at startup (`ShaftViewModel.init`), never into an
   already-initialized session.
-- **UI surface**: `ShaftViewModel.drafts: StateFlow<List<DraftEntry>>` (+ derived
-  `hasDraft`) backs the StartScreen "Unsaved drafts" card (up to 3 entries, tap to
+- **UI surface**: `ShaftViewModel.drafts: StateFlow<List<DraftEntry>>` backs the
+  StartScreen "Unsaved drafts" card (up to 3 entries, tap to
   `continueDraft(id)`, X icon → confirm → `discardDraft(id)`). See `Navigation.md`.
 
 Invariants (see the incident doc's "Invariants going forward" for the authoritative list)

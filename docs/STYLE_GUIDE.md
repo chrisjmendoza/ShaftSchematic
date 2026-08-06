@@ -1,5 +1,5 @@
 # ShaftSchematic Style Guide
-Version: v0.4.x
+Version: v0.5.x
 
 This document defines the conventions for Kotlin, Compose, architectural boundaries, commit messages, and file organization.
 
@@ -65,8 +65,9 @@ These rules enforce architecture boundaries:
 - Never performs unit or geometry calculations
 
 ### Stroke Rules:
-- `shaftWidth` for bodies, tapers, liners' top/bottom
-- `dimWidth` for ticks, hatch, dimensions
+Both live on `RenderOptions` (`ui/drawing/render/RenderOptions.kt`):
+- `outlineWidthPx` for bodies, tapers, liners' top/bottom, envelopes
+- `dimLineWidthPx` for ticks, hatch, dimensions and other auxiliary lines
 
 Renderer may not invent new stroke sizes.
 
@@ -142,11 +143,15 @@ Model migration
 
 Layout coordinate mapping
 
-Instrumentation tests for:
+Compose UI tests (Robolectric, `@RunWith(RobolectricTestRunner::class)` +
+`createComposeRule()`) run on the **JVM** under `src/test/` — dialog/field behavior,
+commit-on-blur, and StateFlow integration are covered there, so they run with the normal
+unit-test task and need no device or emulator. Prefer this over `src/androidTest/` for
+anything that does not require real device services.
 
-Dialog behavior
+Instrumentation tests (`src/androidTest/`) for:
 
-StateFlow integration
+Anything requiring a real device/emulator
 
 Preview rendering correctness
 

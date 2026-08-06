@@ -42,6 +42,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,9 +66,16 @@ import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.ui.viewmodel.*
+import com.android.shaftschematic.geom.defaultShaftHeightPt
+import com.android.shaftschematic.settings.AppThemeMode
+import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
+import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
+import com.android.shaftschematic.util.UndercutShadeColor
+import com.android.shaftschematic.util.UndercutShadeIntensity
 import com.android.shaftschematic.util.UnitSystem
 
 /**
@@ -94,9 +102,13 @@ fun SettingsRoute(
     onBack: () -> Unit,
     onOpenAchievements: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenHelp: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
 ) {
     val unit by vm.unit.collectAsState()
+    val themeMode by vm.themeMode.collectAsState()
+    val highContrast by vm.highContrast.collectAsState()
+    val undercutStyle by vm.undercutStyle.collectAsState()
     val showGrid by vm.showGrid.collectAsState()
     val showComponentArrows by vm.showComponentArrows.collectAsState()
     val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
@@ -120,6 +132,8 @@ fun SettingsRoute(
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
+    val pdfCurveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
+    val pdfCurveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -190,6 +204,32 @@ fun SettingsRoute(
                             label = { Text("Inches") }
                         )
                     }
+
+                    HorizontalDivider()
+                    Text("Appearance", style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AppThemeMode.entries.forEach { mode ->
+                            FilterChip(
+                                selected = themeMode == mode,
+                                onClick = { vm.setThemeMode(mode) },
+                                label = { Text(mode.uiLabel()) }
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = highContrast,
+                            onCheckedChange = { vm.setHighContrast(it) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("High contrast")
+                    }
+                    Text(
+                        "High contrast boosts figure/ground separation for bright sunlight or " +
+                            "low-vision use. Drawing sheets and PDFs always stay white with dark ink.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
 
                     HorizontalDivider()
                     ListItem(
@@ -321,6 +361,15 @@ fun SettingsRoute(
 
                     HorizontalDivider()
                     ListItem(
+                        headlineContent = { Text("Help & FAQ") },
+                        supportingContent = { Text("How-to guides and common questions") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onOpenHelp)
+                    )
+
+                    HorizontalDivider()
+                    ListItem(
                         headlineContent = { Text("About ShaftSchematic") },
                         supportingContent = {
                             Text(
@@ -410,6 +459,66 @@ fun SettingsRoute(
                         onChanged = vm::setPreviewThreadHatchSetting,
                         enabled = !previewBlackWhiteOnly
                     )
+
+                    HorizontalDivider()
+                    Text("Undercut Drawing", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Styles the on-screen Undercut Drawing. The printed PDF keeps standard drawing colors.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = undercutStyle.lineArt,
+                            onCheckedChange = { vm.setUndercutLineArt(it) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Line art (no shading)")
+                    }
+                    if (undercutStyle.lineArt) {
+                        Text(
+                            "Everything draws white with black outlines only.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    Text("Shade color", style = MaterialTheme.typography.titleSmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        UndercutShadeColor.entries.forEach { color ->
+                            FilterChip(
+                                selected = undercutStyle.shadeColor == color,
+                                onClick = { vm.setUndercutShadeColor(color) },
+                                enabled = !undercutStyle.lineArt,
+                                label = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(12.dp)
+                                                .background(color = color.base, shape = CircleShape)
+                                        )
+                                        Text(color.uiLabel())
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    Text("Shade intensity", style = MaterialTheme.typography.titleSmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        UndercutShadeIntensity.entries.forEach { intensity ->
+                            FilterChip(
+                                selected = undercutStyle.intensity == intensity,
+                                onClick = { vm.setUndercutShadeIntensity(intensity) },
+                                enabled = !undercutStyle.lineArt,
+                                label = { Text(intensity.uiLabel()) }
+                            )
+                        }
+                    }
                 }
             }
 
@@ -461,6 +570,62 @@ fun SettingsRoute(
                         Text("Liners")
                     }
 
+                    HorizontalDivider()
+                    Text(
+                        "Default drawing size",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                    )
+                    Text(
+                        "Drawn shaft height on paper at 100% “Shaft height”. Set what a " +
+                            "4″ and an 8″ shaft draw; sizes between and beyond follow " +
+                            "the line, capped at 1.5″ on paper.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    CurveAnchorControl(
+                        label = "4″ shaft draws",
+                        valueIn = pdfCurveLoHeightIn,
+                        onCommit = { vm.setPdfCurveLoHeightIn(it) },
+                    )
+                    CurveAnchorControl(
+                        label = "8″ shaft draws",
+                        valueIn = pdfCurveHiHeightIn,
+                        onCommit = { vm.setPdfCurveHiHeightIn(it) },
+                    )
+                    if (pdfCurveHiHeightIn < pdfCurveLoHeightIn) {
+                        Text(
+                            "8″ is set below 4″ — larger shafts never draw smaller, so " +
+                                "drawings flatten the line at the 4″ value.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val sixInHeight = defaultShaftHeightPt(
+                            152.4f, pdfCurveLoHeightIn * 72f, pdfCurveHiHeightIn * 72f
+                        ) / 72f
+                        Text(
+                            "Example: a 6″ shaft draws ${fmtCurveInches(sixInHeight)}.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            onClick = {
+                                vm.setPdfCurveLoHeightIn(PdfPrefs().curveLoHeightIn)
+                                vm.setPdfCurveHiHeightIn(PdfPrefs().curveHiHeightIn)
+                            },
+                            enabled = pdfCurveLoHeightIn != PdfPrefs().curveLoHeightIn ||
+                                pdfCurveHiHeightIn != PdfPrefs().curveHiHeightIn,
+                        ) {
+                            Text(
+                                "Standard (${fmtCurveInches(PdfPrefs().curveLoHeightIn)} / " +
+                                    fmtCurveInches(PdfPrefs().curveHiHeightIn) + ")"
+                            )
+                        }
+                    }
+
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Switch(
                             checked = pdfExportMode == PdfExportMode.Template,
@@ -509,6 +674,44 @@ fun SettingsRoute(
 
 private enum class SettingsPage { MAIN, PREVIEW_COLORS, PDF_EXPORT }
 
+/**
+ * One sizing-curve anchor: label + value readout and a slider over the settable range,
+ * quantized to 1/16″. Commits once on release — the drag is local, same posture as
+ * [LineThicknessControl] (per-frame commits would write DataStore every frame).
+ */
+@Composable
+private fun CurveAnchorControl(
+    label: String,
+    valueIn: Float,
+    onCommit: (Float) -> Unit,
+) {
+    var drag by remember { mutableStateOf<Float?>(null) }
+    val shown = drag ?: valueIn
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text("$label  ${fmtCurveInches(shown)}", style = MaterialTheme.typography.bodyMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(fmtCurveInches(PDF_CURVE_HEIGHT_MIN_IN), style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { drag = (it * 16f).roundToInt() / 16f },
+                onValueChangeFinished = {
+                    drag?.let(onCommit)
+                    drag = null
+                },
+                valueRange = PDF_CURVE_HEIGHT_MIN_IN..PDF_CURVE_HEIGHT_MAX_IN,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+            )
+            Text(fmtCurveInches(PDF_CURVE_HEIGHT_MAX_IN), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/** Trimmed paper inches with the double-prime mark: 0.75″, 0.5″, 1.0625″. */
+private fun fmtCurveInches(v: Float): String =
+    String.format(java.util.Locale.US, "%.4f", v).trimEnd('0').trimEnd('.') + "″"
+
 @Composable
 private fun LineThicknessControl(
     scale: Float,
@@ -518,7 +721,17 @@ private fun LineThicknessControl(
     var fieldText by remember(scale) { mutableStateOf((scale * 100).roundToInt().toString()) }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("Line Thickness", style = MaterialTheme.typography.titleSmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Line Thickness",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = { onScaleChange(1f) },
+                enabled = scale != 1f,
+            ) { Text("Default (100%)") }
+        }
         Text(
             "Applies to preview and PDF output. 100% = default thin weight; 200% = original thick weight.",
             style = MaterialTheme.typography.bodySmall,
@@ -538,7 +751,9 @@ private fun LineThicknessControl(
                     fieldText = (v * 100).roundToInt().toString()
                 },
                 onValueChangeFinished = {
-                    sliderDrag?.let(onScaleChange)
+                    // Slider commits share the 100% detent with the options-sheet
+                    // control; typed values in the % field are never snapped.
+                    sliderDrag?.let { onScaleChange(snappedLineThickness(it)) }
                     sliderDrag = null
                 },
                 valueRange = 0.5f..2.0f,
