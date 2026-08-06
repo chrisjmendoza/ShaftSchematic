@@ -8,6 +8,56 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-06
 
+### fix(pdf): dimension labels clear each other — slide along the span, lift the next tier
+
+On-device report, with screenshots of the consolidated sheet: two short spans on *different*
+rails printed their values literally on top of each other (a 19½" taper span and a 21½" span
+at overlapping x), and another value ("11 ½") was struck through by a neighbouring rail's
+dimension line. The direction: "There is enough space to print the label along the span, and
+there is enough vertical space to move the next tier up to clear the label as well, so please
+make adjustments for the labels and spans to clear each other."
+
+Root cause: `PdfDimensionRenderer` tracked placed labels **per rail** (`labelBoundsByRail`),
+but a span too short to seat its value in the line break floats that value `textAboveDy`
+(12 pt) above its own rail while rails are only `railDy` apart (18 pt on the consolidated
+sheet) — so a floating label physically lives in the *next tier's* band, invisible to that
+tier's collision list and vice versa. Rail **lines** were never obstacles at all, so a value
+could be struck through by a neighbouring rail's line. The only escape was a bounded bump
+**upward**, which pushed the label further into the tier above, and no mechanism existed to
+give a tier extra room. Rails were drawn span-by-span, so the renderer never saw the full
+set up front.
+
+New rule: one collision space, planned up front by the pure `geom/DimensionRailLayout.kt`
+(no Android imports, unit-tested — same posture as `DiameterCalloutLayout`). It places every
+span at once, top OAL rail included, treating both placed labels and every rail **line** as
+obstacles. A collision is resolved by **sliding the value horizontally along its own span**
+first — the smallest shift from center that clears everything, inside
+`[xa+textPad+half, xb−textPad−half]` and tightened by `arrowSize` on both sides for an inline
+value so the break keeps its inward arrows — and only then by bumping a floating value
+vertically. A rail carrying a floating value **lifts every rail above it** (OAL included) by
+one label band, cumulative per intervening fallback rail, so lines clear values. Placement is
+least-slide-room-first, so the wide span is the one that moves.
+
+Inline-vs-fallback is decided from x-geometry alone, so the lifts are known before any
+vertical budget: `ShaftPdfComposer` folds `topLift` into its `computeTopY` fit loop (shrink
+rail gap, then text size, until the lifted block still clears the content top), and
+`RunoutPdfComposer` adds it to `railsBlockH` off a prelim linear-map plan — the same
+prelim-then-resolve posture the bubble budget already uses, since the real compressed x map
+needs the budget the lift feeds. `PdfDimensionRenderer` keeps only the Canvas work
+(`drawPlanned`); its internal collision/bump code is gone. Unchanged: the value-in-the-break
+primary path, the `canFitInwardArrows` predicate, inward arrows on inline spans, and the
+blank-draft write-in gap (planned on `blankLabelWidthPx`, so hand-write-in windows get the
+same clearance). The classic runout sheet (`consolidated = false`) has no rails and is
+untouched. Pinned by `DimensionRailLayoutTest`.
+
+Follow-up from the same on-device review: the OAL rail now rides exactly **one regular
+tier pitch** above the highest component tier on both composers ("it is the topmost
+measurement, but it doesn't need such a large gap… make use of our whitespace more
+efficiently") — the extra OAL padding constants (`OVERALL_EXTRA_PT` 16 pt schematic,
+`RUNOUT_OAL_EXTRA_PT` 14 pt consolidated) are removed; the planner's lift is the only
+thing that widens the gap, and only when the tier below floats a label into the lane.
+The freed height goes back to the shaft on the consolidated sheet's budget.
+
 ### fix(pdf): liners shade again on the consolidated sheet — unless values print inside them
 
 On-device report: the Consolidated Sheet Preview drew liners white even with Settings'

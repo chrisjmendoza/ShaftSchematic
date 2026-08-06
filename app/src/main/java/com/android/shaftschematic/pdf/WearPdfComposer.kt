@@ -1029,7 +1029,7 @@ private fun drawWearStripRail(
 
         // Value-in-a-break when the label fits its span (arrowInward guarantees the break's
         // stubs still have arrow room); otherwise a continuous line with the below-line
-        // fallback row — the schematic's drawSpan rule, mirrored.
+        // fallback row — the schematic's value-in-a-break rule, mirrored.
         val lw = dimText.measureText(s.label)
         val seatsInBreak = drawLabels && s.arrowInward
         if (seatsInBreak) {

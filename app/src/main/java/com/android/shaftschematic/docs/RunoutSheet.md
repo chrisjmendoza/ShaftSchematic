@@ -425,6 +425,13 @@ consolidated drawing —
   mapping — a foreshortened liner still reads its full length, exactly like the hand
   sheets. Compact lane constants (`RUNOUT_RAIL_GAP_PT` etc.) keep the block tight. This
   replaces the old standalone OAL span line.
+  Values and rail LINES share ONE collision space (`geom/DimensionRailLayout.kt`, planned
+  before drawing): a value too short to seat in its break floats into the *next* tier's
+  band, so a colliding value slides horizontally along its own span first and bumps only
+  when the slide has no room, and every rail above a floating value lifts by one label
+  band. The lift is folded into `railsBlockH` from a prelim linear-map plan —
+  inline-vs-floating depends only on drawn width, but the real compressed map needs the
+  budget the lift feeds. See `docs/PDF_EXPORT.md` §5.4.
 - **Footer block at the bottom** — the schematic's `drawFooter` itself (made internal;
   ONE implementation for both documents): AFT/FWD taper columns (Rate, L.E.T., S.E.T.,
   Length, KW incl. spooned note, Threads), work-order center (Customer/Vessel/Job#/Date,
@@ -727,7 +734,7 @@ span; only the label uses the typed value. The printed label keeps its small `"O
 prefix (product decision, 2026-07-28: compact print output reads well and the prefix is a
 nice visual identifier) and **seats in a break cut mid-span, vertically centred on the
 line** — the same value-in-a-break convention as the schematic's dimension lines
-(`PdfDimensionRenderer.drawSpan`), so all drawing outputs read the same; a span too short
+(`PdfDimensionRenderer.drawPlanned`), so all drawing outputs read the same; a span too short
 for the break + inward arrows falls back to a continuous line with the label above.
 Neither document's **header** repeats the OAL (it would just duplicate this span), and the
 blank/write-in variant of this line carries no label text at all — the machinist
@@ -948,7 +955,7 @@ witness-line/arrowed-span/centered-label convention the main schematic uses
   its own span when it fits with padding on both sides, else centered on the span's
   midpoint and allowed to overhang (never dropped); arrowheads point inward when there's
   room beside the label, outward when cramped (same test as
-  `PdfDimensionRenderer.canFitInwardArrows`); and a label is bumped to the next stacked row
+  `DimensionRailLayout.canFitInwardArrows`); and a label is bumped to the next stacked row
   when it would otherwise overlap an already-placed label — the crowding fallback for
   short bands/gaps whose label is wider than the span itself.
 - **Drawing (2026-07-28)**: a label that fits inside its span (`arrowInward == true`, which

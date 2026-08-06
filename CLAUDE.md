@@ -268,15 +268,31 @@ posture as runout bubbles. PDF-only — no on-screen canvas equivalent, so no dr
 rule applies. See `docs/PDF_EXPORT.md` §5.3.
 
 ### Dimension values seat in a break in the line
-`PdfDimensionRenderer.drawSpan` draws each dimension line as **two stubs**
+`PdfDimensionRenderer.drawPlanned` draws each dimension line as **two stubs**
 (`xa→gapLeft`, `gapRight→xb`) with the value seated in the gap, vertically centered on the
 line — not floating above a continuous line. The gap (label width + 2·`textPad`) is cut
 **only** when both stubs can host an inward arrowhead — the same `canFitInwardArrows`
-predicate that chooses arrow direction — so inline spans always get inward arrows. Short
-spans, or a label colliding with one already placed on the rail, **fall back** to the
-original style (continuous line, label above at `textAboveDy`, bounded bump). Do not
-reintroduce always-above label placement. The top OAL rail uses the same `drawSpan`, so it
-breaks too. PDF-only — the on-screen preview rasterizes the real PDF, so there is no separate
+predicate that chooses arrow direction — so inline spans always get inward arrows. Spans too
+short for that **fall back** to the original style (continuous line, label above at
+`textAboveDy`). Do not reintroduce always-above label placement. The top OAL rail is planned
+and drawn through the same path, so it breaks too.
+
+**Labels and rail LINES share ONE collision space** — a floating value lives in the *next*
+rail's band, so per-rail collision tracking is blind exactly where the labels overlap. The
+pure planner `geom/DimensionRailLayout.kt` places every span at once (top OAL rail included),
+treating both placed labels and every rail line as obstacles; the renderer keeps only the
+Canvas work, and no collision logic may be duplicated back into it. Resolution order:
+(a) **slide the value horizontally along its own span** — smallest shift from center inside
+`[xa+textPad+half, xb−textPad−half]`, tightened by `arrowSize` on both sides for an inline
+value so the break keeps its inward arrows; (b) only then bump a floating value vertically
+(bounded, never past the content top). A rail carrying a floating value **lifts every rail
+above it** — the OAL rail included — by one label band (glyph height + gap), cumulative per
+intervening fallback rail. Inline-vs-fallback is decided from **x-geometry alone**, so the
+lifts are known before the vertical budget: both composers fold them in
+(`ShaftPdfComposer`'s `computeTopY` fit loop; `RunoutPdfComposer`'s `railsBlockH`, off a
+prelim linear-map plan since the real x map needs the budget). Blank drafts plan on
+`blankLabelWidthPx` — the write-in gaps get the same clearance as printed values.
+PDF-only — the on-screen preview rasterizes the real PDF, so there is no separate
 draw path and no canvas equivalent to keep in sync. See `docs/PDF_EXPORT.md` §5.4.
 
 ### Golden rule: user inputs are SACRED

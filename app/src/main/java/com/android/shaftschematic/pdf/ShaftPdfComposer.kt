@@ -5,6 +5,7 @@ package com.android.shaftschematic.pdf
 
 import android.graphics.*
 import android.graphics.pdf.PdfDocument
+import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.geom.END_EPS_MM
 import com.android.shaftschematic.geom.KeywaySilhouetteNotch
 import com.android.shaftschematic.geom.KeywaySilhouettePoint
@@ -376,10 +377,45 @@ fun composeShaftPdf(
 
         val maxRail = assignments.maxOfOrNull { it.rail } ?: 0
         val extraClearRails = (pdfPrefs.oalSpacingFactor.coerceIn(1.0f, 6.0f) - 1.0f) * 0.5f
-        // (already declared above)
-        fun computeTopY(gap: Float): Float = baseY - OVERALL_EXTRA_PT - gap * (maxRail + 1f + extraClearRails)
 
-        var topY = computeTopY(railGap)
+        val renderer = PdfDimensionRenderer(
+            pageX = pageX,
+            linePaint = dim,
+            textPaint = dimText,
+            objectTopY = yTopOfShaft,
+            objectClearance = 6f,
+            blankLabels = blank,
+            blankLabelWidthPx = BLANK_DIM_GAP_PT
+        )
+
+        val oalAft = if (spec.threads.any { t ->
+            abs(t.startFromAftMm.toDouble()) <= END_EPS_MM && !t.excludeFromOAL
+        }) 0.0 else sets.aftSETxMm
+        val oalFwd = if (spec.threads.any { t ->
+            abs((t.startFromAftMm + t.lengthMm).toDouble() - spec.overallLengthMm.toDouble()) <= END_EPS_MM && !t.excludeFromOAL
+        }) win.oalMm else sets.fwdSETxMm
+        val oalDimSpan = oalSpan(oalAft, oalFwd, unit, labelMm = spec.overallLengthMm.toDouble())
+
+        // Planner rows, OAL topmost. Rail y values here are UNLIFTED; the plan returns the
+        // lifted line positions.
+        fun rows(gap: Float, unliftedTopY: Float) =
+            assignments.map { renderer.spanInput(it.rail, baseY - gap * it.rail, it.span) } +
+                renderer.spanInput(DimensionRailLayout.TOP_RAIL, unliftedTopY, oalDimSpan)
+
+        // A span too short to seat its value in the line prints it ABOVE the line, in the next
+        // rail's band — so every rail above lifts by one label band. Inline-vs-above is decided
+        // from x-geometry alone, so the lift is known before the lane budget is fixed and the
+        // fit loop can shrink the gap (then the text) until the lifted block still clears the
+        // content top.
+        fun liftFor(gap: Float): Float = renderer.topLift(rows(gap, 0f))
+        // The OAL lane is the topmost measurement but rides exactly ONE regular tier
+        // pitch above the highest component tier (on-device report: a wider gap wastes
+        // whitespace); the planner's lift adds a label band only when the tier below
+        // floats a label into the lane.
+        fun computeTopY(gap: Float): Float =
+            baseY - gap * (maxRail + 1f + extraClearRails)
+
+        var topY = computeTopY(railGap) - liftFor(railGap)
         repeat(10) {
             if (topY >= geomRect.top + topSafePad) return@repeat
             if (railGap > minRailGap) {
@@ -388,35 +424,17 @@ fun composeShaftPdf(
                 dimTextSize = maxOf(dimTextSize - 1f, minDimTextSize)
                 dimText.textSize = dimTextSize
             }
-            topY = computeTopY(railGap)
+            topY = computeTopY(railGap) - liftFor(railGap)
         }
-        // Final clamp after loop
-        topY = max(computeTopY(railGap), geomRect.top + topSafePad)
+        // Final clamp after loop — the OAL rail lands at topY once the lift is applied.
+        val topLift = liftFor(railGap)
+        topY = max(computeTopY(railGap) - topLift, geomRect.top + topSafePad)
 
-        val renderer = PdfDimensionRenderer(
-            pageX = pageX,
-            baseY = baseY,
-            railDy = railGap,
-            topRailY = topY,
-            linePaint = dim,
-            textPaint = dimText,
-            objectTopY = yTopOfShaft,
-            contentTopPx = geomRect.top,
-            objectClearance = 6f,
-            blankLabels = blank,
-            blankLabelWidthPx = BLANK_DIM_GAP_PT
-        )
-
-        assignments.forEach { rs ->
-            renderer.drawOnRail(c, rs.rail, rs.span, true)
+        val plan = renderer.plan(rows(railGap, topY + topLift), safeTopY = geomRect.top + topSafePad)
+        assignments.forEachIndexed { i, rs ->
+            renderer.drawPlanned(c, rs.span, plan.placements[i], true)
         }
-        val oalAft = if (spec.threads.any { t ->
-            abs(t.startFromAftMm.toDouble()) <= END_EPS_MM && !t.excludeFromOAL
-        }) 0.0 else sets.aftSETxMm
-        val oalFwd = if (spec.threads.any { t ->
-            abs((t.startFromAftMm + t.lengthMm).toDouble() - spec.overallLengthMm.toDouble()) <= END_EPS_MM && !t.excludeFromOAL
-        }) win.oalMm else sets.fwdSETxMm
-        renderer.drawTop(c, oalSpan(oalAft, oalFwd, unit, labelMm = spec.overallLengthMm.toDouble()), true)
+        renderer.drawPlanned(c, oalDimSpan, plan.placements.last(), true)
     }
 
     // --- Ø callouts below the shaft: one leader per unique body OD and per unique liner OD ---
@@ -504,7 +522,6 @@ private const val TOP_TEXT_PAD_PT = 12f
 private const val SHAFT_DOWN_PT = 36f        // 0.5 in downward shift (moves footer down too)
 private const val BAND_CLEAR_PT = 12f        // breathing room above shaft before first dim line
 private const val BASE_DIM_OFFSET_PT = 24f   // distance from shaft top to first component dim
-private const val OVERALL_EXTRA_PT = 16f     // overall lane sits above components
 private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
 
 // Component title labels (PDF only)
