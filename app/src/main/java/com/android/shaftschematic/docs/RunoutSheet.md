@@ -425,6 +425,13 @@ consolidated drawing —
   mapping — a foreshortened liner still reads its full length, exactly like the hand
   sheets. Compact lane constants (`RUNOUT_RAIL_GAP_PT` etc.) keep the block tight. This
   replaces the old standalone OAL span line.
+  Values and rail LINES share ONE collision space (`geom/DimensionRailLayout.kt`, planned
+  before drawing): a value too short to seat in its break floats into the *next* tier's
+  band, so a colliding value slides horizontally along its own span first and bumps only
+  when the slide has no room, and every rail above a floating value lifts by one label
+  band. The lift is folded into `railsBlockH` from a prelim linear-map plan —
+  inline-vs-floating depends only on drawn width, but the real compressed map needs the
+  budget the lift feeds. See `docs/PDF_EXPORT.md` §5.4.
 - **Footer block at the bottom** — the schematic's `drawFooter` itself (made internal;
   ONE implementation for both documents): AFT/FWD taper columns (Rate, L.E.T., S.E.T.,
   Length, KW incl. spooned note, Threads), work-order center (Customer/Vessel/Job#/Date,
@@ -522,9 +529,18 @@ On-device request following the worn-sections review:
     drawing plan re-solves on the real mapping. The SCHEMATIC composer uses the same
     scale + engine (`ShaftPdfComposer` — dims, callout leaders, keyways, and the
     compression footer note all ride the compressed `xAt`).
-  - *No liner grey on this sheet:* liners draw unfilled on both the canvas preview and
-    the PDF regardless of the `shadedLiners` pref — against a grey liner every white
-    knockout read as a pasted box (on-device request). Bodies/tapers keep the pref.
+  - *Liner grey, conditionally:* liners follow the `shadedLiners` pref like bodies and
+    tapers **unless the sheet prints Ø values inside the profile** — against a grey liner
+    every sheet-white knockout reads as a pasted box (on-device request), so on such a
+    sheet liners draw unfilled whatever the pref says. One predicate decides it,
+    `consolidatedSheetHasInProfileValues` (`pdf/RunoutPdfComposer.kt`): wear info elected
+    in, not a blank draft, and at least one worn-section value > 0 or one valued reading
+    keyed to a component that still resolves. The composer builds its `linerFill` from it
+    and the Output tab's options sheet locks the "Liners" checkbox with it
+    (`RunoutWearOptionsSheet(linerShadeLocked)` — disabled and displayed unchecked, with
+    the caption "Ø values print inside the profile on this sheet"; **display-only**, the
+    stored pref is never rewritten). The classic runout sheet and the Runout tab's live
+    canvas never carry in-profile text, so there the pref simply applies.
 - **Division of labor (on-device decision):** the Wear page **stays** as the authoring
   surface — spots, pits, and point Ø readings are placed/edited there, and its own PDF is
   unchanged — while the Runout sheet is the consolidated **output** that features that
@@ -718,7 +734,7 @@ span; only the label uses the typed value. The printed label keeps its small `"O
 prefix (product decision, 2026-07-28: compact print output reads well and the prefix is a
 nice visual identifier) and **seats in a break cut mid-span, vertically centred on the
 line** — the same value-in-a-break convention as the schematic's dimension lines
-(`PdfDimensionRenderer.drawSpan`), so all drawing outputs read the same; a span too short
+(`PdfDimensionRenderer.drawPlanned`), so all drawing outputs read the same; a span too short
 for the break + inward arrows falls back to a continuous line with the label above.
 Neither document's **header** repeats the OAL (it would just duplicate this span), and the
 blank/write-in variant of this line carries no label text at all — the machinist
@@ -939,7 +955,7 @@ witness-line/arrowed-span/centered-label convention the main schematic uses
   its own span when it fits with padding on both sides, else centered on the span's
   midpoint and allowed to overhang (never dropped); arrowheads point inward when there's
   room beside the label, outward when cramped (same test as
-  `PdfDimensionRenderer.canFitInwardArrows`); and a label is bumped to the next stacked row
+  `DimensionRailLayout.canFitInwardArrows`); and a label is bumped to the next stacked row
   when it would otherwise overlap an already-placed label — the crowding fallback for
   short bands/gaps whose label is wider than the span itself.
 - **Drawing (2026-07-28)**: a label that fits inside its span (`arrowInward == true`, which
@@ -998,7 +1014,7 @@ OD lookups, and runout stations. Both routes always pass `vm.resolvedComponents`
 | `lineThicknessScale` (0.5–2.0) | Scales `strokeWidth` on all `OUTLINE_PT` and `DIM_PT` paints |
 | `pdfPrefs.shadedBodies` | Draws a light-grey (`Color.argb(40,0,0,0)`) fill rect before each body outline |
 | `pdfPrefs.shadedTapers` | Draws a light-grey trapezoid path before each taper outline |
-| `pdfPrefs.shadedLiners` | Draws a light-grey fill rect before each liner outline |
+| `pdfPrefs.shadedLiners` | Draws a light-grey fill rect before each liner outline — suppressed on a sheet that prints Ø values inside the profile (`consolidatedSheetHasInProfileValues`) |
 
 Fills are drawn before outlines so the outline strokes are always visible on top.
 
@@ -1028,9 +1044,11 @@ Both routes pass `RunoutWearOptionsSheet` as the lambda:
 | Line thickness (Slider 50–200%) | `vm.setLineThicknessScale()` |
 | Shade Bodies (Checkbox) | `vm.setPdfShadedBodies()` |
 | Shade Tapers (Checkbox) | `vm.setPdfShadedTapers()` |
-| Shade Liners (Checkbox) | `vm.setPdfShadedLiners()` |
+| Shade Liners (Checkbox) | `vm.setPdfShadedLiners()` — locked (disabled, shown unchecked) when the document prints Ø values inside the profile; display-only, the pref is never rewritten |
 
 All four values are included in the `LaunchedEffect` key list so changing any option immediately re-renders the preview bitmap.
+
+The Consolidated Output tab passes `linerShadeLocked = consolidatedSheetHasInProfileValues(…)` computed from the same inputs its composer call gets (wear record, resolved component ids, the elected variant's `includeWearInfo`, the blank-draft flag), so the checkbox can never show a shade the sheet won't draw. The other three callers (Runout, Wear, Undercut) leave the parameter at its `false` default.
 
 ---
 

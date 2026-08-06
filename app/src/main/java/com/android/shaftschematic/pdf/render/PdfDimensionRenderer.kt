@@ -2,7 +2,7 @@ package com.android.shaftschematic.pdf.render
 
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.RectF
+import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.pdf.dim.DimSpan
 import kotlin.math.max
 import kotlin.math.min
@@ -13,22 +13,22 @@ import kotlin.math.min
  *
  * The dimension value is seated in a BREAK in the line (drafting convention): the main line
  * is drawn as two stubs [xa..gapLeft] and [gapRight..xb] with the value vertically centered on
- * the line in the gap. Short spans (or a label colliding with one already on the rail) fall back
- * to a continuous line with the label floating above it.
+ * the line in the gap. Spans too short to keep an inward arrowhead on both stubs fall back to a
+ * continuous line with the value floating above it.
+ *
+ * Placement is not decided here: the pure [DimensionRailLayout] plans every span at once so
+ * labels and rail lines across ALL tiers share one collision space (a floating value lives in
+ * the next rail's band). This class measures the text, maps the spans to page x, and draws the
+ * planned result — the plan owns inline-vs-above, the label center, and the rail lift.
  *
  * Blank-draft mode ([blankLabels]): the break is still cut — at a fixed writable width — but no
  * value text is drawn, leaving the gap as a hand-write-in spot.
  */
 class PdfDimensionRenderer(
     private val pageX: (Double) -> Float,   // mm → page X
-    private val baseY: Float,
-    private val railDy: Float,
-    private val topRailY: Float,
     private val linePaint: Paint,           // strokes for lines/ticks/arrows
     private val textPaint: Paint,           // text paint (fill)
     private val objectTopY: Float,          // top of shaft outline in page coords
-    private val contentTopPx: Float = Float.NEGATIVE_INFINITY,
-    private val railSafePaddingPx: Float = 6f,
     private val objectClearance: Float = 6f,
     private val textAboveDy: Float = 12f,   // fallback (label-above-line) baseline offset; primary path seats the label in the line break
     private val arrowSize: Float = 5f,      // arrowhead half-size
@@ -36,22 +36,63 @@ class PdfDimensionRenderer(
     private val blankLabels: Boolean = false, // blank-draft: cut the break, draw no value text
     private val blankLabelWidthPx: Float = 46f
 ) {
-    private val labelBoundsByRail = mutableMapOf<Int, MutableList<RectF>>()
+    /** The width this renderer occupies for a value — blank drafts reserve the write-in gap. */
+    fun labelWidth(span: DimSpan): Float =
+        if (blankLabels) blankLabelWidthPx else textPaint.measureText(span.labelTop)
 
-    fun drawTop(canvas: Canvas, span: DimSpan, drawExtensions: Boolean = true) {
-        drawSpan(canvas, railIndex = -1, span = span, y = topRailY, drawExtensions = drawExtensions)
+    /** Text box metrics the planner needs, read live from this renderer's text paint. */
+    fun metrics(): DimensionRailLayout.TextMetrics {
+        val fm = textPaint.fontMetrics
+        return DimensionRailLayout.TextMetrics(
+            ascent = fm.ascent,
+            descent = fm.descent,
+            aboveDy = textAboveDy,
+        )
     }
 
-    fun drawOnRail(canvas: Canvas, railIndex: Int, span: DimSpan, drawExtensions: Boolean = true) {
-        val y = baseY - railDy * railIndex
-        drawSpan(canvas, railIndex, span, y, drawExtensions)
+    /**
+     * Planner input for one (rail, span) row. [railY] is the caller's UNLIFTED rail position;
+     * the plan returns the lifted y to draw at. Use [DimensionRailLayout.TOP_RAIL] for the OAL rail.
+     */
+    fun spanInput(railIndex: Int, railY: Float, span: DimSpan): DimensionRailLayout.SpanInput {
+        val x1 = pageX(span.x1Mm)
+        val x2 = pageX(span.x2Mm)
+        return DimensionRailLayout.SpanInput(
+            railIndex = railIndex,
+            railY = railY,
+            xa = min(x1, x2),
+            xb = max(x1, x2),
+            labelWidth = labelWidth(span),
+        )
     }
 
-    private fun drawSpan(canvas: Canvas, railIndex: Int, span: DimSpan, y: Float, drawExtensions: Boolean) {
+    /**
+     * Extra height the rail block needs: one label band per rail carrying an above-line value.
+     * Answerable from x-geometry alone, so a composer can size its vertical budget before it
+     * places the rails.
+     */
+    fun topLift(inputs: List<DimensionRailLayout.SpanInput>): Float =
+        DimensionRailLayout.topLift(inputs, metrics(), arrowSize, textPad)
+
+    /** Plans placements parallel to [inputs]; vertical bumps stay below [safeTopY]. */
+    fun plan(
+        inputs: List<DimensionRailLayout.SpanInput>,
+        safeTopY: Float = Float.NEGATIVE_INFINITY,
+    ): DimensionRailLayout.Plan =
+        DimensionRailLayout.plan(inputs, metrics(), arrowSize, textPad, safeTopY)
+
+    /** Draws one planned span: extension lines, the (broken or continuous) line, value, arrows. */
+    fun drawPlanned(
+        canvas: Canvas,
+        span: DimSpan,
+        placement: DimensionRailLayout.Placement,
+        drawExtensions: Boolean = true,
+    ) {
         val x1 = pageX(span.x1Mm)
         val x2 = pageX(span.x2Mm)
         val xa = min(x1, x2)
         val xb = max(x1, x2)
+        val y = placement.railY
 
         // extension lines (from object to rail with clearance) — independent of the label
         if (drawExtensions) {
@@ -60,94 +101,30 @@ class PdfDimensionRenderer(
             canvas.drawLine(xb, extTop, xb, y, linePaint)
         }
 
-        // ---- label metrics + horizontal center (computed before the line so we can break it) ----
-        val label = span.labelTop
-        val w = if (blankLabels) blankLabelWidthPx else textPaint.measureText(label)
-        val mid = (xa + xb) * 0.5f
-
-        // keep label center inside [xa+pad+w/2, xb-pad-w/2]
-        val half = w * 0.5f
-        val leftBoundCenter  = xa + textPad + half
-        val rightBoundCenter = xb - textPad - half
-        val cx = if (leftBoundCenter > rightBoundCenter) mid else clamp(mid, leftBoundCenter, rightBoundCenter)
-
-        val fm = textPaint.fontMetrics
-        val textHeightPx = fm.descent - fm.ascent
-        val bumpStepPx = textHeightPx + LABEL_GAP_PX
-        val safeTop = contentTopPx + railSafePaddingPx
-        val existing = labelBoundsByRail.getOrPut(railIndex) { mutableListOf() }
-
-        // Inline eligibility is the SAME predicate as inward arrows: both need the residual
-        // stubs [xa..gapLeft] and [gapRight..xb] to be at least arrowSize long.
-        val inlineFits = canFitInwardArrows(xa, xb, cx, w, textPad, arrowSize)
-
-        // Bounds for the label seated ON the line (glyph box vertically centered on y).
-        val inlineBaseline = y - (fm.ascent + fm.descent) / 2f
-        val inlineBounds = centeredLabelBounds(cx, baselineY = inlineBaseline, halfWidthPx = half, fm = fm)
-
-        if (inlineFits && !collidesWithAny(inlineBounds, existing)) {
+        if (placement.inline) {
             // ---- primary path: value seated in a break in the line ----
-            val gapLeft  = cx - half - textPad
-            val gapRight = cx + half + textPad
-            canvas.drawLine(xa, y, gapLeft, y, linePaint)       // left stub
-            canvas.drawLine(gapRight, y, xb, y, linePaint)      // right stub
-            drawLabelAtBounds(canvas, label, inlineBounds, fm)
-            existing += RectF(inlineBounds)
+            val half = labelWidth(span) * 0.5f
+            canvas.drawLine(xa, y, placement.cx - half - textPad, y, linePaint)
+            canvas.drawLine(placement.cx + half + textPad, y, xb, y, linePaint)
         } else {
-            // ---- fallback path: continuous line + label above, with bounded bump ----
+            // ---- fallback path: continuous line, value floating above it ----
             canvas.drawLine(xa, y, xb, y, linePaint)
-            val aboveBounds = centeredLabelBounds(cx, baselineY = y - textAboveDy, halfWidthPx = half, fm = fm)
-            var placedBounds = RectF(aboveBounds)
-            var bumps = 0
-            while (bumps < MAX_BUMPS && collidesWithAny(placedBounds, existing)) {
-                placedBounds = placedBounds.offsetCopy(0f, -bumpStepPx)
-                if (placedBounds.top < safeTop) {
-                    placedBounds = placedBounds.offsetCopy(0f, safeTop - placedBounds.top)
-                }
-                bumps++
-            }
-            drawLabelAtBounds(canvas, label, placedBounds, fm)
-            existing += RectF(placedBounds)
         }
 
-        // ---- arrowheads: inward by default, outward only when cramped ----
-        // Same predicate as inline eligibility, so inline spans always get inward arrows
-        // that line up with the value seated in the break.
-        drawArrow(canvas, xAt = xa, y = y, inward = inlineFits, isLeftEnd = true)
-        drawArrow(canvas, xAt = xb, y = y, inward = inlineFits, isLeftEnd = false)
+        drawLabel(canvas, span.labelTop, placement.label)
+
+        // ---- arrowheads: inward whenever the value is seated in the break ----
+        drawArrow(canvas, xAt = xa, y = y, inward = placement.inline, isLeftEnd = true)
+        drawArrow(canvas, xAt = xb, y = y, inward = placement.inline, isLeftEnd = false)
     }
 
-    private fun centeredLabelBounds(cx: Float, baselineY: Float, halfWidthPx: Float, fm: Paint.FontMetrics): RectF {
-        val left = cx - halfWidthPx
-        val right = cx + halfWidthPx
-        val top = baselineY + fm.ascent
-        val bottom = baselineY + fm.descent
-        return RectF(left, top, right, bottom)
-    }
-
-    private fun drawLabelAtBounds(canvas: Canvas, label: String, bounds: RectF, fm: Paint.FontMetrics) {
-        if (blankLabels) return  // the gap itself is the write-in spot; bounds are still reserved
-        val baseline = bounds.top - fm.ascent
+    private fun drawLabel(canvas: Canvas, label: String, bounds: DimensionRailLayout.Box) {
+        if (blankLabels) return  // the gap itself is the write-in spot; the plan still reserved it
+        val baseline = bounds.top - textPaint.fontMetrics.ascent
         val prevAlign = textPaint.textAlign
         textPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText(label, bounds.centerX(), baseline, textPaint)
+        canvas.drawText(label, bounds.centerX, baseline, textPaint)
         textPaint.textAlign = prevAlign
-    }
-
-    private fun collidesWithAny(candidate: RectF, existing: List<RectF>): Boolean {
-        val padded = RectF(candidate).apply { inset(-LABEL_GAP_PX * 0.5f, -LABEL_GAP_PX * 0.5f) }
-        return existing.any { RectF.intersects(padded, it) }
-    }
-
-    private fun canFitInwardArrows(xa: Float, xb: Float, cx: Float, w: Float, pad: Float, s: Float): Boolean {
-        // Require enough leftover line length on both sides of the label window to place arrowheads pointing inward.
-        // Label window = [cx - w/2 - pad, cx + w/2 + pad]
-        val leftWindow = cx - w * 0.5f - pad
-        val rightWindow = cx + w * 0.5f + pad
-        val leftRoom = leftWindow - xa
-        val rightRoom = xb - rightWindow
-        // need at least arrowSize margin on each side; 1.0× is enough for the arrowhead itself
-        return leftRoom >= s && rightRoom >= s
     }
 
     private fun drawArrow(canvas: Canvas, xAt: Float, y: Float, inward: Boolean, isLeftEnd: Boolean) {
@@ -164,11 +141,4 @@ class PdfDimensionRenderer(
         canvas.drawLine(xAt, y, xAt + dir * s, y - s, linePaint)
         canvas.drawLine(xAt, y, xAt + dir * s, y + s, linePaint)
     }
-
-    private fun clamp(v: Float, lo: Float, hi: Float): Float = min(max(v, lo), hi)
 }
-
-private const val LABEL_GAP_PX = 6f
-private const val MAX_BUMPS = 3
-
-private fun RectF.offsetCopy(dx: Float, dy: Float): RectF = RectF(left + dx, top + dy, right + dx, bottom + dy)

@@ -7,6 +7,7 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
+import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.geom.PlacedRunoutBubble
 import com.android.shaftschematic.geom.RunoutBubbleGeometry
 import com.android.shaftschematic.geom.RunoutComponentKind
@@ -142,9 +143,10 @@ fun composeRunoutPdf(
     lineThicknessScale: Float = 1.0f,
     runoutReadings: RunoutReadings = RunoutReadings(),
     /**
-     * Wear record for the consolidated runout/wear sheet: designated worn sections print
-     * their measured Ø values inside the shaft profile (`WornSection`). Only
-     * `wornSections` is consumed here — spots/pits/diaReadings stay on the wear document.
+     * Wear record for the consolidated runout/wear sheet: worn sections and point readings
+     * print their measured Ø values inside the shaft profile, spots and pits draw as marks
+     * on it. Whether any VALUE prints also decides the liner fill —
+     * [consolidatedSheetHasInProfileValues].
      */
     wearRecord: WearRecord = WearRecord(),
     /**
@@ -196,10 +198,19 @@ fun composeRunoutPdf(
     }
     val bodyFill : Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
     val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
-    // Liners deliberately NEVER shade on this sheet, whatever `shadedLiners` says
-    // (on-device request): the in-profile value halos are sheet-white, and against a grey
-    // liner every knockout reads as a pasted white box instead of clear paper.
-    val linerFill: Paint? = null
+    // Liners follow `shadedLiners` like bodies and tapers, EXCEPT on a sheet that prints
+    // measured Ø values INSIDE the profile: those values sit on sheet-white knockout halos,
+    // and shading the liner under them would turn every halo into a pasted white box
+    // instead of clear paper. One predicate governs this fill and the Output tab's "Liners"
+    // checkbox, so the control can never offer a shade the sheet does not draw.
+    val inProfileValues = consolidatedSheetHasInProfileValues(
+        wornSections = wearRecord.wornSections,
+        diaReadings = wearRecord.diaReadings,
+        resolvedComponentIds = resolvedComponents?.map { it.id }?.toSet() ?: emptySet(),
+        includeWearInfo = drawWear,
+        blankValues = blankValues,
+    )
+    val linerFill: Paint? = if (pdfPrefs.shadedLiners && !inProfileValues) shadeFill() else null
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         textSize = TEXT_PT
@@ -263,10 +274,40 @@ fun composeRunoutPdf(
     } else emptyList()
     val maxRail = railAssignments.maxOfOrNull { it.rail } ?: -1
     val railGap = RUNOUT_RAIL_GAP_PT
-    // Height reserved above the shaft: first-rail offset + tier rows + the OAL lane
-    // (consolidated), or header strip + gap + raised OAL span line (classic).
+    val dimText = Paint(text).apply { textSize = RUNOUT_DIM_TEXT_PT }
+    // OAL brackets the SET-to-SET span; the label is ALWAYS the typed OAL (the number is
+    // sacred; see docs/OverallLength.md).
+    val oalDimSpan = oalSpan(
+        setPositions.aftSETxMm, setPositions.fwdSETxMm, unit,
+        labelMm = spec.overallLengthMm.toDouble(),
+    )
+
+    /** Planner rows for the rail block under a given mm→page mapping; OAL topmost. */
+    fun dimRows(renderer: PdfDimensionRenderer, railY: (Int) -> Float) =
+        railAssignments.map { renderer.spanInput(it.rail, railY(it.rail), it.span) } +
+            renderer.spanInput(DimensionRailLayout.TOP_RAIL, railY(DimensionRailLayout.TOP_RAIL), oalDimSpan)
+
+    // A span too short to seat its value in the line prints it ABOVE the line — inside the next
+    // rail's band — so every rail above lifts by one label band and the reserved block has to
+    // grow by the same amount. Inline-vs-above depends only on a span's drawn WIDTH, so the
+    // prelim linear map answers it before the shaft scale is solved (the same prelim-then-
+    // resolve posture the bubble budget uses); the drawn plan below re-solves on the real map.
+    val prelimRailLift = if (!consolidated) 0f else {
+        val prelim = PdfDimensionRenderer(
+            pageX = { dimMm -> xAtLinear((dimMm + oalWindow.measureStartMm).toFloat()) },
+            linePaint = dim,
+            textPaint = dimText,
+            objectTopY = 0f,   // lift query only — nothing is drawn through this renderer
+            blankLabels = blankValues,
+            blankLabelWidthPx = BLANK_DIM_GAP_PT,
+        )
+        prelim.topLift(dimRows(prelim) { 0f })
+    }
+
+    // Height reserved above the shaft: first-rail offset + tier rows + above-line label lifts
+    // + the OAL lane (consolidated), or header strip + gap + raised OAL span line (classic).
     val railsBlockH =
-        if (consolidated) RUNOUT_BASE_DIM_OFFSET_PT + railGap * (maxRail + 1) + RUNOUT_OAL_EXTRA_PT + 8f
+        if (consolidated) RUNOUT_BASE_DIM_OFFSET_PT + railGap * (maxRail + 1) + 8f + prelimRailLift
         else HEADER_HEIGHT_PT + OAL_GAP_PT + OAL_LINE_SPACE_PT
 
     // Footer block pinned to the page bottom (consolidated only); the TIR line sits
@@ -476,33 +517,30 @@ fun composeRunoutPdf(
     if (consolidated) {
         val yTopOfShaft = shaftCy - shaftHalfPt
         val railBaseY = yTopOfShaft - RUNOUT_BASE_DIM_OFFSET_PT
-        val topRailY = (railBaseY - railGap * (maxRail + 1) - RUNOUT_OAL_EXTRA_PT)
-            .coerceAtLeast(margin + 8f)
-        val dimText = Paint(text).apply { textSize = RUNOUT_DIM_TEXT_PT }
         val renderer = PdfDimensionRenderer(
             pageX = { dimMm -> xAt((dimMm + oalWindow.measureStartMm).toFloat()) },
-            baseY = railBaseY,
-            railDy = railGap,
-            topRailY = topRailY,
             linePaint = dim,
             textPaint = dimText,
             objectTopY = yTopOfShaft,
-            contentTopPx = margin,
             objectClearance = 4f,
             blankLabels = blankValues,
             blankLabelWidthPx = BLANK_DIM_GAP_PT,
         )
-        railAssignments.forEach { renderer.drawOnRail(c, it.rail, it.span, true) }
-        // OAL topmost — brackets the SET-to-SET span, label is ALWAYS the typed OAL
-        // (the number is sacred; see docs/OverallLength.md).
-        renderer.drawTop(
-            c,
-            oalSpan(
-                setPositions.aftSETxMm, setPositions.fwdSETxMm, unit,
-                labelMm = spec.overallLengthMm.toDouble(),
-            ),
-            true,
+        // Lift on the REAL mapping — it can differ from the prelim by a band when a span
+        // foreshortens across the inline threshold; the clamp below absorbs the difference.
+        val railLift = renderer.topLift(dimRows(renderer) { 0f })
+        // The OAL lane rides exactly ONE tier pitch above the highest component tier —
+        // same rule as the schematic; the planner lift is the only thing that widens it.
+        val unliftedTopRailY = (railBaseY - railGap * (maxRail + 1))
+            .coerceAtLeast(margin + 8f + railLift)
+        val plan = renderer.plan(
+            dimRows(renderer) { rail ->
+                if (rail == DimensionRailLayout.TOP_RAIL) unliftedTopRailY else railBaseY - railGap * rail
+            },
+            safeTopY = margin + 6f,
         )
+        railAssignments.forEachIndexed { i, ra -> renderer.drawPlanned(c, ra.span, plan.placements[i], true) }
+        renderer.drawPlanned(c, oalDimSpan, plan.placements.last(), true)
     }
 
     // ── Draw shaft profile ────────────────────────────────────────────────────
@@ -593,6 +631,42 @@ fun composeRunoutPdf(
             text = text, cfg = footerCfg, blankValues = blankValues,
         )
     }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// In-profile value predicate — shared by the composer and the Output tab's options
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Does this sheet print measured Ø values INSIDE the shaft profile?
+ *
+ * Those values sit on sheet-white knockout halos, so shading the liner beneath one turns the
+ * halo into a pasted white box: liners draw unfilled whenever this is true, whatever
+ * `PdfPrefs.shadedLiners` says. ONE predicate serves both consumers — [composeRunoutPdf]
+ * decides the liner fill with it, and the Consolidated Output tab locks its "Liners" shade
+ * checkbox with it — so the control can never offer a shade the sheet does not draw.
+ *
+ * The inputs mirror exactly what the value passes draw:
+ * - [includeWearInfo] is the composer's own `drawWear` (`consolidated && includeWearInfo`);
+ *   the classic runout sheet carries no wear info at all, so it always comes out false.
+ * - [blankValues] blanks every recorded value — worn sections keep boundaries only.
+ * - A worn section prints only its measurements > 0 (the placed-but-empty rule).
+ * - A reading prints only with `diaMm > 0` AND a component that still resolves
+ *   ([resolvedComponentIds]); orphans are skipped at the render layer.
+ *
+ * Wear-area bands and pit X's are marks, not text — they carry no halo and never suppress
+ * the fill.
+ */
+internal fun consolidatedSheetHasInProfileValues(
+    wornSections: List<WornSection>,
+    diaReadings: List<WearDiaReading>,
+    resolvedComponentIds: Set<String>,
+    includeWearInfo: Boolean,
+    blankValues: Boolean,
+): Boolean {
+    if (!includeWearInfo || blankValues) return false
+    if (wornSections.any { section -> section.diaMm.any { it > 0f } }) return true
+    return diaReadings.any { it.diaMm > 0f && it.componentId in resolvedComponentIds }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1289,7 +1363,6 @@ private const val COMPRESS_TRIGGER_PT = 220f
 // schematic's lane constants so the rails, bubbles, and footer share one page).
 private const val RUNOUT_BASE_DIM_OFFSET_PT = 22f
 private const val RUNOUT_RAIL_GAP_PT = 18f
-private const val RUNOUT_OAL_EXTRA_PT = 14f
 private const val RUNOUT_DIM_TEXT_PT = 8.5f
 
 // Classic central gap; breakPairLayout may widen it to keep the pair clear.

@@ -158,8 +158,17 @@ is hard-capped at **1.5" on paper** (`PROFILE_MAX_SHAFT_HEIGHT_PT`, an ABSOLUTE 
 the page) and by the page budget (`exaggeratedProfileScale`, pure/unit-tested). The slider
 selects the drawn height by VALUE in paper inches — track ends at 1.5" or the shaft's
 300% height, whichever is less (`drawnShaftHeightPt`/`heightFracForDrawnHeight`);
-commits near the standard height snap to exactly 100%. Liners draw **unfilled on this sheet**
-regardless of `shadedLiners` so halos don't read as pasted boxes. Division of labor: the Wear page is the **authoring surface** for
+commits near the standard height snap to exactly 100%. Liners follow `shadedLiners` like
+bodies and tapers **except when in-profile values print** — a sheet-white knockout halo over
+grey reads as a pasted box, so on such a sheet liners draw unfilled whatever the pref says.
+ONE predicate decides it, `consolidatedSheetHasInProfileValues`
+(`pdf/RunoutPdfComposer.kt` — wear info elected in, not a blank draft, and at least one
+worn-section value > 0 or one valued reading on a component that still resolves): the
+composer builds `linerFill` with it and the Output tab's PDF options sheet locks its
+"Liners" checkbox with it (`RunoutWearOptionsSheet(linerShadeLocked)` — disabled and shown
+unchecked, **display-only**; the stored pref is never rewritten). The classic runout sheet
+and the Runout tab's live canvas carry no in-profile text, so both simply honor the pref.
+Division of labor: the Wear page is the **authoring surface** for
 spots/pits/point-readings (tab visible; `WEAR_TAB_ENABLED` in `EditorTab.kt` is the
 one-line retirement switch for a future full consolidation); the Runout tab authors
 **runouts only** (its buttons produce the classic standalone runout sheet,
@@ -259,15 +268,31 @@ posture as runout bubbles. PDF-only — no on-screen canvas equivalent, so no dr
 rule applies. See `docs/PDF_EXPORT.md` §5.3.
 
 ### Dimension values seat in a break in the line
-`PdfDimensionRenderer.drawSpan` draws each dimension line as **two stubs**
+`PdfDimensionRenderer.drawPlanned` draws each dimension line as **two stubs**
 (`xa→gapLeft`, `gapRight→xb`) with the value seated in the gap, vertically centered on the
 line — not floating above a continuous line. The gap (label width + 2·`textPad`) is cut
 **only** when both stubs can host an inward arrowhead — the same `canFitInwardArrows`
-predicate that chooses arrow direction — so inline spans always get inward arrows. Short
-spans, or a label colliding with one already placed on the rail, **fall back** to the
-original style (continuous line, label above at `textAboveDy`, bounded bump). Do not
-reintroduce always-above label placement. The top OAL rail uses the same `drawSpan`, so it
-breaks too. PDF-only — the on-screen preview rasterizes the real PDF, so there is no separate
+predicate that chooses arrow direction — so inline spans always get inward arrows. Spans too
+short for that **fall back** to the original style (continuous line, label above at
+`textAboveDy`). Do not reintroduce always-above label placement. The top OAL rail is planned
+and drawn through the same path, so it breaks too.
+
+**Labels and rail LINES share ONE collision space** — a floating value lives in the *next*
+rail's band, so per-rail collision tracking is blind exactly where the labels overlap. The
+pure planner `geom/DimensionRailLayout.kt` places every span at once (top OAL rail included),
+treating both placed labels and every rail line as obstacles; the renderer keeps only the
+Canvas work, and no collision logic may be duplicated back into it. Resolution order:
+(a) **slide the value horizontally along its own span** — smallest shift from center inside
+`[xa+textPad+half, xb−textPad−half]`, tightened by `arrowSize` on both sides for an inline
+value so the break keeps its inward arrows; (b) only then bump a floating value vertically
+(bounded, never past the content top). A rail carrying a floating value **lifts every rail
+above it** — the OAL rail included — by one label band (glyph height + gap), cumulative per
+intervening fallback rail. Inline-vs-fallback is decided from **x-geometry alone**, so the
+lifts are known before the vertical budget: both composers fold them in
+(`ShaftPdfComposer`'s `computeTopY` fit loop; `RunoutPdfComposer`'s `railsBlockH`, off a
+prelim linear-map plan since the real x map needs the budget). Blank drafts plan on
+`blankLabelWidthPx` — the write-in gaps get the same clearance as printed values.
+PDF-only — the on-screen preview rasterizes the real PDF, so there is no separate
 draw path and no canvas equivalent to keep in sync. See `docs/PDF_EXPORT.md` §5.4.
 
 ### Golden rule: user inputs are SACRED

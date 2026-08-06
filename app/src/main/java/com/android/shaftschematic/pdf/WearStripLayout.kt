@@ -558,8 +558,9 @@ data class WearRailSpanLayout(
  * - Labels are assigned to the lowest-numbered row (`0` first) whose already-placed labels
  *   don't overlap it horizontally — the crowding fallback for short bands/gaps whose label is
  *   wider than the span itself, where row 0 alone would overlap a neighboring label
- *   (`PdfDimensionRenderer`'s per-rail label-bump collision avoidance, replicated for this
- *   rail's single chain).
+ *   (the label-bump collision avoidance of `geom/DimensionRailLayout.kt`, replicated for this
+ *   rail's single chain; that engine's cross-tier lifts have no analogue here because a wear
+ *   strip has exactly one rail).
  *
  * [labelWidthPt] measures a label's on-page width (`Paint.measureText` in the composer) — kept
  * as a caller-supplied function rather than an Android import so this stays pure/JVM-testable

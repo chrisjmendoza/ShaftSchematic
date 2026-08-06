@@ -1,6 +1,10 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-08-05 (b) — §1/§3 name the single real fit function
+Last updated: 2026-08-06 (b) — §5.4/§5.5 gain the one-collision-space rule for dimension
+labels (pure `geom/DimensionRailLayout.kt`: rail lines are obstacles too, slide along the
+span before bumping, tiers above a floating value lift by one label band, composer budgets
+include the lifts). 2026-08-06 — §5.6 gains the conditional liner-shading rule
+(`consolidatedSheetHasInProfileValues`) and the locked "Liners" checkbox. 2026-08-05 (b) — §1/§3 name the single real fit function
 (`computeDetailPtPerMm`; the `computeBodyOnlyPtPerMm`/`computePdfPtPerMmFitAxes` names never
 existed); §4 units corrected (printed values follow the document's ACTIVE unit, not always
 mm); §5.5 gains the Tune options-sheet inventory; §5.7 names only the public
@@ -177,9 +181,9 @@ they are now all-BELOW, same as liners.
 
 # 5.4 Inline Dimension Text (value seated in the line break)
 
-Dimension values on the schematic's horizontal dimension lines (`PdfDimensionRenderer.drawSpan`)
-are drawn seated **inside a break in the line** — the hand-drafting convention
-`|←—— 237 1/2" ——→|` — instead of floating above a continuous line.
+Dimension values on the schematic's horizontal dimension lines
+(`PdfDimensionRenderer.drawPlanned`) are drawn seated **inside a break in the line** — the
+hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floating above a continuous line.
 
 - **Inline (primary) path.** The main dimension line is drawn as two stubs,
   `xa → gapLeft` and `gapRight → xb`, where `gapLeft = cx - half - textPad` and
@@ -190,16 +194,42 @@ are drawn seated **inside a break in the line** — the hand-drafting convention
   long — the *same* predicate (`canFitInwardArrows`) already used to choose inward vs.
   outward arrowheads. Because it's the same predicate, an inline span always gets
   inward-pointing arrows aligned with the value; there is no separate "should this be
-  inline" flag to keep in sync.
-- **Fallback path.** When the span is too short, or the inline label would collide with
-  a label already placed on that rail, `drawSpan` reverts to the original behavior: one
-  continuous line `xa → xb`, the label floating above it at baseline `y - textAboveDy`,
-  the existing bounded bump-up-on-collision loop, and outward arrows.
-- **Top OAL rail included.** `drawTop` and `drawOnRail` both delegate to the same
-  `drawSpan`, so the top OAL dimension line gets the identical inline-break treatment as
-  the numbered component rails below it.
+  inline" flag to keep in sync. Eligibility is decided from **x-geometry alone**, so the
+  set of fallback spans is known before any vertical budget is chosen.
+- **Fallback path.** A span too short for that reverts to the original behavior: one
+  continuous line `xa → xb`, the value floating above it at baseline `y - textAboveDy`,
+  and outward arrows.
+- **One collision space (`geom/DimensionRailLayout.kt`).** A floating value lives in the
+  vertical band of the *next rail up*, so labels and rail lines from different tiers
+  cannot be resolved rail by rail. A pure planner places **every** span at once — the top
+  OAL rail included — treating both the placed labels and every rail **line** as
+  obstacles, so no value is ever printed over another value or struck through by a
+  neighbouring tier's dimension line.
+  - **Slide before bump.** A colliding value first slides **horizontally along its own
+    span** — the smallest shift from center that clears everything, bounded by
+    `[xa + textPad + half, xb − textPad − half]`, tightened by `arrowSize` on both sides
+    for an inline value so the break keeps its inward arrows. Only a floating value that
+    cannot slide clear bumps vertically (bounded, never past the content top).
+  - **Tiers lift.** A rail carrying at least one floating value pushes every rail
+    **above** it — the OAL rail included — up by one label band (glyph height + gap),
+    cumulatively per intervening fallback rail, so the lines clear the values.
+  - **Budgets include the lifts.** `ShaftPdfComposer` folds `topLift` into its
+    `computeTopY` fit loop (shrink rail gap, then text size, until the lifted block still
+    clears `geomRect.top`); `RunoutPdfComposer` adds it to `railsBlockH` before the shaft
+    scale is solved — the inline/fallback split depends only on drawn width, so a prelim
+    plan on the linear map answers it, the same prelim-then-resolve posture the bubble
+    budget uses.
+  - Placement order is least-slide-room-first, so a wide span is the one that moves.
+    Pinned by `DimensionRailLayoutTest`.
+- **Top OAL rail included.** The OAL span is planned and drawn through the same path as
+  the numbered component rails below it, so it gets the identical inline-break treatment
+  and participates in the same collision space. It is the topmost measurement but rides
+  exactly **one regular tier pitch** above the highest component tier — both composers;
+  no extra OAL padding constant (on-device report: the wider gap wasted whitespace). The
+  planner's lift is the only thing that widens the gap, and only when the tier below
+  floats a label into the lane.
 - **Unchanged:** extension lines, `labelBottom` (SET name below the rail), `drawArrow`,
-  `canFitInwardArrows`, and the collision/bump helpers.
+  and `canFitInwardArrows`.
 - **Scope: PDF-only, no canvas twin.** `PdfDimensionRenderer` backs both the exported
   PDF and the on-screen PDF preview — `PdfPreviewScreen` rasterizes the real PDF via
   `composeShaftPdf` → `ShaftPdfComposer` → this same renderer, so there is no separate
@@ -221,8 +251,10 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
 
 - **Dimension lines** still cut their break, at a fixed writable width
   (`BLANK_DIM_GAP_PT`), but draw no value text — the gap is the write-in spot. Same
-  eligibility/fallback logic as §5.4; label *bounds* are still reserved so gaps on the
-  same rail never overlap. `labelBottom` (SET names) are identifiers and still print.
+  eligibility/fallback/collision logic as §5.4: the planner measures the fixed write-in
+  width instead of the value text, so gaps are reserved — and slid or lifted clear of each
+  other — exactly as printed values are. `labelBottom` (SET names) are identifiers and
+  still print.
 - **Ø leader callouts** print `Ø` + a writing rule instead of the value.
 - **Schematic footer** keeps every label (`Rate:`, `L.E.T. (…):`, `KW:`, `Customer:` …)
   followed by a writing rule (`BLANK_RULE_PT`); the bold STBD/PORT stamp becomes a
@@ -281,6 +313,19 @@ are always on; the runout bubbles/TIR line and the wear info (marks, worn sectio
 in-profile Ø values) are each electable — **All three** (default) | Schematic + Runout |
 Schematic + Wear. Electing bubbles out returns their lanes to the shaft area. Selection
 is session-only (resets to All three).
+
+**Liner shading is conditional here**: liners follow the `shadedLiners` pref like bodies and
+tapers, **except** on a sheet that prints Ø values inside the profile — those values sit on
+sheet-white knockout halos, and grey underneath turns each halo into a pasted box, so liners
+draw unfilled there whatever the pref says. One predicate decides it,
+`consolidatedSheetHasInProfileValues` (`pdf/RunoutPdfComposer.kt`): wear info elected in, not
+a blank draft, and at least one worn-section value > 0 or one valued reading keyed to a
+component that still resolves (wear bands and pit X's are marks, not text — they never
+suppress the fill). The composer builds `linerFill` from it and this tab's preview options
+sheet locks its "Liners" checkbox with it (disabled, displayed unchecked, caption "Ø values
+print inside the profile on this sheet") — display-only; the stored pref is never rewritten,
+so it returns the moment the sheet stops printing in-profile values. The classic runout sheet
+(`consolidated = false`) has no in-profile text and simply honors the pref.
 
 **Also on this tab**: the per-job "Shaft height" slider (§5.7), the worn-section editor
 (sections print on this sheet), the blank-draft toggle, and **Export all** — checkboxes

@@ -254,22 +254,21 @@ fun RunoutRoute(
     // theme, and dark theme's near-white onSurface would print invisible ink on it.
     val outlineArgb   = SheetInk.Outline.toArgb()
     val bodyFillArgb  = SheetInk.Outline.copy(alpha = 0.08f).toArgb()
-    // Liners draw unfilled on this sheet (on-device request): the in-profile value halos
-    // are sheet-white, and against a tinted liner every knockout reads as a pasted box.
-    val linerFillArgb = Color.Transparent.toArgb()
     val hatchArgb     = SheetInk.Outline.copy(alpha = 0.55f).toArgb()
     val previewShape  = MaterialTheme.shapes.medium
     val textMeasurer  = rememberTextMeasurer()
 
+    // Liners take the same tint as bodies/tapers when the pref is on: this canvas carries
+    // runouts only, so no sheet-white value halo ever sits over a shaded liner here.
     val transparentArgb = Color.Transparent.toArgb()
-    val previewOpts = remember(outlineArgb, bodyFillArgb, linerFillArgb, hatchArgb,
+    val previewOpts = remember(outlineArgb, bodyFillArgb, hatchArgb,
                                pdfShadedBodies, pdfShadedTapers, pdfShadedLiners) {
         RenderOptions(
             outlineColor        = outlineArgb,
             outlineWidthPx      = 1.5f,
-            bodyFillColor       = if (pdfShadedBodies) bodyFillArgb  else transparentArgb,
-            taperFillColor      = if (pdfShadedTapers) bodyFillArgb  else transparentArgb,
-            linerFillColor      = if (pdfShadedLiners) linerFillArgb else transparentArgb,
+            bodyFillColor       = if (pdfShadedBodies) bodyFillArgb else transparentArgb,
+            taperFillColor      = if (pdfShadedTapers) bodyFillArgb else transparentArgb,
+            linerFillColor      = if (pdfShadedLiners) bodyFillArgb else transparentArgb,
             threadFillColor     = 0x00000000,
             threadHatchColor    = hatchArgb,
         )
@@ -1047,6 +1046,14 @@ internal fun RunoutWearOptionsSheet(
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
     vm: ShaftViewModel,
+    /**
+     * Locks the "Liners" shade row on a document that prints measured Ø values inside the
+     * profile: their halos are sheet-white, so the composer draws liners unfilled there
+     * (`consolidatedSheetHasInProfileValues`). The row then reads unchecked and disabled —
+     * **display only**; the stored pref is never rewritten, so the user's choice returns as
+     * soon as the document stops printing in-profile values.
+     */
+    linerShadeLocked: Boolean = false,
 ) {
     // Scrollable + inset-padded: without its own scroll a short screen clips the bottom
     // rows mid-checkbox behind the navigation bar (same posture as PdfOptionsSheet).
@@ -1088,9 +1095,22 @@ internal fun RunoutWearOptionsSheet(
             Text("Tapers", style = MaterialTheme.typography.bodyLarge)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = pdfShadedLiners, onCheckedChange = { vm.setPdfShadedLiners(it) })
+            Checkbox(
+                checked = pdfShadedLiners && !linerShadeLocked,
+                onCheckedChange = { vm.setPdfShadedLiners(it) },
+                enabled = !linerShadeLocked,
+            )
             Spacer(Modifier.width(8.dp))
-            Text("Liners", style = MaterialTheme.typography.bodyLarge)
+            Column {
+                Text("Liners", style = MaterialTheme.typography.bodyLarge)
+                if (linerShadeLocked) {
+                    Text(
+                        "Ø values print inside the profile on this sheet",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(24.dp))
