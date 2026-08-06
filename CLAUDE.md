@@ -158,8 +158,17 @@ is hard-capped at **1.5" on paper** (`PROFILE_MAX_SHAFT_HEIGHT_PT`, an ABSOLUTE 
 the page) and by the page budget (`exaggeratedProfileScale`, pure/unit-tested). The slider
 selects the drawn height by VALUE in paper inches — track ends at 1.5" or the shaft's
 300% height, whichever is less (`drawnShaftHeightPt`/`heightFracForDrawnHeight`);
-commits near the standard height snap to exactly 100%. Liners draw **unfilled on this sheet**
-regardless of `shadedLiners` so halos don't read as pasted boxes. Division of labor: the Wear page is the **authoring surface** for
+commits near the standard height snap to exactly 100%. Liners follow `shadedLiners` like
+bodies and tapers **except when in-profile values print** — a sheet-white knockout halo over
+grey reads as a pasted box, so on such a sheet liners draw unfilled whatever the pref says.
+ONE predicate decides it, `consolidatedSheetHasInProfileValues`
+(`pdf/RunoutPdfComposer.kt` — wear info elected in, not a blank draft, and at least one
+worn-section value > 0 or one valued reading on a component that still resolves): the
+composer builds `linerFill` with it and the Output tab's PDF options sheet locks its
+"Liners" checkbox with it (`RunoutWearOptionsSheet(linerShadeLocked)` — disabled and shown
+unchecked, **display-only**; the stored pref is never rewritten). The classic runout sheet
+and the Runout tab's live canvas carry no in-profile text, so both simply honor the pref.
+Division of labor: the Wear page is the **authoring surface** for
 spots/pits/point-readings (tab visible; `WEAR_TAB_ENABLED` in `EditorTab.kt` is the
 one-line retirement switch for a future full consolidation); the Runout tab authors
 **runouts only** (its buttons produce the classic standalone runout sheet,

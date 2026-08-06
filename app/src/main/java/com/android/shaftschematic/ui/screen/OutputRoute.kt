@@ -63,6 +63,7 @@ import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.pdf.composeUndercutPdf
 import com.android.shaftschematic.pdf.composeWearPdf
+import com.android.shaftschematic.pdf.consolidatedSheetHasInProfileValues
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.ui.nav.appVersionFromContext
@@ -152,6 +153,21 @@ fun OutputRoute(
         val spanMm = (setPositions.fwdSETxMm - setPositions.aftSETxMm).toFloat().coerceAtLeast(1f)
         val contentW = 792f - 72f
         maxOf(contentW / spanMm, defaultVisualScale(heightSliderDiaMm, curveLoHeightIn * 72f, curveHiHeightIn * 72f))
+    }
+
+    // Liner shading is unavailable exactly when this sheet prints measured Ø values inside
+    // the profile — the composer draws liners unfilled there so the sheet-white value halos
+    // never read as pasted boxes. Same predicate, same inputs the composer gets (elected
+    // wear info, blank-draft flag, the resolved ids a reading must key to), so the checkbox
+    // always matches what gets drawn.
+    val linerShadeLocked = remember(wearRecord, resolvedComponents, variant, blankDraft) {
+        consolidatedSheetHasInProfileValues(
+            wornSections = wearRecord.wornSections,
+            diaReadings = wearRecord.diaReadings,
+            resolvedComponentIds = resolvedComponents.map { it.id }.toSet(),
+            includeWearInfo = variant.includeWearInfo,
+            blankValues = blankDraft,
+        )
     }
 
     val outputFilename = buildOutputFilename(customer, vessel, jobNumber, OutputDoc.CONSOLIDATED, blankDraft)
@@ -572,6 +588,7 @@ fun OutputRoute(
                     pdfShadedTapers = pdfShadedTapers,
                     pdfShadedLiners = pdfShadedLiners,
                     vm = vm,
+                    linerShadeLocked = linerShadeLocked,
                 )
             },
         )

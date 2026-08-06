@@ -522,9 +522,18 @@ On-device request following the worn-sections review:
     drawing plan re-solves on the real mapping. The SCHEMATIC composer uses the same
     scale + engine (`ShaftPdfComposer` — dims, callout leaders, keyways, and the
     compression footer note all ride the compressed `xAt`).
-  - *No liner grey on this sheet:* liners draw unfilled on both the canvas preview and
-    the PDF regardless of the `shadedLiners` pref — against a grey liner every white
-    knockout read as a pasted box (on-device request). Bodies/tapers keep the pref.
+  - *Liner grey, conditionally:* liners follow the `shadedLiners` pref like bodies and
+    tapers **unless the sheet prints Ø values inside the profile** — against a grey liner
+    every sheet-white knockout reads as a pasted box (on-device request), so on such a
+    sheet liners draw unfilled whatever the pref says. One predicate decides it,
+    `consolidatedSheetHasInProfileValues` (`pdf/RunoutPdfComposer.kt`): wear info elected
+    in, not a blank draft, and at least one worn-section value > 0 or one valued reading
+    keyed to a component that still resolves. The composer builds its `linerFill` from it
+    and the Output tab's options sheet locks the "Liners" checkbox with it
+    (`RunoutWearOptionsSheet(linerShadeLocked)` — disabled and displayed unchecked, with
+    the caption "Ø values print inside the profile on this sheet"; **display-only**, the
+    stored pref is never rewritten). The classic runout sheet and the Runout tab's live
+    canvas never carry in-profile text, so there the pref simply applies.
 - **Division of labor (on-device decision):** the Wear page **stays** as the authoring
   surface — spots, pits, and point Ø readings are placed/edited there, and its own PDF is
   unchanged — while the Runout sheet is the consolidated **output** that features that
@@ -998,7 +1007,7 @@ OD lookups, and runout stations. Both routes always pass `vm.resolvedComponents`
 | `lineThicknessScale` (0.5–2.0) | Scales `strokeWidth` on all `OUTLINE_PT` and `DIM_PT` paints |
 | `pdfPrefs.shadedBodies` | Draws a light-grey (`Color.argb(40,0,0,0)`) fill rect before each body outline |
 | `pdfPrefs.shadedTapers` | Draws a light-grey trapezoid path before each taper outline |
-| `pdfPrefs.shadedLiners` | Draws a light-grey fill rect before each liner outline |
+| `pdfPrefs.shadedLiners` | Draws a light-grey fill rect before each liner outline — suppressed on a sheet that prints Ø values inside the profile (`consolidatedSheetHasInProfileValues`) |
 
 Fills are drawn before outlines so the outline strokes are always visible on top.
 
@@ -1028,9 +1037,11 @@ Both routes pass `RunoutWearOptionsSheet` as the lambda:
 | Line thickness (Slider 50–200%) | `vm.setLineThicknessScale()` |
 | Shade Bodies (Checkbox) | `vm.setPdfShadedBodies()` |
 | Shade Tapers (Checkbox) | `vm.setPdfShadedTapers()` |
-| Shade Liners (Checkbox) | `vm.setPdfShadedLiners()` |
+| Shade Liners (Checkbox) | `vm.setPdfShadedLiners()` — locked (disabled, shown unchecked) when the document prints Ø values inside the profile; display-only, the pref is never rewritten |
 
 All four values are included in the `LaunchedEffect` key list so changing any option immediately re-renders the preview bitmap.
+
+The Consolidated Output tab passes `linerShadeLocked = consolidatedSheetHasInProfileValues(…)` computed from the same inputs its composer call gets (wear record, resolved component ids, the elected variant's `includeWearInfo`, the blank-draft flag), so the checkbox can never show a shade the sheet won't draw. The other three callers (Runout, Wear, Undercut) leave the parameter at its `false` default.
 
 ---
 

@@ -1,6 +1,7 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-08-05 (b) — §1/§3 name the single real fit function
+Last updated: 2026-08-06 — §5.6 gains the conditional liner-shading rule
+(`consolidatedSheetHasInProfileValues`) and the locked "Liners" checkbox. 2026-08-05 (b) — §1/§3 name the single real fit function
 (`computeDetailPtPerMm`; the `computeBodyOnlyPtPerMm`/`computePdfPtPerMmFitAxes` names never
 existed); §4 units corrected (printed values follow the document's ACTIVE unit, not always
 mm); §5.5 gains the Tune options-sheet inventory; §5.7 names only the public
@@ -281,6 +282,19 @@ are always on; the runout bubbles/TIR line and the wear info (marks, worn sectio
 in-profile Ø values) are each electable — **All three** (default) | Schematic + Runout |
 Schematic + Wear. Electing bubbles out returns their lanes to the shaft area. Selection
 is session-only (resets to All three).
+
+**Liner shading is conditional here**: liners follow the `shadedLiners` pref like bodies and
+tapers, **except** on a sheet that prints Ø values inside the profile — those values sit on
+sheet-white knockout halos, and grey underneath turns each halo into a pasted box, so liners
+draw unfilled there whatever the pref says. One predicate decides it,
+`consolidatedSheetHasInProfileValues` (`pdf/RunoutPdfComposer.kt`): wear info elected in, not
+a blank draft, and at least one worn-section value > 0 or one valued reading keyed to a
+component that still resolves (wear bands and pit X's are marks, not text — they never
+suppress the fill). The composer builds `linerFill` from it and this tab's preview options
+sheet locks its "Liners" checkbox with it (disabled, displayed unchecked, caption "Ø values
+print inside the profile on this sheet") — display-only; the stored pref is never rewritten,
+so it returns the moment the sheet stops printing in-profile values. The classic runout sheet
+(`consolidated = false`) has no in-profile text and simply honors the pref.
 
 **Also on this tab**: the per-job "Shaft height" slider (§5.7), the worn-section editor
 (sections print on this sheet), the blank-draft toggle, and **Export all** — checkboxes

@@ -8,6 +8,25 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-06
 
+### fix(pdf): liners shade again on the consolidated sheet — unless values print inside them
+
+On-device report: the Consolidated Sheet Preview drew liners white even with Settings'
+"Shade in PDF → Liners" checked. Root cause: the in-profile-value change hard-coded
+`linerFill = null` in `RunoutPdfComposer` — the halo-legibility rule (a sheet-white knockout
+over grey reads as a pasted box) was applied to *every* sheet, including the ones that print
+no values inside the profile at all. New rule: liners follow `shadedLiners` like bodies and
+tapers, and go unfilled only when in-profile Ø values actually print. One shared predicate
+decides it — `consolidatedSheetHasInProfileValues` (wear info elected in, not a blank draft,
+and at least one worn-section value > 0 or one valued reading keyed to a component that still
+resolves; wear bands and pit X's are marks, not text, and never suppress the fill). The
+composer builds `linerFill` from it, and the Consolidated Output tab's PDF options sheet
+locks its "Liners" checkbox with the same call (`RunoutWearOptionsSheet(linerShadeLocked)`:
+disabled, displayed unchecked, captioned "Ø values print inside the profile on this sheet") —
+display-only, the stored pref is never rewritten, so the choice returns as soon as the sheet
+stops printing values. The classic runout sheet and the Runout tab's live canvas carry no
+in-profile text and now shade liners per the pref as well. Predicate pinned by
+`ConsolidatedInProfileValuesTest`.
+
 ### feat(ui): line thickness gets a Default (100%) button and a magnetic detent
 
 On-device report: "I tried messing with the line size and had some trouble landing on

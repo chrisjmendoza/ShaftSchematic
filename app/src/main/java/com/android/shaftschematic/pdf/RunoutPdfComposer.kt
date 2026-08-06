@@ -142,9 +142,10 @@ fun composeRunoutPdf(
     lineThicknessScale: Float = 1.0f,
     runoutReadings: RunoutReadings = RunoutReadings(),
     /**
-     * Wear record for the consolidated runout/wear sheet: designated worn sections print
-     * their measured Ø values inside the shaft profile (`WornSection`). Only
-     * `wornSections` is consumed here — spots/pits/diaReadings stay on the wear document.
+     * Wear record for the consolidated runout/wear sheet: worn sections and point readings
+     * print their measured Ø values inside the shaft profile, spots and pits draw as marks
+     * on it. Whether any VALUE prints also decides the liner fill —
+     * [consolidatedSheetHasInProfileValues].
      */
     wearRecord: WearRecord = WearRecord(),
     /**
@@ -196,10 +197,19 @@ fun composeRunoutPdf(
     }
     val bodyFill : Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
     val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
-    // Liners deliberately NEVER shade on this sheet, whatever `shadedLiners` says
-    // (on-device request): the in-profile value halos are sheet-white, and against a grey
-    // liner every knockout reads as a pasted white box instead of clear paper.
-    val linerFill: Paint? = null
+    // Liners follow `shadedLiners` like bodies and tapers, EXCEPT on a sheet that prints
+    // measured Ø values INSIDE the profile: those values sit on sheet-white knockout halos,
+    // and shading the liner under them would turn every halo into a pasted white box
+    // instead of clear paper. One predicate governs this fill and the Output tab's "Liners"
+    // checkbox, so the control can never offer a shade the sheet does not draw.
+    val inProfileValues = consolidatedSheetHasInProfileValues(
+        wornSections = wearRecord.wornSections,
+        diaReadings = wearRecord.diaReadings,
+        resolvedComponentIds = resolvedComponents?.map { it.id }?.toSet() ?: emptySet(),
+        includeWearInfo = drawWear,
+        blankValues = blankValues,
+    )
+    val linerFill: Paint? = if (pdfPrefs.shadedLiners && !inProfileValues) shadeFill() else null
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         textSize = TEXT_PT
@@ -593,6 +603,42 @@ fun composeRunoutPdf(
             text = text, cfg = footerCfg, blankValues = blankValues,
         )
     }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// In-profile value predicate — shared by the composer and the Output tab's options
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Does this sheet print measured Ø values INSIDE the shaft profile?
+ *
+ * Those values sit on sheet-white knockout halos, so shading the liner beneath one turns the
+ * halo into a pasted white box: liners draw unfilled whenever this is true, whatever
+ * `PdfPrefs.shadedLiners` says. ONE predicate serves both consumers — [composeRunoutPdf]
+ * decides the liner fill with it, and the Consolidated Output tab locks its "Liners" shade
+ * checkbox with it — so the control can never offer a shade the sheet does not draw.
+ *
+ * The inputs mirror exactly what the value passes draw:
+ * - [includeWearInfo] is the composer's own `drawWear` (`consolidated && includeWearInfo`);
+ *   the classic runout sheet carries no wear info at all, so it always comes out false.
+ * - [blankValues] blanks every recorded value — worn sections keep boundaries only.
+ * - A worn section prints only its measurements > 0 (the placed-but-empty rule).
+ * - A reading prints only with `diaMm > 0` AND a component that still resolves
+ *   ([resolvedComponentIds]); orphans are skipped at the render layer.
+ *
+ * Wear-area bands and pit X's are marks, not text — they carry no halo and never suppress
+ * the fill.
+ */
+internal fun consolidatedSheetHasInProfileValues(
+    wornSections: List<WornSection>,
+    diaReadings: List<WearDiaReading>,
+    resolvedComponentIds: Set<String>,
+    includeWearInfo: Boolean,
+    blankValues: Boolean,
+): Boolean {
+    if (!includeWearInfo || blankValues) return false
+    if (wornSections.any { section -> section.diaMm.any { it > 0f } }) return true
+    return diaReadings.any { it.diaMm > 0f && it.componentId in resolvedComponentIds }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
