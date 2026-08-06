@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**  
-**Last updated: 2026-08-05**
+**Last updated: 2026-08-06**
 
 Tasks are ordered by priority. Completed series are collapsed to a single summary line to
 keep this readable — full detail lives in `CHANGELOG.md` and git history.
@@ -94,16 +94,13 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 - [x] §3.3 taper-vs-body Ø-mismatch advisory — fixed 2026-07-25, still misfired on-device,
   **removed entirely 2026-07-26 by product decision** (the difference is visible in the
   drawing itself; regression test pins the no-warning behavior). Do not reintroduce.
-- [ ] **Taper orientation discrepancy — analysis done 2026-07-26, fix decision pending.**
-  Full investigation in `docs/TaperOrientation_Analysis_2026-07-26.md` (includes a 2-minute
-  on-device repro). Confirmed in code: the Add dialog keys its SET/LET swap on the
-  **measure-from toggle**, while derivation/labels use the **midpoint half** and keyway
-  placement uses **diameter magnitude** — a taper added into the opposite half from its
-  measure-from direction stores SET at the wrong face (drawn backwards, card labels
-  swapped). Also: the Add path never persists `authoredReference` (FWD measuring frame
-  lost on reopen). Recommended: re-key the dialog swap on the physical half + thread the
-  toggle into `addTaperAt`; data-repair normalization is a product decision (would rewrite
-  stored docs and forecloses reversed tapers).
+- [x] **Taper orientation discrepancy — fixed 2026-08-06** (forward fix per the analysis's
+  recommendation): the Add dialog's SET/LET swap is re-keyed on the **physical half**
+  (judged against the post-add OAL — `oalAfterTaperAddMm`), the measure-from chip persists
+  as `Taper.authoredReference`, and `addTaperAt`/`updateTaper` derivation lost the stale-OAL
+  face bug. Data-repair normalization deliberately **declined** — reversed pairs stored by
+  earlier builds decode exactly as saved (golden rule; pinned by test). Full detail:
+  CHANGELOG 2026-08-06 + `docs/TaperOrientation_Analysis_2026-07-26.md` (marked RESOLVED).
 - [ ] **OAL reload edge (low):** a file saved with manual OAL exactly equal to the content end
   reloads as "auto" (`importJson` uses `> coverageEnd + 1e-3`), and the auto-sync effect then
   keeps OAL glued to the content end — silently dropping a *leading* auto span (components not
@@ -175,11 +172,10 @@ Waves 1–2 shipped (Wave 1 fixes 2026-07-11; Wave 2 deletion pass 2026-07-26, `
   **Deliberately not covered** (decision, not a gap): no Compose test for
   `ComponentCarouselPager` (~35 params, all callbacks — that coupling is what rotted the
   deleted androidTest) or the Add dialogs; their logic is pure and covered.
-- [ ] **Open: CI does not run the test suite.** `distribute.yml` runs only
-  `./gradlew assembleDebug`; `merge-on-green.yml` just automerges. So all tests are
-  local-only, which blunts the point of picking Robolectric. Adding `testDebugUnitTest`
-  before the assemble step would gate distribution on green — natural to want, but it's a
-  release-pipeline policy change (a red test blocks a build), so it needs a decision.
+- [x] **CI gates on the test suite — decided + done 2026-08-06** ("yes, set it up so only
+  green builds, red blocks"): `distribute.yml` runs `testDebugUnitTest` before
+  `assembleDebug`, so a red suite stops the build and nothing distributes. Triggers
+  extended to `chore/**` and `fix/**` so review branches get builds too.
 
 **Incidental finding (product question, not a defect):** the preview hit-test
 (`ShaftDrawing.kt:229-239`) covers Body/Taper/Thread/Liner but **not** `ResolvedCouplerBoltSlot`,
@@ -197,12 +193,10 @@ would make that body untappable at the slot. Decide before changing.
   single-shaft files — no file-format change; Phase 0 fixes the existing runout/wear
   export-filename collision for same-job shafts). Awaiting answers to the plan's
   6 product questions before building.
-- [ ] **Carousel ordering product decision** (from the 2026-07-18 doc sweep):
-  `ComponentsOrdering.md` v1.1 LOCKED newest-on-top, but the carousel actually displays
-  resolved components in physical order and the ViewModel's newest-first `componentOrder` is
-  unused for display (doc updated to v1.2 describing reality). Decide: accept physical order
-  and remove the dangling `componentOrder` display plumbing, or restore newest-on-top as a
-  regression fix.
+- [x] **Carousel ordering — decided + done 2026-08-06**: physical order accepted (the
+  resolved-component display is correct); the dangling newest-first `componentOrder`
+  plumbing removed from the ViewModel, `EditState`, and the pager parameter chain.
+  Nothing persisted changes. `ComponentsOrdering.md` v1.3 records the decision.
 - [ ] Title-strip follow-ups (from the 2026-07-25 night run; liked, not yet requested):
   tappable title → Save As / rename; smarter untitled-draft row names on StartScreen (derive
   from job/customer/vessel via `DocumentNaming.suggestedBaseName`); title strip on the

@@ -4,7 +4,6 @@ import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
-import com.android.shaftschematic.ui.order.ComponentKey
 
 /**
  * File: EditState.kt
@@ -16,9 +15,10 @@ import com.android.shaftschematic.ui.order.ComponentKey
  * - [wearRecord]: reference-only wear spots + pits (rides the same envelope as the spec).
  * - [runoutReadings]: reference-only per-station TIR values + high-spot markers.
  * - [undercutRecord]: reference-only recorded undercut sections.
- * - [componentOrder]: the cross-type UI order (so deleting/reordering is undoable, not just
- *   the spec change — a delete restore must bring back the row in its original position).
  * - [overallIsManual]: the OAL manual/auto mode.
+ *
+ * Carousel row order is NOT part of the snapshot: rows are derived from the spec (resolved
+ * components in physical order), so restoring the spec restores the order with it.
  *
  * Metadata (customer / vessel / job number / notes / shaft position / unit) is deliberately
  * NOT part of this snapshot — those fields are not undoable. As a plain data class its
@@ -30,6 +30,5 @@ data class EditState(
     val wearRecord: WearRecord,
     val runoutReadings: RunoutReadings,
     val undercutRecord: UndercutRecord,
-    val componentOrder: List<ComponentKey>,
     val overallIsManual: Boolean,
 )

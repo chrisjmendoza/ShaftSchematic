@@ -39,6 +39,9 @@ import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.keywayCount
+import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
+import com.android.shaftschematic.ui.input.oalAfterTaperAddMm
+import com.android.shaftschematic.ui.input.taperAddDiameterOrder
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.util.collectAddWarnings
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
@@ -632,7 +635,8 @@ fun AddTaperDialog(
     overallIsManual: Boolean = false,
     initialStartMm: Float? = null,
     initialLengthMm: Float? = null,
-    onSubmit: (startMm: Float, lengthMm: Float, setDiaMm: Float, letDiaMm: Float, rateText: String,
+    onSubmit: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float, rateText: String,
+               reference: LinerAuthoredReference,
                keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                keywayOffsetFromSetMm: Float, keywaySpooned: Boolean, keyways180Apart: Boolean,
                keyways90Apart: Boolean, keyways90Cw: Boolean) -> Unit,
@@ -772,10 +776,10 @@ fun AddTaperDialog(
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Length (${abbr(unit)})", length) { length = it }
                 Spacer(Modifier.height(8.dp))
-                // SET is always Small End; LET is always Large End.
-                // For AFT taper: SET is at the AFT (start) face.
-                // For FWD taper: SET is at the FWD (end) face — the model stores AFT→FWD diameters,
-                // so the submit handler swaps them.
+                // SET is always Small End; LET is always Large End, whichever end the start
+                // was measured from. The model stores AFT→FWD diameters and SET faces the
+                // nearer shaft end, so the submit handler orders them by the taper's physical
+                // half — not by this dialog's direction chip.
                 CommitNumField("S.E.T. Ø (${abbr(unit)})", setText) { setText = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("L.E.T. Ø (${abbr(unit)})", letText) { letText = it }
@@ -882,12 +886,27 @@ fun AddTaperDialog(
             Button(
                 enabled = ok,
                 onClick = {
-                    // For FWD taper the model stores diameters AFT→FWD, so LET is at the AFT
-                    // (start) end and SET is at the FWD (end) end — swap them on submit.
-                    val startDia = if (isFwd) (if (letMm > 0f) letMm else -1f)
-                                  else        (if (setMm > 0f) setMm else -1f)
-                    val endDia   = if (isFwd) (if (setMm > 0f) setMm else -1f)
-                                  else        (if (letMm > 0f) letMm else -1f)
+                    // Which face SET lands on follows the taper's PHYSICAL half — the chip
+                    // above only says which end the start was measured from, and a taper
+                    // measured from one end can be placed in the other half. The half is
+                    // judged against the OAL the shaft will have once this taper exists.
+                    val addSide = classifyTaperSideByMidpoint(
+                        startFromAftMm = physStartMm,
+                        lengthMm = lengthMm,
+                        overallLengthMm = oalAfterTaperAddMm(
+                            currentOalMm = spec.overallLengthMm,
+                            overallIsManual = overallIsManual,
+                            startFromAftMm = physStartMm,
+                            lengthMm = lengthMm,
+                        ),
+                    )
+                    val (startDia, endDia) = taperAddDiameterOrder(
+                        setDiaMm = if (setMm > 0f) setMm else -1f,
+                        letDiaMm = if (letMm > 0f) letMm else -1f,
+                        side = addSide,
+                    )
+                    val reference = if (isFwd) LinerAuthoredReference.FWD
+                                    else       LinerAuthoredReference.AFT
                     val kwW = toMmOrNull(kwWidth,  unit) ?: 0f
                     val kwD = toMmOrNull(kwDepth,  unit) ?: 0f
                     val kwL = toMmOrNull(kwLength, unit) ?: 0f
@@ -895,6 +914,7 @@ fun AddTaperDialog(
                     val submitRateText = if (autoRate) computedRateText.orEmpty() else rateText
                     val action = {
                         onSubmit(physStartMm, lengthMm, startDia, endDia, submitRateText,
+                                 reference,
                                  kwW, kwD, kwL, kwO, kwSpooned && !isFloating,
                                  if (showClockingToggle) clock180 else spec.keyways180Apart,
                                  if (showClockingToggle) clock90 else spec.keyways90Apart,

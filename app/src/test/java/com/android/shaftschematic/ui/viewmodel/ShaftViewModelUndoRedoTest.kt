@@ -5,8 +5,6 @@ import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
-import com.android.shaftschematic.ui.order.ComponentKey
-import com.android.shaftschematic.ui.order.ComponentKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -27,28 +25,24 @@ import org.junit.Test
  */
 class ShaftViewModelUndoRedoTest {
 
-    private fun editState(spec: ShaftSpec, order: List<ComponentKey>) = EditState(
+    private fun editState(spec: ShaftSpec) = EditState(
         spec = spec,
         wearRecord = WearRecord(),
         runoutReadings = RunoutReadings(),
         undercutRecord = UndercutRecord(),
-        componentOrder = order,
         overallIsManual = false,
     )
 
     @Test
     fun `field edit undo restores the prior body diameter`() {
         val body = Body(id = "b1", startFromAftMm = 0f, lengthMm = 100f, diaMm = 50f)
-        val order = listOf(ComponentKey("b1", ComponentKind.BODY))
-        val before = editState(ShaftSpec(bodies = listOf(body)), order)
+        val before = editState(ShaftSpec(bodies = listOf(body)))
 
         val h = SessionHistory<EditState>()
         h.record(before, 1_000)   // recorder seeds the head with the initial state
 
         // updateBody changes only the diameter (50 → 80).
-        val after = editState(
-            ShaftSpec(bodies = listOf(body.copy(diaMm = 80f))), order
-        )
+        val after = editState(ShaftSpec(bodies = listOf(body.copy(diaMm = 80f))))
         h.record(after, 2_000)    // first edit after seed → its own undo step
 
         val restored = h.undo(after)
@@ -58,9 +52,8 @@ class ShaftViewModelUndoRedoTest {
     @Test
     fun `redo after undo re-applies the edit`() {
         val body = Body(id = "b1", startFromAftMm = 0f, lengthMm = 100f, diaMm = 50f)
-        val order = listOf(ComponentKey("b1", ComponentKind.BODY))
-        val before = editState(ShaftSpec(bodies = listOf(body)), order)
-        val after = editState(ShaftSpec(bodies = listOf(body.copy(diaMm = 80f))), order)
+        val before = editState(ShaftSpec(bodies = listOf(body)))
+        val after = editState(ShaftSpec(bodies = listOf(body.copy(diaMm = 80f))))
 
         val h = SessionHistory<EditState>()
         h.record(before, 1_000)
@@ -79,10 +72,9 @@ class ShaftViewModelUndoRedoTest {
     fun `importJson clears history so undo cannot cross the document boundary`() {
         // Mirrors ShaftViewModel.importJson() calling clearEditHistory().
         val body = Body(id = "b1", startFromAftMm = 0f, lengthMm = 100f, diaMm = 50f)
-        val order = listOf(ComponentKey("b1", ComponentKind.BODY))
         val h = SessionHistory<EditState>()
-        h.record(editState(ShaftSpec(bodies = listOf(body)), order), 1_000)
-        h.record(editState(ShaftSpec(bodies = listOf(body.copy(diaMm = 80f))), order), 2_000)
+        h.record(editState(ShaftSpec(bodies = listOf(body))), 1_000)
+        h.record(editState(ShaftSpec(bodies = listOf(body.copy(diaMm = 80f)))), 2_000)
         assertTrue(h.canUndo)
 
         h.clear()   // importJson boundary

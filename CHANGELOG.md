@@ -19,6 +19,110 @@ key/flow, ViewModel collector, and `setPdfOalSpacingFactor` are removed and the
 schematic's OAL now truly rides `railGap × (maxRail + 1)`. The consolidated sheet was
 already correct (it never read the pref). §5b marked resolved.
 
+### fix(taper): S.E.T. lands on the face it faces — orientation keyed on the physical half
+
+A taper added with the Add dialog's direction chip left on AFT (the default) but placed in
+the FWD half of the shaft stored its diameters backwards: the dialog keyed its SET/LET swap
+on the **measure-from chip**, while diameter derivation, the carousel's labels, the renderer
+and the keyway's SET reference all key on the taper's **physical half** (midpoint ≤ OAL/2).
+The two are independent choices — where you measured from says nothing about which half the
+taper lands in. When they disagreed the taper drew small-end-inboard, the card printed
+S.E.T. 7 / L.E.T. 6 against the typed 6 / 7, and a keyway "from SET" started at the far face
+(`docs/TaperOrientation_Analysis_2026-07-26.md`, §4 Scenario A).
+
+`AddTaperDialog`'s submit now orders the typed values with `taperAddDiameterOrder` over
+`classifyTaperSideByMidpoint` (`ui/input/TaperSetLetMapping.kt`), which is also the rule
+`ShaftViewModel.taperSmallEndAtStart` now delegates to instead of restating — one convention,
+one implementation. The half is judged against `oalAfterTaperAddMm(…)`, the OAL the shaft
+carries **after** the change: in auto-OAL mode the add itself grows the shaft (on a blank
+shaft the pre-add OAL is 0), and classifying against the stale value put SET on the wrong
+face and derived a rate-filled end for the wrong face (Scenario B). `addTaperAt` and
+`updateTaper` both use it, and both now read the typed S.E.T./L.E.T. back out of the
+x-ordered pair through that same half, so a FWD-half taper no longer seeds the next dialog's
+SET default from a LET.
+
+The Add dialog also passes its measure-from chip through to `Taper.authoredReference`
+(`onSubmit → ShaftScreen → ShaftRoute → addTaperAt`), the same pass-through liners have had:
+a taper added "measure from FWD" reopens in that frame instead of showing AFT with a
+converted Start (Scenario C). The field is additive + defaulted — no envelope bump.
+
+**Stored documents are not repaired.** A reversed pair written by an earlier build decodes
+exactly as saved (golden rule); only newly added tapers get the corrected ordering. Pinned by
+`TaperAddOrientationTest` (all four half × measure-from combinations, both the both-ends and
+single-end-plus-rate variants, card labels and keyway face) and
+`TaperAuthoredReferencePersistenceTest`. Contracts: `Model_Conventions.md` v0.5,
+`AddComponentDialogs.md` v1.7, `ShaftViewModel.md` v0.8.
+
+### chore(carousel): physical order accepted — the newest-first plumbing is gone
+
+Product decision: the carousel's physical display order is correct and stays. `ComponentsOrdering.md`
+v1.1 had locked a newest-on-top rule that the app stopped following when the resolved-component
+pipeline landed (newest-on-top cannot coexist with auto-bodies interleaved at their spans), and
+v1.2 recorded the drift as an open question. It is now closed, and the dangling machinery removed:
+`ShaftViewModel._componentOrder`/`componentOrder`, `orderAdd`/`orderRemove`/`ensureOrderCoversSpec`
+and their ~20 call sites, `EditState.componentOrder`, and the parameter threaded
+`ShaftRoute → ShaftScreen → ComponentCarouselPager` (declared there, never read).
+
+Undo/redo is unaffected: rows are derived from the spec, so restoring the spec restores them,
+and every order mutation already accompanied a spec mutation. Dropping the flow took the
+history collector from six flows to five, replacing the `Array<Any?>` `combine` overload — with
+its unchecked casts and arity `check()` — with the typed one. Nothing persisted changes: the
+document envelope never had a field for order, so every existing file opens exactly as before.
+
+`ComponentKind` stays (cards, snackbars, test tags), as does `ComponentKey` — it feeds the
+model-layer physical ordering helpers `ShaftSpec.buildPhysicalKeyOrder`/`snapForwardFrom`.
+`BodySplitResult.removedIds`/`addedIds` also stay: no longer an order feed, but the record of
+which stored bodies a split/merge replaced, asserted throughout `BodySplitMergeTest`. Two
+order-only tests in `ShaftViewModelRemoveTest` were dropped and its delete+undo tests now
+assert spec restoration. Contracts: `ComponentsOrdering.md` v1.3, `ShaftViewModel.md` v0.8,
+`docs/ARCHITECTURE.md`, `docs/UI_CONTRACT.md` §4.2.
+
+### ci: unit tests gate every distributed build — red blocks
+
+`distribute.yml` now runs `testDebugUnitTest` before `assembleDebug`, so a red suite stops
+the build and nothing reaches Firebase — only green builds distribute (on-device direction).
+The workflow also triggers on `chore/**` and `fix/**` branches (previously only `main` and
+`feat/**`), so review branches get testable builds too.
+
+### refactor: one raster helper, one Shade-in-PDF block, and the dead long-body constants gone
+
+Three behavior-preserving cleanups off `docs/REFACTOR_CANDIDATES.md` (§1, §4, §5). No
+drawing, preference, or wording changes; 1153 tests green.
+
+**One PDF→bitmap raster path** (§1). Every in-app preview composed its own temp PDF and
+rasterized it — and there were **four** copies of that pipeline, not the two the catalog
+recorded: `renderPdfPreviewBitmap` (PdfPreviewScreen), `renderPdfPageBitmap` (RunoutRoute,
+also used by OutputRoute), `renderWearBitmap` (WearRoute), and `renderUndercutBitmap`
+(UndercutRoute). All four are replaced by `util/PdfRaster.renderPdfPageBitmap(context,
+composePage)`, which takes the same `composePage: (PdfDocument.Page) -> Unit` lambda as the
+hardened SAF write path (`util/PdfSafExport.writeShaftPdfToUri`) — the raster sibling of that
+one-write-path rule. The copies were behaviorally identical: same `ARGB_8888` bitmap, same
+white `eraseColor`, same 2× scale (now the named `PDF_PREVIEW_RENDER_SCALE`), same 792 × 612
+page (now `PDF_PAGE_WIDTH_PT`/`PDF_PAGE_HEIGHT_PT`), same `runCatching{}.getOrNull()` posture,
+same close/delete order. They differed only in their temp-file prefix (now one
+`"pdf_preview_"`) and in the schematic one taking typed compose arguments instead of a lambda.
+The "must be called off the main thread" contract, documented on only one of the four, now
+rides the shared helper. Known and unchanged: a `composePage` throw still leaves its temp file
+in the cache — the delete lives in the raster stage's `finally` — recorded in
+REFACTOR_CANDIDATES §1 as its own future change.
+
+**Shared "Shade in PDF" block** (§4). The Bodies/Tapers/Liners checkbox trio existed three
+times. It is now `ShadeInPdfChecks` in `ui/screen/ShaftHeightSlider.kt`, beside the shared
+`LineThicknessSlider`, carrying the heading, the three rows, and the defaulted
+`linerShadeLocked` display-only lock (disabled + shown unchecked + the "Ø values print inside
+the profile on this sheet" caption; the stored pref is still never rewritten). Both PDF options
+sheets use it, so the next option lands on both at once. **Settings → PDF Export stays
+bespoke**: its rows sit in a `spacedBy(12.dp)` column under a padded heading, so adopting the
+sheets' tighter block would have restyled that page — same prefs, same setters, and a comment
+at the site records why.
+
+**Long-body bubble-count constants deleted** (§5, product decision). `RunoutConfig`'s
+`BODY_SHORT_THRESHOLD_MM` (914 mm) and `BODY_LONG_COUNT` were defined and documented but never
+read — verified zero readers in main and test — and their KDoc promised a length-based default
+the app never had. Default bubble counts stay **uniform**; the user raises the count per
+component (`componentOverrides`) when a run wants extra readings. `BODY_DEFAULT_COUNT`'s KDoc
+now says exactly that.
+
 ### fix(pdf): dimension labels clear each other — slide along the span, lift the next tier
 
 On-device report, with screenshots of the consolidated sheet: two short spans on *different*

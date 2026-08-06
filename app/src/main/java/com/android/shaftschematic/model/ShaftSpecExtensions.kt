@@ -272,8 +272,9 @@ fun ShaftSpec.snapForwardFrom(anchor: ComponentKey): ShaftSpec {
 // ---- Body split / merge --------------------------------------------------------
 
 /**
- * Carries the spec mutated by a split or merge, plus the IDs that were removed from
- * and added to the bodies list so the ViewModel can keep [_componentOrder] in sync.
+ * Carries the spec mutated by a split or merge, plus the IDs the operation removed from and
+ * added to the bodies list — the record of which stored bodies were replaced (pinned by
+ * `BodySplitMergeTest`).
  */
 data class BodySplitResult(
     val spec: ShaftSpec,

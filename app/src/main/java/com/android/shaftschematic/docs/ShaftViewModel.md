@@ -4,7 +4,7 @@ ShaftViewModel Contract
 Layer: UI → ViewModel  
 Purpose: Owns editable ShaftSpec state, unit selection, grid toggle, and routes all commits from the UI to the model/persistence.
 
-Version: v0.7 (2026-07-26)
+Version: v0.8 (2026-08-06)
 
 Invariants
 - All stored geometry is **canonical millimeters (mm)**.  
@@ -69,10 +69,11 @@ Responsibilities
   (`ui/viewmodel/SessionHistory.kt`) recording every drawing-editor edit, not just
   deletes:
   - `EditState` (`ui/viewmodel/EditState.kt`) is the undoable slice: `spec`,
-    `wearRecord`, `runoutReadings`, `componentOrder`, `overallIsManual`. Metadata
+    `wearRecord`, `runoutReadings`, `undercutRecord`, `overallIsManual`. Metadata
     (customer/vessel/job number/notes/shaft position/unit) is deliberately **not**
-    undoable.
-  - A central collector (`combine(spec, wearRecord, runoutReadings, componentOrder,
+    undoable, and neither is carousel row order — rows are derived from the spec
+    (resolved components in physical order), so restoring the spec restores them.
+  - A central collector (`combine(spec, wearRecord, runoutReadings, undercutRecord,
     overallIsManual)` in `init`) records an `EditState` on every emission via
     `editHistory.record(edit, System.currentTimeMillis())`. `SessionHistory` owns the
     policy: edits within 600 ms of the previous record coalesce into one undo step (a
@@ -98,6 +99,7 @@ Responsibilities
 
 Add APIs
 - `addLinerAt(startMm, lengthMm, odMm, reference: LinerAuthoredReference = AFT)` — the `reference` parameter records which end the user measured from; stored on `Liner.authoredReference` for the carousel edit card to display correctly. The default is `AFT` for the quick-add path which does not ask for a reference.
+- `addTaperAt(startMm, lengthMm, startDiaMm, endDiaMm, rateText, reference: LinerAuthoredReference = AFT, keyway…)` — `startDiaMm`/`endDiaMm` arrive **x-ordered AFT → FWD** (the Add dialog orders the typed S.E.T./L.E.T. by the taper's physical half, `ui/input/TaperSetLetMapping.kt`); `reference` records the measured-from end and is stored on `Taper.authoredReference` so the carousel card reopens in that frame. Which end is the Small End — used to derive a missing diameter from the rate and to seed the next dialog's SET/LET defaults — comes from `taperSmallEndAtStart` against `oalAfterTaperAddMm(…)`, the OAL the shaft carries **after** the add (auto-OAL mode grows to cover the new span; a manual OAL stands).
 - `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through = true, depthMm = 0f, reference: SlotAuthoredReference = FWD)` — adds a coupler bolt-slot row. **Does not** call `ensureOverall()` (slots never drive OAL); no body split. Paired with `updateCouplerBoltSlot(index, …)`, `updateCouplerBoltSlotReference/Label/ShowRail`, and `removeCouplerBoltSlot(id)` (recoverable via the general `undoEdit()` session history; no body merge). See `CouplerBoltSlot.md`.
 
 Do Nots
@@ -116,6 +118,19 @@ Future Enhancements
 
 Change Log
 ----------
+**v0.8 (2026-08-06)**
+- **`componentOrder` removed.** The newest-first cross-type order (`_componentOrder`,
+  `orderAdd`/`orderRemove`/`ensureOrderCoversSpec`, the `EditState.componentOrder` field and
+  the `ShaftScreen`/`ComponentCarouselPager` pass-through) is gone: the carousel has rendered
+  resolved components in **physical** order since the resolved pipeline landed, and nothing
+  read the list. The undo/redo collector now combines five flows (`spec`, `wearRecord`,
+  `runoutReadings`, `undercutRecord`, `overallIsManual`) through the typed `combine` overload
+  instead of the `Array<Any?>` one. Nothing persisted changes — order was never in the
+  document envelope. `ComponentKey`/`ComponentKind` stay (model-layer physical ordering,
+  card/test tags). See `ComponentsOrdering.md` v1.3.
+- **`addTaperAt` takes the authored reference** and orders diameters by the taper's physical
+  half against the post-add OAL (see Add APIs above).
+
 **v0.7 (2026-07-26)**
 - **Session-scoped undo/redo replaces delete-only undo.** New `SessionHistory<EditState>`
   (`ui/viewmodel/SessionHistory.kt`, generic + pure) and `EditState`

@@ -93,7 +93,6 @@ import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
-import com.android.shaftschematic.ui.order.ComponentKey
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
@@ -110,12 +109,13 @@ import kotlinx.coroutines.launch
  * • Free-to-End badge overlay (top-start of preview; red on oversize)
  * • Overall length input (ghost “0”; commits on blur/Done; auto when not manual)
  * • Project fields (commit-on-blur / IME Done)
- * • Component carousel (edit & remove) — honors cross-type ID order
+ * • Component carousel (edit & remove) — rows in physical order along the shaft
  * • Add-component FAB floating above IME & nav bar
  *
  * Contract / Invariants
  * • Canonical model units are millimeters (mm) — convert only at UI edge.
- * • No geometry-based resorting. When provided, UI renders strictly by componentOrder (IDs).
+ * • Carousel rows follow the resolved components' physical order (auto-bodies interleaved at
+ *   their spans); there is no separate cross-type order. See `docs/ComponentsOrdering.md`.
  * • IME safety: imePadding shrinks the scroll viewport (applied before verticalScroll) so
  *   Compose auto-scrolls to keep the focused field in view; FAB uses ime ∪ navigationBars insets.
  * • No file I/O or routing here.
@@ -124,8 +124,6 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 fun ShaftScreen(
     resetNonce: Int,
-    // Ordering (from VM via Route)
-    componentOrder: List<ComponentKey> = emptyList(),
 
     // State
     spec: ShaftSpec,
@@ -187,7 +185,10 @@ fun ShaftScreen(
                 keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
                 keywaySpooned: Boolean) -> Unit,
     onSetAutoBodyDia: (Float) -> Unit,
-    onAddTaper: (Float, Float, Float, Float, String, Float, Float, Float, Float, Boolean) -> Unit,
+    onAddTaper: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float,
+                 rateText: String, reference: LinerAuthoredReference,
+                 keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
+                 keywayOffsetFromSetMm: Float, keywaySpooned: Boolean) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean, isAftEnd: Boolean) -> Unit,
     onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
     onAddCouplerBoltSlot: (startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float, reference: SlotAuthoredReference) -> Unit,
@@ -661,7 +662,6 @@ fun ShaftScreen(
                     spec = spec,
                     resolvedComponents = resolvedComponents,
                     unit = unit,
-                    componentOrder = componentOrder,
                     showEdgeArrows = showComponentArrows,
                     edgeArrowWidthDp = componentArrowWidthDp,
                     showComponentDebugLabels = showComponentDebugLabels,
@@ -863,9 +863,9 @@ fun ShaftScreen(
                         overallIsManual = overallIsManual,
                         initialStartMm = tapAddStartMm,
                         initialLengthMm = tapAddGapMm,
-                        onSubmit = { s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90 ->
+                        onSubmit = { s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90 ->
                             tapAddTaperOpen = false
-                            onAddTaper(s, l, setDia, letDia, rate, kwW, kwD, kwL, kwO, kwSpooned)
+                            onAddTaper(s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned)
                             onSetKeyways180Apart(k180)
                             onSetKeyways90Apart(k90)
                             if (k90) onSetKeyways90Cw(cw90)

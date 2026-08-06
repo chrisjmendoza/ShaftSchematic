@@ -4,7 +4,7 @@ Model Conventions
 Layer: Model  
 Purpose: Shared expectations across Body, Taper, ThreadSpec, Liner, CouplerBoltSlot, Segment.
 
-Version: v0.4 (2026-07-18)
+Version: v0.5 (2026-08-06)
 
 Invariants
 - All fields are **Float mm** unless stated otherwise.  
@@ -26,7 +26,14 @@ Invariants
 `LinerAuthoredReference` on `Taper`
 - `Taper.authoredReference` mirrors `Liner.authoredReference` — same semantics: AFT (default) or FWD.
 - The carousel edit card uses this to label and convert the Start input; the canonical `startFromAftMm` is always stored AFT-face.
-- When a user selects "FWD" in `AddTaperDialog`, SET and LET are swapped before submission so the model's `startDiaMm/endDiaMm` pair is always stored AFT → FWD.
+- `AddTaperDialog` passes the chip through (`onSubmit → ShaftScreen.onAddTaper → ShaftRoute → ShaftViewModel.addTaperAt(reference = …)`), so a taper added "measure from FWD" reopens in that frame instead of falling back to AFT with a converted Start.
+
+Taper `startDiaMm`/`endDiaMm` are **x-ordered, SET faces the nearer shaft end**
+- Storage is positional: `startDiaMm` is the diameter at the AFT-most face, `endDiaMm` at the FWD-most face. SET/LET are display labels.
+- Which face carries the Small End is decided by the taper's **physical half** — `classifyTaperSideByMidpoint` (`ui/input/TaperSetLetMapping.kt`), midpoint ≤ OAL/2 → SET at the start face. Every writer and reader shares that one rule: the Add dialog's submit order (`taperAddDiameterOrder`), rate derivation (`ShaftViewModel.taperSmallEndAtStart` → same function), the carousel's labels (`taperSetLetMapping`), the renderer's trapezoid, and the keyway's SET-face reference.
+- The measure-from chip is **not** that signal — it says where the Start was measured from, nothing about which half the taper lands in. Keying the swap on it stores SET at the wrong face whenever the two disagree.
+- At add/edit time the half is judged against `oalAfterTaperAddMm(…)`: the OAL the shaft carries **after** the change (auto-OAL grows to cover the span; a manual OAL stands). The pre-add OAL is stale — on a blank shaft it is 0.
+- Documents written before this rule are **not** repaired on decode: a stored reversed pair loads exactly as saved (golden rule).
 
 `CouplerBoltSlot` — reference-only feature (see `CouplerBoltSlot.md`)
 - One axial **row** of radial bolt cutouts. `startFromAftMm` = the aft-most cutout center; `count`, `spacingMm` describe the row; `holeDiaMm`, `through`/`depthMm` the hole.

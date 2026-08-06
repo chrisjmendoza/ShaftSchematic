@@ -74,14 +74,12 @@ data class RunoutConfig(
          */
         const val RUNOUT_EDGE_INSET_MM = 25.4f
 
-        /** Default bubble count for body sections shorter than this threshold. */
-        const val BODY_SHORT_THRESHOLD_MM = 914f  // ~36 inches
-
-        /** Default number of bubbles for a body whose length is below [BODY_SHORT_THRESHOLD_MM]. */
+        /**
+         * Default bubble count for a body — uniform, whatever the body's length. Longer
+         * bodies do NOT default to more stations; the user raises the count per component
+         * (`componentOverrides`) when a run wants extra readings.
+         */
         const val BODY_DEFAULT_COUNT = 3
-
-        /** Default for long bodies — user bumps this up in the app as needed. */
-        const val BODY_LONG_COUNT = 3  // keep at 3; user promotes as needed
 
         /** Default bubble count for tapers. */
         const val TAPER_DEFAULT_COUNT = 2

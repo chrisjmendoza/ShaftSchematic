@@ -110,7 +110,6 @@ fun ShaftRoute(
     val shaftPosition   by vm.shaftPosition.collectAsState()
     val notes           by vm.notes.collectAsState()
     val overallIsManual by vm.overallIsManual.collectAsState()
-    val order           by vm.componentOrder.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
     val selectedComponentId by vm.selectedComponentId.collectAsState()
 
@@ -179,7 +178,6 @@ fun ShaftRoute(
         previewThreadHatch = previewThreadHatch,
         previewBlackWhiteOnly = previewBlackWhiteOnly,
         lineThicknessScale = lineThicknessScale,
-        componentOrder = order,
 
         // model updates (unchanged)
         onSetCustomer = vm::setCustomer,
@@ -194,7 +192,7 @@ fun ShaftRoute(
 
         onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp -> vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp) },
         onSetAutoBodyDia = vm::setAutoBodyDiaMm,
-        onAddTaper  = { s, l, sd, ed, rate, kwW, kwD, kwL, kwO, kwS -> vm.addTaperAt(s, l, sd, ed, rate, kwW, kwD, kwL, kwO, kwS) },
+        onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS -> vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS) },
         onAddThread = { s, l, maj, p, ex, aft -> vm.addThreadAt(s, l, maj, p, ex, aft) },
         onAddLiner  = { s, l, od, ref -> vm.addLinerAt(s, l, od, ref) },
         onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref) },

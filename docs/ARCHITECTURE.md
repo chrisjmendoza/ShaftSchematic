@@ -93,7 +93,6 @@ Responsibilities:
 - Converting raw strings into typed numbers (with error handling)
 - Applying taper rate rules
 - Performing full validation (blocking + non-blocking)
-- Maintaining `_componentOrder` for UI ordering
 - File import/export
 
 Resolved component pipeline (shipped):
@@ -292,11 +291,15 @@ Tier origin controls rail stacking only. Measurement reference controls numeric 
 ---
 
 ## Component Ordering System
-A separate StateFlow `_componentOrder` stores UI ordering for the component list.
+There is none to maintain: carousel rows are a pure function of the spec.
 
-- Uses stable UUIDs
-- Must update after spec updates to avoid race conditions
-- Does not affect render order of geometry (renderer uses geometric order)
+- The carousel renders the **resolved** component list in physical position order along the
+  shaft, auto-bodies interleaved at their spans.
+- The ViewModel keeps no cross-type display order (the newest-first `_componentOrder` was
+  removed once the resolved pipeline made it dead — see `docs/ComponentsOrdering.md` v1.3).
+- Order is never persisted: the document envelope has no field for it.
+- `ComponentKey`/`ComponentKind` remain for component identity and the model-layer physical
+  ordering helpers (`ShaftSpec.buildPhysicalKeyOrder`, `snapForwardFrom`).
 
 ---
 

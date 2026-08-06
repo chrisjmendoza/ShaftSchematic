@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.6, 2026-07-30)
+# AddComponentDialogs Contract (v1.7, 2026-08-06)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -106,6 +106,22 @@ ShaftViewModel.addThreadAt()` and stored on the `Threads` model object.
 | Keyways 90° apart toggle | Same condition as the 180° toggle |
 | CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on |
 
+Submit ordering (SET/LET → the stored pair):
+- The model stores `startDiaMm`/`endDiaMm` x-ordered AFT → FWD, and SET faces the nearer
+  shaft end. The submit handler therefore orders the typed values by the taper's **physical
+  half** — `taperAddDiameterOrder` over `classifyTaperSideByMidpoint`
+  (`ui/input/TaperSetLetMapping.kt`) — judged against `oalAfterTaperAddMm(…)`, the OAL the
+  shaft will carry once the taper exists.
+- **Not** by the Measure From chip. The chip only resolves the Start (`FWD → OAL − start −
+  length`); a taper measured from AFT can still be placed in the FWD half, and keying the
+  swap on the chip stores SET at the wrong face — drawn small-end-inboard, card labels
+  reading swapped against the typed values.
+- The chip itself is passed through as `Taper.authoredReference` (`onSubmit →
+  ShaftScreen.onAddTaper → ShaftRoute → ShaftViewModel.addTaperAt`), so the card reopens in
+  the user's measuring frame — same pass-through as `AddLinerDialog`.
+- Pinned by `TaperAddOrientationTest` (all four half × measure-from combinations) and
+  `TaperAuthoredReferencePersistenceTest`.
+
 Manual taper-rate rules:
 - Bare `1` is invalid/ambiguous and must be rewritten as a full ratio or fraction.
 - `1/1` is allowed.
@@ -165,6 +181,12 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.7 (2026-08-06)**
+- `AddTaperDialog` submit keys the SET/LET storage order on the taper's **physical half**
+  (against the post-add OAL) instead of the Measure From chip, and passes the chip through as
+  `Taper.authoredReference`. The dialog's controls are unchanged — the chips stay, so
+  add-dialog parity with the taper card is unaffected.
+
 **v1.6 (2026-07-30)**
 - Spec-level "Keyways 90° apart" toggle (+ CW/CCW direction chips, viewed from aft, from
   the AFT keyway) added to `AddBodyDialog` + `AddTaperDialog` and both keyway-bearing

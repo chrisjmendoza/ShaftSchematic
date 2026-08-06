@@ -9,6 +9,8 @@ on:
     branches:
       - main
       - 'feat/**'
+      - 'chore/**'
+      - 'fix/**'
   workflow_dispatch:
 
 jobs:
@@ -30,6 +32,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: gradle
+
+      - name: Run unit tests
+        # Gate: a red suite blocks the build and nothing is distributed — only green
+        # builds reach Firebase (on-device direction).
+        run: ./gradlew testDebugUnitTest --no-daemon
 
       - name: Build debug APK
         # The shared debug.keystore is committed to the repo so the APK is

@@ -549,6 +549,10 @@ fun SettingsRoute(
                         Text("Show component titles in PDF")
                     }
 
+                    // Deliberately not the shared `ShadeInPdfChecks` block the two PDF
+                    // options sheets use: this page stacks its rows in a spacedBy(12.dp)
+                    // column with a padded heading, so adopting the sheets' tighter block
+                    // would restyle the page. Same prefs, same setters.
                     Text(
                         "Shade in PDF",
                         style = MaterialTheme.typography.titleSmall,
