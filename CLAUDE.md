@@ -174,7 +174,13 @@ visual-only override** (`ui/screen/PreviewTuning.kt`): while the finger is on Li
 thickness / Body S-break / Shaft height / Liner compression the open preview re-renders
 from the in-progress value (conflated render loop, draft raster, undimmed sheet scrim),
 but NO DataStore write and NO `RunoutConfig` update may happen on a drag frame —
-persistence and the per-job dirty mark stay on commit-on-release. Liners follow `shadedLiners` like
+persistence and the per-job dirty mark stay on commit-on-release. **An open tuning sheet
+may never cover the page**: the preview switches to the fit-width **page strip** pinned
+under the app bar and the sheet is capped below it (`tuningSheetMaxHeightDp` /
+`tuningPageStripHeightDp`, pure, off the real `PDF_PAGE_*_PT` constants; sheet floor 40%
+of the screen, strip yields the remainder), and the full-window `ModalBottomSheet` scrim
+goes transparent so the strip is never dimmed. The Wear/Undercut sheets tune nothing and
+keep the plain 78% cap with the centered full-size page. Liners follow `shadedLiners` like
 bodies and tapers **except when in-profile values print** — a sheet-white knockout halo over
 grey reads as a pasted box, so on such a sheet liners draw unfilled whatever the pref says.
 ONE predicate decides it, `consolidatedSheetHasInProfileValues`

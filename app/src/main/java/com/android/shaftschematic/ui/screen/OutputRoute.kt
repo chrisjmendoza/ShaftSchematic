@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -670,7 +668,7 @@ fun OutputRoute(
                     tuning = tuning,
                 )
             },
-            sheetScrimColor = if (tuning.active) Color.Transparent else BottomSheetDefaults.ScrimColor,
+            sheetTunesPage = true,
         )
     }
 }

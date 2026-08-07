@@ -9,6 +9,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
@@ -102,6 +103,9 @@ import kotlin.math.roundToInt
  *
  * Contract
  * - Rendering runs on Dispatchers.IO; a loading indicator is shown meanwhile.
+ * - While the options sheet is open the page redraws as a fit-width strip pinned under the
+ *   app bar, and the sheet is capped to what is left below it — the sliders tune the page
+ *   live, so the page has to stay in sight. Opening the sheet resets zoom/pan.
  * - If rendering fails, a plain error message is shown (no crash).
  * - The "Export PDF" action in the top bar calls [onExport] to proceed to the SAF picker.
  * - No model state is mutated here.
@@ -237,6 +241,24 @@ fun PdfPreviewScreen(
     val scope = rememberCoroutineScope()
     val scale = remember { Animatable(1f) }
     val offset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+
+    // ── Tuning layout ─────────────────────────────────────────────────────────
+    // While the options sheet is open the page moves into a fit-width strip pinned under
+    // the app bar and the sheet is capped just below it, so a slider's effect is visible
+    // as it is dragged ("I can see the PDF Preview area lighten up on moving a slider but
+    // I can't see anything" — on-device report). Opening the sheet RESETS zoom/pan:
+    // predictable beats preserved, since an inspection zoom would hide the strip.
+    val configuration = LocalConfiguration.current
+    val stripHeightDp = tuningPageStripHeightDp(
+        configuration.screenWidthDp.toFloat(),
+        configuration.screenHeightDp.toFloat(),
+    )
+    LaunchedEffect(showOptions) {
+        if (showOptions) {
+            scale.snapTo(1f)
+            offset.snapTo(Offset.Zero)
+        }
+    }
 
     val gestures = Modifier
         .pointerInput(Unit) {
@@ -374,12 +396,19 @@ fun PdfPreviewScreen(
                         val imgW = currentBitmap.width.toFloat()
                         val imgH = currentBitmap.height.toFloat()
 
-                        // Fit the PDF page to the canvas at zoom=1, centered.
-                        val fitScale = minOf(size.width / imgW, size.height / imgH)
+                        // Fit the PDF page to the canvas at zoom=1, centered — or, while
+                        // the options sheet is open, into the top strip the sheet was
+                        // sized to leave free (fit-width, top-aligned; on a short screen
+                        // the strip height wins and the page fits to that instead).
+                        val fitScale = if (showOptions) {
+                            minOf(size.width / imgW, stripHeightDp.dp.toPx() / imgH)
+                        } else {
+                            minOf(size.width / imgW, size.height / imgH)
+                        }
                         val fittedW = imgW * fitScale
                         val fittedH = imgH * fitScale
                         val baseLeft = (size.width - fittedW) / 2f
-                        val baseTop = (size.height - fittedH) / 2f
+                        val baseTop = if (showOptions) 0f else (size.height - fittedH) / 2f
 
                         withTransform({
                             translate(offset.value.x, offset.value.y)
@@ -401,29 +430,47 @@ fun PdfPreviewScreen(
                 }
             }
 
+            // The gap between the page strip and the sheet, dimmed — the modal affordance
+            // the bottom sheet's own scrim would give, minus the part that matters: the
+            // strip stays at full brightness. `ModalBottomSheet`'s scrim is all-or-nothing
+            // over the whole window, so it is passed transparent and this stands in for it.
+            // A drag takes even this off — the page is the thing being judged.
+            if (showOptions && !tuning.active) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = stripHeightDp.dp)
+                        .background(BottomSheetDefaults.ScrimColor)
+                )
+            }
+
             // Always-visible blank-draft toggle, overlaid on the preview — the SAME
             // session-only state as the options sheet's switch, so the two can never
             // disagree. Surfaced here because the sheet buried it (on-device report:
             // hard to find, even when demoing the app). Toggling re-renders the
-            // preview live, so what's shown is always what will print.
-            FilterChip(
-                selected = pdfBlankDraft,
-                onClick = { vm.setPdfBlankDraft(!pdfBlankDraft) },
-                label = { Text("Blank draft (write-in)") },
-                leadingIcon = if (pdfBlankDraft) {
-                    {
-                        Icon(
-                            Icons.Filled.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(FilterChipDefaults.IconSize),
-                        )
-                    }
-                } else null,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 4.dp)
-                    .testTag("pdf_blank_toggle"),
-            )
+            // preview live, so what's shown is always what will print. Hidden while the
+            // options sheet is open: it would sit on the page strip, and the sheet's own
+            // first row is this same switch.
+            if (!showOptions) {
+                FilterChip(
+                    selected = pdfBlankDraft,
+                    onClick = { vm.setPdfBlankDraft(!pdfBlankDraft) },
+                    label = { Text("Blank draft (write-in)") },
+                    leadingIcon = if (pdfBlankDraft) {
+                        {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(FilterChipDefaults.IconSize),
+                            )
+                        }
+                    } else null,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 4.dp)
+                        .testTag("pdf_blank_toggle"),
+                )
+            }
         }
     }
 
@@ -431,10 +478,11 @@ fun PdfPreviewScreen(
         ModalBottomSheet(
             onDismissRequest = { showOptions = false },
             sheetState = sheetState,
-            // The scrim exists to say "the sheet has focus" — but while a tuning slider is
-            // being dragged the page above IS the thing being judged, so the dimming comes
-            // off for the duration of the drag and returns on release.
-            scrimColor = if (tuning.active) Color.Transparent else BottomSheetDefaults.ScrimColor,
+            // `ModalBottomSheet`'s scrim is a full-window rect — it cannot be restricted to
+            // the area below the page strip, and dimming the strip is exactly what this
+            // layout exists to prevent. It stays transparent; the preview Box paints the
+            // strip-to-sheet gap itself (and stops even that during a drag).
+            scrimColor = Color.Transparent,
         ) {
             PdfOptionsSheet(
                 vm = vm,
@@ -527,9 +575,13 @@ private fun PdfOptionsSheet(
 ) {
     // Scrollable + inset-padded: the sheet's content is taller than a phone screen, so
     // without its own scroll the bottom rows clip mid-checkbox behind the navigation bar.
-    // Height is capped below full screen — a sheet expanded to the status bar leaves no
-    // edge to swipe it back down by (on-device report).
-    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.78f).dp
+    // Height is capped to what is left under the fit-width page strip — this sheet tunes
+    // the page live, so it must not cover it. See [tuningSheetMaxHeightDp].
+    val configuration = LocalConfiguration.current
+    val maxSheetHeight = tuningSheetMaxHeightDp(
+        configuration.screenWidthDp.toFloat(),
+        configuration.screenHeightDp.toFloat(),
+    ).dp
     Column(
         Modifier
             .fillMaxWidth()

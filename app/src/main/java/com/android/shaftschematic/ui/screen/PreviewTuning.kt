@@ -8,6 +8,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
+import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.PDF_PREVIEW_RENDER_SCALE
 
 /**
@@ -27,6 +29,10 @@ import com.android.shaftschematic.util.PDF_PREVIEW_RENDER_SCALE
  *
  * [active] is a `derivedStateOf` so the screens that read it (the raster resolution and the
  * bottom-sheet scrim) recompose when the drag STARTS and ENDS, not on every frame.
+ *
+ * The file also owns the pure **tuning layout** math ([tuningSheetMaxHeightDp],
+ * [tuningPageStripHeightDp]) — where the page sits and how tall its sheet may grow while
+ * that sheet is open. Live rendering is worthless if the menu covers the page.
  */
 class PreviewTuning {
     /** In-progress "Line thickness" multiplier, or null when no thickness drag is live. */
@@ -90,3 +96,62 @@ internal fun tunedRunoutConfig(
  */
 internal fun previewRenderScale(tuningActive: Boolean): Int =
     if (tuningActive) 1 else PDF_PREVIEW_RENDER_SCALE
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tuning layout — the page strip above an open options sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Status bar + preview app bar, in dp. Covers the M3 small top app bar (64 dp) on the
+ * schematic preview and the shared overlay's icon-button toolbar (≈56 dp) plus the status
+ * bar, so ONE allowance serves both surfaces.
+ */
+internal const val PREVIEW_TOP_CHROME_DP = 88f
+
+/**
+ * Floor for a tunable sheet's height, as a fraction of the screen. A short/wide device
+ * cannot host both a full-width page and a usable sheet; the sheet keeps this much and the
+ * page strip takes what is left (it is zoomable, the sliders are not).
+ */
+internal const val TUNING_SHEET_MIN_FRAC = 0.40f
+
+/**
+ * Ceiling for any options sheet, as a fraction of the screen — a sheet expanded to the
+ * status bar leaves no edge to swipe it back down by (on-device report). The non-tunable
+ * sheets (wear, undercut) use this alone.
+ */
+internal const val PREVIEW_SHEET_MAX_FRAC = 0.78f
+
+/**
+ * Height of the exported page drawn at fit-width, in dp. The sheets are LANDSCAPE
+ * (`PDF_PAGE_WIDTH_PT` × `PDF_PAGE_HEIGHT_PT`), so a page fitted to a portrait screen's
+ * width needs only this much height — the whole drawing lives in a strip near the top.
+ */
+internal fun fitWidthPageHeightDp(screenWidthDp: Float): Float =
+    screenWidthDp * (PDF_PAGE_HEIGHT_PT.toFloat() / PDF_PAGE_WIDTH_PT.toFloat())
+
+/**
+ * Height cap for an options sheet that tunes the page behind it: whatever is left under the
+ * fit-width page strip and the top chrome, so the drawing being judged stays visible while
+ * the sliders move ("It may render live but the menu with the sliders is in the way" —
+ * on-device report). Clamped between [TUNING_SHEET_MIN_FRAC] and [PREVIEW_SHEET_MAX_FRAC]
+ * of the screen: the floor keeps the sheet usable on short/wide devices, the ceiling keeps
+ * the historical swipe-down edge on very tall ones.
+ */
+internal fun tuningSheetMaxHeightDp(screenWidthDp: Float, screenHeightDp: Float): Float =
+    (screenHeightDp - fitWidthPageHeightDp(screenWidthDp) - PREVIEW_TOP_CHROME_DP)
+        .coerceAtLeast(screenHeightDp * TUNING_SHEET_MIN_FRAC)
+        .coerceAtMost(screenHeightDp * PREVIEW_SHEET_MAX_FRAC)
+
+/**
+ * Height of the page strip the preview draws into while a tuning sheet is open. Normally
+ * the fit-width height; on a screen too short to host both, the SHEET keeps its floor first
+ * and the strip yields the remainder (the page fits to that height instead, and stays
+ * zoomable once the sheet closes).
+ */
+internal fun tuningPageStripHeightDp(screenWidthDp: Float, screenHeightDp: Float): Float =
+    minOf(
+        fitWidthPageHeightDp(screenWidthDp),
+        screenHeightDp - PREVIEW_TOP_CHROME_DP -
+            tuningSheetMaxHeightDp(screenWidthDp, screenHeightDp),
+    ).coerceAtLeast(0f)

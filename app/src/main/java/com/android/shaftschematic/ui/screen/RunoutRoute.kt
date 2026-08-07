@@ -596,7 +596,7 @@ fun RunoutRoute(
                     tuning = tuning,
                 )
             },
-            sheetScrimColor = if (tuning.active) Color.Transparent else BottomSheetDefaults.ScrimColor,
+            sheetTunesPage = true,
         )
     }
 
@@ -946,10 +946,14 @@ internal fun openRunoutPdf(context: Context, uri: Uri) {
  * @param onExport      Called when the user taps the Export button.
  * @param optionsSheet  Optional composable content shown in a bottom sheet when the user
  *                      taps the Tune icon. When null, no Tune icon is shown.
- * @param sheetScrimColor Scrim behind the options sheet. A caller whose sheet tunes the
- *                      page live passes `Color.Transparent` while a slider is being
- *                      dragged — the page above IS what the drag is judged against, so the
- *                      dimming comes off for the duration and returns on release.
+ * @param sheetTunesPage Whether [optionsSheet] reshapes THIS page live. When true the open
+ *                      sheet switches the preview to the tuning layout — the page redrawn
+ *                      as a fit-width strip pinned under the toolbar, zoom/pan reset, and
+ *                      the sheet's own cap ([tuningSheetMaxHeightDp]) keeping it below the
+ *                      strip — and the sheet's scrim comes off, because dimming the page
+ *                      being judged is exactly what the layout exists to prevent (the black
+ *                      surround already separates strip from sheet). Wear and undercut
+ *                      leave it false: their sheets tune nothing.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -960,10 +964,18 @@ internal fun PdfPreviewOverlay(
     onClose: () -> Unit,
     onExport: () -> Unit,
     optionsSheet: (@Composable () -> Unit)? = null,
-    sheetScrimColor: Color = BottomSheetDefaults.ScrimColor,
+    sheetTunesPage: Boolean = false,
 ) {
     var showOptions by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Tuning layout: page strip on top, sheet below it. See [tuningPageStripHeightDp].
+    val stripLayout = showOptions && sheetTunesPage
+    val configuration = LocalConfiguration.current
+    val stripHeight = tuningPageStripHeightDp(
+        configuration.screenWidthDp.toFloat(),
+        configuration.screenHeightDp.toFloat(),
+    ).dp
 
     // Unlock device rotation while the preview is open so the landscape sheet can be viewed in
     // landscape (the app is otherwise locked to portrait); restore portrait on dismiss. Same
@@ -1037,12 +1049,31 @@ internal fun PdfPreviewOverlay(
                             offsetState.value = offsetState.value + panChange
                         }
 
+                        // Opening a tuning sheet RESETS zoom/pan: predictable beats
+                        // preserved — an inspection zoom would put the strip off-screen
+                        // exactly when the sliders need it visible.
+                        LaunchedEffect(stripLayout) {
+                            if (stripLayout) {
+                                scaleState.floatValue = 1f
+                                offsetState.value = Offset.Zero
+                            }
+                        }
+
                         Image(
                             bitmap = bitmap,
                             contentDescription = "PDF preview — pinch to zoom, drag to pan",
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
-                                .fillMaxSize()
+                                .then(
+                                    if (stripLayout) {
+                                        Modifier
+                                            .align(Alignment.TopCenter)
+                                            .fillMaxWidth()
+                                            .height(stripHeight)
+                                    } else {
+                                        Modifier.fillMaxSize()
+                                    }
+                                )
                                 .transformable(state = transformState)
                                 .graphicsLayer(
                                     scaleX = scale,
@@ -1066,7 +1097,11 @@ internal fun PdfPreviewOverlay(
         ModalBottomSheet(
             onDismissRequest = { showOptions = false },
             sheetState = sheetState,
-            scrimColor = sheetScrimColor,
+            // `ModalBottomSheet`'s scrim is one full-window rect — it cannot be restricted
+            // to the area below the page strip. A tuning sheet therefore takes none of it;
+            // the overlay's black surround already reads as separation, and dimming the
+            // page under a slider is what this layout exists to prevent.
+            scrimColor = if (sheetTunesPage) Color.Transparent else BottomSheetDefaults.ScrimColor,
         ) {
             optionsSheet()
         }
@@ -1103,8 +1138,19 @@ internal fun RunoutWearOptionsSheet(
 ) {
     // Scrollable + inset-padded: without its own scroll a short screen clips the bottom
     // rows mid-checkbox behind the navigation bar (same posture as PdfOptionsSheet).
-    // Height capped below full screen so the sheet never reaches the status bar.
-    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.78f).dp
+    // Height cap: a sheet that tunes the page live ([tuning] non-null — runout and
+    // consolidated output) stops below the fit-width page strip so the drawing it is
+    // reshaping stays in sight; the wear and undercut sheets, which tune nothing, keep the
+    // plain screen-fraction cap that leaves an edge to swipe them back down by.
+    val configuration = LocalConfiguration.current
+    val maxSheetHeight = if (tuning != null) {
+        tuningSheetMaxHeightDp(
+            configuration.screenWidthDp.toFloat(),
+            configuration.screenHeightDp.toFloat(),
+        ).dp
+    } else {
+        (configuration.screenHeightDp * PREVIEW_SHEET_MAX_FRAC).dp
+    }
     Column(
         Modifier
             .fillMaxWidth()

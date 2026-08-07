@@ -6,6 +6,7 @@ import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.util.PDF_PREVIEW_RENDER_SCALE
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -14,6 +15,9 @@ import org.junit.Test
  * override reaches the drawing through the config/prefs the composers already consume
  * (so the derived liner floor is never a re-stated formula), that no override leaves the
  * committed values disturbed, and that drag frames raster at draft resolution.
+ *
+ * Plus the tuning LAYOUT math: live rendering is worthless if the open menu covers the
+ * page, so the page takes a fit-width strip on top and the sheet is capped below it.
  */
 class PreviewTuningTest {
 
@@ -76,5 +80,61 @@ class PreviewTuningTest {
     fun `drag frames raster at draft resolution and the release pass at full`() {
         assertEquals(1, previewRenderScale(tuningActive = true))
         assertEquals(PDF_PREVIEW_RENDER_SCALE, previewRenderScale(tuningActive = false))
+    }
+
+    // ── Tuning layout: page strip on top, sheet capped below it ──────────────
+
+    @Test
+    fun `the page strip is the landscape page fitted to the screen width`() {
+        // 612 / 792 of the width — the whole drawing, no cropping.
+        assertEquals(303.68f, fitWidthPageHeightDp(393f), 0.01f)
+        assertEquals(0.7727f, fitWidthPageHeightDp(1f), 1e-3f)
+    }
+
+    @Test
+    fun `a phone sheet stops exactly below the strip`() {
+        // 1080 x 2340 @ 2.75x ≈ 393 x 851 dp.
+        val w = 393f
+        val h = 851f
+        val strip = tuningPageStripHeightDp(w, h)
+        val sheet = tuningSheetMaxHeightDp(w, h)
+        assertEquals(303.68f, strip, 0.01f)
+        assertEquals(459.32f, sheet, 0.01f)
+        // Strip + chrome + sheet accounts for the screen: nothing of the page is covered.
+        assertEquals(h, strip + PREVIEW_TOP_CHROME_DP + sheet, 0.01f)
+        // …and the sheet is well clear of both clamps.
+        assertTrue(sheet > h * TUNING_SHEET_MIN_FRAC)
+        assertTrue(sheet < h * PREVIEW_SHEET_MAX_FRAC)
+    }
+
+    @Test
+    fun `a short wide screen keeps the sheet floor and the strip yields`() {
+        // Landscape phone: the fit-width page alone is taller than the screen.
+        val w = 731f
+        val h = 411f
+        assertTrue(fitWidthPageHeightDp(w) > h)
+        val sheet = tuningSheetMaxHeightDp(w, h)
+        val strip = tuningPageStripHeightDp(w, h)
+        // Sheet keeps its floor; the strip takes the remainder (the page fits to it).
+        assertEquals(h * TUNING_SHEET_MIN_FRAC, sheet, 0.01f)
+        assertEquals(158.6f, strip, 0.01f)
+        assertTrue(strip > 0f)
+        assertTrue(strip < fitWidthPageHeightDp(w))
+        assertEquals(h, strip + PREVIEW_TOP_CHROME_DP + sheet, 0.01f)
+    }
+
+    @Test
+    fun `a very tall screen still leaves an edge to swipe the sheet down by`() {
+        val w = 300f
+        val h = 2000f
+        val sheet = tuningSheetMaxHeightDp(w, h)
+        assertEquals(h * PREVIEW_SHEET_MAX_FRAC, sheet, 0.01f)
+        // The strip is not stretched to fill the surplus — it stays fit-width.
+        assertEquals(fitWidthPageHeightDp(w), tuningPageStripHeightDp(w, h), 0.01f)
+    }
+
+    @Test
+    fun `the strip never goes negative on a tiny screen`() {
+        assertTrue(tuningPageStripHeightDp(200f, 120f) >= 0f)
     }
 }

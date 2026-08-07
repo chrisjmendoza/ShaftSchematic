@@ -76,9 +76,11 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     padded heading); the prefs and setters are identical.
   - The sheet's content is taller than a phone screen, so it carries its own
     `verticalScroll` plus `navigationBarsPadding()` — without them the bottom rows clip
-    mid-checkbox behind the navigation bar. Its height is capped at **78% of the screen**
-    (`LocalConfiguration.screenHeightDp * 0.78f`): a sheet expanded to the status bar
-    leaves no edge to swipe it back down by (on-device report).
+    mid-checkbox behind the navigation bar. Its height is capped by
+    `tuningSheetMaxHeightDp` (see **Tuning layout** below) — this sheet tunes the page
+    live, so it stops below the page strip instead of taking the historical 78% of the
+    screen. Both caps keep the sheet clear of the status bar, which would otherwise leave
+    no edge to swipe it back down by (on-device report).
 - **Live tuning:** the four tuning sliders — Line thickness, Body S-break, Shaft height,
   Liner compression — reshape the page **while the finger is still on the track**
   ("see the differences without choosing, closing menu, opening menu, choosing" —
@@ -96,10 +98,37 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     live (≈¼ the pixels, so the page keeps up) and the pass after the release restores
     `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back for drag frames and for that
     release pass — the current page stays up instead of strobing.
-  - **Scrim.** The options `ModalBottomSheet` passes
-    `scrimColor = if (tuning.active) Color.Transparent else BottomSheetDefaults.ScrimColor`:
-    the page above is the thing being judged, so the dimming comes off for the drag and
-    the modal affordance returns on release.
+  - **Tuning layout — the page keeps a strip on top.** Live rendering is worthless if the
+    menu covers the page: on a phone the options sheet filled virtually the whole screen
+    ("It may render live but the menu with the sliders is in the way. I can see the PDF
+    Preview area lighten up on moving a slider but I can't see anything. I need to close
+    the menu to see the changes." — on-device report). While the sheet is open the preview
+    switches to the **tuning layout**, whose pure math lives in `ui/screen/PreviewTuning.kt`:
+    - The PDF pages are LANDSCAPE, so the whole drawing fits a strip only
+      `screenWidthDp × (PDF_PAGE_HEIGHT_PT / PDF_PAGE_WIDTH_PT)` tall
+      (`fitWidthPageHeightDp`, never a magic ratio). The Canvas draws the page fit-width and
+      **top-aligned** under the app bar instead of centered-and-fitted.
+    - The sheet is capped at `tuningSheetMaxHeightDp` = screen height − strip −
+      `PREVIEW_TOP_CHROME_DP` (88 dp: status bar + app bar), clamped to
+      `[TUNING_SHEET_MIN_FRAC 40%, PREVIEW_SHEET_MAX_FRAC 78%]` of the screen. On a
+      393 × 851 dp phone: strip 303.7 dp, sheet 459.3 dp — together with the chrome exactly
+      the screen. The sheet scrolls internally, so no content is lost.
+    - **Clamp order: the sheet keeps its floor, the strip yields the remainder**
+      (`tuningPageStripHeightDp`). On a short/wide screen the page fits to the shrunken
+      strip — it is zoomable once the sheet closes; the sliders are not usable at all if
+      crushed.
+    - Opening the sheet **resets zoom/pan** to fit. Deliberate: an inspection zoom would
+      put the strip off-screen exactly when the sliders need it visible — predictable over
+      preserved. Closing returns the normal layout (centered, pinch 0.5×–8×, double-tap
+      reset).
+  - **Scrim.** `ModalBottomSheet`'s scrim is one **full-window** rect — it cannot be
+    restricted to the area below the strip, and dimming the strip is what the layout exists
+    to prevent — so `scrimColor` is `Color.Transparent` whenever the sheet tunes the page.
+    The preview Box paints the strip-to-sheet **gap** itself with `BottomSheetDefaults.ScrimColor`
+    to keep the modal affordance, and drops even that while a slider is being dragged. The
+    transparent scrim still handles tap-outside-to-dismiss, unchanged.
+  - The blank-draft chip overlaid on the preview is **hidden while the sheet is open** — it
+    would sit on the page strip, and the sheet's own first row is that same switch.
 - **Orientation:** `DisposableEffect` unlocks rotation on entry and restores the
   portrait lock on dispose — every other screen stays portrait-only.
 - **Pipeline:** `snapshotFlow { SchematicRenderInputs(…) }.conflate().collect { … }` →

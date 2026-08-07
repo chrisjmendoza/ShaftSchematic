@@ -8,6 +8,48 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-07
 
+### fix(preview): the page stays visible above the tune menu
+
+On-device report against the live-tuning drop: "It may render live but the menu with the
+sliders is in the way. I can see the PDF Preview area lighten up on moving a slider but I
+can't see anything. I need to close the menu to see the changes." The direction — "the
+preview rendering being allotted a space near the top… and the menu only reaching the
+bottom of that preview."
+
+**The page takes a strip on top while the sheet is open.** The exported sheets are
+LANDSCAPE (792 × 612 pt), so a page fitted to a portrait screen's *width* needs only
+`screenWidth × 612/792` of height — the whole drawing fits a strip near the top with room
+to spare. Opening a tuning options sheet now switches the preview to that layout: the page
+is redrawn fit-width and **top-aligned** under the app bar (from the real
+`PDF_PAGE_WIDTH_PT`/`PDF_PAGE_HEIGHT_PT` constants, never a magic ratio), and the sheet is
+capped at `tuningSheetMaxHeightDp` = screen height − strip − 88 dp of status bar and app
+bar. On a 393 × 851 dp phone: a 303.7 dp strip over a 459.3 dp sheet — the two plus the
+chrome are exactly the screen. The sheets already scroll internally, so nothing is lost.
+
+**Short/wide screens: the sheet keeps its floor, the strip yields.** The cap is clamped to
+40–78% of the screen height; when the fit-width page cannot also fit, the page fits to the
+shrunken strip instead (`tuningPageStripHeightDp`). A cramped page is still readable and
+zooms once the sheet closes; cramped sliders are not usable at all. All of it is pure and
+unit-tested in `ui/screen/PreviewTuning.kt` / `PreviewTuningTest`.
+
+**Zoom resets when the sheet opens** — deliberate, predictable over preserved: an
+inspection zoom would push the strip off-screen exactly when the sliders need it in view.
+Closing restores the normal layout (fill, pinch 0.5×–8×, double-tap reset).
+
+**Scrim.** `ModalBottomSheet`'s scrim is one full-window rect — it covers the strip and
+cannot be restricted to the gap below it — so a tuning sheet passes `Color.Transparent` for
+the whole time it is open, not only during a drag. On the shared `PdfPreviewOverlay` the
+black surround already separates strip from sheet; the schematic's `PdfPreviewScreen`
+paints the strip-to-sheet gap itself and drops even that while a slider is being dragged.
+Tap-outside-to-dismiss is unaffected. The overlay's `sheetScrimColor` parameter is replaced
+by `sheetTunesPage: Boolean`, which drives layout and scrim together.
+
+Applies to the three surfaces whose sheets tune the page — the schematic preview, the
+classic runout sheet, and the Consolidated Output tab. The **Wear** and **Undercut**
+previews keep the full-size centered page and the plain 78% sheet cap: their sheets tune
+nothing, so there is nothing to watch. The live-tuning machinery itself (draft raster,
+conflated render loop, commit-on-release persistence) is untouched — this is layout only.
+
 ### feat(preview): sliders tune the open preview live
 
 On-device request: "see the differences without choosing, closing menu, opening menu,
