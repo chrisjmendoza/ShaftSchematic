@@ -394,6 +394,7 @@ fun PdfPreviewScreen(
                 pdfShowComponentTitles = pdfShowComponentTitles,
                 pdfTieringMode = pdfTieringMode,
                 lineThicknessScale = lineThicknessScale,
+                sBreakThresholdFrac = pdfSBreakThresholdFrac,
                 heightScale = runoutConfig.heightScale,
                 linersProportional = runoutConfig.linersProportional,
                 linerCompression = runoutConfig.linerCompression,
@@ -426,6 +427,7 @@ private fun PdfOptionsSheet(
     pdfShowComponentTitles: Boolean,
     pdfTieringMode: PdfTieringMode,
     lineThicknessScale: Float,
+    sBreakThresholdFrac: Float,
     heightScale: Float,
     linersProportional: Boolean,
     linerCompression: Float,
@@ -488,6 +490,18 @@ private fun PdfOptionsSheet(
         LineThicknessSlider(
             scale = lineThicknessScale,
             onCommit = { vm.setLineThicknessScale(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Body S-break ─────────────────────────────────────────────────────
+        // The same app-wide `PdfPrefs.sBreakThresholdFrac` Settings → Drawing sets —
+        // here so the threshold can be judged against the drawing it changes.
+        SBreakThresholdSlider(
+            frac = sBreakThresholdFrac,
+            onCommit = { vm.setPdfSBreakThresholdFrac(it) },
         )
 
         Spacer(Modifier.height(12.dp))

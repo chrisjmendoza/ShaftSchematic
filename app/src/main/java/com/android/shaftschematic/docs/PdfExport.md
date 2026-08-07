@@ -33,12 +33,14 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `sBreakThresholdFrac` | `0.5` | Body S-break threshold: a body run breaks once drawn below this fraction of its true length (0–1; `0` = never break on compression) |
 
 All fields are also reachable in the preview screen's Tune sheet, except the sizing-curve
-anchors and the S-break threshold, which live in Settings → Drawing (app-level
-defaults) under "Default drawing size" and "Body S-break" respectively; the per-job
-"Shaft height" slider multiplies on top of the sizing curve.
+anchors, which live only in Settings → Drawing (app-level defaults) under "Default
+drawing size"; the per-job "Shaft height" slider multiplies on top of the sizing curve.
 
 - **Body S-break** (`sBreakThresholdFrac`): slider in 5% steps, commits on release, with a
-  "Default (50%)" reset button — the same posture as Line Thickness. The readout shows
+  "Default (50%)" reset button — the same posture as Line Thickness, and like Line
+  Thickness it lives in **both** places: Settings → Drawing → "Body S-break" and the PDF
+  Options sheets of the schematic and runout/consolidated previews (one shared
+  `SBreakThresholdSlider`, one app-wide pref — see below). The readout shows
   "Never" at 0 and "below N%" elsewhere. It governs only the *compression* trigger of
   `breakForCompression` (`pdf/BreakSymbol.kt`), shared by the schematic body loop, the
   consolidated sheet's body loop, and the footer's compression note. The traditional
@@ -55,8 +57,9 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
 (`PdfDocument` + `PdfRenderer`, 2× raster), pinch-to-zoom 0.5×–8×, double-tap reset.
 
 - **Options sheet (Tune icon):** blank draft (write-in) toggle, component labels, line
-  thickness (50–200%), "Shaft height" slider, liner compression control, measurement
-  reference (Auto/AFT/FWD), shade bodies/tapers/liners — bound to `PdfPrefs` (or, for the
+  thickness (50–200%), "Body S-break" threshold, "Shaft height" slider, liner compression
+  control, measurement reference (Auto/AFT/FWD), shade bodies/tapers/liners — bound to
+  `PdfPrefs` (or, for the
   height/liner-compression pair, the per-job `RunoutConfig`) via VM setters, persisted,
   applied live (each option is a `LaunchedEffect` key). Blank draft is session-scoped, not
   persisted.

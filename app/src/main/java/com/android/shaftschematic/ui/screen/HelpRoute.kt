@@ -324,6 +324,9 @@ private val helpSections: List<HelpSection> = listOf(
                     "• Bodies only — liners and tapers always foreshorten silently.\n" +
                     "• A genuinely long run (about 3 in of paper at true scale) still prints " +
                     "its break at every setting, Never included.\n" +
+                    "• The same slider sits on the PDF Options sheet of the schematic and " +
+                    "runout/consolidated previews, so the threshold can be set against the " +
+                    "drawing it changes — one setting, wherever you move it.\n" +
                     "• Dimension values always print true lengths, whatever the drawing does."
             ),
             HelpTopic(
@@ -449,8 +452,9 @@ private val helpSections: List<HelpSection> = listOf(
                     "• \"Sheet content\", worn sections, and \"Export all\" — on the " +
                     "Consolidated Output tab.\n" +
                     "• Each document's PDF Options sheet repeats Line thickness, Shade in PDF, " +
-                    "and (on the schematic) Measurement reference — the same app-wide settings, " +
-                    "reachable without leaving the drawing."
+                    "(on the schematic) Measurement reference, and — on the schematic and the " +
+                    "runout/consolidated sheets, the drawings that can break — Body S-break: " +
+                    "the same app-wide settings, reachable without leaving the drawing."
             ),
         )
     ),
