@@ -8,11 +8,13 @@ include the lifts). 2026-08-06 — §5.6 gains the conditional liner-shading rul
 (`computeDetailPtPerMm`; the `computeBodyOnlyPtPerMm`/`computePdfPtPerMmFitAxes` names never
 existed); §4 units corrected (printed values follow the document's ACTIVE unit, not always
 mm); §5.5 gains the Tune options-sheet inventory; §5.7 names only the public
-`fracFitFactor`. 2026-08-05 — §5.7 gains the default sizing curve (4" → 0.75", 8" → 1.25",
-linear, superseding the flat visual scale as the 100% base) with user-adjustable anchor
-heights (Settings → PDF Export → "Default drawing size", `PdfPrefs.curveLo/HiHeightIn`);
-§6.4 documents the S-break pair's minimum-gap layout (`breakPairLayout`, ≥ 1 pt of
-daylight) and the foreshortening trigger. Previously 2026-07-28 — §5.5 wear-document blank-draft bullet corrected (blank mode keeps
+`fracFitFactor`. 2026-08-05 — §5.7 gains the default sizing curve (linear, superseding the
+flat visual scale as the 100% base; the shipped anchors were 4" → 0.75" / 8" → 1.25" that
+day and are now the proportional 4" → 0.5" / 8" → 1" — §5.7 is the current statement) with
+user-adjustable anchor heights (Settings → PDF Export → "Default drawing size",
+`PdfPrefs.curveLo/HiHeightIn`); §6.4 documents the S-break pair's minimum-gap layout
+(`breakPairLayout`, ≥ 1 pt of daylight) and the foreshortening trigger (since 2026-08-06 a
+user-set threshold, Settings → PDF Export → "Body S-break" — §6.4). Previously 2026-07-28 — §5.5 wear-document blank-draft bullet corrected (blank mode keeps
 the profile AND every liner's detail strip since 2026-07-28, values-out only) and extended
 for measured-Ø readings; §5.3 gains a pointer to the wear document's own measured-Ø callout
 system. 2026-07-22 — added §5.4 Inline Dimension Text (dimension values now seated in a break in the line, drafting-convention style, PDF export + preview); added §5.3 On-Shaft Diameter Callouts (body/liner OD leaders now all-BELOW, ≤3-decimal formatting, two-tier stacking); previously 2026-07-18 fixed page orientation (landscape, not portrait), clarified preview/PDF as separate drawing paths (fit functions named; corrected 2026-08-05), replaced the "no display compression" invariant with the actual round-stock S-break behavior, fixed the AUDIT.md path.
@@ -438,7 +440,20 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
 4. **Round-stock display compression exists for long bodies** (this replaces an earlier "no
    display compression" claim, which is no longer true). `ShaftPdfComposer.drawBodiesCompressedCenterBreak()`
    triggers per-body when that body's on-paper length reaches `COMPRESS_TRIGGER_PT` (220 pt) —
-   or whenever the compressed profile x-map actually foreshortens it, whichever comes first: the
+   or when the compressed profile x-map squeezes it below a **user-set fraction of its true
+   drawn width** (`breakForCompression`, `pdf/BreakSymbol.kt` — ONE predicate shared with the
+   consolidated sheet's body loop and the footer's compression note, so the note and the drawn
+   breaks can never disagree). The fraction is `PdfPrefs.sBreakThresholdFrac`, set in
+   Settings → PDF Export → **"Body S-break"** (slider, 5% steps, "Default (50%)" reset):
+   **Never** (0) suppresses compression breaks entirely — all foreshortening stays hidden —
+   and 100% breaks on any foreshortening at all ("why lock it in one way when different users
+   may want different outputs" — on-device request). `COMPRESS_TRIGGER_PT` is deliberately
+   NOT governed by the slider: a run that eats 220 pt of paper at true scale is not hidden
+   compression, so it breaks at every setting. At the default half, milder foreshortening
+   prints a plain outline — a run kept at half scale or better still reads honestly, and
+   a break pair on a barely-squeezed run was noise (on-device report: a 6" run at ~74% of
+   true carried the pair); the rails print true lengths either way. Whichever trigger
+   fires first: the
    body is drawn as two shortened stubs, each capped with an S-curve "round-stock break" symbol
    (`pdf/BreakSymbol.kt`, `drawBreakEdge()`) instead of a straight end cap, so the drawing reads as
    a foreshortened cylindrical bar rather than a literal-length rectangle. The pair's gap and

@@ -35,6 +35,7 @@ import com.android.shaftschematic.pdf.dim.RailPlanner
 import com.android.shaftschematic.pdf.dim.buildLinerSpans
 import com.android.shaftschematic.pdf.dim.oalSpan
 import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
+import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
@@ -546,7 +547,8 @@ fun composeRunoutPdf(
     // ── Draw shaft profile ────────────────────────────────────────────────────
     drawShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill,
-        ptPerMm = diaPtPerMm, truePtPerMm = diaPtPerMm)
+        ptPerMm = diaPtPerMm, truePtPerMm = diaPtPerMm,
+        breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac)
 
     // ── Wear marks + worn sections + in-profile values (consolidated sheet) ───
     // Z-order (on-device request): marks first — wear-area bands and pit X's — then the
@@ -1053,11 +1055,14 @@ private fun drawShaftProfile(
     linerFill: Paint? = null,
     ptPerMm: Float = 1f,
     /**
-     * True-scale pt-per-mm of the diameter solve. A body whose drawn span falls short of
-     * its true length at this scale is foreshortened by the compressed x mapping, and
-     * MUST show the S-break pair. 0 disables the check (glyph on long spans only).
+     * True-scale pt-per-mm of the diameter solve. A body drawn below
+     * [breakMinFracOfTrue] of its true width at this scale shows the S-break pair
+     * ([breakForCompression]); milder foreshortening prints plain. 0 disables the check
+     * (glyph on long spans only).
      */
     truePtPerMm: Float = 0f,
+    /** The user's `PdfPrefs.sBreakThresholdFrac`; 0 = never break on compression. */
+    breakMinFracOfTrue: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
 ) {
     // ── Shade fills first (drawn under all outlines) ──────────────────────
     bodyFill?.let { f ->
@@ -1088,7 +1093,7 @@ private fun drawShaftProfile(
         }
     }
     // Bodies — with compression breaks for foreshortened (and very long) sections
-    drawBodiesForRunout(c, spec.bodies, cy, xAt, rPx, outline, geomRect, truePtPerMm)
+    drawBodiesForRunout(c, spec.bodies, cy, xAt, rPx, outline, geomRect, truePtPerMm, breakMinFracOfTrue)
     // Tapers
     drawTapersForRunout(c, spec, xAt, rPx, cy, outline)
     // Liners (elevated outline, thin end ticks)
@@ -1126,9 +1131,10 @@ private fun drawShaftProfile(
 }
 
 /**
- * Draw bodies with the S-break pair on every foreshortened section (its drawn span is
- * shorter than its true length at [truePtPerMm] — the compressed x mapping squeezed it)
- * and on any traditionally long span ([COMPRESS_TRIGGER_PT]) — the hand-sheet convention.
+ * Draw bodies with the S-break pair on every deeply compressed section (drawn below
+ * [breakMinFracOfTrue] of its true width at [truePtPerMm] — [breakForCompression]) and on
+ * any traditionally long span ([COMPRESS_TRIGGER_PT]) — the hand-sheet convention. Milder
+ * foreshortening prints a plain outline.
  */
 private fun drawBodiesForRunout(
     c: Canvas,
@@ -1139,6 +1145,8 @@ private fun drawBodiesForRunout(
     outline: Paint,
     geomRect: RectF,
     truePtPerMm: Float = 0f,
+    /** The user's `PdfPrefs.sBreakThresholdFrac`; 0 = never break on compression. */
+    breakMinFracOfTrue: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
 ) {
     val capPaint = Paint(outline)
     bodies.forEach { b ->
@@ -1146,7 +1154,7 @@ private fun drawBodiesForRunout(
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r  = rPx(b.diaMm);          val top = cy - r; val bot = cy + r
         val lenPt = abs(x1 - x0)
-        val foreshortened = truePtPerMm > 0f && lenPt < b.lengthMm * truePtPerMm - 1f
+        val foreshortened = breakForCompression(lenPt, b.lengthMm, truePtPerMm, breakMinFracOfTrue)
 
         if (!foreshortened && lenPt < COMPRESS_TRIGGER_PT) {
             c.drawLine(x0, top, x1, top, outline)

@@ -518,12 +518,20 @@ On-device request following the worn-sections review:
     visibly longer, equal runs draw equal (on-device request), no span ever stretches
     past true scale. Pure engine `geom/ProfileCompression.kt`
     (`buildCompressedProfileXMap` + monotone `solveSpanWidths` bisection, unit-tested);
-    only BODY runs get the S-break pair when foreshortened (`drawBodiesForRunout` /
-    the schematic's `drawBodiesCompressedCenterBreak` trigger on actual foreshortening;
-    the pair lays out via `breakPairLayout` — `pdf/BreakSymbol.kt`, unit-tested — which
-    widens the classic gap up to half the run before flattening the glyph, so the two
-    edges' curves always keep ≥ 1 pt of daylight and never overlap, on-device report);
-    liners/tapers/threads foreshorten silently, like the hand sheets. Everything rides
+    only BODY runs get the S-break pair, and only when squeezed below a **user-set
+    fraction of their true drawn width** (`breakForCompression`, `pdf/BreakSymbol.kt` —
+    one predicate for `drawBodiesForRunout`, the schematic's
+    `drawBodiesCompressedCenterBreak`, and the schematic footer's compression note;
+    milder foreshortening prints a plain outline — a break on a barely-squeezed run was
+    noise, on-device report). The threshold is `PdfPrefs.sBreakThresholdFrac` —
+    Settings → PDF Export → "Body S-break", **default half**, 5% steps, **Never** (0) =
+    compression breaks off entirely, 100% = break on any foreshortening ("why lock it in
+    one way when different users may want different outputs", on-device request); the
+    classic long-span trigger `COMPRESS_TRIGGER_PT` is independent of the slider and
+    fires at every setting. The pair lays out via `breakPairLayout` — same file, unit-tested —
+    which widens the classic gap up to half the run before flattening the glyph, so the
+    two edges' curves always keep ≥ 1 pt of daylight and never overlap (on-device
+    report); liners/tapers/threads foreshorten silently, like the hand sheets. Everything rides
     the one `xAt` — dimension rails, bubble stations, worn sections, wear marks. The
     bubble-row budget is solved on a prelim linear map (scale ↔ rows cycle), and the
     drawing plan re-solves on the real mapping. The SCHEMATIC composer uses the same

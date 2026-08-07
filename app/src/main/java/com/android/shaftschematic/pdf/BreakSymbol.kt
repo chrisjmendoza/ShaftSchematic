@@ -96,6 +96,31 @@ internal val BREAK_PAIR_REACH_FRAC = (1f + RETURN_SWEEP_FULLNESS) * (kotlin.math
 /** Minimum daylight between the pair's nearest curves ("at worst 1px" — on-device report). */
 internal const val BREAK_PAIR_MIN_CLEAR_PT = 1f
 
+/**
+ * True when a body run drawn [drawnPt] wide represents less than [minFracOfTrue] of its
+ * true width ([trueLenMm] × [truePtPerMm]) — the compressed x mapping squeezed it far
+ * enough that the S-break pair must mark the longer span. Mild foreshortening prints a
+ * plain outline instead; the dimension rails print true lengths either way, so this is
+ * purely a visual-honesty threshold.
+ *
+ * [minFracOfTrue] is the user's `PdfPrefs.sBreakThresholdFrac` (Settings → PDF Export →
+ * "Body S-break", default half): `0` disables compression breaks entirely — all
+ * foreshortening stays hidden — and `1` breaks on any shortfall at all. `truePtPerMm ≤ 0`
+ * also disables the check (callers that never compress pass 0 and break on span length
+ * alone). The traditional long-span trigger (`COMPRESS_TRIGGER_PT` at the draw sites) is
+ * independent of this rule and unaffected by it.
+ *
+ * ONE predicate for every break draw site AND the schematic footer's compression note, so
+ * the note and the drawn breaks can never disagree.
+ */
+internal fun breakForCompression(
+    drawnPt: Float,
+    trueLenMm: Float,
+    truePtPerMm: Float,
+    minFracOfTrue: Float,
+): Boolean =
+    truePtPerMm > 0f && minFracOfTrue > 0f && drawnPt < trueLenMm * truePtPerMm * minFracOfTrue
+
 internal data class BreakPairLayout(val gapPt: Float, val amplitudePt: Float)
 
 /**

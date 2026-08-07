@@ -129,17 +129,23 @@ standalone runout sheet.
 
 ### S-break (round-stock break)
 The S-curve end-cap glyph (`pdf/BreakSymbol.kt`, `drawBreakEdge()`) that replaces a straight
-end cap when a long body is drawn foreshortened, so the drawing reads as a shortened
+end cap when a body is drawn appreciably foreshortened, so the drawing reads as a shortened
 cylindrical bar rather than a literal-length rectangle. **Bodies only** — tapers, threads,
 and liners are never broken this way. Liners foreshorten in *size* only, down to a finite
-width floor.
+width floor. How much squeeze earns the glyph is a user setting
+(`PdfPrefs.sBreakThresholdFrac`, Settings → PDF Export → "Body S-break", default half of
+true drawn width; **Never** hides compression entirely, 100% breaks on any foreshortening) —
+one predicate, `breakForCompression`, for every draw site and the footer's compression note.
+The independent long-span trigger (`COMPRESS_TRIGGER_PT`, 220 pt of paper at true scale)
+fires at every setting.
 
 ### Default sizing curve
 The 100% base for drawn shaft height (`defaultShaftHeightPt` / `defaultVisualScale`,
-`geom/ProfileCompression.kt`): drawn height is linear in true diameter through 4" → 0.75"
-and 8" → 1.25" on paper, continuing past both anchors and meeting the 1.5" ceiling at 10".
-The anchor **heights** are user settings (Settings → PDF Export → "Default drawing size");
-the anchor diameters stay fixed at 4"/8".
+`geom/ProfileCompression.kt`): drawn height is linear in true diameter through the two
+anchors, continuing past both until the 1.5" ceiling. The STANDARD anchors are
+**proportional** — 4" → 0.5" and 8" → 1" on paper (6" → 3/4"), a line through the origin,
+so the ceiling is met at 12". The anchor **heights** are user settings (Settings → PDF
+Export → "Default drawing size"); the anchor diameters stay fixed at 4"/8".
 
 ### Shaft height slider
 The per-job multiplier (`RunoutConfig.heightScale`, 50–300%) applied to the solved profile

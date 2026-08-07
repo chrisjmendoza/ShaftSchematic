@@ -4,9 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Sizing-curve anchor prefs — the user-adjustable "Default drawing size" pair. Pins the
- * standard defaults (the hand-sheet convention: 4" → 0.75", 8" → 1.25"), the pt
- * conversion the composers consume, and the clamp to the settable range.
+ * The user-adjustable drawing prefs on Settings → PDF Export: the "Default drawing size"
+ * sizing-curve pair and the "Body S-break" threshold. Pins the shipped defaults (the
+ * proportional hand-sheet anchors 4" → 1/2", 8" → 1"; S-break at half of true), the pt
+ * conversion the composers consume, and the clamps to each settable range.
  */
 class PdfPrefsCurveTest {
 
@@ -33,5 +34,28 @@ class PdfPrefsCurveTest {
         val p = PdfPrefs(curveLoHeightIn = 0.5f, curveHiHeightIn = 1.0f).clamped()
         assertEquals(0.5f, p.curveLoHeightIn, 1e-6f)
         assertEquals(1.0f, p.curveHiHeightIn, 1e-6f)
+    }
+
+    // ── Body S-break threshold (Settings → PDF Export → "Body S-break") ──────────
+
+    @Test
+    fun `S-break threshold defaults to half of true`() {
+        assertEquals(0.5f, PDF_SBREAK_THRESHOLD_DEFAULT, 1e-6f)
+        assertEquals(PDF_SBREAK_THRESHOLD_DEFAULT, PdfPrefs().sBreakThresholdFrac, 1e-6f)
+    }
+
+    @Test
+    fun `clamped coerces the S-break threshold into 0 to 1`() {
+        assertEquals(0f, PdfPrefs(sBreakThresholdFrac = -0.4f).clamped().sBreakThresholdFrac, 1e-6f)
+        assertEquals(1f, PdfPrefs(sBreakThresholdFrac = 2.5f).clamped().sBreakThresholdFrac, 1e-6f)
+    }
+
+    @Test
+    fun `in-range S-break thresholds pass through clamped verbatim`() {
+        // Both ends are legal settings: 0 = never break on compression, 1 = always.
+        assertEquals(0f, PdfPrefs(sBreakThresholdFrac = 0f).clamped().sBreakThresholdFrac, 1e-6f)
+        assertEquals(0.25f, PdfPrefs(sBreakThresholdFrac = 0.25f).clamped().sBreakThresholdFrac, 1e-6f)
+        assertEquals(0.75f, PdfPrefs(sBreakThresholdFrac = 0.75f).clamped().sBreakThresholdFrac, 1e-6f)
+        assertEquals(1f, PdfPrefs(sBreakThresholdFrac = 1f).clamped().sBreakThresholdFrac, 1e-6f)
     }
 }

@@ -39,8 +39,8 @@ Persistence & Data Safety
 
 Misc
 
-- Settings screen — units, grid, preview colors, line thickness, Appearance (System/Light/Dark + high contrast; the white paper sheets keep fixed ink either way), undercut drawing styles, and PDF Export prefs including "Default drawing size" (the 4" → 0.75" / 8" → 1.25" sizing curve anchors); plus Data backup/restore
-- Help screen, Developer Options, Achievements screen, Project-Info sheet
+- Settings screen — units, grid, preview colors, line thickness, Appearance (System/Light/Dark + high contrast; the white paper sheets keep fixed ink either way), undercut drawing styles, and PDF Export prefs including "Default drawing size" (the proportional 4" → 0.5" / 8" → 1" sizing curve anchors) and "Body S-break" (how far a body may compress before it prints the break symbol); plus Data backup/restore
+- Help & FAQ screen (how-to guides, a Settings reference covering every field and option, FAQ), Developer Options, Achievements screen, Project-Info sheet
 - Portrait-locked UI (landscape is currently disabled)
 
 📂 Project Structure

@@ -8,7 +8,55 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-06
 
-### fix(pdf): OAL one-tier rule completed — hidden 2.5× spacing pref removed
+### docs(help): Settings reference — every field and option covered
+
+On-device direction: "Let's make sure all relevant docs are updated, including the help
+section. It needs to be thorough covering settings fields and options." Help & FAQ gains a
+**Settings Reference** section — one topic per Settings area (Units, Appearance, Editor
+Screen, Preview Colors, Undercut Drawing style, the four PDF Export groups, Achievements,
+Data, Help/About/Developer Options) naming every control by its on-screen label with what
+it changes and its default, plus a closing topic for the per-job controls that live on a
+document rather than in Settings (Shaft height, liner compression, blank draft, cut-depth
+exaggeration). `Navigation.md` extends the "Help tracks behavior" rule to cover every
+Settings control by name. Doc sweep alongside it fixed the stale pre-proportional sizing
+anchors (4" → 0.75" / 8" → 1.25") still quoted in `GLOSSARY.md`, `ROADMAP.md`, `TODO.md`,
+and `README.md` — the shipped standard is the proportional 4" → 0.5" / 8" → 1" pair — and
+brought the glossary's S-break entry up to the new user-set threshold.
+
+### fix(pdf): S-breaks only on real compression — user-adjustable threshold (default: half of true)
+
+On-device report: a 6" body run between a taper and a liner carried a full S-break pair.
+It was drawn at ~74% of true width — the old rule broke on ANY foreshortening beyond
+1 pt of paper, so a barely-squeezed run got the same glyph as one hiding twenty feet of
+shaft. New rule ("institute a compression with no break, and after a certain length add
+the S break to indicate a longer span"): a body run prints a plain outline until the
+compressed x-map squeezes it below a **threshold fraction of its true drawn width**,
+half by default; below that, enough shaft is hidden that the pair must mark the longer
+span. Bodies ONLY — liners/tapers still foreshorten silently, per the standing invariant.
+
+The threshold is a **user preference**, not a fixed constant — "add a slider for body S
+break compression setting? So if I want an S break at 25% or more, or 75%, to no break
+and all hidden compression. Figured why lock it in one way when different users may want
+different outputs." Settings → PDF Export → **"Body S-break"**: a slider in 5% steps
+(commit on release) with a "Default (50%)" reset button, the same posture as Line
+Thickness. The readout reads "Never" at the low end — compression breaks off entirely,
+all foreshortening hidden — and "below N%" elsewhere; at 100% any foreshortening at all
+breaks. Persisted as `PdfPrefs.sBreakThresholdFrac` (DataStore key
+`pdf_sbreak_threshold_frac`, default `PDF_SBREAK_THRESHOLD_DEFAULT` = 0.5, clamped to
+0–1), and every preview that rasterizes with the current prefs — schematic, runout,
+consolidated output — keys its re-render on it, so the sheet updates live.
+
+One predicate (`breakForCompression`, `pdf/BreakSymbol.kt`, unit-tested in
+`BreakThresholdTest`) drives all three consumers — the schematic's
+`drawBodiesCompressedCenterBreak`, the consolidated sheet's `drawBodiesForRunout`, and
+the schematic footer's compression note — all reading the ONE pref, so the note and the
+drawn breaks can never disagree. The classic long-span trigger (`COMPRESS_TRIGGER_PT`,
+≥ 220 pt of paper) is deliberately **outside** the slider and unchanged: a run that eats
+220 pt of paper at true scale is not hidden compression, so it still shows its break at
+every setting, "Never" included. The rails print true lengths over every span either way;
+the threshold trades a marker on mild compression for a quieter sheet. Sample numbers at
+the 1" standard and the default 50%: a 6" run (true 54 pt) floored at 40 pt on the
+schematic = 74% → plain; the 302" shaft's 29–31" runs at 25–40% of true → break, as before.
 
 The "one regular tier bump" adjustment removed `OVERALL_EXTRA_PT` but missed the second
 padding source: `PdfPrefs.oalSpacingFactor` (default 2.5, no UI control — permanently at

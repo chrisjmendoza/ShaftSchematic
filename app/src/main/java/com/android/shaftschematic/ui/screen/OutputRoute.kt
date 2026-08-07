@@ -109,6 +109,7 @@ fun OutputRoute(
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val curveLoHeightIn    by vm.pdfCurveLoHeightIn.collectAsState()
     val curveHiHeightIn    by vm.pdfCurveHiHeightIn.collectAsState()
+    val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
     val undercutRecord     by vm.undercutRecord.collectAsState()
@@ -301,7 +302,7 @@ fun OutputRoute(
 
     LaunchedEffect(showPreview, variant, spec, runoutConfig, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   runoutReadings, wearRecord, blankDraft) {
+                   pdfSBreakThresholdFrac, runoutReadings, wearRecord, blankDraft) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot = vm.currentPdfPrefs

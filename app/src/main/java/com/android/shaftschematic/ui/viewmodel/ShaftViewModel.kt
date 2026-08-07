@@ -249,6 +249,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfCurveHiHeightIn = MutableStateFlow(PdfPrefs().curveHiHeightIn)
     val pdfCurveHiHeightIn: StateFlow<Float> = _pdfCurveHiHeightIn.asStateFlow()
 
+    // Body S-break threshold: how far a body run may compress before it shows the S-break
+    // pair. 0 = never on compression alone. Also a preview re-render key on every tab that
+    // rasterizes with the current PdfPrefs.
+    internal val _pdfSBreakThresholdFrac = MutableStateFlow(PdfPrefs().sBreakThresholdFrac)
+    val pdfSBreakThresholdFrac: StateFlow<Float> = _pdfSBreakThresholdFrac.asStateFlow()
+
     internal val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
 
@@ -1145,6 +1151,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfCurveHiHeightInFlow(getApplication()).collectLatest { persisted ->
                 _pdfCurveHiHeightIn.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(curveHiHeightIn = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfSBreakThresholdFracFlow(getApplication()).collectLatest { persisted ->
+                _pdfSBreakThresholdFrac.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(sBreakThresholdFrac = persisted) }
             }
         }
         viewModelScope.launch {

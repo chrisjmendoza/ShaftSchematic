@@ -80,6 +80,7 @@ object SettingsStore {
     private val KEY_PDF_SHADED_LINERS  = booleanPreferencesKey("pdf_shaded_liners")
     private val KEY_PDF_CURVE_LO_HEIGHT_IN = floatPreferencesKey("pdf_curve_lo_height_in")
     private val KEY_PDF_CURVE_HI_HEIGHT_IN = floatPreferencesKey("pdf_curve_hi_height_in")
+    private val KEY_PDF_SBREAK_THRESHOLD_FRAC = floatPreferencesKey("pdf_sbreak_threshold_frac")
 
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
@@ -132,6 +133,14 @@ object SettingsStore {
         ctx.settingsDataStore.edit {
             it[KEY_PDF_CURVE_HI_HEIGHT_IN] = v.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN)
         }
+    }
+
+    // Body S-break threshold: fraction of true width below which a compressed body run
+    // shows the S-break pair. 0 = never break on compression.
+    fun pdfSBreakThresholdFracFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SBREAK_THRESHOLD_FRAC] ?: PdfPrefs().sBreakThresholdFrac }
+    suspend fun setPdfSBreakThresholdFrac(ctx: Context, v: Float) {
+        ctx.settingsDataStore.edit { it[KEY_PDF_SBREAK_THRESHOLD_FRAC] = v.coerceIn(0f, 1f) }
     }
 
     fun pdfExportModeFlow(ctx: Context): Flow<PdfExportMode> =

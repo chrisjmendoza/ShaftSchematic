@@ -30,10 +30,22 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `shadedLiners` | `false` | Fill liner sections with light grey |
 | `curveLoHeightIn` | `0.5` | Sizing-curve anchor: drawn height (paper in) of a 4" shaft at 100% (0.25–1.5) |
 | `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
+| `sBreakThresholdFrac` | `0.5` | Body S-break threshold: a body run breaks once drawn below this fraction of its true length (0–1; `0` = never break on compression) |
 
 All fields are also reachable in the preview screen's Tune sheet, except the sizing-curve
-anchors, which live in Settings → PDF Export → "Default drawing size" (app-level default;
-the per-job "Shaft height" slider multiplies on top).
+anchors and the S-break threshold, which live in Settings → PDF Export (app-level
+defaults) under "Default drawing size" and "Body S-break" respectively; the per-job
+"Shaft height" slider multiplies on top of the sizing curve.
+
+- **Body S-break** (`sBreakThresholdFrac`): slider in 5% steps, commits on release, with a
+  "Default (50%)" reset button — the same posture as Line Thickness. The readout shows
+  "Never" at 0 and "below N%" elsewhere. It governs only the *compression* trigger of
+  `breakForCompression` (`pdf/BreakSymbol.kt`), shared by the schematic body loop, the
+  consolidated sheet's body loop, and the footer's compression note. The traditional
+  long-span trigger `COMPRESS_TRIGGER_PT` (220 pt of paper) is independent and unaffected:
+  at "Never" a genuinely long run still shows its break. Bodies only — liners and tapers
+  foreshorten silently at every setting. Every preview that rasterizes with the current
+  `PdfPrefs` keys its `LaunchedEffect` on `vm.pdfSBreakThresholdFrac`, so the change is live.
 
 ---
 

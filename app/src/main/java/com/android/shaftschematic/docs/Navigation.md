@@ -6,7 +6,7 @@ ShaftEditorRoute.kt, ShaftRoute.kt, StartScreen.kt, RunoutRoute.kt, WearRoute.kt
 UndercutRoute.kt, HelpRoute.kt (ui/screen/)  
 Layer: UI → Nav
 
-Version: v0.6 (2026-08-05)
+Version: v0.7 (2026-08-06)
 
 Invariants
 - Routes are stable, typed constants or sealed routes.
@@ -24,13 +24,19 @@ Route graph (AppNav.kt NavHost)
   - Undercut Drawing tab → UndercutRoute (`docs/UndercutDrawing.md`) — same "built" gating as
     Runout/Wear
   - Consolidated Output tab → OutputRoute (`docs/RunoutSheet.md` Consolidation step 5) —
-    consolidated-sheet variants, worn-section editor, "Shaft height" slider, Export all;
-    same "built" gating, last in the sidebar
-- `settings` → SettingsRoute
+    consolidated-sheet variants, worn-section editor, "Shaft height" slider, the
+    liner-compression pair, blank draft, Export all; same "built" gating, last in the
+    sidebar
+- `settings` → SettingsRoute — main page plus two in-screen sub-pages (`SettingsPage`:
+  Preview Colors, PDF Export), back-arrow returns to the main page before leaving the route
 - `about` → AboutRoute
 - `help` → HelpRoute — static Help & FAQ content (no ViewModel); entered from Settings.
-  Topics restate current behavior — a behavior change must update the matching topic in
-  the same change (the screen is the user-facing summary of the contract docs).
+  Four sections: Getting Started, How-To Guides, **Settings Reference**, FAQ. Topics
+  restate current behavior — a behavior change must update the matching topic in the same
+  change (the screen is the user-facing summary of the contract docs). The Settings
+  Reference section carries the same obligation for **every user-visible Settings
+  control**: adding, renaming, or re-defaulting a control on any Settings page (main,
+  Preview Colors, PDF Export) must update its entry in the same change.
 - `developerOptions` → DeveloperOptionsRoute
 - `achievements` → AchievementsRoute
 - `openLocal` / `saveLocal` → internal-storage document pickers (InternalDocRoutes.kt)

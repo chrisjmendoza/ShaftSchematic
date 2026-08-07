@@ -91,6 +91,14 @@ fun ShaftViewModel.setPdfCurveHiHeightIn(v: Float, persist: Boolean = true) {
     if (persist) viewModelScope.launch { SettingsStore.setPdfCurveHiHeightIn(getApplication(), clamped) }
 }
 
+/** Wired to Settings → PDF Export → "Body S-break"; 0 = never break on compression. */
+fun ShaftViewModel.setPdfSBreakThresholdFrac(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(0f, 1f)
+    _pdfSBreakThresholdFrac.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(sBreakThresholdFrac = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfSBreakThresholdFrac(getApplication(), clamped) }
+}
+
 fun ShaftViewModel.setPdfExportMode(mode: PdfExportMode, persist: Boolean = true) {
     _pdfExportMode.value = mode
     if (persist) {
