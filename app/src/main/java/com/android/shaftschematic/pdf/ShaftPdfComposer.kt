@@ -232,7 +232,7 @@ fun composeShaftPdf(
     // the HEIGHT yields ("doesn't have to be perfectly proportional, just close" —
     // on-device rule). The per-job "Shaft height" slider multiplies the default sizing
     // curve (standard: proportional, 8" → 1.125"; anchor heights user-adjustable via
-    // Settings → PDF Export); the 1.5" ceiling and the page budget cap the result
+    // Settings → Drawing); the 1.5" ceiling and the page budget cap the result
     // (exaggeratedProfileScale, pure, unit-tested).
     val desiredScale = exaggeratedProfileScale(
         baseScale = defaultVisualScale(maxDiaMm, pdfPrefs.curveLoHeightPt, pdfPrefs.curveHiHeightPt),

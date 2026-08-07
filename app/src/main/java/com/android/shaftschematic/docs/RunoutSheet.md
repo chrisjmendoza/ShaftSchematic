@@ -483,7 +483,7 @@ On-device request following the worn-sections review:
     continues past both anchors until the absolute 1.5" ceiling; the flat 0.40 pt/mm
     `VISUAL_DIA_SCALE_PT_PER_MM` remains only as the degenerate-diameter fallback in
     `defaultVisualScale`; the anchor HEIGHTS are user-adjustable app-wide via
-    Settings → PDF Export → "Default drawing size" —
+    Settings → Drawing → "Default drawing size" —
     `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`, an inverted pair flattens at the low
     anchor) and is never diluted by shaft length — EXCEPT when a pinned span (a
     **keyway-bearing body**, whose drawn slot geometry must stay real) needs the room:
@@ -524,7 +524,7 @@ On-device request following the worn-sections review:
     `drawBodiesCompressedCenterBreak`, and the schematic footer's compression note;
     milder foreshortening prints a plain outline — a break on a barely-squeezed run was
     noise, on-device report). The threshold is `PdfPrefs.sBreakThresholdFrac` —
-    Settings → PDF Export → "Body S-break", **default half**, 5% steps, **Never** (0) =
+    Settings → Drawing → "Body S-break", **default half**, 5% steps, **Never** (0) =
     compression breaks off entirely, 100% = break on any foreshortening ("why lock it in
     one way when different users may want different outputs", on-device request); the
     classic long-span trigger `COMPRESS_TRIGGER_PT` is independent of the slider and

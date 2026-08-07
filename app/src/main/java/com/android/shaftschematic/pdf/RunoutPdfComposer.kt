@@ -442,7 +442,7 @@ fun composeRunoutPdf(
 
     // Sizing rule (shared with the schematic): height follows TRUE diameter on the
     // default curve (standard: 8" → 1.25", 4" → 0.75", linear between; anchor heights
-    // user-adjustable via Settings → PDF Export). Keyway-bearing bodies stay
+    // user-adjustable via Settings → Drawing). Keyway-bearing bodies stay
     // pinned at true width, so when one needs the room the HEIGHT yields —
     // solveMaxProfileScale finds the largest scale that still lays out on the page
     // ("doesn't have to be perfectly proportional, just close").

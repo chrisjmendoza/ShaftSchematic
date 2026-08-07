@@ -33,7 +33,7 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `sBreakThresholdFrac` | `0.5` | Body S-break threshold: a body run breaks once drawn below this fraction of its true length (0–1; `0` = never break on compression) |
 
 All fields are also reachable in the preview screen's Tune sheet, except the sizing-curve
-anchors and the S-break threshold, which live in Settings → PDF Export (app-level
+anchors and the S-break threshold, which live in Settings → Drawing (app-level
 defaults) under "Default drawing size" and "Body S-break" respectively; the per-job
 "Shaft height" slider multiplies on top of the sizing curve.
 

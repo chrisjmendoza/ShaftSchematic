@@ -8,6 +8,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-06
 
+### fix(settings): Default drawing size + Body S-break move up to the main Settings page
+
+On-device report: "The S break is way too deep in settings, it's under pdf export. Default
+body size drawing and S break both need to be in settings, not pdf export area." Both
+controls define the **drawing itself** — how tall a shaft prints and when a foreshortened
+body admits it — so burying them a page deep behind "PDF Export Options" filed them as
+export plumbing. They now sit in a new **Drawing** section on the main Settings page,
+directly under the PDF Export Options row and above Editor Screen, in their original order
+("Default drawing size" then "Body S-break"). The PDF Export sub-page keeps what is
+genuinely about exporting: open-after-export, component titles, Shade in PDF, Template
+mode, and the dimension tiering reference. Pure relocation — same composables, same
+prefs, same setters, no geometry or persistence change. Help's Settings Reference moves
+both topics in with the main-page entries and every doc pointer retargets from
+"Settings → PDF Export" to "Settings → Drawing".
+
 ### docs(help): Settings reference — every field and option covered
 
 On-device direction: "Let's make sure all relevant docs are updated, including the help

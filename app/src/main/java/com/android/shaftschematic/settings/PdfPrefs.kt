@@ -35,7 +35,7 @@ data class PdfPrefs(
      * "Shaft height" slider): a 4" shaft draws [curveLoHeightIn] tall, an 8" shaft
      * [curveHiHeightIn]; sizes between and beyond follow the line
      * (`geom/ProfileCompression.defaultShaftHeightPt`). Adjustable in
-     * Settings → PDF Export → Default drawing size; the standard pair is PROPORTIONAL
+     * Settings → Drawing → Default drawing size; the standard pair is PROPORTIONAL
      * (through the origin: 8" → 1", 6" → 3/4", 4" → 1/2" — the hand-sheet rule from
      * the original rulered sketches; taller defaults read "chubby" on-device).
      */
@@ -43,7 +43,7 @@ data class PdfPrefs(
     val curveHiHeightIn: Float = 1.0f,
     /**
      * Fraction of true drawn width below which a compressed BODY run shows the S-break
-     * pair (`pdf/BreakSymbol.breakForCompression`). Adjustable in Settings → PDF Export →
+     * pair (`pdf/BreakSymbol.breakForCompression`). Adjustable in Settings → Drawing →
      * "Body S-break": 0 = never break on compression (all foreshortening stays hidden),
      * 1 = break on any foreshortening at all. The traditional long-span trigger
      * (`COMPRESS_TRIGGER_PT`) is deliberately NOT governed by this — a run that eats

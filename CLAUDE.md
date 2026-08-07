@@ -120,7 +120,7 @@ compression convention** — drawn height follows TRUE diameter on the **default
 curve** (`defaultShaftHeightPt`: STANDARD anchors are PROPORTIONAL — 8" → 1",
 6" → 3/4", 4" → 1/2", a line through the origin, the hand-sheet rule from the
 original rulered sketches; taller pairs read "chubby" on-device and are a deliberate
-Settings choice, never the default — Settings → PDF Export "Default drawing size",
+Settings choice, never the default — Settings → Drawing "Default drawing size",
 `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`; an inverted pair flattens at the low
 anchor: a larger shaft never draws smaller; `defaultVisualScale` keeps the flat
 `VISUAL_DIA_SCALE_PT_PER_MM` only as the degenerate fallback),
@@ -140,7 +140,7 @@ outline; bodies ONLY, and the schematic footer's compression note shares the sam
 predicate) draw the S-break pair laid out by `breakPairLayout` — gap widens up to half
 the run, then amplitude flattens, so the two edges always keep ≥ 1 pt of daylight and
 never overlap. The threshold is **user-set** — `PdfPrefs.sBreakThresholdFrac`, Settings →
-PDF Export → "Body S-break", default **half** (`PDF_SBREAK_THRESHOLD_DEFAULT`), 5% steps,
+Drawing → "Body S-break", default **half** (`PDF_SBREAK_THRESHOLD_DEFAULT`), 5% steps,
 **Never** (0) at the low end = compression stays entirely hidden, 100% = break on any
 foreshortening ("why lock it in one way when different users may want different outputs"
 — on-device request). ONE pref feeds all three consumers (`drawBodiesCompressedCenterBreak`,
