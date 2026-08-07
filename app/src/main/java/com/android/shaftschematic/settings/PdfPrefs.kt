@@ -15,6 +15,13 @@ const val PDF_CURVE_HEIGHT_MIN_IN = 0.25f
 const val PDF_CURVE_HEIGHT_MAX_IN = 1.5f
 
 /**
+ * Default body S-break threshold: a body run breaks once it draws below HALF its true
+ * width. The single source for the shipped value — the pref field, the Settings slider's
+ * reset button, and the tests all read it from here.
+ */
+const val PDF_SBREAK_THRESHOLD_DEFAULT = 0.5f
+
+/**
  * PDF-only preferences. Add more knobs here as you grow the exporter.
  */
 data class PdfPrefs(
@@ -34,6 +41,15 @@ data class PdfPrefs(
      */
     val curveLoHeightIn: Float = 0.5f,
     val curveHiHeightIn: Float = 1.0f,
+    /**
+     * Fraction of true drawn width below which a compressed BODY run shows the S-break
+     * pair (`pdf/BreakSymbol.breakForCompression`). Adjustable in Settings → PDF Export →
+     * "Body S-break": 0 = never break on compression (all foreshortening stays hidden),
+     * 1 = break on any foreshortening at all. The traditional long-span trigger
+     * (`COMPRESS_TRIGGER_PT`) is deliberately NOT governed by this — a run that eats
+     * 220 pt of paper at true scale is not hidden compression, so it breaks regardless.
+     */
+    val sBreakThresholdFrac: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
 ) {
     /** The anchor heights in PDF points (72 pt per paper inch) — what the geometry consumes. */
     val curveLoHeightPt: Float get() = curveLoHeightIn * 72f
@@ -43,5 +59,6 @@ data class PdfPrefs(
         copy(
             curveLoHeightIn = curveLoHeightIn.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN),
             curveHiHeightIn = curveHiHeightIn.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN),
+            sBreakThresholdFrac = sBreakThresholdFrac.coerceIn(0f, 1f),
         )
 }

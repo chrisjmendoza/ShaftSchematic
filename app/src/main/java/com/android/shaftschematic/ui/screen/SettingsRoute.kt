@@ -70,6 +70,7 @@ import com.android.shaftschematic.geom.defaultShaftHeightPt
 import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
+import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
@@ -134,6 +135,7 @@ fun SettingsRoute(
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
     val pdfCurveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
     val pdfCurveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
+    val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -630,6 +632,12 @@ fun SettingsRoute(
                         }
                     }
 
+                    HorizontalDivider()
+                    SBreakThresholdControl(
+                        frac = pdfSBreakThresholdFrac,
+                        onCommit = { vm.setPdfSBreakThresholdFrac(it) },
+                    )
+
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Switch(
                             checked = pdfExportMode == PdfExportMode.Template,
@@ -711,6 +719,65 @@ private fun CurveAnchorControl(
         }
     }
 }
+
+/**
+ * Body S-break threshold: how far a body run may be foreshortened before it prints the
+ * S-break pair instead of a plain outline. 0% = never break on compression ("all hidden
+ * compression"); 100% = break on any foreshortening. Steps of 5%, commits once on release
+ * — the drag is local, same posture as [CurveAnchorControl] and [LineThicknessControl].
+ *
+ * The long-span trigger is deliberately outside this control: a run that eats 220 pt of
+ * paper at true scale is not hidden compression, so it keeps its break at every setting.
+ */
+@Composable
+private fun SBreakThresholdControl(
+    frac: Float,
+    onCommit: (Float) -> Unit,
+) {
+    var drag by remember { mutableStateOf<Float?>(null) }
+    val shown = drag ?: frac
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Body S-break",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            Text(fmtSBreakThreshold(shown), style = MaterialTheme.typography.bodyMedium)
+            TextButton(
+                onClick = { onCommit(PDF_SBREAK_THRESHOLD_DEFAULT) },
+                enabled = frac != PDF_SBREAK_THRESHOLD_DEFAULT,
+            ) { Text("Default (${(PDF_SBREAK_THRESHOLD_DEFAULT * 100).roundToInt()}%)") }
+        }
+        Text(
+            "A body run shows the S-break once it draws shorter than this much of its " +
+                "true length. At Never, compression stays hidden and only very long runs " +
+                "break. Bodies only — liners and tapers never break.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Never", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { drag = (it * 20f).roundToInt() / 20f },
+                onValueChangeFinished = {
+                    drag?.let(onCommit)
+                    drag = null
+                },
+                valueRange = 0f..1f,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+            )
+            Text("Always", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/** "Never" at 0, else the threshold as "below N%" of true length. */
+private fun fmtSBreakThreshold(v: Float): String =
+    if (v <= 0f) "Never" else "below ${(v * 100).roundToInt()}%"
 
 /** Trimmed paper inches with the double-prime mark: 0.75″, 0.5″, 1.0625″. */
 private fun fmtCurveInches(v: Float): String =

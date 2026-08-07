@@ -160,6 +160,7 @@ fun RunoutRoute(
     val pdfShadedBodies    by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
+    val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
 
     // Which bubble's editor dialog is open, if any (component id + station index + display title).
@@ -226,7 +227,7 @@ fun RunoutRoute(
 
     LaunchedEffect(showPreview, spec, runoutConfig, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   runoutReadings, blankDraft) {
+                   pdfSBreakThresholdFrac, runoutReadings, blankDraft) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot  = vm.currentPdfPrefs

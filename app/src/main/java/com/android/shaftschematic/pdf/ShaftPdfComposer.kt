@@ -31,6 +31,7 @@ import com.android.shaftschematic.model.*
 import com.android.shaftschematic.pdf.dim.*
 import com.android.shaftschematic.pdf.notes.*
 import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
+import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_OFF
 import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_ON
@@ -302,6 +303,7 @@ fun composeShaftPdf(
     drawBodiesCompressedCenterBreak(
         c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect, bodyFill,
         truePtPerMm = diaPtPerMm,
+        breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
     )
     // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every other
     // host is a secondary. At 180° a secondary renders hidden (dashed, no fill); at 90° it renders
@@ -462,7 +464,8 @@ fun composeShaftPdf(
         // so the note and the drawn center breaks can't disagree.
         val showCompressionNote = !bodyOnly && bodiesForPdf.any { b ->
             val drawnPt = abs(xAt(b.startFromAftMm + b.lengthMm) - xAt(b.startFromAftMm))
-            drawnPt < b.lengthMm * diaPtPerMm - 1f || drawnPt >= COMPRESS_TRIGGER_PT
+            breakForCompression(drawnPt, b.lengthMm, diaPtPerMm, pdfPrefs.sBreakThresholdFrac) ||
+                drawnPt >= COMPRESS_TRIGGER_PT
         }
 
         // Footer "Body:" diameters — authored bodies as actually drawn. Raw spec.bodies
@@ -690,8 +693,14 @@ private fun drawBodiesCompressedCenterBreak(
     outline: Paint,
     geomRect: RectF,
     fill: Paint? = null,
-    /** True-scale pt/mm — a body drawn shorter than this is foreshortened and MUST break. */
+    /**
+     * True-scale pt/mm — a body drawn below [breakMinFracOfTrue] of its true width at
+     * this scale shows the S-break pair ([breakForCompression]); milder foreshortening
+     * prints plain. 0 disables the check (break on span length alone).
+     */
     truePtPerMm: Float = 0f,
+    /** The user's `PdfPrefs.sBreakThresholdFrac`; 0 = never break on compression. */
+    breakMinFracOfTrue: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
     bodies.forEach { b ->
@@ -700,7 +709,7 @@ private fun drawBodiesCompressedCenterBreak(
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
 
         val bodyLenPt = abs(x1 - x0)
-        val foreshortened = truePtPerMm > 0f && bodyLenPt < b.lengthMm * truePtPerMm - 1f
+        val foreshortened = breakForCompression(bodyLenPt, b.lengthMm, truePtPerMm, breakMinFracOfTrue)
         val compress = foreshortened || bodyLenPt >= COMPRESS_TRIGGER_PT
 
         if (!compress) {

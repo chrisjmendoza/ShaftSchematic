@@ -44,10 +44,11 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   knockout halos), and **Export all** — the checked documents batch-written to one picked
   folder. The classic standalone runout sheet stays on the Runout tab
 - Profile sizing round — per-job value-based "Shaft height" slider (in paper inches, hard
-  capped at 1.5"), a default sizing curve (4" → 0.75", 8" → 1.25") with user-adjustable
-  anchors in Settings → PDF Export → "Default drawing size", the liner-compression control
-  with height precedence (it never lowers the drawn height), an S-break pair minimum gap,
-  and even-spread runout bubbles
+  capped at 1.5"), a proportional default sizing curve (4" → 0.5", 8" → 1") with
+  user-adjustable anchors in Settings → PDF Export → "Default drawing size", the
+  liner-compression control with height precedence (it never lowers the drawn height), an
+  S-break pair minimum gap with a user-set compression threshold (Settings → PDF Export →
+  "Body S-break"), and even-spread runout bubbles
 - Appearance settings — System/Light/Dark + high contrast for the Compose chrome, with the
   white paper sheets pinned to fixed ink so dark mode can never print invisible drawings
 - Help screen and Achievements screen

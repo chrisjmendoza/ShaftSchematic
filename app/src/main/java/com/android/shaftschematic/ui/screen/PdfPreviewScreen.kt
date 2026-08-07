@@ -136,6 +136,7 @@ fun PdfPreviewScreen(
     val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
+    val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
 
     val project = remember(customer, vessel, shaftPosition, jobNumber) {
         ProjectInfo(customer = customer, vessel = vessel, side = shaftPosition, jobNumber = jobNumber)
@@ -152,7 +153,7 @@ fun PdfPreviewScreen(
 
     LaunchedEffect(spec, unit, project, options, resolvedComponents, lineThicknessScale,
                    pdfShowComponentTitles, pdfTieringMode,
-                   pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
+                   pdfShadedBodies, pdfShadedTapers, pdfShadedLiners, pdfSBreakThresholdFrac,
                    runoutConfig.heightScale, runoutConfig.linerMinFracOfTrue) {
         isLoading = true
         errorMessage = null

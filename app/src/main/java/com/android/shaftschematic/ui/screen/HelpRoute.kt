@@ -41,6 +41,14 @@ import androidx.compose.ui.unit.dp
  * Topics describe CURRENT app behavior — when a behavior changes, the topic must change in
  * the same PR (same posture as the contract docs; this screen is the user-facing summary
  * of them).
+ *
+ * The "Settings Reference" section carries that obligation control by control: every
+ * user-visible control on every Settings page (main, Preview Colors, PDF Export) has an
+ * entry naming it by its on-screen label, what it changes, and its default. Adding,
+ * renaming, or re-defaulting a Settings control means editing its entry here in the same
+ * change. Per-job controls that live on a document rather than in Settings (Shaft height,
+ * liner compression, blank draft, cut-depth exaggeration) are covered by the last topic in
+ * that section, so a reader who goes looking in Settings for them is told where they are.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -242,7 +250,9 @@ private val helpSections: List<HelpSection> = listOf(
                     "ask for liners at true scale, or set how far they may shorten with " +
                     "the slider. The page balances the request — liners keep as much true " +
                     "length as fits, and the runs between them always keep their relative " +
-                    "lengths readable."
+                    "lengths readable. Settings → PDF Export → Body S-break sets how far a " +
+                    "body run may be shortened before it prints the S-break symbol — set " +
+                    "it to Never to hide compression entirely, or higher to mark it sooner."
             ),
             HelpTopic(
                 "Back up and restore",
@@ -258,7 +268,188 @@ private val helpSections: List<HelpSection> = listOf(
                     "styles the editor preview (outline, fills, black/white only) and the " +
                     "Undercut Drawing (shade color, intensity, or full line art). Drawing " +
                     "sheets and printed PDFs always stay white with dark ink, whatever the " +
-                    "app theme."
+                    "app theme. Every Settings field is listed in the Settings Reference " +
+                    "section below."
+            ),
+        )
+    ),
+    HelpSection(
+        "Settings Reference",
+        listOf(
+            HelpTopic(
+                "Units",
+                "\"Millimeters\" or \"Inches\" — default Millimeters. Picks how every value is " +
+                    "shown and typed throughout the app: fields, badges, drawings, and PDFs. " +
+                    "Nothing in the file is converted — the model is always millimeters — so " +
+                    "you can switch back and forth as often as you like with no drift. Inch " +
+                    "fields also accept fractions like 3 1/2."
+            ),
+            HelpTopic(
+                "Appearance",
+                "The app's color scheme. Affects app screens only — drawing sheets and " +
+                    "printed PDFs are always white paper with dark ink.\n\n" +
+                    "• \"System\" / \"Light\" / \"Dark\" — default Light, which is the app's " +
+                    "original look. System follows the device's own dark-mode switch.\n" +
+                    "• \"High contrast\" — default off. Boosts figure/ground separation for " +
+                    "bright sunlight or low-vision use."
+            ),
+            HelpTopic(
+                "Editor Screen",
+                "Presentation of the editor and its preview.\n\n" +
+                    "• \"Line Thickness\" — default 100%. Slider from 50% to 200%, a typed % " +
+                    "box beside it, and a \"Default (100%)\" button. This one applies to both " +
+                    "the on-screen preview and every printed PDF: 100% is the standard thin " +
+                    "weight, 200% the heavier original weight. Releasing the slider near 100% " +
+                    "snaps exactly to it; a number you type is used exactly as typed. The same " +
+                    "slider also sits in each document's PDF Options sheet — one setting, two " +
+                    "places to reach it.\n" +
+                    "• \"Preview Colors\" — opens the preview color page (see below).\n" +
+                    "• \"Show Grid in Preview\" — default off. Draws a background grid behind " +
+                    "the shaft in the editor preview. Preview only; never printed.\n" +
+                    "• \"Highlight Selected Component in Preview\" — default on. Emphasizes the " +
+                    "component whose card you are editing.\n" +
+                    "• \"Show Left/Right Arrows on Component Cards\" — default off. Adds arrow " +
+                    "buttons to the carousel cards for stepping between components.\n" +
+                    "• \"Small\" / \"Medium\" / \"Large\" — arrow size, default Medium. " +
+                    "Selectable only while the arrows switch is on."
+            ),
+            HelpTopic(
+                "Preview Colors",
+                "Styles the editor preview only — the PDF has its own fixed drawing colors.\n\n" +
+                    "• \"Black/White Only\" — default off. Turns every fill off and forces " +
+                    "outlines to black; the color rows below are disabled while it is on.\n" +
+                    "• Six color rows: \"Outline\" (default Steel), \"Body Fill\" " +
+                    "(Transparent), \"Taper Fill\" (Steel), \"Liner Fill\" (Bronze), \"Thread " +
+                    "Fill\" (Transparent), \"Thread Hatch\" (Steel). Each row's button offers " +
+                    "Stainless, Steel, Bronze, Transparent, or Custom.\n" +
+                    "• Choosing Custom adds a \"Palette\" button for picking the exact shade " +
+                    "(Monochrome, Primary, Secondary, Tertiary, Surface Variant, Outline, On " +
+                    "Surface, Error, or Transparent). Presets follow the app theme, so they " +
+                    "stay sensible in light and dark."
+            ),
+            HelpTopic(
+                "Undercut Drawing style",
+                "At the bottom of the Preview Colors page. Styles the on-screen Undercut " +
+                    "Drawing; the printed undercut PDF keeps standard drawing colors.\n\n" +
+                    "• \"Line art (no shading)\" — default off. Everything draws white with " +
+                    "black outlines only; the two controls below are disabled while it is on.\n" +
+                    "• \"Shade color\" — Grey (default), Bronze, or Blue.\n" +
+                    "• \"Shade intensity\" — Light, Standard (default), or Dark. The undercut " +
+                    "section's core always shades one step lighter than the liner, at every " +
+                    "intensity."
+            ),
+            HelpTopic(
+                "PDF Export — printing and shading",
+                "Settings → PDF Export Options. These apply to every document you export or " +
+                    "print.\n\n" +
+                    "• \"Open PDF after export\" — default off. Hands the finished file to your " +
+                    "PDF viewer as soon as it is written.\n" +
+                    "• \"Show component titles in PDF\" — default on. Prints the component " +
+                    "names above the drawing.\n" +
+                    "• \"Shade in PDF\": \"Bodies\", \"Tapers\", \"Liners\" — all off by " +
+                    "default. Fills those sections with light grey instead of leaving them " +
+                    "outlined. The same three checkboxes appear in each document's PDF Options " +
+                    "sheet. On a consolidated sheet that prints Ø values inside the profile, " +
+                    "that sheet shows its Liners box unchecked and greyed — the values sit on " +
+                    "white halos a fill would fight — and your setting comes straight back on " +
+                    "every other document."
+            ),
+            HelpTopic(
+                "PDF Export — Default drawing size",
+                "How tall the shaft prints on paper before any per-job adjustment. Two " +
+                    "sliders set the sizing line, each adjustable from 0.25 in to 1.5 in in " +
+                    "1/16 in steps:\n\n" +
+                    "• \"4″ shaft draws\" — default 0.5 in.\n" +
+                    "• \"8″ shaft draws\" — default 1 in.\n\n" +
+                    "Every other diameter follows the straight line through those two points, " +
+                    "so a 6 in shaft lands halfway; the line under the sliders shows that " +
+                    "result live. No drawing ever exceeds 1.5 in of shaft height on paper. " +
+                    "\"Standard (0.5″ / 1″)\" restores the shipped pair, which is the " +
+                    "proportional hand-sheet rule. If you set the 8 in value below the 4 in " +
+                    "value a warning appears and drawings simply flatten at the 4 in height — " +
+                    "a larger shaft never draws smaller than a smaller one. The per-job " +
+                    "\"Shaft height\" slider works on top of this default."
+            ),
+            HelpTopic(
+                "PDF Export — Body S-break",
+                "How much a body run must be squeezed before it prints the S-break symbol — " +
+                    "the pair of curved breaks that says \"length removed here\".\n\n" +
+                    "• Slider from \"Never\" to \"Always\" in 5% steps, default 50%, with a " +
+                    "\"Default (50%)\" button. The readout reads \"Never\" at the low end and " +
+                    "\"below 50%\" (or whatever you pick) elsewhere.\n" +
+                    "• At the default, a body that draws shorter than half its true length " +
+                    "gets the symbol. Drag left to mark only heavier compression, right to " +
+                    "mark even mild compression, or all the way to Never to keep compression " +
+                    "hidden entirely.\n" +
+                    "• Bodies only — liners and tapers always foreshorten silently.\n" +
+                    "• A genuinely long run (about 3 in of paper at true scale) still prints " +
+                    "its break at every setting, Never included.\n" +
+                    "• Dimension values always print true lengths, whatever the drawing does."
+            ),
+            HelpTopic(
+                "PDF Export — Template mode and dimension reference",
+                "• \"Template (shaft only)\" — default off. Prints the shaft outline with no " +
+                    "dimensions, for marking up by hand. (Blank draft, the other write-in " +
+                    "mode, keeps the dimension lines and empties the values; it lives on each " +
+                    "document's preview, not here.)\n" +
+                    "• \"Dimension tiering reference\" — \"Auto (closest end)\" (default), " +
+                    "\"AFT (force AFT SET)\", or \"FWD (force FWD SET)\". Picks which end " +
+                    "printed dimensions measure from. Auto anchors each dimension to whichever " +
+                    "end is closer. The same choice appears as \"Measurement reference\" in the " +
+                    "schematic's PDF Options sheet."
+            ),
+            HelpTopic(
+                "Achievements",
+                "• \"Enable Achievements\" — default off. Turns on the app's unlockable " +
+                    "milestones.\n" +
+                    "• \"View Achievements\" — opens the list. It stays greyed out, with a " +
+                    "note, until achievements are enabled."
+            ),
+            HelpTopic(
+                "Data — back up, restore, samples",
+                "• \"Back up all shafts…\" — writes every saved shaft into one zip at a " +
+                    "location you pick (Drive, Downloads, SD card).\n" +
+                    "• \"Restore from backup…\" — imports shafts from a backup zip. It never " +
+                    "overwrites: a name that already exists is brought in under a new name.\n" +
+                    "• \"Restore sample shafts\" — re-adds the bundled examples to Saved, " +
+                    "again without overwriting anything of yours."
+            ),
+            HelpTopic(
+                "Help, About, and Developer Options",
+                "• \"Help & FAQ\" — this screen.\n" +
+                    "• \"About ShaftSchematic\" — app version and build, plus the note that all " +
+                    "geometry is stored in millimeters. Tapping App Version seven times there " +
+                    "unlocks Developer Options.\n" +
+                    "• \"Developer Options\" — appears in the Settings list only once " +
+                    "unlocked. Debug overlays (OAL labels and helper lines, component labels, " +
+                    "render layout and OAL markers) and verbose logging switches for render, " +
+                    "OAL, PDF, and storage. Nothing there changes a drawing's data, and " +
+                    "turning the master switch off hides the row and clears the debug flags."
+            ),
+            HelpTopic(
+                "Drawing controls that live on the document",
+                "These are saved with the job rather than in Settings, so a reopened document " +
+                    "prints exactly as it did.\n\n" +
+                    "• \"Shaft height\" — on the Consolidated Output tab and in the " +
+                    "schematic's PDF Options sheet. Sets the drawn shaft height on paper by " +
+                    "value in inches, up to the 1.5 in cap; \"Standard (…)\" returns to the " +
+                    "size the Default drawing size setting picks. One value behind the " +
+                    "schematic, runout, and consolidated sheets.\n" +
+                    "• \"Keep liners proportional lengthwise\" and \"Liner compression\" — same " +
+                    "two places. Ask for liners at true length, or set how far they may " +
+                    "shorten when the page needs the room; the line underneath reports how " +
+                    "much true length the page can actually afford. Neither ever changes the " +
+                    "drawn shaft height.\n" +
+                    "• \"Blank draft (write-in)\" — on each document's preview and on the " +
+                    "Output tab. Prints the drawing with values blanked for handwriting. Not " +
+                    "saved; it resets each session.\n" +
+                    "• \"Cut depth exaggeration\" — on the Undercut Drawing. Changes only how " +
+                    "deep cuts look, never the printed numbers.\n" +
+                    "• \"Sheet content\", worn sections, and \"Export all\" — on the " +
+                    "Consolidated Output tab.\n" +
+                    "• Each document's PDF Options sheet repeats Line thickness, Shade in PDF, " +
+                    "and (on the schematic) Measurement reference — the same app-wide settings, " +
+                    "reachable without leaving the drawing."
             ),
         )
     ),
@@ -291,6 +482,15 @@ private val helpSections: List<HelpSection> = listOf(
                     "invisible. The drawing exaggerates cut depth (up to the sheet's " +
                     "exaggeration setting, never shallower than true) so the cut can be seen " +
                     "and tapped. Printed values are always the measured numbers you typed."
+            ),
+            HelpTopic(
+                "Why does a body print with a break symbol through it?",
+                "The drawing shortens long plain runs so the whole shaft fits the page at a " +
+                    "readable height. When a body run is squeezed past the point where it " +
+                    "still reads honestly, it prints the S-break pair — the drafting symbol " +
+                    "for \"length removed here\". The dimension values are always the true " +
+                    "lengths. Settings → PDF Export → \"Body S-break\" sets how much squeeze " +
+                    "earns the symbol, from Never (compression stays hidden) to Always."
             ),
             HelpTopic(
                 "Why can't this auto-body host a keyway?",
