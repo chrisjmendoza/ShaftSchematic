@@ -103,7 +103,7 @@ internal const val BREAK_PAIR_MIN_CLEAR_PT = 1f
  * plain outline instead; the dimension rails print true lengths either way, so this is
  * purely a visual-honesty threshold.
  *
- * [minFracOfTrue] is the user's `PdfPrefs.sBreakThresholdFrac` (Settings → PDF Export →
+ * [minFracOfTrue] is the user's `PdfPrefs.sBreakThresholdFrac` (Settings → Drawing →
  * "Body S-break", default half): `0` disables compression breaks entirely — all
  * foreshortening stays hidden — and `1` breaks on any shortfall at all. `truePtPerMm ≤ 0`
  * also disables the check (callers that never compress pass 0 and break on span length

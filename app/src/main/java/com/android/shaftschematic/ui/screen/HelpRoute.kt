@@ -243,14 +243,14 @@ private val helpSections: List<HelpSection> = listOf(
                     "height on paper directly, in inches, on the schematic and " +
                     "consolidated/runout sheets — up to 1.5 in at most — and the Standard " +
                     "button restores the default size. That default follows a sizing curve " +
-                    "you can adjust in Settings → PDF Export → Default drawing size: set " +
+                    "you can adjust in Settings → Drawing → Default drawing size: set " +
                     "what a 4 in and an 8 in shaft draw, and sizes in between follow. " +
                     "Liner compression (next to the height slider) keeps the measured " +
                     "components readable: check \"Keep liners proportional lengthwise\" to " +
                     "ask for liners at true scale, or set how far they may shorten with " +
                     "the slider. The page balances the request — liners keep as much true " +
                     "length as fits, and the runs between them always keep their relative " +
-                    "lengths readable. Settings → PDF Export → Body S-break sets how far a " +
+                    "lengths readable. Settings → Drawing → Body S-break sets how far a " +
                     "body run may be shortened before it prints the S-break symbol — set " +
                     "it to Never to hide compression entirely, or higher to mark it sooner."
             ),
@@ -292,6 +292,39 @@ private val helpSections: List<HelpSection> = listOf(
                     "original look. System follows the device's own dark-mode switch.\n" +
                     "• \"High contrast\" — default off. Boosts figure/ground separation for " +
                     "bright sunlight or low-vision use."
+            ),
+            HelpTopic(
+                "Drawing — Default drawing size",
+                "Settings → Drawing. How tall the shaft prints on paper before any per-job " +
+                    "adjustment. Two sliders set the sizing line, each adjustable from 0.25 " +
+                    "in to 1.5 in in 1/16 in steps:\n\n" +
+                    "• \"4″ shaft draws\" — default 0.5 in.\n" +
+                    "• \"8″ shaft draws\" — default 1 in.\n\n" +
+                    "Every other diameter follows the straight line through those two points, " +
+                    "so a 6 in shaft lands halfway; the line under the sliders shows that " +
+                    "result live. No drawing ever exceeds 1.5 in of shaft height on paper. " +
+                    "\"Standard (0.5″ / 1″)\" restores the shipped pair, which is the " +
+                    "proportional hand-sheet rule. If you set the 8 in value below the 4 in " +
+                    "value a warning appears and drawings simply flatten at the 4 in height — " +
+                    "a larger shaft never draws smaller than a smaller one. The per-job " +
+                    "\"Shaft height\" slider works on top of this default."
+            ),
+            HelpTopic(
+                "Drawing — Body S-break",
+                "Settings → Drawing. How much a body run must be squeezed before it prints " +
+                    "the S-break symbol — the pair of curved breaks that says \"length " +
+                    "removed here\".\n\n" +
+                    "• Slider from \"Never\" to \"Always\" in 5% steps, default 50%, with a " +
+                    "\"Default (50%)\" button. The readout reads \"Never\" at the low end and " +
+                    "\"below 50%\" (or whatever you pick) elsewhere.\n" +
+                    "• At the default, a body that draws shorter than half its true length " +
+                    "gets the symbol. Drag left to mark only heavier compression, right to " +
+                    "mark even mild compression, or all the way to Never to keep compression " +
+                    "hidden entirely.\n" +
+                    "• Bodies only — liners and tapers always foreshorten silently.\n" +
+                    "• A genuinely long run (about 3 in of paper at true scale) still prints " +
+                    "its break at every setting, Never included.\n" +
+                    "• Dimension values always print true lengths, whatever the drawing does."
             ),
             HelpTopic(
                 "Editor Screen",
@@ -353,38 +386,6 @@ private val helpSections: List<HelpSection> = listOf(
                     "that sheet shows its Liners box unchecked and greyed — the values sit on " +
                     "white halos a fill would fight — and your setting comes straight back on " +
                     "every other document."
-            ),
-            HelpTopic(
-                "PDF Export — Default drawing size",
-                "How tall the shaft prints on paper before any per-job adjustment. Two " +
-                    "sliders set the sizing line, each adjustable from 0.25 in to 1.5 in in " +
-                    "1/16 in steps:\n\n" +
-                    "• \"4″ shaft draws\" — default 0.5 in.\n" +
-                    "• \"8″ shaft draws\" — default 1 in.\n\n" +
-                    "Every other diameter follows the straight line through those two points, " +
-                    "so a 6 in shaft lands halfway; the line under the sliders shows that " +
-                    "result live. No drawing ever exceeds 1.5 in of shaft height on paper. " +
-                    "\"Standard (0.5″ / 1″)\" restores the shipped pair, which is the " +
-                    "proportional hand-sheet rule. If you set the 8 in value below the 4 in " +
-                    "value a warning appears and drawings simply flatten at the 4 in height — " +
-                    "a larger shaft never draws smaller than a smaller one. The per-job " +
-                    "\"Shaft height\" slider works on top of this default."
-            ),
-            HelpTopic(
-                "PDF Export — Body S-break",
-                "How much a body run must be squeezed before it prints the S-break symbol — " +
-                    "the pair of curved breaks that says \"length removed here\".\n\n" +
-                    "• Slider from \"Never\" to \"Always\" in 5% steps, default 50%, with a " +
-                    "\"Default (50%)\" button. The readout reads \"Never\" at the low end and " +
-                    "\"below 50%\" (or whatever you pick) elsewhere.\n" +
-                    "• At the default, a body that draws shorter than half its true length " +
-                    "gets the symbol. Drag left to mark only heavier compression, right to " +
-                    "mark even mild compression, or all the way to Never to keep compression " +
-                    "hidden entirely.\n" +
-                    "• Bodies only — liners and tapers always foreshorten silently.\n" +
-                    "• A genuinely long run (about 3 in of paper at true scale) still prints " +
-                    "its break at every setting, Never included.\n" +
-                    "• Dimension values always print true lengths, whatever the drawing does."
             ),
             HelpTopic(
                 "PDF Export — Template mode and dimension reference",
@@ -489,7 +490,7 @@ private val helpSections: List<HelpSection> = listOf(
                     "readable height. When a body run is squeezed past the point where it " +
                     "still reads honestly, it prints the S-break pair — the drafting symbol " +
                     "for \"length removed here\". The dimension values are always the true " +
-                    "lengths. Settings → PDF Export → \"Body S-break\" sets how much squeeze " +
+                    "lengths. Settings → Drawing → \"Body S-break\" sets how much squeeze " +
                     "earns the symbol, from Never (compression stays hidden) to Always."
             ),
             HelpTopic(

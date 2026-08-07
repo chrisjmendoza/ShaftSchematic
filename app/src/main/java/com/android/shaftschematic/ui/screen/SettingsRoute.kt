@@ -88,6 +88,9 @@ import com.android.shaftschematic.util.UnitSystem
  * This screen is intentionally “preferences-only”:
  * - Units: changes formatting/labels, never the underlying model geometry (mm-only).
  * - Preview: visual aids (grid) and preview-only styling controls.
+ * - Drawing: what every drawing looks like — default drawn shaft height and the
+ *   body S-break threshold. Main page, not the PDF Export sub-page: they define the
+ *   drawing, not the export.
  * - PDF export: user experience around exporting (not PDF styling).
  * - Editor screen: editor presentation toggles (e.g., component card affordances).
  *
@@ -240,6 +243,73 @@ fun SettingsRoute(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { page = SettingsPage.PDF_EXPORT }
+                    )
+
+                    // Drawing sits on the main page, not under PDF Export: these two
+                    // shape the drawing itself — how tall a shaft prints and when a
+                    // foreshortened body admits it — while the PDF Export sub-page
+                    // holds export plumbing (open-after-export, shading, template mode).
+                    HorizontalDivider()
+                    Text("Drawing", style = MaterialTheme.typography.titleMedium)
+
+                    Text(
+                        "Default drawing size",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                    )
+                    Text(
+                        "Drawn shaft height on paper at 100% “Shaft height”. Set what a " +
+                            "4″ and an 8″ shaft draw; sizes between and beyond follow " +
+                            "the line, capped at 1.5″ on paper.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    CurveAnchorControl(
+                        label = "4″ shaft draws",
+                        valueIn = pdfCurveLoHeightIn,
+                        onCommit = { vm.setPdfCurveLoHeightIn(it) },
+                    )
+                    CurveAnchorControl(
+                        label = "8″ shaft draws",
+                        valueIn = pdfCurveHiHeightIn,
+                        onCommit = { vm.setPdfCurveHiHeightIn(it) },
+                    )
+                    if (pdfCurveHiHeightIn < pdfCurveLoHeightIn) {
+                        Text(
+                            "8″ is set below 4″ — larger shafts never draw smaller, so " +
+                                "drawings flatten the line at the 4″ value.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val sixInHeight = defaultShaftHeightPt(
+                            152.4f, pdfCurveLoHeightIn * 72f, pdfCurveHiHeightIn * 72f
+                        ) / 72f
+                        Text(
+                            "Example: a 6″ shaft draws ${fmtCurveInches(sixInHeight)}.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            onClick = {
+                                vm.setPdfCurveLoHeightIn(PdfPrefs().curveLoHeightIn)
+                                vm.setPdfCurveHiHeightIn(PdfPrefs().curveHiHeightIn)
+                            },
+                            enabled = pdfCurveLoHeightIn != PdfPrefs().curveLoHeightIn ||
+                                pdfCurveHiHeightIn != PdfPrefs().curveHiHeightIn,
+                        ) {
+                            Text(
+                                "Standard (${fmtCurveInches(PdfPrefs().curveLoHeightIn)} / " +
+                                    fmtCurveInches(PdfPrefs().curveHiHeightIn) + ")"
+                            )
+                        }
+                    }
+
+                    SBreakThresholdControl(
+                        frac = pdfSBreakThresholdFrac,
+                        onCommit = { vm.setPdfSBreakThresholdFrac(it) },
                     )
 
                     HorizontalDivider()
@@ -577,67 +647,6 @@ fun SettingsRoute(
                     }
 
                     HorizontalDivider()
-                    Text(
-                        "Default drawing size",
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
-                    )
-                    Text(
-                        "Drawn shaft height on paper at 100% “Shaft height”. Set what a " +
-                            "4″ and an 8″ shaft draw; sizes between and beyond follow " +
-                            "the line, capped at 1.5″ on paper.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    CurveAnchorControl(
-                        label = "4″ shaft draws",
-                        valueIn = pdfCurveLoHeightIn,
-                        onCommit = { vm.setPdfCurveLoHeightIn(it) },
-                    )
-                    CurveAnchorControl(
-                        label = "8″ shaft draws",
-                        valueIn = pdfCurveHiHeightIn,
-                        onCommit = { vm.setPdfCurveHiHeightIn(it) },
-                    )
-                    if (pdfCurveHiHeightIn < pdfCurveLoHeightIn) {
-                        Text(
-                            "8″ is set below 4″ — larger shafts never draw smaller, so " +
-                                "drawings flatten the line at the 4″ value.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val sixInHeight = defaultShaftHeightPt(
-                            152.4f, pdfCurveLoHeightIn * 72f, pdfCurveHiHeightIn * 72f
-                        ) / 72f
-                        Text(
-                            "Example: a 6″ shaft draws ${fmtCurveInches(sixInHeight)}.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(
-                            onClick = {
-                                vm.setPdfCurveLoHeightIn(PdfPrefs().curveLoHeightIn)
-                                vm.setPdfCurveHiHeightIn(PdfPrefs().curveHiHeightIn)
-                            },
-                            enabled = pdfCurveLoHeightIn != PdfPrefs().curveLoHeightIn ||
-                                pdfCurveHiHeightIn != PdfPrefs().curveHiHeightIn,
-                        ) {
-                            Text(
-                                "Standard (${fmtCurveInches(PdfPrefs().curveLoHeightIn)} / " +
-                                    fmtCurveInches(PdfPrefs().curveHiHeightIn) + ")"
-                            )
-                        }
-                    }
-
-                    HorizontalDivider()
-                    SBreakThresholdControl(
-                        frac = pdfSBreakThresholdFrac,
-                        onCommit = { vm.setPdfSBreakThresholdFrac(it) },
-                    )
-
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Switch(
                             checked = pdfExportMode == PdfExportMode.Template,

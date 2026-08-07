@@ -34,7 +34,7 @@ const val VISUAL_DIA_SCALE_PT_PER_MM = 0.40f
 // 4" → 1/2" — the hand-sheet rule from the original rulered sketches; taller defaults
 // read "chubby" on-device) — and the line continues past both anchors until the
 // absolute [PROFILE_MAX_SHAFT_HEIGHT_PT] ceiling. The anchor DIAMETERS are fixed; the
-// anchor HEIGHTS are user-adjustable (Settings → PDF Export → Default drawing size,
+// anchor HEIGHTS are user-adjustable (Settings → Drawing → Default drawing size,
 // `PdfPrefs.curveLoHeightIn/curveHiHeightIn`) with these as the standard values — a
 // non-proportional pair (e.g. 0.75"/1.25") is a deliberate choice there, never the
 // default. The "Shaft height" slider multiplies on top.

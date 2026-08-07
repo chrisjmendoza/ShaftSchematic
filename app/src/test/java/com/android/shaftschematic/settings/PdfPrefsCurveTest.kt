@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * The user-adjustable drawing prefs on Settings → PDF Export: the "Default drawing size"
+ * The user-adjustable drawing prefs on Settings → Drawing: the "Default drawing size"
  * sizing-curve pair and the "Body S-break" threshold. Pins the shipped defaults (the
  * proportional hand-sheet anchors 4" → 1/2", 8" → 1"; S-break at half of true), the pt
  * conversion the composers consume, and the clamps to each settable range.
@@ -36,7 +36,7 @@ class PdfPrefsCurveTest {
         assertEquals(1.0f, p.curveHiHeightIn, 1e-6f)
     }
 
-    // ── Body S-break threshold (Settings → PDF Export → "Body S-break") ──────────
+    // ── Body S-break threshold (Settings → Drawing → "Body S-break") ────────────
 
     @Test
     fun `S-break threshold defaults to half of true`() {

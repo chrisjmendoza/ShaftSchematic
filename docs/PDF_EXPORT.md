@@ -11,10 +11,10 @@ mm); §5.5 gains the Tune options-sheet inventory; §5.7 names only the public
 `fracFitFactor`. 2026-08-05 — §5.7 gains the default sizing curve (linear, superseding the
 flat visual scale as the 100% base; the shipped anchors were 4" → 0.75" / 8" → 1.25" that
 day and are now the proportional 4" → 0.5" / 8" → 1" — §5.7 is the current statement) with
-user-adjustable anchor heights (Settings → PDF Export → "Default drawing size",
+user-adjustable anchor heights (Settings → Drawing → "Default drawing size",
 `PdfPrefs.curveLo/HiHeightIn`); §6.4 documents the S-break pair's minimum-gap layout
 (`breakPairLayout`, ≥ 1 pt of daylight) and the foreshortening trigger (since 2026-08-06 a
-user-set threshold, Settings → PDF Export → "Body S-break" — §6.4). Previously 2026-07-28 — §5.5 wear-document blank-draft bullet corrected (blank mode keeps
+user-set threshold, Settings → Drawing → "Body S-break" — §6.4). Previously 2026-07-28 — §5.5 wear-document blank-draft bullet corrected (blank mode keeps
 the profile AND every liner's detail strip since 2026-07-28, values-out only) and extended
 for measured-Ø readings; §5.3 gains a pointer to the wear document's own measured-Ø callout
 system. 2026-07-22 — added §5.4 Inline Dimension Text (dimension values now seated in a break in the line, drafting-convention style, PDF export + preview); added §5.3 On-Shaft Diameter Callouts (body/liner OD leaders now all-BELOW, ≤3-decimal formatting, two-tier stacking); previously 2026-07-18 fixed page orientation (landscape, not portrait), clarified preview/PDF as separate drawing paths (fit functions named; corrected 2026-08-05), replaced the "no display compression" invariant with the actual round-stock S-break behavior, fixed the AUDIT.md path.
@@ -361,7 +361,7 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
   the runout/consolidated sheet maxes it with the width-fit and in-profile value
   demands; the schematic uses the curve alone. The flat 0.40 pt/mm
   `VISUAL_DIA_SCALE_PT_PER_MM` remains only as the degenerate-diameter fallback.
-- **The anchor heights are settings** (Settings → PDF Export → "Default drawing size";
+- **The anchor heights are settings** (Settings → Drawing → "Default drawing size";
   `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`, persisted app-wide, standard
   0.5"/1.0", settable 0.25"–1.5" in 1/16" steps): change what a 4" and an 8"
   shaft draw and the whole line re-derives — no code edit (a taller pair like
@@ -444,7 +444,7 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
    drawn width** (`breakForCompression`, `pdf/BreakSymbol.kt` — ONE predicate shared with the
    consolidated sheet's body loop and the footer's compression note, so the note and the drawn
    breaks can never disagree). The fraction is `PdfPrefs.sBreakThresholdFrac`, set in
-   Settings → PDF Export → **"Body S-break"** (slider, 5% steps, "Default (50%)" reset):
+   Settings → Drawing → **"Body S-break"** (slider, 5% steps, "Default (50%)" reset):
    **Never** (0) suppresses compression breaks entirely — all foreshortening stays hidden —
    and 100% breaks on any foreshortening at all ("why lock it in one way when different users
    may want different outputs" — on-device request). `COMPRESS_TRIGGER_PT` is deliberately

@@ -10,7 +10,7 @@ import org.junit.Test
  * until it draws below the user's threshold fraction of its true width; past that, enough
  * shaft is hidden that the pair must mark the longer span (on-device report: a 6" run kept
  * at ~74% of true carried a full break pair under an any-foreshortening rule). The
- * threshold is Settings → PDF Export → "Body S-break" (`PdfPrefs.sBreakThresholdFrac`,
+ * threshold is Settings → Drawing → "Body S-break" (`PdfPrefs.sBreakThresholdFrac`,
  * default half); the long-span trigger (COMPRESS_TRIGGER_PT at the draw sites) is
  * independent of it and fires at every setting.
  */

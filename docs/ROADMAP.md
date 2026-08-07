@@ -45,9 +45,9 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   folder. The classic standalone runout sheet stays on the Runout tab
 - Profile sizing round — per-job value-based "Shaft height" slider (in paper inches, hard
   capped at 1.5"), a proportional default sizing curve (4" → 0.5", 8" → 1") with
-  user-adjustable anchors in Settings → PDF Export → "Default drawing size", the
+  user-adjustable anchors in Settings → Drawing → "Default drawing size", the
   liner-compression control with height precedence (it never lowers the drawn height), an
-  S-break pair minimum gap with a user-set compression threshold (Settings → PDF Export →
+  S-break pair minimum gap with a user-set compression threshold (Settings → Drawing →
   "Body S-break"), and even-spread runout bubbles
 - Appearance settings — System/Light/Dark + high contrast for the Compose chrome, with the
   white paper sheets pinned to fixed ink so dark mode can never print invisible drawings
