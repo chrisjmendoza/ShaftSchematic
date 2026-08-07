@@ -25,17 +25,23 @@ const val PDF_PREVIEW_RENDER_SCALE = 2
 
 /**
  * Compose one landscape-Letter page via [composePage], rasterize it to a [Bitmap] at
- * [PDF_PREVIEW_RENDER_SCALE], and drop the temp file.
+ * [renderScale], and drop the temp file.
  *
  * Must be called off the main thread (use `Dispatchers.IO`). Returns null on any failure —
  * compose, write, or render — so the caller can show an error message instead of crashing.
  * The temp file is created with `createTempFile` so concurrent preview renders never
  * collide on one path.
+ *
+ * [renderScale] defaults to [PDF_PREVIEW_RENDER_SCALE]. A preview that is being tuned live
+ * passes 1 for its drag frames — a quarter of the pixels keeps the page reshaping under the
+ * finger — and the pass after the release goes back to the default sharp raster.
  */
 fun renderPdfPageBitmap(
     context: Context,
+    renderScale: Int = PDF_PREVIEW_RENDER_SCALE,
     composePage: (PdfDocument.Page) -> Unit,
 ): Bitmap? = runCatching {
+    val rasterScale = renderScale.coerceAtLeast(1)
     // Step 1 – compose the page into a temp PDF in the cache dir.
     val tempFile = File.createTempFile("pdf_preview_", ".pdf", context.cacheDir)
     val doc = PdfDocument()
@@ -58,8 +64,8 @@ fun renderPdfPageBitmap(
         val pdfPage = renderer.openPage(0)
         try {
             val bmp = Bitmap.createBitmap(
-                pdfPage.width * PDF_PREVIEW_RENDER_SCALE,
-                pdfPage.height * PDF_PREVIEW_RENDER_SCALE,
+                pdfPage.width * rasterScale,
+                pdfPage.height * rasterScale,
                 Bitmap.Config.ARGB_8888,
             )
             bmp.eraseColor(Color.WHITE)

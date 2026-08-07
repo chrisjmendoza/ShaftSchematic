@@ -79,11 +79,41 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     mid-checkbox behind the navigation bar. Its height is capped at **78% of the screen**
     (`LocalConfiguration.screenHeightDp * 0.78f`): a sheet expanded to the status bar
     leaves no edge to swipe it back down by (on-device report).
+- **Live tuning:** the four tuning sliders — Line thickness, Body S-break, Shaft height,
+  Liner compression — reshape the page **while the finger is still on the track**
+  ("see the differences without choosing, closing menu, opening menu, choosing" —
+  on-device request). Each shared control (`ui/screen/ShaftHeightSlider.kt`) carries an
+  optional `onDrag: (Float?) -> Unit`: the in-progress value every frame in the SAME units
+  as its commit callback (the height slider converts drawn inches → `heightScale` exactly
+  as its commit does, **minus** the standard-height detent — snapping is a commit rule),
+  and `null` on release. The screen parks it in a `PreviewTuning`
+  (`ui/screen/PreviewTuning.kt`) and the render loop reads `override ?: committed`.
+  - **Visual only.** No DataStore write and no `RunoutConfig` update happens on a drag
+    frame; commit-on-release is untouched, so nothing persists and the job is not marked
+    dirty by a drag. Callers that don't opt in (Settings, the wear/undercut sheets) keep
+    the no-op default.
+  - **Draft resolution.** `renderPdfPageBitmap(renderScale = …)` takes 1 while a drag is
+    live (≈¼ the pixels, so the page keeps up) and the pass after the release restores
+    `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back for drag frames and for that
+    release pass — the current page stays up instead of strobing.
+  - **Scrim.** The options `ModalBottomSheet` passes
+    `scrimColor = if (tuning.active) Color.Transparent else BottomSheetDefaults.ScrimColor`:
+    the page above is the thing being judged, so the dimming comes off for the drag and
+    the modal affordance returns on release.
 - **Orientation:** `DisposableEffect` unlocks rotation on entry and restores the
   portrait lock on dispose — every other screen stays portrait-only.
-- **Pipeline:** snapshot `vm.currentPdfPrefs` on main thread → `Dispatchers.IO` →
-  `renderPdfPageBitmap` (temp PDF via the `composeShaftPdf` lambda → rasterize page 0 at
-  `PDF_PREVIEW_RENDER_SCALE`) → pan/zoom Canvas. Temp file deleted after rasterization;
+- **Pipeline:** `snapshotFlow { SchematicRenderInputs(…) }.conflate().collect { … }` →
+  snapshot `vm.currentPdfPrefs` on main thread → `Dispatchers.IO` →
+  `renderPdfPageBitmap` (temp PDF via the `composeShaftPdf` lambda → rasterize page 0) →
+  pan/zoom Canvas. The `RenderInputs` holder is a data class capturing **everything** the
+  composed page reads — including the fields that reach the composer inside the `PdfPrefs`
+  snapshot rather than as arguments (shade flags, component titles, tiering mode, S-break
+  threshold, and the sizing-curve anchors `curveLoHeightIn`/`curveHiHeightIn`, which the
+  older `LaunchedEffect` key list omitted, so a Settings change to "Default drawing size"
+  left an open preview at its old height). Omitting an input here is a stale-preview bug.
+  `conflate()` is latest-wins: intermediate values produced while a render is in flight are
+  dropped and the newest always renders — which is what makes a slider drag keep up. Temp
+  file deleted after rasterization;
   failures return null and show an error, never crash. **ONE raster helper**
   (`util/PdfRaster.kt`) serves every tab's preview — schematic, runout, wear, undercut,
   consolidated output — the raster sibling of the one hardened SAF write path

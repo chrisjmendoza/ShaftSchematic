@@ -6,6 +6,45 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-07
+
+### feat(preview): sliders tune the open preview live
+
+On-device request: "see the differences without choosing, closing menu, opening menu,
+choosing". The four tuning sliders — **Line thickness**, **Body S-break**, **Shaft
+height**, **Liner compression** — now reshape the open preview **while the finger is still
+on the track**, on all three preview surfaces: the schematic (`PdfPreviewScreen`), the
+Consolidated Output tab, and the classic runout sheet. The options sheet also stops
+dimming the drawing during a drag — the page above is the thing being judged, so
+`scrimColor` goes transparent for the duration and the modal dimming returns on release.
+
+**A drag is a visual-only channel.** Each shared control in `ui/screen/ShaftHeightSlider.kt`
+gained an optional `onDrag: (Float?) -> Unit` — the in-progress value every frame in the
+same units as its commit callback, `null` on release. The height slider converts drawn
+inches → `heightScale` exactly as its commit does but **without** the standard-height
+detent (snapping is a commit rule; applying it per frame would make the drawing jump under
+the finger). The screens park the value in a `PreviewTuning` holder
+(`ui/screen/PreviewTuning.kt`) and render `override ?: committed`. **No DataStore write and
+no `RunoutConfig` update happens on a drag frame** — commit-on-release is untouched, so a
+drag never persists a setting and never marks the job dirty. Callers that don't opt in
+(Settings, the wear and undercut options sheets) keep the defaulted no-op.
+
+**Conflated render loop.** Each screen's multi-key `LaunchedEffect` became
+`snapshotFlow { RenderInputs(…) }.conflate().collect { … }` — latest-wins, so intermediate
+drag values are dropped while a render is in flight and the newest always renders. The
+`RenderInputs` data class captures everything the old key list covered plus the overrides
+and a draft flag; the schematic's also picks up **`curveLoHeightIn`/`curveHiHeightIn`**,
+which its key list omitted, so a Settings change to "Default drawing size" no longer leaves
+an open preview at its old height.
+
+**Draft res, then sharp.** `util/PdfRaster.renderPdfPageBitmap` gained
+`renderScale: Int = PDF_PREVIEW_RENDER_SCALE`; the three screens pass 1 while a drag is
+live (≈¼ the pixels) and the pass after the release restores the full 2×. The spinner is
+held back across drag frames and that release pass so the page never strobes.
+
+No geometry, composer, or persistence change — the drawing math is untouched; only which
+values reach it, when, and at what raster.
+
 ## 2026-08-06
 
 ### feat(ui): Body S-break joins the PDF Options sheets

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -58,9 +59,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -74,12 +77,15 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.maxOuterDiaMm
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.pdf.composeShaftPdf
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.content.pm.PackageManager
@@ -137,6 +143,12 @@ fun PdfPreviewScreen(
     val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    // Sizing-curve anchors: the composer sizes the drawn shaft off them, so a Settings
+    // change to "Default drawing size" has to re-render an open preview. Collected here,
+    // not only inside the Tune sheet, or the page would keep its old height until some
+    // other input moved.
+    val curveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
+    val curveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
 
     val project = remember(customer, vessel, shaftPosition, jobNumber) {
         ProjectInfo(customer = customer, vessel = vessel, side = shaftPosition, jobNumber = jobNumber)
@@ -150,43 +162,75 @@ fun PdfPreviewScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showOptions by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Live slider drags — visual-only overrides, never a write. See [PreviewTuning].
+    val tuning = rememberPreviewTuning()
 
-    LaunchedEffect(spec, unit, project, options, resolvedComponents, lineThicknessScale,
-                   pdfShowComponentTitles, pdfTieringMode,
-                   pdfShadedBodies, pdfShadedTapers, pdfShadedLiners, pdfSBreakThresholdFrac,
-                   runoutConfig.heightScale, runoutConfig.linerMinFracOfTrue) {
-        isLoading = true
-        errorMessage = null
-        // Snapshot on the main thread before switching to IO.
-        val pdfPrefsSnapshot = vm.currentPdfPrefs
-        val thicknessScaleSnapshot = lineThicknessScale
-        val heightScaleSnapshot = runoutConfig.heightScale
-        val linerFracSnapshot = runoutConfig.linerMinFracOfTrue
-        val versionSnapshot = appVersionName(ctx)
-        val bmp = withContext(Dispatchers.IO) {
-            renderPdfPageBitmap(ctx) { page ->
-                composeShaftPdf(
-                    page = page,
-                    spec = spec,
-                    unit = unit,
-                    project = project,
-                    appVersion = versionSnapshot,
-                    filename = "preview",
-                    pdfPrefs = pdfPrefsSnapshot,
-                    options = options,
-                    resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
-                    lineThicknessScale = thicknessScaleSnapshot,
-                    heightScale = heightScaleSnapshot,
-                    linerMinFracOfTrue = linerFracSnapshot,
-                )
+    // The render loop. One RenderInputs value carries EVERYTHING the composed page reads
+    // (an omission here is a stale-preview bug); `snapshotFlow { … }.conflate()` renders
+    // the newest inputs and drops the intermediate frames a slider drag produces while a
+    // render is in flight. When a drag ends the overrides go null, the inputs change once
+    // more, and that final pass rasterizes at full resolution.
+    LaunchedEffect(Unit) {
+        var previousWasDraft = false
+        snapshotFlow {
+            val config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression)
+            SchematicRenderInputs(
+                spec = spec,
+                unit = unit,
+                project = ProjectInfo(
+                    customer = customer, vessel = vessel,
+                    side = shaftPosition, jobNumber = jobNumber,
+                ),
+                options = PdfExportOptions(mode = pdfExportMode, blankValues = pdfBlankDraft),
+                resolved = resolvedComponents,
+                lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
+                showComponentTitles = pdfShowComponentTitles,
+                tieringMode = pdfTieringMode,
+                shadedBodies = pdfShadedBodies,
+                shadedTapers = pdfShadedTapers,
+                shadedLiners = pdfShadedLiners,
+                sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                curveLoHeightIn = curveLoHeightIn,
+                curveHiHeightIn = curveHiHeightIn,
+                heightScale = config.heightScale,
+                linerMinFracOfTrue = config.linerMinFracOfTrue,
+                draft = tuning.active,
+            )
+        }.conflate().collect { inputs ->
+            // A drag frame — and the sharp pass right after one — keeps the current page on
+            // screen: swapping in the spinner between frames would strobe the preview.
+            val quiet = inputs.draft || previousWasDraft
+            previousWasDraft = inputs.draft
+            if (!quiet) isLoading = true
+            errorMessage = null
+            // Snapshot on the main thread before switching to IO.
+            val pdfPrefsSnapshot = tunedPdfPrefs(vm.currentPdfPrefs, inputs.sBreakThresholdFrac)
+            val versionSnapshot = appVersionName(ctx)
+            val bmp = withContext(Dispatchers.IO) {
+                renderPdfPageBitmap(ctx, renderScale = previewRenderScale(inputs.draft)) { page ->
+                    composeShaftPdf(
+                        page = page,
+                        spec = inputs.spec,
+                        unit = inputs.unit,
+                        project = inputs.project,
+                        appVersion = versionSnapshot,
+                        filename = "preview",
+                        pdfPrefs = pdfPrefsSnapshot,
+                        options = inputs.options,
+                        resolvedComponents = inputs.resolved.takeIf { it.isNotEmpty() },
+                        lineThicknessScale = inputs.lineThicknessScale,
+                        heightScale = inputs.heightScale,
+                        linerMinFracOfTrue = inputs.linerMinFracOfTrue,
+                    )
+                }
             }
+            if (bmp != null) {
+                previewBitmap = bmp.asImageBitmap()
+            } else {
+                errorMessage = "Could not render preview."
+            }
+            isLoading = false
         }
-        if (bmp != null) {
-            previewBitmap = bmp.asImageBitmap()
-        } else {
-            errorMessage = "Could not render preview."
-        }
-        isLoading = false
     }
 
     // ── Pan / Zoom state ──────────────────────────────────────────────────────
@@ -387,6 +431,10 @@ fun PdfPreviewScreen(
         ModalBottomSheet(
             onDismissRequest = { showOptions = false },
             sheetState = sheetState,
+            // The scrim exists to say "the sheet has focus" — but while a tuning slider is
+            // being dragged the page above IS the thing being judged, so the dimming comes
+            // off for the duration of the drag and returns on release.
+            scrimColor = if (tuning.active) Color.Transparent else BottomSheetDefaults.ScrimColor,
         ) {
             PdfOptionsSheet(
                 vm = vm,
@@ -398,14 +446,47 @@ fun PdfPreviewScreen(
                 heightScale = runoutConfig.heightScale,
                 linersProportional = runoutConfig.linersProportional,
                 linerCompression = runoutConfig.linerCompression,
+                curveLoHeightIn = curveLoHeightIn,
+                curveHiHeightIn = curveHiHeightIn,
                 pdfShadedBodies = pdfShadedBodies,
                 pdfShadedTapers = pdfShadedTapers,
                 pdfShadedLiners = pdfShadedLiners,
                 pdfBlankDraft = pdfBlankDraft,
+                tuning = tuning,
             )
         }
     }
 }
+
+/**
+ * Everything one composed schematic preview page depends on, in one structural-equality
+ * value — the render loop's unit of work.
+ *
+ * Some fields never reach [composeShaftPdf] directly: the shade flags, component titles,
+ * tiering mode, S-break threshold and sizing-curve anchors travel inside the `PdfPrefs`
+ * snapshot taken at render time. They are held here because the loop must RE-RENDER when
+ * they change, and a `PdfPrefs` read is not snapshot state.
+ */
+private data class SchematicRenderInputs(
+    val spec: ShaftSpec,
+    val unit: UnitSystem,
+    val project: ProjectInfo,
+    val options: PdfExportOptions,
+    val resolved: List<ResolvedComponent>,
+    val lineThicknessScale: Float,
+    val showComponentTitles: Boolean,
+    val tieringMode: PdfTieringMode,
+    val shadedBodies: Boolean,
+    val shadedTapers: Boolean,
+    val shadedLiners: Boolean,
+    val sBreakThresholdFrac: Float,
+    val curveLoHeightIn: Float,
+    val curveHiHeightIn: Float,
+    val heightScale: Float,
+    val linerMinFracOfTrue: Float,
+    /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
+    val draft: Boolean,
+)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -431,10 +512,18 @@ private fun PdfOptionsSheet(
     heightScale: Float,
     linersProportional: Boolean,
     linerCompression: Float,
+    curveLoHeightIn: Float,
+    curveHiHeightIn: Float,
     pdfShadedBodies: Boolean,
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
     pdfBlankDraft: Boolean,
+    /**
+     * Live-tuning sink: every slider here reports its in-progress value so the preview
+     * behind the sheet reshapes under the finger. Visual only — the commit path is
+     * unchanged and nothing persists on a drag frame.
+     */
+    tuning: PreviewTuning,
 ) {
     // Scrollable + inset-padded: the sheet's content is taller than a phone screen, so
     // without its own scroll the bottom rows clip mid-checkbox behind the navigation bar.
@@ -490,6 +579,7 @@ private fun PdfOptionsSheet(
         LineThicknessSlider(
             scale = lineThicknessScale,
             onCommit = { vm.setLineThicknessScale(it) },
+            onDrag = { tuning.lineThickness = it },
         )
 
         Spacer(Modifier.height(12.dp))
@@ -502,6 +592,7 @@ private fun PdfOptionsSheet(
         SBreakThresholdSlider(
             frac = sBreakThresholdFrac,
             onCommit = { vm.setPdfSBreakThresholdFrac(it) },
+            onDrag = { tuning.sBreakFrac = it },
         )
 
         Spacer(Modifier.height(12.dp))
@@ -515,14 +606,13 @@ private fun PdfOptionsSheet(
         // drawn-height VALUE in paper inches; the schematic's base is the default
         // sizing curve at the configured anchor heights, no width-fit term.
         val sliderDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) }
-        val curveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
-        val curveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
         val sliderBase = defaultVisualScale(sliderDiaMm, curveLoHeightIn * 72f, curveHiHeightIn * 72f)
         ShaftHeightSlider(
             heightScale = heightScale,
             baseScale = sliderBase,
             maxDiaMm = sliderDiaMm,
             onCommit = { vm.setRunoutHeightScale(it) },
+            onDrag = { tuning.heightScale = it },
         )
 
         Spacer(Modifier.height(12.dp))
@@ -539,6 +629,7 @@ private fun PdfOptionsSheet(
             },
             onSetProportional = { vm.setLinersProportional(it) },
             onSetCompression = { vm.setLinerCompression(it) },
+            onDrag = { tuning.linerCompression = it },
         )
 
         Spacer(Modifier.height(12.dp))

@@ -169,7 +169,12 @@ is hard-capped at **1.5" on paper** (`PROFILE_MAX_SHAFT_HEIGHT_PT`, an ABSOLUTE 
 the page) and by the page budget (`exaggeratedProfileScale`, pure/unit-tested). The slider
 selects the drawn height by VALUE in paper inches — track ends at 1.5" or the shaft's
 300% height, whichever is less (`drawnShaftHeightPt`/`heightFracForDrawnHeight`);
-commits near the standard height snap to exactly 100%. Liners follow `shadedLiners` like
+commits near the standard height snap to exactly 100%. **A tuning-slider drag is a
+visual-only override** (`ui/screen/PreviewTuning.kt`): while the finger is on Line
+thickness / Body S-break / Shaft height / Liner compression the open preview re-renders
+from the in-progress value (conflated render loop, draft raster, undimmed sheet scrim),
+but NO DataStore write and NO `RunoutConfig` update may happen on a drag frame —
+persistence and the per-job dirty mark stay on commit-on-release. Liners follow `shadedLiners` like
 bodies and tapers **except when in-profile values print** — a sheet-white knockout halo over
 grey reads as a pasted box, so on such a sheet liners draw unfilled whatever the pref says.
 ONE predicate decides it, `consolidatedSheetHasInProfileValues`

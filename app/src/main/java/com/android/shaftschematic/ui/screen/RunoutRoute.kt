@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,6 +70,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -130,6 +132,7 @@ import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.cos
@@ -142,7 +145,7 @@ private data class RunoutComponentEntry(
     val startMm: Float,
 )
 
-@OptIn(ExperimentalTextApi::class)
+@OptIn(ExperimentalTextApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun RunoutRoute(
     vm: ShaftViewModel,
@@ -175,6 +178,9 @@ fun RunoutRoute(
     // and the LaunchedEffect below regenerates it anyway.
     var previewBitmap  by remember { mutableStateOf<ImageBitmap?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
+    // Live slider drags on the preview's options sheet — visual-only overrides, never a
+    // write. See [PreviewTuning].
+    val tuning = rememberPreviewTuning()
 
     // This tab produces the classic standalone runout sheet; the consolidated sheet (and
     // batch export) lives on the Consolidated Output tab. Collisions corrupt any drawing,
@@ -226,25 +232,55 @@ fun RunoutRoute(
         }
     }
 
-    LaunchedEffect(showPreview, spec, runoutConfig, unit, resolvedComponents,
-                   lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   pdfSBreakThresholdFrac, runoutReadings, blankDraft) {
-        if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
-        previewLoading = true
-        val prefsSnapshot  = vm.currentPdfPrefs
-        val thicknessSnapshot = lineThicknessScale
-        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-            jobNumber = jobNumber, side = shaftPosition)
-        val bmp = withContext(Dispatchers.IO) {
-            renderPdfPageBitmap(ctx) { page ->
-                composeClassicRunout(
-                    page, spec, runoutConfig, projectSnapshot, unit, prefsSnapshot,
-                    resolvedComponents, thicknessSnapshot, runoutReadings, blankDraft,
-                )
+    // The render loop. One RenderInputs value carries EVERYTHING the composed sheet reads
+    // (an omission here is a stale-preview bug); `snapshotFlow { … }.conflate()` renders
+    // the newest inputs and drops the intermediate frames a slider drag produces while a
+    // render is in flight. When a drag ends the overrides go null, the inputs change once
+    // more, and that final pass rasterizes at full resolution.
+    LaunchedEffect(Unit) {
+        var previousWasDraft = false
+        snapshotFlow {
+            RunoutRenderInputs(
+                showPreview = showPreview,
+                spec = spec,
+                config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression),
+                project = ProjectInfo(customer = customer, vessel = vessel,
+                    jobNumber = jobNumber, side = shaftPosition),
+                unit = unit,
+                resolved = resolvedComponents,
+                lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
+                shadedBodies = pdfShadedBodies,
+                shadedTapers = pdfShadedTapers,
+                shadedLiners = pdfShadedLiners,
+                sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                readings = runoutReadings,
+                blankValues = blankDraft,
+                draft = tuning.active,
+            )
+        }.conflate().collect { inputs ->
+            if (!inputs.showPreview) {
+                previewBitmap = null
+                previousWasDraft = false
+                return@collect
             }
+            // A drag frame — and the sharp pass right after one — keeps the current page on
+            // screen: swapping in the spinner between frames would strobe the preview.
+            val quiet = inputs.draft || previousWasDraft
+            previousWasDraft = inputs.draft
+            if (!quiet) previewLoading = true
+            val prefsSnapshot = tunedPdfPrefs(vm.currentPdfPrefs, inputs.sBreakThresholdFrac)
+            val bmp = withContext(Dispatchers.IO) {
+                renderPdfPageBitmap(ctx, renderScale = previewRenderScale(inputs.draft)) { page ->
+                    composeClassicRunout(
+                        page, inputs.spec, inputs.config, inputs.project, inputs.unit,
+                        prefsSnapshot, inputs.resolved, inputs.lineThicknessScale,
+                        inputs.readings, inputs.blankValues,
+                    )
+                }
+            }
+            previewBitmap = bmp?.asImageBitmap()
+            previewLoading = false
         }
-        previewBitmap = bmp?.asImageBitmap()
-        previewLoading = false
     }
 
     // Capture colors before the Canvas block (DrawScope is not composable). Sheet ink is
@@ -557,8 +593,10 @@ fun RunoutRoute(
                     vm = vm,
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
+                    tuning = tuning,
                 )
             },
+            sheetScrimColor = if (tuning.active) Color.Transparent else BottomSheetDefaults.ScrimColor,
         )
     }
 
@@ -578,6 +616,33 @@ fun RunoutRoute(
         )
     }
 }
+
+/**
+ * Everything one composed classic-runout preview page depends on, in one
+ * structural-equality value — the render loop's unit of work.
+ *
+ * The shade flags and the S-break threshold never reach the composer from here: they
+ * travel inside the `PdfPrefs` snapshot taken at render time. They are held in this holder
+ * because the loop must RE-RENDER when they change, and a `PdfPrefs` read is not snapshot
+ * state.
+ */
+private data class RunoutRenderInputs(
+    val showPreview: Boolean,
+    val spec: ShaftSpec,
+    val config: RunoutConfig,
+    val project: ProjectInfo,
+    val unit: UnitSystem,
+    val resolved: List<ResolvedComponent>,
+    val lineThicknessScale: Float,
+    val shadedBodies: Boolean,
+    val shadedTapers: Boolean,
+    val shadedLiners: Boolean,
+    val sBreakThresholdFrac: Float,
+    val readings: RunoutReadings,
+    val blankValues: Boolean,
+    /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
+    val draft: Boolean,
+)
 
 /** Identifies the bubble whose editor dialog is open. */
 private data class EditingRunoutBubble(
@@ -881,6 +946,10 @@ internal fun openRunoutPdf(context: Context, uri: Uri) {
  * @param onExport      Called when the user taps the Export button.
  * @param optionsSheet  Optional composable content shown in a bottom sheet when the user
  *                      taps the Tune icon. When null, no Tune icon is shown.
+ * @param sheetScrimColor Scrim behind the options sheet. A caller whose sheet tunes the
+ *                      page live passes `Color.Transparent` while a slider is being
+ *                      dragged — the page above IS what the drag is judged against, so the
+ *                      dimming comes off for the duration and returns on release.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -891,6 +960,7 @@ internal fun PdfPreviewOverlay(
     onClose: () -> Unit,
     onExport: () -> Unit,
     optionsSheet: (@Composable () -> Unit)? = null,
+    sheetScrimColor: Color = BottomSheetDefaults.ScrimColor,
 ) {
     var showOptions by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -996,6 +1066,7 @@ internal fun PdfPreviewOverlay(
         ModalBottomSheet(
             onDismissRequest = { showOptions = false },
             sheetState = sheetState,
+            scrimColor = sheetScrimColor,
         ) {
             optionsSheet()
         }
@@ -1023,6 +1094,12 @@ internal fun RunoutWearOptionsSheet(
     showSBreak: Boolean = false,
     /** The app-wide `PdfPrefs.sBreakThresholdFrac`; read only when [showSBreak]. */
     sBreakThresholdFrac: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
+    /**
+     * Live-tuning sink for a preview that reshapes under the finger: each slider reports
+     * its in-progress value here. Visual only — the commit path is unchanged and nothing
+     * persists on a drag frame. Null (the default) on surfaces that don't tune live.
+     */
+    tuning: PreviewTuning? = null,
 ) {
     // Scrollable + inset-padded: without its own scroll a short screen clips the bottom
     // rows mid-checkbox behind the navigation bar (same posture as PdfOptionsSheet).
@@ -1043,6 +1120,7 @@ internal fun RunoutWearOptionsSheet(
         LineThicknessSlider(
             scale = lineThicknessScale,
             onCommit = { vm.setLineThicknessScale(it) },
+            onDrag = { tuning?.lineThickness = it },
         )
 
         Spacer(Modifier.height(12.dp))
@@ -1056,6 +1134,7 @@ internal fun RunoutWearOptionsSheet(
             SBreakThresholdSlider(
                 frac = sBreakThresholdFrac,
                 onCommit = { vm.setPdfSBreakThresholdFrac(it) },
+                onDrag = { tuning?.sBreakFrac = it },
             )
 
             Spacer(Modifier.height(12.dp))
