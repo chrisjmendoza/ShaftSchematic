@@ -6,6 +6,121 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-07
+
+### fix(preview): the tuning strip shows the drawing, and the menu stops clear of it
+
+On-device report against the tuning layout: the sheet still covered the bottom ~90 dp of
+the page (diameter callouts and footer gone), and the strip spent its top third on blank
+paper — "The shaft rendering has a LOT of white space on top and we're losing some of the
+items under the shaft. Can we move it up a bit to clear some of that white space or perhaps
+bring the menu down just a little more?" Both, as it turns out.
+
+**The sheet's own chrome is now budgeted.** `heightIn` caps a bottom sheet's CONTENT
+column; M3 stacks its drag handle (4 dp bar + 22 dp padding a side = 48 dp) and the sheet's
+bottom window inset OUTSIDE that cap, so the real sheet stood ~48 dp plus a navigation bar
+taller than the layout math believed and overlapped the page. `TUNING_SHEET_CHROME_DP` plus
+the measured `WindowInsets.navigationBars` bottom now comes out of the budget at both
+preview surfaces.
+
+**The strip crops to the page's ink band.** A composed page rarely inks its full height —
+the top margin plus unused rail room ran to about a third of the page. New
+`util/PdfInkBounds.kt` measures the rendered bitmap's first and last inked rows (one row at
+a time through `getPixels`, sampled every `height/200` rows and `width/256` pixels, ink =
+any channel below 0xF0, padded 2.5% a side) and the strip is sized and drawn to that band.
+Ink is never cropped — the OAL rail and the footer are ink, so they are inside the band by
+construction; only paper is. The band is measured on **sharp passes only**, so a slider drag
+never resizes the strip or the sheet under a moving finger.
+
+The pure pair was restructured **strip first, cap derived from the strip**
+(`tuningPageStripHeightDp` → `tuningSheetMaxHeightDp`), which retires the old circular
+definition and guarantees the two can never disagree; a new `drawPageBand` in
+`ui/screen/PreviewTuning.kt` is the ONE strip draw implementation for both sites (the
+overlay swaps its `Image` for a `Canvas` in strip layout), and the sheet cap moved out of
+`RunoutWearOptionsSheet` into `PdfPreviewOverlay`, which is the only thing that knows the
+strip. On a 393 × 851 dp phone with a 48 dp navigation bar: a 303.7 dp strip over a 363.3 dp
+sheet — with the chrome, exactly the screen. View-layer only: no composer, no preference,
+no `RunoutConfig` touched. `PreviewTuningTest` and the new `PdfInkBoundsTest` pin the math.
+
+### fix(preview): the page stays visible above the tune menu
+
+On-device report against the live-tuning drop: "It may render live but the menu with the
+sliders is in the way. I can see the PDF Preview area lighten up on moving a slider but I
+can't see anything. I need to close the menu to see the changes." The direction — "the
+preview rendering being allotted a space near the top… and the menu only reaching the
+bottom of that preview."
+
+**The page takes a strip on top while the sheet is open.** The exported sheets are
+LANDSCAPE (792 × 612 pt), so a page fitted to a portrait screen's *width* needs only
+`screenWidth × 612/792` of height — the whole drawing fits a strip near the top with room
+to spare. Opening a tuning options sheet now switches the preview to that layout: the page
+is redrawn fit-width and **top-aligned** under the app bar (from the real
+`PDF_PAGE_WIDTH_PT`/`PDF_PAGE_HEIGHT_PT` constants, never a magic ratio), and the sheet is
+capped at `tuningSheetMaxHeightDp` = screen height − strip − 88 dp of status bar and app
+bar. On a 393 × 851 dp phone: a 303.7 dp strip over a 459.3 dp sheet — the two plus the
+chrome are exactly the screen. The sheets already scroll internally, so nothing is lost.
+
+**Short/wide screens: the sheet keeps its floor, the strip yields.** The cap is clamped to
+40–78% of the screen height; when the fit-width page cannot also fit, the page fits to the
+shrunken strip instead (`tuningPageStripHeightDp`). A cramped page is still readable and
+zooms once the sheet closes; cramped sliders are not usable at all. All of it is pure and
+unit-tested in `ui/screen/PreviewTuning.kt` / `PreviewTuningTest`.
+
+**Zoom resets when the sheet opens** — deliberate, predictable over preserved: an
+inspection zoom would push the strip off-screen exactly when the sliders need it in view.
+Closing restores the normal layout (fill, pinch 0.5×–8×, double-tap reset).
+
+**Scrim.** `ModalBottomSheet`'s scrim is one full-window rect — it covers the strip and
+cannot be restricted to the gap below it — so a tuning sheet passes `Color.Transparent` for
+the whole time it is open, not only during a drag. On the shared `PdfPreviewOverlay` the
+black surround already separates strip from sheet; the schematic's `PdfPreviewScreen`
+paints the strip-to-sheet gap itself and drops even that while a slider is being dragged.
+Tap-outside-to-dismiss is unaffected. The overlay's `sheetScrimColor` parameter is replaced
+by `sheetTunesPage: Boolean`, which drives layout and scrim together.
+
+Applies to the three surfaces whose sheets tune the page — the schematic preview, the
+classic runout sheet, and the Consolidated Output tab. The **Wear** and **Undercut**
+previews keep the full-size centered page and the plain 78% sheet cap: their sheets tune
+nothing, so there is nothing to watch. The live-tuning machinery itself (draft raster,
+conflated render loop, commit-on-release persistence) is untouched — this is layout only.
+
+### feat(preview): sliders tune the open preview live
+
+On-device request: "see the differences without choosing, closing menu, opening menu,
+choosing". The four tuning sliders — **Line thickness**, **Body S-break**, **Shaft
+height**, **Liner compression** — now reshape the open preview **while the finger is still
+on the track**, on all three preview surfaces: the schematic (`PdfPreviewScreen`), the
+Consolidated Output tab, and the classic runout sheet. The options sheet also stops
+dimming the drawing during a drag — the page above is the thing being judged, so
+`scrimColor` goes transparent for the duration and the modal dimming returns on release.
+
+**A drag is a visual-only channel.** Each shared control in `ui/screen/ShaftHeightSlider.kt`
+gained an optional `onDrag: (Float?) -> Unit` — the in-progress value every frame in the
+same units as its commit callback, `null` on release. The height slider converts drawn
+inches → `heightScale` exactly as its commit does but **without** the standard-height
+detent (snapping is a commit rule; applying it per frame would make the drawing jump under
+the finger). The screens park the value in a `PreviewTuning` holder
+(`ui/screen/PreviewTuning.kt`) and render `override ?: committed`. **No DataStore write and
+no `RunoutConfig` update happens on a drag frame** — commit-on-release is untouched, so a
+drag never persists a setting and never marks the job dirty. Callers that don't opt in
+(Settings, the wear and undercut options sheets) keep the defaulted no-op.
+
+**Conflated render loop.** Each screen's multi-key `LaunchedEffect` became
+`snapshotFlow { RenderInputs(…) }.conflate().collect { … }` — latest-wins, so intermediate
+drag values are dropped while a render is in flight and the newest always renders. The
+`RenderInputs` data class captures everything the old key list covered plus the overrides
+and a draft flag; the schematic's also picks up **`curveLoHeightIn`/`curveHiHeightIn`**,
+which its key list omitted, so a Settings change to "Default drawing size" no longer leaves
+an open preview at its old height.
+
+**Draft res, then sharp.** `util/PdfRaster.renderPdfPageBitmap` gained
+`renderScale: Int = PDF_PREVIEW_RENDER_SCALE`; the three screens pass 1 while a drag is
+live (≈¼ the pixels) and the pass after the release restores the full 2×. The spinner is
+held back across drag frames and that release pass so the page never strobes.
+
+No geometry, composer, or persistence change — the drawing math is untouched; only which
+values reach it, when, and at what raster.
+
 ## 2026-08-06
 
 ### feat(ui): Body S-break joins the PDF Options sheets

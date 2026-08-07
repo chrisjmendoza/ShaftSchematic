@@ -454,7 +454,17 @@ private val helpSections: List<HelpSection> = listOf(
                     "• Each document's PDF Options sheet repeats Line thickness, Shade in PDF, " +
                     "(on the schematic) Measurement reference, and — on the schematic and the " +
                     "runout/consolidated sheets, the drawings that can break — Body S-break: " +
-                    "the same app-wide settings, reachable without leaving the drawing."
+                    "the same app-wide settings, reachable without leaving the drawing.\n" +
+                    "• Drag any of those sliders and the preview updates as you drag — the " +
+                    "sheet stops dimming the page and the drawing reshapes under your finger, " +
+                    "so there is no need to pick a value, close the sheet, look, and reopen it. " +
+                    "The picture sharpens when you let go, and only then is the value saved.\n" +
+                    "• The page stays visible above the menu while you adjust. Opening the " +
+                    "options sheet moves the drawing into a strip across the top of the " +
+                    "screen — trimmed to the drawing itself, so blank paper doesn't take up " +
+                    "the room — and the menu stops just below it. Any zoom you had is reset " +
+                    "so the strip is in view; close the menu and the whole page fills the " +
+                    "screen again, pinch and double-tap as before."
             ),
         )
     ),

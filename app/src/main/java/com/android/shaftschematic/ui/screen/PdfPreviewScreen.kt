@@ -9,10 +9,14 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,6 +37,7 @@ import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -58,15 +63,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.model.ProjectInfo
@@ -74,12 +82,17 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.maxOuterDiaMm
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.pdf.composeShaftPdf
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.util.InkBand
+import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.inkBand
 import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.content.pm.PackageManager
@@ -96,6 +109,9 @@ import kotlin.math.roundToInt
  *
  * Contract
  * - Rendering runs on Dispatchers.IO; a loading indicator is shown meanwhile.
+ * - While the options sheet is open the page redraws as a fit-width strip pinned under the
+ *   app bar, and the sheet is capped to what is left below it — the sliders tune the page
+ *   live, so the page has to stay in sight. Opening the sheet resets zoom/pan.
  * - If rendering fails, a plain error message is shown (no crash).
  * - The "Export PDF" action in the top bar calls [onExport] to proceed to the SAF picker.
  * - No model state is mutated here.
@@ -137,6 +153,12 @@ fun PdfPreviewScreen(
     val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    // Sizing-curve anchors: the composer sizes the drawn shaft off them, so a Settings
+    // change to "Default drawing size" has to re-render an open preview. Collected here,
+    // not only inside the Tune sheet, or the page would keep its old height until some
+    // other input moved.
+    val curveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
+    val curveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
 
     val project = remember(customer, vessel, shaftPosition, jobNumber) {
         ProjectInfo(customer = customer, vessel = vessel, side = shaftPosition, jobNumber = jobNumber)
@@ -146,53 +168,126 @@ fun PdfPreviewScreen(
     }
 
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    // Where the composed page actually carries ink — the tuning strip crops to it so blank
+    // paper never takes room from the drawing. Measured on sharp passes only (see below).
+    var inkBand by remember { mutableStateOf<InkBand?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showOptions by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Live slider drags — visual-only overrides, never a write. See [PreviewTuning].
+    val tuning = rememberPreviewTuning()
 
-    LaunchedEffect(spec, unit, project, options, resolvedComponents, lineThicknessScale,
-                   pdfShowComponentTitles, pdfTieringMode,
-                   pdfShadedBodies, pdfShadedTapers, pdfShadedLiners, pdfSBreakThresholdFrac,
-                   runoutConfig.heightScale, runoutConfig.linerMinFracOfTrue) {
-        isLoading = true
-        errorMessage = null
-        // Snapshot on the main thread before switching to IO.
-        val pdfPrefsSnapshot = vm.currentPdfPrefs
-        val thicknessScaleSnapshot = lineThicknessScale
-        val heightScaleSnapshot = runoutConfig.heightScale
-        val linerFracSnapshot = runoutConfig.linerMinFracOfTrue
-        val versionSnapshot = appVersionName(ctx)
-        val bmp = withContext(Dispatchers.IO) {
-            renderPdfPageBitmap(ctx) { page ->
-                composeShaftPdf(
-                    page = page,
-                    spec = spec,
-                    unit = unit,
-                    project = project,
-                    appVersion = versionSnapshot,
-                    filename = "preview",
-                    pdfPrefs = pdfPrefsSnapshot,
-                    options = options,
-                    resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
-                    lineThicknessScale = thicknessScaleSnapshot,
-                    heightScale = heightScaleSnapshot,
-                    linerMinFracOfTrue = linerFracSnapshot,
-                )
+    // The render loop. One RenderInputs value carries EVERYTHING the composed page reads
+    // (an omission here is a stale-preview bug); `snapshotFlow { … }.conflate()` renders
+    // the newest inputs and drops the intermediate frames a slider drag produces while a
+    // render is in flight. When a drag ends the overrides go null, the inputs change once
+    // more, and that final pass rasterizes at full resolution.
+    LaunchedEffect(Unit) {
+        var previousWasDraft = false
+        snapshotFlow {
+            val config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression)
+            SchematicRenderInputs(
+                spec = spec,
+                unit = unit,
+                project = ProjectInfo(
+                    customer = customer, vessel = vessel,
+                    side = shaftPosition, jobNumber = jobNumber,
+                ),
+                options = PdfExportOptions(mode = pdfExportMode, blankValues = pdfBlankDraft),
+                resolved = resolvedComponents,
+                lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
+                showComponentTitles = pdfShowComponentTitles,
+                tieringMode = pdfTieringMode,
+                shadedBodies = pdfShadedBodies,
+                shadedTapers = pdfShadedTapers,
+                shadedLiners = pdfShadedLiners,
+                sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                curveLoHeightIn = curveLoHeightIn,
+                curveHiHeightIn = curveHiHeightIn,
+                heightScale = config.heightScale,
+                linerMinFracOfTrue = config.linerMinFracOfTrue,
+                draft = tuning.active,
+            )
+        }.conflate().collect { inputs ->
+            // A drag frame — and the sharp pass right after one — keeps the current page on
+            // screen: swapping in the spinner between frames would strobe the preview.
+            val quiet = inputs.draft || previousWasDraft
+            previousWasDraft = inputs.draft
+            if (!quiet) isLoading = true
+            errorMessage = null
+            // Snapshot on the main thread before switching to IO.
+            val pdfPrefsSnapshot = tunedPdfPrefs(vm.currentPdfPrefs, inputs.sBreakThresholdFrac)
+            val versionSnapshot = appVersionName(ctx)
+            // The ink band is measured on the raw raster, and only on a sharp (non-draft)
+            // pass: a drag frame that resized the strip — and with it the sheet cap — would
+            // shuffle the layout under a moving finger.
+            val (bmp, band) = withContext(Dispatchers.IO) {
+                val raster = renderPdfPageBitmap(
+                    ctx,
+                    renderScale = previewRenderScale(inputs.draft),
+                ) { page ->
+                    composeShaftPdf(
+                        page = page,
+                        spec = inputs.spec,
+                        unit = inputs.unit,
+                        project = inputs.project,
+                        appVersion = versionSnapshot,
+                        filename = "preview",
+                        pdfPrefs = pdfPrefsSnapshot,
+                        options = inputs.options,
+                        resolvedComponents = inputs.resolved.takeIf { it.isNotEmpty() },
+                        lineThicknessScale = inputs.lineThicknessScale,
+                        heightScale = inputs.heightScale,
+                        linerMinFracOfTrue = inputs.linerMinFracOfTrue,
+                    )
+                }
+                raster to raster?.takeIf { !inputs.draft }?.inkBand()
             }
+            if (bmp != null) {
+                previewBitmap = bmp.asImageBitmap()
+                if (!inputs.draft) inkBand = band
+            } else {
+                errorMessage = "Could not render preview."
+            }
+            isLoading = false
         }
-        if (bmp != null) {
-            previewBitmap = bmp.asImageBitmap()
-        } else {
-            errorMessage = "Could not render preview."
-        }
-        isLoading = false
     }
 
     // ── Pan / Zoom state ──────────────────────────────────────────────────────
     val scope = rememberCoroutineScope()
     val scale = remember { Animatable(1f) }
     val offset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+
+    // ── Tuning layout ─────────────────────────────────────────────────────────
+    // While the options sheet is open the page moves into a strip pinned under the app bar
+    // and the sheet is capped just below it, so a slider's effect is visible as it is
+    // dragged ("I can see the PDF Preview area lighten up on moving a slider but I can't
+    // see anything" — on-device report). The strip carries the page's INK BAND, so the
+    // drawing gets the room the blank top margin used to hold. The sheet's drag handle and
+    // its navigation-bar inset stack OUTSIDE the content cap, so they are budgeted here;
+    // strip and cap come from one set of inputs and cannot disagree. Opening the sheet
+    // RESETS zoom/pan: predictable beats preserved, since a zoom would hide the strip.
+    val configuration = LocalConfiguration.current
+    val navBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().value
+    val sheetChromeDp = TUNING_SHEET_CHROME_DP + navBottomDp
+    val stripHeightDp = tuningPageStripHeightDp(
+        configuration.screenWidthDp.toFloat(),
+        configuration.screenHeightDp.toFloat(),
+        sheetChromeDp,
+        inkBand?.frac ?: 1f,
+    )
+    val maxSheetHeight = tuningSheetMaxHeightDp(
+        configuration.screenHeightDp.toFloat(),
+        stripHeightDp,
+        sheetChromeDp,
+    ).dp
+    LaunchedEffect(showOptions) {
+        if (showOptions) {
+            scale.snapTo(1f)
+            offset.snapTo(Offset.Zero)
+        }
+    }
 
     val gestures = Modifier
         .pointerInput(Unit) {
@@ -327,59 +422,81 @@ fun PdfPreviewScreen(
                             .then(gestures)
                             .testTag("pdf_preview_canvas")
                     ) {
-                        val imgW = currentBitmap.width.toFloat()
-                        val imgH = currentBitmap.height.toFloat()
-
-                        // Fit the PDF page to the canvas at zoom=1, centered.
-                        val fitScale = minOf(size.width / imgW, size.height / imgH)
-                        val fittedW = imgW * fitScale
-                        val fittedH = imgH * fitScale
-                        val baseLeft = (size.width - fittedW) / 2f
-                        val baseTop = (size.height - fittedH) / 2f
-
                         withTransform({
                             translate(offset.value.x, offset.value.y)
                             scale(scale.value, scale.value, Offset.Zero)
                         }) {
-                            drawImage(
-                                image = currentBitmap,
-                                dstOffset = androidx.compose.ui.unit.IntOffset(
-                                    baseLeft.toInt(),
-                                    baseTop.toInt()
-                                ),
-                                dstSize = androidx.compose.ui.unit.IntSize(
-                                    fittedW.toInt(),
-                                    fittedH.toInt()
+                            if (showOptions) {
+                                // Tuning layout: the drawing, cropped to its ink band,
+                                // fitted into the strip the sheet was sized to leave free
+                                // and top-aligned under the app bar.
+                                drawPageBand(currentBitmap, inkBand, stripHeightDp.dp.toPx())
+                            } else {
+                                // Normal preview: the whole page — real paper, blank
+                                // margins included — fitted to the canvas and centered.
+                                val imgW = currentBitmap.width.toFloat()
+                                val imgH = currentBitmap.height.toFloat()
+                                val fitScale = minOf(size.width / imgW, size.height / imgH)
+                                val fittedW = imgW * fitScale
+                                val fittedH = imgH * fitScale
+                                drawImage(
+                                    image = currentBitmap,
+                                    dstOffset = androidx.compose.ui.unit.IntOffset(
+                                        ((size.width - fittedW) / 2f).toInt(),
+                                        ((size.height - fittedH) / 2f).toInt()
+                                    ),
+                                    dstSize = androidx.compose.ui.unit.IntSize(
+                                        fittedW.toInt(),
+                                        fittedH.toInt()
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
+            }
+
+            // The gap between the page strip and the sheet, dimmed — the modal affordance
+            // the bottom sheet's own scrim would give, minus the part that matters: the
+            // strip stays at full brightness. `ModalBottomSheet`'s scrim is all-or-nothing
+            // over the whole window, so it is passed transparent and this stands in for it.
+            // A drag takes even this off — the page is the thing being judged.
+            if (showOptions && !tuning.active) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = stripHeightDp.dp)
+                        .background(BottomSheetDefaults.ScrimColor)
+                )
             }
 
             // Always-visible blank-draft toggle, overlaid on the preview — the SAME
             // session-only state as the options sheet's switch, so the two can never
             // disagree. Surfaced here because the sheet buried it (on-device report:
             // hard to find, even when demoing the app). Toggling re-renders the
-            // preview live, so what's shown is always what will print.
-            FilterChip(
-                selected = pdfBlankDraft,
-                onClick = { vm.setPdfBlankDraft(!pdfBlankDraft) },
-                label = { Text("Blank draft (write-in)") },
-                leadingIcon = if (pdfBlankDraft) {
-                    {
-                        Icon(
-                            Icons.Filled.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(FilterChipDefaults.IconSize),
-                        )
-                    }
-                } else null,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 4.dp)
-                    .testTag("pdf_blank_toggle"),
-            )
+            // preview live, so what's shown is always what will print. Hidden while the
+            // options sheet is open: it would sit on the page strip, and the sheet's own
+            // first row is this same switch.
+            if (!showOptions) {
+                FilterChip(
+                    selected = pdfBlankDraft,
+                    onClick = { vm.setPdfBlankDraft(!pdfBlankDraft) },
+                    label = { Text("Blank draft (write-in)") },
+                    leadingIcon = if (pdfBlankDraft) {
+                        {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(FilterChipDefaults.IconSize),
+                            )
+                        }
+                    } else null,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 4.dp)
+                        .testTag("pdf_blank_toggle"),
+                )
+            }
         }
     }
 
@@ -387,6 +504,11 @@ fun PdfPreviewScreen(
         ModalBottomSheet(
             onDismissRequest = { showOptions = false },
             sheetState = sheetState,
+            // `ModalBottomSheet`'s scrim is a full-window rect — it cannot be restricted to
+            // the area below the page strip, and dimming the strip is exactly what this
+            // layout exists to prevent. It stays transparent; the preview Box paints the
+            // strip-to-sheet gap itself (and stops even that during a drag).
+            scrimColor = Color.Transparent,
         ) {
             PdfOptionsSheet(
                 vm = vm,
@@ -398,14 +520,48 @@ fun PdfPreviewScreen(
                 heightScale = runoutConfig.heightScale,
                 linersProportional = runoutConfig.linersProportional,
                 linerCompression = runoutConfig.linerCompression,
+                curveLoHeightIn = curveLoHeightIn,
+                curveHiHeightIn = curveHiHeightIn,
                 pdfShadedBodies = pdfShadedBodies,
                 pdfShadedTapers = pdfShadedTapers,
                 pdfShadedLiners = pdfShadedLiners,
                 pdfBlankDraft = pdfBlankDraft,
+                tuning = tuning,
+                maxHeightDp = maxSheetHeight,
             )
         }
     }
 }
+
+/**
+ * Everything one composed schematic preview page depends on, in one structural-equality
+ * value — the render loop's unit of work.
+ *
+ * Some fields never reach [composeShaftPdf] directly: the shade flags, component titles,
+ * tiering mode, S-break threshold and sizing-curve anchors travel inside the `PdfPrefs`
+ * snapshot taken at render time. They are held here because the loop must RE-RENDER when
+ * they change, and a `PdfPrefs` read is not snapshot state.
+ */
+private data class SchematicRenderInputs(
+    val spec: ShaftSpec,
+    val unit: UnitSystem,
+    val project: ProjectInfo,
+    val options: PdfExportOptions,
+    val resolved: List<ResolvedComponent>,
+    val lineThicknessScale: Float,
+    val showComponentTitles: Boolean,
+    val tieringMode: PdfTieringMode,
+    val shadedBodies: Boolean,
+    val shadedTapers: Boolean,
+    val shadedLiners: Boolean,
+    val sBreakThresholdFrac: Float,
+    val curveLoHeightIn: Float,
+    val curveHiHeightIn: Float,
+    val heightScale: Float,
+    val linerMinFracOfTrue: Float,
+    /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
+    val draft: Boolean,
+)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -431,20 +587,31 @@ private fun PdfOptionsSheet(
     heightScale: Float,
     linersProportional: Boolean,
     linerCompression: Float,
+    curveLoHeightIn: Float,
+    curveHiHeightIn: Float,
     pdfShadedBodies: Boolean,
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
     pdfBlankDraft: Boolean,
+    /**
+     * Live-tuning sink: every slider here reports its in-progress value so the preview
+     * behind the sheet reshapes under the finger. Visual only — the commit path is
+     * unchanged and nothing persists on a drag frame.
+     */
+    tuning: PreviewTuning,
+    /**
+     * Cap for this content column, computed by the screen from the SAME inputs as the page
+     * strip ([tuningSheetMaxHeightDp]) so sheet and strip can never disagree. This sheet
+     * tunes the page live, so it must not cover it.
+     */
+    maxHeightDp: Dp,
 ) {
     // Scrollable + inset-padded: the sheet's content is taller than a phone screen, so
     // without its own scroll the bottom rows clip mid-checkbox behind the navigation bar.
-    // Height is capped below full screen — a sheet expanded to the status bar leaves no
-    // edge to swipe it back down by (on-device report).
-    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.78f).dp
     Column(
         Modifier
             .fillMaxWidth()
-            .heightIn(max = maxSheetHeight)
+            .heightIn(max = maxHeightDp)
             .verticalScroll(rememberScrollState())
             .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),
@@ -490,6 +657,7 @@ private fun PdfOptionsSheet(
         LineThicknessSlider(
             scale = lineThicknessScale,
             onCommit = { vm.setLineThicknessScale(it) },
+            onDrag = { tuning.lineThickness = it },
         )
 
         Spacer(Modifier.height(12.dp))
@@ -502,6 +670,7 @@ private fun PdfOptionsSheet(
         SBreakThresholdSlider(
             frac = sBreakThresholdFrac,
             onCommit = { vm.setPdfSBreakThresholdFrac(it) },
+            onDrag = { tuning.sBreakFrac = it },
         )
 
         Spacer(Modifier.height(12.dp))
@@ -515,14 +684,13 @@ private fun PdfOptionsSheet(
         // drawn-height VALUE in paper inches; the schematic's base is the default
         // sizing curve at the configured anchor heights, no width-fit term.
         val sliderDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) }
-        val curveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
-        val curveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
         val sliderBase = defaultVisualScale(sliderDiaMm, curveLoHeightIn * 72f, curveHiHeightIn * 72f)
         ShaftHeightSlider(
             heightScale = heightScale,
             baseScale = sliderBase,
             maxDiaMm = sliderDiaMm,
             onCommit = { vm.setRunoutHeightScale(it) },
+            onDrag = { tuning.heightScale = it },
         )
 
         Spacer(Modifier.height(12.dp))
@@ -539,6 +707,7 @@ private fun PdfOptionsSheet(
             },
             onSetProportional = { vm.setLinersProportional(it) },
             onSetCompression = { vm.setLinerCompression(it) },
+            onDrag = { tuning.linerCompression = it },
         )
 
         Spacer(Modifier.height(12.dp))

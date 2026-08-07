@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -67,18 +69,51 @@ import com.android.shaftschematic.pdf.consolidatedSheetHasInProfileValues
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.ui.nav.appVersionFromContext
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.createPdfInTree
+import com.android.shaftschematic.util.inkBand
 import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
 
 /** Worn-section editor dialog target — [section] null means "add a new one". */
 private data class OutputWornSectionTarget(val section: WornSection?)
+
+/**
+ * Everything one composed consolidated-sheet preview page depends on, in one
+ * structural-equality value — the render loop's unit of work.
+ *
+ * The shade flags and the S-break threshold never reach the composer from here: they
+ * travel inside the `PdfPrefs` snapshot taken at render time. They are held in this holder
+ * because the loop must RE-RENDER when they change, and a `PdfPrefs` read is not snapshot
+ * state.
+ */
+private data class ConsolidatedRenderInputs(
+    val showPreview: Boolean,
+    val variant: ConsolidatedVariant,
+    val spec: ShaftSpec,
+    val config: RunoutConfig,
+    val project: ProjectInfo,
+    val unit: UnitSystem,
+    val resolved: List<ResolvedComponent>,
+    val lineThicknessScale: Float,
+    val shadedBodies: Boolean,
+    val shadedTapers: Boolean,
+    val shadedLiners: Boolean,
+    val sBreakThresholdFrac: Float,
+    val readings: RunoutReadings,
+    val wearRecord: WearRecord,
+    val blankValues: Boolean,
+    /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
+    val draft: Boolean,
+)
 
 /**
  * OutputRoute — the Consolidated Output tab.
@@ -89,6 +124,7 @@ private data class OutputWornSectionTarget(val section: WornSection?)
  * sections (they print here), and preview/print/export. The original tabs keep their own
  * single-document buttons; batch export of the full document set also lives on this tab.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OutputRoute(
     vm: ShaftViewModel,
@@ -126,8 +162,15 @@ fun OutputRoute(
     var blankDraft by rememberSaveable { mutableStateOf(false) }
     var showPreview by rememberSaveable { mutableStateOf(false) }
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    // Where the composed sheet carries ink — the tuning strip crops to it so blank paper
+    // never takes room from the drawing. Measured on sharp passes only (see the loop).
+    var previewInkBand by remember { mutableStateOf<InkBand?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
     var wornSectionDialog by remember { mutableStateOf<OutputWornSectionTarget?>(null) }
+    // Live slider drags — on this tab's own Shaft height / Liner compression controls and
+    // on the preview's options sheet. Visual-only overrides, never a write, so a drag
+    // frame can't mark the job dirty. See [PreviewTuning].
+    val tuning = rememberPreviewTuning()
 
     // "Export all" election, one flag per OutputDoc in enum order. Everything on by default:
     // the normal hand-off is the complete document package, and an unchecked box is a
@@ -187,7 +230,7 @@ fun OutputRoute(
         projectSnap: ProjectInfo,
         unitSnap: UnitSystem,
         prefsSnap: PdfPrefs,
-        resolvedSnap: List<com.android.shaftschematic.ui.resolved.ResolvedComponent>,
+        resolvedSnap: List<ResolvedComponent>,
         thicknessSnap: Float,
         readingsSnap: RunoutReadings,
         wearSnap: WearRecord,
@@ -300,26 +343,66 @@ fun OutputRoute(
         }
     }
 
-    LaunchedEffect(showPreview, variant, spec, runoutConfig, unit, resolvedComponents,
-                   lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   pdfSBreakThresholdFrac, runoutReadings, wearRecord, blankDraft) {
-        if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
-        previewLoading = true
-        val prefsSnapshot = vm.currentPdfPrefs
-        val thicknessSnapshot = lineThicknessScale
-        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-            jobNumber = jobNumber, side = shaftPosition)
-        val bmp = withContext(Dispatchers.IO) {
-            renderPdfPageBitmap(ctx) { page ->
-                composeConsolidated(
-                    page, variant, spec, runoutConfig, projectSnapshot, unit,
-                    prefsSnapshot, resolvedComponents, thicknessSnapshot,
-                    runoutReadings, wearRecord, blankDraft,
-                )
+    // The render loop. One RenderInputs value carries EVERYTHING the composed sheet reads
+    // (an omission here is a stale-preview bug); `snapshotFlow { … }.conflate()` renders
+    // the newest inputs and drops the intermediate frames a slider drag produces while a
+    // render is in flight. When a drag ends the overrides go null, the inputs change once
+    // more, and that final pass rasterizes at full resolution.
+    LaunchedEffect(Unit) {
+        var previousWasDraft = false
+        snapshotFlow {
+            ConsolidatedRenderInputs(
+                showPreview = showPreview,
+                variant = variant,
+                spec = spec,
+                config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression),
+                project = ProjectInfo(customer = customer, vessel = vessel,
+                    jobNumber = jobNumber, side = shaftPosition),
+                unit = unit,
+                resolved = resolvedComponents,
+                lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
+                shadedBodies = pdfShadedBodies,
+                shadedTapers = pdfShadedTapers,
+                shadedLiners = pdfShadedLiners,
+                sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                readings = runoutReadings,
+                wearRecord = wearRecord,
+                blankValues = blankDraft,
+                draft = tuning.active,
+            )
+        }.conflate().collect { inputs ->
+            if (!inputs.showPreview) {
+                previewBitmap = null
+                previousWasDraft = false
+                return@collect
             }
+            // A drag frame — and the sharp pass right after one — keeps the current page on
+            // screen: swapping in the spinner between frames would strobe the preview.
+            val quiet = inputs.draft || previousWasDraft
+            previousWasDraft = inputs.draft
+            if (!quiet) previewLoading = true
+            val prefsSnapshot = tunedPdfPrefs(vm.currentPdfPrefs, inputs.sBreakThresholdFrac)
+            // The ink band is measured on the raw raster, and only on a sharp (non-draft)
+            // pass: a drag frame that resized the strip — and with it the sheet cap —
+            // would shuffle the layout under a moving finger.
+            val (bmp, band) = withContext(Dispatchers.IO) {
+                val raster = renderPdfPageBitmap(
+                    ctx,
+                    renderScale = previewRenderScale(inputs.draft),
+                ) { page ->
+                    composeConsolidated(
+                        page, inputs.variant, inputs.spec, inputs.config, inputs.project,
+                        inputs.unit, prefsSnapshot, inputs.resolved,
+                        inputs.lineThicknessScale, inputs.readings, inputs.wearRecord,
+                        inputs.blankValues,
+                    )
+                }
+                raster to raster?.takeIf { !inputs.draft }?.inkBand()
+            }
+            previewBitmap = bmp?.asImageBitmap()
+            if (!inputs.draft) previewInkBand = band
+            previewLoading = false
         }
-        previewBitmap = bmp?.asImageBitmap()
-        previewLoading = false
     }
 
     // ── Screen ────────────────────────────────────────────────────────────────
@@ -379,6 +462,7 @@ fun OutputRoute(
                 baseScale = heightSliderBase,
                 maxDiaMm = heightSliderDiaMm,
                 onCommit = { vm.setRunoutHeightScale(it) },
+                onDrag = { tuning.heightScale = it },
             )
 
             LinerCompressionControl(
@@ -389,6 +473,7 @@ fun OutputRoute(
                 },
                 onSetProportional = { vm.setLinersProportional(it) },
                 onSetCompression = { vm.setLinerCompression(it) },
+                onDrag = { tuning.linerCompression = it },
             )
 
             // ── Worn sections — authored here, printed on this sheet ─────────
@@ -593,8 +678,11 @@ fun OutputRoute(
                     linerShadeLocked = linerShadeLocked,
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
+                    tuning = tuning,
                 )
             },
+            sheetTunesPage = true,
+            inkBand = previewInkBand,
         )
     }
 }

@@ -1037,10 +1037,12 @@ Fills are drawn before outlines so the outline strokes are always visible on top
 PdfPreviewOverlay(
     bitmap, loading, title, onClose, onExport,
     optionsSheet: (@Composable () -> Unit)? = null,
+    sheetTunesPage: Boolean = false,
+    inkBand: InkBand? = null,
 )
 ```
 
-When `optionsSheet` is non-null, a **Tune** icon appears in the overlay toolbar. Tapping it opens a `ModalBottomSheet` (skips partial expansion) containing the composable.
+When `optionsSheet` is non-null, a **Tune** icon appears in the overlay toolbar. Tapping it opens a `ModalBottomSheet` (skips partial expansion) containing the composable, height-capped by the overlay itself. `sheetTunesPage` says that sheet reshapes THIS page live (Runout and Consolidated Output pass `true`; Wear and Undercut take the `false` default): it switches the open preview to the page-strip layout and takes the sheet's scrim off — see **Live tuning** below. `inkBand` is where that page carries ink (`util/PdfInkBounds.kt`), supplied by the routes whose sheets tune; the strip crops to it.
 
 **Stacking:** the zoom/pan `Box` is `clipToBounds()`, so the transformed page tucks **behind** the toolbar instead of sliding over it. A `graphicsLayer` scale/translate draws outside its layout node unless clipped, which let a zoomed-in page cover Close/Export (on-device report); hit testing was always bounded by layout, so this is a drawing fix, not a touch one. Also used by the undercut tab.
 
@@ -1056,7 +1058,15 @@ Both routes pass `RunoutWearOptionsSheet` as the lambda:
 | Shade Tapers (Checkbox) | `vm.setPdfShadedTapers()` |
 | Shade Liners (Checkbox) | `vm.setPdfShadedLiners()` — locked (disabled, shown unchecked) when the document prints Ø values inside the profile; display-only, the pref is never rewritten |
 
-All of these values are included in the `LaunchedEffect` key list so changing any option immediately re-renders the preview bitmap.
+All of these values are included in the render loop's `RenderInputs` holder so changing any option immediately re-renders the preview bitmap.
+
+**Live tuning (Runout + Consolidated Output).** Both routes pass a `PreviewTuning` (`ui/screen/PreviewTuning.kt`) into the sheet, so the two sliders here — Line thickness and Body S-break — reshape the page **while the finger is still on the track**, and so do the Output tab's own "Shaft height" and "Liner compression" controls ("see the differences without choosing, closing menu, opening menu, choosing" — on-device request). The shared controls report their in-progress value through an optional `onDrag: (Float?) -> Unit` (same units as their commit callback, `null` on release); the route folds it into the render inputs as `override ?: committed`. Three rules hold:
+
+- **Visual only.** A drag frame never writes DataStore and never updates `RunoutConfig` — persistence and the per-job dirty mark stay on commit-on-release. The Wear and Undercut routes leave `tuning` at its `null` default and are unaffected.
+- **Draft then sharp.** The loop is `snapshotFlow { RenderInputs(…) }.conflate().collect { … }` — latest-wins, so intermediate drag values are dropped while a render is in flight — and drag frames raster at `renderScale = 1` (¼ the pixels). When the drag ends the overrides go null, the inputs change once more, and that pass restores `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back across drag frames and that release pass so the page never strobes.
+- **The page keeps a strip on top.** Both routes pass `sheetTunesPage = true` to `PdfPreviewOverlay`, because live rendering is worthless if the menu covers the page ("It may render live but the menu with the sliders is in the way. I can see the PDF Preview area lighten up on moving a slider but I can't see anything. I need to close the menu to see the changes." — on-device report). While such a sheet is open the overlay drops the centered full-size `Image` for a **page strip** pinned `TopCenter` under the toolbar (a `Canvas` with the same modifier chain plus an explicit `contentDescription`, drawing through the shared `drawPageBand`): the sheets are LANDSCAPE, so a whole page needs only `screenWidthDp × (PDF_PAGE_HEIGHT_PT / PDF_PAGE_WIDTH_PT)` of height (`fitWidthPageHeightDp`, `ui/screen/PreviewTuning.kt` — the real page constants, never a magic ratio). The strip actually shows the page's **ink band** — `util/PdfInkBounds.kt` measures the rendered bitmap's first/last inked rows, the routes hold it in a `previewInkBand` state updated on **sharp passes only** (a drag frame must not resize the strip under the finger) and pass it as `PdfPreviewOverlay(inkBand = …)`, so the blank top margin stops eating the strip while inked content — rail, footer — is never cropped. Opening the sheet **resets zoom/pan** to fit; predictable over preserved, since an inspection zoom would push the strip off-screen exactly when the sliders need it. Closing restores the normal layout (fill, pinch 0.5×–8×).
+- **Sheet capped below the strip — by the overlay.** `PdfPreviewOverlay` wraps `optionsSheet()` in a `Box(heightIn(max = …))`: `tuningSheetMaxHeightDp(screenHeight, strip, sheetChrome)` = screen height − strip − `PREVIEW_TOP_CHROME_DP` (88 dp of status bar + toolbar) − the sheet's own chrome, clamped to `[TUNING_SHEET_MIN_FRAC 40%, PREVIEW_SHEET_MAX_FRAC 78%]` of the screen. **Sheet chrome** is `TUNING_SHEET_CHROME_DP` (48 dp: M3's drag handle) plus the measured `WindowInsets.navigationBars` bottom — both stack OUTSIDE a content-column cap, so ignoring them left the sheet overlapping the strip and swallowing the drawing's lowest callouts and footer (on-device report). On a 393 × 851 dp phone with a 48 dp nav bar: a 303.7 dp strip over a 363.3 dp sheet. The clamp order is **sheet floor first, strip takes the remainder** (`tuningPageStripHeightDp`, computed first so the cap derives from it) — on a short/wide screen the page fits to the shrunken strip, because it is zoomable once the sheet closes and crushed sliders are not usable at all. The sheet already scrolls internally, so the cap never loses content. `RunoutWearOptionsSheet` itself carries **no** cap: only the overlay knows the strip. The **Wear and Undercut** previews take `sheetTunesPage = false` and get the plain `PREVIEW_SHEET_MAX_FRAC` (78%) cap with the full-size centered preview — they tune nothing, so there is nothing to watch.
+- **Undimmed scrim.** `ModalBottomSheet`'s scrim is one **full-window** rect — it covers the page strip too and cannot be restricted to the gap below it — so a tuning sheet passes `Color.Transparent` for the whole time it is open, not just during a drag. The overlay's black surround already reads as separation between strip and sheet. (The schematic's `PdfPreviewScreen`, which has no black surround, paints the strip-to-sheet gap itself and drops that during a drag.) Tap-outside-to-dismiss is unaffected: the transparent scrim still takes the tap.
 
 The option blocks are shared composables in `ui/screen/ShaftHeightSlider.kt` — `LineThicknessSlider`, `SBreakThresholdSlider`, and `ShadeInPdfChecks` (heading + the three checkboxes + the `linerShadeLocked` behavior) — used by this sheet and by the schematic preview's `PdfOptionsSheet`, so an added option lands on both surfaces at once. Settings → PDF Export keeps its own copy of the checkbox rows: they sit in a `spacedBy(12.dp)` column with a padded heading, and adopting the sheets' tighter block would restyle that page. Same prefs, same setters. `SBreakThresholdSlider` is additionally the Settings → Drawing control (that page adds only its explanatory caption), so the threshold reads and writes the one app-wide pref from every surface.
 
@@ -1087,9 +1097,10 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
 - OAL arrows bracket the SET-to-SET span, not the full `overallLengthMm`.
 - Every tab's preview bitmap comes from the ONE shared raster helper
   `util/PdfRaster.renderPdfPageBitmap` (`composePage` lambda in, bitmap out) at
-  `PDF_PREVIEW_RENDER_SCALE` (2×) for sharpness on high-density displays. Its temp PDF is
-  deleted after rasterisation, and any failure returns null so the tab shows an error
-  instead of crashing.
+  `PDF_PREVIEW_RENDER_SCALE` (2×) for sharpness on high-density displays — its
+  `renderScale` parameter defaults to it, and only a live tuning drag passes 1 for its
+  draft frames. Its temp PDF is deleted after rasterisation, and any failure returns null
+  so the tab shows an error instead of crashing.
 
 ---
 

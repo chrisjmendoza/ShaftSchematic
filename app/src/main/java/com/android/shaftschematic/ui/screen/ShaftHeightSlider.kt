@@ -65,13 +65,17 @@ internal fun snappedLineThickness(rawCommit: Float): Float =
  * The "Line thickness" slider block shared by the schematic PDF options sheet and the
  * runout/wear options sheet. (Settings keeps its own layout — it adds a typed % field —
  * but shares [snappedLineThickness] and the Default button posture.) Drag is tracked
- * locally and committed once on release so drag frames don't write DataStore or
- * re-render an open PDF preview.
+ * locally and committed once on release so drag frames never write DataStore.
+ *
+ * [onDrag] is the visual-only channel a hosting preview opts into: the in-progress value
+ * on every frame, `null` once the drag ends. It reports the SAME units as [onCommit] (a
+ * thickness multiplier), and it is never a persistence path — see [PreviewTuning].
  */
 @Composable
 internal fun LineThicknessSlider(
     scale: Float,
     onCommit: (Float) -> Unit,
+    onDrag: (Float?) -> Unit = {},
 ) {
     var thicknessDrag by remember { mutableStateOf<Float?>(null) }
     Column {
@@ -82,7 +86,7 @@ internal fun LineThicknessSlider(
                 modifier = Modifier.weight(1f),
             )
             TextButton(
-                onClick = { thicknessDrag = null; onCommit(1f) },
+                onClick = { thicknessDrag = null; onDrag(null); onCommit(1f) },
                 enabled = scale != 1f || thicknessDrag != null,
             ) { Text("Default (100%)") }
         }
@@ -90,10 +94,11 @@ internal fun LineThicknessSlider(
             Text("50%", style = MaterialTheme.typography.bodySmall)
             Slider(
                 value = thicknessDrag ?: scale,
-                onValueChange = { thicknessDrag = it },
+                onValueChange = { thicknessDrag = it; onDrag(it) },
                 onValueChangeFinished = {
                     thicknessDrag?.let { onCommit(snappedLineThickness(it)) }
                     thicknessDrag = null
+                    onDrag(null)
                 },
                 valueRange = 0.5f..2.0f,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
@@ -110,8 +115,10 @@ internal fun LineThicknessSlider(
  * the threshold can be tuned against the drawing it changes instead of only from Settings.
  *
  * Never (0) = compression never triggers a break; Always (1) = any foreshortening breaks.
- * Steps of 5%. Drag is tracked locally and committed once on release so drag frames neither
- * write DataStore nor re-render an open PDF preview.
+ * Steps of 5%. Drag is tracked locally and committed once on release so drag frames never
+ * write DataStore. [onDrag] is the visual-only channel a hosting preview opts into — the
+ * in-progress value (already stepped, same units as [onCommit]) every frame, `null` on
+ * release. See [PreviewTuning].
  *
  * The long-span trigger is deliberately outside this control: a run that eats 220 pt of
  * paper at true scale is not hidden compression, so it keeps its break at every setting.
@@ -122,6 +129,7 @@ internal fun LineThicknessSlider(
 internal fun SBreakThresholdSlider(
     frac: Float,
     onCommit: (Float) -> Unit,
+    onDrag: (Float?) -> Unit = {},
 ) {
     var sBreakDrag by remember { mutableStateOf<Float?>(null) }
     val shown = sBreakDrag ?: frac
@@ -133,7 +141,7 @@ internal fun SBreakThresholdSlider(
                 modifier = Modifier.weight(1f),
             )
             TextButton(
-                onClick = { sBreakDrag = null; onCommit(PDF_SBREAK_THRESHOLD_DEFAULT) },
+                onClick = { sBreakDrag = null; onDrag(null); onCommit(PDF_SBREAK_THRESHOLD_DEFAULT) },
                 enabled = frac != PDF_SBREAK_THRESHOLD_DEFAULT || sBreakDrag != null,
             ) { Text("Default (${(PDF_SBREAK_THRESHOLD_DEFAULT * 100).roundToInt()}%)") }
         }
@@ -141,10 +149,15 @@ internal fun SBreakThresholdSlider(
             Text("Never", style = MaterialTheme.typography.bodySmall)
             Slider(
                 value = shown,
-                onValueChange = { sBreakDrag = (it * 20f).roundToInt() / 20f },
+                onValueChange = {
+                    val stepped = (it * 20f).roundToInt() / 20f
+                    sBreakDrag = stepped
+                    onDrag(stepped)
+                },
                 onValueChangeFinished = {
                     sBreakDrag?.let(onCommit)
                     sBreakDrag = null
+                    onDrag(null)
                 },
                 valueRange = 0f..1f,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
@@ -233,9 +246,15 @@ internal fun ShadeInPdfChecks(
  * the sizing-curve scale at the configured anchor heights on the schematic;
  * max(width-fit, curve scale) on the runout/consolidated sheets.
  *
- * Drag-local value, committed once on release (per-frame commits would re-render the PDF
- * preview every frame); commits near the standard height snap exactly to it; Reset
- * returns to standard.
+ * Drag-local value, committed once on release (a per-frame commit would mark the job dirty
+ * on every frame); commits near the standard height snap exactly to it; Reset returns to
+ * standard.
+ *
+ * [onDrag] is the visual-only channel a hosting preview opts into. It reports the value in
+ * the SAME units as [onCommit] — the stored `heightScale` multiplier, converted from the
+ * slider's drawn inches exactly as the commit does — but **without** the standard-height
+ * detent: snapping is a commit rule, and applying it per frame would make the drawing jump
+ * while the finger is still on the track. `null` once the drag ends. See [PreviewTuning].
  */
 @Composable
 internal fun ShaftHeightSlider(
@@ -243,6 +262,7 @@ internal fun ShaftHeightSlider(
     baseScale: Float,
     maxDiaMm: Float,
     onCommit: (Float) -> Unit,
+    onDrag: (Float?) -> Unit = {},
 ) {
     fun heightIn(frac: Float) = drawnShaftHeightPt(baseScale, frac, maxDiaMm) / 72f
     val minIn = heightIn(PROFILE_HEIGHT_SCALE_MIN)
@@ -260,7 +280,7 @@ internal fun ShaftHeightSlider(
                 modifier = Modifier.weight(1f),
             )
             TextButton(
-                onClick = { heightDrag = null; onCommit(1f) },
+                onClick = { heightDrag = null; onDrag(null); onCommit(1f) },
                 enabled = heightScale != 1f || heightDrag != null,
             ) { Text("Standard (${fmtIn(standardIn)})") }
         }
@@ -268,12 +288,16 @@ internal fun ShaftHeightSlider(
             Text(fmtIn(minIn), style = MaterialTheme.typography.bodySmall)
             Slider(
                 value = shownIn,
-                onValueChange = { heightDrag = it },
+                onValueChange = {
+                    heightDrag = it
+                    onDrag(heightFracForDrawnHeight(baseScale, it * 72f, maxDiaMm))
+                },
                 onValueChangeFinished = {
                     heightDrag?.let {
                         onCommit(snappedHeightScale(heightFracForDrawnHeight(baseScale, it * 72f, maxDiaMm)))
                     }
                     heightDrag = null
+                    onDrag(null)
                 },
                 valueRange = minIn..maxIn,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
@@ -317,7 +341,11 @@ private fun fmtIn(inches: Float): String = "%.2f″".format(inches)
  * the slider shows it LIVE during the drag (on-device report: the slider "gives no
  * indication" of its effect).
  *
- * Drag-local value, committed once on release, same posture as the height slider.
+ * Drag-local value, committed once on release, same posture as the height slider. [onDrag]
+ * is the visual-only channel a hosting preview opts into — the raw in-progress compression
+ * value (the SAME units as [onSetCompression]) every frame, `null` on release; the derived
+ * width floor is the consumer's business ([RunoutConfig.linerMinFracOfTrue]). See
+ * [PreviewTuning].
  */
 @Composable
 internal fun LinerCompressionControl(
@@ -326,6 +354,7 @@ internal fun LinerCompressionControl(
     estimateKeptFrac: (requestedFracOfTrue: Float) -> Float,
     onSetProportional: (Boolean) -> Unit,
     onSetCompression: (Float) -> Unit,
+    onDrag: (Float?) -> Unit = {},
 ) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -345,10 +374,11 @@ internal fun LinerCompressionControl(
             Text("0%", style = MaterialTheme.typography.bodySmall)
             Slider(
                 value = shown,
-                onValueChange = { compressionDrag = it },
+                onValueChange = { compressionDrag = it; onDrag(it) },
                 onValueChangeFinished = {
                     compressionDrag?.let(onSetCompression)
                     compressionDrag = null
+                    onDrag(null)
                 },
                 valueRange = 0f..1f,
                 enabled = !linersProportional,
