@@ -524,7 +524,8 @@ On-device request following the worn-sections review:
     `drawBodiesCompressedCenterBreak`, and the schematic footer's compression note;
     milder foreshortening prints a plain outline — a break on a barely-squeezed run was
     noise, on-device report). The threshold is `PdfPrefs.sBreakThresholdFrac` —
-    Settings → Drawing → "Body S-break", **default half**, 5% steps, **Never** (0) =
+    Settings → Drawing → "Body S-break" **and** the PDF Options sheet of this preview
+    (see *PDF Options sheet* below), **default half**, 5% steps, **Never** (0) =
     compression breaks off entirely, 100% = break on any foreshortening ("why lock it in
     one way when different users may want different outputs", on-device request); the
     classic long-span trigger `COMPRESS_TRIGGER_PT` is independent of the slider and
@@ -1050,13 +1051,16 @@ Both routes pass `RunoutWearOptionsSheet` as the lambda:
 | Control | Bound to |
 |---|---|
 | Line thickness (Slider 50–200%) | `vm.setLineThicknessScale()` |
+| Body S-break (Slider Never–Always, 5% steps) | `vm.setPdfSBreakThresholdFrac()` — only when `showSBreak` (see below) |
 | Shade Bodies (Checkbox) | `vm.setPdfShadedBodies()` |
 | Shade Tapers (Checkbox) | `vm.setPdfShadedTapers()` |
 | Shade Liners (Checkbox) | `vm.setPdfShadedLiners()` — locked (disabled, shown unchecked) when the document prints Ø values inside the profile; display-only, the pref is never rewritten |
 
-All four values are included in the `LaunchedEffect` key list so changing any option immediately re-renders the preview bitmap.
+All of these values are included in the `LaunchedEffect` key list so changing any option immediately re-renders the preview bitmap.
 
-Both option blocks are shared composables in `ui/screen/ShaftHeightSlider.kt` — `LineThicknessSlider` and `ShadeInPdfChecks` (heading + the three checkboxes + the `linerShadeLocked` behavior) — used by this sheet and by the schematic preview's `PdfOptionsSheet`, so an added option lands on both surfaces at once. Settings → PDF Export keeps its own copy of the checkbox rows: they sit in a `spacedBy(12.dp)` column with a padded heading, and adopting the sheets' tighter block would restyle that page. Same prefs, same setters.
+The option blocks are shared composables in `ui/screen/ShaftHeightSlider.kt` — `LineThicknessSlider`, `SBreakThresholdSlider`, and `ShadeInPdfChecks` (heading + the three checkboxes + the `linerShadeLocked` behavior) — used by this sheet and by the schematic preview's `PdfOptionsSheet`, so an added option lands on both surfaces at once. Settings → PDF Export keeps its own copy of the checkbox rows: they sit in a `spacedBy(12.dp)` column with a padded heading, and adopting the sheets' tighter block would restyle that page. Same prefs, same setters. `SBreakThresholdSlider` is additionally the Settings → Drawing control (that page adds only its explanatory caption), so the threshold reads and writes the one app-wide pref from every surface.
+
+**`showSBreak` is asymmetric across the four callers.** The Runout and Consolidated Output routes pass `showSBreak = true` with their collected `pdfSBreakThresholdFrac`; the Wear and Undercut routes leave it at its `false` default, because those documents never draw compression breaks and the control would be inert noise there. The schematic's `PdfOptionsSheet` shows it unconditionally.
 
 The Consolidated Output tab passes `linerShadeLocked = consolidatedSheetHasInProfileValues(…)` computed from the same inputs its composer call gets (wear record, resolved component ids, the elected variant's `includeWearInfo`, the blank-draft flag), so the checkbox can never show a shade the sheet won't draw. The other three callers (Runout, Wear, Undercut) leave the parameter at its `false` default.
 

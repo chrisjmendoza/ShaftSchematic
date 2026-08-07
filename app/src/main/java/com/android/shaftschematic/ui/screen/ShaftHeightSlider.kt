@@ -34,6 +34,7 @@ import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.hasKeyway
 import com.android.shaftschematic.model.maxOuterDiaMm
+import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -101,6 +102,64 @@ internal fun LineThicknessSlider(
         }
     }
 }
+
+/**
+ * The "Body S-break" threshold slider, shared by Settings → Drawing and both PDF options
+ * sheets (`PdfOptionsSheet` on the schematic preview, `RunoutWearOptionsSheet` on the
+ * runout / consolidated previews) — ONE `PdfPrefs.sBreakThresholdFrac` behind all three, so
+ * the threshold can be tuned against the drawing it changes instead of only from Settings.
+ *
+ * Never (0) = compression never triggers a break; Always (1) = any foreshortening breaks.
+ * Steps of 5%. Drag is tracked locally and committed once on release so drag frames neither
+ * write DataStore nor re-render an open PDF preview.
+ *
+ * The long-span trigger is deliberately outside this control: a run that eats 220 pt of
+ * paper at true scale is not hidden compression, so it keeps its break at every setting.
+ * The explanatory caption belongs to the caller — Settings carries it, the sheets stay
+ * compact.
+ */
+@Composable
+internal fun SBreakThresholdSlider(
+    frac: Float,
+    onCommit: (Float) -> Unit,
+) {
+    var sBreakDrag by remember { mutableStateOf<Float?>(null) }
+    val shown = sBreakDrag ?: frac
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Body S-break  ${fmtSBreakThreshold(shown)}",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = { sBreakDrag = null; onCommit(PDF_SBREAK_THRESHOLD_DEFAULT) },
+                enabled = frac != PDF_SBREAK_THRESHOLD_DEFAULT || sBreakDrag != null,
+            ) { Text("Default (${(PDF_SBREAK_THRESHOLD_DEFAULT * 100).roundToInt()}%)") }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Never", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { sBreakDrag = (it * 20f).roundToInt() / 20f },
+                onValueChangeFinished = {
+                    sBreakDrag?.let(onCommit)
+                    sBreakDrag = null
+                },
+                valueRange = 0f..1f,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+            )
+            Text("Always", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/**
+ * "Never" at 0, else the threshold as "below N%" of true length — ONE formatter for every
+ * site that shows `PdfPrefs.sBreakThresholdFrac`.
+ */
+internal fun fmtSBreakThreshold(v: Float): String =
+    if (v <= 0f) "Never" else "below ${(v * 100).roundToInt()}%"
 
 /**
  * The "Shade in PDF" heading + Bodies / Tapers / Liners checkbox group shared by the two

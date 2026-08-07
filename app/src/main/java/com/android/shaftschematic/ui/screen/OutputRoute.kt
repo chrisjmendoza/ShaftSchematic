@@ -591,6 +591,8 @@ fun OutputRoute(
                     pdfShadedLiners = pdfShadedLiners,
                     vm = vm,
                     linerShadeLocked = linerShadeLocked,
+                    showSBreak = true,
+                    sBreakThresholdFrac = pdfSBreakThresholdFrac,
                 )
             },
         )

@@ -104,6 +104,7 @@ import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeRunoutPdf
+import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
@@ -554,6 +555,8 @@ fun RunoutRoute(
                     pdfShadedTapers = pdfShadedTapers,
                     pdfShadedLiners = pdfShadedLiners,
                     vm = vm,
+                    showSBreak = true,
+                    sBreakThresholdFrac = pdfSBreakThresholdFrac,
                 )
             },
         )
@@ -1012,6 +1015,14 @@ internal fun RunoutWearOptionsSheet(
     vm: ShaftViewModel,
     /** Locks the "Liners" shade row — see [ShadeInPdfChecks]. */
     linerShadeLocked: Boolean = false,
+    /**
+     * Shows the shared "Body S-break" threshold slider. On for the runout and consolidated
+     * sheets, which draw compression breaks; off for the wear and undercut documents, whose
+     * profiles never break, so the control would be inert noise there.
+     */
+    showSBreak: Boolean = false,
+    /** The app-wide `PdfPrefs.sBreakThresholdFrac`; read only when [showSBreak]. */
+    sBreakThresholdFrac: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
 ) {
     // Scrollable + inset-padded: without its own scroll a short screen clips the bottom
     // rows mid-checkbox behind the navigation bar (same posture as PdfOptionsSheet).
@@ -1037,6 +1048,20 @@ internal fun RunoutWearOptionsSheet(
         Spacer(Modifier.height(12.dp))
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
+
+        // ── Body S-break ─────────────────────────────────────────────────────
+        // The same app-wide `PdfPrefs.sBreakThresholdFrac` Settings → Drawing sets —
+        // here so the threshold can be judged against the drawing it changes.
+        if (showSBreak) {
+            SBreakThresholdSlider(
+                frac = sBreakThresholdFrac,
+                onCommit = { vm.setPdfSBreakThresholdFrac(it) },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+        }
 
         // ── Shade in PDF ─────────────────────────────────────────────────────
         ShadeInPdfChecks(

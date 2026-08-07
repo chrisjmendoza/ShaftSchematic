@@ -8,6 +8,26 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-06
 
+### feat(ui): Body S-break joins the PDF Options sheets
+
+On-device request: "Can we add S breaks to pdf preview settings too?" The threshold was
+reachable only from Settings → Drawing, which meant leaving the drawing to change the
+setting that shapes it. It now also sits on the per-document **PDF Options** sheets —
+directly under Line thickness, exactly the way Line thickness already lives in both
+places — on the schematic preview (`PdfOptionsSheet`) and the runout / consolidated
+previews (`RunoutWearOptionsSheet(showSBreak = true)`). The wear and undercut sheets,
+which share that composable, leave `showSBreak` at its `false` default: their documents
+never draw compression breaks, so the control would be inert there.
+
+ONE shared `SBreakThresholdSlider` (`ui/screen/ShaftHeightSlider.kt`, beside
+`LineThicknessSlider`) backs all three surfaces, with the "Never / below N%" formatter
+living next to it; Settings → Drawing now renders that shared control plus its
+explanatory caption instead of its own copy of the slider. One app-wide pref
+(`PdfPrefs.sBreakThresholdFrac`) throughout, so a move on any surface is the same move —
+and every preview already keys its re-render on `vm.pdfSBreakThresholdFrac`, so the
+sheet redraws under the open options sheet. Pure UI wiring over a tested pref: no
+geometry, persistence, or composer change.
+
 ### fix(settings): Default drawing size + Body S-break move up to the main Settings page
 
 On-device report: "The S break is way too deep in settings, it's under pdf export. Default
