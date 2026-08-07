@@ -76,11 +76,12 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     padded heading); the prefs and setters are identical.
   - The sheet's content is taller than a phone screen, so it carries its own
     `verticalScroll` plus `navigationBarsPadding()` — without them the bottom rows clip
-    mid-checkbox behind the navigation bar. Its height is capped by
-    `tuningSheetMaxHeightDp` (see **Tuning layout** below) — this sheet tunes the page
-    live, so it stops below the page strip instead of taking the historical 78% of the
-    screen. Both caps keep the sheet clear of the status bar, which would otherwise leave
-    no edge to swipe it back down by (on-device report).
+    mid-checkbox behind the navigation bar. Its height cap arrives as a `maxHeightDp`
+    parameter computed by the hosting screen from `tuningSheetMaxHeightDp` (see **Tuning
+    layout** below) — this sheet tunes the page live, so it stops below the page strip
+    instead of taking the historical 78% of the screen, and only the screen knows the strip.
+    Both caps keep the sheet clear of the status bar, which would otherwise leave no edge to
+    swipe it back down by (on-device report).
 - **Live tuning:** the four tuning sliders — Line thickness, Body S-break, Shaft height,
   Liner compression — reshape the page **while the finger is still on the track**
   ("see the differences without choosing, closing menu, opening menu, choosing" —
@@ -104,19 +105,48 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     Preview area lighten up on moving a slider but I can't see anything. I need to close
     the menu to see the changes." — on-device report). While the sheet is open the preview
     switches to the **tuning layout**, whose pure math lives in `ui/screen/PreviewTuning.kt`:
-    - The PDF pages are LANDSCAPE, so the whole drawing fits a strip only
+    - The PDF pages are LANDSCAPE, so a whole page fits a strip only
       `screenWidthDp × (PDF_PAGE_HEIGHT_PT / PDF_PAGE_WIDTH_PT)` tall
       (`fitWidthPageHeightDp`, never a magic ratio). The Canvas draws the page fit-width and
       **top-aligned** under the app bar instead of centered-and-fitted.
-    - The sheet is capped at `tuningSheetMaxHeightDp` = screen height − strip −
-      `PREVIEW_TOP_CHROME_DP` (88 dp: status bar + app bar), clamped to
-      `[TUNING_SHEET_MIN_FRAC 40%, PREVIEW_SHEET_MAX_FRAC 78%]` of the screen. On a
-      393 × 851 dp phone: strip 303.7 dp, sheet 459.3 dp — together with the chrome exactly
-      the screen. The sheet scrolls internally, so no content is lost.
+    - **The strip carries the page's ink band, not the whole sheet.** A composed page rarely
+      inks its full height — the top margin plus unused rail room ran to ~30% of the page,
+      so the drawing sat low in the strip under a band of white while items below the shaft
+      fell off ("The shaft rendering has a LOT of white space on top and we're losing some
+      of the items under the shaft" — on-device report). `util/PdfInkBounds.kt` measures the
+      rendered bitmap's first and last inked rows (`InkBand`, padded 2.5% a side; one row at
+      a time through `getPixels`, sampled every `height/200` rows and `width/256` pixels, ink
+      = any channel < 0xF0) and the strip is `fitWidthPageHeightDp × InkBand.frac`. Ink is
+      never cropped — the OAL rail and the footer are ink, so they are inside the band by
+      construction; only paper is. The band is measured on **sharp (non-draft) passes only**,
+      so a slider drag never resizes the strip or the sheet under the finger, and a page with
+      no band yet draws whole.
+    - **The pair is strip-first, cap-derived.** `tuningPageStripHeightDp(screenWidth,
+      screenHeight, sheetChromeDp, inkFrac)` then `tuningSheetMaxHeightDp(screenHeight,
+      strip, sheetChromeDp)` = screen height − strip − `PREVIEW_TOP_CHROME_DP` (88 dp: status
+      bar + app bar) − sheet chrome, clamped to `[TUNING_SHEET_MIN_FRAC 40%,
+      PREVIEW_SHEET_MAX_FRAC 78%]` of the screen. The cap takes the strip as an argument
+      rather than recomputing it, so the two can never disagree.
+    - **The sheet's own chrome is budgeted.** `heightIn` caps the sheet's CONTENT column;
+      M3 stacks its drag handle (4 dp bar + 22 dp padding a side = `TUNING_SHEET_CHROME_DP`
+      48 dp) and the sheet's bottom window inset OUTSIDE that cap, so the real sheet stood
+      ~48 dp + nav bar taller than the budget and covered the bottom of the page (on-device
+      report). Both draw sites pass `TUNING_SHEET_CHROME_DP + WindowInsets.navigationBars`
+      bottom. On a 393 × 851 dp phone with a 48 dp nav bar: strip 303.7 dp, sheet 363.3 dp —
+      with the chrome, exactly the screen. The sheet scrolls internally, so no content is
+      lost. Where `Configuration.screenHeightDp` excludes the system bars the cap comes out
+      conservative: a slightly shorter sheet, never a covered page.
     - **Clamp order: the sheet keeps its floor, the strip yields the remainder**
       (`tuningPageStripHeightDp`). On a short/wide screen the page fits to the shrunken
       strip — it is zoomable once the sheet closes; the sliders are not usable at all if
       crushed.
+    - **One draw helper.** `DrawScope.drawPageBand(bitmap, band, stripHeightPx)`
+      (`PreviewTuning.kt`) crops to the band, fits to strip width/height, centers
+      horizontally and pins to the top. Both strip sites call it — the schematic preview's
+      Canvas and `PdfPreviewOverlay`'s (which swaps its `Image` for a `Canvas` in strip
+      layout, same modifier chain plus an explicit `contentDescription`) — so they cannot
+      drift. The non-strip path is untouched: the normal preview still shows the real page,
+      margins and all.
     - Opening the sheet **resets zoom/pan** to fit. Deliberate: an inspection zoom would
       put the strip off-screen exactly when the sliders need it visible — predictable over
       preserved. Closing returns the normal layout (centered, pinch 0.5×–8×, double-tap

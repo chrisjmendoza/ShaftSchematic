@@ -72,8 +72,10 @@ import com.android.shaftschematic.ui.nav.appVersionFromContext
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.createPdfInTree
+import com.android.shaftschematic.util.inkBand
 import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
@@ -160,6 +162,9 @@ fun OutputRoute(
     var blankDraft by rememberSaveable { mutableStateOf(false) }
     var showPreview by rememberSaveable { mutableStateOf(false) }
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    // Where the composed sheet carries ink — the tuning strip crops to it so blank paper
+    // never takes room from the drawing. Measured on sharp passes only (see the loop).
+    var previewInkBand by remember { mutableStateOf<InkBand?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
     var wornSectionDialog by remember { mutableStateOf<OutputWornSectionTarget?>(null) }
     // Live slider drags — on this tab's own Shaft height / Liner compression controls and
@@ -377,8 +382,14 @@ fun OutputRoute(
             previousWasDraft = inputs.draft
             if (!quiet) previewLoading = true
             val prefsSnapshot = tunedPdfPrefs(vm.currentPdfPrefs, inputs.sBreakThresholdFrac)
-            val bmp = withContext(Dispatchers.IO) {
-                renderPdfPageBitmap(ctx, renderScale = previewRenderScale(inputs.draft)) { page ->
+            // The ink band is measured on the raw raster, and only on a sharp (non-draft)
+            // pass: a drag frame that resized the strip — and with it the sheet cap —
+            // would shuffle the layout under a moving finger.
+            val (bmp, band) = withContext(Dispatchers.IO) {
+                val raster = renderPdfPageBitmap(
+                    ctx,
+                    renderScale = previewRenderScale(inputs.draft),
+                ) { page ->
                     composeConsolidated(
                         page, inputs.variant, inputs.spec, inputs.config, inputs.project,
                         inputs.unit, prefsSnapshot, inputs.resolved,
@@ -386,8 +397,10 @@ fun OutputRoute(
                         inputs.blankValues,
                     )
                 }
+                raster to raster?.takeIf { !inputs.draft }?.inkBand()
             }
             previewBitmap = bmp?.asImageBitmap()
+            if (!inputs.draft) previewInkBand = band
             previewLoading = false
         }
     }
@@ -669,6 +682,7 @@ fun OutputRoute(
                 )
             },
             sheetTunesPage = true,
+            inkBand = previewInkBand,
         )
     }
 }

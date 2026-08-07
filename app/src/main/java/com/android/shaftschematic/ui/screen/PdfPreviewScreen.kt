@@ -13,7 +13,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -71,6 +74,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.model.ProjectInfo
@@ -82,7 +86,9 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.inkBand
 import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import kotlinx.coroutines.Dispatchers
@@ -162,6 +168,9 @@ fun PdfPreviewScreen(
     }
 
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    // Where the composed page actually carries ink — the tuning strip crops to it so blank
+    // paper never takes room from the drawing. Measured on sharp passes only (see below).
+    var inkBand by remember { mutableStateOf<InkBand?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showOptions by remember { mutableStateOf(false) }
@@ -210,8 +219,14 @@ fun PdfPreviewScreen(
             // Snapshot on the main thread before switching to IO.
             val pdfPrefsSnapshot = tunedPdfPrefs(vm.currentPdfPrefs, inputs.sBreakThresholdFrac)
             val versionSnapshot = appVersionName(ctx)
-            val bmp = withContext(Dispatchers.IO) {
-                renderPdfPageBitmap(ctx, renderScale = previewRenderScale(inputs.draft)) { page ->
+            // The ink band is measured on the raw raster, and only on a sharp (non-draft)
+            // pass: a drag frame that resized the strip — and with it the sheet cap — would
+            // shuffle the layout under a moving finger.
+            val (bmp, band) = withContext(Dispatchers.IO) {
+                val raster = renderPdfPageBitmap(
+                    ctx,
+                    renderScale = previewRenderScale(inputs.draft),
+                ) { page ->
                     composeShaftPdf(
                         page = page,
                         spec = inputs.spec,
@@ -227,9 +242,11 @@ fun PdfPreviewScreen(
                         linerMinFracOfTrue = inputs.linerMinFracOfTrue,
                     )
                 }
+                raster to raster?.takeIf { !inputs.draft }?.inkBand()
             }
             if (bmp != null) {
                 previewBitmap = bmp.asImageBitmap()
+                if (!inputs.draft) inkBand = band
             } else {
                 errorMessage = "Could not render preview."
             }
@@ -243,16 +260,28 @@ fun PdfPreviewScreen(
     val offset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
 
     // ── Tuning layout ─────────────────────────────────────────────────────────
-    // While the options sheet is open the page moves into a fit-width strip pinned under
-    // the app bar and the sheet is capped just below it, so a slider's effect is visible
-    // as it is dragged ("I can see the PDF Preview area lighten up on moving a slider but
-    // I can't see anything" — on-device report). Opening the sheet RESETS zoom/pan:
-    // predictable beats preserved, since an inspection zoom would hide the strip.
+    // While the options sheet is open the page moves into a strip pinned under the app bar
+    // and the sheet is capped just below it, so a slider's effect is visible as it is
+    // dragged ("I can see the PDF Preview area lighten up on moving a slider but I can't
+    // see anything" — on-device report). The strip carries the page's INK BAND, so the
+    // drawing gets the room the blank top margin used to hold. The sheet's drag handle and
+    // its navigation-bar inset stack OUTSIDE the content cap, so they are budgeted here;
+    // strip and cap come from one set of inputs and cannot disagree. Opening the sheet
+    // RESETS zoom/pan: predictable beats preserved, since a zoom would hide the strip.
     val configuration = LocalConfiguration.current
+    val navBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().value
+    val sheetChromeDp = TUNING_SHEET_CHROME_DP + navBottomDp
     val stripHeightDp = tuningPageStripHeightDp(
         configuration.screenWidthDp.toFloat(),
         configuration.screenHeightDp.toFloat(),
+        sheetChromeDp,
+        inkBand?.frac ?: 1f,
     )
+    val maxSheetHeight = tuningSheetMaxHeightDp(
+        configuration.screenHeightDp.toFloat(),
+        stripHeightDp,
+        sheetChromeDp,
+    ).dp
     LaunchedEffect(showOptions) {
         if (showOptions) {
             scale.snapTo(1f)
@@ -393,38 +422,35 @@ fun PdfPreviewScreen(
                             .then(gestures)
                             .testTag("pdf_preview_canvas")
                     ) {
-                        val imgW = currentBitmap.width.toFloat()
-                        val imgH = currentBitmap.height.toFloat()
-
-                        // Fit the PDF page to the canvas at zoom=1, centered — or, while
-                        // the options sheet is open, into the top strip the sheet was
-                        // sized to leave free (fit-width, top-aligned; on a short screen
-                        // the strip height wins and the page fits to that instead).
-                        val fitScale = if (showOptions) {
-                            minOf(size.width / imgW, stripHeightDp.dp.toPx() / imgH)
-                        } else {
-                            minOf(size.width / imgW, size.height / imgH)
-                        }
-                        val fittedW = imgW * fitScale
-                        val fittedH = imgH * fitScale
-                        val baseLeft = (size.width - fittedW) / 2f
-                        val baseTop = if (showOptions) 0f else (size.height - fittedH) / 2f
-
                         withTransform({
                             translate(offset.value.x, offset.value.y)
                             scale(scale.value, scale.value, Offset.Zero)
                         }) {
-                            drawImage(
-                                image = currentBitmap,
-                                dstOffset = androidx.compose.ui.unit.IntOffset(
-                                    baseLeft.toInt(),
-                                    baseTop.toInt()
-                                ),
-                                dstSize = androidx.compose.ui.unit.IntSize(
-                                    fittedW.toInt(),
-                                    fittedH.toInt()
+                            if (showOptions) {
+                                // Tuning layout: the drawing, cropped to its ink band,
+                                // fitted into the strip the sheet was sized to leave free
+                                // and top-aligned under the app bar.
+                                drawPageBand(currentBitmap, inkBand, stripHeightDp.dp.toPx())
+                            } else {
+                                // Normal preview: the whole page — real paper, blank
+                                // margins included — fitted to the canvas and centered.
+                                val imgW = currentBitmap.width.toFloat()
+                                val imgH = currentBitmap.height.toFloat()
+                                val fitScale = minOf(size.width / imgW, size.height / imgH)
+                                val fittedW = imgW * fitScale
+                                val fittedH = imgH * fitScale
+                                drawImage(
+                                    image = currentBitmap,
+                                    dstOffset = androidx.compose.ui.unit.IntOffset(
+                                        ((size.width - fittedW) / 2f).toInt(),
+                                        ((size.height - fittedH) / 2f).toInt()
+                                    ),
+                                    dstSize = androidx.compose.ui.unit.IntSize(
+                                        fittedW.toInt(),
+                                        fittedH.toInt()
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -501,6 +527,7 @@ fun PdfPreviewScreen(
                 pdfShadedLiners = pdfShadedLiners,
                 pdfBlankDraft = pdfBlankDraft,
                 tuning = tuning,
+                maxHeightDp = maxSheetHeight,
             )
         }
     }
@@ -572,20 +599,19 @@ private fun PdfOptionsSheet(
      * unchanged and nothing persists on a drag frame.
      */
     tuning: PreviewTuning,
+    /**
+     * Cap for this content column, computed by the screen from the SAME inputs as the page
+     * strip ([tuningSheetMaxHeightDp]) so sheet and strip can never disagree. This sheet
+     * tunes the page live, so it must not cover it.
+     */
+    maxHeightDp: Dp,
 ) {
     // Scrollable + inset-padded: the sheet's content is taller than a phone screen, so
     // without its own scroll the bottom rows clip mid-checkbox behind the navigation bar.
-    // Height is capped to what is left under the fit-width page strip — this sheet tunes
-    // the page live, so it must not cover it. See [tuningSheetMaxHeightDp].
-    val configuration = LocalConfiguration.current
-    val maxSheetHeight = tuningSheetMaxHeightDp(
-        configuration.screenWidthDp.toFloat(),
-        configuration.screenHeightDp.toFloat(),
-    ).dp
     Column(
         Modifier
             .fillMaxWidth()
-            .heightIn(max = maxSheetHeight)
+            .heightIn(max = maxHeightDp)
             .verticalScroll(rememberScrollState())
             .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),

@@ -461,10 +461,10 @@ private val helpSections: List<HelpSection> = listOf(
                     "The picture sharpens when you let go, and only then is the value saved.\n" +
                     "• The page stays visible above the menu while you adjust. Opening the " +
                     "options sheet moves the drawing into a strip across the top of the " +
-                    "screen — the sheets are landscape, so the whole page fits there — and " +
-                    "the menu stops just below it. Any zoom you had is reset so the strip is " +
-                    "in view; close the menu and the page fills the screen again, pinch and " +
-                    "double-tap as before."
+                    "screen — trimmed to the drawing itself, so blank paper doesn't take up " +
+                    "the room — and the menu stops just below it. Any zoom you had is reset " +
+                    "so the strip is in view; close the menu and the whole page fills the " +
+                    "screen again, pinch and double-tap as before."
             ),
         )
     ),

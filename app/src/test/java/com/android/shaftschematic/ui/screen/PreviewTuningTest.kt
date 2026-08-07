@@ -84,9 +84,15 @@ class PreviewTuningTest {
 
     // ── Tuning layout: page strip on top, sheet capped below it ──────────────
 
+    /**
+     * The M3 drag handle plus a typical navigation-bar inset — the sheet furniture that
+     * stacks OUTSIDE the content column's cap and so has to be budgeted for.
+     */
+    private val chrome = TUNING_SHEET_CHROME_DP + 48f
+
     @Test
     fun `the page strip is the landscape page fitted to the screen width`() {
-        // 612 / 792 of the width — the whole drawing, no cropping.
+        // 612 / 792 of the width — the whole sheet, before the ink band crops it.
         assertEquals(303.68f, fitWidthPageHeightDp(393f), 0.01f)
         assertEquals(0.7727f, fitWidthPageHeightDp(1f), 1e-3f)
     }
@@ -96,15 +102,44 @@ class PreviewTuningTest {
         // 1080 x 2340 @ 2.75x ≈ 393 x 851 dp.
         val w = 393f
         val h = 851f
-        val strip = tuningPageStripHeightDp(w, h)
-        val sheet = tuningSheetMaxHeightDp(w, h)
+        val strip = tuningPageStripHeightDp(w, h, chrome)
+        val sheet = tuningSheetMaxHeightDp(h, strip, chrome)
         assertEquals(303.68f, strip, 0.01f)
-        assertEquals(459.32f, sheet, 0.01f)
-        // Strip + chrome + sheet accounts for the screen: nothing of the page is covered.
-        assertEquals(h, strip + PREVIEW_TOP_CHROME_DP + sheet, 0.01f)
+        assertEquals(363.32f, sheet, 0.01f)
+        // Chrome + strip + sheet + the sheet's own furniture account for the screen:
+        // nothing of the page is covered.
+        assertEquals(h, PREVIEW_TOP_CHROME_DP + strip + sheet + chrome, 0.01f)
         // …and the sheet is well clear of both clamps.
         assertTrue(sheet > h * TUNING_SHEET_MIN_FRAC)
         assertTrue(sheet < h * PREVIEW_SHEET_MAX_FRAC)
+    }
+
+    @Test
+    fun `the sheet's own chrome comes out of the sheet, never out of the identity`() {
+        val w = 393f
+        val h = 851f
+        val lean = tuningPageStripHeightDp(w, h, sheetChromeDp = 0f)
+        val fat = tuningPageStripHeightDp(w, h, chrome)
+        // Neither is clamped here, so the strip is the same fit-width page either way…
+        assertEquals(lean, fat, 0.01f)
+        // …and the extra furniture is paid for entirely by the sheet.
+        val leanSheet = tuningSheetMaxHeightDp(h, lean, 0f)
+        val fatSheet = tuningSheetMaxHeightDp(h, fat, chrome)
+        assertEquals(chrome, leanSheet - fatSheet, 0.01f)
+        assertEquals(h, PREVIEW_TOP_CHROME_DP + fat + fatSheet + chrome, 0.01f)
+    }
+
+    @Test
+    fun `the strip shortens with the page's ink band`() {
+        val w = 393f
+        val h = 851f
+        val whole = tuningPageStripHeightDp(w, h, chrome, inkFrac = 1f)
+        val cropped = tuningPageStripHeightDp(w, h, chrome, inkFrac = 0.6f)
+        assertEquals(whole * 0.6f, cropped, 0.01f)
+        // The room the blank paper gave up goes to the sheet.
+        assertTrue(tuningSheetMaxHeightDp(h, cropped, chrome) > tuningSheetMaxHeightDp(h, whole, chrome))
+        // A degenerate band cannot collapse the strip to nothing.
+        assertEquals(whole * 0.05f, tuningPageStripHeightDp(w, h, chrome, inkFrac = 0f), 0.01f)
     }
 
     @Test
@@ -113,28 +148,29 @@ class PreviewTuningTest {
         val w = 731f
         val h = 411f
         assertTrue(fitWidthPageHeightDp(w) > h)
-        val sheet = tuningSheetMaxHeightDp(w, h)
-        val strip = tuningPageStripHeightDp(w, h)
+        val strip = tuningPageStripHeightDp(w, h, chrome)
+        val sheet = tuningSheetMaxHeightDp(h, strip, chrome)
         // Sheet keeps its floor; the strip takes the remainder (the page fits to it).
         assertEquals(h * TUNING_SHEET_MIN_FRAC, sheet, 0.01f)
-        assertEquals(158.6f, strip, 0.01f)
+        assertEquals(62.6f, strip, 0.01f)
         assertTrue(strip > 0f)
         assertTrue(strip < fitWidthPageHeightDp(w))
-        assertEquals(h, strip + PREVIEW_TOP_CHROME_DP + sheet, 0.01f)
+        assertEquals(h, PREVIEW_TOP_CHROME_DP + strip + sheet + chrome, 0.01f)
     }
 
     @Test
     fun `a very tall screen still leaves an edge to swipe the sheet down by`() {
         val w = 300f
         val h = 2000f
-        val sheet = tuningSheetMaxHeightDp(w, h)
-        assertEquals(h * PREVIEW_SHEET_MAX_FRAC, sheet, 0.01f)
+        val strip = tuningPageStripHeightDp(w, h, chrome)
+        assertEquals(h * PREVIEW_SHEET_MAX_FRAC, tuningSheetMaxHeightDp(h, strip, chrome), 0.01f)
         // The strip is not stretched to fill the surplus — it stays fit-width.
-        assertEquals(fitWidthPageHeightDp(w), tuningPageStripHeightDp(w, h), 0.01f)
+        assertEquals(fitWidthPageHeightDp(w), strip, 0.01f)
     }
 
     @Test
     fun `the strip never goes negative on a tiny screen`() {
-        assertTrue(tuningPageStripHeightDp(200f, 120f) >= 0f)
+        assertTrue(tuningPageStripHeightDp(200f, 120f, chrome) >= 0f)
+        assertTrue(tuningPageStripHeightDp(731f, 200f, chrome, inkFrac = 0.5f) >= 0f)
     }
 }

@@ -8,6 +8,40 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-07
 
+### fix(preview): the tuning strip shows the drawing, and the menu stops clear of it
+
+On-device report against the tuning layout: the sheet still covered the bottom ~90 dp of
+the page (diameter callouts and footer gone), and the strip spent its top third on blank
+paper — "The shaft rendering has a LOT of white space on top and we're losing some of the
+items under the shaft. Can we move it up a bit to clear some of that white space or perhaps
+bring the menu down just a little more?" Both, as it turns out.
+
+**The sheet's own chrome is now budgeted.** `heightIn` caps a bottom sheet's CONTENT
+column; M3 stacks its drag handle (4 dp bar + 22 dp padding a side = 48 dp) and the sheet's
+bottom window inset OUTSIDE that cap, so the real sheet stood ~48 dp plus a navigation bar
+taller than the layout math believed and overlapped the page. `TUNING_SHEET_CHROME_DP` plus
+the measured `WindowInsets.navigationBars` bottom now comes out of the budget at both
+preview surfaces.
+
+**The strip crops to the page's ink band.** A composed page rarely inks its full height —
+the top margin plus unused rail room ran to about a third of the page. New
+`util/PdfInkBounds.kt` measures the rendered bitmap's first and last inked rows (one row at
+a time through `getPixels`, sampled every `height/200` rows and `width/256` pixels, ink =
+any channel below 0xF0, padded 2.5% a side) and the strip is sized and drawn to that band.
+Ink is never cropped — the OAL rail and the footer are ink, so they are inside the band by
+construction; only paper is. The band is measured on **sharp passes only**, so a slider drag
+never resizes the strip or the sheet under a moving finger.
+
+The pure pair was restructured **strip first, cap derived from the strip**
+(`tuningPageStripHeightDp` → `tuningSheetMaxHeightDp`), which retires the old circular
+definition and guarantees the two can never disagree; a new `drawPageBand` in
+`ui/screen/PreviewTuning.kt` is the ONE strip draw implementation for both sites (the
+overlay swaps its `Image` for a `Canvas` in strip layout), and the sheet cap moved out of
+`RunoutWearOptionsSheet` into `PdfPreviewOverlay`, which is the only thing that knows the
+strip. On a 393 × 851 dp phone with a 48 dp navigation bar: a 303.7 dp strip over a 363.3 dp
+sheet — with the chrome, exactly the screen. View-layer only: no composer, no preference,
+no `RunoutConfig` touched. `PreviewTuningTest` and the new `PdfInkBoundsTest` pin the math.
+
 ### fix(preview): the page stays visible above the tune menu
 
 On-device report against the live-tuning drop: "It may render live but the menu with the

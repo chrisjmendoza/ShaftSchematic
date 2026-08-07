@@ -19,6 +19,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -86,6 +89,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
@@ -120,7 +125,9 @@ import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
+import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.inkBand
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
@@ -177,6 +184,9 @@ fun RunoutRoute(
     // Plain remember: an ImageBitmap is not saveable (crashes onSaveInstanceState),
     // and the LaunchedEffect below regenerates it anyway.
     var previewBitmap  by remember { mutableStateOf<ImageBitmap?>(null) }
+    // Where the composed page carries ink — the tuning strip crops to it so blank paper
+    // never takes room from the drawing. Measured on sharp passes only (see the loop).
+    var previewInkBand by remember { mutableStateOf<InkBand?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
     // Live slider drags on the preview's options sheet — visual-only overrides, never a
     // write. See [PreviewTuning].
@@ -269,16 +279,24 @@ fun RunoutRoute(
             previousWasDraft = inputs.draft
             if (!quiet) previewLoading = true
             val prefsSnapshot = tunedPdfPrefs(vm.currentPdfPrefs, inputs.sBreakThresholdFrac)
-            val bmp = withContext(Dispatchers.IO) {
-                renderPdfPageBitmap(ctx, renderScale = previewRenderScale(inputs.draft)) { page ->
+            // The ink band is measured on the raw raster, and only on a sharp (non-draft)
+            // pass: a drag frame that resized the strip — and with it the sheet cap —
+            // would shuffle the layout under a moving finger.
+            val (bmp, band) = withContext(Dispatchers.IO) {
+                val raster = renderPdfPageBitmap(
+                    ctx,
+                    renderScale = previewRenderScale(inputs.draft),
+                ) { page ->
                     composeClassicRunout(
                         page, inputs.spec, inputs.config, inputs.project, inputs.unit,
                         prefsSnapshot, inputs.resolved, inputs.lineThicknessScale,
                         inputs.readings, inputs.blankValues,
                     )
                 }
+                raster to raster?.takeIf { !inputs.draft }?.inkBand()
             }
             previewBitmap = bmp?.asImageBitmap()
+            if (!inputs.draft) previewInkBand = band
             previewLoading = false
         }
     }
@@ -597,6 +615,7 @@ fun RunoutRoute(
                 )
             },
             sheetTunesPage = true,
+            inkBand = previewInkBand,
         )
     }
 
@@ -948,12 +967,16 @@ internal fun openRunoutPdf(context: Context, uri: Uri) {
  *                      taps the Tune icon. When null, no Tune icon is shown.
  * @param sheetTunesPage Whether [optionsSheet] reshapes THIS page live. When true the open
  *                      sheet switches the preview to the tuning layout — the page redrawn
- *                      as a fit-width strip pinned under the toolbar, zoom/pan reset, and
- *                      the sheet's own cap ([tuningSheetMaxHeightDp]) keeping it below the
- *                      strip — and the sheet's scrim comes off, because dimming the page
- *                      being judged is exactly what the layout exists to prevent (the black
- *                      surround already separates strip from sheet). Wear and undercut
- *                      leave it false: their sheets tune nothing.
+ *                      as a strip pinned under the toolbar, cropped to its ink, zoom/pan
+ *                      reset, and the sheet capped ([tuningSheetMaxHeightDp]) to what is
+ *                      left below the strip — and the sheet's scrim comes off, because
+ *                      dimming the page being judged is exactly what the layout exists to
+ *                      prevent (the black surround already separates strip from sheet).
+ *                      Wear and undercut leave it false: their sheets tune nothing.
+ * @param inkBand       Where [bitmap] carries ink, from the route's render loop. The strip
+ *                      crops to it so the page's blank top margin does not take room from
+ *                      the drawing; null shows the whole page. Measured on sharp passes
+ *                      only, so the strip never resizes under a moving finger.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -965,17 +988,37 @@ internal fun PdfPreviewOverlay(
     onExport: () -> Unit,
     optionsSheet: (@Composable () -> Unit)? = null,
     sheetTunesPage: Boolean = false,
+    inkBand: InkBand? = null,
 ) {
     var showOptions by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Tuning layout: page strip on top, sheet below it. See [tuningPageStripHeightDp].
+    // The sheet's drag handle and its navigation-bar inset stack OUTSIDE the content cap,
+    // so both are budgeted here — a cap that ignored them left the sheet overlapping the
+    // strip and swallowing the drawing's lowest callouts (on-device report).
     val stripLayout = showOptions && sheetTunesPage
     val configuration = LocalConfiguration.current
-    val stripHeight = tuningPageStripHeightDp(
+    val navBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().value
+    val sheetChromeDp = TUNING_SHEET_CHROME_DP + navBottomDp
+    val stripHeightDp = tuningPageStripHeightDp(
         configuration.screenWidthDp.toFloat(),
         configuration.screenHeightDp.toFloat(),
-    ).dp
+        sheetChromeDp,
+        inkBand?.frac ?: 1f,
+    )
+    val stripHeight = stripHeightDp.dp
+    val sheetMaxHeight = if (sheetTunesPage) {
+        tuningSheetMaxHeightDp(
+            configuration.screenHeightDp.toFloat(),
+            stripHeightDp,
+            sheetChromeDp,
+        ).dp
+    } else {
+        // The wear and undercut sheets tune nothing: no strip to stay clear of, just the
+        // swipe-down edge at the top.
+        (configuration.screenHeightDp * PREVIEW_SHEET_MAX_FRAC).dp
+    }
 
     // Unlock device rotation while the preview is open so the landscape sheet can be viewed in
     // landscape (the app is otherwise locked to portrait); restore portrait on dismiss. Same
@@ -1059,29 +1102,45 @@ internal fun PdfPreviewOverlay(
                             }
                         }
 
-                        Image(
-                            bitmap = bitmap,
-                            contentDescription = "PDF preview — pinch to zoom, drag to pan",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .then(
-                                    if (stripLayout) {
-                                        Modifier
-                                            .align(Alignment.TopCenter)
-                                            .fillMaxWidth()
-                                            .height(stripHeight)
-                                    } else {
-                                        Modifier.fillMaxSize()
-                                    }
-                                )
-                                .transformable(state = transformState)
-                                .graphicsLayer(
-                                    scaleX = scale,
-                                    scaleY = scale,
-                                    translationX = offset.x,
-                                    translationY = offset.y,
-                                ),
-                        )
+                        if (stripLayout) {
+                            // The drawing, cropped to its ink band and fitted into the
+                            // strip the sheet was sized to leave free. One draw helper
+                            // with the schematic preview's Canvas, so they cannot drift.
+                            Canvas(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .fillMaxWidth()
+                                    .height(stripHeight)
+                                    .transformable(state = transformState)
+                                    .graphicsLayer(
+                                        scaleX = scale,
+                                        scaleY = scale,
+                                        translationX = offset.x,
+                                        translationY = offset.y,
+                                    )
+                                    .semantics {
+                                        contentDescription =
+                                            "PDF preview — pinch to zoom, drag to pan"
+                                    },
+                            ) {
+                                drawPageBand(bitmap, inkBand, stripHeight.toPx())
+                            }
+                        } else {
+                            Image(
+                                bitmap = bitmap,
+                                contentDescription = "PDF preview — pinch to zoom, drag to pan",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .transformable(state = transformState)
+                                    .graphicsLayer(
+                                        scaleX = scale,
+                                        scaleY = scale,
+                                        translationX = offset.x,
+                                        translationY = offset.y,
+                                    ),
+                            )
+                        }
                     }
                     else -> Text(
                         "Preview unavailable",
@@ -1103,7 +1162,9 @@ internal fun PdfPreviewOverlay(
             // page under a slider is what this layout exists to prevent.
             scrimColor = if (sheetTunesPage) Color.Transparent else BottomSheetDefaults.ScrimColor,
         ) {
-            optionsSheet()
+            // The cap lives here, not in the sheet content: only the overlay knows the
+            // strip the sheet has to stay clear of, and one owner keeps the two in step.
+            Box(Modifier.heightIn(max = sheetMaxHeight)) { optionsSheet() }
         }
     }
 }
@@ -1137,24 +1198,12 @@ internal fun RunoutWearOptionsSheet(
     tuning: PreviewTuning? = null,
 ) {
     // Scrollable + inset-padded: without its own scroll a short screen clips the bottom
-    // rows mid-checkbox behind the navigation bar (same posture as PdfOptionsSheet).
-    // Height cap: a sheet that tunes the page live ([tuning] non-null — runout and
-    // consolidated output) stops below the fit-width page strip so the drawing it is
-    // reshaping stays in sight; the wear and undercut sheets, which tune nothing, keep the
-    // plain screen-fraction cap that leaves an edge to swipe them back down by.
-    val configuration = LocalConfiguration.current
-    val maxSheetHeight = if (tuning != null) {
-        tuningSheetMaxHeightDp(
-            configuration.screenWidthDp.toFloat(),
-            configuration.screenHeightDp.toFloat(),
-        ).dp
-    } else {
-        (configuration.screenHeightDp * PREVIEW_SHEET_MAX_FRAC).dp
-    }
+    // rows mid-checkbox behind the navigation bar (same posture as PdfOptionsSheet). The
+    // height cap belongs to the hosting `PdfPreviewOverlay` — only it knows the page strip
+    // a tuning sheet must stay clear of.
     Column(
         Modifier
             .fillMaxWidth()
-            .heightIn(max = maxSheetHeight)
             .verticalScroll(rememberScrollState())
             .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),
