@@ -136,7 +136,11 @@ See docs/ROADMAP.md for the release-series roadmap and TODO.md for the active de
 
 📄 License
 
-Pending — private/closed until final licensing decision.
+Proprietary — Copyright © 2026 Chris Mendoza. All rights reserved.
+
+This repository is public for viewing and reference only. No right to use, copy, modify, or
+distribute the software is granted; see LICENSE for the full terms. Third-party components
+(Android SDK, AndroidX, Jetpack Compose) remain under their own licenses.
 
 📜 Changelog
 
