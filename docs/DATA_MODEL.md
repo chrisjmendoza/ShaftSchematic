@@ -155,7 +155,7 @@ Keyway invariants (hosted feature, both hosts):
 Derived:
 val Taper.hasKeyway: Boolean get() = keywayWidthMm > 0f && keywayDepthMm > 0f && keywayLengthMm > 0f
 val Body.hasKeyway:  Boolean get() = keywayWidthMm > 0f && keywayDepthMm > 0f && keywayLengthMm > 0f
-val Body.keywayAbsSpanMm(): Pair<Float, Float>?  // absolute AFT-origin span of the slot
+val Body.keywayAbsSpanMm(): KeywaySpan?  // absolute AFT-origin span of the slot (loMm/hiMm/centerMm)
 val Taper.maxDiaMm get() = max(startDiaMm, endDiaMm)
 
 Spec-level keyway clocking note:
@@ -174,7 +174,7 @@ Spec-level keyway clocking note:
   no void fill). No geometric effect — pure drawing classification. (keyways90Apart uses a
   different rendering path — an edge notch, not a hidden dashed line — see
   docs/COMPONENT_CONTRACT.md "Keyway clocking — 180° / 90° apart".)
-- Taper.keywayAbsSpanMm(): Pair<Float, Float>?  // absolute AFT-origin span (for clocking)
+- Taper.keywayAbsSpanMm(): KeywaySpan?  // absolute AFT-origin span (for clocking)
 Threads
 @Serializable
 data class Threads(

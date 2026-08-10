@@ -6,7 +6,27 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
-## 2026-08-08
+## 2026-08-10
+
+### refactor: KeywaySpan type + withBodyAt extraction (code-review findings)
+
+Two of three external-review findings applied; the third (SettingsStore's in-memory
+`PdfPrefs` mirror being a process-wide singleton) is deliberately left alone — converting
+it to an injected dependency only pays off if DI is ever introduced, and threading it
+through the layout + PDF composers by hand would cost more than it buys.
+
+**`KeywaySpan` replaces `Pair<Float, Float>`** as the return type of
+`Body.keywayAbsSpanMm()` / `Taper.keywayAbsSpanMm()` (`model/KeywaySpan.kt`): named
+`loMm`/`hiMm` edges plus a `centerMm` accessor that absorbs the `(lo + hi) * 0.5f`
+duplicated at the clocking-datum and PDF-footer call sites. Destructuring call sites
+(`val (lo, hi) = …`) are unchanged — the data class destructures in the same order.
+
+**`ShaftSpec.withBodyAt(index, startMm, lengthMm, diaMm)`** (`ShaftSpecExtensions.kt`)
+extracts `ShaftViewModel.updateBody`'s inline list edit into a pure, tested model
+function — same posture as `withKeyways180Apart`/`withNewOal`. The ViewModel method is
+now a delegate plus its two side effects (`rememberBodyDefaults`, `ensureOverall`).
+`WithBodyAtTest` pins the contract: out-of-range index returns the same instance,
+length/Ø clamp to ≥ 0, start stays verbatim (golden rule), keyway fields survive.
 
 ### chore: proprietary license
 

@@ -1394,7 +1394,7 @@ internal fun buildFooterEndColumns(
     }
     spec.bodies.filter { it.hasKeyway }.forEach { b ->
         val span = b.keywayAbsSpanMm() ?: return@forEach
-        val centerMm = (span.first + span.second) * 0.5f
+        val centerMm = span.centerMm
         val col = if (centerMm <= spec.overallLengthMm * 0.5f) aft else fwd
         col += bodyKwLine(b)
         if (b.keywaySpooned) col += SPOONED_KW_NOTE
