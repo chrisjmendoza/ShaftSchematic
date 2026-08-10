@@ -1469,20 +1469,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _selectedComponentId.value = id
     }
 
-    fun updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) = _spec.update { s ->
-        if (index !in s.bodies.indices) s else {
-            val old = s.bodies[index]
-            s.copy(
-                bodies = s.bodies.toMutableList().also { list ->
-                    list[index] = old.copy(
-                        startFromAftMm = startMm,
-                        lengthMm = max(0f, lengthMm),
-                        diaMm = max(0f, diaMm)
-                    )
-                }
-            )
-        }
-    }.also {
+    fun updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) {
+        _spec.update { s -> s.withBodyAt(index, startMm, lengthMm, diaMm) }
         if (index in _spec.value.bodies.indices) {
             rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
         }

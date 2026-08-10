@@ -29,8 +29,11 @@ Version: v1.0 (2026-08-04)
 
 The five paper-sheet canvases — `UndercutRoute` overview, `UndercutWindowDetailOverlay`,
 `WearRoute` overview, `LinerWearDetail` (`ComponentWearDetailOverlay`), `RunoutRoute`
-preview — draw on a forced-white sheet (`background(Color.White)`). Their **ink** comes
-from `ui/theme/SheetInk`, never from `MaterialTheme.colorScheme`:
+preview — draw on a forced-white sheet (`background(Color.White)`). The Help screen's
+figures (`ui/screen/HelpIllustrations.kt`) follow the same rule for the same reason: they
+depict printed output, so each draws `SheetInk` on a white `Surface` in every theme, and
+only the figure's frame and caption are theme-colored chrome. Their **ink** comes from
+`ui/theme/SheetInk`, never from `MaterialTheme.colorScheme`:
 
 - `SheetInk.Outline` (black) — profile outlines, rails, sheet text, hatches.
 - `SheetInk.LinerTint` — liner tint on wear/runout sheets (pinned historical light tertiary).

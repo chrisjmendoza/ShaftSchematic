@@ -1,0 +1,67 @@
+ShaftSchematic — Proprietary Software License
+
+Copyright © 2026 Chris Mendoza. All rights reserved.
+
+The ShaftSchematic application, together with its source code, documentation,
+drawings, sample data, and other materials in this repository (collectively, the
+"Software"), is the proprietary and confidential property of the copyright
+holder.
+
+1. NO LICENSE GRANTED
+
+   The Software is made publicly viewable for reference and evaluation only.
+   No license or right is granted, expressly or by implication, estoppel, or
+   otherwise, to any person to use, copy, reproduce, modify, adapt, translate,
+   merge, publish, distribute, sublicense, sell, lease, transmit, create
+   derivative works from, or otherwise exploit the Software, in whole or in
+   part, in any form or by any means.
+
+   Any such use requires the prior written permission of the copyright holder.
+
+2. NO IMPLIED RIGHTS FROM PLATFORM FEATURES
+
+   Neither the public visibility of this repository, nor the fork, clone,
+   download, or similar mechanisms provided by the hosting platform, grants any
+   of the rights withheld in Section 1. Such features exist to permit viewing
+   and platform operation only.
+
+3. RESERVATION OF RIGHTS
+
+   All rights not expressly granted are reserved by the copyright holder. No
+   trademark, patent, or trade secret rights are licensed by this document.
+
+4. CONTRIBUTIONS
+
+   Contributions are accepted only from persons authorized in writing by the
+   copyright holder. By submitting a contribution, the contributor assigns to
+   the copyright holder all right, title, and interest in that contribution,
+   and confirms they have the authority to do so.
+
+5. THIRD-PARTY COMPONENTS
+
+   The Software builds against third-party open source components (including
+   the Android SDK, AndroidX, and Jetpack Compose) that are licensed separately
+   by their respective owners, principally under the Apache License, Version
+   2.0. Nothing in this document alters, restricts, or purports to grant rights
+   in those components; they remain governed solely by their own licenses.
+
+6. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NONINFRINGEMENT.
+
+7. LIMITATION OF LIABILITY
+
+   IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR
+   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+   ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OF OR
+   OTHER DEALINGS IN THE SOFTWARE.
+
+   ShaftSchematic is an engineering drafting aid. It does not verify, certify,
+   or approve any design, and the copyright holder accepts no responsibility
+   for decisions made or work performed on the basis of its output. All
+   dimensions and drawings produced by the Software remain the responsibility
+   of the engineer or machinist who reviews them.
+
+For licensing enquiries, contact the copyright holder.

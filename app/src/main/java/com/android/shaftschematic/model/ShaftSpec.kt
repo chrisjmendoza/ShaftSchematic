@@ -101,8 +101,8 @@ fun ShaftSpec.keywayClocking(): KeywayClocking = when {
 fun ShaftSpec.secondaryKeywayHostIds(): Set<String> {
     if (keywayClocking() == KeywayClocking.NONE) return emptySet()
     val centers = buildList {
-        tapers.forEach { t -> t.keywayAbsSpanMm()?.let { add(t.id to (it.first + it.second) * 0.5f) } }
-        bodies.forEach { b -> b.keywayAbsSpanMm()?.let { add(b.id to (it.first + it.second) * 0.5f) } }
+        tapers.forEach { t -> t.keywayAbsSpanMm()?.let { add(t.id to it.centerMm) } }
+        bodies.forEach { b -> b.keywayAbsSpanMm()?.let { add(b.id to it.centerMm) } }
     }
     if (centers.size < 2) return emptySet()
     val nearId = centers.minByOrNull { it.second }!!.first

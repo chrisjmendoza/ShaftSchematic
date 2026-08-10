@@ -88,7 +88,17 @@ fun HelpRoute(onBack: () -> Unit) {
     }
 }
 
-private data class HelpTopic(val title: String, val body: String)
+/**
+ * One expandable card. [illustration] is an optional figure drawn under the body text —
+ * see `HelpIllustrations.kt`. Figures elaborate; the body text must explain the topic on
+ * its own, since a figure is skipped by a screen reader beyond its caption.
+ */
+private data class HelpTopic(
+    val title: String,
+    val body: String,
+    val illustration: (@Composable () -> Unit)? = null,
+)
+
 private data class HelpSection(val title: String, val topics: List<HelpTopic>)
 
 @Composable
@@ -127,6 +137,7 @@ private fun HelpTopicCard(topic: HelpTopic) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                topic.illustration?.invoke()
             }
         }
     }
@@ -147,7 +158,8 @@ private val helpSections: List<HelpSection> = listOf(
                     "liners, and bodies with the add buttons; each component becomes a card in " +
                     "the carousel where you edit its dimensions. Any span you don't cover is " +
                     "filled automatically with bare shaft (an \"auto-body\"), so the drawing " +
-                    "is always continuous."
+                    "is always continuous.",
+                illustration = { AftFwdFigure() },
             ),
             HelpTopic(
                 "Millimeters and inches",
@@ -162,6 +174,16 @@ private val helpSections: List<HelpSection> = listOf(
                     "out. An asterisk in the title bar means unsaved changes. The app also " +
                     "autosaves a rolling draft ring in the background — if you leave without " +
                     "saving, the home screen offers to continue where you left off."
+            ),
+            HelpTopic(
+                "Undo and redo",
+                "The History button in the editor's toolbar (the clock icon) holds Undo and " +
+                    "Redo. Each greys out when there is nothing to step to. A burst of quick " +
+                    "edits collapses into a single undo step, so undoing after typing a value " +
+                    "returns you to before you started typing rather than stepping back one " +
+                    "character at a time. History covers the shaft itself — components, " +
+                    "lengths, keyways — and lasts for the editing session; it is not saved " +
+                    "with the file and starts fresh when you open a document."
             ),
         )
     ),
@@ -191,7 +213,8 @@ private val helpSections: List<HelpSection> = listOf(
                     "depth, length, offset). A spooned keyway adds the enlarged bowl at the " +
                     "closed end on the drawing — it is drawing-only and never changes the " +
                     "keyway's dimensions. With two or more keyways, clocking toggles " +
-                    "(180°/90°, CW/CCW) appear on the keyway cards."
+                    "(180°/90°, CW/CCW) appear on the keyway cards.",
+                illustration = { SpoonedKeywayFigure() },
             ),
             HelpTopic(
                 "Liners and threads",
@@ -199,6 +222,19 @@ private val helpSections: List<HelpSection> = listOf(
                     "can be excluded from the overall length (\"Thread excluded from OAL\") — " +
                     "useful when the OAL is quoted to the shoulder; an excluded thread just " +
                     "picks which end it hangs off."
+            ),
+            HelpTopic(
+                "Coupler bolt slots",
+                "A coupler bolt slot is a row of radial cutouts drawn on the shaft. Add one " +
+                    "from the add chooser, then set Measure From (AFT or FWD), the distance to " +
+                    "the first slot, hole Ø, and how many; Spacing appears once the count is " +
+                    "more than one. Through hole is on by default — switch it off and a Depth " +
+                    "field appears for a blind hole. The Add dialog warns if the row would run " +
+                    "off either end of the shaft.\n\n" +
+                    "Slots are reference features: they are drawn, but they never change the " +
+                    "overall length, never split a body, and never collide with anything else. " +
+                    "Their card carries a \"show dimension rail\" toggle if you want the row " +
+                    "dimensioned on the printed schematic."
             ),
             HelpTopic(
                 "Record wear readings",
@@ -213,7 +249,13 @@ private val helpSections: List<HelpSection> = listOf(
                 "The Runout sheet places dial-indicator stations per component and records a " +
                     "TIR value plus a high-spot clock position per bubble. Tap a bubble to " +
                     "edit it. Readings are reference-only and survive component edits; a " +
-                    "reading whose station no longer exists is simply not drawn."
+                    "reading whose station no longer exists is simply not drawn.\n\n" +
+                    "Stations default to two per taper and liner (set in an inch from each " +
+                    "edge, where the geometry changes and an indicator reads unreliably) and " +
+                    "three per body; you can raise or lower the count per component, or set it " +
+                    "to zero to hide that component's stations. Set the indicator direction on " +
+                    "the sheet and it prints as \"TIR's taken looking AFT / FORWARD\" at the " +
+                    "bottom, so the shop knows how to read the high-spot arrows."
             ),
             HelpTopic(
                 "Record undercut sections",
@@ -489,14 +531,27 @@ private val helpSections: List<HelpSection> = listOf(
                 "They are reference features: notes on top of the drawing, like pencil marks " +
                     "on a print. They never affect overall length, component positions, or " +
                     "collision checks, and deleting a component never deletes your record of " +
-                    "what was measured — orphaned marks simply stop drawing."
+                    "what was measured — orphaned marks simply stop drawing. Coupler bolt " +
+                    "slots work the same way: drawn, but never part of the length or the " +
+                    "collision check."
+            ),
+            HelpTopic(
+                "Why is Export PDF greyed out?",
+                "Two reasons, and the button's message says which. Either the shaft has no " +
+                    "components yet — add at least one taper, thread, liner, or body, since " +
+                    "coupler bolt slots alone give nothing to dimension — or two components " +
+                    "overlap. Overlapping cards are flagged in the carousel; fix the " +
+                    "positions and export re-enables itself. Bodies never trigger this: a body " +
+                    "running under a liner or up against a taper is normal, and the drawing " +
+                    "trims it around them."
             ),
             HelpTopic(
                 "Why does the undercut look deeper than its numbers?",
                 "A real undercut is a few thousandths deep — at drawing scale that is " +
                     "invisible. The drawing exaggerates cut depth (up to the sheet's " +
                     "exaggeration setting, never shallower than true) so the cut can be seen " +
-                    "and tapped. Printed values are always the measured numbers you typed."
+                    "and tapped. Printed values are always the measured numbers you typed.",
+                illustration = { UndercutDepthFigure() },
             ),
             HelpTopic(
                 "Why does a body print with a break symbol through it?",
@@ -505,7 +560,8 @@ private val helpSections: List<HelpSection> = listOf(
                     "still reads honestly, it prints the S-break pair — the drafting symbol " +
                     "for \"length removed here\". The dimension values are always the true " +
                     "lengths. Settings → Drawing → \"Body S-break\" sets how much squeeze " +
-                    "earns the symbol, from Never (compression stays hidden) to Always."
+                    "earns the symbol, from Never (compression stays hidden) to Always.",
+                illustration = { SBreakFigure() },
             ),
             HelpTopic(
                 "Why can't this auto-body host a keyway?",

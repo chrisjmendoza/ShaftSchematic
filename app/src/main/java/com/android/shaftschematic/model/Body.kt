@@ -55,19 +55,19 @@ fun Body.isValid(overallLengthMm: Float): Boolean =
 val Body.hasKeyway: Boolean get() = keywayWidthMm > 0f && keywayDepthMm > 0f && keywayLengthMm > 0f
 
 /**
- * Absolute AFT-origin axial span of this body's keyway as (lo, hi) mm, or null when
- * the body has no keyway. Resolves the AFT/FWD end-face reference to physical space.
+ * Absolute AFT-origin axial span of this body's keyway, or null when the body has no
+ * keyway. Resolves the AFT/FWD end-face reference to physical space.
  */
-fun Body.keywayAbsSpanMm(): Pair<Float, Float>? {
+fun Body.keywayAbsSpanMm(): KeywaySpan? {
     if (!hasKeyway) return null
     return when (keywayEnd) {
         LinerAuthoredReference.AFT -> {
             val near = startFromAftMm + keywayOffsetFromEndMm
-            near to near + keywayLengthMm
+            KeywaySpan(near, near + keywayLengthMm)
         }
         LinerAuthoredReference.FWD -> {
             val near = startFromAftMm + lengthMm - keywayOffsetFromEndMm
-            (near - keywayLengthMm) to near
+            KeywaySpan(near - keywayLengthMm, near)
         }
     }
 }

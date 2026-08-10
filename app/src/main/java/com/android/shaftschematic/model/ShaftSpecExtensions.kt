@@ -269,6 +269,27 @@ fun ShaftSpec.snapForwardFrom(anchor: ComponentKey): ShaftSpec {
     return working
 }
 
+// ---- Body edit -----------------------------------------------------------------
+
+/**
+ * Returns a copy with the body at [index] set to the given geometry, or `this` unchanged
+ * when [index] is out of range. Length and Ø are clamped to ≥ 0; [startMm] is kept
+ * **verbatim** (authored positions are sacred — golden rule). Keyway fields, id, and
+ * label are untouched.
+ */
+fun ShaftSpec.withBodyAt(index: Int, startMm: Float, lengthMm: Float, diaMm: Float): ShaftSpec {
+    val old = bodies.getOrNull(index) ?: return this
+    return copy(
+        bodies = bodies.toMutableList().also { list ->
+            list[index] = old.copy(
+                startFromAftMm = startMm,
+                lengthMm = max(0f, lengthMm),
+                diaMm = max(0f, diaMm),
+            )
+        }
+    )
+}
+
 // ---- Body split / merge --------------------------------------------------------
 
 /**

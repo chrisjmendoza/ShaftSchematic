@@ -56,18 +56,18 @@ fun Taper.isValid(overallLengthMm: Float): Boolean =
 val Taper.hasKeyway: Boolean get() = keywayWidthMm > 0f && keywayDepthMm > 0f && keywayLengthMm > 0f
 
 /**
- * Absolute AFT-origin axial span of this taper's keyway as (lo, hi) mm, or null when the
- * taper has no keyway. The keyway is referenced from the SET face (the smaller-diameter
- * end) and extends toward LET. Mirrors [Body.keywayAbsSpanMm] for keyway clocking logic.
+ * Absolute AFT-origin axial span of this taper's keyway, or null when the taper has no
+ * keyway. The keyway is referenced from the SET face (the smaller-diameter end) and
+ * extends toward LET. Mirrors [Body.keywayAbsSpanMm] for keyway clocking logic.
  */
-fun Taper.keywayAbsSpanMm(): Pair<Float, Float>? {
+fun Taper.keywayAbsSpanMm(): KeywaySpan? {
     if (!hasKeyway) return null
     val setAtStart = startDiaMm <= endDiaMm
     val setX = if (setAtStart) startFromAftMm else startFromAftMm + lengthMm
     val dir  = if (setAtStart) 1f else -1f
     val kwSet = setX + dir * keywayOffsetFromSetMm
     val kwLet = kwSet + dir * keywayLengthMm
-    return minOf(kwSet, kwLet) to maxOf(kwSet, kwLet)
+    return KeywaySpan(minOf(kwSet, kwLet), maxOf(kwSet, kwLet))
 }
 
 /** Maximum diameter across the taper span. */

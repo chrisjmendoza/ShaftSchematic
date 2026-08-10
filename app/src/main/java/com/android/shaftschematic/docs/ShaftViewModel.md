@@ -4,7 +4,7 @@ ShaftViewModel Contract
 Layer: UI → ViewModel  
 Purpose: Owns editable ShaftSpec state, unit selection, grid toggle, and routes all commits from the UI to the model/persistence.
 
-Version: v0.8 (2026-08-06)
+Version: v0.9 (2026-08-10)
 
 Invariants
 - All stored geometry is **canonical millimeters (mm)**.  
@@ -118,6 +118,14 @@ Future Enhancements
 
 Change Log
 ----------
+**v0.9 (2026-08-10)**
+- `updateBody()` — the inline list edit moved to the pure, tested model function
+  `ShaftSpec.withBodyAt(index, startMm, lengthMm, diaMm)` (`ShaftSpecExtensions.kt`; same
+  posture as `withKeyways180Apart`/`withNewOal`). The ViewModel method is now a delegate
+  plus its two side effects (`rememberBodyDefaults`, `ensureOverall`). Behavior unchanged:
+  length/Ø clamp to ≥ 0 (now in the model function), `startMm` stays verbatim (golden
+  rule), keyway fields survive, out-of-range index is a no-op. Pinned by `WithBodyAtTest`.
+
 **v0.8 (2026-08-06)**
 - **`componentOrder` removed.** The newest-first cross-type order (`_componentOrder`,
   `orderAdd`/`orderRemove`/`ensureOrderCoversSpec`, the `EditState.componentOrder` field and

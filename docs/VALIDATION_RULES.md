@@ -113,8 +113,9 @@ What actually happens instead:
   last committed value. This incidentally screens out most ways to *type* a NaN/Infinity, but
   does nothing to bound magnitude or sign.
 - **Per-field validators**: individual fields clamp specific values downstream (e.g.
-  `ShaftViewModel.updateBody/updateTaper/updateThread/updateLiner` clamp `lengthMm`/diameter
-  fields to `max(0f, …)` on commit), but this is per-field clamping, not a general safety filter,
+  `ShaftViewModel.updateTaper/updateThread/updateLiner` clamp `lengthMm`/diameter
+  fields to `max(0f, …)` on commit; `updateBody` delegates the same clamp to
+  `ShaftSpec.withBodyAt`), but this is per-field clamping, not a general safety filter,
   and it does not cover every numeric field (notably `startFromAftMm` — see §3.1).
 
 If a NaN/Infinity/huge value reaches the model through a non-UI path (e.g. a hand-edited saved
@@ -133,8 +134,9 @@ endFromAftMm <= overallLengthMm
 
 These three rules are the **intended** shared contract, but only some are actually enforced as
 a hard block today:
-- `lengthMm >= 0` and the diameter fields **are** clamped on commit in `ShaftViewModel`
-  (`max(0f, …)`).
+- `lengthMm >= 0` and the diameter fields **are** clamped on commit (`max(0f, …)`) — in
+  `ShaftViewModel` for tapers/threads/liners, in `ShaftSpec.withBodyAt` (the model function
+  `updateBody` delegates to) for bodies.
 - `startFromAftMm >= 0` is **not** enforced by the ViewModel on update — `updateBody` /
   `updateTaper` / `updateThread` / `updateLiner` write `startMm` through unclamped. The only
   place this is gated is the **Add dialog's Submit button enabled-condition**
