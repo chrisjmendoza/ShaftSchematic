@@ -303,6 +303,23 @@ object SettingsStore {
         ctx.settingsDataStore.edit { it[KEY_MIGRATED_INTERNAL_DOCS_TO_SHAFT] = migrated }
     }
 
+    /**
+     * One-shot flag for the bundled starter templates.
+     *
+     * Deliberately simpler than the sample-shaft seeder's version + hash ledger: templates are
+     * user-owned from the moment they appear, so there is no "update the bundled copy" story to
+     * support. Seed once, never again — a user who deletes every starter does not get them back
+     * on the next launch.
+     */
+    private val KEY_STARTER_TEMPLATES_SEEDED = booleanPreferencesKey("starter_templates_seeded")
+
+    suspend fun starterTemplatesSeeded(ctx: Context): Boolean =
+        ctx.settingsDataStore.data.first()[KEY_STARTER_TEMPLATES_SEEDED] ?: false
+
+    suspend fun setStarterTemplatesSeeded(ctx: Context, seeded: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_STARTER_TEMPLATES_SEEDED] = seeded }
+    }
+
     fun currentSampleSeedVersion(): Int = CURRENT_SAMPLE_SEED_VERSION
 
     suspend fun getSampleSeedVersion(ctx: Context): Int =

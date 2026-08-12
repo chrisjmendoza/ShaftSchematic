@@ -38,6 +38,7 @@ import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_ON
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
+import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
@@ -141,14 +142,7 @@ fun composeShaftPdf(
     // there is nothing else on the sheet the squeeze needs explaining against.
     val resolvedBodies = resolvedComponents
         ?.filterIsInstance<ResolvedBody>()
-        ?.map { b ->
-            Body(
-                id = b.id,
-                startFromAftMm = b.startMmPhysical,
-                lengthMm = b.endMmPhysical - b.startMmPhysical,
-                diaMm = b.diaMm
-            )
-        }
+        ?.map { b -> spec.bodyForPdf(b) }
 
     val bodiesForPdf = resolvedBodies ?: spec.bodies
     val hasNonBodyDetail = spec.tapers.isNotEmpty() || spec.threads.isNotEmpty() || spec.liners.isNotEmpty()
@@ -439,7 +433,9 @@ fun composeShaftPdf(
     }
 
     // --- Ø callouts below the shaft: one leader per unique body OD and per unique liner OD ---
-    run {
+    // A blank draft may elect the whole pass out (`blankDiaCallouts`) so the shaft prints
+    // clear for freehand annotation instead of carrying write-in rules.
+    if (effectiveOptions.showDiaCallouts) {
         val calls = buildBodyOdCallouts(bodiesForPdf) + buildLinerOdCallouts(spec.liners)
         if (calls.isNotEmpty()) {
             val leaderText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -531,9 +527,15 @@ private const val COMPONENT_LABEL_OFFSET_PT = 32f
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
 internal const val FOOTER_BLOCK_PT = 96f
 // Blank drafts reserve a taller footer band: line spacing opens up for handwriting.
-internal const val FOOTER_BLOCK_BLANK_PT = 150f
+// Sized for the fullest column (taper header + Rate/L.E.T./S.E.T./Length/KW + spooned note
+// + Thread = 8 lines) at the blank pitch; drawFooter additionally fit-clamps its pitch to
+// the band, so an overloaded column tightens up instead of running off the page.
+internal const val FOOTER_BLOCK_BLANK_PT = 200f
 private const val FOOTER_LINE_FACTOR = 1.35f
-private const val FOOTER_LINE_FACTOR_BLANK = 1.8f
+// Handwriting pitch: ~2.2 lines of the footer text size (≈ 26 pt on the schematic, ≈ 22 pt
+// on the consolidated sheet) — a printed-density 1.35 factor leaves no room to write a value
+// between the rules (on-device report).
+private const val FOOTER_LINE_FACTOR_BLANK = 2.2f
 
 private fun drawComponentLabelsPdf(
     canvas: Canvas,
@@ -1200,15 +1202,31 @@ internal fun drawFooter(
     blankValues: Boolean = false
 ) {
     val top = rect.top + 6f
-    val lh = text.textSize * (if (blankValues) FOOTER_LINE_FACTOR_BLANK else FOOTER_LINE_FACTOR)
 
     val cols = buildFooterEndColumns(spec, unit, cfg, blankValues)
 
+    // Blank drafts open the line pitch up for handwriting, fit-clamped to the reserved band
+    // so the fullest column (taper + spooned note + thread) tightens toward printed density
+    // instead of running past the page margin. Printed footers keep the print pitch.
+    val lh = if (blankValues) {
+        val midLineCount = 4 + // Customer / Vessel / Job # / Date
+            (if (cfg.bodyDiasMm.isNotEmpty()) 1 else 0) +
+            (if (keywayClockingFooterNote(spec) != null) 1 else 0) +
+            1 // Side:
+        val maxLines = maxOf(cols.aftLines.size, cols.fwdLines.size, midLineCount, 1)
+        min(text.textSize * FOOTER_LINE_FACTOR_BLANK, (rect.height() - 10f) / maxLines)
+            .coerceAtLeast(text.textSize * FOOTER_LINE_FACTOR)
+    } else {
+        text.textSize * FOOTER_LINE_FACTOR
+    }
+
     // Blank drafts: any line that ends with ":" (or a bare "Ø") is a label whose value gets
-    // hand-written — draw a writing rule after it instead of a printed value.
+    // hand-written — draw a writing rule after it instead of a printed value. The rule runs
+    // to the COLUMN edge, not a fixed width: a ~1" rule is too short to hand-write a customer
+    // name or a diameter on a clipboard (on-device report).
     fun drawFooterLine(line: String, x: Float, y: Float, maxW: Float) {
         if (blankValues && (line.endsWith(":") || line.endsWith("Ø"))) {
-            drawLabelWithRule(c, line, x, y, text, ruleWidth = BLANK_RULE_PT, maxRight = x + maxW)
+            drawLabelWithRule(c, line, x, y, text, ruleWidth = maxW, maxRight = x + maxW)
         } else {
             c.drawText(ellipsizeToWidth(line, text, maxW), x, y, text)
         }
@@ -1340,8 +1358,11 @@ internal fun buildFooterEndColumns(
     fun taperLines(tp: Taper): List<String> = buildList {
         val ls = letSet(tp)
         add(line("Rate:") { printedTaperRate(tp.taperRateText.trim().ifEmpty { rate1toN(tp) }, unit) })
-        add(line("L.E.T. (${ls.letFace}):") { formatDiaWithUnit(ls.let.toDouble(), unit) })
-        add(line("S.E.T. (${ls.setFace}):") { formatDiaWithUnit(ls.set.toDouble(), unit) })
+        // No face suffix on L.E.T./S.E.T. — the footer column already says which end of the
+        // shaft this taper is, and "(FWD)" beside an AFT taper's L.E.T. read as if it were
+        // asking about the FWD taper (on-device report).
+        add(line("L.E.T.:") { formatDiaWithUnit(ls.let.toDouble(), unit) })
+        add(line("S.E.T.:") { formatDiaWithUnit(ls.set.toDouble(), unit) })
         add(line("Length:") { formatLenWithUnit(tp.lengthMm.toDouble(), unit) })
         if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
             val spoon = if (tp.keywaySpooned) " (spooned)" else ""
@@ -1412,10 +1433,15 @@ internal fun buildFooterEndColumns(
  * that diameter. All callouts hang BELOW the shaft; horizontally-close labels are stacked
  * onto a second row by the renderer ([DiameterLeaderRenderer] / [DiameterCalloutLayout]),
  * so no side alternation is needed here.
+ *
+ * [Body.showDiaOnDrawing] is applied BEFORE the grouping, which is what makes the toggle
+ * useful: hiding one body of a shared-Ø group does not delete the value from the sheet, it
+ * moves the anchor to the longest body of that Ø the user can still point at. Hiding every
+ * body carrying a Ø is what drops it.
  */
 internal fun buildBodyOdCallouts(bodies: List<Body>): List<DiaCallout> =
     bodies
-        .filter { it.diaMm > 0f }
+        .filter { it.diaMm > 0f && it.showDiaOnDrawing }
         .groupBy { it.diaMm }
         .entries
         .sortedByDescending { it.key }
@@ -1429,10 +1455,12 @@ internal fun buildBodyOdCallouts(bodies: List<Body>): List<DiaCallout> =
  * Liner mirror of [buildBodyOdCallouts]: one [DiaCallout] per unique liner OD, anchored at
  * the center of the longest liner with that OD, all BELOW the shaft. Bodies and liners are
  * separate groups — a liner OD is never deduped against a body OD.
+ *
+ * [Liner.showDiaOnDrawing] is applied before the grouping, same rule as the body builder.
  */
 internal fun buildLinerOdCallouts(liners: List<Liner>): List<DiaCallout> =
     liners
-        .filter { it.odMm > 0f }
+        .filter { it.odMm > 0f && it.showDiaOnDrawing }
         .groupBy { it.odMm }
         .entries
         .sortedByDescending { it.key }
@@ -1442,15 +1470,15 @@ internal fun buildLinerOdCallouts(liners: List<Liner>): List<DiaCallout> =
             DiaCallout(xMm = centerMm, valueMm = odMm.toDouble(), side = LeaderSide.BELOW)
         }
 
-private data class LetSetResult(val let: Float, val set: Float, val letFace: String, val setFace: String)
+private data class LetSetResult(val let: Float, val set: Float)
 
-// startDiaMm is always the AFT-facing end of the taper (position = startFromAftMm).
-// Determine which physical face carries the large end so the footer can label it correctly.
+// startDiaMm is always the AFT-facing end of the taper (position = startFromAftMm); the
+// large end is the L.E.T. whichever physical face carries it.
 private fun letSet(t: Taper): LetSetResult =
     if (t.startDiaMm >= t.endDiaMm)
-        LetSetResult(t.startDiaMm, t.endDiaMm, "AFT", "FWD")
+        LetSetResult(t.startDiaMm, t.endDiaMm)
     else
-        LetSetResult(t.endDiaMm, t.startDiaMm, "FWD", "AFT")
+        LetSetResult(t.endDiaMm, t.startDiaMm)
 
 /**
  * Shop notation for the two most common tapers on inch drawings: 1:12 prints as 1"/ft and
@@ -1495,15 +1523,29 @@ private fun fmtPitch(pitchMm: Float, unit: UnitSystem): String =
  */
 internal fun ShaftSpec.withResolvedBodies(resolved: List<ResolvedComponent>?): ShaftSpec {
     if (resolved == null) return this
-    return copy(bodies = resolved.filterIsInstance<ResolvedBody>().map { b ->
-        Body(
-            id = b.id,
-            startFromAftMm = b.startMmPhysical,
-            lengthMm = b.endMmPhysical - b.startMmPhysical,
-            diaMm = b.diaMm,
-        )
-    })
+    return copy(bodies = resolved.filterIsInstance<ResolvedBody>().map { b -> bodyForPdf(b) })
 }
+
+/**
+ * The drawable [Body] behind a [ResolvedBody] — start/length/Ø as resolved, plus the authored
+ * Ø-callout visibility carried over from the spec.
+ *
+ * Fragment ids must be stripped before the lookup: a body split by a liner or taper resolves
+ * into several runs (`"<id>#2"`, …), and hiding the body has to hide every one of them. AUTO
+ * spans share the single bare-shaft flag ([ShaftSpec.showAutoBodyDia]), matching the single Ø
+ * they already share. A resolved id with no stored match (never expected) defaults to visible.
+ */
+internal fun ShaftSpec.bodyForPdf(b: ResolvedBody): Body = Body(
+    id = b.id,
+    startFromAftMm = b.startMmPhysical,
+    lengthMm = b.endMmPhysical - b.startMmPhysical,
+    diaMm = b.diaMm,
+    showDiaOnDrawing = if (b.source == ResolvedComponentSource.AUTO) {
+        showAutoBodyDia
+    } else {
+        bodies.firstOrNull { it.id == resolvedBodyBaseId(b.id) }?.showDiaOnDrawing ?: true
+    },
+)
 
 /**
  * Truncates [text] with an ellipsis so it fits within [maxWidth] points. Footer columns sit

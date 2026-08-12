@@ -179,6 +179,39 @@ they are now all-BELOW, same as liners.
   the liner detail strips and under the main profile, with a canvas twin in the wear
   overlay). See `RunoutSheet.md` §"Wear Diameter Measurements".
 
+## Visibility
+
+Two independent controls gate the pass; both must allow a callout for it to print.
+
+**Per component — "Show Ø on drawing"** (`Body.showDiaOnDrawing`, `Liner.showDiaOnDrawing`,
+and `ShaftSpec.showAutoBodyDia` for every auto span at once). A switch under the Ø field on
+the body / auto-body / liner cards. Additive and defaulted `true`: a document saved before
+the flags existed prints exactly as it always did.
+
+- **The filter runs before the grouping.** Hiding one body of a shared-Ø group does not
+  remove the value from the sheet — the anchor moves to the longest body of that Ø that is
+  still shown. That is the feature: the on-device case was a body running under fiberglass
+  with one bare window, where the callout landed over the covered run and claimed a reading
+  had been taken there. Model the two runs as separate bodies, hide the covered one, and the
+  Ø moves onto the window. A hidden body whose Ø no other visible body carries simply does
+  not print below the shaft.
+- **Fragment-aware.** `ShaftSpec.bodyForPdf` looks the flag up by `resolvedBodyBaseId`, so a
+  body a liner has split hides every one of its drawn runs.
+- **The footer is not gated.** The "Body:" Ø list still shows the diameter — the value is
+  true for the shaft; only its placement on the drawing was misleading.
+- Draw-only: no geometry, no OAL, no collision, no stored value changes. Card-only, with no
+  Add-dialog counterpart (see the carve-out in `CLAUDE.md` / `AddComponentDialogs.md`).
+
+**Per sheet — blank drafts** (`PdfExportOptions.blankDiaCallouts`, a sub-switch under the
+blank-draft toggle in the PDF options sheet; session-only, like that toggle). Off skips the
+whole pass — line, arrow and write-in rule — so the shaft prints clear for freehand
+annotation; a blank leader with nothing to write on is worse than no leader. Ignored outside
+blank mode.
+
+`PdfExportOptions.showDiaCallouts` (`!blankValues || blankDiaCallouts`) is the single place
+the sheet-level rule lives; the four call sites that build export options pass the raw
+preference and never re-derive it.
+
 ---
 
 # 5.4 Inline Dimension Text (value seated in the line break)
@@ -252,19 +285,25 @@ aren't allowed.
 Rules (shared helpers in `pdf/BlankFormText.kt`):
 
 - **Dimension lines** still cut their break, at a fixed writable width
-  (`BLANK_DIM_GAP_PT`), but draw no value text — the gap is the write-in spot. Same
+  (`BLANK_DIM_GAP_PT` = 60 pt, sized for handwriting a mixed-number dimension on a
+  clipboard), but draw no value text — the gap is the write-in spot. Same
   eligibility/fallback/collision logic as §5.4: the planner measures the fixed write-in
   width instead of the value text, so gaps are reserved — and slid or lifted clear of each
-  other — exactly as printed values are. `labelBottom` (SET names) are identifiers and
+  other — exactly as printed values are; a span too short for the gap falls back to the
+  continuous-line style as always. `labelBottom` (SET names) are identifiers and
   still print.
 - **Ø leader callouts** print `Ø` + a writing rule instead of the value.
-- **Schematic footer** keeps every label (`Rate:`, `L.E.T. (…):`, `KW:`, `Customer:` …)
-  followed by a writing rule (`BLANK_RULE_PT`); the bold STBD/PORT stamp becomes a
-  `Side:` rule. Lines space out (`FOOTER_LINE_FACTOR_BLANK` = 1.8 vs 1.35) and the
-  footer band grows (`FOOTER_BLOCK_BLANK_PT` = 150 pt vs 96 pt) because handwriting is
-  larger than print. `buildFooterEndColumns(blankValues = true)` returns label-only
-  lines — same count and order as standard, no digits (JVM-tested in
-  `BlankDraftFooterTest`).
+- **Schematic footer** keeps every label (`Rate:`, `L.E.T.:`, `KW:`, `Customer:` …)
+  followed by a writing rule that runs to the **column edge** (a fixed ~1" rule was too
+  short to hand-write a customer name — on-device report); the bold STBD/PORT stamp
+  becomes a `Side:` rule. Lines space out to a handwriting pitch
+  (`FOOTER_LINE_FACTOR_BLANK` = 2.2 vs 1.35) inside a taller band
+  (`FOOTER_BLOCK_BLANK_PT` = 200 pt vs 96 pt); `drawFooter` fit-clamps the pitch to the
+  band, so the fullest column (taper + spooned note + thread) tightens toward printed
+  density instead of overrunning the page. Both blank footers — schematic and
+  consolidated — share this one implementation. `buildFooterEndColumns(blankValues =
+  true)` returns label-only lines — same count and order as standard, no digits
+  (JVM-tested in `BlankDraftFooterTest`).
 - **Runout sheet**: header labels get rules; the OAL dimension line carries no label of any
   kind (2026-07-28) — it cuts an empty `BLANK_DIM_GAP_PT`-wide break at mid-span instead,
   the same convention as the dimension-line rule above, so the machinist writes the value

@@ -20,6 +20,9 @@ enum class LinerAuthoredReference { AFT, FWD }
  * @property lengthMm Axial length of the liner.
  * @property odMm Outside diameter of the liner.
  * @property authoredReference AFT or FWD reference used for authoring display.
+ * @property showDiaOnDrawing Whether this liner's OD prints as a below-shaft callout on the
+ *   schematic. Draw-only flag — mirrors [com.android.shaftschematic.model.Body.showDiaOnDrawing];
+ *   it never rewrites [odMm] and never touches geometry. Defaults true for back-compat.
  */
 @Serializable
 @OptIn(ExperimentalSerializationApi::class)
@@ -35,6 +38,7 @@ data class Liner(
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     @JsonNames("endFromAftMm", "endMmPhysical")
     val endMmPhysical: Float = 0f,
+    val showDiaOnDrawing: Boolean = true,
 ) : Segment
 
 /** Normalize to ensure endMmPhysical matches start + length. */

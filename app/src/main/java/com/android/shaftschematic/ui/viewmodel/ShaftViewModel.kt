@@ -17,6 +17,7 @@ import com.android.shaftschematic.data.SettingsStore.UnitPref
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.io.ShaftBackup
+import com.android.shaftschematic.io.TemplateStorage
 import java.io.File
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.model.snapForwardFrom
@@ -262,6 +263,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // toggle would silently blank every future export. Defaults off each session.
     internal val _pdfBlankDraft = MutableStateFlow(false)
     val pdfBlankDraft: StateFlow<Boolean> = _pdfBlankDraft.asStateFlow()
+
+    // Whether a blank draft prints the below-shaft Ø callout leaders (ready to fill in) or
+    // leaves the shaft clear to annotate freehand. Only consulted in blank mode. Session-only
+    // for the same reason as _pdfBlankDraft, and so the two always reset together.
+    internal val _pdfBlankDiaCallouts = MutableStateFlow(true)
+    val pdfBlankDiaCallouts: StateFlow<Boolean> = _pdfBlankDiaCallouts.asStateFlow()
 
     internal val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
@@ -1087,6 +1094,20 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }.onFailure {
                 VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") {
                     "sample seeding failed: ${it.javaClass.simpleName}: ${it.message}"
+                }
+            }
+
+            // One-shot seeding: bundled starter templates into the template store, so the
+            // browser has something in it the first time it opens.
+            runCatching {
+                TemplateStorage.seedStarterTemplatesIfNeeded(app, SettingsStore)
+            }.onSuccess { report ->
+                VerboseLog.d(VerboseLog.Category.IO, "TemplateStorage") {
+                    "starter template seeding finished: saved=${report.savedCount} failed=${report.failedCount}"
+                }
+            }.onFailure {
+                VerboseLog.d(VerboseLog.Category.IO, "TemplateStorage") {
+                    "starter template seeding failed: ${it.javaClass.simpleName}: ${it.message}"
                 }
             }
         }
@@ -1969,6 +1990,45 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Show/hide this body's Ø callout on the schematic. Draw-only — no geometry, no value
+     * rewrite. No-ops when the flag already matches so a recomposition can never mark the
+     * document dirty.
+     */
+    fun updateBodyShowDia(index: Int, show: Boolean) = _spec.update { s ->
+        if (index !in s.bodies.indices) s else {
+            val old = s.bodies[index]
+            if (old.showDiaOnDrawing == show) return@update s
+            s.copy(
+                bodies = s.bodies.toMutableList().also { l ->
+                    l[index] = old.copy(showDiaOnDrawing = show)
+                }
+            )
+        }
+    }
+
+    /** Liner mirror of [updateBodyShowDia]. */
+    fun updateLinerShowDia(index: Int, show: Boolean) = _spec.update { s ->
+        if (index !in s.liners.indices) s else {
+            val old = s.liners[index]
+            if (old.showDiaOnDrawing == show) return@update s
+            s.copy(
+                liners = s.liners.toMutableList().also { l ->
+                    l[index] = old.copy(showDiaOnDrawing = show)
+                }
+            )
+        }
+    }
+
+    /**
+     * Show/hide the bare-shaft Ø callout. One flag for every auto span — the shaft between
+     * explicit components is one piece of stock, so it carries one visibility, matching the
+     * single [ShaftSpec.autoBodyDiaMm].
+     */
+    fun setShowAutoBodyDia(show: Boolean) = _spec.update { s ->
+        if (s.showAutoBodyDia == show) s else s.copy(showAutoBodyDia = show)
+    }
+
     fun updateTaperLabel(index: Int, label: String?) = _spec.update { s ->
         if (index !in s.tapers.indices) s else {
             val old = s.tapers[index]
@@ -2274,8 +2334,83 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             wearRecord = _wearRecord.value,
             runoutReadings = _runoutReadings.value,
             undercutRecord = _undercutRecord.value,
+            // station_interval_version is stamped by encodeV1 itself — see its KDoc.
         )
     )
+
+    /**
+     * Encode the current drawing as a reusable **template**: geometry only.
+     *
+     * Everything that identifies a job or records a measurement is dropped here, at WRITE
+     * time, so the stored file itself is clean — job number, customer, vessel, shaft position,
+     * notes, and the wear / runout / undercut records. Scrubbing only on load would leave a
+     * customer's name sitting in the template file, to be carried into every drawing built
+     * from it (and into any copy of that file). The per-job sheet tuning in [RunoutConfig]
+     * (shaft height, liner compression) resets too — it is tuned per document, not per shaft
+     * family.
+     *
+     * The unit and unit-lock DO travel: they describe how the geometry is authored, not whose
+     * job it is.
+     */
+    fun exportTemplateJson(): String = ShaftDocCodec.encodeV1(
+        ShaftDocCodec.ShaftDocV1(
+            preferredUnit = _unit.value,
+            unitLocked = _unitLocked.value,
+            spec = _spec.value,
+        )
+    )
+
+    /**
+     * Start a new document from a template.
+     *
+     * Differs from [importJson] in two deliberate ways:
+     *  - **No identity is adopted.** Job metadata and measurement records are cleared even if
+     *    the file carries them (belt-and-braces against a template authored before
+     *    [exportTemplateJson] scrubbed on write, or one hand-copied into the folder).
+     *  - **The session starts dirty, with no filename.** [importJson] ends by marking the
+     *    document saved; doing that here would leave a loaded template counting as "no unsaved
+     *    work", so quitting would lose it — the draft ring only protects a session it can see
+     *    as dirty, and a template-loaded session is not blank. The null filename means the
+     *    first Save prompts for a name, so a template can never be overwritten by the drawing
+     *    made from it.
+     *
+     * Component ids are kept as-is: ids never cross document boundaries (wear, runout and
+     * undercut records key within one document), so two drawings from one template sharing ids
+     * is harmless.
+     */
+    fun applyTemplate(raw: String) {
+        val decoded = runCatching { ShaftDocCodec.decode(raw) }.getOrElse { throw it }
+
+        _editorResetNonce.update { it + 1 }
+        clearEditHistory()
+        currentDraftId = UUID.randomUUID().toString()
+        draftPersisted = false
+        _selectedComponentId.value = null
+
+        _spec.value = decoded.spec
+        seedSessionAddDefaultsFromSpec(decoded.spec)
+
+        _unitLocked.value = decoded.unitLocked
+        decoded.preferredUnit?.let { setUnit(it, persist = false) }
+
+        // A template is geometry, not a job.
+        _jobNumber.value = ""
+        _customer.value = ""
+        _vessel.value = ""
+        _shaftPosition.value = ShaftPosition.OTHER
+        _notes.value = ""
+        _runoutConfig.value = RunoutConfig()
+        _wearRecord.value = WearRecord()
+        _runoutReadings.value = RunoutReadings()
+        _undercutRecord.value = UndercutRecord()
+
+        _overallIsManual.value =
+            decoded.spec.overallLengthMm > coverageEndMm(decoded.spec) + 1e-3f
+
+        // Deliberately NOT markDocumentSaved() — see the KDoc. The baseline stays where it
+        // was, so the session reads as unsaved work and autosave keeps a draft of it.
+        _currentDocumentName.value = null
+    }
 
     /**
      * Import a JSON string and replace current state.

@@ -61,8 +61,9 @@ class BlankDraftFooterTest {
         assertTrue("Expected bare Length label", lines.contains("Length:"))
         assertTrue("Expected bare KW label", lines.contains("KW:"))
         assertTrue("Expected bare Thread label", lines.contains("Thread:"))
-        assertTrue("Expected L.E.T. label with face", lines.any { it.startsWith("L.E.T. (") && it.endsWith("):") })
-        assertTrue("Expected S.E.T. label with face", lines.any { it.startsWith("S.E.T. (") && it.endsWith("):") })
+        // No face suffix — the footer column already names the end (on-device report).
+        assertTrue("Expected bare L.E.T. label", lines.contains("L.E.T.:"))
+        assertTrue("Expected bare S.E.T. label", lines.contains("S.E.T.:"))
 
         lines.forEach { line ->
             assertFalse("Blank footer line must not contain digits: \"$line\"", line.any { it.isDigit() })

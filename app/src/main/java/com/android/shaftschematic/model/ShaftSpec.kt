@@ -34,6 +34,11 @@ import kotlinx.serialization.Serializable
  *           covers every auto span. 0 = unset → each span derives its Ø from neighbors as
  *           before. Affects drawn diameter only — auto-span positioning stays derived.
  *           Defaults 0 for back-compat.
+ * @property showAutoBodyDia Whether the bare-shaft Ø prints as a below-shaft callout on the
+ *           schematic. One flag for ALL auto spans, matching the single [autoBodyDiaMm] —
+ *           the shaft between explicit components is one piece of stock, so it carries one
+ *           visibility. Draw-only: never affects OAL, resolve, collision, or footer geometry.
+ *           Defaults true for back-compat.
  */
 @Serializable
 data class ShaftSpec(
@@ -47,6 +52,7 @@ data class ShaftSpec(
     val keyways90Apart: Boolean = false,
     val keyways90Cw: Boolean = true,
     val autoBodyDiaMm: Float = 0f,
+    val showAutoBodyDia: Boolean = true,
 )
 
 /**

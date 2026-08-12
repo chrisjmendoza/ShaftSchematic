@@ -31,6 +31,19 @@ object ShaftDocCodec {
     const val CURRENT_VERSION = 1
 
     /**
+     * Marks a document as authored with **length-driven** runout station counts.
+     *
+     * 0 (absent) = written before station counts followed length, so its readings were taken
+     * against the old flat defaults and [freezeLegacyStationCounts] must pin them. 1 = written
+     * by this build or later; its counts are already the interval's, and freezing them would
+     * be the very corruption the freeze exists to prevent.
+     *
+     * Not the envelope [CURRENT_VERSION]: this is additive and defaulted, readable by any
+     * older build, and says nothing about the file's shape.
+     */
+    const val CURRENT_STATION_INTERVAL_VERSION = 1
+
+    /**
      * Thrown when a document was written by a newer app version (envelope version above
      * [CURRENT_VERSION]). Decoding it with `ignoreUnknownKeys` would silently drop the newer
      * fields, and re-saving it would destroy them — so we refuse instead.
@@ -85,6 +98,13 @@ object ShaftDocCodec {
          */
         @SerialName("undercut_record")
         val undercutRecord: UndercutRecord = UndercutRecord(),
+        /**
+         * See [CURRENT_STATION_INTERVAL_VERSION]. Defaults 0 so every pre-existing file reads
+         * as "authored against the old flat station counts"; [encodeV1] stamps the current
+         * value on every write, so no caller can forget it.
+         */
+        @SerialName("station_interval_version")
+        val stationIntervalVersion: Int = 0,
     )
 
     enum class Format { ENVELOPE_V1, LEGACY_SPEC }
@@ -111,7 +131,76 @@ object ShaftDocCodec {
         ignoreUnknownKeys = true
     }
 
-    fun encodeV1(doc: ShaftDocV1): String = json.encodeToString(ShaftDocV1.serializer(), doc)
+    /**
+     * Encodes a document for storage. [ShaftDocV1.stationIntervalVersion] is stamped HERE,
+     * unconditionally — not left to callers. The stamp is what keeps
+     * [freezeLegacyStationCounts] away from documents authored under length-driven station
+     * counts, and the field's decode default is 0, so a writer that forgot to pass it would
+     * compile cleanly while producing files that reopen with their counts pinned to the old
+     * defaults and their trailing readings orphaned. No writer legitimately wants the legacy
+     * value, so the encoder owns it.
+     */
+    fun encodeV1(doc: ShaftDocV1): String = json.encodeToString(
+        ShaftDocV1.serializer(),
+        doc.copy(stationIntervalVersion = CURRENT_STATION_INTERVAL_VERSION),
+    )
+
+    /**
+     * Protects documents authored before station counts became length-driven.
+     *
+     * A runout reading is keyed `(componentId, stationIndex)`, so a component's station count
+     * decides where its readings sit. Deriving counts from length (one station per 20") changes
+     * that count for most components — which would slide values the user measured and wrote down
+     * onto different physical spots, or orphan them. A typed value is sacred; a system change
+     * must not invalidate it.
+     *
+     * So: every component that **already carries at least one reading** and has **no explicit
+     * override** gets its pre-interval default frozen into [RunoutConfig.componentOverrides].
+     * The freeze is visible and editable in the station editor — not hidden state — and a
+     * document with no readings is left completely alone so it picks up the new defaults.
+     *
+     * **Only legacy documents.** [stationIntervalVersion] gates this: a file stamped with the
+     * current version already has interval-derived counts, and pinning it to the OLD defaults
+     * would be exactly the corruption this exists to prevent — a 100" body authored today at
+     * 5 stations would reopen at 3 with its last two readings orphaned. Without the stamp
+     * there is no way to tell the two cases apart, since neither carries an override.
+     *
+     * Ids are classified without resolving the spec: a taper or liner id matches its list;
+     * anything else is a body (stored or auto — auto spans are bodies).
+     *
+     * Fidelity note: for an UNFRAGMENTED component the frozen count reproduces the old sheet
+     * exactly. For a body a liner had split, the old sheet gave every run its own full count
+     * with indices restarting at 0 per run — so one reading drew on several bubbles and its key
+     * was genuinely ambiguous. The freeze keeps the authored count for the component as a whole,
+     * which is what that body's station-editor row always claimed it had.
+     */
+    internal fun freezeLegacyStationCounts(
+        spec: ShaftSpec,
+        config: RunoutConfig,
+        readings: RunoutReadings,
+        stationIntervalVersion: Int,
+    ): RunoutConfig {
+        if (stationIntervalVersion >= CURRENT_STATION_INTERVAL_VERSION) return config
+        if (readings.readings.isEmpty()) return config
+
+        val taperIds = spec.tapers.map { it.id }.toSet()
+        val linerIds = spec.liners.map { it.id }.toSet()
+
+        val frozen = readings.readings
+            .map { it.componentId }
+            .distinct()
+            .filter { it.isNotBlank() && it !in config.componentOverrides }
+            .associateWith { id ->
+                when (id) {
+                    in taperIds -> RunoutConfig.LEGACY_TAPER_DEFAULT_COUNT
+                    in linerIds -> RunoutConfig.LEGACY_LINER_DEFAULT_COUNT
+                    else -> RunoutConfig.LEGACY_BODY_DEFAULT_COUNT
+                }
+            }
+
+        if (frozen.isEmpty()) return config
+        return config.copy(componentOverrides = config.componentOverrides + frozen)
+    }
 
     fun decode(raw: String): Decoded {
         // Try envelope first.
@@ -131,7 +220,12 @@ object ShaftDocCodec {
                     shaftPosition = doc.shaftPosition,
                     notes = doc.notes,
                     spec = normalizedSpec,
-                    runoutConfig = doc.runoutConfig,
+                    runoutConfig = freezeLegacyStationCounts(
+                        spec = normalizedSpec,
+                        config = doc.runoutConfig,
+                        readings = doc.runoutReadings,
+                        stationIntervalVersion = doc.stationIntervalVersion,
+                    ),
                     // Orphan policy: spots whose linerId no longer matches a liner in this
                     // spec are dropped here, at decode time — the same layer that already
                     // normalizes the spec above. Every decode() caller (VM import/open,
@@ -153,7 +247,8 @@ object ShaftDocCodec {
                 )
             }
 
-        // Back-compat: older files were just the spec.
+        // Back-compat: older files were just the spec. Nothing to freeze — a spec-only file
+        // predates runout readings entirely.
         val legacy = json.decodeFromString(ShaftSpec.serializer(), raw).normalized()
         return Decoded(
             format = Format.LEGACY_SPEC,

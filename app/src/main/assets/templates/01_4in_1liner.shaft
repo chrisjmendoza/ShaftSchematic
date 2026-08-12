@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "preferred_unit": "INCHES",
+  "unit_locked": true,
+  "job_number": "",
+  "customer": "",
+  "vessel": "",
+  "shaft_position": "OTHER",
+  "notes": "",
+  "station_interval_version": 1,
+  "spec": {
+    "overallLengthMm": 2400.0,
+    "bodies": [
+      {
+        "id": "tpl4-b1",
+        "startFromAftMm": 406.4,
+        "lengthMm": 1993.6,
+        "diaMm": 101.6
+      }
+    ],
+    "tapers": [
+      {
+        "id": "tpl4-t1",
+        "startFromAftMm": 101.6,
+        "lengthMm": 304.8,
+        "startDiaMm": 76.2,
+        "endDiaMm": 101.6,
+        "keywayWidthMm": 25.4,
+        "keywayDepthMm": 7.9375,
+        "keywayLengthMm": 228.6,
+        "keywaySpooned": false,
+        "taperRateText": "1:12"
+      }
+    ],
+    "threads": [
+      {
+        "id": "tpl4-th1",
+        "startFromAftMm": 0.0,
+        "majorDiaMm": 76.2,
+        "pitchMm": 6.35,
+        "lengthMm": 101.6,
+        "excludeFromOAL": true,
+        "tpi": 4.0
+      }
+    ],
+    "liners": [
+      {
+        "id": "tpl4-l1",
+        "startMmPhysical": 1500.0,
+        "lengthMm": 400.0,
+        "odMm": 107.95
+      }
+    ]
+  }
+}

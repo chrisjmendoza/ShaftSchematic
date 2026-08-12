@@ -16,4 +16,24 @@ data class PdfExportOptions(
      * replaced by a writable blank so the sheet can be filled in by hand in the field.
      */
     val blankValues: Boolean = false,
-)
+    /**
+     * On a blank draft, whether the below-shaft Ø callout leaders print at all.
+     *
+     * true  → leaders and their write-in rules are drawn, ready to fill (the default, and
+     *         what blank drafts have always done).
+     * false → the callout pass is skipped entirely — line, arrow, and rule — leaving the
+     *         shaft clear to annotate freehand. A blank leader with nothing to write on is
+     *         worse than no leader, so this drops the whole mark rather than just the value.
+     *
+     * Ignored outside blank mode: a printed sheet always shows its diameters (subject to the
+     * per-component `showDiaOnDrawing` toggles).
+     */
+    val blankDiaCallouts: Boolean = true,
+) {
+    /**
+     * Whether the below-shaft Ø callout pass runs for this sheet. One rule, one place — every
+     * call site that builds export options passes the raw preference and never re-derives
+     * this itself.
+     */
+    val showDiaCallouts: Boolean get() = !blankValues || blankDiaCallouts
+}

@@ -61,6 +61,7 @@ fun PdfExportRoute(
     val openAfterExport by vm.openPdfAfterExport.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val pdfBlankDraft by vm.pdfBlankDraft.collectAsState()
+    val pdfBlankDiaCallouts by vm.pdfBlankDiaCallouts.collectAsState()
 
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
@@ -103,7 +104,11 @@ fun PdfExportRoute(
                     appVersion = appVersionFromContext(ctx),
                     filename = filename,
                     pdfPrefs = vm.currentPdfPrefs,
-                    options = PdfExportOptions(mode = pdfExportMode, blankValues = pdfBlankDraft),
+                    options = PdfExportOptions(
+                        mode = pdfExportMode,
+                        blankValues = pdfBlankDraft,
+                        blankDiaCallouts = pdfBlankDiaCallouts,
+                    ),
                     resolvedComponents = vm.resolvedComponents.value,
                     lineThicknessScale = vm.lineThicknessScale.value,
                     heightScale = vm.runoutConfig.value.heightScale,

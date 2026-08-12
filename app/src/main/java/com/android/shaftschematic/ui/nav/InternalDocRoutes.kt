@@ -24,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,6 +33,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.android.shaftschematic.io.InternalStorage
+import com.android.shaftschematic.io.TemplateStorage
+import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.template.TemplateLinerCount
+import com.android.shaftschematic.template.TemplateSizeBucket
+import com.android.shaftschematic.template.templateLinerCount
+import com.android.shaftschematic.template.templateSizeBucket
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.unlockAchievement
 import com.android.shaftschematic.util.FeedbackIntentFactory
@@ -535,6 +542,9 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
         }
     }
 
+    val spec by vm.spec.collectAsState()
+    var showTemplateDialog by remember { mutableStateOf(false) }
+
     var existingFiles by remember { mutableStateOf(listOf<String>()) }
     LaunchedEffect(Unit) { existingFiles = InternalStorage.list(ctx) }
 
@@ -684,6 +694,140 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                 val base = stripShaftDocExtension(name.text.trim()).ifBlank { "Shaft" }
                 saveCopyLauncher.launch(base + SHAFT_DOT_EXT)
             }) { Text("Save a copy to device…") }
+
+            OutlinedButton(
+                onClick = { showTemplateDialog = true },
+                modifier = Modifier.testTag("save_as_template_button"),
+            ) { Text("Save as template…") }
+
+            Text(
+                "A template keeps the shaft's geometry only — no job number, customer, vessel, " +
+                    "notes, or measurements travel with it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
+
+    // Same overwrite protection as the document save above: an existing template of the
+    // typed name (case-insensitive, so one browser row never becomes two case-variant files)
+    // is confirmed before it is replaced, never silently clobbered.
+    var pendingTemplateOverwrite by remember { mutableStateOf<String?>(null) }
+
+    fun writeTemplate(fileName: String) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                TemplateStorage.save(ctx, fileName, vm.exportTemplateJson())
+            }
+            pendingTemplateOverwrite = null
+            showTemplateDialog = false
+            snackbarHostState.showSnackbar("Saved to templates")
+        }
+    }
+
+    if (showTemplateDialog) {
+        SaveAsTemplateDialog(
+            spec = spec,
+            suggestedName = suggestedTemplateName(spec, name.text),
+            onDismiss = { showTemplateDialog = false },
+            onSave = { templateName ->
+                scope.launch {
+                    val normalized = TemplateStorage.normalizeTemplateName(templateName)
+                    if (normalized == null) {
+                        showTemplateDialog = false
+                        snackbarHostState.showSnackbar("Enter a template name")
+                        return@launch
+                    }
+                    val existing = withContext(Dispatchers.IO) {
+                        TemplateStorage.list(ctx).firstOrNull { it.equals(normalized, ignoreCase = true) }
+                    }
+                    if (existing != null) {
+                        pendingTemplateOverwrite = existing
+                    } else {
+                        writeTemplate(normalized)
+                    }
+                }
+            },
+        )
+    }
+
+    pendingTemplateOverwrite?.let { fileName ->
+        AlertDialog(
+            onDismissRequest = { pendingTemplateOverwrite = null },
+            title = { Text("Replace existing template?") },
+            text = { Text("A template named \"${stripShaftDocExtension(fileName)}\" already exists. Replace it?") },
+            confirmButton = {
+                TextButton(
+                    onClick = { writeTemplate(fileName) },
+                    modifier = Modifier.testTag("template_overwrite_confirm"),
+                ) { Text("Replace") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingTemplateOverwrite = null }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+/**
+ * Names a new template after what it IS — its liner size and count — rather than after the job
+ * it came from, since job identity is exactly what a template drops. Falls back to the document
+ * name the user was already typing when the shaft has no liners to describe.
+ */
+internal fun suggestedTemplateName(spec: ShaftSpec, documentName: String): String {
+    val size = templateSizeBucket(spec)
+    val count = templateLinerCount(spec)
+    return when {
+        size is TemplateSizeBucket.Inches ->
+            "${size.inches}in ${count.label.lowercase()}"
+        count == TemplateLinerCount.NONE ->
+            stripShaftDocExtension(documentName.trim()).ifBlank { "Straight shaft" }
+        else -> stripShaftDocExtension(documentName.trim()).ifBlank { "Shaft template" }
+    }
+}
+
+/**
+ * Confirms the template's name and shows the bucket it will file under, so the user knows
+ * where to find it before committing. The bucket is derived, never chosen — it always matches
+ * what the browser computes from the same spec.
+ */
+@Composable
+private fun SaveAsTemplateDialog(
+    spec: ShaftSpec,
+    suggestedName: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+) {
+    var text by remember { mutableStateOf(TextFieldValue(suggestedName, TextRange(suggestedName.length))) }
+    val sizeLabel = remember(spec) { templateSizeBucket(spec).label }
+    val countLabel = remember(spec) { templateLinerCount(spec).label }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Save as template") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("Template name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("template_name_field"),
+                )
+                Text(
+                    "Files under: $sizeLabel · $countLabel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(text.text) },
+                enabled = text.text.isNotBlank(),
+                modifier = Modifier.testTag("template_save_confirm"),
+            ) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

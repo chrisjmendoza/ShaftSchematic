@@ -76,14 +76,22 @@ object InternalStorage {
      * - Trims whitespace
      * - If user includes `.shaft` or a legacy extension like `.json`, it is replaced with `.shaft`
      * - Appends `.shaft` if no extension is present
+     * - Collapses path separators to spaces: a name is ONE path segment. Every store does
+     *   `File(dir, name)`, so a name like `../shafts/Job 1` would resolve outside the store's
+     *   directory and silently overwrite an unrelated file.
      *
-     * Returns null if the input is blank.
+     * Returns null if the input is blank, or reduces to nothing (or to a dot-only segment)
+     * after sanitizing.
      */
     fun normalizeShaftDocName(raw: String): String? {
         val trimmed = raw.trim()
         if (trimmed.isEmpty()) return null
 
         val base = stripShaftDocExtension(trimmed)
+            .replace(Regex("""[/\\]"""), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (base.isEmpty() || base.all { it == '.' }) return null
         return base + SHAFT_DOT_EXT
     }
 

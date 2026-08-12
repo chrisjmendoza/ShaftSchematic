@@ -14,8 +14,13 @@ import android.graphics.Paint
 /** Default writable rule length after a label (pt). */
 internal const val BLANK_RULE_PT = 70f
 
-/** Writable gap reserved inside a dimension-line break when the value is blanked (pt). */
-internal const val BLANK_DIM_GAP_PT = 46f
+/**
+ * Writable gap reserved inside a dimension-line break when the value is blanked (pt).
+ * Sized for handwriting a dimension like `60 1/4"` on a clipboard — a print-width gap is
+ * too tight to write in (on-device report). Spans too short to host the gap with inward
+ * arrows fall back to the continuous-line style, so widening this never breaks a rail.
+ */
+internal const val BLANK_DIM_GAP_PT = 60f
 
 /**
  * Air between a printed dimension value and each line stub when it seats in its break

@@ -111,6 +111,11 @@ fun ShaftViewModel.setPdfBlankDraft(enabled: Boolean) {
     _pdfBlankDraft.value = enabled
 }
 
+/** Session-only, like [setPdfBlankDraft]. Only affects sheets exported in blank mode. */
+fun ShaftViewModel.setPdfBlankDiaCallouts(enabled: Boolean) {
+    _pdfBlankDiaCallouts.value = enabled
+}
+
 // ── Appearance (app-wide theme) ──────────────────────────────────────────────
 
 fun ShaftViewModel.setThemeMode(mode: AppThemeMode, persist: Boolean = true) {

@@ -185,6 +185,7 @@ fun ShaftScreen(
                 keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
                 keywaySpooned: Boolean) -> Unit,
     onSetAutoBodyDia: (Float) -> Unit,
+    onSetShowAutoBodyDia: (Boolean) -> Unit,
     onAddTaper: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float,
                  rateText: String, reference: LinerAuthoredReference,
                  keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
@@ -195,6 +196,7 @@ fun ShaftScreen(
 
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
+    onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -204,6 +206,7 @@ fun ShaftScreen(
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+    onUpdateLinerShowDia: (Int, Boolean) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
@@ -672,7 +675,9 @@ fun ShaftScreen(
                         onAddBody(s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false)
                     },
                     onSetAutoBodyDia = onSetAutoBodyDia,
+                    onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
+                    onUpdateBodyShowDia = onUpdateBodyShowDia,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
                     onUpdateTaper = onUpdateTaper,
@@ -682,6 +687,7 @@ fun ShaftScreen(
                     onUpdateThread = onUpdateThread,
                     onUpdateThreadLabel = onUpdateThreadLabel,
                     onUpdateLiner = onUpdateLiner,
+                    onUpdateLinerShowDia = onUpdateLinerShowDia,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
                     onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,

@@ -35,6 +35,7 @@ import com.android.shaftschematic.ui.screen.PdfPreviewScreen
 import com.android.shaftschematic.ui.screen.SettingsRoute
 import com.android.shaftschematic.ui.screen.ShaftEditorRoute
 import com.android.shaftschematic.ui.screen.StartScreen
+import com.android.shaftschematic.ui.screen.TemplatesRoute
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.FeedbackIntentFactory
@@ -135,6 +136,7 @@ fun AppNav(vm: ShaftViewModel) {
                             }
                         },
                         onOpen = { runGuarded { nav.navigate("openLocal") } },
+                        onOpenTemplates = { nav.navigate("templates") },
                         onSettings = { nav.navigate("settings") },
                         onSendFeedback = {
                             val intent = FeedbackIntentFactory.create(
@@ -223,6 +225,25 @@ fun AppNav(vm: ShaftViewModel) {
                 onOpenDeveloperOptions = { nav.navigate("developerOptions") },
                 // PDF EXPORT = show preview first, then SAF
                 onExportPdf = { nav.navigate("pdfPreview") }
+            )
+        }
+
+        /* ───────── Templates ─────────
+           Browsing is harmless, so the route itself is unguarded; CHOOSING a template
+           replaces the session, so that action goes through the same unsaved-changes guard
+           as New/Open. applyTemplate leaves the session dirty and unnamed on purpose — see
+           its KDoc — so the draft ring protects the loaded template from the first moment.
+        */
+        composable("templates") {
+            TemplatesRoute(
+                vm = vm,
+                onBack = { nav.popBackStack() },
+                onUseTemplate = { raw ->
+                    runGuarded {
+                        vm.applyTemplate(raw)
+                        nav.navigate("editor") { popUpTo("start") { inclusive = false } }
+                    }
+                },
             )
         }
 

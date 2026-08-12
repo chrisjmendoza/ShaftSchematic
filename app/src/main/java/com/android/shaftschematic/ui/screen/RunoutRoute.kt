@@ -100,8 +100,6 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.PlacedRunoutBubble
 import com.android.shaftschematic.geom.RunoutBubbleGeometry
 import com.android.shaftschematic.geom.RunoutBubblePlan
-import com.android.shaftschematic.geom.RunoutComponentKind
-import com.android.shaftschematic.geom.RunoutComponentSpan
 import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.pickBubbleAt
@@ -120,17 +118,13 @@ import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
-import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
-import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
+import com.android.shaftschematic.ui.resolved.runoutComponentSpans
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.inkBand
-import com.android.shaftschematic.ui.util.buildBodyTitleById
-import com.android.shaftschematic.ui.util.buildLinerTitleById
-import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
@@ -144,13 +138,6 @@ import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.roundToInt
-
-private data class RunoutComponentEntry(
-    val id: String,
-    val label: String,
-    val defaultCount: Int,
-    val startMm: Float,
-)
 
 @OptIn(ExperimentalTextApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -326,34 +313,10 @@ fun RunoutRoute(
         )
     }
 
-    // Bodies, tapers, liners in axial order for the station count selector.
-    // Built from RESOLVED components — the same list the drawn profile uses — so bodies
-    // appear as their drawable segments (subtracted against tapers/liners, auto-fill
-    // included), never at their raw spec positions. A body split into several fragments
-    // by liners keeps one row (one id) controlling all its fragments.
+    // Bodies, tapers, liners in axial order for the station count selector — the same rows
+    // the Consolidated tab shows (`RunoutStationEditor.kt`, one builder for both).
     val entries: List<RunoutComponentEntry> = remember(spec, resolvedComponents) {
-        val bodyTitles  = buildBodyTitleById(spec)
-        val taperTitles = buildTaperTitleById(spec)
-        val linerTitles = buildLinerTitleById(spec)
-        buildList {
-            resolvedComponents.forEach { rc ->
-                when (rc) {
-                    is ResolvedBody -> {
-                        // Fragments of one stored body carry suffixed ids ("<id>#2", …);
-                        // key off the base id so they collapse into a single row below.
-                        val baseId = resolvedBodyBaseId(rc.id)
-                        val label = if (rc.source == ResolvedComponentSource.AUTO) "Body (auto)"
-                                    else bodyTitles[baseId] ?: "Body"
-                        add(RunoutComponentEntry(baseId, label, RunoutConfig.BODY_DEFAULT_COUNT, rc.startMmPhysical))
-                    }
-                    is ResolvedTaper ->
-                        add(RunoutComponentEntry(rc.id, taperTitles[rc.id] ?: "Taper", RunoutConfig.TAPER_DEFAULT_COUNT, rc.startMmPhysical))
-                    is ResolvedLiner ->
-                        add(RunoutComponentEntry(rc.id, linerTitles[rc.id] ?: "Liner", RunoutConfig.LINER_DEFAULT_COUNT, rc.startMmPhysical))
-                    else -> {}
-                }
-            }
-        }.distinctBy { it.id }.sortedBy { it.startMm }
+        buildRunoutStationEntries(spec, resolvedComponents)
     }
 
     // Zoom state for the shaft preview (hoisted so it survives spec updates)
@@ -493,18 +456,11 @@ fun RunoutRoute(
             }
 
             // ── Measurement station selector ──────────────────────────────────
-            if (entries.isNotEmpty()) {
-                Text("Measurement stations", style = MaterialTheme.typography.titleSmall)
-                entries.forEach { entry ->
-                    val currentCount = runoutConfig.componentOverrides[entry.id] ?: entry.defaultCount
-                    RunoutStationRow(
-                        label        = entry.label,
-                        currentCount = currentCount,
-                        onDecrement  = { vm.setRunoutBubbleCount(entry.id, currentCount - 1) },
-                        onIncrement  = { vm.setRunoutBubbleCount(entry.id, currentCount + 1) },
-                    )
-                }
-            }
+            RunoutStationCountEditor(
+                entries = entries,
+                overrides = runoutConfig.componentOverrides,
+                onSetCount = { id, count -> vm.setRunoutBubbleCount(id, count) },
+            )
 
             // (Worn-section authoring, the consolidated variant picker, and the "Shaft
             // height" slider live on the Consolidated Output tab — this tab is the runout
@@ -681,47 +637,6 @@ private fun runoutBubbleTitle(bubble: PlacedRunoutBubble, entries: List<RunoutCo
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun RunoutStationRow(
-    label: String,
-    currentCount: Int,
-    onDecrement: () -> Unit,
-    onIncrement: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Stations:",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(end = 4.dp),
-            )
-            IconButton(onClick = onDecrement, enabled = currentCount > 1) {
-                Text("−", style = MaterialTheme.typography.titleMedium)
-            }
-            Text(
-                text = "$currentCount",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
-            IconButton(onClick = onIncrement) {
-                Text("+", style = MaterialTheme.typography.titleMedium)
-            }
-        }
-    }
-}
-
-@Composable
 private fun TirButton(label: String, selected: Boolean, onClick: () -> Unit) {
     if (selected) Button(onClick = onClick) { Text(label) }
     else TextButton(onClick = onClick) { Text(label) }
@@ -730,20 +645,6 @@ private fun TirButton(label: String, selected: Boolean, onClick: () -> Unit) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Canvas helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-/** Component spans eligible for runout stations, from the resolved component list. */
-private fun runoutSpans(components: List<ResolvedComponent>): List<RunoutComponentSpan> =
-    components.mapNotNull { rc ->
-        val lengthMm = rc.endMmPhysical - rc.startMmPhysical
-        when (rc) {
-            // Body fragments key off the base id (suffix stripped) so all fragments of one
-            // stored body share a single station key.
-            is ResolvedBody  -> RunoutComponentSpan(resolvedBodyBaseId(rc.id), RunoutComponentKind.BODY,  rc.startMmPhysical, lengthMm)
-            is ResolvedTaper -> RunoutComponentSpan(rc.id, RunoutComponentKind.TAPER, rc.startMmPhysical, lengthMm)
-            is ResolvedLiner -> RunoutComponentSpan(rc.id, RunoutComponentKind.LINER, rc.startMmPhysical, lengthMm)
-            else -> null
-        }
-    }
 
 /** The shaft layout + planned bubbles for the runout preview canvas, computed by [computeRunoutPreview]. */
 private class RunoutPreview(
@@ -774,7 +675,7 @@ private fun Density.computeRunoutPreview(
         contentLeft = 0f,
         contentRight = widthPx,
     )
-    val spans = runoutSpans(resolvedComponents)
+    val spans = runoutComponentSpans(resolvedComponents)
 
     // Reserve vertical space for the planned bubble rows so shaft + bubbles are centred together.
     // First pass assumes the typical two-row layout; re-plan once if the actual row count differs.

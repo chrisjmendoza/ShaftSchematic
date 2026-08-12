@@ -49,6 +49,13 @@ Specifically:
   when count > 1), through/blind toggle + depth (only when blind). The card additionally
   has the deferred "show dimension rail" toggle.
 
+**Carve-out — post-hoc display toggles are card-only.** A control that only exists to change
+how an *already-drawn* component prints, is default-on, and is reached for after looking at a
+printed sheet is not a property of the component being added; in an Add dialog it would be a
+permanently-checked box adding noise to every add. Exactly two qualify: the coupler slot's
+"show dimension rail" and **"Show Ø on drawing"** (`Body`/`Liner`/auto-body cards). Anything
+that changes geometry, position, or a value stays under the parity rule above.
+
 ### Coupler bolt slots are reference features
 Coupler bolt slots (`ShaftSpec.couplerBoltSlots`) are radial cutouts drawn on the shaft
 but they **never** affect overall length (`coverageEndMm` ignores them), **never** split
@@ -257,6 +264,30 @@ section core stays half the liner alpha at every intensity — `UndercutStyleTes
 fixed inks, never theme roles, and never leaking into the PDF composers. See
 `Appearance.md`.
 
+### Runout stations are per COMPONENT, never per drawn run
+Station counts are length-driven — one per `RUNOUT_STATION_INTERVAL_MM` (20") via
+`geom/RunoutBubbleLayout.kt`'s `defaultStationCount` (bodies `ceil(L/20")` min 1; liners the
+same floored at 2 for the edge-inset convention; tapers a flat 2, the shop convention; all
+capped at `MAX_STATIONS_PER_COMPONENT`). `componentOverrides` still wins.
+
+A body split by liners/tapers draws as several runs but is **ONE component**: one carousel
+name, one station-editor row, one override, one continuous run of `stationIndex` values
+AFT→FWD. `collectRunoutStations` therefore groups spans by id, derives the count ONCE from the
+summed length, and apportions it across the runs (`apportionStations`, largest-remainder).
+Deriving per run is the bug this replaced — a 1–2" leftover fragment collected a full default's
+worth of bubbles, and indices restarting at 0 per run made one reading key identify several
+bubbles.
+
+**Both draw sites must build spans through `ui/resolved/RunoutSpans.kt`** (`runoutComponentSpans`)
+— base-id keyed. The canvas keying by base id while the PDF kept the resolved fragment id
+(`"<id>#2"`) silently dropped count overrides AND hand-entered TIR values from the printed
+sheet on any fragmented body; it is invisible on unfragmented bodies, so it hides well. Do not
+rebuild spans from `spec.bodies` or from `withResolvedBodies` output.
+
+Changing a default count moves stations under readings keyed `(componentId, stationIndex)`, so
+`ShaftDocCodec.freezeLegacyStationCounts` freezes the pre-interval count for any component that
+already carries a reading and has no override. A typed TIR is as sacred as a typed diameter.
+
 ### Runout readings are reference features
 Per-station runout readings (`RunoutReadings` in the doc envelope — a TIR value + high-spot
 clock marker per bubble) are **reference-only**, same posture as coupler bolt slots and wear
@@ -292,7 +323,26 @@ footer's "Ø" text — never the raw 4-decimal format. Bodies and liners are **s
 groups** — a liner OD is never deduped against a body OD. Horizontally-close labels stack onto
 a second row via `geom/DiameterCalloutLayout.kt` (pure, unit-tested), the same two-tier
 posture as runout bubbles. PDF-only — no on-screen canvas equivalent, so no draw-both-sites
-rule applies. See `docs/PDF_EXPORT.md` §5.3.
+rule applies.
+
+Two visibility controls gate the pass, and they compose as an AND:
+- **Per component** — `Body.showDiaOnDrawing` / `Liner.showDiaOnDrawing` (and
+  `ShaftSpec.showAutoBodyDia`, ONE flag for every auto span, matching the single
+  `autoBodyDiaMm`). Draw-only, default true, additive/defaulted so old documents print
+  unchanged. The filter runs **BEFORE the group-by-Ø** — that is the whole point: hiding one
+  body of a shared-Ø group moves the anchor to the longest body of that Ø still shown, rather
+  than deleting the value (the on-device case: a Ø printed over a fiberglassed run that could
+  not have been measured there). The spec→drawable mapping (`ShaftSpec.bodyForPdf`) must strip
+  fragment ids with `resolvedBodyBaseId`, so hiding a split body hides every run. The footer's
+  "Body:" Ø list is deliberately NOT gated — the value is true for the shaft; only its
+  placement was wrong. These toggles are **card-only**, an explicit carve-out from the
+  add-dialog-parity invariant on the same grounds as the coupler slot's "show dimension rail".
+- **Per sheet, blank drafts only** — `PdfExportOptions.blankDiaCallouts` drops the whole
+  pass (line, arrow, and rule) so a write-in sheet can be annotated freehand. One rule,
+  `PdfExportOptions.showDiaCallouts`, is the only place the two combine; the four sites that
+  build export options pass the raw preference and never re-derive it.
+
+See `docs/PDF_EXPORT.md` §5.3.
 
 ### Dimension values seat in a break in the line
 `PdfDimensionRenderer.drawPlanned` draws each dimension line as **two stubs**

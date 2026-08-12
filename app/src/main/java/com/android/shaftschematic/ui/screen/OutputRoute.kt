@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.geom.computeOalWindow
@@ -129,6 +131,8 @@ private data class ConsolidatedRenderInputs(
 fun OutputRoute(
     vm: ShaftViewModel,
     onOpenSidebar: () -> Unit = {},
+    /** Switch the editor to the Runout tab — the full bubble authoring surface. */
+    onOpenRunoutTab: () -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
     val runoutConfig       by vm.runoutConfig.collectAsState()
@@ -150,11 +154,19 @@ fun OutputRoute(
     val wearRecord         by vm.wearRecord.collectAsState()
     val undercutRecord     by vm.undercutRecord.collectAsState()
     val exportMode         by vm.pdfExportMode.collectAsState()
+    // Whether a blank schematic in the batch carries Ø leaders — one preference for every
+    // surface that prints a blank schematic (see PdfExportOptions.showDiaCallouts).
+    val pdfBlankDiaCallouts by vm.pdfBlankDiaCallouts.collectAsState()
 
     val ctx = LocalContext.current
     // Footer stamp for the schematic document in the batch — the same version string the
     // Schematic tab's own export prints.
     val appVersion = remember(ctx) { appVersionFromContext(ctx) }
+
+    // Station-count rows for the in-place bubble editor — same builder the Runout tab uses.
+    val stationEntries = remember(spec, resolvedComponents) {
+        buildRunoutStationEntries(spec, resolvedComponents)
+    }
 
     // Sheet-content election. Session-scoped, resets to the full sheet — an inspection
     // normally wants everything; a sticky partial pick would silently print less later.
@@ -309,7 +321,11 @@ fun OutputRoute(
                         OutputDoc.SCHEMATIC -> composeShaftPdf(
                             page = page, spec = spec, unit = unit, project = project,
                             appVersion = appVersion, filename = name, pdfPrefs = prefs,
-                            options = PdfExportOptions(mode = exportMode, blankValues = blankDraft),
+                            options = PdfExportOptions(
+                                mode = exportMode,
+                                blankValues = blankDraft,
+                                blankDiaCallouts = pdfBlankDiaCallouts,
+                            ),
                             resolvedComponents = resolvedComponents,
                             lineThicknessScale = lineThicknessScale,
                             heightScale = runoutConfig.heightScale,
@@ -455,6 +471,38 @@ fun OutputRoute(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            // ── Runout bubbles ───────────────────────────────────────────────
+            // The bubbles print on THIS sheet, so their counts are editable here (on-device
+            // report: adjusting one meant leaving the tab). Same rows, same overrides, same
+            // composable as the Runout tab — the two surfaces cannot drift. The button beside
+            // it still opens the Runout tab for the full authoring surface (TIR values, high
+            // spots, the standalone sheet).
+            if (variant.includeBubbles && stationEntries.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Runout bubbles", style = MaterialTheme.typography.titleSmall)
+                    TextButton(
+                        onClick = onOpenRunoutTab,
+                        modifier = Modifier.testTag("output_open_runout_tab"),
+                    ) { Text("Runout sheet →") }
+                }
+                RunoutStationCountEditor(
+                    entries = stationEntries,
+                    overrides = runoutConfig.componentOverrides,
+                    onSetCount = { id, count -> vm.setRunoutBubbleCount(id, count) },
+                    showHeading = false,
+                )
+                Text(
+                    "One station per 20\" by default. Tap a bubble on the Runout sheet to " +
+                        "enter its TIR reading and high spot.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             // ── Shaft height (per-job, shared with the schematic PDF) ────────
             ShaftHeightSlider(

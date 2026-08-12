@@ -36,6 +36,188 @@ commit cannot be withdrawn from anyone who took a copy under them.
 
 ---
 
+## 2026-08-12
+
+### fix: taper footers drop the (AFT)/(FWD) suffix on L.E.T. / S.E.T.
+
+The taper spec boxes printed `L.E.T. (AFT):` / `S.E.T. (FWD):`. On-device report: beside an
+AFT taper, "(FWD)" read as if the line were asking about the FWD taper. The footer column
+already names which end of the shaft the box describes, and which face is the small end is
+shop knowledge — the suffix only confused. Labels are now bare `L.E.T.:` / `S.E.T.:` on every
+footer on every page (one shared `buildFooterEndColumns` feeds them all; blank drafts
+included). The large end is still always the L.E.T. whichever physical face carries it.
+
+### fix: blank-draft write-in lines sized for handwriting
+
+On-device report from a consolidated blank sheet: the fill-in rules neither spaced out nor
+ran long enough to write on. Three changes, all in the shared blank-form helpers so every
+blank document moves together:
+
+- **Footer rules run to the column edge** instead of a fixed ~1" (`drawFooter`, shared by
+  the schematic and consolidated footers) — room for a real customer name or diameter.
+- **Footer lines open to a handwriting pitch** (`FOOTER_LINE_FACTOR_BLANK` 1.8 → 2.2, band
+  `FOOTER_BLOCK_BLANK_PT` 150 → 200 pt), with the pitch fit-clamped to the band so the
+  fullest column (taper + spooned note + thread) tightens instead of overrunning the page.
+- **Dimension write-in gaps widen** (`BLANK_DIM_GAP_PT` 46 → 60 pt) on every sheet that
+  cuts them; spans too short for the wider gap keep the existing continuous-line fallback.
+
+### fix: review findings on the templates / Ø-toggle / station-interval branch
+
+Fixes from the review of the 2026-08-11 work, all behavior-preserving for existing documents:
+
+- **The `station_interval_version` stamp moved into `encodeV1` itself.** The field's decode
+  default is 0 (legacy), so a future writer that forgot to pass it would compile cleanly while
+  producing files that reopen with counts pinned to the old defaults and trailing readings
+  orphaned. The encoder now stamps every write unconditionally; no caller can forget.
+- **Start screen scrolls.** The home column (title, drafts, recents, five buttons) overran a
+  small phone's height with no way to reach Settings; centered layout is unchanged when the
+  content fits.
+- **"Save as template…" confirms before replacing** an existing template of the same name
+  (case-insensitive), matching the document save screen. It previously overwrote silently.
+- **Document/template names are single path segments.** `normalizeShaftDocName` collapses
+  `/` and `\` — a name like `../shafts/Job 1` could previously resolve outside the store's
+  directory and silently overwrite a saved job document.
+- **Starter templates' taper rates match their geometry.** The placeholder assets labeled
+  tapers `1:12`/`1:16` that were cut at 1:24, 1:15, and 1:13 — the first drawing from a
+  starter printed a wrong rate and tripped the rate-mismatch warning. SET/LET/length now
+  derive from the labeled rate (pinned by `StarterTemplateAssetsTest`); the geometry remains
+  placeholder pending plan §7 Q14.
+- **Template previews resolve like the editor.** `ShaftThumbnail` derived manual-OAL mode as
+  `OAL > 0`, so a stored auto-OAL template previewed a leading auto-fill span that vanished
+  on load; it now uses `applyTemplate`'s `> coverageEndMm + eps` predicate.
+- **Template store hardening**: rename returns a typed result (a vanished source is no longer
+  reported as "name already taken"; an unnormalizable name gets feedback instead of a silent
+  no-op); "Use" re-decodes before applying so a file corrupted after the scan snackbars
+  instead of crashing; the browser awaits the (idempotent) first-run seeder so a first open
+  cannot race it into "No templates yet"; the seed one-shot flag is not set when every asset
+  failed, so a fixed build can retry; a just-seeded name joins the collision set.
+- **One span mapping everywhere**: the station editor's rows now derive from
+  `runoutComponentSpans` (the same builder both draw sites use) instead of a parallel fold,
+  so editor rows can never disagree with drawn bubbles about identity or eligibility.
+- **Template size buckets divide in Double**, so an OD stored as Float mm on an exact
+  half-inch boundary (3.5" = 88.9 mm) cannot round down a bucket.
+
+Left deliberately unfixed, still awaiting a call: the inert keyway true-scale pin (plan §7
+Q8 — confirmed inert in `ShaftPdfComposer` AND `RunoutPdfComposer`, with
+`ShaftHeightSlider`'s estimate modeling the pin the composers drop), and whether user-typed
+component labels should be scrubbed from templates.
+
+---
+
+## 2026-08-11
+
+Spec: `docs/Templates_And_DiaVisibility_PLAN.md` (parts A1, A2, B, C, D, E). Open questions
+in that doc's §7 are unanswered; every one was resolved with the recommendation stated there,
+so each is a one-line change if the answer differs.
+
+### feat: show/hide a component's Ø on the schematic
+
+A per-card **"Show Ø on drawing"** switch on explicit-body, auto-body and liner cards
+(`Body.showDiaOnDrawing`, `Liner.showDiaOnDrawing`, `ShaftSpec.showAutoBodyDia` — additive,
+defaulted `true`, so no envelope version bump and pre-feature documents print exactly as
+before). Draw-only: nothing in the model, resolve, OAL, collision or footer geometry moves,
+and no stored diameter is ever rewritten.
+
+From an on-device report: a body ran under fiberglass for most of its length with one bare
+window that could be measured, and the Ø callout printed at the body's center — over the
+fiberglass — implying a reading was taken where it could not have been. The filter is applied
+**before** the group-by-Ø in `buildBodyOdCallouts`/`buildLinerOdCallouts`, so hiding one body
+of a shared-Ø group does not delete the value: the anchor moves to the longest body of that Ø
+that is still shown. The lookup strips fragment ids (`resolvedBodyBaseId`), so hiding a body a
+liner has split hides every one of its runs. Auto spans share one flag, matching the single
+bare-shaft Ø. The footer's "Body:" Ø list is unchanged — the value is true for the shaft; it
+was only the placement that misled.
+
+Card-only, with no Add-dialog counterpart: the same carve-out the coupler slot's "Show
+dimension rail" already has, for the same reason — it is a display choice made after seeing a
+printed sheet, not a property of the component being added.
+
+### feat: Ø callouts optional on blank write-in drafts
+
+A **"Ø callouts"** sub-switch under the blank-draft toggle in the PDF options sheet
+(`PdfExportOptions.blankDiaCallouts`, session-only like the blank toggle it sits under).
+Off drops the whole callout pass — line, arrow and rule — leaving the shaft clear to annotate
+freehand; a blank leader with nothing to write on is worse than no leader. One rule
+(`PdfExportOptions.showDiaCallouts`) serves all four sites that build export options, so they
+cannot disagree. Composes with the per-component toggle as an AND.
+
+### fix: runout station counts follow length, and reach the printed sheet
+
+**One station per 20 inches** (`defaultStationCount`, `RUNOUT_STATION_INTERVAL_MM`), replacing
+the flat "3 per body whatever its length". Bodies take `ceil(length / 20")` (min 1), liners the
+same floored at 2 (the edge-inset convention needs both ends), tapers stay at 2 (shop
+convention). Capped at 10 per component. Overrides still win.
+
+The reported symptom — three bubbles on a 1–2" segment — had a second cause: the count was
+applied **per drawn run, not per component**. A body split by two liners drew 3 + 3 + 3 = 9
+bubbles while its station-editor row said "3". Counts are now derived once per component and
+apportioned across its runs by length (`apportionStations`, largest-remainder).
+
+Two further defects, found while tracing that and fixed with it:
+
+- **Count overrides and TIR values did not reach the printed runout sheet** for any body a
+  liner had split. The live canvas keyed stations by the base body id while the PDF kept the
+  resolved fragment id (`"<id>#2"`), so `overrides["X"]` missed and `readings.find("X", 1)`
+  missed — the value stayed in the file and never printed. Both sites now build spans through
+  one shared mapping, `ui/resolved/RunoutSpans.kt`. Invisible on unfragmented bodies, which is
+  why it survived this long.
+- **Fragments reused station indices**, each run restarting at 0, so one reading key identified
+  several bubbles. Indices now run continuously AFT→FWD across a component's runs.
+
+**Existing documents are protected**: at decode, any component that already carries a reading
+and has no override gets its pre-interval count frozen into `componentOverrides`
+(`ShaftDocCodec.freezeLegacyStationCounts`). A reading is keyed by station index, not by
+position, so station 1 *of 3* is not where station 1 *of 5* is — changing a count slides a
+measured value onto a spot it was not measured at, or off the end entirely. The golden rule
+applies to a typed TIR exactly as it does to a typed diameter. The freeze is visible and
+editable in the station editor, and documents with no readings pick up the new defaults.
+
+The freeze is gated on a new envelope stamp, `station_interval_version` (additive, defaulted
+0, no envelope version bump; writers stamp `CURRENT_STATION_INTERVAL_VERSION`). Without it the
+freeze cannot tell a pre-interval document from one authored after — neither carries an
+override — and would pin NEW documents to the OLD defaults: a 100" body drawn today defaults
+to 5 stations, and reopening it would drop that to 3 and orphan the readings at 4 and 5.
+
+### feat: bubble counts editable from the Consolidated Output tab
+
+The station editor is now a shared composable (`RunoutStationEditor.kt`) hosted by both the
+Runout tab and the Consolidated tab, plus a "Runout sheet →" button for the full authoring
+surface. On-device report: the bubbles print on the consolidated sheet but changing one meant
+leaving the tab. One composable, two hosts — the surfaces cannot drift.
+
+### feat: shaft templates
+
+**A template store** (`<filesDir>/templates/`, `io/TemplateStorage.kt`) holding ordinary
+`.shaft` documents — no new format, no codec change. **Save → "Save as template…"** files the
+current drawing there; the dialog shows the bucket it will land in.
+
+A template carries **geometry only**. Job number, customer, vessel, position, notes and every
+measurement record are stripped at WRITE time (`ShaftViewModel.exportTemplateJson`), not merely
+ignored on load — a template that still held a customer name would carry it into every drawing
+built from it, and into any copy of the file.
+
+**A browser** (`TemplatesRoute.kt`, reached from "Start from Template" on the home screen):
+collapsible sections by liner size (4"–12", plus "No liners" and "Other sizes"), then by liner
+count, then cards with a drawn preview. Both grouping keys are **derived from each stored spec
+on scan** (`template/TemplateBuckets.kt`) — no index file to fall out of sync, so an edited
+template re-files itself. Empty buckets are hidden. Previews use `ShaftThumbnail`, which calls
+the same `ShaftLayout.compute` → `ShaftRenderer.draw` pair as the editor with everything
+interactive stripped; there is no second renderer.
+
+Choosing a template routes through the same unsaved-changes guard as New/Open, then
+`applyTemplate` loads it as a **new, unnamed, dirty** session: unnamed so the first Save
+prompts (a template can never be overwritten by the drawing made from it), dirty because
+`importJson`'s closing `markDocumentSaved()` would leave a loaded template counting as "no
+unsaved work" — quitting would lose it, since the draft ring only protects a session it can
+see as dirty.
+
+Three bundled starter templates (4"/1 liner, 6"/2 liners, 8"/3 liners) seed once on first run
+so the browser is not empty; deleting them is permanent. **Their geometry is placeholder** —
+plausible proportions derived from the bundled sample shafts, pending the answer to the plan's
+Q14 (which layouts are actually reached for).
+
+---
+
 ## 2026-08-10
 
 ### refactor: KeywaySpan type + withBodyAt extraction (code-review findings)

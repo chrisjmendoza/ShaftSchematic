@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "preferred_unit": "INCHES",
+  "unit_locked": true,
+  "job_number": "",
+  "customer": "",
+  "vessel": "",
+  "shaft_position": "OTHER",
+  "notes": "",
+  "station_interval_version": 1,
+  "spec": {
+    "overallLengthMm": 3600.0,
+    "bodies": [
+      {
+        "id": "tpl6-b1",
+        "startFromAftMm": 431.8,
+        "lengthMm": 2761.8,
+        "diaMm": 152.4
+      }
+    ],
+    "tapers": [
+      {
+        "id": "tpl6-t1",
+        "startFromAftMm": 127.0,
+        "lengthMm": 304.8,
+        "startDiaMm": 127.0,
+        "endDiaMm": 152.4,
+        "keywayWidthMm": 31.75,
+        "keywayDepthMm": 9.525,
+        "keywayLengthMm": 254.0,
+        "keywaySpooned": false,
+        "taperRateText": "1:12"
+      },
+      {
+        "id": "tpl6-t2",
+        "startFromAftMm": 3193.6,
+        "lengthMm": 406.4,
+        "startDiaMm": 152.4,
+        "endDiaMm": 127.0,
+        "keywayWidthMm": 31.75,
+        "keywayDepthMm": 9.525,
+        "keywayLengthMm": 254.0,
+        "keywaySpooned": false,
+        "taperRateText": "1:16"
+      }
+    ],
+    "threads": [
+      {
+        "id": "tpl6-th1",
+        "startFromAftMm": 0.0,
+        "majorDiaMm": 127.0,
+        "pitchMm": 6.35,
+        "lengthMm": 127.0,
+        "excludeFromOAL": true,
+        "tpi": 4.0
+      }
+    ],
+    "liners": [
+      {
+        "id": "tpl6-l1",
+        "startMmPhysical": 900.0,
+        "lengthMm": 500.0,
+        "odMm": 158.75
+      },
+      {
+        "id": "tpl6-l2",
+        "startMmPhysical": 2600.0,
+        "lengthMm": 500.0,
+        "odMm": 158.75
+      }
+    ]
+  }
+}

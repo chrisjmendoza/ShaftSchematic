@@ -1,6 +1,7 @@
 package com.android.shaftschematic.geom
 
 import com.android.shaftschematic.settings.RunoutConfig
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
@@ -105,6 +106,72 @@ fun runoutStationPositionsMm(
 /** Component type for runout station assignment — determines default count and inset behaviour. */
 enum class RunoutComponentKind { BODY, TAPER, LINER }
 
+/**
+ * Station count for a component with no user override — **length-driven**, one station per
+ * [RunoutConfig.RUNOUT_STATION_INTERVAL_MM] (20 inches) of drawn component.
+ *
+ * - **Bodies**: `ceil(length / interval)`, at least 1. A body always gets a reading, and never
+ *   gets three just for existing — the flat "3 per body" this replaced put three stations on a
+ *   1–2" leftover run and only three on a 100" line shaft (on-device report).
+ * - **Tapers**: 2, whatever the length. The two stations are the shop convention (one inset
+ *   from each of the S.E.T. and L.E.T. ends), not a density choice.
+ * - **Liners**: the interval, floored at 2 — the edge-inset convention needs both ends, and a
+ *   long stern-tube liner earns extra stations.
+ *
+ * Capped at [RunoutConfig.MAX_STATIONS_PER_COMPONENT] so a very long shaft cannot derive more
+ * bubbles than the page can seat; a user override may still exceed the cap. Zero-length
+ * components get 0 — nothing to measure.
+ */
+fun defaultStationCount(kind: RunoutComponentKind, lengthMm: Float): Int {
+    if (lengthMm <= 0f) return 0
+    val byInterval = ceil(lengthMm / RunoutConfig.RUNOUT_STATION_INTERVAL_MM).toInt()
+    return when (kind) {
+        RunoutComponentKind.TAPER -> RunoutConfig.TAPER_DEFAULT_COUNT
+        RunoutComponentKind.BODY ->
+            byInterval.coerceIn(1, RunoutConfig.MAX_STATIONS_PER_COMPONENT)
+        RunoutComponentKind.LINER ->
+            byInterval.coerceIn(RunoutConfig.LINER_DEFAULT_COUNT, RunoutConfig.MAX_STATIONS_PER_COMPONENT)
+    }
+}
+
+/**
+ * Split [total] stations across a component's drawn runs in proportion to their lengths
+ * (largest-remainder apportionment).
+ *
+ * A body cut by liners draws as several runs but is ONE component to the user: the carousel
+ * names it once, the station editor gives it one row, and one override governs it. So the
+ * count is derived once for the whole body and handed out here — never re-derived per run,
+ * which is what made a short leftover fragment collect a full default's worth of bubbles.
+ *
+ * A run too short to earn a station gets 0 (you would not put an indicator on a 1" sliver).
+ * Returns all-zero when [total] ≤ 0 or every run is empty.
+ */
+fun apportionStations(runLengthsMm: List<Float>, total: Int): List<Int> {
+    val n = runLengthsMm.size
+    if (n == 0) return emptyList()
+    if (total <= 0) return List(n) { 0 }
+    val lengths = runLengthsMm.map { max(it, 0f) }
+    val sum = lengths.sum()
+    if (sum <= 0f) return List(n) { 0 }
+
+    val exact = lengths.map { it / sum * total }
+    val floors = exact.map { it.toInt() }
+    var remaining = total - floors.sum()
+
+    // Hand the leftovers to the largest fractional parts; ties break toward the aft-most run
+    // (stable sort on descending remainder) so the layout is deterministic.
+    val order = exact.indices.sortedByDescending { exact[it] - floors[it] }
+    val out = floors.toMutableList()
+    var i = 0
+    while (remaining > 0 && i < order.size) {
+        out[order[i]] = out[order[i]] + 1
+        remaining--
+        i++
+        if (i == order.size && remaining > 0) i = 0  // more stations than runs — wrap
+    }
+    return out
+}
+
 /** A component span eligible for runout stations, in physical mm. */
 data class RunoutComponentSpan(
     val id: String,
@@ -128,8 +195,8 @@ data class RunoutStationX(
 )
 
 /**
- * Expand component spans into the flat station list, applying per-component count
- * overrides and the default counts from [RunoutConfig].
+ * Expand component spans into the flat station list, applying per-component count overrides
+ * and the length-derived defaults ([defaultStationCount]).
  *
  * Station placement per kind (on-device request):
  * - **Tapers / liners**: physical mm with the edge inset — the worn areas usually don't
@@ -148,27 +215,50 @@ fun collectRunoutStations(
     mmAtX: ((Float) -> Float)? = null,
 ): List<RunoutStationX> {
     val out = mutableListOf<RunoutStationX>()
-    for (span in spans.filter { it.lengthMm > 0f }.sortedBy { it.startMm }) {
-        val count = overrides[span.id] ?: when (span.kind) {
-            RunoutComponentKind.BODY -> RunoutConfig.BODY_DEFAULT_COUNT
-            RunoutComponentKind.TAPER -> RunoutConfig.TAPER_DEFAULT_COUNT
-            RunoutComponentKind.LINER -> RunoutConfig.LINER_DEFAULT_COUNT
-        }
-        if (span.kind == RunoutComponentKind.BODY && mmAtX != null && count > 0) {
-            val x0 = xAtMm(span.startMm)
-            val x1 = xAtMm(span.startMm + span.lengthMm)
-            repeat(count) { idx ->
-                val xs = x0 + (idx + 0.5f) * (x1 - x0) / count
-                out.add(RunoutStationX(span.id, mmAtX(xs), xs, stationIndex = idx))
-            }
-        } else {
-            runoutStationPositionsMm(
-                startMm = span.startMm,
-                lengthMm = span.lengthMm,
-                count = count,
-                useEdgeInset = span.kind != RunoutComponentKind.BODY,
-            ).forEachIndexed { idx, mm ->
-                out.add(RunoutStationX(span.id, mm, xAtMm(mm), stationIndex = idx))
+
+    // Group by component id FIRST: a body split by liners arrives as several runs sharing one
+    // id, and it is one component to the user — one carousel name, one station-editor row, one
+    // override. The count is therefore derived once from the total drawn length and then
+    // apportioned across the runs, never re-derived per run.
+    val byComponent = spans
+        .filter { it.lengthMm > 0f }
+        .sortedBy { it.startMm }
+        .groupBy { it.id }
+        .entries
+        .sortedBy { (_, runs) -> runs.minOf { it.startMm } }
+
+    for ((id, runs) in byComponent) {
+        val kind = runs.first().kind
+        val totalLengthMm = runs.sumOf { it.lengthMm.toDouble() }.toFloat()
+        val count = overrides[id] ?: defaultStationCount(kind, totalLengthMm)
+        if (count <= 0) continue
+
+        val perRun = apportionStations(runs.map { it.lengthMm }, count)
+
+        // stationIndex runs continuously AFT→FWD across every run of the component, so a
+        // reading keyed (componentId, stationIndex) identifies exactly one bubble no matter
+        // how the body is fragmented.
+        var nextIndex = 0
+        runs.forEachIndexed { runIdx, span ->
+            val runCount = perRun[runIdx]
+            if (runCount <= 0) return@forEachIndexed
+
+            if (kind == RunoutComponentKind.BODY && mmAtX != null) {
+                val x0 = xAtMm(span.startMm)
+                val x1 = xAtMm(span.startMm + span.lengthMm)
+                repeat(runCount) { i ->
+                    val xs = x0 + (i + 0.5f) * (x1 - x0) / runCount
+                    out.add(RunoutStationX(id, mmAtX(xs), xs, stationIndex = nextIndex++))
+                }
+            } else {
+                runoutStationPositionsMm(
+                    startMm = span.startMm,
+                    lengthMm = span.lengthMm,
+                    count = runCount,
+                    useEdgeInset = kind != RunoutComponentKind.BODY,
+                ).forEach { mm ->
+                    out.add(RunoutStationX(id, mm, xAtMm(mm), stationIndex = nextIndex++))
+                }
             }
         }
     }

@@ -12,6 +12,7 @@ import com.android.shaftschematic.geom.PlacedRunoutBubble
 import com.android.shaftschematic.geom.RunoutBubbleGeometry
 import com.android.shaftschematic.geom.RunoutComponentKind
 import com.android.shaftschematic.geom.RunoutComponentSpan
+import com.android.shaftschematic.ui.resolved.runoutComponentSpans
 import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
@@ -239,10 +240,20 @@ fun composeRunoutPdf(
 
     // Empty when bubbles are elected out — the plan then reserves zero height and the
     // shaft area absorbs the difference.
-    val stationSpans = if (!drawBubbles) emptyList() else buildList {
-        docSpec.bodies.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.BODY, it.startFromAftMm, it.lengthMm)) }
-        docSpec.tapers.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.TAPER, it.startFromAftMm, it.lengthMm)) }
-        docSpec.liners.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.LINER, it.startFromAftMm, it.lengthMm)) }
+    //
+    // Built through the SHARED span mapping (`ui/resolved/RunoutSpans.kt`) the live canvas
+    // uses, so both sites key stations by the component the user names. Building these from
+    // `docSpec.bodies` instead kept the resolved FRAGMENT id ("<id>#2"), which silently
+    // dropped the user's count override and orphaned hand-entered TIR readings on any body a
+    // liner had split.
+    val stationSpans = if (!drawBubbles) {
+        emptyList()
+    } else {
+        resolvedComponents?.let { runoutComponentSpans(it) } ?: buildList {
+            docSpec.bodies.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.BODY, it.startFromAftMm, it.lengthMm)) }
+            docSpec.tapers.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.TAPER, it.startFromAftMm, it.lengthMm)) }
+            docSpec.liners.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.LINER, it.startFromAftMm, it.lengthMm)) }
+        }
     }
     val bubbleGeom = RunoutBubbleGeometry(
         radius = BUBBLE_RADIUS_PT,

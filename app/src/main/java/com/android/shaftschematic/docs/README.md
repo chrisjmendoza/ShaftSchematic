@@ -55,6 +55,9 @@ listed under the contract it belongs to.
 - **ShaftViewModel.md** — ViewModel responsibilities and state ownership
 - **Persistence.md** — internal `.shaft` storage (atomic saves, migration, sample
   seeding), doc envelope format, units policy
+- **Templates.md** — the template store (geometry-only, scrubbed on write), derived
+  size/count bucketing, the browser + thumbnail, and why a loaded template starts unnamed
+  and dirty. Design plan: `docs/Templates_And_DiaVisibility_PLAN.md`
 - **Navigation.md** — route graph, editor container (sidebar + tabs), screen wiring
 - **Appearance.md** — app theme (System/Light/Dark + high contrast) and the sheet-ink
   invariant: paper-sheet canvases draw fixed ink, never theme colors

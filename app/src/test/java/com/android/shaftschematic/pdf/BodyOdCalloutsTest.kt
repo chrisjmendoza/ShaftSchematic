@@ -92,6 +92,43 @@ class BodyOdCalloutsTest {
         assertTrue((one + two + three).all { it.side == LeaderSide.BELOW })
     }
 
+    // ── Per-body Ø visibility (showDiaOnDrawing) ──────────────────────────────
+
+    @Test
+    fun `hidden body produces no callout`() {
+        val body = Body(startFromAftMm = 100f, lengthMm = 400f, diaMm = 127f, showDiaOnDrawing = false)
+        assertTrue(buildBodyOdCallouts(listOf(body)).isEmpty())
+    }
+
+    @Test
+    fun `hiding the longer body moves the anchor to the visible one`() {
+        // The reported case: a long run under fiberglass shares its Ø with a short bare
+        // window that could actually be measured. Hiding the covered run must not delete
+        // the value — it must move the callout onto the run the reading came from.
+        val covered = Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = 127f, showDiaOnDrawing = false)
+        val window  = Body(startFromAftMm = 600f, lengthMm = 100f, diaMm = 127f)
+        val calls = buildBodyOdCallouts(listOf(covered, window))
+
+        assertEquals(1, calls.size)
+        assertEquals(650.0, calls[0].xMm, 0.001)
+    }
+
+    @Test
+    fun `hiding every body of one OD drops that callout and keeps the others`() {
+        val hidden1 = Body(startFromAftMm = 0f,   lengthMm = 300f, diaMm = 127f, showDiaOnDrawing = false)
+        val hidden2 = Body(startFromAftMm = 400f, lengthMm = 100f, diaMm = 127f, showDiaOnDrawing = false)
+        val shown   = Body(startFromAftMm = 600f, lengthMm = 200f, diaMm = 152f)
+        val calls = buildBodyOdCallouts(listOf(hidden1, hidden2, shown))
+
+        assertEquals(1, calls.size)
+        assertEquals(152.0, calls[0].valueMm, 0.001)
+    }
+
+    @Test
+    fun `bodies are visible by default`() {
+        assertTrue(Body().showDiaOnDrawing)
+    }
+
     // ── OD value accuracy ─────────────────────────────────────────────────────
 
     @Test

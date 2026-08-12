@@ -107,6 +107,7 @@ fun ShaftEditorRoute(
             EditorTab.OUTPUT -> OutputRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
+                onOpenRunoutTab = { activeTab = EditorTab.RUNOUT },
             )
         }
 

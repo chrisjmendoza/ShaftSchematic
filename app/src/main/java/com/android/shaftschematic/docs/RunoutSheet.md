@@ -53,6 +53,66 @@ Both tabs share the same layout pattern: outer `Column` with `systemBarsPadding(
 
 ---
 
+## Measurement stations (counts, fragments, identity)
+
+**Counts are length-driven.** `geom/RunoutBubbleLayout.kt`'s `defaultStationCount(kind, lengthMm)`
+gives one station per `RunoutConfig.RUNOUT_STATION_INTERVAL_MM` (**20 inches**):
+
+| Kind | Default | Why |
+|---|---|---|
+| Body | `ceil(L / 20")`, min 1 | Length is the only thing that decides how many readings a uniform surface wants |
+| Liner | `ceil(L / 20")`, min 2 | The edge-inset convention needs both ends; a long stern-tube liner earns more |
+| Taper | 2, always | One inset from each of the S.E.T. and L.E.T. ends — the shop convention, not a density choice |
+
+All capped at `RunoutConfig.MAX_STATIONS_PER_COMPONENT` (10); `componentOverrides` still wins
+and may exceed the cap. This replaced a flat "3 per body whatever its length", which put three
+readings on a 1–2" run and only three on a 100" line shaft (on-device report).
+
+**A fragmented body is ONE component.** A body split by liners or tapers draws as several runs,
+but the user sees one carousel name, one station-editor row, and one override — so
+`collectRunoutStations` groups spans by id, derives the count **once** from the summed length,
+and apportions it across the runs by length (`apportionStations`, largest-remainder). A run too
+short to earn a station gets none. Deriving per run was the second half of the reported bug: a
+three-run body drew 3 + 3 + 3 = 9 bubbles while its editor row read "3".
+
+**`stationIndex` runs continuously AFT→FWD across a component's runs**, so a reading keyed
+`(componentId, stationIndex)` identifies exactly one bubble. Restarting the index per run made
+one key match several bubbles at once.
+
+**Both draw sites build spans through `ui/resolved/RunoutSpans.kt`** (`runoutComponentSpans`),
+keyed by the **base** body id. Do not rebuild spans from `spec.bodies` or from
+`withResolvedBodies` output: the canvas keying by base id while the PDF kept the resolved
+fragment id (`"<id>#2"`) meant that, on any body a liner had split, `overrides["X"]` missed and
+`readings.find("X", 1)` missed — the count override and the hand-entered TIR value never
+reached the paper, while both looked right on screen. Unfragmented bodies hide the defect
+entirely (base id == fragment id).
+
+**Legacy documents are frozen, not migrated.** Because a reading is keyed by station *index*
+rather than by position, station 1 of 3 is not where station 1 of 5 is — changing a default
+count slides measured values onto spots they were not measured at, or off the end.
+`ShaftDocCodec.freezeLegacyStationCounts` therefore writes the pre-interval count (3 body /
+2 taper / 2 liner) into `componentOverrides` for every component that already carries a reading
+and has no override — visible and editable in the station editor, not hidden state. Documents
+with no readings pick up the new defaults. Ids are classified without resolving: a taper or
+liner id matches its list, anything else (stored or auto body) is a body.
+
+**The freeze applies to legacy documents ONLY, gated on the `station_interval_version`
+envelope stamp** (additive, default 0; `encodeV1` itself stamps
+`CURRENT_STATION_INTERVAL_VERSION` on every write, so no caller can forget it).
+A pre-interval file and one authored after look identical otherwise — neither carries an
+override — so without the stamp the freeze pins NEW documents to the OLD defaults: a 100" body
+drawn today gets 5 stations, and reopening would cut it to 3 and orphan the readings at 4 and
+5. The stamp lives in the encoder, not in each writer, precisely so a future writer that
+forgets it is impossible rather than merely discouraged.
+
+**The station editor lives in one place.** `ui/screen/RunoutStationEditor.kt` provides
+`buildRunoutStationEntries` + `RunoutStationCountEditor`, hosted by BOTH the Runout tab and the
+Consolidated Output tab (whose sheet the bubbles actually print on — adjusting a count used to
+mean leaving the tab). The Output tab also carries a "Runout sheet →" button for the full
+authoring surface.
+
+---
+
 ## Liner Wear Inspection (UI, Phase 2/3, 2026-07-18)
 
 See `docs/LinerWearAreas_Proposal.md` for the full feature scope; this section covers only

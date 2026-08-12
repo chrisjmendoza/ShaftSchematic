@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
@@ -30,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.data.AutosaveManager
@@ -51,6 +54,7 @@ fun StartScreen(
     onOpen: () -> Unit,
     onSettings: () -> Unit,
     onSendFeedback: () -> Unit,
+    onOpenTemplates: () -> Unit = {},
     drafts: List<AutosaveManager.DraftEntry> = emptyList(),
     onContinueDraft: ((String) -> Unit)? = null,
     onDiscardDraft: ((String) -> Unit)? = null,
@@ -79,9 +83,13 @@ fun StartScreen(
         )
     }
 
+    // Scrollable: with drafts + recents showing, the title and the last buttons overrun a
+    // small phone's height, and a centered non-scrolling column would clip BOTH ends with no
+    // way to reach Settings. CenterVertically still centers when the content fits.
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -200,6 +208,10 @@ fun StartScreen(
         }
 
         Button(onClick = onNew, modifier = Modifier.fillMaxWidth()) { Text("New Drawing") }
+        Button(
+            onClick = onOpenTemplates,
+            modifier = Modifier.fillMaxWidth().testTag("start_templates_button"),
+        ) { Text("Start from Template") }
         Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text("Open…") }
         OutlinedButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Settings") }
         OutlinedButton(onClick = onSendFeedback, modifier = Modifier.fillMaxWidth()) { Text("Send Feedback") }

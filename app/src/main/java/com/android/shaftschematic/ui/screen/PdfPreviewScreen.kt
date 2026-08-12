@@ -141,6 +141,7 @@ fun PdfPreviewScreen(
     val runoutConfig by vm.runoutConfig.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val pdfBlankDraft by vm.pdfBlankDraft.collectAsState()
+    val pdfBlankDiaCallouts by vm.pdfBlankDiaCallouts.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
@@ -163,8 +164,12 @@ fun PdfPreviewScreen(
     val project = remember(customer, vessel, shaftPosition, jobNumber) {
         ProjectInfo(customer = customer, vessel = vessel, side = shaftPosition, jobNumber = jobNumber)
     }
-    val options = remember(pdfExportMode, pdfBlankDraft) {
-        PdfExportOptions(mode = pdfExportMode, blankValues = pdfBlankDraft)
+    val options = remember(pdfExportMode, pdfBlankDraft, pdfBlankDiaCallouts) {
+        PdfExportOptions(
+            mode = pdfExportMode,
+            blankValues = pdfBlankDraft,
+            blankDiaCallouts = pdfBlankDiaCallouts,
+        )
     }
 
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -194,7 +199,11 @@ fun PdfPreviewScreen(
                     customer = customer, vessel = vessel,
                     side = shaftPosition, jobNumber = jobNumber,
                 ),
-                options = PdfExportOptions(mode = pdfExportMode, blankValues = pdfBlankDraft),
+                options = PdfExportOptions(
+                    mode = pdfExportMode,
+                    blankValues = pdfBlankDraft,
+                    blankDiaCallouts = pdfBlankDiaCallouts,
+                ),
                 resolved = resolvedComponents,
                 lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
                 showComponentTitles = pdfShowComponentTitles,
@@ -526,6 +535,7 @@ fun PdfPreviewScreen(
                 pdfShadedTapers = pdfShadedTapers,
                 pdfShadedLiners = pdfShadedLiners,
                 pdfBlankDraft = pdfBlankDraft,
+                pdfBlankDiaCallouts = pdfBlankDiaCallouts,
                 tuning = tuning,
                 maxHeightDp = maxSheetHeight,
             )
@@ -593,6 +603,7 @@ private fun PdfOptionsSheet(
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
     pdfBlankDraft: Boolean,
+    pdfBlankDiaCallouts: Boolean,
     /**
      * Live-tuning sink: every slider here reports its in-progress value so the preview
      * behind the sheet reshapes under the finger. Visual only — the commit path is
@@ -631,6 +642,35 @@ private fun PdfOptionsSheet(
                 Text(
                     "Prints the drawing with all values blanked for handwriting. Not saved — resets each session.",
                     style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        // Sub-option of the switch above: a blank sheet either carries Ø leaders ready to
+        // fill in, or prints clear so the diameters can be written in freehand wherever they
+        // belong. Disabled (but visible) when blank mode is off, where it has no effect.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 24.dp, top = 4.dp),
+        ) {
+            Switch(
+                checked = pdfBlankDiaCallouts,
+                enabled = pdfBlankDraft,
+                onCheckedChange = { vm.setPdfBlankDiaCallouts(it) },
+                modifier = Modifier.testTag("pdf_blank_dia_callouts_toggle"),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(
+                    "Ø callouts",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (pdfBlankDraft) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "Off prints the shaft clear of Ø leaders so they can be hand-written.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

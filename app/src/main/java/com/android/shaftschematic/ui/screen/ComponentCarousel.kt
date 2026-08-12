@@ -153,7 +153,9 @@ internal fun ComponentCarouselPager(
     selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoBodyDia: (Float) -> Unit,
+    onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
+    onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -163,6 +165,7 @@ internal fun ComponentCarouselPager(
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+    onUpdateLinerShowDia: (Int, Boolean) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
@@ -285,7 +288,9 @@ internal fun ComponentCarouselPager(
                     showComponentDebugLabels = showComponentDebugLabels,
                     onAddBody = onAddBody,
                     onSetAutoBodyDia = onSetAutoBodyDia,
+                    onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
+                    onUpdateBodyShowDia = onUpdateBodyShowDia,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
                     onUpdateTaper = onUpdateTaper,
@@ -295,6 +300,7 @@ internal fun ComponentCarouselPager(
                     onUpdateThread = onUpdateThread,
                     onUpdateThreadLabel = onUpdateThreadLabel,
                     onUpdateLiner = onUpdateLiner,
+                    onUpdateLinerShowDia = onUpdateLinerShowDia,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
                     onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
@@ -443,7 +449,9 @@ internal fun ComponentPagerCard(
     showComponentDebugLabels: Boolean,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoBodyDia: (Float) -> Unit,
+    onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
+    onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -453,6 +461,7 @@ internal fun ComponentPagerCard(
     onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
+    onUpdateLinerShowDia: (Int, Boolean) -> Unit,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
@@ -546,6 +555,14 @@ internal fun ComponentPagerCard(
                     CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit)) { s ->
                         toMmOrNull(s, unit)?.let { onSetAutoBodyDia(it) }
                     }
+                    // One flag for every auto span — the bare shaft is one piece of stock, so
+                    // it carries one Ø and one visibility.
+                    ShowDiaToggleRow(
+                        label = "Show bare-shaft Ø on drawing",
+                        checked = spec.showAutoBodyDia,
+                        testTag = "autobody_show_dia_toggle",
+                        onCheckedChange = onSetShowAutoBodyDia,
+                    )
                 }
                 return
             }
@@ -652,6 +669,12 @@ internal fun ComponentPagerCard(
                 CommitNum("Ø (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, b.lengthMm, it) }
                 }
+                ShowDiaToggleRow(
+                    label = "Show Ø on drawing",
+                    checked = b.showDiaOnDrawing,
+                    testTag = "body_show_dia_toggle",
+                    onCheckedChange = { onUpdateBodyShowDia(idx, it) },
+                )
 
                 // Keyway — gated behind a checkbox so the fields only appear once turned on
                 // (intermediate shafts with fitted couplings carry a keyway in a plain end
@@ -1204,6 +1227,12 @@ internal fun ComponentPagerCard(
                 CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateLiner(idx, ln.startFromAftMm, ln.lengthMm, it) }
                 }
+                ShowDiaToggleRow(
+                    label = "Show Ø on drawing",
+                    checked = ln.showDiaOnDrawing,
+                    testTag = "liner_show_dia_toggle",
+                    onCheckedChange = { onUpdateLinerShowDia(idx, it) },
+                )
             }
         }
 
@@ -1304,6 +1333,40 @@ internal fun ComponentPagerCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * "Show Ø on drawing" row — the per-component schematic Ø-callout switch, sitting directly
+ * under the Ø field it modifies.
+ *
+ * Draw-only: it never touches the stored diameter. Hiding is for a surface whose Ø could not
+ * be measured where the callout would land (a body under fiberglass, a sleeved run) — the
+ * printed anchor then moves to the longest still-visible component sharing that Ø.
+ *
+ * Deliberately card-only, with no Add-dialog counterpart: like the coupler slot's
+ * "Show dimension rail" it is a post-hoc display choice made after seeing a printed sheet,
+ * not a property of the component being added. See `docs/AddComponentDialogs.md`.
+ */
+@Composable
+private fun ShowDiaToggleRow(
+    label: String,
+    checked: Boolean,
+    testTag: String,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, modifier = Modifier.weight(1f))
+        // The tag rides on the Switch — the clickable control — so a test's performClick on
+        // it toggles instead of landing on an inert Row.
+        androidx.compose.material3.Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.testTag(testTag),
+        )
     }
 }
 

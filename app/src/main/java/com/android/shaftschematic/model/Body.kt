@@ -24,6 +24,12 @@ import java.util.UUID
  * @property keywaySpooned Whether the open keyway's closed (LET) end is spooned — an enlarged
  *   circle drawn around the mill end (which stays as an inner reference line).
  *   Ignored when [keywayOffsetFromEndMm] > 0 (floating keyways have no open end to reference).
+ * @property showDiaOnDrawing Whether this body's Ø prints as a below-shaft callout on the
+ *   schematic. Draw-only flag: it changes nothing in the model, resolve, OAL, collision, or
+ *   footer geometry, and never rewrites [diaMm]. Hiding a body whose measurable surface is
+ *   covered (fiberglass, a fitted sleeve) keeps the callout from claiming a reading was taken
+ *   where it could not have been — the anchor moves to the longest still-visible body sharing
+ *   that Ø. Defaults true for back-compat.
  */
 @Serializable
 data class Body(
@@ -37,6 +43,7 @@ data class Body(
     val keywayOffsetFromEndMm: Float = 0f,
     val keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val keywaySpooned: Boolean = false,
+    val showDiaOnDrawing: Boolean = true,
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
 ) : Segment

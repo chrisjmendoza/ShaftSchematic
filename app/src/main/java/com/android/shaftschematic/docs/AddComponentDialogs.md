@@ -162,6 +162,29 @@ one extra control — the **"show dimension rail"** toggle (deferred; off by def
 a card-only affordance (not an add-time choice), so its absence from the dialog is
 intentional and does not violate parity. See `CouplerBoltSlot.md`.
 
+---
+
+## Card-only display toggles (parity carve-out)
+
+A control qualifies as card-only — present on the carousel card, deliberately absent from the
+Add dialog — when all three hold:
+
+1. it changes only how an already-drawn component **prints**, never geometry, position, or a
+   stored value;
+2. it is **default-on/off in the common case**, so in a dialog it would be a permanently
+   pre-set box on every add; and
+3. it is reached for **after looking at a printed sheet**, not while adding a component.
+
+Exactly two controls qualify today:
+
+| Control | Cards | Why card-only |
+|---|---|---|
+| **Show dimension rail** | `ResolvedCouplerBoltSlot` | Deferred print affordance, off by default |
+| **Show Ø on drawing** | Body (explicit + auto), Liner | Hides a Ø callout whose printed anchor lands on a surface that could not be measured there (a fiberglassed run, a sleeved section). Default on; you reach for it after seeing the sheet |
+
+Anything that moves a value or a component stays under the parity rule above. See
+`docs/PDF_EXPORT.md` §5.3 for what the Ø toggle does to the callout pass.
+
 FWD-reference math: the entered position locates the fwd-most cutout; the ViewModel stores
 the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spacingMm`.
 

@@ -75,4 +75,38 @@ class LinerOdCalloutsTest {
         assertTrue(combined.all { it.valueMm == 127.0 })
         assertTrue(combined.all { it.side == LeaderSide.BELOW })
     }
+
+    // ── Per-liner Ø visibility (showDiaOnDrawing) ─────────────────────────────
+
+    @Test
+    fun `hidden liner produces no callout`() {
+        val liner = Liner(startFromAftMm = 100f, lengthMm = 400f, odMm = 140f, showDiaOnDrawing = false)
+        assertTrue(buildLinerOdCallouts(listOf(liner)).isEmpty())
+    }
+
+    @Test
+    fun `hiding the longer liner moves the anchor to the visible one`() {
+        val hidden = Liner(startFromAftMm = 0f,   lengthMm = 500f, odMm = 140f, showDiaOnDrawing = false)
+        val shown  = Liner(startFromAftMm = 600f, lengthMm = 100f, odMm = 140f)
+        val calls = buildLinerOdCallouts(listOf(hidden, shown))
+
+        assertEquals(1, calls.size)
+        assertEquals(650.0, calls[0].xMm, 0.001)
+    }
+
+    @Test
+    fun `hiding a liner never hides a body sharing its OD`() {
+        val bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 300f, diaMm = 127f))
+        val liners = listOf(Liner(startFromAftMm = 400f, lengthMm = 200f, odMm = 127f, showDiaOnDrawing = false))
+
+        val combined = buildBodyOdCallouts(bodies) + buildLinerOdCallouts(liners)
+
+        assertEquals(1, combined.size)
+        assertEquals(150.0, combined[0].xMm, 0.001)
+    }
+
+    @Test
+    fun `liners are visible by default`() {
+        assertTrue(Liner().showDiaOnDrawing)
+    }
 }

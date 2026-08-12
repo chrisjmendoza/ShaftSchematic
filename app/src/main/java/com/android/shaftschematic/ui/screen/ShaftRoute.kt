@@ -192,12 +192,14 @@ fun ShaftRoute(
 
         onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp -> vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp) },
         onSetAutoBodyDia = vm::setAutoBodyDiaMm,
+        onSetShowAutoBodyDia = vm::setShowAutoBodyDia,
         onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS -> vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS) },
         onAddThread = { s, l, maj, p, ex, aft -> vm.addThreadAt(s, l, maj, p, ex, aft) },
         onAddLiner  = { s, l, od, ref -> vm.addLinerAt(s, l, od, ref) },
         onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
+        onUpdateBodyShowDia = { i, show    -> vm.updateBodyShowDia(i, show) },
         onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label) },
         onUpdateBodyKeyway = { i, w, d, l, offset, end, spooned -> vm.updateBodyKeyway(i, w, d, l, offset, end, spooned) },
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },
@@ -207,6 +209,7 @@ fun ShaftRoute(
         onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
         onUpdateThreadLabel = { i, label   -> vm.updateThreadLabel(i, label) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
+        onUpdateLinerShowDia = { i, show   -> vm.updateLinerShowDia(i, show) },
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
         onUpdateCouplerBoltSlot = { i, s, dia, cnt, sp, thru, dep -> vm.updateCouplerBoltSlot(i, s, dia, cnt, sp, thru, dep) },

@@ -8,13 +8,18 @@ import kotlinx.serialization.Serializable
  * Stores per-job runout-sheet preferences. Saved alongside the shaft spec in the .shaft file.
  *
  * ## Bubble count logic
- * Each component type has a default bubble count computed at PDF render time:
- *   - Taper  → 2  (one near the SET end, one near the LET end — both inset from the physical edge)
- *   - Liner  → 2  (one near each edge, inset from the physical boundary)
- *   - Body   → 3  (evenly distributed across the body length)
+ * Station counts are **length-driven**: one station per
+ * [Companion.RUNOUT_STATION_INTERVAL_MM] (20 inches) of drawn component, resolved by
+ * [Companion.defaultStationCount] —
+ *   - Taper  → 2, always (one near the SET end, one near the LET end — both inset from the
+ *     physical edge; the shop convention, not a density choice)
+ *   - Liner  → one per interval, never fewer than 2 (one per edge)
+ *   - Body   → one per interval, never fewer than 1
  *   - Thread → 0  (threads are not measured for runout)
  *
- * Users may override these per component via [componentOverrides].
+ * A body split by liners or tapers is ONE component here: its runs' lengths add up, the count
+ * is derived once, and the stations are apportioned across the runs. Users may override the
+ * derived count per component via [componentOverrides].
  *
  * ## Edge inset convention
  * For tapers and liners the measurement stations are NOT placed directly on the component
@@ -75,16 +80,42 @@ data class RunoutConfig(
         const val RUNOUT_EDGE_INSET_MM = 25.4f
 
         /**
-         * Default bubble count for a body — uniform, whatever the body's length. Longer
-         * bodies do NOT default to more stations; the user raises the count per component
-         * (`componentOverrides`) when a run wants extra readings.
+         * Axial distance covered by one measurement station: **one bubble per 20 inches**
+         * (on-device request). Replaces the former flat "3 stations per body, whatever its
+         * length", which put three readings on a 1–2" leftover run and only three on a
+         * 100" line shaft.
          */
-        const val BODY_DEFAULT_COUNT = 3
+        const val RUNOUT_STATION_INTERVAL_MM = 508f
 
-        /** Default bubble count for tapers. */
+        /**
+         * Ceiling on a single component's derived station count. A very long line shaft
+         * would otherwise ask for more bubbles than a letter page can seat (the layout
+         * engine starts compressing around 27 stations across the whole sheet). Raising a
+         * capped component past this is still possible by hand — the cap only bounds what
+         * is derived automatically.
+         */
+        const val MAX_STATIONS_PER_COMPONENT = 10
+
+        /**
+         * The derived count itself lives in `geom/RunoutBubbleLayout.kt`
+         * (`defaultStationCount`) — beside the [com.android.shaftschematic.geom.RunoutComponentKind]
+         * it switches on, and out of this file so `settings` need not depend on `geom`.
+         */
+
+        /**
+         * Pre-interval default counts, kept ONLY for the decode-time freeze that protects
+         * documents authored before the interval existed — see
+         * `ShaftDocCodec.freezeLegacyStationCounts`. New defaults come from
+         * [defaultStationCount]; do not read these anywhere else.
+         */
+        const val LEGACY_BODY_DEFAULT_COUNT = 3
+        const val LEGACY_TAPER_DEFAULT_COUNT = 2
+        const val LEGACY_LINER_DEFAULT_COUNT = 2
+
+        /** Default bubble count for tapers — the shop's two-station convention. */
         const val TAPER_DEFAULT_COUNT = 2
 
-        /** Default bubble count for liners. */
+        /** Floor on a liner's station count (one per edge). */
         const val LINER_DEFAULT_COUNT = 2
     }
 }

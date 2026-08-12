@@ -31,4 +31,24 @@ class InternalStorageNormalizeJsonNameTest {
         assertEquals("foo" + SHAFT_DOT_EXT, InternalStorage.normalizeShaftDocName("  foo  "))
         assertEquals("foo" + SHAFT_DOT_EXT, InternalStorage.normalizeShaftDocName("  foo.JSON  "))
     }
+
+    // A normalized name is ONE path segment — every store does File(dir, name), so a
+    // separator would let a typed name resolve outside the store's directory and silently
+    // overwrite an unrelated file (a template named "../shafts/Job 1" hitting a saved job).
+
+    @Test
+    fun `path separators collapse into the name`() {
+        assertEquals(".. shafts Job 814201" + SHAFT_DOT_EXT, InternalStorage.normalizeShaftDocName("../shafts/Job 814201"))
+        assertEquals(".. .. etc x" + SHAFT_DOT_EXT, InternalStorage.normalizeShaftDocName("..\\..\\etc\\x"))
+        assertEquals("a b" + SHAFT_DOT_EXT, InternalStorage.normalizeShaftDocName("a/b"))
+    }
+
+    @Test
+    fun `dot-only and separator-only names normalize to null`() {
+        assertNull(InternalStorage.normalizeShaftDocName(".."))
+        assertNull(InternalStorage.normalizeShaftDocName("."))
+        assertNull(InternalStorage.normalizeShaftDocName("/"))
+        assertNull(InternalStorage.normalizeShaftDocName("\\\\"))
+        assertNull(InternalStorage.normalizeShaftDocName(" / \\ "))
+    }
 }
