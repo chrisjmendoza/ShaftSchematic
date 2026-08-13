@@ -6,6 +6,36 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-13
+
+### chore: relicense to MIT
+
+Replaces the proprietary "public for viewing and reference only" terms (`3be8d39`) with the
+**MIT License**. ShaftSchematic is used as a worked example in instructional material, and
+under the old terms a reader had no right to build on what they were being shown; MIT grants
+that outright — use, modification, redistribution, and commercial use, with no separate
+permission needed.
+
+The carve-outs that matter are stated as scope notes at the bottom of `LICENSE`:
+
+- **The top-level `assets/` reference photographs are NOT licensed.** They are photographs
+  of shop hand-drawings kept for development reference; all rights reserved, no
+  redistribution. `app/src/main/assets/` **is** covered — that directory is the app's own
+  sample shafts and starter templates, not the photographs.
+- **Name and branding reserved** — the license grants no rights to the "ShaftSchematic"
+  name or icon; forks should ship under their own branding.
+- **Engineering disclaimer**, alongside the license's warranty disclaimer: this is a
+  drafting aid, it certifies nothing, and every dimension remains the responsibility of the
+  engineer or machinist who reviews it.
+
+`README.md`'s License section rewritten to match.
+
+Note the direction of travel: a permissive grant is effectively one-way. Future versions can
+be released under different terms at any time, but rights already granted on a published
+commit cannot be withdrawn from anyone who took a copy under them.
+
+---
+
 ## 2026-08-10
 
 ### refactor: KeywaySpan type + withBodyAt extraction (code-review findings)

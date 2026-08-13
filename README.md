@@ -136,11 +136,22 @@ See docs/ROADMAP.md for the release-series roadmap and TODO.md for the active de
 
 📄 License
 
-Proprietary — Copyright © 2026 Chris Mendoza. All rights reserved.
+Licensed under the [MIT License](LICENSE) — Copyright © 2026 Chris Mendoza.
 
-This repository is public for viewing and reference only. No right to use, copy, modify, or
-distribute the software is granted; see LICENSE for the full terms. Third-party components
-(Android SDK, AndroidX, Jetpack Compose) remain under their own licenses.
+You may use, copy, modify, and distribute this source code, including in commercial
+projects. ShaftSchematic is used as a worked example in instructional material, and
+students and readers are explicitly welcome to build on it — no separate permission
+needed.
+
+Two scope notes, spelled out at the bottom of [LICENSE](LICENSE): the reference
+photographs in the top-level `assets/` directory are **not** covered by the license and
+must not be redistributed (the app's own bundled assets under `app/src/main/assets/`
+are covered), and the license grants no rights to the "ShaftSchematic" name or icon, so
+forks should ship under their own branding. Third-party components (Android SDK,
+AndroidX, Jetpack Compose) remain under their own licenses.
+
+ShaftSchematic is a drafting aid — it does not verify or certify any design, and all
+dimensions remain the responsibility of the engineer or machinist who reviews them.
 
 📜 Changelog
 
