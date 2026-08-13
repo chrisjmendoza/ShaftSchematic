@@ -57,6 +57,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -111,6 +112,7 @@ import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
@@ -1097,6 +1099,28 @@ internal fun RunoutWearOptionsSheet(
      * persists on a drag frame. Null (the default) on surfaces that don't tune live.
      */
     tuning: PreviewTuning? = null,
+    /** The hosting tab's session-only blank-draft state. The row renders only when non-null. */
+    blankDraft: Boolean = false,
+    onSetBlankDraft: ((Boolean) -> Unit)? = null,
+    /**
+     * Shows the per-job "Shaft height" + "Liner compression" pair (`RunoutConfig`). On for
+     * the consolidated sheet, whose preview these tune live; off elsewhere, where the pair
+     * has nothing to act on.
+     */
+    showHeightControls: Boolean = false,
+    heightScale: Float = 1f,
+    heightSliderBase: Float = 1f,
+    heightSliderMaxDiaMm: Float = 10f,
+    linersProportional: Boolean = false,
+    linerCompression: Float = 0f,
+    estimateKeptFrac: (Float) -> Float = { it },
+    /**
+     * Shows the "Measurement reference" radios. On only for the consolidated sheet: its
+     * dimension rails honor `PdfPrefs.tieringMode`, while the classic runout/wear/undercut
+     * documents draw no rails, so the radios would be inert there.
+     */
+    showMeasurementReference: Boolean = false,
+    pdfTieringMode: PdfTieringMode = PdfTieringMode.AUTO,
 ) {
     // Scrollable + inset-padded: without its own scroll a short screen clips the bottom
     // rows mid-checkbox behind the navigation bar (same posture as PdfOptionsSheet). The
@@ -1111,6 +1135,29 @@ internal fun RunoutWearOptionsSheet(
     ) {
         Text("PDF Options", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(12.dp))
+
+        // ── Blank draft (write-in) ───────────────────────────────────────────
+        if (onSetBlankDraft != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = blankDraft,
+                    onCheckedChange = onSetBlankDraft,
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Job info, dimensions, and recorded values are blanked for handwriting.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+        }
 
         // ── Line thickness ───────────────────────────────────────────────────
         LineThicknessSlider(
@@ -1132,6 +1179,59 @@ internal fun RunoutWearOptionsSheet(
                 onCommit = { vm.setPdfSBreakThresholdFrac(it) },
                 onDrag = { tuning?.sBreakFrac = it },
             )
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // ── Shaft height / Liner compression ────────────────────────────────
+        // Same per-job pair as the Consolidated Output tab (`RunoutConfig`).
+        if (showHeightControls) {
+            ShaftHeightSlider(
+                heightScale = heightScale,
+                baseScale = heightSliderBase,
+                maxDiaMm = heightSliderMaxDiaMm,
+                onCommit = { vm.setRunoutHeightScale(it) },
+                onDrag = { tuning?.heightScale = it },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+
+            LinerCompressionControl(
+                linersProportional = linersProportional,
+                linerCompression = linerCompression,
+                estimateKeptFrac = estimateKeptFrac,
+                onSetProportional = { vm.setLinersProportional(it) },
+                onSetCompression = { vm.setLinerCompression(it) },
+                onDrag = { tuning?.linerCompression = it },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // ── Measurement reference ────────────────────────────────────────────
+        if (showMeasurementReference) {
+            Text("Measurement reference", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            listOf(
+                PdfTieringMode.AUTO to "Auto (closest end)",
+                PdfTieringMode.AFT  to "AFT",
+                PdfTieringMode.FWD  to "FWD",
+            ).forEach { (mode, label) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = pdfTieringMode == mode,
+                        onClick = { vm.setPdfTieringMode(mode) },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(label, style = MaterialTheme.typography.bodyLarge)
+                }
+            }
 
             Spacer(Modifier.height(12.dp))
             HorizontalDivider()

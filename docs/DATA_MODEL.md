@@ -1,6 +1,9 @@
 # ShaftSchematic Data Model
 Version: v0.5.x
-Last updated: 2026-08-05 — envelope listing gains `undercutRecord`
+Last updated: 2026-08-13 — added `ShaftSpec.autoDiaOverrides` (`AutoDiaOverride`: per-section
+bare-shaft Ø for a single auto-body span, shaft-space anchor, dormant anchors never pruned);
+`autoBodyDiaMm` demoted to the legacy shaft-wide fallback.
+2026-08-05 — envelope listing gains `undercutRecord`
 (`@SerialName("undercut_record")`) and `WearRecord.wornSections`; added the `UndercutRecord`
 and `WornSection` bullets (shaft-space spans, no orphans, never pruned at decode).
 2026-07-30 — added `keyways90Apart`/`keyways90Cw` (90°-apart clocking,
@@ -35,7 +38,9 @@ data class ShaftSpec(
     val keyways180Apart: Boolean = false,  // drawing note: keyways clocked 180° apart
     val keyways90Apart: Boolean = false,   // drawing note: keyways clocked 90° apart (mutually exclusive with keyways180Apart)
     val keyways90Cw: Boolean = true,       // 90°-apart direction from the AFT keyway, viewed from aft; meaningful only when keyways90Apart
-    val autoBodyDiaMm: Float = 0f,         // single bare-shaft Ø shared by all auto-body spans; 0 = derive from neighbors
+    val autoBodyDiaMm: Float = 0f,         // LEGACY shaft-wide bare-shaft Ø; fallback for spans with no override, 0 = derive from neighbors
+    val showAutoBodyDia: Boolean = false,  // one Ø-callout visibility for ALL auto spans (draw-only)
+    val autoDiaOverrides: List<AutoDiaOverride> = emptyList(),  // per-section bare-shaft Ø, keyed by shaft-space anchor
 )
 Responsibilities:
 ```
@@ -84,8 +89,38 @@ raised false collision warnings on normal drafts.)
 - **Auto-bodies** (derived at resolve via `deriveAutoBodies`, never stored) flow around every
   component. Promote one to explicit with the **"Explicit body"** checkbox on its carousel card
   (or Add Body) to lock a span / add a keyway — the checkbox is the ONLY promotion path; the
-  card's editable Ø field instead sets the shared bare-shaft `ShaftSpec.autoBodyDiaMm` without
-  promoting.
+  card's editable Ø field instead writes a **per-section** `AutoDiaOverride` for that one span
+  (see below) without promoting.
+
+#### `AutoDiaOverride` — per-section bare-shaft Ø
+
+```
+@Serializable
+data class AutoDiaOverride(
+    val anchorMm: Float = 0f,   // shaft-space mm from the AFT face; system-placed (span midpoint at commit)
+    val diaMm: Float = 0f,      // user-typed, stored VERBATIM (golden rule)
+)
+```
+
+Individual auto sections may carry slightly different diameters without being promoted, so the
+auto-body card's Ø field is **per-section**. An auto span whose extent contains an anchor —
+the half-open interval `[startMm, endMm)` — draws at that `diaMm`.
+
+- **Precedence per span:** aft-most anchor inside the span → `ShaftSpec.autoBodyDiaMm` (the
+  legacy shaft-wide value, no UI writes it any more) → neighbor derivation
+  (`resolveAutoBodyDia`). It also wins over the `normalizeBodies` diameter-continuity carry,
+  and a section-authored run seeds no continuity forward, so an override never leaks into the
+  next auto run.
+- **Merge rule:** delete the component separating two auto sections and the gaps join into one
+  run holding both anchors — the run takes the **aft-most** override's Ø, because the aft
+  section is authored first. The fwd one lies dormant.
+- **Shaft-space keying, no orphans:** auto spans have no stored row and their ids are
+  position-derived, so anchors are stored in shaft space (the `Undercut` / `WornSection`
+  posture). An anchor that lands inside a component, or inside a gap absorbed into an
+  explicit-body run, is **dormant** — not applied, never pruned at decode — and resurrects
+  unchanged if its span reappears.
+- **Draw-only:** never affects OAL/coverage, span positioning, body resolution, collision, or
+  the Free-to-End badge. Written by `ShaftSpec.withAutoSectionDia` (upsert; `≤ 0` clears).
 
 #### Body Split / Merge
 
@@ -327,7 +362,8 @@ Backfill missing UUIDs
 
 Normalize thread pitch/tpi relationships
 
-`couplerBoltSlots`, `keyways180Apart`, `keyways90Apart`, `keyways90Cw`, `autoBodyDiaMm`, and
+`couplerBoltSlots`, `keyways180Apart`, `keyways90Apart`, `keyways90Cw`, `autoBodyDiaMm`,
+`showAutoBodyDia`, `autoDiaOverrides`, and
 every envelope record above round-trip automatically through `ShaftDocCodec` with no
 schema/version bump: each defaults empty/zero/false and decode uses `ignoreUnknownKeys`, so
 documents written before a field existed decode unchanged.

@@ -26,10 +26,10 @@ import java.util.UUID
  *   Ignored when [keywayOffsetFromEndMm] > 0 (floating keyways have no open end to reference).
  * @property showDiaOnDrawing Whether this body's Ø prints as a below-shaft callout on the
  *   schematic. Draw-only flag: it changes nothing in the model, resolve, OAL, collision, or
- *   footer geometry, and never rewrites [diaMm]. Hiding a body whose measurable surface is
- *   covered (fiberglass, a fitted sleeve) keeps the callout from claiming a reading was taken
- *   where it could not have been — the anchor moves to the longest still-visible body sharing
- *   that Ø. Defaults true for back-compat.
+ *   footer geometry, and never rewrites [diaMm]. Defaults OFF (on-device preference): body Ø
+ *   callouts are opt-in per card, so the schematic stays clean unless a Ø is deliberately
+ *   shown — the footer's "Body:" list still always carries every Ø. When several shown
+ *   bodies share a Ø, the callout anchors at the longest of them.
  */
 @Serializable
 data class Body(
@@ -43,7 +43,7 @@ data class Body(
     val keywayOffsetFromEndMm: Float = 0f,
     val keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val keywaySpooned: Boolean = false,
-    val showDiaOnDrawing: Boolean = true,
+    val showDiaOnDrawing: Boolean = false,
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
 ) : Segment

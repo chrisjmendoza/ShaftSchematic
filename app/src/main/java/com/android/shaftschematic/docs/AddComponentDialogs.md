@@ -180,7 +180,7 @@ Exactly two controls qualify today:
 | Control | Cards | Why card-only |
 |---|---|---|
 | **Show dimension rail** | `ResolvedCouplerBoltSlot` | Deferred print affordance, off by default |
-| **Show Ø on drawing** | Body (explicit + auto), Liner | Hides a Ø callout whose printed anchor lands on a surface that could not be measured there (a fiberglassed run, a sleeved section). Default on; you reach for it after seeing the sheet |
+| **Show Ø on drawing** | Body (explicit + auto), Liner | Controls whether the Ø callout prints below the shaft. Bodies and the bare shaft default **off** — body Ø callouts are opt-in per card (on-device preference; the footer's "Body:" list still carries every Ø). Liners default on |
 
 Anything that moves a value or a component stays under the parity rule above. See
 `docs/PDF_EXPORT.md` §5.3 for what the Ø toggle does to the callout pass.

@@ -1531,9 +1531,10 @@ internal fun ShaftSpec.withResolvedBodies(resolved: List<ResolvedComponent>?): S
  * Ø-callout visibility carried over from the spec.
  *
  * Fragment ids must be stripped before the lookup: a body split by a liner or taper resolves
- * into several runs (`"<id>#2"`, …), and hiding the body has to hide every one of them. AUTO
- * spans share the single bare-shaft flag ([ShaftSpec.showAutoBodyDia]), matching the single Ø
- * they already share. A resolved id with no stored match (never expected) defaults to visible.
+ * into several runs (`"<id>#2"`, …), and showing/hiding the body has to cover every one of
+ * them. AUTO spans share the single bare-shaft flag ([ShaftSpec.showAutoBodyDia]), matching
+ * the single Ø they already share. A resolved id with no stored match (never expected)
+ * follows the model default — hidden, the opt-in posture.
  */
 internal fun ShaftSpec.bodyForPdf(b: ResolvedBody): Body = Body(
     id = b.id,
@@ -1543,7 +1544,7 @@ internal fun ShaftSpec.bodyForPdf(b: ResolvedBody): Body = Body(
     showDiaOnDrawing = if (b.source == ResolvedComponentSource.AUTO) {
         showAutoBodyDia
     } else {
-        bodies.firstOrNull { it.id == resolvedBodyBaseId(b.id) }?.showDiaOnDrawing ?: true
+        bodies.firstOrNull { it.id == resolvedBodyBaseId(b.id) }?.showDiaOnDrawing ?: false
     },
 )
 

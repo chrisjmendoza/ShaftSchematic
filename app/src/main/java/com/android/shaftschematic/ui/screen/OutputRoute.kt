@@ -18,8 +18,11 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.outlined.PictureAsPdf
@@ -69,6 +72,7 @@ import com.android.shaftschematic.pdf.composeUndercutPdf
 import com.android.shaftschematic.pdf.composeWearPdf
 import com.android.shaftschematic.pdf.consolidatedSheetHasInProfileValues
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.ui.nav.appVersionFromContext
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -92,10 +96,10 @@ private data class OutputWornSectionTarget(val section: WornSection?)
  * Everything one composed consolidated-sheet preview page depends on, in one
  * structural-equality value — the render loop's unit of work.
  *
- * The shade flags and the S-break threshold never reach the composer from here: they
- * travel inside the `PdfPrefs` snapshot taken at render time. They are held in this holder
- * because the loop must RE-RENDER when they change, and a `PdfPrefs` read is not snapshot
- * state.
+ * The shade flags, the S-break threshold, and the tiering mode never reach the composer
+ * from here: they travel inside the `PdfPrefs` snapshot taken at render time. They are
+ * held in this holder because the loop must RE-RENDER when they change, and a `PdfPrefs`
+ * read is not snapshot state.
  */
 private data class ConsolidatedRenderInputs(
     val showPreview: Boolean,
@@ -110,6 +114,7 @@ private data class ConsolidatedRenderInputs(
     val shadedTapers: Boolean,
     val shadedLiners: Boolean,
     val sBreakThresholdFrac: Float,
+    val tieringMode: PdfTieringMode,
     val readings: RunoutReadings,
     val wearRecord: WearRecord,
     val blankValues: Boolean,
@@ -150,6 +155,7 @@ fun OutputRoute(
     val curveLoHeightIn    by vm.pdfCurveLoHeightIn.collectAsState()
     val curveHiHeightIn    by vm.pdfCurveHiHeightIn.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    val pdfTieringMode     by vm.pdfTieringMode.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
     val undercutRecord     by vm.undercutRecord.collectAsState()
@@ -172,6 +178,8 @@ fun OutputRoute(
     // normally wants everything; a sticky partial pick would silently print less later.
     var variant by rememberSaveable { mutableStateOf(ConsolidatedVariant.ALL) }
     var blankDraft by rememberSaveable { mutableStateOf(false) }
+    // Collapsed by default — the per-component station rows are an occasional tweak.
+    var bubblesExpanded by rememberSaveable { mutableStateOf(false) }
     var showPreview by rememberSaveable { mutableStateOf(false) }
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     // Where the composed sheet carries ink — the tuning strip crops to it so blank paper
@@ -381,6 +389,7 @@ fun OutputRoute(
                 shadedTapers = pdfShadedTapers,
                 shadedLiners = pdfShadedLiners,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                tieringMode = pdfTieringMode,
                 readings = runoutReadings,
                 wearRecord = wearRecord,
                 blankValues = blankDraft,
@@ -472,85 +481,11 @@ fun OutputRoute(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            // ── Runout bubbles ───────────────────────────────────────────────
-            // The bubbles print on THIS sheet, so their counts are editable here (on-device
-            // report: adjusting one meant leaving the tab). Same rows, same overrides, same
-            // composable as the Runout tab — the two surfaces cannot drift. The button beside
-            // it still opens the Runout tab for the full authoring surface (TIR values, high
-            // spots, the standalone sheet).
-            if (variant.includeBubbles && stationEntries.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text("Runout bubbles", style = MaterialTheme.typography.titleSmall)
-                    TextButton(
-                        onClick = onOpenRunoutTab,
-                        modifier = Modifier.testTag("output_open_runout_tab"),
-                    ) { Text("Runout sheet →") }
-                }
-                RunoutStationCountEditor(
-                    entries = stationEntries,
-                    overrides = runoutConfig.componentOverrides,
-                    onSetCount = { id, count -> vm.setRunoutBubbleCount(id, count) },
-                    showHeading = false,
-                )
-                Text(
-                    "One station per 20\" by default. Tap a bubble on the Runout sheet to " +
-                        "enter its TIR reading and high spot.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            // ── Shaft height (per-job, shared with the schematic PDF) ────────
-            ShaftHeightSlider(
-                heightScale = runoutConfig.heightScale,
-                baseScale = heightSliderBase,
-                maxDiaMm = heightSliderDiaMm,
-                onCommit = { vm.setRunoutHeightScale(it) },
-                onDrag = { tuning.heightScale = it },
-            )
-
-            LinerCompressionControl(
-                linersProportional = runoutConfig.linersProportional,
-                linerCompression = runoutConfig.linerCompression,
-                estimateKeptFrac = { frac ->
-                    estimatedLinerKeptFracOfTrue(spec, heightSliderBase, runoutConfig.heightScale, frac)
-                },
-                onSetProportional = { vm.setLinersProportional(it) },
-                onSetCompression = { vm.setLinerCompression(it) },
-                onDrag = { tuning.linerCompression = it },
-            )
-
-            // ── Worn sections — authored here, printed on this sheet ─────────
-            Text("Worn sections", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "Designate a measured area — its Ø readings print inside the shaft profile, " +
-                    "and no lines draw through the numbers.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            wearRecord.wornSections.forEachIndexed { i, section ->
-                WornSectionRow(
-                    index = i + 1,
-                    section = section,
-                    unit = unit,
-                    aftSetXMm = aftSetXMm,
-                    fwdSetXMm = fwdSetXMm,
-                    onClick = { wornSectionDialog = OutputWornSectionTarget(section) },
-                )
-            }
-            OutlinedButton(onClick = { wornSectionDialog = OutputWornSectionTarget(null) }) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Add worn section")
-            }
-
-            Spacer(Modifier.height(4.dp))
-
-            // ── Blank draft toggle ───────────────────────────────────────────
+            // ── Blank draft + Preview / Print / Export — right under the election ──
+            // The output actions are the tab's first go-to (on-device report: "everything
+            // else is tweaking the output"), so the group sits directly under the content
+            // election it acts on; the sliders, station rows and worn sections follow.
+            // The blank-draft toggle stays with the buttons it modifies.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
                 Spacer(Modifier.width(12.dp))
@@ -564,7 +499,6 @@ fun OutputRoute(
                 }
             }
 
-            // ── Export gate ──────────────────────────────────────────────────
             if (!gate.enabled) {
                 Text(
                     gate.disabledMessage,
@@ -573,7 +507,6 @@ fun OutputRoute(
                 )
             }
 
-            // ── Preview / Print / Export ─────────────────────────────────────
             OutlinedButton(
                 onClick = { showPreview = true },
                 enabled = gate.enabled,
@@ -624,6 +557,102 @@ fun OutputRoute(
                 Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Export Consolidated Sheet PDF")
+            }
+
+            HorizontalDivider()
+
+            // ── Runout bubbles ───────────────────────────────────────────────
+            // The bubbles print on THIS sheet, so their counts are editable here (on-device
+            // report: adjusting one meant leaving the tab). Same rows, same overrides, same
+            // composable as the Runout tab — the two surfaces cannot drift. COLLAPSED by
+            // default: the per-component rows are an occasional tweak, and a wall of them at
+            // the top of the tab buried everything else (on-device report). The header row
+            // toggles the rows; the button beside it still opens the Runout tab for the full
+            // authoring surface (TIR values, high spots, the standalone sheet).
+            if (variant.includeBubbles && stationEntries.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { bubblesExpanded = !bubblesExpanded }
+                            .testTag("output_bubbles_expander"),
+                    ) {
+                        Icon(
+                            if (bubblesExpanded) Icons.Filled.KeyboardArrowUp
+                            else Icons.Filled.KeyboardArrowDown,
+                            contentDescription = if (bubblesExpanded) "Collapse" else "Expand",
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Runout bubbles", style = MaterialTheme.typography.titleSmall)
+                    }
+                    TextButton(
+                        onClick = onOpenRunoutTab,
+                        modifier = Modifier.testTag("output_open_runout_tab"),
+                    ) { Text("Runout sheet →") }
+                }
+                if (bubblesExpanded) {
+                    RunoutStationCountEditor(
+                        entries = stationEntries,
+                        overrides = runoutConfig.componentOverrides,
+                        onSetCount = { id, count -> vm.setRunoutBubbleCount(id, count) },
+                        showHeading = false,
+                    )
+                    Text(
+                        "One station per 20\" by default. Tap a bubble on the Runout sheet " +
+                            "to enter its TIR reading and high spot.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // ── Shaft height (per-job, shared with the schematic PDF) ────────
+            ShaftHeightSlider(
+                heightScale = runoutConfig.heightScale,
+                baseScale = heightSliderBase,
+                maxDiaMm = heightSliderDiaMm,
+                onCommit = { vm.setRunoutHeightScale(it) },
+                onDrag = { tuning.heightScale = it },
+            )
+
+            LinerCompressionControl(
+                linersProportional = runoutConfig.linersProportional,
+                linerCompression = runoutConfig.linerCompression,
+                estimateKeptFrac = { frac ->
+                    estimatedLinerKeptFracOfTrue(spec, heightSliderBase, runoutConfig.heightScale, frac)
+                },
+                onSetProportional = { vm.setLinersProportional(it) },
+                onSetCompression = { vm.setLinerCompression(it) },
+                onDrag = { tuning.linerCompression = it },
+            )
+
+            // ── Worn sections — authored here, printed on this sheet ─────────
+            Text("Worn sections", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Designate a measured area — its Ø readings print inside the shaft profile, " +
+                    "and no lines draw through the numbers.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            wearRecord.wornSections.forEachIndexed { i, section ->
+                WornSectionRow(
+                    index = i + 1,
+                    section = section,
+                    unit = unit,
+                    aftSetXMm = aftSetXMm,
+                    fwdSetXMm = fwdSetXMm,
+                    onClick = { wornSectionDialog = OutputWornSectionTarget(section) },
+                )
+            }
+            OutlinedButton(onClick = { wornSectionDialog = OutputWornSectionTarget(null) }) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Add worn section")
             }
 
             // ── Export all ───────────────────────────────────────────────────
@@ -727,6 +756,19 @@ fun OutputRoute(
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     tuning = tuning,
+                    blankDraft = blankDraft,
+                    onSetBlankDraft = { blankDraft = it },
+                    showHeightControls = true,
+                    heightScale = runoutConfig.heightScale,
+                    heightSliderBase = heightSliderBase,
+                    heightSliderMaxDiaMm = heightSliderDiaMm,
+                    linersProportional = runoutConfig.linersProportional,
+                    linerCompression = runoutConfig.linerCompression,
+                    estimateKeptFrac = { frac ->
+                        estimatedLinerKeptFracOfTrue(spec, heightSliderBase, runoutConfig.heightScale, frac)
+                    },
+                    showMeasurementReference = true,
+                    pdfTieringMode = pdfTieringMode,
                 )
             },
             sheetTunesPage = true,

@@ -29,16 +29,24 @@ import kotlinx.serialization.Serializable
  * @property keyways90Cw Direction of the 90° clocking **viewed from aft**: true = clockwise,
  *           false = counter-clockwise. Only meaningful while [keyways90Apart] is set.
  *           Defaults true for back-compat.
- * @property autoBodyDiaMm User-set bare-shaft diameter applied to ALL auto-body spans (mm).
- *           The shaft between explicit components is one piece of stock, so a single value
- *           covers every auto span. 0 = unset → each span derives its Ø from neighbors as
- *           before. Affects drawn diameter only — auto-span positioning stays derived.
+ * @property autoBodyDiaMm Legacy shaft-wide bare-shaft diameter applied to auto-body spans
+ *           that carry no [autoDiaOverrides] entry (mm). No UI writes it any more — the
+ *           auto-body card's Ø field is per-section — but documents authored against the
+ *           one-Ø-for-every-span rule still decode it, so it stays as the silent fallback
+ *           between a section override and neighbor derivation. 0 = unset → derive from
+ *           neighbors. Affects drawn diameter only — auto-span positioning stays derived.
  *           Defaults 0 for back-compat.
- * @property showAutoBodyDia Whether the bare-shaft Ø prints as a below-shaft callout on the
- *           schematic. One flag for ALL auto spans, matching the single [autoBodyDiaMm] —
- *           the shaft between explicit components is one piece of stock, so it carries one
- *           visibility. Draw-only: never affects OAL, resolve, collision, or footer geometry.
- *           Defaults true for back-compat.
+ * @property autoDiaOverrides Per-section diameters for individual auto-body spans, keyed in
+ *           shaft space by anchor. An auto span containing an anchor draws at that
+ *           [AutoDiaOverride.diaMm], beating [autoBodyDiaMm] and neighbor derivation;
+ *           aft-most anchor wins when a span holds several. Anchors that land inside a
+ *           component or inside an absorbed gap are dormant, never pruned. Draw-only and
+ *           additive/defaulted — see [AutoDiaOverride].
+ * @property showAutoBodyDia Whether bare-shaft Ø values print as below-shaft callouts on the
+ *           schematic. ONE flag for ALL auto spans — the bare shaft is one piece of stock, so
+ *           it carries one visibility even where sections differ; each shown section prints
+ *           its own resolved Ø. Draw-only: never affects OAL, resolve, collision, or footer
+ *           geometry. Defaults OFF, same opt-in posture as [Body.showDiaOnDrawing].
  */
 @Serializable
 data class ShaftSpec(
@@ -52,7 +60,8 @@ data class ShaftSpec(
     val keyways90Apart: Boolean = false,
     val keyways90Cw: Boolean = true,
     val autoBodyDiaMm: Float = 0f,
-    val showAutoBodyDia: Boolean = true,
+    val showAutoBodyDia: Boolean = false,
+    val autoDiaOverrides: List<AutoDiaOverride> = emptyList(),
 )
 
 /**

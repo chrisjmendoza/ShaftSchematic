@@ -1441,13 +1441,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Set the bare-shaft Ø used by ALL auto-body spans (mm). The shaft between explicit
-     * components is one piece of stock, so a single value covers every auto span; editing
-     * any auto-body card updates them all. Values ≤ 0 clear back to derived behavior.
-     * Positioning of auto spans is unaffected.
+     * Set the bare-shaft Ø for the ONE auto-body span `[spanStartMm, spanEndMm)` (mm) — the
+     * span whose card was edited. Values ≤ 0 clear the section back to the legacy shaft-wide
+     * Ø and then to neighbor derivation; overrides anchored elsewhere are untouched, and
+     * auto-span positioning is unaffected. See [withAutoSectionDia].
      */
-    fun setAutoBodyDiaMm(valueMm: Float) {
-        _spec.update { it.copy(autoBodyDiaMm = max(0f, valueMm)) }
+    fun setAutoSectionDiaMm(spanStartMm: Float, spanEndMm: Float, valueMm: Float) {
+        _spec.update { it.withAutoSectionDia(spanStartMm, spanEndMm, valueMm) }
     }
 
     // ────────────────────────────────────────────────────────────────────────────

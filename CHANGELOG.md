@@ -8,6 +8,26 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-13
 
+### feat: auto-body sections can carry individual diameters
+
+On-device request: a shaft in the shop had a couple of bare-shaft sections at slightly
+different diameters, and pinning one meant promoting the span to an explicit body. The
+auto-body card's Ø field now commits a **per-section** override instead of the shaft-wide
+value: `ShaftSpec.autoDiaOverrides`, a list of shaft-space `AutoDiaOverride(anchorMm, diaMm)`
+entries (anchor placed at the span midpoint on commit, Ø stored verbatim). An auto span
+draws at the aft-most override anchored inside it, falling back to the legacy shaft-wide
+`autoBodyDiaMm` and then neighbor derivation — so existing documents render unchanged.
+
+Deleting the separator between two differing sections merges them at the **more aftward**
+section's Ø (aft is authored first); the forward override lies dormant rather than being
+pruned — no orphans by construction, the runout-readings posture — so re-adding a component
+there resurrects it exactly as typed. Clearing the field drops that section's override only.
+Overrides never move span boundaries, and a gap absorbed into an adjacent explicit-body run
+keeps the explicit Ø. "Show bare-shaft Ø on drawing" stays one flag for all auto spans;
+differing sections print as separate below-shaft callouts since grouping is by value. The
+field rides `ShaftSpec` additively (no codec change; old docs decode to an empty list), and
+the shaft-wide setter is gone from the UI path (`setAutoSectionDiaMm` replaces it).
+
 ### chore: relicense to MIT
 
 Replaces the proprietary "public for viewing and reference only" terms (`3be8d39`) with the
@@ -37,6 +57,38 @@ commit cannot be withdrawn from anyone who took a copy under them.
 ---
 
 ## 2026-08-12
+
+### feat: consolidated-sheet preview options match the schematic preview's applicable set
+
+The Consolidated Output tab's PDF preview options sheet (`RunoutWearOptionsSheet`) now
+also hosts Blank draft (write-in), Shaft height, Liner compression, and Measurement
+reference — the same controls the schematic preview's Tune sheet exposes, minus Component
+labels and the blank Ø-callouts sub-toggle (the consolidated composer never reads those
+two prefs, so they'd sit there inert). All four are adjustable while watching the open
+preview reshape; Shaft height and Liner compression previously required leaving the
+preview to reach the tab's own sliders, and Measurement-reference changes now also
+re-render the open preview (folded into the render loop's `ConsolidatedRenderInputs` so a
+tiering change is no longer silently invisible until the next full re-open). The Wear,
+Undercut, and Runout tabs keep their existing, unchanged sheet.
+
+### feat: body Ø callouts are now opt-in (default off)
+
+`Body.showDiaOnDrawing` and `ShaftSpec.showAutoBodyDia` default **false**: the schematic
+prints a body's below-shaft Ø callout only when its card's "Show Ø on drawing" switch is
+turned on (on-device request — the diameter is wanted only sometimes, and the footer's
+"Body:" list always carries every Ø regardless). Liner OD callouts keep their default-on
+posture. Documents saved with the switch already set keep their setting verbatim; documents
+that never touched it — including everything authored before the switch existed — now print
+no body Ø callouts until one is switched on.
+
+### fix: Consolidated Output tab ordered around its outputs
+
+On-device report: the runout-bubble rows at the top buried what the tab is for, and the
+output buttons sat at the bottom. The tab now reads: **Sheet content election → the output
+group (blank-draft toggle + Preview / Print / Export, kept together) → tuning** (runout
+bubbles, sliders, worn sections) **→ Export all**. The per-component station rows sit behind
+a collapsed-by-default "Runout bubbles" expander with the "Runout sheet →" button beside it
+— counts are an occasional tweak, not the tab's headline.
 
 ### fix: taper footers drop the (AFT)/(FWD) suffix on L.E.T. / S.E.T.
 

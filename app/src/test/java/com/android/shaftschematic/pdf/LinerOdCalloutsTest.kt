@@ -66,7 +66,8 @@ class LinerOdCalloutsTest {
 
     @Test
     fun `body OD equal to liner OD yields two callouts across the builders`() {
-        val bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 300f, diaMm = 127f))
+        // Body callouts are opt-in — shown explicitly so this pins the separate-group rule.
+        val bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 300f, diaMm = 127f, showDiaOnDrawing = true))
         val liners = listOf(Liner(startFromAftMm = 400f, lengthMm = 200f, odMm = 127f))
 
         val combined = buildBodyOdCallouts(bodies) + buildLinerOdCallouts(liners)
@@ -96,7 +97,7 @@ class LinerOdCalloutsTest {
 
     @Test
     fun `hiding a liner never hides a body sharing its OD`() {
-        val bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 300f, diaMm = 127f))
+        val bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 300f, diaMm = 127f, showDiaOnDrawing = true))
         val liners = listOf(Liner(startFromAftMm = 400f, lengthMm = 200f, odMm = 127f, showDiaOnDrawing = false))
 
         val combined = buildBodyOdCallouts(bodies) + buildLinerOdCallouts(liners)

@@ -50,11 +50,12 @@ Specifically:
   has the deferred "show dimension rail" toggle.
 
 **Carve-out — post-hoc display toggles are card-only.** A control that only exists to change
-how an *already-drawn* component prints, is default-on, and is reached for after looking at a
-printed sheet is not a property of the component being added; in an Add dialog it would be a
-permanently-checked box adding noise to every add. Exactly two qualify: the coupler slot's
-"show dimension rail" and **"Show Ø on drawing"** (`Body`/`Liner`/auto-body cards). Anything
-that changes geometry, position, or a value stays under the parity rule above.
+how an *already-drawn* component prints, has a stable default, and is reached for after
+looking at a printed sheet is not a property of the component being added; in an Add dialog
+it would be a permanently-preset box adding noise to every add. Exactly two qualify: the
+coupler slot's "show dimension rail" and **"Show Ø on drawing"** (`Body`/`Liner`/auto-body
+cards). Anything that changes geometry, position, or a value stays under the parity rule
+above.
 
 ### Coupler bolt slots are reference features
 Coupler bolt slots (`ShaftSpec.couplerBoltSlots`) are radial cutouts drawn on the shaft
@@ -327,9 +328,13 @@ rule applies.
 
 Two visibility controls gate the pass, and they compose as an AND:
 - **Per component** — `Body.showDiaOnDrawing` / `Liner.showDiaOnDrawing` (and
-  `ShaftSpec.showAutoBodyDia`, ONE flag for every auto span, matching the single
-  `autoBodyDiaMm`). Draw-only, default true, additive/defaulted so old documents print
-  unchanged. The filter runs **BEFORE the group-by-Ø** — that is the whole point: hiding one
+  `ShaftSpec.showAutoBodyDia`, ONE flag for every auto span even though per-section Ø
+  overrides exist — visibility is all-or-nothing for bare shaft). Draw-only,
+  additive/defaulted. **Body and bare-shaft callouts are
+  OPT-IN — both flags default `false`** (on-device preference: the schematic stays clean
+  unless a body's Ø is deliberately shown; a document with no flags prints no body Ø
+  callouts). Liners default `true`. The filter runs **BEFORE the group-by-Ø** — that is the
+  whole point: hiding one
   body of a shared-Ø group moves the anchor to the longest body of that Ø still shown, rather
   than deleting the value (the on-device case: a Ø printed over a fiberglassed run that could
   not have been measured there). The spec→drawable mapping (`ShaftSpec.bodyForPdf`) must strip
@@ -407,10 +412,16 @@ user edit. Fixed 2026-07-26, pinned by `BlurCommitPolicyTest` + `NumericInputFie
 ### Auto-body promotion
 Auto-body cards in the carousel (`ResolvedComponentSource.AUTO`) show Start/Length as
 **disabled** (greyed, derived-value) fields — there is no field-edit promotion path. The
-**Ø field is editable** and sets the single bare-shaft Ø (`ShaftSpec.autoBodyDiaMm`,
-0 = unset → derive from neighbors) shared by **all** auto spans — one piece of stock. It
-wins over neighbor derivation, never affects auto-span positioning, and does **not**
-promote the card.
+**Ø field is editable** and commits a **per-section** override (`ShaftSpec.autoDiaOverrides`
+— a shaft-space `AutoDiaOverride(anchorMm, diaMm)` list, anchor system-placed at the span
+midpoint; `diaMm` stored verbatim, golden rule). Per-span precedence: aft-most anchor inside
+the span `[start, end)` → legacy shaft-wide `autoBodyDiaMm` (> 0) → neighbor derivation.
+When a separator's deletion merges two differing sections, the merged span takes the **more
+aftward** override (aft is authored first); the FWD one lies **dormant — never pruned** (no
+orphans by construction, same posture as runout readings/wear pits), so re-splitting the run
+resurrects it as authored. Clearing the field (≤ 0) drops that section's override only.
+Overrides never affect auto-span positioning and do **not** promote the card; a gap absorbed
+into an explicit-body run keeps the explicit Ø (its anchors stay dormant).
 Promotion to a real body happens only on an **explicit user action**: ticking the
 **"Explicit body"** checkbox (relabeled from "Make editable body"). Checking it calls
 `onAddBody` with the auto-body's current derived Start/Length/Ø, guarded by a `promoted`

@@ -1,6 +1,9 @@
 package com.android.shaftschematic.ui.resolved
 
+import com.android.shaftschematic.model.AutoDiaOverride
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.autoSectionDiaMmFor
+import com.android.shaftschematic.model.hasAutoSectionDia
 import com.android.shaftschematic.ui.config.AddDefaultsConfig
 import java.util.Locale
 import kotlin.math.max
@@ -82,13 +85,18 @@ fun resolveComponents(spec: ShaftSpec, overallIsManual: Boolean): List<ResolvedC
     val autoBodies = deriveAutoBodies(
         overallLengthMm = if (overallIsManual) spec.overallLengthMm else 0f,
         explicitComponents = explicit,
-        overrideDiaMm = spec.autoBodyDiaMm
+        overrideDiaMm = spec.autoBodyDiaMm,
+        sectionOverrides = spec.autoDiaOverrides
     )
     val merged = (explicit + autoBodies).sortedWith(
         compareBy<ResolvedComponent>({ it.startMmPhysical }, { it.typeSortKey() })
     )
     val subtracted = subtractBodiesAgainstNonBodies(merged)
-    val bodiesAndFeatures = normalizeBodies(subtracted, overrideDiaMm = spec.autoBodyDiaMm)
+    val bodiesAndFeatures = normalizeBodies(
+        subtracted,
+        overrideDiaMm = spec.autoBodyDiaMm,
+        sectionOverrides = spec.autoDiaOverrides
+    )
 
     // Coupler bolt slots are overlays: resolved separately and appended so they never enter
     // auto-body/subtraction geometry, then merged back in physical order for the carousel.
@@ -163,13 +171,20 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
 /**
  * Derive auto body segments from explicit component spans.
  *
- * [overrideDiaMm] > 0 is the user-set bare-shaft Ø ([ShaftSpec.autoBodyDiaMm]): it wins
- * over all neighbor derivation for every auto span. 0 keeps the derived behavior.
+ * Per-span diameter precedence:
+ * 1. [sectionOverrides] — the aft-most [AutoDiaOverride] anchored inside the span
+ *    (`[start, end)`); the rest stay dormant. A merged run therefore takes the Ø of its more
+ *    aftward section, since aft is authored first.
+ * 2. [overrideDiaMm] > 0 — the legacy shaft-wide bare-shaft Ø ([ShaftSpec.autoBodyDiaMm]).
+ * 3. Neighbor derivation ([resolveAutoBodyDia]).
+ *
+ * Diameter only: no input here moves a span boundary.
  */
 fun deriveAutoBodies(
     overallLengthMm: Float,
     explicitComponents: List<ResolvedComponent>,
-    overrideDiaMm: Float = 0f
+    overrideDiaMm: Float = 0f,
+    sectionOverrides: List<AutoDiaOverride> = emptyList()
 ): List<ResolvedComponent> {
     val explicit = explicitComponents
         .filter { it.source == ResolvedComponentSource.EXPLICIT }
@@ -177,8 +192,9 @@ fun deriveAutoBodies(
 
     data class Span(val start: Float, val end: Float)
 
-    fun autoDia(startMm: Float): Float =
-        if (overrideDiaMm > 0f) overrideDiaMm else resolveAutoBodyDia(startMm, explicit)
+    fun autoDia(startMm: Float, endMm: Float): Float =
+        sectionOverrides.autoSectionDiaMmFor(startMm, endMm)
+            ?: if (overrideDiaMm > 0f) overrideDiaMm else resolveAutoBodyDia(startMm, explicit)
 
     if (explicit.isEmpty()) {
         if (overallLengthMm <= 0f) return emptyList()
@@ -189,7 +205,7 @@ fun deriveAutoBodies(
                 source = ResolvedComponentSource.AUTO,
                 startMmPhysical = 0f,
                 endMmPhysical = overallLengthMm,
-                diaMm = autoDia(0f)
+                diaMm = autoDia(0f, overallLengthMm)
             )
         )
     }
@@ -215,7 +231,7 @@ fun deriveAutoBodies(
         val length = span.end - span.start
         if (length <= 0f) return@mapNotNull null
 
-        val dia = autoDia(span.start)
+        val dia = autoDia(span.start, span.end)
         val id = autoBodyId(span.start, span.end)
         ResolvedBody(
             id = id,
@@ -357,7 +373,8 @@ private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>):
 
 private fun normalizeBodies(
     components: List<ResolvedComponent>,
-    overrideDiaMm: Float = 0f
+    overrideDiaMm: Float = 0f,
+    sectionOverrides: List<AutoDiaOverride> = emptyList()
 ): List<ResolvedComponent> {
     if (components.isEmpty()) return components
 
@@ -367,6 +384,8 @@ private fun normalizeBodies(
         var diaMm: Float,
         var hasExplicit: Boolean,
         var explicitId: String?,
+        /** Set when this run's Ø came from an [AutoDiaOverride] anchored in the opening span. */
+        var sectionAuthored: Boolean = false,
     ) {
         fun toResolved(): ResolvedBody = ResolvedBody(
             id = explicitId ?: autoBodyId(start, end),
@@ -385,11 +404,15 @@ private fun normalizeBodies(
 
     fun startAccum(comp: ResolvedBody): BodyAccum {
         val isExplicit = comp.source == ResolvedComponentSource.EXPLICIT
-        // With a user-set bare-shaft Ø, auto spans keep it — no diameter continuity
-        // carried over from a flanking explicit body.
+        val sectionAuthored = !isExplicit &&
+            sectionOverrides.hasAutoSectionDia(comp.startMmPhysical, comp.endMmPhysical)
+        // An auto span with a user-set Ø of its own — a section override anchored inside it,
+        // or the legacy shaft-wide bare-shaft Ø — keeps that value; only a span with no
+        // authored Ø inherits diameter continuity from a flanking explicit body.
         val dia = when {
             isExplicit -> comp.diaMm
             overrideDiaMm > 0f -> comp.diaMm
+            sectionAuthored -> comp.diaMm
             else -> lastMergedDia ?: comp.diaMm
         }
         return BodyAccum(
@@ -397,14 +420,19 @@ private fun normalizeBodies(
             end = comp.endMmPhysical,
             diaMm = dia,
             hasExplicit = isExplicit,
-            explicitId = if (isExplicit) comp.id else null
+            explicitId = if (isExplicit) comp.id else null,
+            sectionAuthored = sectionAuthored
         )
     }
 
     fun flush() {
         current?.let {
             result.add(it.toResolved())
-            lastMergedDia = it.diaMm
+            // A section-authored auto run states one section's Ø, so it seeds no continuity:
+            // the next auto run falls back to the shaft-wide Ø or neighbor derivation rather
+            // than inheriting a value that was only ever true of the run before it. A run that
+            // absorbed an explicit body carries that body's Ø forward as before.
+            lastMergedDia = if (it.sectionAuthored && !it.hasExplicit) null else it.diaMm
             current = null
         }
     }

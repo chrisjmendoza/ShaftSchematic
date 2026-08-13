@@ -108,8 +108,12 @@ forgets it is impossible rather than merely discouraged.
 **The station editor lives in one place.** `ui/screen/RunoutStationEditor.kt` provides
 `buildRunoutStationEntries` + `RunoutStationCountEditor`, hosted by BOTH the Runout tab and the
 Consolidated Output tab (whose sheet the bubbles actually print on — adjusting a count used to
-mean leaving the tab). The Output tab also carries a "Runout sheet →" button for the full
-authoring surface.
+mean leaving the tab). On the Output tab the rows sit behind a **collapsed-by-default**
+"Runout bubbles" expander — they are an occasional tweak, and an open wall of rows buried the
+tab's output actions (on-device report) — with the "Runout sheet →" button beside it for the
+full authoring surface. The Output tab's order is: Sheet content election, then the output
+group (blank-draft toggle + Preview / Print / Export — the actions the tab is for), then the
+tuning sections (bubbles, sliders, worn sections), then Export all.
 
 ---
 
@@ -1108,19 +1112,31 @@ When `optionsSheet` is non-null, a **Tune** icon appears in the overlay toolbar.
 
 **Rotation:** the app is locked to portrait, but the runout/wear sheets are landscape, so — like the schematic `PdfPreviewScreen` — the overlay unlocks rotation while open (`DisposableEffect` sets `SCREEN_ORIENTATION_UNSPECIFIED`, restoring `SCREEN_ORIENTATION_PORTRAIT` on dismiss). Turning the device landscape then lets the letterboxed `ContentScale.Fit` preview fill the width.
 
-Both routes pass `RunoutWearOptionsSheet` as the lambda:
+All four routes (Runout, Wear, Undercut, Consolidated Output) pass `RunoutWearOptionsSheet` as the lambda:
 
 | Control | Bound to |
 |---|---|
+| Blank draft (write-in) (Switch) | the hosting tab's session-only blank-draft state, via `onSetBlankDraft` — row renders only when that callback is non-null (Consolidated Output only) |
 | Line thickness (Slider 50–200%) | `vm.setLineThicknessScale()` |
 | Body S-break (Slider Never–Always, 5% steps) | `vm.setPdfSBreakThresholdFrac()` — only when `showSBreak` (see below) |
+| Shaft height (Slider) | `vm.setRunoutHeightScale()` — only when `showHeightControls` (Consolidated Output only) |
+| Liner compression (Checkbox + Slider) | `vm.setLinersProportional()` / `vm.setLinerCompression()` — only when `showHeightControls` (Consolidated Output only) |
+| Measurement reference (Radio: Auto / AFT / FWD) | `vm.setPdfTieringMode()` — only when `showMeasurementReference` (Consolidated Output only) |
 | Shade Bodies (Checkbox) | `vm.setPdfShadedBodies()` |
 | Shade Tapers (Checkbox) | `vm.setPdfShadedTapers()` |
 | Shade Liners (Checkbox) | `vm.setPdfShadedLiners()` — locked (disabled, shown unchecked) when the document prints Ø values inside the profile; display-only, the pref is never rewritten |
 
+Only the Consolidated Output instance turns on the blank-draft row, the Shaft height /
+Liner compression pair, and the Measurement reference radios — the same set the schematic
+Tune sheet exposes (`PdfPreviewScreen.kt`'s `PdfOptionsSheet`), minus Component labels and
+the blank Ø-callouts sub-toggle: the consolidated composer never reads either of those two
+prefs, so they would be inert controls on this sheet. The Wear, Undercut, and Runout
+instances are unchanged — they leave every one of these gates at its `false`/`null`
+default and show only Line thickness, (Runout also) Body S-break, and Shade in PDF.
+
 All of these values are included in the render loop's `RenderInputs` holder so changing any option immediately re-renders the preview bitmap.
 
-**Live tuning (Runout + Consolidated Output).** Both routes pass a `PreviewTuning` (`ui/screen/PreviewTuning.kt`) into the sheet, so the two sliders here — Line thickness and Body S-break — reshape the page **while the finger is still on the track**, and so do the Output tab's own "Shaft height" and "Liner compression" controls ("see the differences without choosing, closing menu, opening menu, choosing" — on-device request). The shared controls report their in-progress value through an optional `onDrag: (Float?) -> Unit` (same units as their commit callback, `null` on release); the route folds it into the render inputs as `override ?: committed`. Three rules hold:
+**Live tuning (Runout + Consolidated Output).** Both routes pass a `PreviewTuning` (`ui/screen/PreviewTuning.kt`) into the sheet, so the sliders here — Line thickness and Body S-break on both routes, plus Shaft height and Liner compression on the Consolidated Output sheet — reshape the page **while the finger is still on the track** ("see the differences without choosing, closing menu, opening menu, choosing" — on-device request). The shared controls report their in-progress value through an optional `onDrag: (Float?) -> Unit` (same units as their commit callback, `null` on release); the route folds it into the render inputs as `override ?: committed`. Three rules hold:
 
 - **Visual only.** A drag frame never writes DataStore and never updates `RunoutConfig` — persistence and the per-job dirty mark stay on commit-on-release. The Wear and Undercut routes leave `tuning` at its `null` default and are unaffected.
 - **Draft then sharp.** The loop is `snapshotFlow { RenderInputs(…) }.conflate().collect { … }` — latest-wins, so intermediate drag values are dropped while a render is in flight — and drag frames raster at `renderScale = 1` (¼ the pixels). When the drag ends the overrides go null, the inputs change once more, and that pass restores `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back across drag frames and that release pass so the page never strobes.

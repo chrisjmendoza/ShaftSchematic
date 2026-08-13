@@ -3,10 +3,18 @@ package com.android.shaftschematic.pdf
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.pdf.notes.LeaderSide
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BodyOdCalloutsTest {
+
+    /**
+     * Body callouts are OPT-IN ([Body.showDiaOnDrawing] defaults false), so every body meant
+     * to print in these tests says so explicitly.
+     */
+    private fun shown(startFromAftMm: Float, lengthMm: Float, diaMm: Float) =
+        Body(startFromAftMm = startFromAftMm, lengthMm = lengthMm, diaMm = diaMm, showDiaOnDrawing = true)
 
     // ── Empty / zero-OD cases ─────────────────────────────────────────────────
 
@@ -17,16 +25,14 @@ class BodyOdCalloutsTest {
 
     @Test
     fun `body with zero diameter is skipped`() {
-        val bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = 0f))
-        assertTrue(buildBodyOdCallouts(bodies).isEmpty())
+        assertTrue(buildBodyOdCallouts(listOf(shown(0f, 500f, diaMm = 0f))).isEmpty())
     }
 
     // ── Single body ───────────────────────────────────────────────────────────
 
     @Test
-    fun `single body produces one callout below`() {
-        val body = Body(startFromAftMm = 100f, lengthMm = 400f, diaMm = 127f)
-        val calls = buildBodyOdCallouts(listOf(body))
+    fun `single shown body produces one callout below`() {
+        val calls = buildBodyOdCallouts(listOf(shown(100f, 400f, 127f)))
 
         assertEquals(1, calls.size)
         assertEquals(127.0, calls[0].valueMm, 0.001)
@@ -35,8 +41,7 @@ class BodyOdCalloutsTest {
 
     @Test
     fun `callout placed at body center`() {
-        val body = Body(startFromAftMm = 200f, lengthMm = 300f, diaMm = 127f)
-        val calls = buildBodyOdCallouts(listOf(body))
+        val calls = buildBodyOdCallouts(listOf(shown(200f, 300f, 127f)))
 
         // Center = 200 + 300/2 = 350
         assertEquals(350.0, calls[0].xMm, 0.001)
@@ -46,9 +51,9 @@ class BodyOdCalloutsTest {
 
     @Test
     fun `two bodies with same OD produce one callout at the longer body center`() {
-        val short = Body(startFromAftMm = 0f,    lengthMm = 100f, diaMm = 127f)
-        val long  = Body(startFromAftMm = 200f,  lengthMm = 500f, diaMm = 127f)
-        val calls = buildBodyOdCallouts(listOf(short, long))
+        val calls = buildBodyOdCallouts(
+            listOf(shown(0f, 100f, 127f), shown(200f, 500f, 127f))
+        )
 
         assertEquals(1, calls.size)
         // Placed at center of longer body: 200 + 250 = 450
@@ -59,9 +64,9 @@ class BodyOdCalloutsTest {
 
     @Test
     fun `two distinct ODs produce two callouts`() {
-        val b1 = Body(startFromAftMm = 0f,   lengthMm = 300f, diaMm = 127f)
-        val b2 = Body(startFromAftMm = 400f, lengthMm = 200f, diaMm = 152f)
-        val calls = buildBodyOdCallouts(listOf(b1, b2))
+        val calls = buildBodyOdCallouts(
+            listOf(shown(0f, 300f, 127f), shown(400f, 200f, 152f))
+        )
 
         assertEquals(2, calls.size)
         val diameters = calls.map { it.valueMm }.toSet()
@@ -73,21 +78,12 @@ class BodyOdCalloutsTest {
 
     @Test
     fun `all callouts are BELOW regardless of count`() {
-        val one = buildBodyOdCallouts(
-            listOf(Body(startFromAftMm = 0f, lengthMm = 200f, diaMm = 100f))
-        )
+        val one = buildBodyOdCallouts(listOf(shown(0f, 200f, 100f)))
         val two = buildBodyOdCallouts(
-            listOf(
-                Body(startFromAftMm = 0f,   lengthMm = 300f, diaMm = 127f),
-                Body(startFromAftMm = 400f, lengthMm = 200f, diaMm = 152f),
-            )
+            listOf(shown(0f, 300f, 127f), shown(400f, 200f, 152f))
         )
         val three = buildBodyOdCallouts(
-            listOf(
-                Body(startFromAftMm = 0f,   lengthMm = 200f, diaMm = 100f),
-                Body(startFromAftMm = 300f, lengthMm = 200f, diaMm = 130f),
-                Body(startFromAftMm = 600f, lengthMm = 200f, diaMm = 160f),
-            )
+            listOf(shown(0f, 200f, 100f), shown(300f, 200f, 130f), shown(600f, 200f, 160f))
         )
         assertTrue((one + two + three).all { it.side == LeaderSide.BELOW })
     }
@@ -101,12 +97,12 @@ class BodyOdCalloutsTest {
     }
 
     @Test
-    fun `hiding the longer body moves the anchor to the visible one`() {
+    fun `hiding the longer body moves the anchor to the shown one`() {
         // The reported case: a long run under fiberglass shares its Ø with a short bare
-        // window that could actually be measured. Hiding the covered run must not delete
-        // the value — it must move the callout onto the run the reading came from.
+        // window that could actually be measured. With the covered run hidden, the callout
+        // must not vanish — it anchors on the run the reading came from.
         val covered = Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = 127f, showDiaOnDrawing = false)
-        val window  = Body(startFromAftMm = 600f, lengthMm = 100f, diaMm = 127f)
+        val window  = shown(600f, 100f, 127f)
         val calls = buildBodyOdCallouts(listOf(covered, window))
 
         assertEquals(1, calls.size)
@@ -117,7 +113,7 @@ class BodyOdCalloutsTest {
     fun `hiding every body of one OD drops that callout and keeps the others`() {
         val hidden1 = Body(startFromAftMm = 0f,   lengthMm = 300f, diaMm = 127f, showDiaOnDrawing = false)
         val hidden2 = Body(startFromAftMm = 400f, lengthMm = 100f, diaMm = 127f, showDiaOnDrawing = false)
-        val shown   = Body(startFromAftMm = 600f, lengthMm = 200f, diaMm = 152f)
+        val shown   = shown(600f, 200f, 152f)
         val calls = buildBodyOdCallouts(listOf(hidden1, hidden2, shown))
 
         assertEquals(1, calls.size)
@@ -125,16 +121,19 @@ class BodyOdCalloutsTest {
     }
 
     @Test
-    fun `bodies are visible by default`() {
-        assertTrue(Body().showDiaOnDrawing)
+    fun `bodies are hidden by default — callouts are opt-in`() {
+        // On-device preference: the schematic stays clean unless a body's Ø is deliberately
+        // shown; the footer's "Body:" list still carries every Ø.
+        assertFalse(Body().showDiaOnDrawing)
+        val defaultBody = Body(startFromAftMm = 0f, lengthMm = 400f, diaMm = 127f)
+        assertTrue(buildBodyOdCallouts(listOf(defaultBody)).isEmpty())
     }
 
     // ── OD value accuracy ─────────────────────────────────────────────────────
 
     @Test
     fun `callout valueMm matches body diaMm exactly`() {
-        val body = Body(startFromAftMm = 0f, lengthMm = 300f, diaMm = 130.175f)
-        val calls = buildBodyOdCallouts(listOf(body))
+        val calls = buildBodyOdCallouts(listOf(shown(0f, 300f, 130.175f)))
 
         assertEquals(130.175, calls[0].valueMm, 0.0001)
     }

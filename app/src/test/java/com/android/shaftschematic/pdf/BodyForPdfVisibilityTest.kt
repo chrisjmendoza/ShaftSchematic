@@ -52,7 +52,7 @@ class BodyForPdfVisibilityTest {
 
     @Test
     fun `every fragment of a shown body stays shown`() {
-        val spec = ShaftSpec(bodies = listOf(Body(id = "b1")))
+        val spec = ShaftSpec(bodies = listOf(Body(id = "b1", showDiaOnDrawing = true)))
         val fragments = listOf(resolved("b1", 0f, 200f), resolved("b1#2", 300f, 500f))
         assertTrue(fragments.map { spec.bodyForPdf(it) }.all { it.showDiaOnDrawing })
     }
@@ -60,7 +60,7 @@ class BodyForPdfVisibilityTest {
     @Test
     fun `auto spans follow the single bare-shaft flag`() {
         val hidden = ShaftSpec(showAutoBodyDia = false)
-        val shown = ShaftSpec()
+        val shown = ShaftSpec(showAutoBodyDia = true)
         val auto = resolved("auto_body_0.000_500.000", 0f, 500f, source = ResolvedComponentSource.AUTO)
 
         assertFalse(hidden.bodyForPdf(auto).showDiaOnDrawing)
@@ -68,15 +68,19 @@ class BodyForPdfVisibilityTest {
     }
 
     @Test
-    fun `an auto span is unaffected by an explicit body's hidden flag`() {
-        val spec = ShaftSpec(bodies = listOf(Body(id = "b1", showDiaOnDrawing = false)))
+    fun `an auto span is unaffected by an explicit body's flag`() {
+        // The bare-shaft flag and a body's own flag are independent in both directions.
+        val spec = ShaftSpec(
+            bodies = listOf(Body(id = "b1", showDiaOnDrawing = false)),
+            showAutoBodyDia = true,
+        )
         val auto = resolved("auto_body_600.000_900.000", 600f, 900f, source = ResolvedComponentSource.AUTO)
         assertTrue(spec.bodyForPdf(auto).showDiaOnDrawing)
     }
 
     @Test
-    fun `a resolved id with no stored match defaults to visible`() {
-        assertTrue(ShaftSpec().bodyForPdf(resolved("gone", 0f, 100f)).showDiaOnDrawing)
+    fun `a resolved id with no stored match follows the hidden-by-default posture`() {
+        assertFalse(ShaftSpec().bodyForPdf(resolved("gone", 0f, 100f)).showDiaOnDrawing)
     }
 
     @Test

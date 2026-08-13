@@ -152,7 +152,7 @@ internal fun ComponentCarouselPager(
     showComponentDebugLabels: Boolean,
     selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
-    onSetAutoBodyDia: (Float) -> Unit,
+    onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
@@ -287,7 +287,7 @@ internal fun ComponentCarouselPager(
                     outerPaddingHorizontal = componentCardPadding,
                     showComponentDebugLabels = showComponentDebugLabels,
                     onAddBody = onAddBody,
-                    onSetAutoBodyDia = onSetAutoBodyDia,
+                    onSetAutoSectionDia = onSetAutoSectionDia,
                     onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
@@ -448,7 +448,7 @@ internal fun ComponentPagerCard(
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
     onAddBody: (Float, Float, Float) -> Unit,
-    onSetAutoBodyDia: (Float) -> Unit,
+    onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
@@ -502,9 +502,9 @@ internal fun ComponentPagerCard(
             if (component.source == ResolvedComponentSource.AUTO) {
                 // Auto-body Start/Length are derived from the resolve layer and shown
                 // read-only (greyed); making the body explicit via the checkbox is the only
-                // way to control its position. The Ø field IS editable: it sets the single
-                // bare-shaft Ø (ShaftSpec.autoBodyDiaMm) shared by ALL auto spans — one
-                // piece of stock — without promoting or touching positioning.
+                // way to control its position. The Ø field IS editable: it sets THIS
+                // section's bare-shaft Ø (an AutoDiaOverride anchored in this span) without
+                // promoting or touching positioning — neighbouring auto sections keep theirs.
                 val startMm  = component.startMmPhysical
                 val lengthMm = component.endMmPhysical - component.startMmPhysical
                 val diaMm    = component.diaMm
@@ -553,10 +553,12 @@ internal fun ComponentPagerCard(
                     CommitNum("Start (${abbr(unit)})", disp(startMm, unit), enabled = false) { }
                     CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit), enabled = false) { }
                     CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit)) { s ->
-                        toMmOrNull(s, unit)?.let { onSetAutoBodyDia(it) }
+                        toMmOrNull(s, unit)?.let {
+                            onSetAutoSectionDia(component.startMmPhysical, component.endMmPhysical, it)
+                        }
                     }
                     // One flag for every auto span — the bare shaft is one piece of stock, so
-                    // it carries one Ø and one visibility.
+                    // it carries one visibility even where sections differ in Ø.
                     ShowDiaToggleRow(
                         label = "Show bare-shaft Ø on drawing",
                         checked = spec.showAutoBodyDia,

@@ -184,7 +184,7 @@ fun ShaftScreen(
                 keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                 keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
                 keywaySpooned: Boolean) -> Unit,
-    onSetAutoBodyDia: (Float) -> Unit,
+    onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onAddTaper: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float,
                  rateText: String, reference: LinerAuthoredReference,
@@ -674,7 +674,7 @@ fun ShaftScreen(
                     onAddBody = { s, l, d ->
                         onAddBody(s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false)
                     },
-                    onSetAutoBodyDia = onSetAutoBodyDia,
+                    onSetAutoSectionDia = onSetAutoSectionDia,
                     onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,

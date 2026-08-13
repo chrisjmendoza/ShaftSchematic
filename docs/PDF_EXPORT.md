@@ -1,6 +1,9 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-08-06 (b) — §5.4/§5.5 gain the one-collision-space rule for dimension
+Last updated: 2026-08-12 — §5.6 documents the consolidated preview's Tune sheet gaining
+Blank draft, Shaft height, Liner compression, and Measurement reference (the schematic
+Tune sheet's applicable set, minus Component labels and the blank Ø-callouts sub-toggle,
+which the consolidated composer never reads). 2026-08-06 (b) — §5.4/§5.5 gain the one-collision-space rule for dimension
 labels (pure `geom/DimensionRailLayout.kt`: rail lines are obstacles too, slide along the
 span before bumping, tiers above a floating value lift by one label band, composer budgets
 include the lifts). 2026-08-06 — §5.6 gains the conditional liner-shading rule
@@ -185,16 +188,19 @@ Two independent controls gate the pass; both must allow a callout for it to prin
 
 **Per component — "Show Ø on drawing"** (`Body.showDiaOnDrawing`, `Liner.showDiaOnDrawing`,
 and `ShaftSpec.showAutoBodyDia` for every auto span at once). A switch under the Ø field on
-the body / auto-body / liner cards. Additive and defaulted `true`: a document saved before
-the flags existed prints exactly as it always did.
+the body / auto-body / liner cards. All three are additive envelope fields. **Body and
+bare-shaft callouts are opt-in — those two flags default `false`** (on-device preference:
+the schematic stays clean unless a body's Ø is deliberately shown, and a document with no
+flags prints no body Ø callouts; the footer's "Body:" list still carries every Ø). Liners
+default `true`.
 
 - **The filter runs before the grouping.** Hiding one body of a shared-Ø group does not
   remove the value from the sheet — the anchor moves to the longest body of that Ø that is
-  still shown. That is the feature: the on-device case was a body running under fiberglass
-  with one bare window, where the callout landed over the covered run and claimed a reading
-  had been taken there. Model the two runs as separate bodies, hide the covered one, and the
-  Ø moves onto the window. A hidden body whose Ø no other visible body carries simply does
-  not print below the shaft.
+  still shown. The on-device case was a body running under fiberglass with one bare window,
+  where a callout over the covered run claimed a reading had been taken there. Model the two
+  runs as separate bodies and show only the window's Ø — the callout anchors on the surface
+  that was actually measured. A body whose Ø no shown body carries simply does not print
+  below the shaft.
 - **Fragment-aware.** `ShaftSpec.bodyForPdf` looks the flag up by `resolvedBodyBaseId`, so a
   body a liner has split hides every one of its drawn runs.
 - **The footer is not gated.** The "Body:" Ø list still shows the diameter — the value is
@@ -374,6 +380,20 @@ for the five documents (consolidated [current variant], schematic, runout, wear,
 undercut; all on by default) written to one picked folder (`OpenDocumentTree` +
 `createPdfInTree`), each through the hardened write path, with a written/failed result
 line. Nothing auto-opens after a batch.
+
+**The consolidated preview's Tune sheet** (`RunoutWearOptionsSheet`, `ui/screen/RunoutRoute.kt`)
+hosts, in order: Blank draft (write-in) — this tab's own toggle, shown here too so the
+sheet can be judged live — Line thickness, Body S-break, the **"Shaft height" slider** and
+the **liner compression** control (§5.7, the same per-job `RunoutConfig` values as the
+tab's own controls), Measurement reference, and the Shade-in-PDF checkboxes: the same set
+as the schematic Tune sheet (§5.5) minus Component labels and the blank Ø-callouts
+sub-toggle, which the consolidated composer never reads, so they would be inert here. The
+other tabs reuse the same sheet with these additions off: the Runout instance keeps Line
+thickness, Body S-break (the classic sheet draws compression breaks too), and the shade
+checkboxes — the classic sheet honors the same per-job height/liner values, but they are
+tuned from the Output tab or the schematic Tune sheet, and it draws no dimension rails, so
+the Measurement-reference radios would be inert there; the Wear and Undercut instances
+show only Line thickness and the shade checkboxes.
 
 **Hardened writes everywhere**: every SAF export in the app goes through
 `util/PdfSafExport.writeShaftPdfToUri` — a composer throw repaints the page as a valid

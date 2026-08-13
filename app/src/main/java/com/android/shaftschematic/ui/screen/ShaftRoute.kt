@@ -191,7 +191,7 @@ fun ShaftRoute(
         onSelectComponentById = vm::selectComponentById,
 
         onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp -> vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp) },
-        onSetAutoBodyDia = vm::setAutoBodyDiaMm,
+        onSetAutoSectionDia = vm::setAutoSectionDiaMm,
         onSetShowAutoBodyDia = vm::setShowAutoBodyDia,
         onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS -> vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS) },
         onAddThread = { s, l, maj, p, ex, aft -> vm.addThreadAt(s, l, maj, p, ex, aft) },

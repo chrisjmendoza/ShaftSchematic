@@ -1,6 +1,8 @@
 # Component vs Feature Contract
 Version: v0.5.x
-Last updated: 2026-08-05 — the "not components — envelope records" bullet now lists all
+Last updated: 2026-08-13 — the auto-body card's Ø field is **per-section**
+(`AutoDiaOverride`), not one shaft-wide value; still no field-edit promotion path.
+2026-08-05 — the "not components — envelope records" bullet now lists all
 reference-only kinds, adding **worn sections** (`WearRecord.wornSections`) and **undercuts**
 (`UndercutRecord`, its own `undercut_record` envelope field). 2026-07-21 — reverted "explicit bodies are non-negotiable" (it raised false collision warnings on normal drafts); bodies are the fluid base again — they don't collide, and plain bodies split around sacred components while keyed bodies are protected.
 
@@ -101,8 +103,18 @@ Features:
 promotion is live today: the carousel's auto-body card promotes ONLY when the user ticks its
 **"Explicit body"** checkbox (`ComponentCarousel.kt` calls `onAddBody(...)`), persisting the
 section as a real `Body` in `ShaftSpec`. There is no field-edit promotion path — the card's
-editable Ø sets `ShaftSpec.autoBodyDiaMm` without promoting; viewing the card never
+editable Ø writes a per-section `AutoDiaOverride` without promoting; viewing the card never
 promotes it.
+
+**Per-section Ø:** the Ø field applies to **that one auto span**
+(`onSetAutoSectionDia(startMm, endMm, diaMm)` → `ShaftViewModel.setAutoSectionDiaMm` →
+`ShaftSpec.withAutoSectionDia`), so bare-shaft sections may differ without any of them
+becoming explicit. The override is keyed in shaft space by an anchor at the span midpoint,
+beats the legacy shaft-wide `ShaftSpec.autoBodyDiaMm` and neighbor derivation, and changes the
+drawn diameter only — span boundaries stay derived. Anchors under a component (or inside a gap
+absorbed into an explicit-body run) are dormant, never pruned, and resurrect when their span
+does. When a separator is deleted and two differing sections remerge, the joined run takes the
+**more aftward** section's Ø — aft is authored first. See DATA_MODEL.md §`AutoDiaOverride`.
 
 ### Explicit bodies are the fluid base (reverted 2026-07-21)
 
