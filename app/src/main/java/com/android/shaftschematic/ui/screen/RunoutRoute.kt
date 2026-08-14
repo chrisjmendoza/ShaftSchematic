@@ -374,17 +374,20 @@ fun RunoutRoute(
 
         HorizontalDivider()
 
-        // ── Scrollable content ────────────────────────────────────────────────
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-
-            // ── Live shaft + bubble preview (pinch-to-zoom, tap a bubble to edit) ──
-            if (spec.overallLengthMm > 0f) {
+        // ── Pinned live preview ───────────────────────────────────────────────
+        // Deliberately OUTSIDE the scroll region: the whole point of the bubble-count
+        // editor below is watching the profile change, so the preview must stay on
+        // screen while the stations are scrolled to (on-device request). Anything added
+        // here costs the scroll region height on a phone — keep this block to the
+        // preview and its one-line hint.
+        // The guard wraps the divider and padding too, so an OAL-less spec leaves no
+        // orphan rule or gap above the controls.
+        if (spec.overallLengthMm > 0f) {
+            Column(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // ── Live shaft + bubble preview (pinch-to-zoom, tap a bubble to edit) ──
                 // Read live inside the (non-restarting) tap pointerInput without re-keying it.
                 val scaleForTap  = rememberUpdatedState(previewScale)
                 val offsetForTap = rememberUpdatedState(previewOffset)
@@ -471,6 +474,24 @@ fun RunoutRoute(
                 )
             }
 
+            HorizontalDivider()
+        }
+
+        // ── Scrollable content ────────────────────────────────────────────────
+        // Order is deliberate: the document controls (TIR orientation, then the whole
+        // export group) sit at the top so producing a sheet needs no scrolling, and the
+        // measurement-station editor goes last — it is only reached when the document
+        // actually needs adjusting, and it is the one section whose length grows with
+        // the shaft (on-device request).
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+
             // ── TIR orientation selector ──────────────────────────────────────
             Text("TIR orientation", style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -478,19 +499,6 @@ fun RunoutRoute(
                 TirButton("Looking FORWARD", runoutConfig.tirDirection == TirDirection.FORWARD) { vm.setTirDirection(TirDirection.FORWARD) }
                 TirButton("Not set",         runoutConfig.tirDirection == TirDirection.UNSET)   { vm.setTirDirection(TirDirection.UNSET) }
             }
-
-            // ── Measurement station selector ──────────────────────────────────
-            RunoutStationCountEditor(
-                entries = entries,
-                overrides = runoutConfig.componentOverrides,
-                onSetCount = { id, count -> vm.setRunoutBubbleCount(id, count) },
-            )
-
-            // (Worn-section authoring, the consolidated variant picker, and the "Shaft
-            // height" slider live on the Consolidated Output tab — this tab is the runout
-            // authoring surface and produces the classic runout sheet.)
-
-            Spacer(Modifier.height(4.dp))
 
             // ── Blank draft toggle ────────────────────────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -567,6 +575,22 @@ fun RunoutRoute(
                 Spacer(Modifier.width(8.dp))
                 Text("Export Runout Sheet PDF")
             }
+
+            Spacer(Modifier.height(4.dp))
+            HorizontalDivider()
+
+            // ── Measurement station selector ──────────────────────────────────
+            // Last on the page: adjusting bubble counts is the exception, not the
+            // routine path, and the pinned preview above shows the effect live.
+            RunoutStationCountEditor(
+                entries = entries,
+                overrides = runoutConfig.componentOverrides,
+                onSetCount = { id, count -> vm.setRunoutBubbleCount(id, count) },
+            )
+
+            // (Worn-section authoring, the consolidated variant picker, and the "Shaft
+            // height" slider live on the Consolidated Output tab — this tab is the runout
+            // authoring surface and produces the classic runout sheet.)
         }
     }
 

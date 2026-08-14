@@ -49,7 +49,28 @@
   (write-in) template is the same document in **blank-draft mode** (`blankValues = true`),
   for field damage and dye-pen inspection marking.
 
-Both tabs share the same layout pattern: outer `Column` with `systemBarsPadding()`, a toolbar `Row` (hamburger + title), `HorizontalDivider`, then a vertically-scrollable inner `Column`.
+Both tabs share the same shell: outer `Column` with `systemBarsPadding()`, the shared
+`EditorDocumentTitle` strip (`docs/Navigation.md`), a toolbar `Row` (hamburger + title +
+Save), `HorizontalDivider`, then a vertically-scrollable inner `Column`.
+
+**RunoutRoute additionally pins its preview.** The live canvas + its one-line tap hint sit
+**outside** the scroll region, between the toolbar divider and a second `HorizontalDivider`;
+the scrolling `Column` below takes the remainder via `Modifier.weight(1f)`. The bubble-count
+editor's whole purpose is watching the profile change, so the preview has to stay on screen
+while the stations are scrolled to (on-device request). Anything added to the pinned block
+costs the scroll region height on a phone — keep it to the preview and the hint.
+
+Order inside the scroll region is deliberate (on-device request):
+
+1. **TIR orientation**
+2. **Document export group** — blank-draft toggle, gate message, Preview / Print / Export.
+   Producing a sheet is the routine path and must need no scrolling.
+3. **Measurement station editor**, after a divider — reached only when the document needs
+   adjusting, and the one section whose length grows with the shaft.
+
+The pinned block, its padding, and its divider are all inside the same
+`spec.overallLengthMm > 0f` guard, so an OAL-less spec leaves no orphan rule above the
+controls.
 
 ---
 

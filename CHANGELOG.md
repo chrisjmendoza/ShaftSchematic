@@ -8,6 +8,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### feat: Runout tab pins its preview and leads with the export controls
+
+The preview scrolled away with everything else, so changing a component's station count —
+the one edit whose whole point is watching the bubbles move — meant editing blind
+(on-device request). The canvas and its tap hint now sit outside the scroll region, pinned
+between the toolbar and the controls; the scrolling column takes the remainder.
+
+The order below it is inverted to match how the tab is actually used. TIR orientation and
+then the full export group (blank-draft toggle, Preview, Print, Export) come first, so
+producing a sheet needs no scrolling at all. The measurement-station editor moves to the
+bottom, behind a divider — it is reached only when the document needs adjusting, and it is
+the one section whose length grows with the shaft.
+
 ### feat: the document title (and Save) now appear on every editor tab
 
 Only the Schematic told you which document was open and whether it had unsaved changes.

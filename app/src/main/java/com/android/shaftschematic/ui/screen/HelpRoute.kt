@@ -255,7 +255,12 @@ private val helpSections: List<HelpSection> = listOf(
                     "three per body; you can raise or lower the count per component, or set it " +
                     "to zero to hide that component's stations. Set the indicator direction on " +
                     "the sheet and it prints as \"TIR's taken looking AFT / FORWARD\" at the " +
-                    "bottom, so the shop knows how to read the high-spot arrows."
+                    "bottom, so the shop knows how to read the high-spot arrows.\n\n" +
+                    "The preview stays put at the top of the tab while you scroll, so you can " +
+                    "watch the bubbles move as you change a component's station count. The " +
+                    "orientation setting and the Preview / Print / Export buttons sit directly " +
+                    "under it; the station editor is at the bottom, since it is only needed " +
+                    "when the sheet needs adjusting."
             ),
             HelpTopic(
                 "Record undercut sections",
