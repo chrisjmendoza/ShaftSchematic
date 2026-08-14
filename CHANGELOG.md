@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### fix: blank-draft footer job info lines up with the taper columns
+
+On a blank (write-in) schematic the footer's middle job-info block started its writing rules
+one line above the end columns' rules — the AFT/FWD columns spend their first line on a
+"AFT Taper"/"FWD Taper" heading, and the middle block has no heading of its own. Customer /
+Vessel / Job # / Date / Side now start one line down, so every rule on the sheet shares a
+baseline with its neighbours. The blank pitch's fit-clamp counts the extra line, so a full
+sheet still tightens inside the reserved band instead of running past the margin. Printed
+footers are unchanged: their lines carry values rather than rules, and their band has no
+spare line.
+
 ### feat: Save/Cancel on the Project Information sheet
 
 On-device report: whatever field was typed into last lost its text unless the field was

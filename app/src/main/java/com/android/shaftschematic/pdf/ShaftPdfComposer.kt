@@ -1205,11 +1205,24 @@ internal fun drawFooter(
 
     val cols = buildFooterEndColumns(spec, unit, cfg, blankValues)
 
+    // The end columns lead with a taper heading; the middle job-info block has no heading of its
+    // own, so its writing rules would sit one line proud of the end columns' rules. On a blank
+    // draft (every line a rule) that misalignment is what the eye reads first — drop the middle
+    // column one line so all three columns share the same set of baselines. Printed footers carry
+    // values, not rules, and their reserved band has no room to spare, so they stay flush.
+    val midLeadLines = if (
+        blankValues && (
+            cols.aftLines.firstOrNull() == FOOTER_AFT_TAPER_HEADER ||
+                cols.fwdLines.firstOrNull() == FOOTER_FWD_TAPER_HEADER
+            )
+    ) 1 else 0
+
     // Blank drafts open the line pitch up for handwriting, fit-clamped to the reserved band
     // so the fullest column (taper + spooned note + thread) tightens toward printed density
     // instead of running past the page margin. Printed footers keep the print pitch.
     val lh = if (blankValues) {
-        val midLineCount = 4 + // Customer / Vessel / Job # / Date
+        val midLineCount = midLeadLines +
+            4 + // Customer / Vessel / Job # / Date
             (if (cfg.bodyDiasMm.isNotEmpty()) 1 else 0) +
             (if (keywayClockingFooterNote(spec) != null) 1 else 0) +
             1 // Side:
@@ -1252,9 +1265,10 @@ internal fun drawFooter(
         }
     }
 
-    // Middle (Work order) — left-aligned at 1/3 mark
+    // Middle (Work order) — left-aligned at 1/3 mark, one line down on a blank draft so its
+    // rules line up with the end columns' (see midLeadLines).
     run {
-        var y = top
+        var y = top + midLeadLines * lh
         if (blankValues) {
             // Job info is hand-written on a blank draft — a fresh date, a different vessel.
             drawFooterLine("Customer:", midX, y, midMaxW); y += lh
@@ -1336,6 +1350,11 @@ internal data class FooterColumns(
  */
 internal const val SPOONED_KW_NOTE = "KW length to base of spoon (mill end)"
 
+// Column headings of the footer's end columns. Named because [drawFooter] tests whether a column
+// leads with one to decide the middle column's first baseline — a literal there would drift.
+internal const val FOOTER_AFT_TAPER_HEADER = "AFT Taper"
+internal const val FOOTER_FWD_TAPER_HEADER = "FWD Taper"
+
 /**
  * Builds the exact left/right footer text lines that [drawFooter] will render.
  * Exposed for JVM unit tests so we can validate end-feature detection without
@@ -1380,7 +1399,7 @@ internal fun buildFooterEndColumns(
     val aft = mutableListOf<String>()
     if (cfg.showAftTaper) {
         taperSides.aft?.let { tp ->
-            aft += "AFT Taper"
+            aft += FOOTER_AFT_TAPER_HEADER
             aft += taperLines(tp)
         }
     }
@@ -1393,7 +1412,7 @@ internal fun buildFooterEndColumns(
     val fwd = mutableListOf<String>()
     if (cfg.showFwdTaper) {
         taperSides.fwd?.let { tp ->
-            fwd += "FWD Taper"
+            fwd += FOOTER_FWD_TAPER_HEADER
             fwd += taperLines(tp)
         }
     }

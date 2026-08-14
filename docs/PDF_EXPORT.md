@@ -306,7 +306,12 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   (`FOOTER_LINE_FACTOR_BLANK` = 2.2 vs 1.35) inside a taller band
   (`FOOTER_BLOCK_BLANK_PT` = 200 pt vs 96 pt); `drawFooter` fit-clamps the pitch to the
   band, so the fullest column (taper + spooned note + thread) tightens toward printed
-  density instead of overrunning the page. Both blank footers — schematic and
+  density instead of overrunning the page. The middle job-info column starts one line
+  **lower** than the end columns (`midLeadLines`) whenever those lead with an
+  `AFT Taper`/`FWD Taper` heading: the middle block has no heading, so flush tops would
+  put its rules half a pitch off every neighbouring rule. The fit-clamp counts that extra
+  line. Printed footers stay flush — their lines carry values, not rules, and the 96 pt band
+  has no spare line. Both blank footers — schematic and
   consolidated — share this one implementation. `buildFooterEndColumns(blankValues =
   true)` returns label-only lines — same count and order as standard, no digits
   (JVM-tested in `BlankDraftFooterTest`).
