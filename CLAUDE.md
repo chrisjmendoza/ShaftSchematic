@@ -353,11 +353,24 @@ See `docs/PDF_EXPORT.md` §5.3.
 `PdfDimensionRenderer.drawPlanned` draws each dimension line as **two stubs**
 (`xa→gapLeft`, `gapRight→xb`) with the value seated in the gap, vertically centered on the
 line — not floating above a continuous line. The gap (label width + 2·`textPad`) is cut
-**only** when both stubs can host an inward arrowhead — the same `canFitInwardArrows`
-predicate that chooses arrow direction — so inline spans always get inward arrows. Spans too
+**only** when both stubs can host an inward arrowhead (`canFitInwardArrows`). Spans too
 short for that **fall back** to the original style (continuous line, label above at
 `textAboveDy`). Do not reintroduce always-above label placement. The top OAL rail is planned
 and drawn through the same path, so it breaks too.
+
+**Arrow direction is a SEPARATE question from where the value landed**
+(`DimensionRailLayout.arrowsPointInward`, `Placement.arrowsInward`): outward (tips-in) heads
+hang OUTSIDE the extension lines, so on spans sharing a boundary they meet and cross into an
+X. That price is only worth paying when the heads genuinely do not fit *between* the extension
+lines — `(xb − xa) ≥ 2·arrowSize + ARROW_CLEAR` — so a fallback value overhead never costs its
+span the inward heads. Do not re-tie direction to `Placement.inline`. Same split in the
+wear/undercut strip rails (`WearRailSpanLayout.seatsInBreak` decides the break, `arrowInward`
+the heads, through the same shared predicate); `planUndercutRailRows` reserves rows off
+`seatsInBreak`, never off the arrows. The head is a slim 2:1 V (barb spread = half the length),
+one shape at every rail site; its length is user-set — `PdfPrefs.arrowSizePt`, Small 3 /
+**Medium 4 (default)** / Large 5 pt, in both PDF options sheets and Settings → Drawing
+"Dimension arrows". It reaches only the two dimension-rail composers (schematic, consolidated);
+the wear/undercut strips keep their own fixed head.
 
 **Labels and rail LINES share ONE collision space** — a floating value lives in the *next*
 rail's band, so per-rail collision tracking is blind exactly where the labels overlap. The
@@ -372,8 +385,12 @@ above it** — the OAL rail included — by one label band (glyph height + gap),
 intervening fallback rail. Inline-vs-fallback is decided from **x-geometry alone**, so the
 lifts are known before the vertical budget: both composers fold them in
 (`ShaftPdfComposer`'s `computeTopY` fit loop; `RunoutPdfComposer`'s `railsBlockH`, off a
-prelim linear-map plan since the real x map needs the budget). Blank drafts plan on
-`blankLabelWidthPx` — the write-in gaps get the same clearance as printed values.
+prelim linear-map plan since the real x map needs the budget). Blank drafts plan on the
+write-in gap width, so the gaps get the same clearance as printed values; a span too short
+for the full `BLANK_DIM_GAP_PT` **shrinks its gap** toward `BLANK_DIM_GAP_MIN_PT`
+(`blankGapWidth`) instead of losing it, and only a span too tight for even that falls back to
+a gapless continuous line. ONE `labelWidth(span)` feeds both the planner's reserved box and
+the cut gap — they can never disagree.
 PDF-only — the on-screen preview rasterizes the real PDF, so there is no separate
 draw path and no canvas equivalent to keep in sync. See `docs/PDF_EXPORT.md` §5.4.
 

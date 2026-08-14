@@ -31,6 +31,7 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `curveLoHeightIn` | `0.5` | Sizing-curve anchor: drawn height (paper in) of a 4" shaft at 100% (0.25–1.5) |
 | `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
 | `sBreakThresholdFrac` | `0.5` | Body S-break threshold: a body run breaks once drawn below this fraction of its true length (0–1; `0` = never break on compression) |
+| `arrowSizePt` | `4` | Dimension-rail arrowhead length (pt): Small `3` / Medium `4` / Large `5` |
 
 All fields are also reachable in the preview screen's Tune sheet, except the sizing-curve
 anchors, which live only in Settings → Drawing (app-level defaults) under "Default
@@ -48,6 +49,15 @@ drawing size"; the per-job "Shaft height" slider multiplies on top of the sizing
   at "Never" a genuinely long run still shows its break. Bodies only — liners and tapers
   foreshorten silently at every setting. Every preview that rasterizes with the current
   `PdfPrefs` keys its `LaunchedEffect` on `vm.pdfSBreakThresholdFrac`, so the change is live.
+- **Dimension arrows** (`arrowSizePt`): three chips — Small 3 / **Medium 4 (default)** /
+  Large 5 pt (Large is the historical head) — in Settings → Drawing → "Dimension arrows" and
+  in both PDF Options sheets (one shared `DimensionArrowSizeChips`, one app-wide pref). A
+  chip tap IS the commit, so unlike the sliders there is no `onDrag` channel and no
+  `PreviewTuning` override; each preview keys its render inputs on `vm.pdfArrowSizePt` so the
+  page redraws at once. It sizes the heads on the two composers that build a
+  `PdfDimensionRenderer` — the schematic and the consolidated sheet; the wear/undercut strip
+  rails keep their own fixed 4 pt head. A smaller head also slightly widens inline
+  eligibility, since a break's stubs must each be at least `arrowSize` long.
 
 ---
 
@@ -57,8 +67,9 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
 (`PdfDocument` + `PdfRenderer`, 2× raster), pinch-to-zoom 0.5×–8×, double-tap reset.
 
 - **Options sheet (Tune icon):** blank draft (write-in) toggle, component labels, line
-  thickness (50–200%), "Body S-break" threshold, "Shaft height" slider, liner compression
-  control, measurement reference (Auto/AFT/FWD), shade bodies/tapers/liners — bound to
+  thickness (50–200%), "Body S-break" threshold, "Dimension arrows" size, "Shaft height"
+  slider, liner compression control, measurement reference (Auto/AFT/FWD), shade
+  bodies/tapers/liners — bound to
   `PdfPrefs` (or, for the
   height/liner-compression pair, the per-job `RunoutConfig`) via VM setters, persisted,
   applied live (each option is a `LaunchedEffect` key). Blank draft is session-scoped, not

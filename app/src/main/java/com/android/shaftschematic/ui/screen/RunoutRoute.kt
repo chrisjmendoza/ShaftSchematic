@@ -110,6 +110,7 @@ import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeRunoutPdf
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.PdfTieringMode
@@ -1094,6 +1095,14 @@ internal fun RunoutWearOptionsSheet(
     /** The app-wide `PdfPrefs.sBreakThresholdFrac`; read only when [showSBreak]. */
     sBreakThresholdFrac: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
     /**
+     * Shows the shared "Dimension arrows" size picker. On for the consolidated sheet, the only
+     * document here that draws dimension rails; the classic runout/wear/undercut sheets draw
+     * their own fixed-head marks, so the control would be inert there.
+     */
+    showDimensionArrows: Boolean = false,
+    /** The app-wide `PdfPrefs.arrowSizePt`; read only when [showDimensionArrows]. */
+    arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
+    /**
      * Live-tuning sink for a preview that reshapes under the finger: each slider reports
      * its in-progress value here. Visual only — the commit path is unchanged and nothing
      * persists on a drag frame. Null (the default) on surfaces that don't tune live.
@@ -1178,6 +1187,18 @@ internal fun RunoutWearOptionsSheet(
                 frac = sBreakThresholdFrac,
                 onCommit = { vm.setPdfSBreakThresholdFrac(it) },
                 onDrag = { tuning?.sBreakFrac = it },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // ── Dimension arrows ─────────────────────────────────────────────────
+        if (showDimensionArrows) {
+            DimensionArrowSizeChips(
+                arrowSizePt = arrowSizePt,
+                onCommit = { vm.setPdfArrowSizePt(it) },
             )
 
             Spacer(Modifier.height(12.dp))

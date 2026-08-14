@@ -494,7 +494,10 @@ class UndercutStripLayoutTest {
 
     @Test
     fun `the rail row plan follows the fallback rows in use and which level owns the air above`() {
-        fun span(row: Int, inward: Boolean) = WearRailSpanLayout(0f, 10f, "x", 5f, row, inward)
+        // Arrow direction is irrelevant here — only whether the value seats in the break, which
+        // is what decides if the span claims a fallback row.
+        fun span(row: Int, seated: Boolean) =
+            WearRailSpanLayout(0f, 10f, "x", 5f, row, seatsInBreak = seated, arrowInward = true)
         // Break-seated labels sit on the rail line itself — one clear row below keeps the rail
         // (and its arrowheads) off the shaft, nothing more, wherever fallbacks would go.
         assertEquals(

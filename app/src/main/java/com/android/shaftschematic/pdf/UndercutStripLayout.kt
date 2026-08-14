@@ -322,7 +322,7 @@ fun planUndercutRailRows(
     hasTotalRail: Boolean,
 ): UndercutRailRowPlan {
     if (startedStrip) return UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0)
-    val used = (chainLayout.filter { !it.arrowInward }.maxOfOrNull { it.labelRow + 1 } ?: 0)
+    val used = (chainLayout.filter { !it.seatsInBreak }.maxOfOrNull { it.labelRow + 1 } ?: 0)
         .coerceAtMost(WEAR_RAIL_MAX_LABEL_ROWS)
     return if (hasTotalRail) UndercutRailRowPlan(belowRows = used.coerceAtLeast(1), aboveRows = 0)
     else UndercutRailRowPlan(belowRows = 1, aboveRows = used)

@@ -22,6 +22,21 @@ const val PDF_CURVE_HEIGHT_MAX_IN = 1.5f
 const val PDF_SBREAK_THRESHOLD_DEFAULT = 0.5f
 
 /**
+ * Dimension-rail arrowhead sizes (pt, length along the line — the barb spread is half of it).
+ * Three fixed choices, not a range: an arrowhead reads correct or it doesn't, and Medium is
+ * the shipped size. Large restores the historical head.
+ */
+const val PDF_ARROW_SIZE_SMALL_PT = 3f
+const val PDF_ARROW_SIZE_MEDIUM_PT = 4f
+const val PDF_ARROW_SIZE_LARGE_PT = 5f
+
+/** The three choices, small → large — the single source for the picker and the tests. */
+val PDF_ARROW_SIZES_PT = listOf(PDF_ARROW_SIZE_SMALL_PT, PDF_ARROW_SIZE_MEDIUM_PT, PDF_ARROW_SIZE_LARGE_PT)
+
+/** Shipped arrowhead size. */
+const val PDF_ARROW_SIZE_DEFAULT_PT = PDF_ARROW_SIZE_MEDIUM_PT
+
+/**
  * PDF-only preferences. Add more knobs here as you grow the exporter.
  */
 data class PdfPrefs(
@@ -50,6 +65,14 @@ data class PdfPrefs(
      * 220 pt of paper at true scale is not hidden compression, so it breaks regardless.
      */
     val sBreakThresholdFrac: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
+    /**
+     * Arrowhead size on the DIMENSION RAILS (`pdf/render/PdfDimensionRenderer.kt`) — the
+     * schematic's stacked rails and the runout / consolidated sheet's. Adjustable in either
+     * PDF options sheet and in Settings → Drawing → "Dimension arrows"; one of
+     * [PDF_ARROW_SIZES_PT]. The wear / undercut strip rails keep their own fixed head — they
+     * are chained inside a strip, not stacked over the drawing.
+     */
+    val arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
 ) {
     /** The anchor heights in PDF points (72 pt per paper inch) — what the geometry consumes. */
     val curveLoHeightPt: Float get() = curveLoHeightIn * 72f
@@ -60,5 +83,6 @@ data class PdfPrefs(
             curveLoHeightIn = curveLoHeightIn.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN),
             curveHiHeightIn = curveHiHeightIn.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN),
             sBreakThresholdFrac = sBreakThresholdFrac.coerceIn(0f, 1f),
+            arrowSizePt = arrowSizePt.coerceIn(PDF_ARROW_SIZE_SMALL_PT, PDF_ARROW_SIZE_LARGE_PT),
         )
 }

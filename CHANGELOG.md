@@ -8,6 +8,45 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### fix: dimension arrows stop turning outward on spans with room to spare
+
+On-device report from a blank (write-in) inspection sheet: rails printed their arrowheads
+**outward** — the cramped-span convention, tips hanging past the extension lines — on spans
+that were nowhere near cramped, and two adjacent spans' heads crossed at their shared
+boundary into an X.
+
+Root cause: arrow direction was tied to where the *value* landed. A span too short to seat
+its value in a break in the line falls back to a continuous line with the value floating
+above it, and that fallback also flipped its arrows out. On a blank draft the reserved
+write-in gap is a fixed 60 pt, so whole rails fall back for a reason that has nothing to do
+with whether two arrowheads fit.
+
+Direction now comes from the **span's own width** (`DimensionRailLayout.arrowsPointInward`):
+heads turn outward only when they cannot fit between the extension lines at all. A fallback
+value overhead no longer costs a span its inward arrows. Same split applied to the
+wear/undercut strip rails, where `seatsInBreak` (the break) and `arrowInward` (the heads) had
+been one flag — the undercut rail's fallback-row reservation follows `seatsInBreak`, as its
+contract already said it did.
+
+### fix: short blank-draft spans get a smaller write-in gap instead of none
+
+The 60 pt write-in gap was all-or-nothing: a span that couldn't host it fell back to a plain
+continuous line, so some rails on a write-in sheet printed with nowhere to write the value
+(on-device report). A short span now cuts whatever gap it affords, down to
+`BLANK_DIM_GAP_MIN_PT` (28 pt, about a cramped `19 1/2`); only a span too tight for even that
+keeps the continuous-line fallback, where a gap too small to write in would just read as a
+printed break. One `labelWidth(span)` feeds both the planner's reserved box and the cut gap,
+so the two can't disagree.
+
+### feat: dimension arrowhead size — Small / Medium / Large
+
+Arrowheads are also **slimmer and shorter**: a 2:1 V (barb spread half the head's length,
+matching the wear/undercut strip rails) at 4 pt instead of a 1:1 V at 5 pt, which read as a
+fat blob at sheet scale. The size is a preference — `PdfPrefs.arrowSizePt`, **Small 3 /
+Medium 4 (default) / Large 5 pt** (Large is the historical head) — in both PDF options
+sheets and Settings → Drawing → "Dimension arrows". It feeds the schematic and consolidated
+sheets' dimension rails; the wear/undercut strip rails keep their own fixed head.
+
 ### fix: blank-draft footer columns split the band evenly
 
 The FWD column got noticeably less writing room than the other two: the footer weights its

@@ -11,7 +11,8 @@ import org.junit.Test
  * above-line labels never strike another label or another tier's rail line; a colliding label
  * slides along its own span before it bumps; every rail above a fallback-carrying rail lifts by
  * one label band (cumulative); an all-inline sheet is untouched (naive centered layout, zero
- * lift); an over-wide label still places.
+ * lift); an over-wide label still places; arrowheads turn outward only on a span too narrow to
+ * hold both, never merely because the value fell back.
  */
 class DimensionRailLayoutTest {
 
@@ -177,6 +178,67 @@ class DimensionRailLayoutTest {
             assertEquals("write-in gap keeps the fixed width", blankW, it.label.right - it.label.left, 1e-3f)
         }
         assertLabelsClear(spans, p)
+    }
+
+    @Test
+    fun `a fallback span keeps its inward arrows when the span itself has room`() {
+        // 40 pt of rail with a 30 pt value: the value cannot seat in the line, but two 5 pt
+        // heads fit between the extension lines easily. Tying direction to the value's
+        // placement spent the cramped tips-in convention here, and adjacent spans' outward
+        // heads then crossed at their shared boundary.
+        val spans = listOf(
+            span(rail = 0, railY = 400f, xa = 100f, xb = 140f, w = 30f),
+            span(rail = 1, railY = 382f, xa = 100f, xb = 400f, w = 30f),
+        )
+        val p = plan(spans)
+
+        assertFalse("short span falls back", p.placements[0].inline)
+        assertTrue("...but it still has arrow room", p.placements[0].arrowsInward)
+        assertTrue("an inline span always has arrow room", p.placements[1].arrowsInward)
+    }
+
+    @Test
+    fun `only a span too narrow for both arrowheads prints them outward`() {
+        val narrow = span(rail = 0, railY = 400f, xa = 200f, xb = 208f, w = 30f)
+        assertFalse(plan(listOf(narrow)).placements[0].arrowsInward)
+
+        // One point of daylight past 2×arrow + ARROW_CLEAR is enough to turn them in.
+        val wide = span(rail = 0, railY = 400f, xa = 200f, xb = 213f, w = 30f)
+        assertTrue(plan(listOf(wide)).placements[0].arrowsInward)
+    }
+
+    // ── Blank-draft write-in gaps ────────────────────────────────────────────
+
+    private fun blankGap(spanWidth: Float, preferred: Float = 60f, min: Float = 28f) =
+        DimensionRailLayout.blankGapWidth(spanWidth, preferred, min, pad, arrow)
+
+    @Test
+    fun `a span with room keeps the full write-in gap`() {
+        // 60 gap + 2×6 pad + 2×5 arrows + slack.
+        assertEquals(60f, blankGap(200f), 1e-3f)
+        assertEquals(60f, blankGap(82.5f), 1e-3f)
+    }
+
+    @Test
+    fun `a short span cuts a narrower gap instead of losing it`() {
+        // The on-device case: a rail wide enough to write in, but not for the full 60 pt gap,
+        // used to fall back to a continuous line with nowhere to write at all.
+        val gap = blankGap(80f)
+        assertTrue("gap shrank", gap < 60f)
+        assertTrue("...but stays writable", gap >= 28f)
+        // A shrunk gap must still pass its own eligibility test, or the shrink buys nothing.
+        val s = span(rail = 0, railY = 400f, xa = 100f, xb = 180f, w = gap)
+        val p = plan(listOf(s))
+        assertTrue("shrunk gap seats in the line", p.placements[0].inline)
+        assertTrue(p.placements[0].arrowsInward)
+    }
+
+    @Test
+    fun `a span too tight for even the minimum gap keeps the continuous-line fallback`() {
+        // Handed back the preferred width, which fails eligibility → fallback, no cut gap.
+        assertEquals(60f, blankGap(45f), 1e-3f)
+        val s = span(rail = 0, railY = 400f, xa = 100f, xb = 145f, w = blankGap(45f))
+        assertFalse(plan(listOf(s)).placements[0].inline)
     }
 
     @Test

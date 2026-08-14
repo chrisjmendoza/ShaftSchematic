@@ -1,6 +1,7 @@
 // app/src/main/java/com/android/shaftschematic/pdf/WearStripLayout.kt
 package com.android.shaftschematic.pdf
 
+import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.geom.SetPositions
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.LinerAnchor
@@ -535,8 +536,11 @@ fun buildWearStripRailSpans(
  * One dimension span from a wear-strip's chained rail, resolved to on-page geometry and ready
  * to draw: the span's own x-range in points, its label, the label's horizontal center, which
  * stacked row the label landed on (`0` = directly above the rail line, see
- * [WEAR_RAIL_MAX_LABEL_ROWS]), and whether its arrowheads point inward (room for both beside
- * the label) or outward (cramped).
+ * [WEAR_RAIL_MAX_LABEL_ROWS]), whether the value seats in a break in the line (room for it with
+ * arrow-wide stubs to spare) or falls back to a stacked row, and which way the arrowheads point.
+ *
+ * The two flags are independent: a value pushed to a fallback row leaves the span's full width
+ * to the arrowheads, so only a span too narrow to hold both prints them outward.
  */
 data class WearRailSpanLayout(
     val x0Pt: Float,
@@ -544,6 +548,7 @@ data class WearRailSpanLayout(
     val label: String,
     val labelCxPt: Float,
     val labelRow: Int,
+    val seatsInBreak: Boolean,
     val arrowInward: Boolean,
 )
 
@@ -553,8 +558,9 @@ data class WearRailSpanLayout(
  * - A label is centered on its own span when it fits with [textPadPt] to spare on both sides;
  *   otherwise it's centered on the span's midpoint and allowed to overhang — a label is never
  *   dropped, matching `PdfDimensionRenderer`'s "always draw the label somewhere" rule.
- * - Arrowheads point inward when there's room for both beside the label, outward when cramped
- *   (same test as `PdfDimensionRenderer.canFitInwardArrows`).
+ * - The value seats in a break in the line when there's room for both arrowheads beside it (same
+ *   test as `DimensionRailLayout.canFitInwardArrows`); the heads themselves point inward unless
+ *   the span is too narrow to hold both at all (`DimensionRailLayout.arrowsPointInward`).
  * - Labels are assigned to the lowest-numbered row (`0` first) whose already-placed labels
  *   don't overlap it horizontally — the crowding fallback for short bands/gaps whose label is
  *   wider than the span itself, where row 0 alone would overlap a neighboring label
@@ -592,7 +598,8 @@ fun layoutWearStripRail(
         }
         val leftRoom = (cx - half - textPadPt) - xa
         val rightRoom = xb - (cx + half + textPadPt)
-        val inward = leftRoom >= arrowSizePt && rightRoom >= arrowSizePt
+        val seatsInBreak = leftRoom >= arrowSizePt && rightRoom >= arrowSizePt
+        val inward = DimensionRailLayout.arrowsPointInward(xa, xb, seatsInBreak, arrowSizePt)
 
         val left = cx - half
         val right = cx + half
@@ -606,7 +613,7 @@ fun layoutWearStripRail(
             }
             row++
         }
-        WearRailSpanLayout(xa, xb, span.label, cx, row, inward)
+        WearRailSpanLayout(xa, xb, span.label, cx, row, seatsInBreak, inward)
     }
 }
 

@@ -188,7 +188,7 @@ class UndercutStripSvgPreviewTest {
         line(s.x0Pt, witnessBottomY, s.x0Pt, railY - 3f, w = 0.6f)
         line(s.x1Pt, witnessBottomY, s.x1Pt, railY - 3f, w = 0.6f)
         val lw = labelW(s.label)
-        if (s.arrowInward) {
+        if (s.seatsInBreak) {
             val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
             line(s.x0Pt, railY, s.labelCxPt - gapHalf, railY, w = 0.7f)
             line(s.labelCxPt + gapHalf, railY, s.x1Pt, railY, w = 0.7f)

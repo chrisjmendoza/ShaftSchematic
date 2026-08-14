@@ -808,7 +808,8 @@ prefix (product decision, 2026-07-28: compact print output reads well and the pr
 nice visual identifier) and **seats in a break cut mid-span, vertically centred on the
 line** — the same value-in-a-break convention as the schematic's dimension lines
 (`PdfDimensionRenderer.drawPlanned`), so all drawing outputs read the same; a span too short
-for the break + inward arrows falls back to a continuous line with the label above.
+to seat the label with arrow room falls back to a continuous line with the label above (it
+keeps its inward arrows — direction follows the span's width, not the label's placement).
 Neither document's **header** repeats the OAL (it would just duplicate this span), and the
 blank/write-in variant of this line carries no label text at all — the machinist
 hand-writes the value in an empty break cut mid-span: see "Blank draft" below.
@@ -1026,12 +1027,18 @@ witness-line/arrowed-span/centered-label convention the main schematic uses
   the running cursor so the chain never runs backward or double-counts the overlap.
 - `layoutWearStripRail` resolves that chain to on-page geometry: each label is centered on
   its own span when it fits with padding on both sides, else centered on the span's
-  midpoint and allowed to overhang (never dropped); arrowheads point inward when there's
-  room beside the label, outward when cramped (same test as
+  midpoint and allowed to overhang (never dropped); the value **seats in a break**
+  (`seatsInBreak`) when there's arrow room beside it (same test as
   `DimensionRailLayout.canFitInwardArrows`); and a label is bumped to the next stacked row
   when it would otherwise overlap an already-placed label — the crowding fallback for
   short bands/gaps whose label is wider than the span itself.
-- **Drawing (2026-07-28)**: a label that fits inside its span (`arrowInward == true`, which
+- **Arrow direction is a separate flag** (`arrowInward`, from
+  `DimensionRailLayout.arrowsPointInward`): heads turn outward only on a span too narrow to
+  hold both between its witness lines, never merely because the label overhung and fell to a
+  row. The two were one flag until an overhanging label on a roomy span cost it its inward
+  heads (see `docs/PDF_EXPORT.md` §5.4). `planUndercutRailRows` reserves its fallback rows
+  off `seatsInBreak` — the arrows say nothing about rows.
+- **Drawing (2026-07-28)**: a label that fits inside its span (`seatsInBreak == true`, which
   also guarantees the break's stubs keep arrow room at `DIM_BREAK_TEXT_PAD_PT`) **seats in
   a break cut in the span line, vertically centred** — the schematic's value-in-a-break
   convention, consistent across drawing outputs. Only overhanging labels use the stacked

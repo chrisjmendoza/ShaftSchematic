@@ -96,8 +96,9 @@ private data class OutputWornSectionTarget(val section: WornSection?)
  * Everything one composed consolidated-sheet preview page depends on, in one
  * structural-equality value — the render loop's unit of work.
  *
- * The shade flags, the S-break threshold, and the tiering mode never reach the composer
- * from here: they travel inside the `PdfPrefs` snapshot taken at render time. They are
+ * The shade flags, the S-break threshold, the arrowhead size, and the tiering mode never
+ * reach the composer from here: they travel inside the `PdfPrefs` snapshot taken at render
+ * time. They are
  * held in this holder because the loop must RE-RENDER when they change, and a `PdfPrefs`
  * read is not snapshot state.
  */
@@ -114,6 +115,7 @@ private data class ConsolidatedRenderInputs(
     val shadedTapers: Boolean,
     val shadedLiners: Boolean,
     val sBreakThresholdFrac: Float,
+    val arrowSizePt: Float,
     val tieringMode: PdfTieringMode,
     val readings: RunoutReadings,
     val wearRecord: WearRecord,
@@ -155,6 +157,9 @@ fun OutputRoute(
     val curveLoHeightIn    by vm.pdfCurveLoHeightIn.collectAsState()
     val curveHiHeightIn    by vm.pdfCurveHiHeightIn.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    // Dimension-rail arrowhead size: a chip tap commits straight to PdfPrefs, so the render
+    // loop needs it as an input key or the sheet would keep the old heads.
+    val pdfArrowSizePt     by vm.pdfArrowSizePt.collectAsState()
     val pdfTieringMode     by vm.pdfTieringMode.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
@@ -389,6 +394,7 @@ fun OutputRoute(
                 shadedTapers = pdfShadedTapers,
                 shadedLiners = pdfShadedLiners,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                arrowSizePt = pdfArrowSizePt,
                 tieringMode = pdfTieringMode,
                 readings = runoutReadings,
                 wearRecord = wearRecord,
@@ -755,6 +761,8 @@ fun OutputRoute(
                     linerShadeLocked = linerShadeLocked,
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
+                    showDimensionArrows = true,
+                    arrowSizePt = pdfArrowSizePt,
                     tuning = tuning,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },

@@ -497,6 +497,9 @@ private val helpSections: List<HelpSection> = listOf(
                     "(on the schematic) Measurement reference, and — on the schematic and the " +
                     "runout/consolidated sheets, the drawings that can break — Body S-break: " +
                     "the same app-wide settings, reachable without leaving the drawing.\n" +
+                    "• \"Dimension arrows\" — Small / Medium / Large arrowheads on the " +
+                    "dimension rails, on the schematic and consolidated sheets. Heads point " +
+                    "inward unless the span is too narrow to hold both.\n" +
                     "• Drag any of those sliders and the preview updates as you drag — the " +
                     "sheet stops dimming the page and the drawing reshapes under your finger, " +
                     "so there is no need to pick a value, close the sheet, look, and reopen it. " +

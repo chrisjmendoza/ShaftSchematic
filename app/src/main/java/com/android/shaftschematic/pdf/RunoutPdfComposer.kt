@@ -310,8 +310,10 @@ fun composeRunoutPdf(
             linePaint = dim,
             textPaint = dimText,
             objectTopY = 0f,   // lift query only — nothing is drawn through this renderer
+            arrowSize = pdfPrefs.arrowSizePt,
             blankLabels = blankValues,
             blankLabelWidthPx = BLANK_DIM_GAP_PT,
+            blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
         )
         prelim.topLift(dimRows(prelim) { 0f })
     }
@@ -535,8 +537,10 @@ fun composeRunoutPdf(
             textPaint = dimText,
             objectTopY = yTopOfShaft,
             objectClearance = 4f,
+            arrowSize = pdfPrefs.arrowSizePt,
             blankLabels = blankValues,
             blankLabelWidthPx = BLANK_DIM_GAP_PT,
+            blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
         )
         // Lift on the REAL mapping — it can differ from the prelim by a band when a span
         // foreshortens across the inline threshold; the clamp below absorbs the difference.

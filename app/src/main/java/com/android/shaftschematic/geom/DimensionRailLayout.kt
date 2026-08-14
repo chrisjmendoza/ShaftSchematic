@@ -19,7 +19,9 @@ import kotlin.math.min
  *  - every rail above a rail that carries an above-line label LIFTS by one label band
  *    (text height + gap), cumulatively, so no rail line is ever drawn through a value;
  *  - a colliding label first SLIDES horizontally along its own span (smallest shift from
- *    center that clears everything), and only bumps vertically when the slide has no room.
+ *    center that clears everything), and only bumps vertically when the slide has no room;
+ *  - arrowheads point inward unless the span itself is too narrow to hold both
+ *    ([arrowsPointInward]) — a fallback value overhead never costs a span its inward arrows.
  *
  * Labels (inline and above) and rail lines are all obstacles, across every rail including the
  * topmost OAL rail. The renderer owns the pixels; this engine owns the geometry.
@@ -40,6 +42,13 @@ object DimensionRailLayout {
 
     /** Bounded vertical escape for an above-line label that cannot slide clear. */
     const val MAX_BUMPS: Int = 3
+
+    /**
+     * Daylight kept between the two inward arrowheads of a span whose value did NOT seat in a
+     * break. Below this the heads read as one blob and the tips-in convention is the clearer
+     * draw.
+     */
+    const val ARROW_CLEAR: Float = 2f
 
     /**
      * One dimension span as the planner sees it: page-x endpoints and the measured label
@@ -84,12 +93,15 @@ object DimensionRailLayout {
      * @param inline true = value seated in a break in the line at [cx]; false = continuous
      *   line with the value floating above it.
      * @param railY the LIFTED page y of this span's dimension line.
+     * @param arrowsInward true = arrowheads sit between the extension lines; false = the
+     *   cramped-span (tips-in) convention, heads hanging outside them.
      * @param label the placed glyph box; its baseline is `label.top - metrics.ascent`.
      */
     data class Placement(
         val inline: Boolean,
         val cx: Float,
         val railY: Float,
+        val arrowsInward: Boolean,
         val label: Box,
     )
 
@@ -221,7 +233,13 @@ object DimensionRailLayout {
             val finalCx = cx ?: r.mid.coerceIn(r.lo, r.hi)
             val box = Box(finalCx - r.half, top, finalCx + r.half, bottom)
             placedLabels += box
-            result[i] = Placement(inline = r.inline, cx = finalCx, railY = r.y, label = box)
+            result[i] = Placement(
+                inline = r.inline,
+                cx = finalCx,
+                railY = r.y,
+                arrowsInward = arrowsPointInward(r.xa, r.xb, r.inline, arrowSize),
+                label = box,
+            )
         }
 
         return Plan(result.map { it!! }, liftByRail)
@@ -244,6 +262,58 @@ object DimensionRailLayout {
         val rightWindow = cx + labelWidth * 0.5f + textPad
         return (leftWindow - xa) >= arrowSize && (xb - rightWindow) >= arrowSize
     }
+
+    /**
+     * Float headroom subtracted when a blank draft's write-in gap is shrunk to exactly what its
+     * span affords. Without it the shrunk gap lands on [canFitInwardArrows]'s boundary, where
+     * rounding can fail the span by a hair and drop the gap it was just sized for.
+     */
+    const val GAP_FIT_SLACK: Float = 0.5f
+
+    /**
+     * Width of the write-in gap a blank (write-in) draft cuts in one span: the [preferredWidth]
+     * a hand needs, shrunk toward [minWidth] when the span cannot host it, so a short span gets
+     * a smaller write-in spot rather than none at all.
+     *
+     * A span too tight even for [minWidth] is handed back [preferredWidth] — it then fails
+     * [canFitInwardArrows] and takes the continuous-line fallback, which is the right answer
+     * once the gap would be too small to write a dimension in.
+     */
+    fun blankGapWidth(
+        spanWidth: Float,
+        preferredWidth: Float,
+        minWidth: Float,
+        textPad: Float,
+        arrowSize: Float,
+    ): Float {
+        val afford = spanWidth - 2f * textPad - 2f * arrowSize - GAP_FIT_SLACK
+        return when {
+            afford >= preferredWidth -> preferredWidth
+            afford >= minWidth -> afford
+            else -> preferredWidth
+        }
+    }
+
+    /**
+     * Arrow direction for one span, decided from the SPAN's own width — never from where its
+     * value landed.
+     *
+     * Outward (tips-in) heads hang OUTSIDE the extension lines, so two of them on spans that
+     * share a boundary meet there and cross. That is the price of the cramped-span convention
+     * and it is only worth paying when the heads genuinely do not fit between the extension
+     * lines: a span whose value floats above a continuous line still has its whole width free
+     * for them (on-device report — a rail of long spans printed tips-in and the adjacent heads
+     * crossed into an X).
+     *
+     * @param seatsInBreak the value sits in a break in this line, whose stubs the break was cut
+     *   to keep arrow-wide — such a span always keeps inward heads.
+     */
+    fun arrowsPointInward(
+        xa: Float,
+        xb: Float,
+        seatsInBreak: Boolean,
+        arrowSize: Float,
+    ): Boolean = seatsInBreak || (xb - xa) >= 2f * arrowSize + ARROW_CLEAR
 
     private class Row(
         val inline: Boolean,

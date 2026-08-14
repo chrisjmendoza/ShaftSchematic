@@ -4,6 +4,8 @@ import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.pdf.PdfExportMode
 import com.android.shaftschematic.settings.AppThemeMode
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfTieringMode
@@ -97,6 +99,14 @@ fun ShaftViewModel.setPdfSBreakThresholdFrac(v: Float, persist: Boolean = true) 
     _pdfSBreakThresholdFrac.value = clamped
     SettingsStore.updatePdfPrefs { it.copy(sBreakThresholdFrac = clamped) }
     if (persist) viewModelScope.launch { SettingsStore.setPdfSBreakThresholdFrac(getApplication(), clamped) }
+}
+
+/** Wired to the PDF options sheets and Settings → Drawing → "Dimension arrows". */
+fun ShaftViewModel.setPdfArrowSizePt(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_ARROW_SIZE_SMALL_PT, PDF_ARROW_SIZE_LARGE_PT)
+    _pdfArrowSizePt.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(arrowSizePt = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfArrowSizePt(getApplication(), clamped) }
 }
 
 fun ShaftViewModel.setPdfExportMode(mode: PdfExportMode, persist: Boolean = true) {

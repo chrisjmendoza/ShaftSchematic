@@ -17,10 +17,18 @@ internal const val BLANK_RULE_PT = 70f
 /**
  * Writable gap reserved inside a dimension-line break when the value is blanked (pt).
  * Sized for handwriting a dimension like `60 1/4"` on a clipboard — a print-width gap is
- * too tight to write in (on-device report). Spans too short to host the gap with inward
- * arrows fall back to the continuous-line style, so widening this never breaks a rail.
+ * too tight to write in (on-device report). A span too short to host it with inward arrows
+ * cuts a narrower gap instead ([BLANK_DIM_GAP_MIN_PT]), so widening this never costs a rail
+ * its write-in spot.
  */
 internal const val BLANK_DIM_GAP_PT = 60f
+
+/**
+ * Smallest write-in gap still worth cutting (pt) — roughly a cramped `19 1/2`. A span that
+ * cannot host even this keeps the continuous-line fallback: a gap too small to write a
+ * dimension into is worse than an unbroken line, since it reads as a printed break.
+ */
+internal const val BLANK_DIM_GAP_MIN_PT = 28f
 
 /**
  * Air between a printed dimension value and each line stub when it seats in its break

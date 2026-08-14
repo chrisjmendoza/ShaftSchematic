@@ -639,9 +639,10 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   belonging to the chain below it — reported from the shop twice, at 14 pt and again at 22 pt.
 - `UNDERCUT_RAIL_ROW_HEIGHT_PT` = 17 pt is the chained rail's fallback-label row pitch, used by
   **both** the reserved budget (`computeUndercutStripInnerLayout`) and the drawing
-  (`drawUndercutRail`), so they cannot drift. A fallback label starts clear of the outward
-  arrowheads straddling the line (`UC_RAIL_LABEL_GAP_PT` = 5 pt past the arrowhead) — the
-  narrow-gap value ("2″") used to sit on the rail.
+  (`drawUndercutRail`), so they cannot drift. A fallback label starts clear of the arrowheads
+  straddling the line (`UC_RAIL_LABEL_GAP_PT` = 5 pt past the arrowhead — the head's barb
+  spread is the same whichever way it points) — the narrow-gap value ("2″") used to sit on the
+  rail.
 - **Rows-used reservation** (`planUndercutRailRows`, 2026-08-01): the chain is resolved
   (`layoutWearStripRail`, pure horizontal geometry) *before* the vertical split, and the rail
   reserves only the fallback rows its labels actually landed on — minimum 1 row below so the rail

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -34,6 +35,10 @@ import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.hasKeyway
 import com.android.shaftschematic.model.maxOuterDiaMm
+import com.android.shaftschematic.settings.PDF_ARROW_SIZES_PT
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_MEDIUM_PT
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -165,6 +170,49 @@ internal fun SBreakThresholdSlider(
             Text("Always", style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+/**
+ * The "Dimension arrows" size picker, shared by both PDF options sheets and
+ * Settings → Drawing — ONE `PdfPrefs.arrowSizePt` behind all three, so the head can be sized
+ * against the drawing it prints on.
+ *
+ * Three fixed sizes rather than a slider (on-device request): an arrowhead either reads or it
+ * doesn't, and Large is the historical head. A tap IS the commit — there is no drag channel
+ * and no [PreviewTuning] override; the preview re-renders from the stored value.
+ */
+@Composable
+internal fun DimensionArrowSizeChips(
+    arrowSizePt: Float,
+    onCommit: (Float) -> Unit,
+) {
+    Column {
+        Text("Dimension arrows", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PDF_ARROW_SIZES_PT.forEach { pt ->
+                FilterChip(
+                    selected = abs(arrowSizePt - pt) < 1e-3f,
+                    onClick = { onCommit(pt) },
+                    label = { Text(arrowSizeLabel(pt)) },
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+            }
+        }
+        Text(
+            "Arrowhead size on the dimension rails. Heads point inward unless the span is " +
+                "too narrow to hold both.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Chip label for one of `PDF_ARROW_SIZES_PT` — nearest wins, so a stray stored value still reads. */
+private fun arrowSizeLabel(pt: Float): String = when {
+    pt <= (PDF_ARROW_SIZE_SMALL_PT + PDF_ARROW_SIZE_MEDIUM_PT) / 2f -> "Small"
+    pt <= (PDF_ARROW_SIZE_MEDIUM_PT + PDF_ARROW_SIZE_LARGE_PT) / 2f -> "Medium"
+    else -> "Large"
 }
 
 /**

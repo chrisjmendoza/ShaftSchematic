@@ -138,6 +138,7 @@ fun SettingsRoute(
     val pdfCurveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
     val pdfCurveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -309,6 +310,12 @@ fun SettingsRoute(
                     SBreakThresholdControl(
                         frac = pdfSBreakThresholdFrac,
                         onCommit = { vm.setPdfSBreakThresholdFrac(it) },
+                    )
+
+                    // Same picker both PDF options sheets carry — one PdfPrefs.arrowSizePt.
+                    DimensionArrowSizeChips(
+                        arrowSizePt = pdfArrowSizePt,
+                        onCommit = { vm.setPdfArrowSizePt(it) },
                     )
 
                     HorizontalDivider()

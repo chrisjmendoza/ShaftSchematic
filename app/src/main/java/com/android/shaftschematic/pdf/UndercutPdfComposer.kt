@@ -1225,7 +1225,7 @@ private fun drawUndercutRail(
         c.drawLine(s.x1Pt, witnessBottomY, s.x1Pt, railY - witnessExt, dim)
 
         val lw = dimText.measureText(s.label)
-        val seatsInBreak = drawLabels && s.arrowInward
+        val seatsInBreak = drawLabels && s.seatsInBreak
         if (seatsInBreak) {
             val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
             c.drawLine(s.x0Pt, railY, s.labelCxPt - gapHalf, railY, dim)
@@ -1246,7 +1246,7 @@ private fun drawUndercutRail(
     val fm = dimText.fontMetrics
     layout.forEach { s ->
         val lw = dimText.measureText(s.label)
-        if (s.arrowInward) {
+        if (s.seatsInBreak) {
             // Break-seated: the gap already isolates the value from every line.
             c.drawText(s.label, s.labelCxPt - lw * 0.5f, railY - (fm.ascent + fm.descent) * 0.5f, dimText)
             return@forEach

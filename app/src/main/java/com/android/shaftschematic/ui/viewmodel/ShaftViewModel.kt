@@ -256,6 +256,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfSBreakThresholdFrac = MutableStateFlow(PdfPrefs().sBreakThresholdFrac)
     val pdfSBreakThresholdFrac: StateFlow<Float> = _pdfSBreakThresholdFrac.asStateFlow()
 
+    // Dimension-rail arrowhead size (pt). Also a preview re-render key on every tab that
+    // rasterizes with the current PdfPrefs.
+    internal val _pdfArrowSizePt = MutableStateFlow(PdfPrefs().arrowSizePt)
+    val pdfArrowSizePt: StateFlow<Float> = _pdfArrowSizePt.asStateFlow()
+
     internal val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
 
@@ -1178,6 +1183,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfSBreakThresholdFracFlow(getApplication()).collectLatest { persisted ->
                 _pdfSBreakThresholdFrac.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(sBreakThresholdFrac = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfArrowSizePtFlow(getApplication()).collectLatest { persisted ->
+                _pdfArrowSizePt.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(arrowSizePt = persisted) }
             }
         }
         viewModelScope.launch {

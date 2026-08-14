@@ -379,8 +379,10 @@ fun composeShaftPdf(
             textPaint = dimText,
             objectTopY = yTopOfShaft,
             objectClearance = 6f,
+            arrowSize = pdfPrefs.arrowSizePt,
             blankLabels = blank,
-            blankLabelWidthPx = BLANK_DIM_GAP_PT
+            blankLabelWidthPx = BLANK_DIM_GAP_PT,
+            blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
         )
 
         val oalAft = if (spec.threads.any { t ->

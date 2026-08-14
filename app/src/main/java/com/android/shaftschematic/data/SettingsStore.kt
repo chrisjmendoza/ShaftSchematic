@@ -14,6 +14,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.android.shaftschematic.settings.AppThemeMode
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfPrefs
@@ -81,6 +83,7 @@ object SettingsStore {
     private val KEY_PDF_CURVE_LO_HEIGHT_IN = floatPreferencesKey("pdf_curve_lo_height_in")
     private val KEY_PDF_CURVE_HI_HEIGHT_IN = floatPreferencesKey("pdf_curve_hi_height_in")
     private val KEY_PDF_SBREAK_THRESHOLD_FRAC = floatPreferencesKey("pdf_sbreak_threshold_frac")
+    private val KEY_PDF_ARROW_SIZE_PT = floatPreferencesKey("pdf_arrow_size_pt")
 
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
@@ -141,6 +144,15 @@ object SettingsStore {
         ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SBREAK_THRESHOLD_FRAC] ?: PdfPrefs().sBreakThresholdFrac }
     suspend fun setPdfSBreakThresholdFrac(ctx: Context, v: Float) {
         ctx.settingsDataStore.edit { it[KEY_PDF_SBREAK_THRESHOLD_FRAC] = v.coerceIn(0f, 1f) }
+    }
+
+    // Dimension-rail arrowhead size (pt): one of PDF_ARROW_SIZES_PT.
+    fun pdfArrowSizePtFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_ARROW_SIZE_PT] ?: PdfPrefs().arrowSizePt }
+    suspend fun setPdfArrowSizePt(ctx: Context, v: Float) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PDF_ARROW_SIZE_PT] = v.coerceIn(PDF_ARROW_SIZE_SMALL_PT, PDF_ARROW_SIZE_LARGE_PT)
+        }
     }
 
     fun pdfExportModeFlow(ctx: Context): Flow<PdfExportMode> =

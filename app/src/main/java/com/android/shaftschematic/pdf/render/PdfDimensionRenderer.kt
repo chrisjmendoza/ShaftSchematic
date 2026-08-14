@@ -4,8 +4,12 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.pdf.dim.DimSpan
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+
+/** Arrowhead barb spread as a fraction of its length — a 2:1 head, the drafting proportion. */
+private const val ARROW_BARB_FRAC = 0.5f
 
 /**
  * Stacked dimension rails with extension lines, in-line labels, and smart arrowheads.
@@ -16,13 +20,18 @@ import kotlin.math.min
  * the line in the gap. Spans too short to keep an inward arrowhead on both stubs fall back to a
  * continuous line with the value floating above it.
  *
+ * Arrow direction is a SEPARATE question from where the value landed: a fallback span still gets
+ * inward heads, and only one too narrow to hold both between its extension lines prints them
+ * tips-in ([DimensionRailLayout.arrowsPointInward]).
+ *
  * Placement is not decided here: the pure [DimensionRailLayout] plans every span at once so
  * labels and rail lines across ALL tiers share one collision space (a floating value lives in
  * the next rail's band). This class measures the text, maps the spans to page x, and draws the
  * planned result — the plan owns inline-vs-above, the label center, and the rail lift.
  *
- * Blank-draft mode ([blankLabels]): the break is still cut — at a fixed writable width — but no
- * value text is drawn, leaving the gap as a hand-write-in spot.
+ * Blank-draft mode ([blankLabels]): the break is still cut — at a writable width — but no value
+ * text is drawn, leaving the gap as a hand-write-in spot. A span too short for the full gap
+ * cuts a narrower one instead of losing it, down to [blankLabelMinWidthPx].
  */
 class PdfDimensionRenderer(
     private val pageX: (Double) -> Float,   // mm → page X
@@ -31,14 +40,30 @@ class PdfDimensionRenderer(
     private val objectTopY: Float,          // top of shaft outline in page coords
     private val objectClearance: Float = 6f,
     private val textAboveDy: Float = 12f,   // fallback (label-above-line) baseline offset; primary path seats the label in the line break
-    private val arrowSize: Float = 5f,      // arrowhead half-size
+    private val arrowSize: Float = 4f,      // arrowhead length along the line
     private val textPad: Float = 6f,        // left/right text padding inside a span
     private val blankLabels: Boolean = false, // blank-draft: cut the break, draw no value text
-    private val blankLabelWidthPx: Float = 46f
+    private val blankLabelWidthPx: Float = 46f,
+    private val blankLabelMinWidthPx: Float = 28f, // smallest write-in gap still worth cutting
 ) {
-    /** The width this renderer occupies for a value — blank drafts reserve the write-in gap. */
+    /**
+     * The width this renderer occupies for a value — blank drafts reserve the write-in gap,
+     * shrunk toward [blankLabelMinWidthPx] on a span too short for the full one so it still
+     * gets somewhere to write. Both the planner (via [spanInput]) and the break in
+     * [drawPlanned] read this, so the reserved box and the cut gap are the same width.
+     */
     fun labelWidth(span: DimSpan): Float =
-        if (blankLabels) blankLabelWidthPx else textPaint.measureText(span.labelTop)
+        if (blankLabels) {
+            DimensionRailLayout.blankGapWidth(
+                spanWidth = abs(pageX(span.x2Mm) - pageX(span.x1Mm)),
+                preferredWidth = blankLabelWidthPx,
+                minWidth = blankLabelMinWidthPx,
+                textPad = textPad,
+                arrowSize = arrowSize,
+            )
+        } else {
+            textPaint.measureText(span.labelTop)
+        }
 
     /** Text box metrics the planner needs, read live from this renderer's text paint. */
     fun metrics(): DimensionRailLayout.TextMetrics {
@@ -113,9 +138,9 @@ class PdfDimensionRenderer(
 
         drawLabel(canvas, span.labelTop, placement.label)
 
-        // ---- arrowheads: inward whenever the value is seated in the break ----
-        drawArrow(canvas, xAt = xa, y = y, inward = placement.inline, isLeftEnd = true)
-        drawArrow(canvas, xAt = xb, y = y, inward = placement.inline, isLeftEnd = false)
+        // ---- arrowheads: outward only on a span too narrow to hold both (planner's call) ----
+        drawArrow(canvas, xAt = xa, y = y, inward = placement.arrowsInward, isLeftEnd = true)
+        drawArrow(canvas, xAt = xb, y = y, inward = placement.arrowsInward, isLeftEnd = false)
     }
 
     private fun drawLabel(canvas: Canvas, label: String, bounds: DimensionRailLayout.Box) {
@@ -137,8 +162,10 @@ class PdfDimensionRenderer(
             !inward && isLeftEnd -> -1f
             else -> +1f
         }
-        // small V arrow
-        canvas.drawLine(xAt, y, xAt + dir * s, y - s, linePaint)
-        canvas.drawLine(xAt, y, xAt + dir * s, y + s, linePaint)
+        // Slim V, half as tall as it is long — the drafting proportion, and the same head the
+        // wear/undercut strip rails draw. A 1:1 head reads as a fat blob at sheet scale.
+        val barb = s * ARROW_BARB_FRAC
+        canvas.drawLine(xAt, y, xAt + dir * s, y - barb, linePaint)
+        canvas.drawLine(xAt, y, xAt + dir * s, y + barb, linePaint)
     }
 }

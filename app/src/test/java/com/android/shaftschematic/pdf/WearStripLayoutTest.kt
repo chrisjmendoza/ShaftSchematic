@@ -579,7 +579,21 @@ class WearStripLayoutTest {
         assertEquals(1, layout.size)
         val expectedMid = (layout[0].x0Pt + layout[0].x1Pt) / 2f
         assertEquals(expectedMid, layout[0].labelCxPt, 1e-3f)
-        assertFalse("arrows must flip outward when the label overhangs the span", layout[0].arrowInward)
+        assertFalse("an overhanging label cannot seat in the line", layout[0].seatsInBreak)
+        // ...but the 50 pt span itself still holds two arrowheads, so they stay inward: the
+        // tips-in convention is for narrow SPANS, not for wide spans with a wide label.
+        assertTrue("a wide span keeps inward arrows when its label falls back", layout[0].arrowInward)
+    }
+
+    @Test
+    fun `only a span too narrow for both arrowheads prints them outward`() {
+        // 4 pt of rail between the witness lines — two 4 pt heads cannot live inside it.
+        val layout = layoutWearStripRail(
+            listOf(WearRailSpan(0f, 4f, "1mm")),
+            xAtStripMm = { it },
+            labelWidthPt = { charWidth(it) },
+        )
+        assertFalse("cramped span flips its arrows outward", layout[0].arrowInward)
     }
 
     @Test

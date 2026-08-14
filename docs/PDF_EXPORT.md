@@ -232,14 +232,28 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   the clamped label center `cx`). The value is drawn in that gap, vertically centered on
   the line at baseline `y - (fm.ascent + fm.descent) / 2`.
 - **Eligibility.** Inline mode requires both resulting stubs be at least `arrowSize`
-  long — the *same* predicate (`canFitInwardArrows`) already used to choose inward vs.
-  outward arrowheads. Because it's the same predicate, an inline span always gets
-  inward-pointing arrows aligned with the value; there is no separate "should this be
-  inline" flag to keep in sync. Eligibility is decided from **x-geometry alone**, so the
-  set of fallback spans is known before any vertical budget is chosen.
+  long (`canFitInwardArrows`), so an inline span always keeps inward arrows aligned with
+  the value. Eligibility is decided from **x-geometry alone**, so the set of fallback
+  spans is known before any vertical budget is chosen.
 - **Fallback path.** A span too short for that reverts to the original behavior: one
-  continuous line `xa → xb`, the value floating above it at baseline `y - textAboveDy`,
-  and outward arrows.
+  continuous line `xa → xb`, with the value floating above it at baseline
+  `y - textAboveDy`. It keeps its inward arrows — see below.
+- **Arrow direction is decided from the span, not from the value.** Outward (tips-in)
+  heads hang *outside* the extension lines, so two spans meeting at a shared boundary
+  cross their heads into an X there. `DimensionRailLayout.arrowsPointInward` therefore
+  turns them out only when the heads cannot fit *between* the extension lines at all —
+  `(xb − xa) ≥ 2·arrowSize + ARROW_CLEAR` — and the planner reports it per span as
+  `Placement.arrowsInward`. Direction was previously tied to `Placement.inline`, which
+  spent the cramped convention on any span whose value merely fell back: a blank draft's
+  60 pt write-in gaps push whole rails to fallback, and the outward heads on adjacent
+  spans overlapped (on-device report).
+- **Arrowhead shape and size.** A slim 2:1 V — barb spread is half the head's length —
+  one shape at every rail draw site. The length is user-set: `PdfPrefs.arrowSizePt`,
+  **Small 3 / Medium 4 (default) / Large 5 pt**, from either PDF options sheet or
+  Settings → Drawing → "Dimension arrows". It reaches the schematic and consolidated
+  composers (the two that build a `PdfDimensionRenderer`); the wear/undercut strip rails
+  keep their own fixed 4 pt head. A smaller head also widens inline eligibility slightly,
+  since the stub requirement is `arrowSize`.
 - **One collision space (`geom/DimensionRailLayout.kt`).** A floating value lives in the
   vertical band of the *next rail up*, so labels and rail lines from different tiers
   cannot be resolved rail by rail. A pure planner places **every** span at once — the top
@@ -290,14 +304,23 @@ aren't allowed.
 
 Rules (shared helpers in `pdf/BlankFormText.kt`):
 
-- **Dimension lines** still cut their break, at a fixed writable width
-  (`BLANK_DIM_GAP_PT` = 60 pt, sized for handwriting a mixed-number dimension on a
-  clipboard), but draw no value text — the gap is the write-in spot. Same
-  eligibility/fallback/collision logic as §5.4: the planner measures the fixed write-in
-  width instead of the value text, so gaps are reserved — and slid or lifted clear of each
-  other — exactly as printed values are; a span too short for the gap falls back to the
-  continuous-line style as always. `labelBottom` (SET names) are identifiers and
-  still print.
+- **Dimension lines** still cut their break, at a writable width (`BLANK_DIM_GAP_PT` = 60 pt,
+  sized for handwriting a mixed-number dimension on a clipboard), but draw no value text —
+  the gap is the write-in spot. Same eligibility/fallback/collision logic as §5.4: the
+  planner measures the write-in width instead of the value text, so gaps are reserved — and
+  slid or lifted clear of each other — exactly as printed values are. `labelBottom` (SET
+  names) are identifiers and still print.
+  - **A short span shrinks its gap rather than losing it**
+    (`DimensionRailLayout.blankGapWidth`): a span that cannot host 60 pt plus its pad and
+    arrowheads cuts whatever it affords, down to `BLANK_DIM_GAP_MIN_PT` (28 pt, about a
+    cramped `19 1/2`). Only a span too tight for even that keeps the continuous-line
+    fallback — there, a gap too small to write a dimension into is worse than an unbroken
+    line, since it reads as a printed break. The full 60 pt gap had been all-or-nothing, so
+    rails on ordinary-length spans printed with nowhere to write (on-device report).
+  - One `labelWidth(span)` answers both the planner's reserved box and the cut gap, so a
+    shrunk gap can never disagree with what was reserved for it. The shrink leaves
+    `GAP_FIT_SLACK` of float headroom so a gap sized to the span cannot fail its own
+    inward-arrow eligibility test by a rounding hair.
 - **Ø leader callouts** print `Ø` + a writing rule instead of the value.
 - **Schematic footer** keeps every label (`Rate:`, `L.E.T.:`, `KW:`, `Customer:` …)
   followed by a writing rule that runs to the **column edge** (a fixed ~1" rule was too

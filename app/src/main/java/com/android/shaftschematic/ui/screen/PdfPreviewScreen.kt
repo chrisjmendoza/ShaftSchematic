@@ -154,6 +154,9 @@ fun PdfPreviewScreen(
     val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    // Arrowhead size: a chip tap commits straight to PdfPrefs, so the render loop needs it as
+    // an input key or the page would keep the old heads.
+    val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     // Sizing-curve anchors: the composer sizes the drawn shaft off them, so a Settings
     // change to "Default drawing size" has to re-render an open preview. Collected here,
     // not only inside the Tune sheet, or the page would keep its old height until some
@@ -212,6 +215,7 @@ fun PdfPreviewScreen(
                 shadedTapers = pdfShadedTapers,
                 shadedLiners = pdfShadedLiners,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                arrowSizePt = pdfArrowSizePt,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
                 heightScale = config.heightScale,
@@ -526,6 +530,7 @@ fun PdfPreviewScreen(
                 pdfTieringMode = pdfTieringMode,
                 lineThicknessScale = lineThicknessScale,
                 sBreakThresholdFrac = pdfSBreakThresholdFrac,
+                arrowSizePt = pdfArrowSizePt,
                 heightScale = runoutConfig.heightScale,
                 linersProportional = runoutConfig.linersProportional,
                 linerCompression = runoutConfig.linerCompression,
@@ -548,8 +553,8 @@ fun PdfPreviewScreen(
  * value — the render loop's unit of work.
  *
  * Some fields never reach [composeShaftPdf] directly: the shade flags, component titles,
- * tiering mode, S-break threshold and sizing-curve anchors travel inside the `PdfPrefs`
- * snapshot taken at render time. They are held here because the loop must RE-RENDER when
+ * tiering mode, S-break threshold, arrowhead size and sizing-curve anchors travel inside the
+ * `PdfPrefs` snapshot taken at render time. They are held here because the loop must RE-RENDER when
  * they change, and a `PdfPrefs` read is not snapshot state.
  */
 private data class SchematicRenderInputs(
@@ -565,6 +570,7 @@ private data class SchematicRenderInputs(
     val shadedTapers: Boolean,
     val shadedLiners: Boolean,
     val sBreakThresholdFrac: Float,
+    val arrowSizePt: Float,
     val curveLoHeightIn: Float,
     val curveHiHeightIn: Float,
     val heightScale: Float,
@@ -594,6 +600,7 @@ private fun PdfOptionsSheet(
     pdfTieringMode: PdfTieringMode,
     lineThicknessScale: Float,
     sBreakThresholdFrac: Float,
+    arrowSizePt: Float,
     heightScale: Float,
     linersProportional: Boolean,
     linerCompression: Float,
@@ -711,6 +718,16 @@ private fun PdfOptionsSheet(
             frac = sBreakThresholdFrac,
             onCommit = { vm.setPdfSBreakThresholdFrac(it) },
             onDrag = { tuning.sBreakFrac = it },
+        )
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Dimension arrows ─────────────────────────────────────────────────
+        DimensionArrowSizeChips(
+            arrowSizePt = arrowSizePt,
+            onCommit = { vm.setPdfArrowSizePt(it) },
         )
 
         Spacer(Modifier.height(12.dp))
