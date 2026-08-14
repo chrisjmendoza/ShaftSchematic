@@ -261,7 +261,7 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   spans overlapped (on-device report).
 - **Arrowhead shape and size.** A slim 2:1 V — barb spread is half the head's length —
   one shape at every rail draw site. The length is user-set: `PdfPrefs.arrowSizePt`,
-  **Small 3 / Medium 4 (default) / Large 5 pt**, from either PDF options sheet or
+  **Small 3 (default) / Medium 4 / Large 5 pt**, from either PDF options sheet or
   Settings → Drawing → "Dimension arrows". It reaches the schematic and consolidated
   composers (the two that build a `PdfDimensionRenderer`); the wear/undercut strip rails
   keep their own fixed 4 pt head. A smaller head also widens inline eligibility slightly,

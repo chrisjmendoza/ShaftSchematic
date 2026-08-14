@@ -35,10 +35,17 @@ class FractionStyleSettingTest {
         SettingsStore.updatePdfPrefs { it.copy(fractionStyle = PdfPrefs().fractionStyle) }
     }
 
+    /**
+     * One shipped construction, agreed on by the pref, the renderer's baseline and the tolerant
+     * decode. Disagreement here shows up as a fresh install drawing one style while an unreadable
+     * stored value falls back to another.
+     */
     @Test
-    fun `the shipped default is stacked`() {
-        assertEquals(FractionStyle.STACKED, PdfPrefs().fractionStyle)
-        assertEquals(FractionStyle.STACKED, FractionTypography.active.style)
+    fun `the shipped default is one value everywhere`() {
+        assertEquals(FractionStyle.Default, PdfPrefs().fractionStyle)
+        assertEquals(FractionStyle.Default, FractionTextStyle.Default.style)
+        assertEquals(FractionStyle.Default, FractionStyle.fromName(null))
+        assertEquals(FractionStyle.Default, FractionTypography.active.style)
     }
 
     @Test
@@ -111,12 +118,13 @@ class FractionStyleSettingTest {
 
     @Test
     fun `a persisted name decodes tolerantly`() {
+        assertSame(FractionStyle.STACKED, FractionStyle.fromName("STACKED"))
         assertSame(FractionStyle.DIAGONAL, FractionStyle.fromName("DIAGONAL"))
         assertSame(FractionStyle.INLINE, FractionStyle.fromName("INLINE"))
         // Missing or unrecognised (an older build, a hand-edited store) falls back to shipped.
-        assertSame(FractionStyle.STACKED, FractionStyle.fromName(null))
-        assertSame(FractionStyle.STACKED, FractionStyle.fromName(""))
-        assertSame(FractionStyle.STACKED, FractionStyle.fromName("SLANTED"))
+        assertSame(FractionStyle.Default, FractionStyle.fromName(null))
+        assertSame(FractionStyle.Default, FractionStyle.fromName(""))
+        assertSame(FractionStyle.Default, FractionStyle.fromName("SLANTED"))
     }
 
     @Test

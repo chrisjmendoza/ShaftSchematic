@@ -13,11 +13,11 @@ import kotlin.math.max
  * "X", the runout bubble and the spooned keyway bowl already follow.
  *
  * ## The glyph
- * [FractionStyle.STACKED] (default) is the shop-ruler fraction: numerator over denominator,
+ * [FractionStyle.STACKED] is the shop-ruler fraction: numerator over denominator,
  * separated by a bar centred on the *math axis* — half the base font's cap height above the
  * baseline, which is where a minus sign sits. [FractionStyle.DIAGONAL] is the compact
- * alternative: numerator raised to cap height, denominator on the baseline, a slanted solidus
- * between them. [FractionStyle.INLINE] draws plain `n/d` and exists as an escape hatch.
+ * shipped construction: numerator raised to cap height, denominator on the baseline, a slanted
+ * solidus between them. [FractionStyle.INLINE] draws plain `n/d` and exists as an escape hatch.
  *
  * ## The size contract that keeps layout untouched
  * Digits are set at [FractionTextStyle.digitScale] of the base size (0.60 — near a half, the
@@ -35,10 +35,10 @@ import kotlin.math.max
  * Text with no fraction in it costs one scan and then goes straight to [Canvas.drawText].
  */
 enum class FractionStyle {
-    /** Numerator over denominator with a horizontal bar. The shipped look. */
+    /** Numerator over denominator with a horizontal bar — the shop-ruler fraction. */
     STACKED,
 
-    /** Numerator raised, denominator on the baseline, slanted solidus between. */
+    /** Numerator raised, denominator on the baseline, slanted solidus between. The shipped look. */
     DIAGONAL,
 
     /** Plain `n/d` in the base font — no built-up fraction. */
@@ -51,9 +51,20 @@ enum class FractionStyle {
     }
 
     companion object {
+        /**
+         * The shipped construction — the single source for `PdfPrefs.fractionStyle`'s default,
+         * [FractionTextStyle.Default] and [fromName]'s fallback, so a fresh install, an
+         * unreadable stored value and the renderer's baseline can never disagree.
+         *
+         * Diagonal on an on-device verdict: it reads better on screen and in print at the sizes
+         * these sheets are actually read at. It costs ~3.6 pt more width than stacked and so
+         * seats inline slightly less often, which the Small default arrowhead offsets.
+         */
+        val Default: FractionStyle = DIAGONAL
+
         /** Tolerant decode for a persisted name — an unknown value falls back to the shipped look. */
         fun fromName(raw: String?): FractionStyle =
-            if (raw.isNullOrBlank()) STACKED else runCatching { valueOf(raw) }.getOrDefault(STACKED)
+            if (raw.isNullOrBlank()) Default else runCatching { valueOf(raw) }.getOrDefault(Default)
     }
 }
 
@@ -89,6 +100,11 @@ object FractionTypography {
  * point value, so one style serves the 7 pt dimension label and the 30 px preview caption alike.
  */
 data class FractionTextStyle(
+    /**
+     * Defaults to STACKED because the spacing fields below carry the STACKED numbers — a bare
+     * `FractionTextStyle()` is the stacked preset. Build from a user choice with
+     * [FractionTextStyle.forStyle], never by copying a style onto another preset's spacing.
+     */
     val style: FractionStyle = FractionStyle.STACKED,
     /**
      * Numerator/denominator size as a fraction of the base text size. Near a half, as asked —
@@ -147,11 +163,11 @@ data class FractionTextStyle(
         }
 
         /**
-         * The shipped preset. This is the BASELINE, not the live setting — read
-         * [FractionTypography.active] for what is actually drawing, which the user picks in
-         * Settings → Drawing → "Fractions".
+         * The shipped preset, off the one [FractionStyle.Default]. This is the BASELINE, not the
+         * live setting — read [FractionTypography.active] for what is actually drawing, which the
+         * user picks in Settings → Drawing → "Fractions".
          */
-        val Default = Stacked
+        val Default = forStyle(FractionStyle.Default)
     }
 }
 

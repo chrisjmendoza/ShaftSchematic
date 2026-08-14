@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**  
-**Last updated: 2026-08-06**
+**Last updated: 2026-08-14**
 
 Tasks are ordered by priority. Completed series are collapsed to a single summary line to
 keep this readable — full detail lives in `CHANGELOG.md` and git history.
@@ -112,8 +112,43 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 
 ## 3. Rendering / Component Backlog
 
-- [ ] **Liner shoulders** — aft/fwd shoulder length fields, stepped shoulder rendering in preview and PDF
-- [ ] **Fiberglass body segments** — model flag, dark fill / hatch pattern, label. Reference: `assets/20251022_172641.jpg`
+- [ ] **Liner shoulders with a radius selector** (expanded 2026-08-14) — aft/fwd shoulder
+  length fields and stepped shoulder rendering in preview and PDF, plus a **radius selector**
+  for the shoulder edge at each liner end: a machined liner shoulder is rarely a sharp corner,
+  and the fillet is a real machining instruction, not just a drawing nicety. Open questions
+  before building: is the radius per-end or one value per liner; does it come from a list of
+  standard radii (like the taper-rate 3% snap list) or free entry; does it print as a value +
+  leader, a footer note, or both. Shares the draw-both-sites rule — preview and PDF must
+  construct the fillet identically, so the arc math belongs in `geom/`.
+- [ ] **Fiberglass body segments** — model flag, dark fill / hatch pattern, label.
+  Reference: `assets/20251022_172641.jpg`. Two halves, and the second is the open one
+  (2026-08-14): (a) *selection* — which body sections are fiberglassed, presumably a
+  per-`Body` flag with the usual add-dialog/carousel-card parity; (b) **styling — undecided**.
+  Get a sketch or a photographed sheet before choosing, the same way the "indicated wear"
+  squiggle convention is blocked on one. Note the existing interaction: a fiberglassed run is
+  exactly the case that motivated per-body `showDiaOnDrawing`, since a Ø cannot be measured
+  through the wrap.
+- [ ] **Additional output fonts** (requested 2026-08-14) — a font choice for the printed
+  sheets, so a shop can pick a look rather than take the platform default. Constraints worth
+  writing down now: the PDF composers draw with `android.graphics.Paint`, so a face has to be
+  a real `Typeface` (a bundled `.ttf` asset or a system family), and **every text metric in
+  the layout is measured live from the paint** — dimension-rail label widths, the ellipsize
+  helper, the fraction renderer's cap-height and advance math — so a face swap is safe by
+  construction *provided* nothing hard-codes a width. Check the fraction stack against a
+  condensed or slab face before shipping one: `FractionTextRendererTest` pins that the stack
+  stays inside the font's own ascent/descent, and a face with unusual metrics is exactly what
+  that test exists to catch. Same pref posture as `PdfPrefs.fractionStyle`.
+- [ ] **Runout bubble leader clarity** (on-device report 2026-08-14: "there are still times
+  they are not clear to where they are pointing") — the auto-placed alternating bubble rows
+  leave the eye guessing which station a bubble belongs to once rows stack or a shaft is
+  crowded. Same underlying problem as the tap-to-place leader-line item in §6, and probably
+  the same fix: draw a leader from the bubble to its station whenever the bubble is not
+  directly over it, rather than relying on proximity. Cheaper interim options if the full
+  leader is deferred: a witness tick at the station, or tightening the alternation so a bubble
+  never sits closer to a neighbour's station than its own (`geom/RunoutBubbleLayout.kt` is pure
+  and unit-tested, so the rule can be pinned before any drawing changes). Canvas + PDF must
+  draw the leader identically — draw-both-sites, same posture as the bubble value/high-spot
+  marker.
 
 ---
 
@@ -229,6 +264,30 @@ would make that body untappable at the slot. Decide before changing.
   line per the normal drawing convention — instead of (or in addition to) the current
   auto-placed alternating bubble rows. Canvas + PDF must draw the leader identically
   (draw-both-sites rule, same posture as the bubble value/high-spot marker).
+  **Related:** the auto-placed rows have their own clarity complaint (§3, 2026-08-14). If the
+  leader gets built here, an automatic leader probably fixes both — decide the two together
+  rather than shipping two conventions.
+- [ ] **Drawing preset profiles (app-wide)** (asked 2026-08-14). Note first that per-user
+  tailoring **already exists**: every drawing pref (fraction style, arrow size, line thickness,
+  S-break threshold, sizing-curve anchors, shading) is persisted per device in DataStore, so
+  each install already keeps its own look — the `PdfPrefs` defaults only decide what a *fresh*
+  install starts with. What is genuinely missing is above that: a **section-wide "restore
+  Drawing defaults"** (today only individual controls have their own reset buttons), and
+  **named preset profiles** — save the current drawing prefs under a name and switch between
+  them, for a shared device or a shop that wants a different look per customer.
+
+  **Product decision (2026-08-14): profiles are APP-WIDE, never per-document.** A machinist is
+  working against the clock; restyling per job is a hassle they should not have to think about,
+  so a profile is set once and applies to every shaft they draw. This is what makes the feature
+  cheap: it stays a set of DataStore prefs, with **no persisted per-doc field and no
+  doc-envelope change**. Do not "improve" it later by having a document remember the profile it
+  was drawn with.
+
+  **Not in scope of that decision:** the per-job `RunoutConfig` pair ("Shaft height" +
+  liner compression) stays per-document, and is not an exception to be tidied away. Those are
+  not style preferences — they are how *this particular shaft* is made to fit the page, a
+  geometry consequence of its own proportions, so a shared value would be wrong for the next
+  shaft. The line is: a **look** is app-wide; a **fit** is per-job.
 
 ---
 

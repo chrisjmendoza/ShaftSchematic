@@ -8,6 +8,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### feat: shipped drawing defaults move to Diagonal fractions and Small arrowheads
+
+Both on on-device verdicts after using them on real sheets: diagonal "better for readability on
+screen and outputs", Small arrowheads "do the job well with minimal space taking". Neither
+changes an existing install — both prefs are persisted per device, so this only decides what a
+fresh one starts with.
+
+They also compose in the right direction. Diagonal costs ~3.6 pt more width than stacked and so
+seats inline slightly less often; a Small head is 2 pt shorter than Medium and a break's stubs
+must each be at least `arrowSize` long, so the new arrow default hands most of that back.
+
+`FractionStyle.Default` is now the single source for the fraction choice — `PdfPrefs`'s default,
+`FractionTextStyle.Default` and `fromName`'s fallback all read it, so a fresh install, an
+unreadable stored value and the renderer's baseline cannot disagree. `FractionStyleSettingTest`
+pins exactly that, and the flip caught its own regression: a test alias reading
+`FractionTextStyle.Default` for "the stacked preset" silently became diagonal.
+
 ### feat: one built-up fraction construction everywhere the app draws one
 
 `LengthFormat` reached for a Unicode vulgar glyph when the font had one (`½ ¼ ¾ ⅛ ⅜ ⅝ ⅞`) and

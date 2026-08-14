@@ -32,11 +32,12 @@ class FractionTextRendererTest {
     }
 
     /**
-     * Named explicitly rather than left to the default: the default is
-     * [FractionTypography.active], which the Settings toggle moves — these assertions are about
-     * the stacked construction, not about whatever style the JVM happens to be carrying.
+     * The stacked preset by name, never [FractionTextStyle.Default]: the shipped default is a
+     * product decision that has already moved once, and the draw-site default is
+     * [FractionTypography.active], which the Settings toggle moves at runtime. These assertions
+     * are about the stacked construction itself.
      */
-    private val stacked = FractionTextStyle.Default
+    private val stacked = FractionTextStyle.Stacked
 
     @Test
     fun `text with no fraction measures exactly as plain text`() {

@@ -368,7 +368,7 @@ wear/undercut strip rails (`WearRailSpanLayout.seatsInBreak` decides the break, 
 the heads, through the same shared predicate); `planUndercutRailRows` reserves rows off
 `seatsInBreak`, never off the arrows. The head is a slim 2:1 V (barb spread = half the length),
 one shape at every rail site; its length is user-set — `PdfPrefs.arrowSizePt`, Small 3 /
-**Medium 4 (default)** / Large 5 pt, in both PDF options sheets and Settings → Drawing
+(default) / Medium 4 / Large 5 pt, in both PDF options sheets and Settings → Drawing
 "Dimension arrows". It reaches only the two dimension-rail composers (schematic, consolidated);
 the wear/undercut strips keep their own fixed head.
 
@@ -422,7 +422,9 @@ narrower construction also **seats more values inline** — the break costs
 value itself pushed short spans into the above-line fallback for nothing. The style is
 **user-set** — `PdfPrefs.fractionStyle`, Settings →
 Drawing → "Fractions" plus the same `FractionStyleChips` ungated in both PDF options sheets:
-**Stacked (default)** | Diagonal | Plain. Draw sites take NO style parameter; they read the
+Stacked | **Diagonal (default)** | Plain, one source in `FractionStyle.Default` (the pref
+default, `FractionTextStyle.Default` and `fromName`'s fallback all read it). Draw sites take NO
+style parameter; they read the
 process-wide `FractionTypography.active` mirror, whose ONLY writer is
 `SettingsStore.updatePdfPrefs` (the `SettingsStore.pdfPrefs` pattern — threading a uniform
 drawing decision through every composer's private draw functions costs more than it buys). That

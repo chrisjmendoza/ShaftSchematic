@@ -60,12 +60,18 @@ flag must match how the caller will draw, or a line is clipped at the wrong widt
 
 ## 3. The glyph
 
-`FractionStyle.STACKED` is shipped: numerator over denominator, bar centred on the **math axis**
+`FractionStyle.STACKED` is the shop-ruler fraction: numerator over denominator, bar centred on the **math axis**
 (half the base font's cap height above the baseline — where a minus sign sits), which is what
 makes the fraction read as centred on the same optical line as the text beside it.
 
-`FractionStyle.DIAGONAL` is the alternative — raised numerator, slanted solidus, denominator on
-the baseline. `FractionStyle.INLINE` draws plain `n/d`. All three are user-selectable; see §3.1.
+`FractionStyle.DIAGONAL` — raised numerator, slanted solidus, denominator on the baseline — is
+the **shipped** construction, on an on-device verdict that it reads better on screen and in
+print at the sizes these sheets are actually read at. `FractionStyle.INLINE` draws plain `n/d`.
+All three are user-selectable; see §3.1.
+
+`FractionStyle.Default` is the single source for that choice — `PdfPrefs.fractionStyle`'s
+default, `FractionTextStyle.Default` and `fromName`'s fallback all read it, so a fresh install,
+an unreadable stored value and the renderer's baseline can never disagree.
 
 Proportions are ratios of a font size, never absolute points, so one preset serves the 7 pt rail
 label and the 30 px preview caption alike.
@@ -117,7 +123,7 @@ Drawing → "Dimension arrows" at **Small** (3 pt) gives 2 pt of that back.
 
 `PdfPrefs.fractionStyle` — **Settings → Drawing → "Fractions"**, and the same
 `FractionStyleChips` picker in both PDF options sheets (ungated there, unlike the arrowhead
-size: every document those sheets serve prints lengths, so every one draws fractions). Stacked
+size: every document those sheets serve prints lengths, so every one draws fractions). Diagonal
 is the shipped default; Plain restores flat `n/d`.
 
 The draw sites do **not** take a style parameter. They read `FractionTypography.active`, a

@@ -49,7 +49,7 @@ drawing size"; the per-job "Shaft height" slider multiplies on top of the sizing
   at "Never" a genuinely long run still shows its break. Bodies only — liners and tapers
   foreshorten silently at every setting. Every preview that rasterizes with the current
   `PdfPrefs` keys its `LaunchedEffect` on `vm.pdfSBreakThresholdFrac`, so the change is live.
-- **Dimension arrows** (`arrowSizePt`): three chips — Small 3 / **Medium 4 (default)** /
+- **Dimension arrows** (`arrowSizePt`): three chips — **Small 3 (default)** / Medium 4 /
   Large 5 pt (Large is the historical head) — in Settings → Drawing → "Dimension arrows" and
   in both PDF Options sheets (one shared `DimensionArrowSizeChips`, one app-wide pref). A
   chip tap IS the commit, so unlike the sliders there is no `onDrag` channel and no
@@ -58,7 +58,7 @@ drawing size"; the per-job "Shaft height" slider multiplies on top of the sizing
   `PdfDimensionRenderer` — the schematic and the consolidated sheet; the wear/undercut strip
   rails keep their own fixed 4 pt head. A smaller head also slightly widens inline
   eligibility, since a break's stubs must each be at least `arrowSize` long.
-- **Fractions** (`fractionStyle`): three chips — **Stacked (default)** / Diagonal / Plain — in
+- **Fractions** (`fractionStyle`): three chips — Stacked / **Diagonal (default)** / Plain — in
   Settings → Drawing → "Fractions" and in both PDF Options sheets (one shared
   `FractionStyleChips`, one app-wide pref). **Ungated in the sheets**, unlike the arrowhead
   size: every document they serve prints lengths, so every one draws fractions. A chip tap IS
