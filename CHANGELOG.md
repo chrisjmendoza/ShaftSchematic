@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### fix: blank-draft footer columns split the band evenly
+
+The FWD column got noticeably less writing room than the other two: the footer weights its
+band 40 / 36 / 24 toward the left and middle columns, where a printed sheet's long free text
+lives (taper specs, customer and vessel names). A blank draft prints no values at all — every
+line is a rule running to its column edge — so that weighting just reads as a short FWD rule.
+Blank drafts now split the band into equal thirds, with the last column padded like the
+others so all three rules come out the same length. Printed footers keep the old weighting.
+
 ### fix: blank-draft footer job info lines up with the taper columns
 
 On a blank (write-in) schematic the footer's middle job-info block started its writing rules

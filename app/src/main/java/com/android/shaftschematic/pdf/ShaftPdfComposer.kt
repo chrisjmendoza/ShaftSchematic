@@ -1245,16 +1245,26 @@ internal fun drawFooter(
         }
     }
 
+    // Column starts. A printed footer weights the band toward the left and middle columns,
+    // where the long free text lives (taper specs, customer and vessel names) — the FWD column
+    // holds the same short spec lines as AFT and needs no more. A blank draft prints no values
+    // at all: every line is a writing rule that runs to its column edge, so an uneven split is
+    // read as uneven writing room and the FWD column comes out visibly short (on-device report).
+    // Blank drafts therefore split the band into equal thirds.
+    val midFrac   = if (blankValues) 1f / 3f else 0.40f
+    val rightFrac = if (blankValues) 2f / 3f else 0.76f
     val leftX  = rect.left
-    val midX   = rect.left + rect.width() * 0.40f
-    val rightX = rect.left + rect.width() * 0.76f
+    val midX   = rect.left + rect.width() * midFrac
+    val rightX = rect.left + rect.width() * rightFrac
 
     // Column budgets: long free text (customer/vessel names) must never overrun the
     // neighbouring column — ellipsize to the available width.
     val colPad = 6f
     val leftMaxW  = midX - leftX - colPad
     val midMaxW   = rightX - midX - colPad
-    val rightMaxW = rect.right - rightX
+    // The last column has no neighbour to clear, so printed text may run to the band edge; a
+    // blank draft pads it like the others so all three rules come out the same length.
+    val rightMaxW = rect.right - rightX - (if (blankValues) colPad else 0f)
 
     // AFT (left) — left-aligned at left margin
     run {

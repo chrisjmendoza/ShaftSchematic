@@ -311,7 +311,10 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   `AFT Taper`/`FWD Taper` heading: the middle block has no heading, so flush tops would
   put its rules half a pitch off every neighbouring rule. The fit-clamp counts that extra
   line. Printed footers stay flush — their lines carry values, not rules, and the 96 pt band
-  has no spare line. Both blank footers — schematic and
+  has no spare line. The three columns also split the band into **equal thirds** on a blank
+  draft (last column padded like the others, so every rule is the same length) instead of the
+  printed 40 / 36 / 24 weighting, which exists for printed free text — customer and vessel
+  names — and on a value-less sheet only makes the FWD rules short. Both blank footers — schematic and
   consolidated — share this one implementation. `buildFooterEndColumns(blankValues =
   true)` returns label-only lines — same count and order as standard, no digits
   (JVM-tested in `BlankDraftFooterTest`).
