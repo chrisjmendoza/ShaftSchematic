@@ -60,7 +60,7 @@ class FractionTextRendererTest {
     fun `a wide denominator still measures sanely`() {
         val p = paint()
         val w = p.measureRichText("399/4000", stacked)
-        // At most the wider digit row (4 digits at 0.6 scale) plus its bar overhang and bearings.
+        // At most the wider digit row (4 digits at 0.64 scale) plus its bar overhang and bearings.
         assertTrue("w=$w", w > 0f && w < p.measureText("4000"))
     }
 

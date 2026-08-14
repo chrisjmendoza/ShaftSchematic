@@ -254,9 +254,12 @@ fun UndercutRoute(
         }
     }
 
+    // pdfFractionStyle is a key only: the style reaches the ink through
+    // FractionTypography.active, which is not snapshot state — without the key a style
+    // change would leave the rasterized preview drawing the old construction.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   undercutRecord, blankDraft) {
+                   undercutRecord, blankDraft, pdfFractionStyle) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs

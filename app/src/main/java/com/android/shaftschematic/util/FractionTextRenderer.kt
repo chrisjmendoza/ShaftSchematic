@@ -20,7 +20,7 @@ import kotlin.math.max
  * solidus between them. [FractionStyle.INLINE] draws plain `n/d` and exists as an escape hatch.
  *
  * ## The size contract that keeps layout untouched
- * Digits are set at [FractionTextStyle.digitScale] of the base size (0.60 — near a half, the
+ * Digits are set at [FractionTextStyle.digitScale] of the base size (0.64 — near a half, the
  * proportion the reference ruler faces use). With the bar on the math axis, the resulting stack
  * spans roughly `0.9·S` above the baseline and `0.18·S` below it, so it lands **inside the base
  * font's own ascent/descent**. Nothing that budgets vertical space for a line of text — the
@@ -118,7 +118,10 @@ data class FractionTextStyle(
     val barGapFrac: Float = 0.12f,
     /** How far the bar runs past the wider digit row, each end, as a fraction of that size. */
     val barOverhangFrac: Float = 0.08f,
-    /** Side bearing on each edge of the fraction's advance box, as a fraction of the BASE size. */
+    /**
+     * Stacked only: side bearing on each edge of the fraction's advance box, as a fraction of
+     * the BASE size. Diagonal applies none — its box opens and closes on glyph ink.
+     */
     val sideBearingFrac: Float = 0.045f,
     /**
      * The tightened whole-number space ([FractionText.Run.Gap]), as a fraction of the BASE size.
@@ -140,17 +143,16 @@ data class FractionTextStyle(
          * - **Stacked** leads with the BAR — a horizontal stroke reaching the box edge at
          *   mid-height, which binds to a preceding digit the way a hyphen would — and closes
          *   with a numerator row that a trailing `"` will otherwise attach itself to. It needs
-         *   the looser numbers on both sides.
+         *   the looser gap and side bearing on both sides.
          * - **Diagonal** leads with the numerator's own glyph at cap height and closes on the
-         *   baseline, so it reads correctly at a tighter setting — and being the wider
-         *   construction, it is the one that benefits from spending less on air.
+         *   baseline, so it reads correctly with a tighter gap and no side bearing at all — and
+         *   being the wider construction, it is the one that benefits from spending less on air.
          */
         val Stacked = FractionTextStyle(style = FractionStyle.STACKED)
 
         val Diagonal = FractionTextStyle(
             style = FractionStyle.DIAGONAL,
             gapFrac = 0.10f,
-            sideBearingFrac = 0.025f,
         )
 
         val Plain = FractionTextStyle(style = FractionStyle.INLINE)

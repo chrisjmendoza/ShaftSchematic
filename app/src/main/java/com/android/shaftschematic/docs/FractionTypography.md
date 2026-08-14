@@ -31,6 +31,9 @@ a Unicode vulgar glyph. A font only carries `¼ ½ ¾ ⅛ ⅜ ⅝ ⅞` — which
 could print a proper `⅝` beside a typed-out `11/16`, two different constructions at two
 different weights and heights. One spelling in, one look out. Pinned by `LengthFormatTest`.
 
+`printedTaperRate` (the footer's `1:16 → 3/4"/ft` shop shorthand in `ShaftPdfComposer.kt`) spells
+its fraction plain for the same reason; pinned by `TaperRatePrintNotationTest`.
+
 The parser still recognises vulgar glyphs and the Unicode fraction slash `⁄` on the way in, so
 text that already carries them renders identically.
 
@@ -83,10 +86,11 @@ slightly off stacked):
 
 - **Stacked** leads with the BAR — a horizontal stroke reaching the box edge at mid-height, which
   binds to a preceding digit the way a hyphen would — and closes on a numerator row that a
-  trailing `"` attaches itself to. It carries the looser gap and bearing (0.14 / 0.045).
+  trailing `"` attaches itself to. It carries the looser gap (0.14) and the side bearing (0.045).
 - **Diagonal** leads with the numerator's own glyph at cap height and closes on the baseline, so
-  it reads correctly tighter (0.10 / 0.025) — and being the wider construction, it is the one
-  that should spend less on air.
+  it takes the tighter gap (0.10) and **no side bearing at all** — side bearing is a stacked-only
+  metric, since diagonal's box opens and closes on glyph ink — and being the wider construction,
+  it is the one that should spend less on air.
 
 Never `copy(style = …)` one preset onto another style; that is exactly the bug `forStyle` exists
 to prevent, and `FractionStyleSettingTest` pins it.
@@ -171,7 +175,7 @@ shop convention and never carried a fraction.
 - `pdf/ShaftPdfComposer.kt` — footer spec lines (`drawFooterLine`). The free-text job fields
   above them stay plain; see §2.
 - `pdf/RunoutPdfComposer.kt` — the OAL rail.
-- `pdf/WearPdfComposer.kt` — strip rails and the OAL rail.
+- `pdf/WearPdfComposer.kt` — strip rails, strip anchor titles, and the OAL rail.
 - `pdf/UndercutPdfComposer.kt` — strip rails, strip anchor titles, the OAL rail.
 - `ui/screen/LinerWearDetail.kt`, `ui/screen/UndercutDetail.kt` — the on-screen sheets' dim
   segments, so the preview and the paper construct a fraction the same way.

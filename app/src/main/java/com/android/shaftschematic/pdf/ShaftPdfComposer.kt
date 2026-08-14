@@ -1517,14 +1517,16 @@ private fun letSet(t: Taper): LetSetResult =
 
 /**
  * Shop notation for the two most common tapers on inch drawings: 1:12 prints as 1"/ft and
- * 1:16 as ¾"/ft — the way the shop hand-writes them. Every other rate keeps its ratio form
+ * 1:16 as 3/4"/ft — the way the shop hand-writes them. Every other rate keeps its ratio form
  * (1:10, 1:20, exact 1:N.NNN, or the user's own manual text). Metric drawings keep the
  * ratio for all rates; inch-per-foot notation would clash with mm dimensions.
+ * The fraction is spelled plain n/d — the fraction renderer sets it built-up at the draw
+ * site, and FractionText.kt's parse map is the only place a vulgar glyph may appear.
  */
 internal fun printedTaperRate(rateText: String, unit: UnitSystem): String = when {
     unit != UnitSystem.INCHES -> rateText
     rateText == "1:12" -> "1\"/ft"
-    rateText == "1:16" -> "¾\"/ft"
+    rateText == "1:16" -> "3/4\"/ft"
     else -> rateText
 }
 

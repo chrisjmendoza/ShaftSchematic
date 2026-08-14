@@ -969,12 +969,12 @@ private fun drawWearDetailStrip(
         c.drawText(WEAR_BLANK_ANCHOR_SUFFIX, afterRule - 8f, titleBaselineY, titleText)
     } else {
         val anchor = linerAnchorForPdf(docSpec, ln)
-        val titleFit = ellipsizeToWidth(title, titleText, contentRight - contentLeft)
+        val titleFit = ellipsizeToWidth(title, titleText, contentRight - contentLeft, rich = true)
         if (anchor == LinerAnchor.FWD_SET) {
             titleText.textAlign = Paint.Align.RIGHT
-            c.drawText(titleFit, contentRight, titleBaselineY, titleText)
+            c.drawRichText(titleFit, contentRight, titleBaselineY, titleText)
         } else {
-            c.drawText(titleFit, contentLeft, titleBaselineY, titleText)
+            c.drawRichText(titleFit, contentLeft, titleBaselineY, titleText)
         }
     }
 }

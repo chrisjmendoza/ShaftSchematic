@@ -8,6 +8,29 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### fix: post-merge cleanup of the fraction typography system
+
+Four small items from a same-day review of the merged fraction work:
+
+- The Wear and Undercut PDF previews now re-render on a fraction-style change. Their
+  rasterizing effects key on `pdfFractionStyle` like every other preview's render-inputs
+  record — without the key, the style reaches the ink through `FractionTypography.active`
+  (not snapshot state) and an open preview kept drawing the old construction until an
+  unrelated input changed. Exports were never affected; they compose fresh.
+- The wear document's liner strip anchor title — the one label on paper that still printed
+  its fraction inline — now goes through `ellipsizeToWidth(rich = true)` + `drawRichText`,
+  matching the identical construct in the undercut composer.
+- `printedTaperRate` spells `3/4"/ft` plain instead of embedding a literal `¾`. The glyph
+  rendered correctly (the parser normalizes vulgar fractions on the way in), but it was a
+  second producer of Unicode fractions outside `FractionText.kt`'s parse map — against the
+  "one spelling in, one look out" contract. `TaperRatePrintNotationTest` now pins that no
+  printed rate carries a vulgar glyph.
+- Comment/doc corrections: the renderer's header now states the real digit scale (0.64),
+  and the Diagonal preset drops an inert `sideBearingFrac` override — side bearing is a
+  stacked-only metric, so the tighter value never applied. `FractionTypography.md` §3/§5
+  updated to match (diagonal takes the tighter gap and no side bearing; the wear composer's
+  site list includes its strip anchor titles).
+
 ### feat: shipped drawing defaults move to Diagonal fractions and Small arrowheads
 
 Both on on-device verdicts after using them on real sheets: diagonal "better for readability on
