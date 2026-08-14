@@ -74,7 +74,8 @@ Responsibilities
 
 - **Scrollable Form Area:**  
   - Overall length field (unit-aware; commits per keystroke in manual mode)  
-  - Project information fields (Job Number, Customer, Vessel, Notes)  
+  - Project information sheet (Job Number, Customer, Vessel, Shaft Position, Notes) —
+    opened from the toolbar, **Save/Cancel**, not commit-on-blur (see Notes)  
   - Component carousel for **Body**, **Taper**, **Thread**, **Liner**, and
     **Coupler Bolt Slot** (see `ComponentCarousel.kt`)
 
@@ -112,6 +113,29 @@ Notes
 - `computeAddDefaults()` lives in `ui/screen/ShaftScreenController.kt`. Shared format
   helpers (`abbr`, `disp`, `formatDisplay`, `toMmOrNull`, `parseFractionOrDecimal`,
   `tpiToPitchMm`) and the dialogs/menus remain in `ShaftScreen.kt`.
+- **The Project Information sheet is a DRAFT editor, not commit-on-blur.**
+  `ProjectInfoBottomSheet` holds every field in local `rememberSaveable` draft state
+  (`DraftTextField` — a plain field with no blur commit; the Shaft Position dropdown too)
+  and reaches the ViewModel only from **Save**, which pushes just the fields that differ
+  from the document (so open-and-save with no edit never marks it dirty). **Cancel** drops
+  the draft — a field that was blank goes back to blank. The old `CommitTextField`
+  committed on blur, so text typed into the last field was lost whenever the sheet closed
+  straight from the keyboard, and there was nothing to revert to. Unlike the numeric
+  component fields, these are free text with no derived geometry behind them, so the whole
+  card commits as one unit.
+- **Only the IMPLICIT exits are guarded.** Swipe-down, scrim tap, and back raise a
+  "Save changes?" dialog (**Save · Discard · Keep editing**) when the draft differs from
+  the document, and close silently when it doesn't. Three choices, not the Material two,
+  because an accidental swipe has two plausible intents — meant to close (so save) or
+  fat-fingered (so return). The **Cancel button is deliberately NOT guarded**: confirming
+  a deliberate discard is a second prompt for the same decision. The gate hangs on the
+  sheet state's `confirmValueChange` (reading the live dirty flag through
+  `rememberUpdatedState`, since the state object is created once) as well as on
+  `onDismissRequest` — blocking the settle keeps the sheet in place under the dialog, so
+  "Keep editing" costs no second animation and the draft is never rebuilt. `testTag`s:
+  `project_info_{sheet,job_number,customer,vessel,notes,save,cancel,keep_editing,
+  discard_confirm,discard_save}`; behavior pinned by `ProjectInfoSheetTest` (Robolectric,
+  real swipe gesture).
 - **Typed field commits are never snapped.** Carousel update callbacks
   (`onUpdateBody/Taper/Thread/Liner`) receive the committed values verbatim. The old
   `applySnapped{…}Update` wrappers (removed 2026-07-26) snapped the recomputed start/end
@@ -136,6 +160,14 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.14 (2026-08-14)**
+- **Project Information sheet gains Save/Cancel:** the sheet now edits a local draft and
+  commits on **Save** (changed fields only); **Cancel** reverts. Replaces the per-field
+  commit-on-blur `CommitTextField` (removed), which dropped the last field's text when the
+  sheet was closed with the keyboard still up. Swipe/scrim/back dismissal with a pending
+  edit raises a "Save changes?" prompt (Save · Discard · Keep editing); a clean draft
+  closes silently and the explicit Cancel button is never guarded.
+
 **v0.13 (2026-07-26)**
 - **First component highlighted on open (product decision):** with components present and
   highlighting enabled, opening/creating a document seeds the selection to the FIRST

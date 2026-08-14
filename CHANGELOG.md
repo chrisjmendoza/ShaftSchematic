@@ -6,6 +6,31 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-14
+
+### feat: Save/Cancel on the Project Information sheet
+
+On-device report: whatever field was typed into last lost its text unless the field was
+clicked out of first — the sheet's fields committed on blur, and closing the sheet straight
+from the keyboard never produced a blur commit. The sheet now edits a **local draft** and
+commits from an explicit **Save** button, which pushes only the fields that differ from the
+document (opening and saving without an edit does not mark it dirty). **Cancel** drops the
+draft: a changed field reverts to what the document held, and a field that started blank goes
+back to blank. The Shaft Position dropdown is part of the same draft.
+
+Dismissing the sheet *implicitly* — swipe down, scrim tap, back — with a pending edit raises
+a **"Save changes?"** prompt offering **Save · Discard · Keep editing**. Three choices rather
+than the Material two, because an accidental swipe has two plausible intents: meant to close
+it (so save it) or fat-fingered it (so put me back). A clean draft closes silently, and the
+explicit **Cancel** button is never guarded — confirming a deliberate discard is the same
+decision asked twice. The prompt blocks the sheet from settling closed rather than reacting
+after it has animated away, so "Keep editing" leaves the sheet exactly where it was with the
+draft intact.
+
+The per-field `CommitTextField` (blur/Done commit) is gone, replaced by a plain
+`DraftTextField` whose text lives in the sheet's state. Component-card numeric fields are
+unchanged — they keep commit-on-blur, since each one drives geometry on its own.
+
 ## 2026-08-13
 
 ### feat: auto-body sections can carry individual diameters

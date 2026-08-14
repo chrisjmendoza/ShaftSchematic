@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
@@ -54,10 +55,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -70,6 +73,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -1074,7 +1078,7 @@ private fun ShaftPositionDropdown(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun ProjectInfoBottomSheet(
+internal fun ProjectInfoBottomSheet(
     customer: String,
     vessel: String,
     jobNumber: String,
@@ -1087,14 +1091,65 @@ private fun ProjectInfoBottomSheet(
     onSetNotes: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // The sheet edits a DRAFT copy; nothing reaches the ViewModel until Save. Blur-commit
+    // fields would lose the last field's text when the sheet closed straight from the
+    // keyboard, and gave Cancel nothing to revert to.
+    var draftJobNumber by rememberSaveable { mutableStateOf(jobNumber) }
+    var draftCustomer by rememberSaveable { mutableStateOf(customer) }
+    var draftVessel by rememberSaveable { mutableStateOf(vessel) }
+    var draftPosition by rememberSaveable { mutableStateOf(shaftPosition) }
+    var draftNotes by rememberSaveable { mutableStateOf(notes) }
+
+    var confirmDiscardOpen by rememberSaveable { mutableStateOf(false) }
+
+    val dirty = draftJobNumber != jobNumber ||
+        draftCustomer != customer ||
+        draftVessel != vessel ||
+        draftPosition != shaftPosition ||
+        draftNotes != notes
+    // The sheet state is created once, so its gate must read the LIVE dirty flag rather
+    // than the value captured at creation.
+    val dirtyNow = rememberUpdatedState(dirty)
+
+    // Implicit exits (swipe down, scrim tap, back) are guarded when the draft differs;
+    // blocking the settle keeps the sheet in place under the dialog, so "Keep editing"
+    // costs no second animation. An explicit Cancel is NOT guarded — confirming a
+    // deliberate discard is just a second prompt for the same decision.
+    val gateHide = remember {
+        { target: SheetValue ->
+            if (target == SheetValue.Hidden && dirtyNow.value) {
+                confirmDiscardOpen = true
+                false
+            } else true
+        }
+    }
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = gateHide
+    )
+
+    // Pushes only the changed fields, so opening and saving without an edit never marks
+    // the document dirty.
+    val commitDraft = {
+        if (draftJobNumber != jobNumber) onSetJobNumber(draftJobNumber)
+        if (draftCustomer != customer) onSetCustomer(draftCustomer)
+        if (draftVessel != vessel) onSetVessel(draftVessel)
+        if (draftPosition != shaftPosition) onSetShaftPosition(draftPosition)
+        if (draftNotes != notes) onSetNotes(draftNotes)
+        onDismiss()
+    }
+
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        // A clean draft dismisses straight away; a dirty one asks first. Discarding drops
+        // the draft entirely — the document keeps whatever it already held, so a field
+        // that started blank goes back to blank.
+        onDismissRequest = { if (dirty) confirmDiscardOpen = true else onDismiss() },
         sheetState = sheetState,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .testTag("project_info_sheet")
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .imePadding()
@@ -1106,48 +1161,120 @@ private fun ProjectInfoBottomSheet(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = 4.dp)
             )
-            CommitTextField("Job Number", jobNumber, onSetJobNumber, Modifier.fillMaxWidth())
-            CommitTextField("Customer", customer, onSetCustomer, Modifier.fillMaxWidth())
-            CommitTextField("Vessel", vessel, onSetVessel, Modifier.fillMaxWidth())
+            DraftTextField(
+                label = "Job Number",
+                value = draftJobNumber,
+                onValueChange = { draftJobNumber = it },
+                modifier = Modifier.fillMaxWidth().testTag("project_info_job_number")
+            )
+            DraftTextField(
+                label = "Customer",
+                value = draftCustomer,
+                onValueChange = { draftCustomer = it },
+                modifier = Modifier.fillMaxWidth().testTag("project_info_customer")
+            )
+            DraftTextField(
+                label = "Vessel",
+                value = draftVessel,
+                onValueChange = { draftVessel = it },
+                modifier = Modifier.fillMaxWidth().testTag("project_info_vessel")
+            )
             ShaftPositionDropdown(
-                selected = shaftPosition,
-                onSelected = onSetShaftPosition,
+                selected = draftPosition,
+                onSelected = { draftPosition = it },
                 modifier = Modifier.fillMaxWidth()
             )
-            CommitTextField(
+            DraftTextField(
                 label = "Notes",
-                initial = notes,
-                onCommit = onSetNotes,
-                modifier = Modifier.fillMaxWidth(),
+                value = draftNotes,
+                onValueChange = { draftNotes = it },
+                modifier = Modifier.fillMaxWidth().testTag("project_info_notes"),
                 singleLine = false,
                 minHeight = 88.dp
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag("project_info_cancel")
+                ) { Text("Cancel") }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = commitDraft,
+                    modifier = Modifier.testTag("project_info_save")
+                ) { Text("Save") }
+            }
+        }
+
+        if (confirmDiscardOpen) {
+            AlertDialog(
+                // Dismissing the dialog itself means neither — put the user back in the
+                // sheet, which never went anywhere.
+                onDismissRequest = { confirmDiscardOpen = false },
+                title = { Text("Save changes?") },
+                text = { Text("The project information was edited but not saved.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            confirmDiscardOpen = false
+                            commitDraft()
+                        },
+                        modifier = Modifier.testTag("project_info_discard_save")
+                    ) { Text("Save") }
+                },
+                dismissButton = {
+                    // Two choices share the dismiss slot so "Keep editing" is a visible
+                    // button, not only a tap-outside gesture: an accidental swipe is the
+                    // whole reason this dialog exists.
+                    Row {
+                        TextButton(
+                            onClick = { confirmDiscardOpen = false },
+                            modifier = Modifier.testTag("project_info_keep_editing")
+                        ) { Text("Keep editing") }
+                        TextButton(
+                            onClick = {
+                                confirmDiscardOpen = false
+                                onDismiss()
+                            },
+                            modifier = Modifier.testTag("project_info_discard_confirm")
+                        ) { Text("Discard") }
+                    }
+                }
             )
         }
     }
 }
 
+/**
+ * Plain draft field: text lives in the caller's state and is never pushed anywhere on
+ * blur — the owning sheet decides when (and whether) it is committed.
+ */
 @Composable
-private fun CommitTextField(
+private fun DraftTextField(
     label: String,
-    initial: String,
-    onCommit: (String) -> Unit,
+    value: String,
+    onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     singleLine: Boolean = true,
     maxLines: Int = if (singleLine) 1 else 5,
     minHeight: Dp = Dp.Unspecified
 ) {
-    var text by remember(initial) { mutableStateOf(initial) }
     OutlinedTextField(
-        value = text,
-        onValueChange = { text = it },
+        value = value,
+        onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = singleLine,
         maxLines = maxLines,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
+        keyboardOptions = KeyboardOptions(
+            imeAction = if (singleLine) ImeAction.Next else ImeAction.Default
+        ),
         modifier = modifier
             .let { if (minHeight != Dp.Unspecified) it.heightIn(min = minHeight) else it }
-            .onFocusChanged { f -> if (!f.isFocused) onCommit(text) }
     )
 }
 
