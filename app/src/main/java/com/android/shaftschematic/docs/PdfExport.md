@@ -58,6 +58,16 @@ drawing size"; the per-job "Shaft height" slider multiplies on top of the sizing
   `PdfDimensionRenderer` — the schematic and the consolidated sheet; the wear/undercut strip
   rails keep their own fixed 4 pt head. A smaller head also slightly widens inline
   eligibility, since a break's stubs must each be at least `arrowSize` long.
+- **Fractions** (`fractionStyle`): three chips — **Stacked (default)** / Diagonal / Plain — in
+  Settings → Drawing → "Fractions" and in both PDF Options sheets (one shared
+  `FractionStyleChips`, one app-wide pref). **Ungated in the sheets**, unlike the arrowhead
+  size: every document they serve prints lengths, so every one draws fractions. A chip tap IS
+  the commit — no `onDrag` channel, no `PreviewTuning` override. It is the one control in this
+  section that also restyles the **on-screen** sheets, because both draw families go through
+  `util/FractionTextRenderer.kt`. The style reaches the ink through the process-wide
+  `FractionTypography.active` mirror rather than a composer argument, so each preview carries
+  `fractionStyle` in its render inputs purely as a re-render key. See
+  `docs/FractionTypography.md` §3.1.
 
 ---
 

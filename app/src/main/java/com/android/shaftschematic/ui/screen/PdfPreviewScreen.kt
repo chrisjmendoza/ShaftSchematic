@@ -86,6 +86,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.inkBand
@@ -157,6 +158,9 @@ fun PdfPreviewScreen(
     // Arrowhead size: a chip tap commits straight to PdfPrefs, so the render loop needs it as
     // an input key or the page would keep the old heads.
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
+    // Fraction style: same posture — a chip tap changes the renderer's active style, which the
+    // loop cannot observe, so it rides along as an input key.
+    val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
     // Sizing-curve anchors: the composer sizes the drawn shaft off them, so a Settings
     // change to "Default drawing size" has to re-render an open preview. Collected here,
     // not only inside the Tune sheet, or the page would keep its old height until some
@@ -216,6 +220,7 @@ fun PdfPreviewScreen(
                 shadedLiners = pdfShadedLiners,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
                 arrowSizePt = pdfArrowSizePt,
+                fractionStyle = pdfFractionStyle,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
                 heightScale = config.heightScale,
@@ -531,6 +536,7 @@ fun PdfPreviewScreen(
                 lineThicknessScale = lineThicknessScale,
                 sBreakThresholdFrac = pdfSBreakThresholdFrac,
                 arrowSizePt = pdfArrowSizePt,
+                fractionStyle = pdfFractionStyle,
                 heightScale = runoutConfig.heightScale,
                 linersProportional = runoutConfig.linersProportional,
                 linerCompression = runoutConfig.linerCompression,
@@ -554,8 +560,9 @@ fun PdfPreviewScreen(
  *
  * Some fields never reach [composeShaftPdf] directly: the shade flags, component titles,
  * tiering mode, S-break threshold, arrowhead size and sizing-curve anchors travel inside the
- * `PdfPrefs` snapshot taken at render time. They are held here because the loop must RE-RENDER when
- * they change, and a `PdfPrefs` read is not snapshot state.
+ * `PdfPrefs` snapshot taken at render time, and the fraction style through
+ * `FractionTypography.active`. They are held here because the loop must RE-RENDER when
+ * they change, and neither of those reads is snapshot state.
  */
 private data class SchematicRenderInputs(
     val spec: ShaftSpec,
@@ -571,6 +578,7 @@ private data class SchematicRenderInputs(
     val shadedLiners: Boolean,
     val sBreakThresholdFrac: Float,
     val arrowSizePt: Float,
+    val fractionStyle: FractionStyle,
     val curveLoHeightIn: Float,
     val curveHiHeightIn: Float,
     val heightScale: Float,
@@ -601,6 +609,7 @@ private fun PdfOptionsSheet(
     lineThicknessScale: Float,
     sBreakThresholdFrac: Float,
     arrowSizePt: Float,
+    fractionStyle: FractionStyle,
     heightScale: Float,
     linersProportional: Boolean,
     linerCompression: Float,
@@ -728,6 +737,13 @@ private fun PdfOptionsSheet(
         DimensionArrowSizeChips(
             arrowSizePt = arrowSizePt,
             onCommit = { vm.setPdfArrowSizePt(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        FractionStyleChips(
+            fractionStyle = fractionStyle,
+            onCommit = { vm.setPdfFractionStyle(it) },
         )
 
         Spacer(Modifier.height(12.dp))

@@ -113,6 +113,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.UndercutStyle
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.buildLinerTitleById
 import kotlin.math.max
 import kotlin.math.min
@@ -1894,7 +1895,7 @@ internal fun DrawScope.drawUndercutDimSpan(
         head(lo, -1f)
         head(hi, 1f)
     }
-    drawContext.canvas.nativeCanvas.drawText(label, (lo + hi) / 2f, y - 6.dp.toPx(), paint)
+    drawContext.canvas.nativeCanvas.drawRichText(label, (lo + hi) / 2f, y - 6.dp.toPx(), paint)
 }
 
 /**

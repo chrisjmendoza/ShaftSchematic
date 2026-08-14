@@ -13,11 +13,14 @@ object LengthFormat {
         val decimalPlaces: Int = 3
     )
 
-    private val unicodeFractions = mapOf(
-        "1/2" to "½", "1/4" to "¼", "3/4" to "¾",
-        "1/8" to "⅛", "3/8" to "⅜", "5/8" to "⅝", "7/8" to "⅞",
-    )
-
+    /**
+     * Fractions come out as plain `n/d`, never as a Unicode vulgar glyph.
+     *
+     * The typography is the renderer's job ([FractionText] / [FractionTextRenderer] build the
+     * stacked fraction at the draw site), and a font only carries vulgar glyphs for a handful
+     * of denominators — which is what made a sheet mix a proper `⅝` with a typed-out `11/16`.
+     * One spelling in, one look out.
+     */
     fun formatInchesSmart(inches: Double, opts: InchFormatOptions = InchFormatOptions()): String {
         if (abs(inches) < 1e-9) return "0." + "0".repeat(opts.decimalPlaces)
 
@@ -44,7 +47,7 @@ object LengthFormat {
             val nn = n / g
             val dd = den / g
 
-            val frac = unicodeFractions["$nn/$dd"] ?: "$nn/$dd"
+            val frac = "$nn/$dd"
             return if (w == 0) "$sign$frac" else "$sign$w $frac"
         }
 

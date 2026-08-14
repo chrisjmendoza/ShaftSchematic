@@ -8,6 +8,79 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### feat: one built-up fraction construction everywhere the app draws one
+
+`LengthFormat` reached for a Unicode vulgar glyph when the font had one (`½ ¼ ¾ ⅛ ⅜ ⅝ ⅞`) and
+typed the rest out, so a single sheet could print a proper `⅝` beside a bare `11/16` — two
+constructions at two different weights and two different heights (on-device report).
+
+Fractions are now **set**, not spelled. `util/FractionText.kt` splits a label into plain and
+fraction runs; `util/FractionTextRenderer.kt` draws the fraction as a real stack — numerator
+over denominator, bar on the math axis — through one pair of extensions, `Paint.measureRichText`
+and `Canvas.drawRichText`. `formatInchesSmart` emits plain `n/d` for every denominator and no
+Unicode fraction at all: one spelling in, one look out.
+
+Digits set at 0.64 of the base size, which is the largest that still keeps the stack inside the
+base font's own ascent and descent — so no vertical layout budget in the app changed. Width
+moves down, not up (a stack is one digit column wide), which is why the measure and draw calls
+had to convert together at every site; a rail that reserved the inline width would leave its
+value off-centre in the break.
+
+Wired into the schematic rails, the schematic footer's spec lines, the runout/consolidated OAL
+rail, the wear and undercut strip rails and titles, and the on-screen wear and undercut sheets —
+so a preview and its paper construct a fraction identically. Diameters are untouched (decimal by
+shop convention), and so is editable text: the input fields still show plain `1 1/2`, which is
+what round-trips through `parseFractionOrDecimal`.
+
+Deliberately not converted: the footer's free-text job fields. A job number like `24/1138` is a
+valid fraction by every rule a parser can see, so the caller decides rather than the guard —
+though the guard alone already leaves dates (`12/25/2026`), decimals (`1.5/2`) and ratios
+(`1:12`) as plain text.
+
+See `docs/FractionTypography.md`.
+
+### feat: Settings → Drawing → "Fractions" picks the construction
+
+Stacked / Diagonal / Plain, a new `PdfPrefs.fractionStyle` — so the two constructions can be
+compared on a real sheet instead of by editing a constant. The same `FractionStyleChips` picker
+appears in both PDF options sheets, **ungated** unlike the arrowhead size: every document those
+sheets serve prints lengths, so every one of them draws fractions.
+
+It is the only control in that section that also restyles the **on-screen** sheets, because the
+previews and the exports share one renderer. Plain restores flat `n/d` and is the escape hatch.
+
+The style reaches the ink through `FractionTypography.active`, a process-wide `@Volatile` mirror
+written only by `SettingsStore.updatePdfPrefs` — the `SettingsStore.pdfPrefs` pattern, chosen
+for the reason recorded when that one was reviewed: threading a uniform, app-wide drawing
+decision through every composer's private draw functions costs more than it buys. Because the
+mirror is not snapshot state, each preview's render-inputs record carries `fractionStyle` as a
+re-render key and never as a composer argument.
+
+`FractionStyleSettingTest` covers the whole chain — pref → mirror → an unqualified
+`measureRichText` — and restores the shipped style in `@After`, since a process-wide mirror left
+moved would have the next test class drawing in the wrong style.
+
+### fix: a dimension value that fitted its rail no longer prints above it
+
+On-device report, with the value visibly narrower than the gap it was refused. The break costs
+`labelWidth + 2·textPad + 2·arrowSize`, and `PdfDimensionRenderer` carried its own `textPad` of
+6 pt — wider on each side than a 16 pt value is across. It now uses the shared
+`DIM_BREAK_TEXT_PAD_PT` (4 pt), the gap the wear and undercut strip rails already cut, so one
+convention serves every rail in the app. For `21 5/16"` at the schematic's 7 pt rail size the
+span requirement drops 36.6 pt → 32.3 pt.
+
+Fraction spacing is now **per-style** (`FractionTextStyle.Stacked` / `.Diagonal` / `.Plain`, via
+`forStyle`) rather than one shared set of numbers, which read well diagonal and slightly off
+stacked (on-device report). The cause is structural: stacked leads with the BAR, a horizontal
+stroke reaching the box edge at mid-height that binds to the preceding digit the way a hyphen
+would, and closes on a numerator row that a trailing `"` attaches itself to; diagonal leads with
+the numerator's own glyph at cap height and closes on the baseline. Stacked takes the looser
+gap and bearing (0.14 / 0.045), diagonal the tighter (0.10 / 0.025) — which also suits diagonal
+being the wider construction. Do not `copy(style = …)` one preset onto another style.
+
+Diagonal costs ~3.6 pt more width than stacked and so seats inline slightly less often;
+"Dimension arrows" at Small (3 pt) returns 2 pt of that.
+
 ### feat: Runout tab pins its preview and leads with the export controls
 
 The preview scrolled away with everything else, so changing a component's station count —

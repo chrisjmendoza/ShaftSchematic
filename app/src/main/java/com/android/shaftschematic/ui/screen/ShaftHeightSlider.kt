@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.drawnShaftHeightPt
 import com.android.shaftschematic.geom.exaggeratedProfileScale
@@ -40,6 +41,7 @@ import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_MEDIUM_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
+import com.android.shaftschematic.util.FractionStyle
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -206,6 +208,55 @@ internal fun DimensionArrowSizeChips(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * The "Fractions" style picker, shared by both PDF options sheets and Settings → Drawing —
+ * ONE `PdfPrefs.fractionStyle` behind all three.
+ *
+ * It sits beside the drawing controls rather than under a text setting because it changes
+ * every drawn surface at once: the previews and the exported sheets both build their fractions
+ * through `util/FractionTextRenderer.kt`. A tap IS the commit — there is no drag channel and no
+ * [PreviewTuning] override; the preview re-renders from the stored value.
+ */
+@Composable
+internal fun FractionStyleChips(
+    fractionStyle: FractionStyle,
+    onCommit: (FractionStyle) -> Unit,
+) {
+    Column {
+        Text("Fractions", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FractionStyle.entries.forEach { style ->
+                FilterChip(
+                    selected = fractionStyle == style,
+                    onClick = { onCommit(style) },
+                    label = { Text(style.uiLabel()) },
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .testTag("fraction_style_${style.name.lowercase()}"),
+                )
+            }
+        }
+        Text(
+            fractionStyleHint(fractionStyle),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** One-line description of what the selected style draws. */
+private fun fractionStyleHint(style: FractionStyle): String = when (style) {
+    FractionStyle.STACKED ->
+        "Numerator over denominator with a bar, the shop-ruler fraction. Applies to previews " +
+            "and exported sheets alike."
+    FractionStyle.DIAGONAL ->
+        "Raised numerator, slanted divider, denominator on the line. Wider than stacked, and " +
+            "easier to read at small print sizes."
+    FractionStyle.INLINE ->
+        "Plain text: 3/16 on one line, no built-up fraction."
 }
 
 /** Chip label for one of `PDF_ARROW_SIZES_PT` — nearest wins, so a stray stored value still reads. */

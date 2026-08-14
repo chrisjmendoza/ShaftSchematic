@@ -139,6 +139,7 @@ fun SettingsRoute(
     val pdfCurveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
+    val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -316,6 +317,14 @@ fun SettingsRoute(
                     DimensionArrowSizeChips(
                         arrowSizePt = pdfArrowSizePt,
                         onCommit = { vm.setPdfArrowSizePt(it) },
+                    )
+
+                    // Same picker both PDF options sheets carry — one PdfPrefs.fractionStyle.
+                    // Unlike the rest of this section it also restyles the on-screen sheets:
+                    // one renderer draws every fraction in the app.
+                    FractionStyleChips(
+                        fractionStyle = pdfFractionStyle,
+                        onCommit = { vm.setPdfFractionStyle(it) },
                     )
 
                     HorizontalDivider()

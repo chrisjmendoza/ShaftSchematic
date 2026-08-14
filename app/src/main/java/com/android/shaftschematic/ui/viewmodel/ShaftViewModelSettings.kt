@@ -9,6 +9,7 @@ import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfTieringMode
+import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UndercutShadeColor
 import com.android.shaftschematic.util.UndercutShadeIntensity
@@ -107,6 +108,19 @@ fun ShaftViewModel.setPdfArrowSizePt(v: Float, persist: Boolean = true) {
     _pdfArrowSizePt.value = clamped
     SettingsStore.updatePdfPrefs { it.copy(arrowSizePt = clamped) }
     if (persist) viewModelScope.launch { SettingsStore.setPdfArrowSizePt(getApplication(), clamped) }
+}
+
+/**
+ * Wired to the PDF options sheets and Settings → Drawing → "Fractions".
+ *
+ * The `updatePdfPrefs` call is what actually changes the ink — it mirrors the choice into
+ * `FractionTypography.active`, which every draw site reads. The StateFlow exists so the UI can
+ * show the selection and so each preview's render inputs change, forcing a re-raster.
+ */
+fun ShaftViewModel.setPdfFractionStyle(style: FractionStyle, persist: Boolean = true) {
+    _pdfFractionStyle.value = style
+    SettingsStore.updatePdfPrefs { it.copy(fractionStyle = style) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfFractionStyle(getApplication(), style) }
 }
 
 fun ShaftViewModel.setPdfExportMode(mode: PdfExportMode, persist: Boolean = true) {

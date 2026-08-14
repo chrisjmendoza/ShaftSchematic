@@ -394,6 +394,41 @@ the cut gap — they can never disagree.
 PDF-only — the on-screen preview rasterizes the real PDF, so there is no separate
 draw path and no canvas equivalent to keep in sync. See `docs/PDF_EXPORT.md` §5.4.
 
+### Fractions are SET, never spelled
+Every drawn fraction goes through ONE construction — `util/FractionText.kt` (pure parser:
+plain / fraction / gap runs, no Android) feeding `util/FractionTextRenderer.kt` (the
+`Paint.measureRichText` + `Canvas.drawRichText` pair). `LengthFormat.formatInchesSmart`
+emits plain `n/d` for **every** denominator and never a Unicode vulgar glyph — a font only
+carries `¼ ½ ¾ ⅛ ⅜ ⅝ ⅞`, which is what let one sheet print a proper `⅝` beside a typed-out
+`11/16`. Do not reintroduce a vulgar-glyph map. Digits set at `digitScale` 0.64 with the
+bar on the **math axis** (half the base cap height above the baseline); that scale is the
+largest that keeps the stack inside the base font's own ascent/descent, so **no vertical
+layout budget changes** — `FractionTextRendererTest` renders to a bitmap and fails if a
+raise breaks it. A stack is NARROWER than the same characters inline, so **measure and
+draw convert together at every site**: measuring plain and drawing rich leaves a rail's
+value off-centre in its break (`ellipsizeToWidth(rich = …)` carries the same flag). The
+neighbour guard keeps dates (`12/25/2026`), decimals (`1.5/2`) and ratios (`1:12`) plain,
+but it CANNOT save a job number like `24/1138` — free-text footer fields (Customer /
+Vessel / Job # / Date) therefore stay on plain `drawText` by caller choice, and editable
+text (`dispKw`, numeric fields) is never prettified because it must round-trip through
+`parseFractionOrDecimal`. **Spacing is per-style** (`FractionTextStyle.Stacked`/`.Diagonal`/
+`.Plain`, via `forStyle` — never `copy(style = …)` one preset onto another): stacked leads with
+the BAR at mid-height, which binds to the preceding digit like a hyphen, and closes on a
+numerator row a trailing `"` attaches to, so it takes the looser numbers; diagonal leads with the
+numerator glyph at cap height and closes on the baseline, so it reads correctly tighter. A
+narrower construction also **seats more values inline** — the break costs
+`labelWidth + 2·textPad + 2·arrowSize`, so `PdfDimensionRenderer.textPad` is the shared
+`DIM_BREAK_TEXT_PAD_PT` (4 pt, the strip rails' gap), NOT a private 6 pt: padding wider than the
+value itself pushed short spans into the above-line fallback for nothing. The style is
+**user-set** — `PdfPrefs.fractionStyle`, Settings →
+Drawing → "Fractions" plus the same `FractionStyleChips` ungated in both PDF options sheets:
+**Stacked (default)** | Diagonal | Plain. Draw sites take NO style parameter; they read the
+process-wide `FractionTypography.active` mirror, whose ONLY writer is
+`SettingsStore.updatePdfPrefs` (the `SettingsStore.pdfPrefs` pattern — threading a uniform
+drawing decision through every composer's private draw functions costs more than it buys). That
+mirror is not snapshot state, so every preview's render-inputs record must carry `fractionStyle`
+as a **re-render key** or that tab keeps drawing the old style. See `FractionTypography.md`.
+
 ### Golden rule: user inputs are SACRED
 A value the user typed into a component field is kept **exactly as entered** — no system
 (snap, rounding, derivation, "helpful" adjustment) may rewrite it, no matter how small

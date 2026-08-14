@@ -132,6 +132,7 @@ fun WearRoute(
     val pdfShadedBodies    by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
+    val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
 
     val ctx = LocalContext.current
@@ -437,6 +438,7 @@ fun WearRoute(
                     pdfShadedTapers = pdfShadedTapers,
                     pdfShadedLiners = pdfShadedLiners,
                     vm = vm,
+                    fractionStyle = pdfFractionStyle,
                 )
             },
         )

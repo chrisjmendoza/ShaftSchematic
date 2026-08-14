@@ -79,6 +79,7 @@ import com.android.shaftschematic.ui.nav.appVersionFromContext
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.createPdfInTree
@@ -117,6 +118,8 @@ private data class ConsolidatedRenderInputs(
     val shadedLiners: Boolean,
     val sBreakThresholdFrac: Float,
     val arrowSizePt: Float,
+    /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
+    val fractionStyle: FractionStyle,
     val tieringMode: PdfTieringMode,
     val readings: RunoutReadings,
     val wearRecord: WearRecord,
@@ -165,6 +168,9 @@ fun OutputRoute(
     // Dimension-rail arrowhead size: a chip tap commits straight to PdfPrefs, so the render
     // loop needs it as an input key or the sheet would keep the old heads.
     val pdfArrowSizePt     by vm.pdfArrowSizePt.collectAsState()
+    // Fraction style: same posture — it reaches the ink through the renderer's active style,
+    // which the loop cannot observe, so it rides along as an input key.
+    val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfTieringMode     by vm.pdfTieringMode.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
@@ -400,6 +406,7 @@ fun OutputRoute(
                 shadedLiners = pdfShadedLiners,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
                 arrowSizePt = pdfArrowSizePt,
+                fractionStyle = pdfFractionStyle,
                 tieringMode = pdfTieringMode,
                 readings = runoutReadings,
                 wearRecord = wearRecord,
@@ -783,6 +790,7 @@ fun OutputRoute(
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     showDimensionArrows = true,
                     arrowSizePt = pdfArrowSizePt,
+                    fractionStyle = pdfFractionStyle,
                     tuning = tuning,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },

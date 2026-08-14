@@ -19,6 +19,8 @@ import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.FractionTypography
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
@@ -84,6 +86,7 @@ object SettingsStore {
     private val KEY_PDF_CURVE_HI_HEIGHT_IN = floatPreferencesKey("pdf_curve_hi_height_in")
     private val KEY_PDF_SBREAK_THRESHOLD_FRAC = floatPreferencesKey("pdf_sbreak_threshold_frac")
     private val KEY_PDF_ARROW_SIZE_PT = floatPreferencesKey("pdf_arrow_size_pt")
+    private val KEY_PDF_FRACTION_STYLE = stringPreferencesKey("pdf_fraction_style")
 
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
@@ -147,6 +150,14 @@ object SettingsStore {
     }
 
     // Dimension-rail arrowhead size (pt): one of PDF_ARROW_SIZES_PT.
+    // How a fraction is SET wherever the app draws one — previews included, since both draw
+    // families go through the one renderer.
+    fun pdfFractionStyleFlow(ctx: Context): Flow<FractionStyle> =
+        ctx.settingsDataStore.data.map { p -> FractionStyle.fromName(p[KEY_PDF_FRACTION_STYLE]) }
+    suspend fun setPdfFractionStyle(ctx: Context, style: FractionStyle) {
+        ctx.settingsDataStore.edit { it[KEY_PDF_FRACTION_STYLE] = style.name }
+    }
+
     fun pdfArrowSizePtFlow(ctx: Context): Flow<Float> =
         ctx.settingsDataStore.data.map { p -> p[KEY_PDF_ARROW_SIZE_PT] ?: PdfPrefs().arrowSizePt }
     suspend fun setPdfArrowSizePt(ctx: Context, v: Float) {
@@ -671,6 +682,11 @@ object SettingsStore {
         get() = _pdfPrefs
 
     fun updatePdfPrefs(transform: (PdfPrefs) -> PdfPrefs) {
-        _pdfPrefs = transform(_pdfPrefs).clamped()
+        val next = transform(_pdfPrefs).clamped()
+        _pdfPrefs = next
+        // The one writer of the fraction renderer's active style. Every draw site reads
+        // `FractionTypography.active` rather than taking the style as a parameter, so this
+        // mirror is what makes the Settings choice reach the ink.
+        FractionTypography.setStyle(next.fractionStyle)
     }
 }

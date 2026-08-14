@@ -99,6 +99,7 @@ import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.drawRichText
 
 /**
  * ComponentWearDetail
@@ -1140,7 +1141,7 @@ private fun DrawScope.drawDimSegment(x0: Float, x1: Float, y: Float, label: Stri
     drawLine(lineColor, Offset(lo, y), Offset(hi, y), strokeWidth = 1f)
     drawLine(lineColor, Offset(lo, y - tickH), Offset(lo, y + tickH), strokeWidth = 1f)
     drawLine(lineColor, Offset(hi, y - tickH), Offset(hi, y + tickH), strokeWidth = 1f)
-    drawContext.canvas.nativeCanvas.drawText(label, (lo + hi) / 2f, y - 6f, paint)
+    drawContext.canvas.nativeCanvas.drawRichText(label, (lo + hi) / 2f, y - 6f, paint)
 }
 
 /**

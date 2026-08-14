@@ -154,6 +154,7 @@ fun UndercutRoute(
     val pdfShadedBodies    by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
+    val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val undercutRecord     by vm.undercutRecord.collectAsState()
     val undercutStyle      by vm.undercutStyle.collectAsState()
 
@@ -646,6 +647,7 @@ fun UndercutRoute(
                     pdfShadedTapers = pdfShadedTapers,
                     pdfShadedLiners = pdfShadedLiners,
                     vm = vm,
+                    fractionStyle = pdfFractionStyle,
                 )
             },
         )

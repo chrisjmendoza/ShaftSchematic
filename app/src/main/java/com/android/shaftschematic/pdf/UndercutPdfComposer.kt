@@ -33,6 +33,8 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
+import com.android.shaftschematic.util.drawRichText
+import com.android.shaftschematic.util.measureRichText
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -477,18 +479,18 @@ private fun drawUndercutOalLine(
         // Same formatter as the schematic's OAL rail — inches print as mixed fractions
         // (falling back to 3 decimals), never raw 4-decimal.
         val label = "OAL: ${formatLenDim(oalMm.toDouble(), unit)}"
-        val lw = text.measureText(label)
+        val lw = text.measureRichText(label)
         val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
         if ((mid - gapHalf) - x0 >= arrowLen + 2f) {
             c.drawLine(x0, oalLineY, mid - gapHalf, oalLineY, dim)
             c.drawLine(mid + gapHalf, oalLineY, x1, oalLineY, dim)
             val fm = text.fontMetrics
-            c.drawText(label, mid - lw * 0.5f, oalLineY - (fm.ascent + fm.descent) * 0.5f, text)
+            c.drawRichText(label, mid - lw * 0.5f, oalLineY - (fm.ascent + fm.descent) * 0.5f, text)
         } else {
             // Span too short to host the break plus inward arrows: continuous line, label
             // above — PdfDimensionRenderer's fallback rule.
             c.drawLine(x0, oalLineY, x1, oalLineY, dim)
-            c.drawText(label, mid - lw * 0.5f, oalLineY - 4f, text)
+            c.drawRichText(label, mid - lw * 0.5f, oalLineY - 4f, text)
         }
     }
     c.drawLine(x0, oalLineY, x0 + arrowLen, oalLineY - arrowLen * 0.4f, dim)
@@ -880,7 +882,7 @@ private fun drawUndercutDetailStrip(
     val railLayout = layoutWearStripRail(
         railSpans,
         xAtStripMm = { mm -> xAtStrip(mm) },
-        labelWidthPt = { s -> dimText.measureText(s) },
+        labelWidthPt = { s -> dimText.measureRichText(s) },
     )
     val railPlan = planUndercutRailRows(railLayout, startedStrip, hasTotalRail = totalSpan != null)
     val inner = computeUndercutStripInnerLayout(
@@ -993,7 +995,7 @@ private fun drawUndercutDetailStrip(
         val totalLayout = layoutWearStripRail(
             listOf(totalSpan),
             xAtStripMm = { mm -> xAtStrip(mm) },
-            labelWidthPt = { s -> dimText.measureText(s) },
+            labelWidthPt = { s -> dimText.measureRichText(s) },
         )
         drawUndercutRail(
             c, dim, dimText, totalLayout,
@@ -1024,13 +1026,14 @@ private fun drawUndercutDetailStrip(
             buildUndercutStripTitle(linerTitle, linerAnchorLabel),
             titleText,
             stripRight - stripLeft,
+            rich = true,
         )
         if (linerAnchorAlignRight) {
             titleText.textAlign = Paint.Align.RIGHT
-            c.drawText(label, stripRight, titleBaselineY, titleText)
+            c.drawRichText(label, stripRight, titleBaselineY, titleText)
         } else {
             titleText.textAlign = Paint.Align.LEFT
-            c.drawText(label, stripLeft, titleBaselineY, titleText)
+            c.drawRichText(label, stripLeft, titleBaselineY, titleText)
         }
     } else if (spans.isNotEmpty()) {
         // Bare-shaft strip: no liner to reference, so the cut run itself anchors to the
@@ -1045,13 +1048,14 @@ private fun drawUndercutDetailStrip(
             buildUndercutStripTitle(null, buildUndercutAnchorLabel(anchor, unit)),
             titleText,
             stripRight - stripLeft,
+            rich = true,
         )
         if (anchor.alignRight) {
             titleText.textAlign = Paint.Align.RIGHT
-            c.drawText(label, stripRight, titleBaselineY, titleText)
+            c.drawRichText(label, stripRight, titleBaselineY, titleText)
         } else {
             titleText.textAlign = Paint.Align.LEFT
-            c.drawText(label, stripLeft, titleBaselineY, titleText)
+            c.drawRichText(label, stripLeft, titleBaselineY, titleText)
         }
     } else if (linerTitle != null) {
         // A liner strip can exist with no drawable cut (every assigned span clamped away):
@@ -1224,7 +1228,7 @@ private fun drawUndercutRail(
         c.drawLine(s.x0Pt, witnessBottomY, s.x0Pt, railY - witnessExt, dim)
         c.drawLine(s.x1Pt, witnessBottomY, s.x1Pt, railY - witnessExt, dim)
 
-        val lw = dimText.measureText(s.label)
+        val lw = dimText.measureRichText(s.label)
         val seatsInBreak = drawLabels && s.seatsInBreak
         if (seatsInBreak) {
             val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
@@ -1245,10 +1249,10 @@ private fun drawUndercutRail(
     val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = Color.WHITE }
     val fm = dimText.fontMetrics
     layout.forEach { s ->
-        val lw = dimText.measureText(s.label)
+        val lw = dimText.measureRichText(s.label)
         if (s.seatsInBreak) {
             // Break-seated: the gap already isolates the value from every line.
-            c.drawText(s.label, s.labelCxPt - lw * 0.5f, railY - (fm.ascent + fm.descent) * 0.5f, dimText)
+            c.drawRichText(s.label, s.labelCxPt - lw * 0.5f, railY - (fm.ascent + fm.descent) * 0.5f, dimText)
             return@forEach
         }
         val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
@@ -1268,7 +1272,7 @@ private fun drawUndercutRail(
             s.labelCxPt + lw * 0.5f + 1.5f, baselineY + fm.descent + 0.5f,
             halo,
         )
-        c.drawText(s.label, s.labelCxPt - lw * 0.5f, baselineY, dimText)
+        c.drawRichText(s.label, s.labelCxPt - lw * 0.5f, baselineY, dimText)
     }
 }
 

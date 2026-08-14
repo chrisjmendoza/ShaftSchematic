@@ -7,7 +7,7 @@ Project-wide invariants live in `CLAUDE.md`; repo-level references (architecture
 data model, validation, glossary, roadmap) live in `docs/` at the repo root.
 
 **v1.0 consolidation:** the pack was reorganized from 31 micro-docs down to the
-per-subsystem contracts below (16 at the time, **18** today) — per-file API restatements
+per-subsystem contracts below (16 at the time, **19** today) — per-file API restatements
 were merged into subsystem contracts or deleted where they merely mirrored code.
 (Sweep record in git history.) Design plans (`*_PLAN.md`) are not contracts; each is
 listed under the contract it belongs to.
@@ -49,6 +49,9 @@ listed under the contract it belongs to.
   chained + total dimension rails. Design plan: `UndercutDrawing_PLAN.md`.
 - **PdfExport.md** — export route (SAF, Letter landscape 792×612) and PDF preview
   screen (options sheet, orientation unlock). Composer pipeline: `docs/PDF_EXPORT.md`.
+- **FractionTypography.md** — how a fraction is SET wherever the app draws one: the pure
+  parser + the one Canvas renderer behind every drawn fraction, the Stacked/Diagonal/Plain
+  setting and its process-wide mirror, and why measure and draw must convert together.
 
 ## State & persistence
 

@@ -29,6 +29,7 @@ import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.clampPitAcrossFrac
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.resolveComponents
+import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorPreset
@@ -260,6 +261,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // rasterizes with the current PdfPrefs.
     internal val _pdfArrowSizePt = MutableStateFlow(PdfPrefs().arrowSizePt)
     val pdfArrowSizePt: StateFlow<Float> = _pdfArrowSizePt.asStateFlow()
+
+    // How a fraction is SET on every drawn surface. Also a preview re-render key on every tab
+    // that rasterizes — the style itself reaches the draw sites via `FractionTypography.active`,
+    // which is not snapshot state.
+    internal val _pdfFractionStyle = MutableStateFlow(PdfPrefs().fractionStyle)
+    val pdfFractionStyle: StateFlow<FractionStyle> = _pdfFractionStyle.asStateFlow()
 
     internal val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
@@ -1189,6 +1196,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfArrowSizePtFlow(getApplication()).collectLatest { persisted ->
                 _pdfArrowSizePt.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(arrowSizePt = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfFractionStyleFlow(getApplication()).collectLatest { persisted ->
+                _pdfFractionStyle.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(fractionStyle = persisted) }
             }
         }
         viewModelScope.launch {

@@ -3,7 +3,10 @@ package com.android.shaftschematic.pdf.render
 import android.graphics.Canvas
 import android.graphics.Paint
 import com.android.shaftschematic.geom.DimensionRailLayout
+import com.android.shaftschematic.pdf.DIM_BREAK_TEXT_PAD_PT
 import com.android.shaftschematic.pdf.dim.DimSpan
+import com.android.shaftschematic.util.drawRichText
+import com.android.shaftschematic.util.measureRichText
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -41,7 +44,17 @@ class PdfDimensionRenderer(
     private val objectClearance: Float = 6f,
     private val textAboveDy: Float = 12f,   // fallback (label-above-line) baseline offset; primary path seats the label in the line break
     private val arrowSize: Float = 4f,      // arrowhead length along the line
-    private val textPad: Float = 6f,        // left/right text padding inside a span
+    /**
+     * Left/right clearance between the value and the line stubs it sits between — the same
+     * `DIM_BREAK_TEXT_PAD_PT` the wear/undercut strip rails cut, so one gap convention serves
+     * every rail in the app.
+     *
+     * It is not only cosmetic: the break costs `labelWidth + 2·textPad`, and a span must afford
+     * that plus an arrowhead on each stub to seat its value inline at all. Padding wider than
+     * the value itself pushes short spans into the above-line fallback for no gain in legibility
+     * (on-device report: a value that plainly fitted its rail printed above it).
+     */
+    private val textPad: Float = DIM_BREAK_TEXT_PAD_PT,
     private val blankLabels: Boolean = false, // blank-draft: cut the break, draw no value text
     private val blankLabelWidthPx: Float = 46f,
     private val blankLabelMinWidthPx: Float = 28f, // smallest write-in gap still worth cutting
@@ -62,7 +75,10 @@ class PdfDimensionRenderer(
                 arrowSize = arrowSize,
             )
         } else {
-            textPaint.measureText(span.labelTop)
+            // Rich measure: a value carrying a fraction is set as a built-up stack, which is
+            // NARROWER than the same characters inline. Measuring plain here would over-reserve
+            // the break and leave the value floating off-centre in it.
+            textPaint.measureRichText(span.labelTop)
         }
 
     /** Text box metrics the planner needs, read live from this renderer's text paint. */
@@ -148,7 +164,7 @@ class PdfDimensionRenderer(
         val baseline = bounds.top - textPaint.fontMetrics.ascent
         val prevAlign = textPaint.textAlign
         textPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText(label, bounds.centerX, baseline, textPaint)
+        canvas.drawRichText(label, bounds.centerX, baseline, textPaint)
         textPaint.textAlign = prevAlign
     }
 

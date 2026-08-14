@@ -22,6 +22,8 @@ import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
+import com.android.shaftschematic.util.drawRichText
+import com.android.shaftschematic.util.measureRichText
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -416,18 +418,18 @@ private fun drawWearOalLine(
         // Same formatter as the schematic's OAL rail — inches print as mixed fractions
         // (falling back to 3 decimals), never raw 4-decimal.
         val label = "OAL: ${formatLenDim(oalMm.toDouble(), unit)}"
-        val lw = text.measureText(label)
+        val lw = text.measureRichText(label)
         val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
         if ((mid - gapHalf) - x0 >= arrowLen + 2f) {
             c.drawLine(x0, oalLineY, mid - gapHalf, oalLineY, dim)
             c.drawLine(mid + gapHalf, oalLineY, x1, oalLineY, dim)
             val fm = text.fontMetrics
-            c.drawText(label, mid - lw * 0.5f, oalLineY - (fm.ascent + fm.descent) * 0.5f, text)
+            c.drawRichText(label, mid - lw * 0.5f, oalLineY - (fm.ascent + fm.descent) * 0.5f, text)
         } else {
             // Fallback for a span too short to host the break + inward arrows: continuous
             // line, label above — mirrors PdfDimensionRenderer's fallback rule.
             c.drawLine(x0, oalLineY, x1, oalLineY, dim)
-            c.drawText(label, mid - lw * 0.5f, oalLineY - 4f, text)
+            c.drawRichText(label, mid - lw * 0.5f, oalLineY - 4f, text)
         }
     }
     c.drawLine(x0, oalLineY, x0 + arrowLen, oalLineY - arrowLen * 0.4f, dim)
@@ -938,7 +940,7 @@ private fun drawWearDetailStrip(
     val railLayout = layoutWearStripRail(
         railSpans,
         xAtStripMm = { mm -> xAtStrip(aftMm + mm) },
-        labelWidthPt = { s -> dimText.measureText(s) },
+        labelWidthPt = { s -> dimText.measureRichText(s) },
     )
     // Blank draft: the rail's dimension lines still draw, the value labels do not — the machinist
     // writes the measured figures under the rail by hand. And with no wear bands at all the rail
@@ -1030,14 +1032,14 @@ private fun drawWearStripRail(
         // Value-in-a-break when the label fits its span (the layout's seatsInBreak guarantees
         // the break's stubs still have arrow room); otherwise a continuous line with the
         // below-line fallback row — the schematic's value-in-a-break rule, mirrored.
-        val lw = dimText.measureText(s.label)
+        val lw = dimText.measureRichText(s.label)
         val seatsInBreak = drawLabels && s.seatsInBreak
         if (seatsInBreak) {
             val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
             c.drawLine(s.x0Pt, railY, s.labelCxPt - gapHalf, railY, dim)
             c.drawLine(s.labelCxPt + gapHalf, railY, s.x1Pt, railY, dim)
             val fm = dimText.fontMetrics
-            c.drawText(s.label, s.labelCxPt - lw * 0.5f, railY - (fm.ascent + fm.descent) * 0.5f, dimText)
+            c.drawRichText(s.label, s.labelCxPt - lw * 0.5f, railY - (fm.ascent + fm.descent) * 0.5f, dimText)
         } else {
             c.drawLine(s.x0Pt, railY, s.x1Pt, railY, dim)
         }
@@ -1053,7 +1055,7 @@ private fun drawWearStripRail(
             val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
             if (row >= 0) {
                 val ly = railY + labelGapPt + dimText.textSize + row * rowStepPt
-                c.drawText(s.label, s.labelCxPt - lw * 0.5f, ly, dimText)
+                c.drawRichText(s.label, s.labelCxPt - lw * 0.5f, ly, dimText)
             }
         }
     }

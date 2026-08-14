@@ -235,6 +235,18 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   long (`canFitInwardArrows`), so an inline span always keeps inward arrows aligned with
   the value. Eligibility is decided from **x-geometry alone**, so the set of fallback
   spans is known before any vertical budget is chosen.
+  - In full: a span seats its value only if it affords
+    `labelWidth + 2·textPad + 2·arrowSize`. **Both other terms are therefore fit budget,
+    not just cosmetics.** `textPad` is the shared `DIM_BREAK_TEXT_PAD_PT` (4 pt) — the same
+    gap the wear/undercut strip rails cut, so one convention serves every rail. It was
+    formerly a private 6 pt here, which is wider *per side* than a 16 pt value is across,
+    and it pushed values that plainly fitted their rail into the fallback (on-device
+    report). Do not restore a renderer-local pad.
+  - `labelWidth` is the **rich** width (`Paint.measureRichText`): a built-up fraction is
+    narrower than its characters inline, so the fraction typography widened eligibility as
+    a side effect. Diagonal fractions cost ~3.6 pt more than stacked and seat slightly less
+    often; a Small arrowhead returns 2 pt of that. See
+    `app/.../docs/FractionTypography.md`.
 - **Fallback path.** A span too short for that reverts to the original behavior: one
   continuous line `xa → xb`, with the value floating above it at baseline
   `y - textAboveDy`. It keeps its inward arrows — see below.

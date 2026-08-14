@@ -44,7 +44,9 @@ import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.formatRunoutValue
+import com.android.shaftschematic.util.measureRichText
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -1021,18 +1023,18 @@ private fun drawOalSpanLine(
         // Same formatter as the schematic's OAL rail — inches print as mixed fractions
         // (falling back to 3 decimals), never raw 4-decimal.
         val label = "OAL: ${formatLenDim(oalMm.toDouble(), unit)}"
-        val lw = text.measureText(label)
+        val lw = text.measureRichText(label)
         val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
         if ((mid - gapHalf) - x0 >= arrowLen + 2f) {
             c.drawLine(x0, y, mid - gapHalf, y, dim)
             c.drawLine(mid + gapHalf, y, x1, y, dim)
             val fm = text.fontMetrics
-            c.drawText(label, mid - lw * 0.5f, y - (fm.ascent + fm.descent) * 0.5f, text)
+            c.drawRichText(label, mid - lw * 0.5f, y - (fm.ascent + fm.descent) * 0.5f, text)
         } else {
             // Fallback for a span too short to host the break + inward arrows: continuous
             // line, label above — mirrors PdfDimensionRenderer's fallback rule.
             c.drawLine(x0, y, x1, y, dim)
-            c.drawText(label, mid - lw * 0.5f, y - 4f, text)
+            c.drawRichText(label, mid - lw * 0.5f, y - 4f, text)
         }
     }
     // Left arrowhead

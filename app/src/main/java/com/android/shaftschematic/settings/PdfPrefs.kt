@@ -1,5 +1,7 @@
 package com.android.shaftschematic.settings
 
+import com.android.shaftschematic.util.FractionStyle
+
 /**
  * Controls how liner dimension rails are anchored in the PDF export.
  */
@@ -73,6 +75,16 @@ data class PdfPrefs(
      * are chained inside a strip, not stacked over the drawing.
      */
     val arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
+    /**
+     * How a fraction is SET wherever the app draws one — Settings → Drawing → "Fractions".
+     * Unlike the other fields here this reaches the previews as well as the PDFs, because both
+     * draw families go through the one renderer (`util/FractionTextRenderer.kt`); it is a
+     * drawing pref, and `PdfPrefs` is where the drawing prefs live.
+     *
+     * `SettingsStore.updatePdfPrefs` mirrors it into `FractionTypography.active`, which is what
+     * the draw sites actually read.
+     */
+    val fractionStyle: FractionStyle = FractionStyle.STACKED,
 ) {
     /** The anchor heights in PDF points (72 pt per paper inch) — what the geometry consumes. */
     val curveLoHeightPt: Float get() = curveLoHeightIn * 72f

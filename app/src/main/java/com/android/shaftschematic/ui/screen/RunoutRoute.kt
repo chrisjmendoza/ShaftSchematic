@@ -127,6 +127,7 @@ import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.runoutComponentSpans
+import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.inkBand
@@ -168,6 +169,9 @@ fun RunoutRoute(
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    // Fraction style: a chip tap changes the renderer's active style, which the render loop
+    // cannot observe, so it rides along as an input key.
+    val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
 
     // Which bubble's editor dialog is open, if any (component id + station index + display title).
@@ -259,6 +263,7 @@ fun RunoutRoute(
                 shadedTapers = pdfShadedTapers,
                 shadedLiners = pdfShadedLiners,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                fractionStyle = pdfFractionStyle,
                 readings = runoutReadings,
                 blankValues = blankDraft,
                 draft = tuning.active,
@@ -615,6 +620,7 @@ fun RunoutRoute(
                     vm = vm,
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
+                    fractionStyle = pdfFractionStyle,
                     tuning = tuning,
                 )
             },
@@ -661,6 +667,8 @@ private data class RunoutRenderInputs(
     val shadedTapers: Boolean,
     val shadedLiners: Boolean,
     val sBreakThresholdFrac: Float,
+    /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
+    val fractionStyle: FractionStyle,
     val readings: RunoutReadings,
     val blankValues: Boolean,
     /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
@@ -1148,6 +1156,11 @@ internal fun RunoutWearOptionsSheet(
     /** The app-wide `PdfPrefs.arrowSizePt`; read only when [showDimensionArrows]. */
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
     /**
+     * The app-wide `PdfPrefs.fractionStyle`. Ungated, unlike the arrowhead size: every document
+     * this sheet serves prints lengths, so every one of them draws fractions.
+     */
+    fractionStyle: FractionStyle = FractionStyle.STACKED,
+    /**
      * Live-tuning sink for a preview that reshapes under the finger: each slider reports
      * its in-progress value here. Visual only — the commit path is unchanged and nothing
      * persists on a drag frame. Null (the default) on surfaces that don't tune live.
@@ -1250,6 +1263,17 @@ internal fun RunoutWearOptionsSheet(
             HorizontalDivider()
             Spacer(Modifier.height(12.dp))
         }
+
+        // ── Fractions ────────────────────────────────────────────────────────
+        // Ungated: every document this sheet serves prints lengths.
+        FractionStyleChips(
+            fractionStyle = fractionStyle,
+            onCommit = { vm.setPdfFractionStyle(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
 
         // ── Shaft height / Liner compression ────────────────────────────────
         // Same per-job pair as the Consolidated Output tab (`RunoutConfig`).

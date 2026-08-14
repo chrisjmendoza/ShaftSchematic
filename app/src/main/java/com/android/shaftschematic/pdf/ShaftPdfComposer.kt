@@ -47,6 +47,8 @@ import com.android.shaftschematic.util.buildBodyTitleById
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.buildTaperTitleById
 import com.android.shaftschematic.util.buildThreadTitleById
+import com.android.shaftschematic.util.drawRichText
+import com.android.shaftschematic.util.measureRichText
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.abs
@@ -1243,7 +1245,9 @@ internal fun drawFooter(
         if (blankValues && (line.endsWith(":") || line.endsWith("Ø"))) {
             drawLabelWithRule(c, line, x, y, text, ruleWidth = maxW, maxRight = x + maxW)
         } else {
-            c.drawText(ellipsizeToWidth(line, text, maxW), x, y, text)
+            // Rich: footer spec lines carry the shop fractions ("Length: 12 5/8\"",
+            // "KW: 1/4 × 1/8 × 2\"") and must set them the way the rails do.
+            c.drawRichText(ellipsizeToWidth(line, text, maxW, rich = true), x, y, text)
         }
     }
 
@@ -1582,12 +1586,18 @@ internal fun ShaftSpec.bodyForPdf(b: ResolvedBody): Body = Body(
 /**
  * Truncates [text] with an ellipsis so it fits within [maxWidth] points. Footer columns sit
  * at fixed x positions; long customer/vessel names must never overrun the next column.
+ *
+ * [rich] must match how the caller will DRAW the result: a built-up fraction is narrower than
+ * its characters inline, so measuring plain and drawing rich clips a line that actually fits.
+ * It stays off by default because the free-text footer fields are drawn plain on purpose —
+ * a job number like `24/1138` is not a fraction and must never be set as one.
  */
-internal fun ellipsizeToWidth(text: String, paint: Paint, maxWidth: Float): String {
-    if (maxWidth <= 0f || paint.measureText(text) <= maxWidth) return text
+internal fun ellipsizeToWidth(text: String, paint: Paint, maxWidth: Float, rich: Boolean = false): String {
+    fun width(s: String) = if (rich) paint.measureRichText(s) else paint.measureText(s)
+    if (maxWidth <= 0f || width(text) <= maxWidth) return text
     val ellipsis = "…"
     var end = text.length
-    while (end > 0 && paint.measureText(text.substring(0, end) + ellipsis) > maxWidth) end--
+    while (end > 0 && width(text.substring(0, end) + ellipsis) > maxWidth) end--
     return text.substring(0, end).trimEnd() + ellipsis
 }
 
