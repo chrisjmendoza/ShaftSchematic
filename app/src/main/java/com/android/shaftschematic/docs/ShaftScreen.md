@@ -35,6 +35,13 @@ Responsibilities
   indicator. The strip consumes the status-bar inset; the TopAppBar below it is given
   `WindowInsets(0, 0, 0, 0)` so the inset is not applied twice.
 
+  The strip is the shared `EditorDocumentTitle` composable
+  (`ui/screen/EditorDocumentTitle.kt`) — **every** editor tab renders it, not just the
+  Schematic. See `Navigation.md` § "Document title strip". It applies no window insets of
+  its own: this site passes the status-bar inset modifier, the other tabs already sit
+  inside a `systemBarsPadding()` column and pass nothing. The string comes from the pure
+  `editorDocumentTitleText`, so the format is asserted without a Compose harness.
+
 - **Header Row (TopAppBar):**  
   - Hamburger icon → opens the editor sidebar (Schematic / Runout / Wear tabs)
   - Undo/Redo history menu (`HistoryMenu`) — general session-scoped undo/redo

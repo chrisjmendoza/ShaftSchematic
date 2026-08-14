@@ -8,6 +8,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### feat: the document title (and Save) now appear on every editor tab
+
+Only the Schematic told you which document was open and whether it had unsaved changes.
+Change the station count on a bubble, drop a wear pit, or add an undercut and the work was
+just as unsaved — but the tab you were looking at said nothing about it (on-device report).
+
+The dirty flag itself was already correct: `ShaftViewModel.hasUnsavedChanges` compares a
+full session snapshot that includes the runout config and readings, the wear record, and
+the undercut record. It simply had one render site. The strip is now the shared
+`EditorDocumentTitle` composable, drawn above the toolbar on the Runout, Wear, Undercut,
+and Consolidated Output tabs as well.
+
+Each of those four tabs also gains a **Save** icon at the trailing edge of its toolbar,
+reusing the Schematic's `onSave` (quick-save when named, the save-name screen when not).
+Without it the asterisk would report unsaved work on a tab with nowhere to act on it —
+Save lived only in the Schematic toolbar and was not in the sidebar either.
+
 ### fix: dimension arrows stop turning outward on spans with room to spare
 
 On-device report from a blank (write-in) inspection sheet: rails printed their arrowheads

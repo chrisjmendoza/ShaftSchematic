@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
@@ -136,8 +137,12 @@ import kotlin.math.roundToInt
 fun UndercutRoute(
     vm: ShaftViewModel,
     onOpenSidebar: () -> Unit = {},
+    /** Quick-save the document (prompts for a name when it has never been saved). */
+    onSave: () -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
+    val currentDocumentName by vm.currentDocumentName.collectAsState()
+    val hasUnsavedChanges  by vm.hasUnsavedChanges.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
     val unit               by vm.unit.collectAsState()
     val customer           by vm.customer.collectAsState()
@@ -307,6 +312,14 @@ fun UndercutRoute(
     // ── Main UI ─────────────────────────────────────────────────────────────
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
 
+        // ── Document title strip ─────────────────────────────────────────────
+        // Adding or editing an undercut here is unsaved work exactly like a spec edit,
+        // so the asterisk belongs on this tab too.
+        EditorDocumentTitle(
+            documentName = currentDocumentName,
+            hasUnsavedChanges = hasUnsavedChanges,
+        )
+
         // ── Toolbar ──────────────────────────────────────────────────────────
         Row(
             modifier = Modifier
@@ -323,6 +336,13 @@ fun UndercutRoute(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(start = 4.dp),
             )
+            Spacer(Modifier.weight(1f))
+            IconButton(
+                onClick = onSave,
+                modifier = Modifier.testTag("toolbar_save"),
+            ) {
+                Icon(Icons.Filled.Save, contentDescription = "Save")
+            }
         }
 
         HorizontalDivider()

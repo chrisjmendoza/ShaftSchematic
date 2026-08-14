@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
@@ -58,6 +59,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
@@ -113,8 +115,12 @@ import kotlinx.coroutines.withContext
 fun WearRoute(
     vm: ShaftViewModel,
     onOpenSidebar: () -> Unit = {},
+    /** Quick-save the document (prompts for a name when it has never been saved). */
+    onSave: () -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
+    val currentDocumentName by vm.currentDocumentName.collectAsState()
+    val hasUnsavedChanges  by vm.hasUnsavedChanges.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
     val unit               by vm.unit.collectAsState()
     val customer           by vm.customer.collectAsState()
@@ -220,6 +226,14 @@ fun WearRoute(
     // ── Main UI ─────────────────────────────────────────────────────────────
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
 
+        // ── Document title strip ─────────────────────────────────────────────
+        // Placing a wear spot, pit, or Ø reading here is unsaved work exactly like a
+        // spec edit, so the asterisk belongs on this tab too.
+        EditorDocumentTitle(
+            documentName = currentDocumentName,
+            hasUnsavedChanges = hasUnsavedChanges,
+        )
+
         // ── Toolbar ──────────────────────────────────────────────────────────
         Row(
             modifier = Modifier
@@ -236,6 +250,13 @@ fun WearRoute(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(start = 4.dp),
             )
+            Spacer(Modifier.weight(1f))
+            IconButton(
+                onClick = onSave,
+                modifier = Modifier.testTag("toolbar_save"),
+            ) {
+                Icon(Icons.Filled.Save, contentDescription = "Save")
+            }
         }
 
         HorizontalDivider()

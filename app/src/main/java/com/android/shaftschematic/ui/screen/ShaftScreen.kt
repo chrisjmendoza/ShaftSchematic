@@ -89,7 +89,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
-import com.android.shaftschematic.doc.stripShaftDocExtension
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.MM_PER_IN
@@ -311,21 +310,12 @@ fun ShaftScreen(
             // Document title strip — desktop-editor style: the current file name (or
             // "Untitled draft") with a trailing asterisk while there are unsaved changes.
             // Sits above the action bar, so it also makes the saved-vs-draft state visible.
-            Text(
-                text = buildString {
-                    append(documentName?.let(::stripShaftDocExtension) ?: "Untitled draft")
-                    if (hasUnsavedChanges) append(" *")
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(horizontal = 16.dp, vertical = 2.dp)
-                    .testTag("editor_document_title"),
+            // Shared with the Runout/Wear/Undercut/Output tabs; this site owns the
+            // status-bar inset (the TopAppBar below zeroes its own).
+            EditorDocumentTitle(
+                documentName = documentName,
+                hasUnsavedChanges = hasUnsavedChanges,
+                modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars),
             )
             TopAppBar(
                 // Status-bar inset is consumed by the title strip above; the default TopAppBar

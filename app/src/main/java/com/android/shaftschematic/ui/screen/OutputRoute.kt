@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
@@ -140,8 +141,12 @@ fun OutputRoute(
     onOpenSidebar: () -> Unit = {},
     /** Switch the editor to the Runout tab — the full bubble authoring surface. */
     onOpenRunoutTab: () -> Unit = {},
+    /** Quick-save the document (prompts for a name when it has never been saved). */
+    onSave: () -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
+    val currentDocumentName by vm.currentDocumentName.collectAsState()
+    val hasUnsavedChanges  by vm.hasUnsavedChanges.collectAsState()
     val runoutConfig       by vm.runoutConfig.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
     val unit               by vm.unit.collectAsState()
@@ -438,6 +443,14 @@ fun OutputRoute(
 
     // ── Screen ────────────────────────────────────────────────────────────────
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+        // ── Document title strip ─────────────────────────────────────────────
+        // Worn sections, the height slider, and the content election are all per-job
+        // state, so the asterisk belongs on this tab too.
+        EditorDocumentTitle(
+            documentName = currentDocumentName,
+            hasUnsavedChanges = hasUnsavedChanges,
+        )
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -453,6 +466,13 @@ fun OutputRoute(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(start = 4.dp),
             )
+            Spacer(Modifier.weight(1f))
+            IconButton(
+                onClick = onSave,
+                modifier = Modifier.testTag("toolbar_save"),
+            ) {
+                Icon(Icons.Filled.Save, contentDescription = "Save")
+            }
         }
 
         HorizontalDivider()

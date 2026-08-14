@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
@@ -68,6 +69,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -147,8 +149,12 @@ import kotlin.math.roundToInt
 fun RunoutRoute(
     vm: ShaftViewModel,
     onOpenSidebar: () -> Unit = {},
+    /** Quick-save the document (prompts for a name when it has never been saved). */
+    onSave: () -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
+    val currentDocumentName by vm.currentDocumentName.collectAsState()
+    val hasUnsavedChanges  by vm.hasUnsavedChanges.collectAsState()
     val runoutConfig       by vm.runoutConfig.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
     val unit               by vm.unit.collectAsState()
@@ -333,6 +339,14 @@ fun RunoutRoute(
     // ── Screen ────────────────────────────────────────────────────────────────
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
 
+        // ── Document title strip ─────────────────────────────────────────────
+        // Editing station counts or typing a TIR reading here is unsaved work exactly
+        // like a spec edit, so the asterisk belongs on this tab too.
+        EditorDocumentTitle(
+            documentName = currentDocumentName,
+            hasUnsavedChanges = hasUnsavedChanges,
+        )
+
         // ── Toolbar ──────────────────────────────────────────────────────────
         Row(
             modifier = Modifier
@@ -349,6 +363,13 @@ fun RunoutRoute(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(start = 4.dp),
             )
+            Spacer(Modifier.weight(1f))
+            IconButton(
+                onClick = onSave,
+                modifier = Modifier.testTag("toolbar_save"),
+            ) {
+                Icon(Icons.Filled.Save, contentDescription = "Save")
+            }
         }
 
         HorizontalDivider()

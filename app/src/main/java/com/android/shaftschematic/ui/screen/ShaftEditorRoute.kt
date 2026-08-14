@@ -92,22 +92,26 @@ fun ShaftEditorRoute(
             EditorTab.RUNOUT -> RunoutRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
+                onSave = onSave,
             )
 
             EditorTab.WEAR -> WearRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
+                onSave = onSave,
             )
 
             EditorTab.UNDERCUT -> UndercutRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
+                onSave = onSave,
             )
 
             EditorTab.OUTPUT -> OutputRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
                 onOpenRunoutTab = { activeTab = EditorTab.RUNOUT },
+                onSave = onSave,
             )
         }
 

@@ -6,7 +6,7 @@ ShaftEditorRoute.kt, ShaftRoute.kt, StartScreen.kt, RunoutRoute.kt, WearRoute.kt
 UndercutRoute.kt, HelpRoute.kt (ui/screen/)  
 Layer: UI → Nav
 
-Version: v0.7 (2026-08-06)
+Version: v0.8 (2026-08-14)
 
 Invariants
 - Routes are stable, typed constants or sealed routes.
@@ -52,6 +52,25 @@ Responsibilities
   `continueDraft(id)`, X icon → "Discard this draft?" confirm → `discardDraft(id)`),
   entry to editor/settings. AppNav wires `drafts`/`continueDraft`/`discardDraft`
   from the VM. See `docs/Persistence.md` (Autosave / draft ring).
+
+Document title strip (`ui/screen/EditorDocumentTitle.kt`)
+- **Every** editor tab renders `EditorDocumentTitle` directly above its toolbar: the saved
+  file name (extension stripped) or "Untitled draft", plus a trailing ` *` while
+  `ShaftViewModel.hasUnsavedChanges` is true. `testTag("editor_document_title")`.
+- Runout station counts / TIR readings, wear spots / pits / Ø readings, undercuts, and the
+  Consolidated tab's worn sections and per-job sliders are all part of the same
+  full-session snapshot the dirty flag compares
+  (`ShaftViewModel.hasUnsavedChanges`, `docs/ShaftViewModel.md`), so editing on any tab
+  raises the asterisk exactly like a spec edit. Surfacing it on only one tab is the bug
+  this replaced.
+- Each non-Schematic tab also carries a **Save** icon at the trailing edge of its toolbar
+  (`testTag("toolbar_save")`, same tag and same `onSave` lambda as the Schematic's), so
+  the asterisk is actionable where it is seen — otherwise the user must navigate back to
+  the Schematic to save. `onSave` is plumbed from `AppNav` through `ShaftEditorRoute`; it
+  quick-saves a named document and routes to `saveLocal` for an unnamed one.
+- The composable applies **no window insets of its own** — the caller owns them.
+  `ShaftScreen` passes the status-bar inset (its `TopAppBar` then zeroes its own); the
+  other four tabs already sit inside a `systemBarsPadding()` column and pass nothing.
 
 Unsaved-changes guard (`AppNav.kt`)
 - A single `runGuarded(action)` helper + one shared `UnsavedChangesDialog`, hoisted to
