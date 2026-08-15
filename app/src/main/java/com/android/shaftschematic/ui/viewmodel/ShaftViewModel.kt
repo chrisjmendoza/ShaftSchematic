@@ -407,7 +407,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Override the number of runout bubbles for a specific component.
      * Pass `count = null` to remove the override and revert to the computed default.
-     * Minimum effective count is 1 for components that normally show bubbles.
+     * `0` is a valid override — the component is not being measured, so it draws no
+     * bubbles (on-device request). Readings keyed to a zeroed component are kept and
+     * simply not drawn (the render-layer orphan rule), so raising the count restores
+     * them.
      */
     fun setRunoutBubbleCount(componentId: String, count: Int?) {
         _runoutConfig.update { cfg ->
@@ -415,7 +418,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             if (count == null) {
                 overrides.remove(componentId)
             } else {
-                overrides[componentId] = count.coerceAtLeast(1)
+                overrides[componentId] = count.coerceAtLeast(0)
             }
             cfg.copy(componentOverrides = overrides)
         }

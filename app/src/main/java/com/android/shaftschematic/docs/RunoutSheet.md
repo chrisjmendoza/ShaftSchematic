@@ -35,7 +35,10 @@
 
 ### RunoutRoute
 - Let the user set TIR orientation (Looking AFT / Looking FORWARD / Not set).
-- Let the user override the station count per component (bodies, tapers, liners).
+- Let the user override the station count per component (bodies, tapers, liners), down
+  to **0** — a component not being measured draws no bubbles on the canvas or either PDF
+  (`collectRunoutStations` skips counts ≤ 0). Readings keyed to a zeroed component are
+  kept, undrawn (the render-layer orphan rule), and reappear if the count is raised.
 - Render a live canvas preview of the shaft with runout bubbles.
 - **Tap a bubble to record its TIR value + high-spot marker** — see "Runout Bubble Editor" below.
 - Export a fill-in PDF runout sheet via SAF (any recorded values/markers are printed in place).

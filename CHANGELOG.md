@@ -8,6 +8,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### feat: station counts go to 0 — skip the bubbles on components not being measured
+
+The runout station editor's − button stopped at 1, so every body, taper, and liner always
+carried at least one bubble whether or not it was going to be measured (on-device request:
+"I need to be able to set bubbles to 0 on any section in case I'm not measuring them").
+
+A count of 0 is now a legal override: the component draws no bubbles on the Runout tab's
+canvas, the classic runout sheet, or the consolidated sheet, and the rest of the shaft's
+bubbles are untouched. TIR readings already recorded on a zeroed component are kept in the
+document, just not drawn — the same render-layer orphan rule as everywhere else — so
+raising the count brings them back. Works from both hosts of the station editor (Runout
+tab and Consolidated Output tab).
+
 ### feat: offer a one-tap rename after quick-save when job info suggests a new name
 
 The Save screen suggests a filename from Job # / Customer / Vessel at the first save, but the

@@ -160,7 +160,8 @@ private fun RunoutStationRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 4.dp),
             )
-            IconButton(onClick = onDecrement, enabled = currentCount > 1) {
+            // 0 is a legal floor — a component not being measured carries no bubbles.
+            IconButton(onClick = onDecrement, enabled = currentCount > 0) {
                 Text("−", style = MaterialTheme.typography.titleMedium)
             }
             Text(

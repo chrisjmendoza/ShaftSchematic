@@ -92,4 +92,31 @@ class RunoutFragmentedStationsTest {
         val keys = stations.map { it.componentId to it.stationIndex }
         assertEquals(keys.size, keys.toSet().size)
     }
+
+    @Test
+    fun `a zero override silences a component and leaves the others alone`() {
+        // A component the user is not measuring: override 0 → no stations for it, even
+        // across fragments, while every other component keeps its own count.
+        val spans = bodyRuns(0f to 500f, 700f to 500f) +
+            RunoutComponentSpan("l1", RunoutComponentKind.LINER, 500f, 200f)
+        val stations = collectRunoutStations(spans, overrides = mapOf("b1" to 0), xAtMm = xAt)
+
+        assertTrue(stations.none { it.componentId == "b1" })
+        assertEquals(
+            listOf(0, 1),
+            stations.filter { it.componentId == "l1" }.map { it.stationIndex },
+        )
+    }
+
+    @Test
+    fun `zero overrides on every component produce an empty sheet`() {
+        val spans = bodyRuns(0f to 500f) +
+            RunoutComponentSpan("t1", RunoutComponentKind.TAPER, 500f, 300f)
+        val stations = collectRunoutStations(
+            spans,
+            overrides = mapOf("b1" to 0, "t1" to 0),
+            xAtMm = xAt,
+        )
+        assertTrue(stations.isEmpty())
+    }
 }
