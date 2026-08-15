@@ -399,11 +399,13 @@ verdict "25% should be our high end"):
   two draw sites can never disagree. It is also a **re-render key** on the wear preview: a job's
   own override rides `wearRecord`, but a change to the Settings default reaches an
   un-overridden document only through the key.
-- **UI** — the Wear tab's "Trace depth exaggeration" row (shared `WearTraceDepthSlider`, drag
-  tracked locally and committed once on release) writes the per-job override; its
-  **"Save as default"** button — enabled only while the effective value differs from the stored
-  global — writes the current value to the global pref AND clears the override in the same
-  action, so the job then follows the default it just created.
+- **UI** — the "Trace depth exaggeration" row (shared `WearTraceDepthControlRow`, wrapping
+  `WearTraceDepthSlider` with drag tracked locally and committed once on release) writes the
+  per-job override; its **"Save as default"** button — enabled only while the effective value
+  differs from the stored global — writes the current value to the global pref AND clears the
+  override in the same action, so the job then follows the default it just created. ONE
+  construction hosted on **two** surfaces: the Wear tab body and the wear preview's PDF options
+  sheet, so the two can never drift.
 
 ---
 
@@ -1041,10 +1043,22 @@ liner span (`clampWearBandToLiner`), drawn after the profile's own liner outline
 not dominant — same alpha/weight/pitch as the old diagonal hatch, only the stroke orientation
 changed (2026-07-22, to match how the shop marks wear areas by hand — the vertical tick style
 in the reference sketch). The broken-out detail strips fill their bands a **light grey**
-instead (`WEAR_BAND_FILL_ALPHA` = 40 on a black FILL paint, the same wash as `shadeFill`):
-they are the surface pits get marked into, by the printed "X"s and by the machinist's pen on
-the printed sheet, and the diagonal hatch they used to carry buried both (2026-08-14 on-device
-report; `drawHatchBand` retired). Each on-page liner's **name** is also printed centered under its span
+instead (a black FILL paint whose alpha is `wearBandShadeAlpha(pdfPrefs.wearBandShadeFrac)`,
+shipping as the same wash as `shadeFill`): they are the surface pits get marked into, by the
+printed "X"s and by the machinist's pen on the printed sheet, and the diagonal hatch they used
+to carry buried both (2026-08-14 on-device report; `drawHatchBand` retired).
+
+That grey is **user-set** — `PdfPrefs.wearBandShadeFrac`, a fraction of full black, default
+`PDF_WEAR_BAND_SHADE_DEFAULT` = 40/255 (the historical fixed alpha, so an untouched install
+draws exactly the shipped look), range `PDF_WEAR_BAND_SHADE_MIN` 5% ..
+`PDF_WEAR_BAND_SHADE_MAX` 35%, 1% steps. **The cap is the point of the range**: past it a
+heavier wash starts burying the pit marks in the band — printed and hand-drawn alike — which is
+exactly what retired the diagonal hatch. App-wide with no per-job override (unlike the trace
+depth), full DataStore round-trip, and a **re-render key** on the wear preview because the
+composer reads it off the `PdfPrefs` snapshot, which is not snapshot state. Two hosts, one
+`WearBandShadeSlider`: Settings → Drawing → "Wear area shade" (with a Default reset) and the
+wear preview's PDF options sheet. The MAIN profile's vertical-stroke bands are a different mark
+and are not styled by it. Each on-page liner's **name** is also printed centered under its span
 (`drawWearLinerNamesOnProfile`, 2026-07-22), sharing the row with the "← AFT / FWD →" labels
 (clamped clear of them) — a lightweight reference tying each band to its broken-out strip, using
 the same shared title the strip title shows: `buildLinerTitleById` (`util/LinerTitles.kt`) —
@@ -1223,8 +1237,10 @@ All four routes (Runout, Wear, Undercut, Consolidated Output) pass `RunoutWearOp
 
 | Control | Bound to |
 |---|---|
-| Blank draft (write-in) (Switch) | the hosting tab's session-only blank-draft state, via `onSetBlankDraft` — row renders only when that callback is non-null (Consolidated Output only) |
+| Blank draft (write-in) (Switch) | the hosting tab's session-only blank-draft state, via `onSetBlankDraft` — row renders only when that callback is non-null (Consolidated Output, Wear, Undercut) |
 | Line thickness (Slider 50–200%) | `vm.setLineThicknessScale()` |
+| Trace depth exaggeration (Slider + "Save as default") | `vm.setWearTraceDepthFrac()` / `vm.setPdfWearTraceDepthFrac()` — only when `showWearControls` (Wear only) |
+| Wear area shade (Slider 5–35%, 1% steps) | `vm.setPdfWearBandShadeFrac()` — only when `showWearControls` (Wear only) |
 | Body S-break (Slider Never–Always, 5% steps) | `vm.setPdfSBreakThresholdFrac()` — only when `showSBreak` (see below) |
 | Shaft height (Slider) | `vm.setRunoutHeightScale()` — only when `showHeightControls` (Consolidated Output only) |
 | Liner compression (Checkbox + Slider) | `vm.setLinersProportional()` / `vm.setLinerCompression()` — only when `showHeightControls` (Consolidated Output only) |
@@ -1233,13 +1249,26 @@ All four routes (Runout, Wear, Undercut, Consolidated Output) pass `RunoutWearOp
 | Shade Tapers (Checkbox) | `vm.setPdfShadedTapers()` |
 | Shade Liners (Checkbox) | `vm.setPdfShadedLiners()` — locked (disabled, shown unchecked) when the document prints Ø values inside the profile; display-only, the pref is never rewritten |
 
-Only the Consolidated Output instance turns on the blank-draft row, the Shaft height /
-Liner compression pair, and the Measurement reference radios — the same set the schematic
-Tune sheet exposes (`PdfPreviewScreen.kt`'s `PdfOptionsSheet`), minus Component labels and
-the blank Ø-callouts sub-toggle: the consolidated composer never reads either of those two
-prefs, so they would be inert controls on this sheet. The Wear, Undercut, and Runout
-instances are unchanged — they leave every one of these gates at its `false`/`null`
-default and show only Line thickness, (Runout also) Body S-break, and Shade in PDF.
+Only the Consolidated Output instance turns on the Shaft height / Liner compression pair and
+the Measurement reference radios — the same set the schematic Tune sheet exposes
+(`PdfPreviewScreen.kt`'s `PdfOptionsSheet`), minus Component labels and the blank Ø-callouts
+sub-toggle: the consolidated composer never reads either of those two prefs, so they would be
+inert controls on this sheet. Only the **Wear** instance turns on `showWearControls`, the block
+that tunes the wear strips; the other three documents draw no wear strips.
+
+The **blank-draft row** is on for Consolidated Output, Wear, and Undercut — the three
+documents with a write-in mode. Wear and Undercut pass the SAME state their tab-body switch
+owns (`blankDraft` + `onSetBlankDraft = { blankDraft = it }`), so the two surfaces always agree
+and either one re-renders the preview through the route's existing `blankDraft` render key. The
+Runout instance leaves it at its `null` default.
+
+So, top to bottom: the **Wear** sheet shows Blank draft → Line thickness → Trace depth
+exaggeration → Wear area shade → Fractions → Shade in PDF; the **Undercut** sheet shows Blank
+draft → Line thickness → Fractions → Shade in PDF; the **Runout** sheet Line thickness → Body
+S-break → Fractions → Shade in PDF. The wear sliders are commit-on-release like every other
+slider here, but the Wear preview is **not** a live-tuning surface (`tuning` stays null and
+`sheetTunesPage` stays `false`): the release commit re-renders the page through the route's
+render keys.
 
 All of these values are included in the render loop's `RenderInputs` holder so changing any option immediately re-renders the preview bitmap.
 
@@ -1248,10 +1277,10 @@ All of these values are included in the render loop's `RenderInputs` holder so c
 - **Visual only.** A drag frame never writes DataStore and never updates `RunoutConfig` — persistence and the per-job dirty mark stay on commit-on-release. The Wear and Undercut routes leave `tuning` at its `null` default and are unaffected.
 - **Draft then sharp.** The loop is `snapshotFlow { RenderInputs(…) }.conflate().collect { … }` — latest-wins, so intermediate drag values are dropped while a render is in flight — and drag frames raster at `renderScale = 1` (¼ the pixels). When the drag ends the overrides go null, the inputs change once more, and that pass restores `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back across drag frames and that release pass so the page never strobes.
 - **The page keeps a strip on top.** Both routes pass `sheetTunesPage = true` to `PdfPreviewOverlay`, because live rendering is worthless if the menu covers the page ("It may render live but the menu with the sliders is in the way. I can see the PDF Preview area lighten up on moving a slider but I can't see anything. I need to close the menu to see the changes." — on-device report). While such a sheet is open the overlay drops the centered full-size `Image` for a **page strip** pinned `TopCenter` under the toolbar (a `Canvas` with the same modifier chain plus an explicit `contentDescription`, drawing through the shared `drawPageBand`): the sheets are LANDSCAPE, so a whole page needs only `screenWidthDp × (PDF_PAGE_HEIGHT_PT / PDF_PAGE_WIDTH_PT)` of height (`fitWidthPageHeightDp`, `ui/screen/PreviewTuning.kt` — the real page constants, never a magic ratio). The strip actually shows the page's **ink band** — `util/PdfInkBounds.kt` measures the rendered bitmap's first/last inked rows, the routes hold it in a `previewInkBand` state updated on **sharp passes only** (a drag frame must not resize the strip under the finger) and pass it as `PdfPreviewOverlay(inkBand = …)`, so the blank top margin stops eating the strip while inked content — rail, footer — is never cropped. Opening the sheet **resets zoom/pan** to fit; predictable over preserved, since an inspection zoom would push the strip off-screen exactly when the sliders need it. Closing restores the normal layout (fill, pinch 0.5×–8×).
-- **Sheet capped below the strip — by the overlay.** `PdfPreviewOverlay` wraps `optionsSheet()` in a `Box(heightIn(max = …))`: `tuningSheetMaxHeightDp(screenHeight, strip, sheetChrome)` = screen height − strip − `PREVIEW_TOP_CHROME_DP` (88 dp of status bar + toolbar) − the sheet's own chrome, clamped to `[TUNING_SHEET_MIN_FRAC 40%, PREVIEW_SHEET_MAX_FRAC 78%]` of the screen. **Sheet chrome** is `TUNING_SHEET_CHROME_DP` (48 dp: M3's drag handle) plus the measured `WindowInsets.navigationBars` bottom — both stack OUTSIDE a content-column cap, so ignoring them left the sheet overlapping the strip and swallowing the drawing's lowest callouts and footer (on-device report). On a 393 × 851 dp phone with a 48 dp nav bar: a 303.7 dp strip over a 363.3 dp sheet. The clamp order is **sheet floor first, strip takes the remainder** (`tuningPageStripHeightDp`, computed first so the cap derives from it) — on a short/wide screen the page fits to the shrunken strip, because it is zoomable once the sheet closes and crushed sliders are not usable at all. The sheet already scrolls internally, so the cap never loses content. `RunoutWearOptionsSheet` itself carries **no** cap: only the overlay knows the strip. The **Wear and Undercut** previews take `sheetTunesPage = false` and get the plain `PREVIEW_SHEET_MAX_FRAC` (78%) cap with the full-size centered preview — they tune nothing, so there is nothing to watch.
+- **Sheet capped below the strip — by the overlay.** `PdfPreviewOverlay` wraps `optionsSheet()` in a `Box(heightIn(max = …))`: `tuningSheetMaxHeightDp(screenHeight, strip, sheetChrome)` = screen height − strip − `PREVIEW_TOP_CHROME_DP` (88 dp of status bar + toolbar) − the sheet's own chrome, clamped to `[TUNING_SHEET_MIN_FRAC 40%, PREVIEW_SHEET_MAX_FRAC 78%]` of the screen. **Sheet chrome** is `TUNING_SHEET_CHROME_DP` (48 dp: M3's drag handle) plus the measured `WindowInsets.navigationBars` bottom — both stack OUTSIDE a content-column cap, so ignoring them left the sheet overlapping the strip and swallowing the drawing's lowest callouts and footer (on-device report). On a 393 × 851 dp phone with a 48 dp nav bar: a 303.7 dp strip over a 363.3 dp sheet. The clamp order is **sheet floor first, strip takes the remainder** (`tuningPageStripHeightDp`, computed first so the cap derives from it) — on a short/wide screen the page fits to the shrunken strip, because it is zoomable once the sheet closes and crushed sliders are not usable at all. The sheet already scrolls internally, so the cap never loses content. `RunoutWearOptionsSheet` itself carries **no** cap: only the overlay knows the strip. The **Wear and Undercut** previews take `sheetTunesPage = false` and get the plain `PREVIEW_SHEET_MAX_FRAC` (78%) cap with the full-size centered preview — they carry no LIVE-tuning channel (the wear sheet's own sliders commit on release and re-render the whole page), so there is nothing to watch mid-drag.
 - **Undimmed scrim.** `ModalBottomSheet`'s scrim is one **full-window** rect — it covers the page strip too and cannot be restricted to the gap below it — so a tuning sheet passes `Color.Transparent` for the whole time it is open, not just during a drag. The overlay's black surround already reads as separation between strip and sheet. (The schematic's `PdfPreviewScreen`, which has no black surround, paints the strip-to-sheet gap itself and drops that during a drag.) Tap-outside-to-dismiss is unaffected: the transparent scrim still takes the tap.
 
-The option blocks are shared composables in `ui/screen/ShaftHeightSlider.kt` — `LineThicknessSlider`, `SBreakThresholdSlider`, and `ShadeInPdfChecks` (heading + the three checkboxes + the `linerShadeLocked` behavior) — used by this sheet and by the schematic preview's `PdfOptionsSheet`, so an added option lands on both surfaces at once. Settings → PDF Export keeps its own copy of the checkbox rows: they sit in a `spacedBy(12.dp)` column with a padded heading, and adopting the sheets' tighter block would restyle that page. Same prefs, same setters. `SBreakThresholdSlider` is additionally the Settings → Drawing control (that page adds only its explanatory caption), so the threshold reads and writes the one app-wide pref from every surface.
+The option blocks are shared composables in `ui/screen/ShaftHeightSlider.kt` — `LineThicknessSlider`, `SBreakThresholdSlider`, `WearTraceDepthControlRow`, `WearBandShadeSlider`, and `ShadeInPdfChecks` (heading + the three checkboxes + the `linerShadeLocked` behavior) — used by this sheet and by the schematic preview's `PdfOptionsSheet`, so an added option lands on both surfaces at once. The two wear controls have a third and fourth host: `WearTraceDepthControlRow` is also the Wear tab body's row, and `WearBandShadeSlider` also sits in Settings → Drawing (wrapped there with a Default reset and a caption), so no surface can drift from another. Settings → PDF Export keeps its own copy of the checkbox rows: they sit in a `spacedBy(12.dp)` column with a padded heading, and adopting the sheets' tighter block would restyle that page. Same prefs, same setters. `SBreakThresholdSlider` is additionally the Settings → Drawing control (that page adds only its explanatory caption), so the threshold reads and writes the one app-wide pref from every surface.
 
 **`showSBreak` is asymmetric across the four callers.** The Runout and Consolidated Output routes pass `showSBreak = true` with their collected `pdfSBreakThresholdFrac`; the Wear and Undercut routes leave it at its `false` default, because those documents never draw compression breaks and the control would be inert noise there. The schematic's `PdfOptionsSheet` shows it unconditionally.
 

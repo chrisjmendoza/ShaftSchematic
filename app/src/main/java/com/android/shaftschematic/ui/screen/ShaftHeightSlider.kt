@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -43,6 +44,10 @@ import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_MEDIUM_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
+import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
+import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
+import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.setPdfWearTraceDepthFrac
 import com.android.shaftschematic.util.FractionStyle
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -207,7 +212,7 @@ internal fun WearTraceDepthSlider(
             trailing()
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(fmtTraceDepthPct(WEAR_TRACE_MIN_DEPTH_FRAC), style = MaterialTheme.typography.bodySmall)
+            Text(fmtWholePct(WEAR_TRACE_MIN_DEPTH_FRAC), style = MaterialTheme.typography.bodySmall)
             Slider(
                 value = shown,
                 onValueChange = {
@@ -224,13 +229,108 @@ internal fun WearTraceDepthSlider(
                     .padding(horizontal = 8.dp)
                     .testTag("wear_trace_depth_slider"),
             )
-            Text(fmtTraceDepthPct(WEAR_TRACE_MAX_DEPTH_FRAC), style = MaterialTheme.typography.bodySmall)
+            Text(fmtWholePct(WEAR_TRACE_MAX_DEPTH_FRAC), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
 
-/** Whole-percent label for a trace-depth fraction — ONE formatter for every site that shows one. */
-internal fun fmtTraceDepthPct(v: Float): String = "${(v * 100).roundToInt()}%"
+/**
+ * Whole-percent label for a 0..1 drawing fraction — ONE formatter for every percentage slider
+ * here (trace depth, wear-band shade) and for the Settings rows that mirror them.
+ */
+internal fun fmtWholePct(v: Float): String = "${(v * 100).roundToInt()}%"
+
+/**
+ * The Wear document's "Trace depth exaggeration" row — the shared [WearTraceDepthSlider] plus
+ * the "Save as default" button and the caption — as BOTH the Wear tab and the wear preview's
+ * PDF options sheet show it. One construction, so the tab and the sheet can never drift.
+ *
+ * Moving the slider pins THIS job's value (`WearRecord.traceDepthFrac`); "Save as default"
+ * promotes the current value to the Settings → Drawing default (`PdfPrefs.wearTraceDepthFrac`)
+ * and clears the override in the same action, so the job then follows the default it created.
+ *
+ * [effectiveFrac] is this job's depth already resolved against [globalDefault]
+ * (`effectiveWearTraceDepthFrac`) — the same value both wear draw sites use, which is what
+ * keeps them identical.
+ */
+@Composable
+internal fun WearTraceDepthControlRow(
+    vm: ShaftViewModel,
+    effectiveFrac: Float,
+    globalDefault: Float,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        WearTraceDepthSlider(
+            frac = effectiveFrac,
+            onCommit = { vm.setWearTraceDepthFrac(it) },
+            title = "Trace depth exaggeration",
+            trailing = {
+                TextButton(
+                    onClick = {
+                        vm.setPdfWearTraceDepthFrac(effectiveFrac)
+                        vm.setWearTraceDepthFrac(null)
+                    },
+                    enabled = effectiveFrac != globalDefault,
+                    modifier = Modifier.testTag("wear_trace_save_default"),
+                ) { Text("Save as default") }
+            },
+        )
+        Text(
+            "Deepest measured wear draws at this fraction of the liner radius. " +
+                "Drawing only — printed Ø values never change.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The "Wear area shade" slider, shared by Settings → Drawing and the wear preview's PDF options
+ * sheet — ONE `PdfPrefs.wearBandShadeFrac` behind both, so the wash can be judged against the
+ * sheet it prints on instead of only from Settings.
+ *
+ * [PDF_WEAR_BAND_SHADE_MIN]..[PDF_WEAR_BAND_SHADE_MAX] in 1% steps. The cap is the point of the
+ * range: a wear band is what pit "X"s land in, printed and hand-drawn, and a heavier fill buries
+ * them. Drag is tracked locally and committed once on release so drag frames never write
+ * DataStore. [trailing] is the caller's header-row button — a reset in Settings, nothing on the
+ * sheet, which stays compact.
+ */
+@Composable
+internal fun WearBandShadeSlider(
+    frac: Float,
+    onCommit: (Float) -> Unit,
+    trailing: @Composable () -> Unit = {},
+) {
+    var shadeDrag by remember { mutableStateOf<Float?>(null) }
+    val shown = (shadeDrag ?: frac).coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Wear area shade  ${fmtWholePct(shown)}",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            trailing()
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(fmtWholePct(PDF_WEAR_BAND_SHADE_MIN), style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { shadeDrag = (it * 100f).roundToInt() / 100f },
+                onValueChangeFinished = {
+                    shadeDrag?.let(onCommit)
+                    shadeDrag = null
+                },
+                valueRange = PDF_WEAR_BAND_SHADE_MIN..PDF_WEAR_BAND_SHADE_MAX,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .testTag("wear_band_shade_slider"),
+            )
+            Text(fmtWholePct(PDF_WEAR_BAND_SHADE_MAX), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
 
 /**
  * The "Dimension arrows" size picker, shared by both PDF options sheets and

@@ -26,6 +26,20 @@ const val PDF_CURVE_HEIGHT_MAX_IN = 1.5f
 const val PDF_SBREAK_THRESHOLD_DEFAULT = 0.5f
 
 /**
+ * Wear-band shade: the settable range and the shipped value for the grey wash filling a wear
+ * area in the wear document's detail strips (`PdfPrefs.wearBandShadeFrac`).
+ *
+ * The default is the historical fixed alpha (40/255), so an untouched install draws exactly the
+ * shipped look. The cap is deliberate and load-bearing: the band is what pit "X"s land in —
+ * printed by the composer and hand-drawn by the machinist on the sheet — and a fill any heavier
+ * buries both, which is why the diagonal hatch was retired. Raising [PDF_WEAR_BAND_SHADE_MAX]
+ * would take that legibility back.
+ */
+const val PDF_WEAR_BAND_SHADE_DEFAULT = 40f / 255f
+const val PDF_WEAR_BAND_SHADE_MIN = 0.05f
+const val PDF_WEAR_BAND_SHADE_MAX = 0.35f
+
+/**
  * Dimension-rail arrowhead sizes (pt, length along the line — the barb spread is half of it).
  * Three fixed choices, not a range: an arrowhead reads correct or it doesn't. Small is the
  * shipped size; Large restores the historical head.
@@ -100,6 +114,17 @@ data class PdfPrefs(
      * touched its slider follows, so changing it here restyles every such document.
      */
     val wearTraceDepthFrac: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
+    /**
+     * Grey of a wear area's fill in the wear document's detail strips, as a fraction of full
+     * black. Settings → Drawing → "Wear area shade" and the wear preview's PDF options sheet,
+     * [PDF_WEAR_BAND_SHADE_MIN]..[PDF_WEAR_BAND_SHADE_MAX]; the default reproduces the shipped
+     * wash exactly.
+     *
+     * The cap keeps the band readable UNDER a pit "X" — printed and hand-drawn alike — which is
+     * the whole reason the heavier diagonal hatch was retired. The MAIN profile's bands are a
+     * different mark (vertical strokes, the shop convention) and are not styled by this.
+     */
+    val wearBandShadeFrac: Float = PDF_WEAR_BAND_SHADE_DEFAULT,
 ) {
     /** The anchor heights in PDF points (72 pt per paper inch) — what the geometry consumes. */
     val curveLoHeightPt: Float get() = curveLoHeightIn * 72f
@@ -113,5 +138,7 @@ data class PdfPrefs(
             arrowSizePt = arrowSizePt.coerceIn(PDF_ARROW_SIZE_SMALL_PT, PDF_ARROW_SIZE_LARGE_PT),
             wearTraceDepthFrac = wearTraceDepthFrac
                 .coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC),
+            wearBandShadeFrac = wearBandShadeFrac
+                .coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX),
         )
 }

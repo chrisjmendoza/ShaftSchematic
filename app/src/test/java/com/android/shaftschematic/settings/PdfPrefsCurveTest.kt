@@ -4,13 +4,15 @@ import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import kotlin.math.roundToInt
 
 /**
  * The user-adjustable drawing prefs on Settings → Drawing: the "Default drawing size"
- * sizing-curve pair, the "Body S-break" threshold, and the "Wear depth exaggeration" default.
- * Pins the shipped defaults (the proportional hand-sheet anchors 4" → 1/2", 8" → 1"; S-break at
- * half of true; wear trace at the 25% high end), the pt conversion the composers consume, and
- * the clamps to each settable range.
+ * sizing-curve pair, the "Body S-break" threshold, the "Wear depth exaggeration" default, and
+ * the "Wear area shade". Pins the shipped defaults (the proportional hand-sheet anchors
+ * 4" → 1/2", 8" → 1"; S-break at half of true; wear trace at the 25% high end; the band shade
+ * at the historical 40/255 alpha), the pt conversion the composers consume, and the clamps to
+ * each settable range.
  */
 class PdfPrefsCurveTest {
 
@@ -77,6 +79,42 @@ class PdfPrefsCurveTest {
         assertEquals(0.05f, PdfPrefs(wearTraceDepthFrac = 0.05f).clamped().wearTraceDepthFrac, 1e-6f)
         assertEquals(0.13f, PdfPrefs(wearTraceDepthFrac = 0.13f).clamped().wearTraceDepthFrac, 1e-6f)
         assertEquals(0.25f, PdfPrefs(wearTraceDepthFrac = 0.25f).clamped().wearTraceDepthFrac, 1e-6f)
+    }
+
+    // ── Wear band shade (Settings → Drawing → "Wear area shade") ───────────────
+
+    @Test
+    fun `wear band shade defaults to the historical fixed alpha`() {
+        // 40/255 — the value the detail strips' band fill shipped as a constant, so an
+        // untouched install draws exactly the same grey.
+        assertEquals(40f / 255f, PDF_WEAR_BAND_SHADE_DEFAULT, 1e-6f)
+        assertEquals(PDF_WEAR_BAND_SHADE_DEFAULT, PdfPrefs().wearBandShadeFrac, 1e-6f)
+        assertEquals(40, (PdfPrefs().wearBandShadeFrac * 255f).roundToInt())
+    }
+
+    @Test
+    fun `clamped coerces the wear band shade into the settable range`() {
+        // The cap is load-bearing: a heavier wash buries the pit "X"s drawn into the band.
+        assertEquals(
+            PDF_WEAR_BAND_SHADE_MIN,
+            PdfPrefs(wearBandShadeFrac = 0f).clamped().wearBandShadeFrac, 1e-6f,
+        )
+        assertEquals(
+            PDF_WEAR_BAND_SHADE_MAX,
+            PdfPrefs(wearBandShadeFrac = 1f).clamped().wearBandShadeFrac, 1e-6f,
+        )
+    }
+
+    @Test
+    fun `in-range wear band shades pass through clamped verbatim`() {
+        assertEquals(0.05f, PdfPrefs(wearBandShadeFrac = 0.05f).clamped().wearBandShadeFrac, 1e-6f)
+        assertEquals(0.20f, PdfPrefs(wearBandShadeFrac = 0.20f).clamped().wearBandShadeFrac, 1e-6f)
+        assertEquals(0.35f, PdfPrefs(wearBandShadeFrac = 0.35f).clamped().wearBandShadeFrac, 1e-6f)
+        assertEquals(
+            PDF_WEAR_BAND_SHADE_DEFAULT,
+            PdfPrefs(wearBandShadeFrac = PDF_WEAR_BAND_SHADE_DEFAULT).clamped().wearBandShadeFrac,
+            1e-6f,
+        )
     }
 
     @Test

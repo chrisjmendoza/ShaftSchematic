@@ -18,6 +18,8 @@ import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
+import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
+import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfPrefs
@@ -90,6 +92,7 @@ object SettingsStore {
     private val KEY_PDF_ARROW_SIZE_PT = floatPreferencesKey("pdf_arrow_size_pt")
     private val KEY_PDF_FRACTION_STYLE = stringPreferencesKey("pdf_fraction_style")
     private val KEY_PDF_WEAR_TRACE_DEPTH_FRAC = floatPreferencesKey("pdf_wear_trace_depth_frac")
+    private val KEY_PDF_WEAR_BAND_SHADE_FRAC = floatPreferencesKey("pdf_wear_band_shade_frac")
 
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
@@ -162,6 +165,19 @@ object SettingsStore {
     suspend fun setPdfWearTraceDepthFrac(ctx: Context, v: Float) {
         ctx.settingsDataStore.edit {
             it[KEY_PDF_WEAR_TRACE_DEPTH_FRAC] = v.coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC)
+        }
+    }
+
+    // Grey of a wear area's fill in the wear document's detail strips, as a fraction of full
+    // black. App-wide (no per-job override); the cap keeps pit "X"s legible over the band.
+    fun pdfWearBandShadeFracFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p ->
+            (p[KEY_PDF_WEAR_BAND_SHADE_FRAC] ?: PdfPrefs().wearBandShadeFrac)
+                .coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX)
+        }
+    suspend fun setPdfWearBandShadeFrac(ctx: Context, v: Float) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PDF_WEAR_BAND_SHADE_FRAC] = v.coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX)
         }
     }
 

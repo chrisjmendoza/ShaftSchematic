@@ -7,6 +7,8 @@ import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.pdf.PdfExportMode
 import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
+import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
+import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
@@ -114,6 +116,18 @@ fun ShaftViewModel.setPdfWearTraceDepthFrac(v: Float, persist: Boolean = true) {
     _pdfWearTraceDepthFrac.value = clamped
     SettingsStore.updatePdfPrefs { it.copy(wearTraceDepthFrac = clamped) }
     if (persist) viewModelScope.launch { SettingsStore.setPdfWearTraceDepthFrac(getApplication(), clamped) }
+}
+
+/**
+ * Wired to Settings → Drawing → "Wear area shade" and the same slider in the wear preview's
+ * PDF options sheet — the grey a wear area's fill draws at in the wear document's detail
+ * strips. App-wide: unlike the trace depth there is no per-job override.
+ */
+fun ShaftViewModel.setPdfWearBandShadeFrac(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX)
+    _pdfWearBandShadeFrac.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(wearBandShadeFrac = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfWearBandShadeFrac(getApplication(), clamped) }
 }
 
 /** Wired to the PDF options sheets and Settings → Drawing → "Dimension arrows". */

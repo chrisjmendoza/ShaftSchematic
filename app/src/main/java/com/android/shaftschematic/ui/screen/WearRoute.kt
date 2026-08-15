@@ -37,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -80,7 +79,6 @@ import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
-import com.android.shaftschematic.ui.viewmodel.setPdfWearTraceDepthFrac
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
@@ -139,6 +137,7 @@ fun WearRoute(
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
     val wearTraceDefault   by vm.pdfWearTraceDepthFrac.collectAsState()
+    val wearBandShadeFrac  by vm.pdfWearBandShadeFrac.collectAsState()
 
     // The ONE resolution of this job's trace-depth override against the Settings default. Every
     // consumer on this tab — the slider, the detail overlay's canvas, and every composeWearPdf
@@ -191,9 +190,11 @@ fun WearRoute(
     // change would leave the rasterized preview drawing the old construction. traceDepthFrac
     // is a key for the other half of its pair: a job's own override rides `wearRecord`, but a
     // change to the Settings default reaches an un-overridden document only through this.
+    // wearBandShadeFrac is a key for the same reason: the composer reads it off the PdfPrefs
+    // snapshot taken inside this effect, which is not snapshot state either.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   wearRecord, blankDraft, pdfFractionStyle, traceDepthFrac) {
+                   wearRecord, blankDraft, pdfFractionStyle, traceDepthFrac, wearBandShadeFrac) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
@@ -358,32 +359,13 @@ fun WearRoute(
 
             // ── Worn-profile trace depth ──────────────────────────────────────
             // Sits under the shaft it restyles (the undercut sheet's exaggeration slider
-            // posture). Moving it pins THIS job's value; "Save as default" promotes the
-            // current value to the Settings → Drawing default and clears the override in the
-            // same action, so the job then follows the default it just created.
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                WearTraceDepthSlider(
-                    frac = traceDepthFrac,
-                    onCommit = { vm.setWearTraceDepthFrac(it) },
-                    title = "Trace depth exaggeration",
-                    trailing = {
-                        TextButton(
-                            onClick = {
-                                vm.setPdfWearTraceDepthFrac(traceDepthFrac)
-                                vm.setWearTraceDepthFrac(null)
-                            },
-                            enabled = traceDepthFrac != wearTraceDefault,
-                            modifier = Modifier.testTag("wear_trace_save_default"),
-                        ) { Text("Save as default") }
-                    },
-                )
-                Text(
-                    "Deepest measured wear draws at this fraction of the liner radius. " +
-                        "Drawing only — printed Ø values never change.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            // posture). The wear preview's PDF options sheet carries this same row, from
+            // the one construction, so the two surfaces can never drift.
+            WearTraceDepthControlRow(
+                vm = vm,
+                effectiveFrac = traceDepthFrac,
+                globalDefault = wearTraceDefault,
+            )
 
             // ── Dye pen inspection result ─────────────────────────────────────
             // Selecting a chip prints an "X" inside that PASS/FAIL checkbox on the sheet's
@@ -502,6 +484,9 @@ fun WearRoute(
                 launcher.launch(buildWearFilename(customer, vessel, jobNumber, blankDraft))
             },
             optionsSheet = {
+                // The sheet tunes the drawing being looked at (on-device request): the same
+                // blank-draft switch as the tab body (ONE state, so the two always agree) and
+                // the wear block — trace depth + wear-area shade.
                 RunoutWearOptionsSheet(
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
@@ -509,6 +494,12 @@ fun WearRoute(
                     pdfShadedLiners = pdfShadedLiners,
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
+                    blankDraft = blankDraft,
+                    onSetBlankDraft = { blankDraft = it },
+                    showWearControls = true,
+                    traceDepthFrac = traceDepthFrac,
+                    traceDepthDefault = wearTraceDefault,
+                    wearBandShadeFrac = wearBandShadeFrac,
                 )
             },
         )

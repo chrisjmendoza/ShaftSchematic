@@ -644,6 +644,8 @@ fun UndercutRoute(
                 launcher.launch(buildUndercutFilename(customer, vessel, jobNumber, blankDraft))
             },
             optionsSheet = {
+                // Same blank-draft state as the tab body's switch — ONE state behind both, so
+                // the tab and the sheet can never disagree about what the preview is showing.
                 RunoutWearOptionsSheet(
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
@@ -651,6 +653,8 @@ fun UndercutRoute(
                     pdfShadedLiners = pdfShadedLiners,
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
+                    blankDraft = blankDraft,
+                    onSetBlankDraft = { blankDraft = it },
                 )
             },
         )

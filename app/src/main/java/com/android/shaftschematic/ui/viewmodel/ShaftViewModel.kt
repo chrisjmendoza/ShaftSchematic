@@ -265,6 +265,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfWearTraceDepthFrac = MutableStateFlow(PdfPrefs().wearTraceDepthFrac)
     val pdfWearTraceDepthFrac: StateFlow<Float> = _pdfWearTraceDepthFrac.asStateFlow()
 
+    // Grey of a wear area's fill in the wear document's detail strips. Also a preview
+    // re-render key on the wear document: the composer reads it through the PdfPrefs
+    // snapshot, which is not snapshot state.
+    internal val _pdfWearBandShadeFrac = MutableStateFlow(PdfPrefs().wearBandShadeFrac)
+    val pdfWearBandShadeFrac: StateFlow<Float> = _pdfWearBandShadeFrac.asStateFlow()
+
     // Dimension-rail arrowhead size (pt). Also a preview re-render key on every tab that
     // rasterizes with the current PdfPrefs.
     internal val _pdfArrowSizePt = MutableStateFlow(PdfPrefs().arrowSizePt)
@@ -1240,6 +1246,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfWearTraceDepthFracFlow(getApplication()).collectLatest { persisted ->
                 _pdfWearTraceDepthFrac.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(wearTraceDepthFrac = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfWearBandShadeFracFlow(getApplication()).collectLatest { persisted ->
+                _pdfWearBandShadeFrac.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(wearBandShadeFrac = persisted) }
             }
         }
         viewModelScope.launch {

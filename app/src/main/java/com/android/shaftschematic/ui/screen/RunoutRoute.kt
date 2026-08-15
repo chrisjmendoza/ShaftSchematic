@@ -107,6 +107,7 @@ import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.pickBubbleAt
 import com.android.shaftschematic.geom.planRunoutBubbles
+import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
@@ -114,6 +115,7 @@ import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
+import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.RunoutConfig
@@ -1148,6 +1150,19 @@ internal fun RunoutWearOptionsSheet(
     /** The app-wide `PdfPrefs.sBreakThresholdFrac`; read only when [showSBreak]. */
     sBreakThresholdFrac: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
     /**
+     * Shows the wear-document tuning block: the "Trace depth exaggeration" row (the Wear tab's
+     * own control, shared construction) and the "Wear area shade" slider. On only for the wear
+     * preview — the sheet exists so the drawing being looked at can be tuned against itself
+     * (on-device request) — and inert on every other document, which draws no wear strips.
+     */
+    showWearControls: Boolean = false,
+    /** This job's trace depth resolved against [traceDepthDefault]; read only when [showWearControls]. */
+    traceDepthFrac: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
+    /** The Settings → Drawing default, `PdfPrefs.wearTraceDepthFrac`; read only when [showWearControls]. */
+    traceDepthDefault: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
+    /** The app-wide `PdfPrefs.wearBandShadeFrac`; read only when [showWearControls]. */
+    wearBandShadeFrac: Float = PDF_WEAR_BAND_SHADE_DEFAULT,
+    /**
      * Shows the shared "Dimension arrows" size picker. On for the consolidated sheet, the only
      * document here that draws dimension rails; the classic runout/wear/undercut sheets draw
      * their own fixed-head marks, so the control would be inert there.
@@ -1236,6 +1251,30 @@ internal fun RunoutWearOptionsSheet(
         Spacer(Modifier.height(12.dp))
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
+
+        // ── Wear drawing (wear document only) ────────────────────────────────
+        // The same two controls the Wear tab and Settings → Drawing carry — here so the
+        // trace depth and the band's grey can be judged against the sheet they print on.
+        // Commit-on-release, like every slider on this sheet; the wear preview re-renders
+        // from its own keys rather than a live tuning channel.
+        if (showWearControls) {
+            WearTraceDepthControlRow(
+                vm = vm,
+                effectiveFrac = traceDepthFrac,
+                globalDefault = traceDepthDefault,
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            WearBandShadeSlider(
+                frac = wearBandShadeFrac,
+                onCommit = { vm.setPdfWearBandShadeFrac(it) },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+        }
 
         // ── Body S-break ─────────────────────────────────────────────────────
         // The same app-wide `PdfPrefs.sBreakThresholdFrac` Settings → Drawing sets —

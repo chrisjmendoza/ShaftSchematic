@@ -8,7 +8,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
-### feat: dye pen PASS/FAIL selectable in-app on the wear sheet
+### feat: the wear preview's PDF options tune the sheet being looked at
+
+The wear document's PDF Options carried only line thickness, fractions, and shading —
+none of the wear-specific dials (on-device report). The sheet now hosts, top to bottom:
+a Blank-draft switch (the same state as the tab's toggle, so the two always agree — the
+undercut preview gains the same row), Line thickness, the Trace depth exaggeration row
+(the Wear tab's own control, one shared construction with its "Save as default" button),
+and a new **Wear area shade** slider.
+
+Wear area shade makes the detail strips' grey wash user-set (`PdfPrefs.wearBandShadeFrac`,
+5–35% of full black, also in Settings → Drawing): the default reproduces the shipped look
+exactly, and the cap is deliberate — the band is where pit X's land, printed and
+hand-drawn, and a heavier fill would bury them, which is why the diagonal hatch was
+retired. The main profile's vertical-stroke bands are a different mark and stay fixed.
 
 The wear sheet's "Dye pen inspection: PASS □ FAIL □" row was hand-marking only. The Wear
 tab now carries Pass/Fail chips: selecting one prints an "X" inside that checkbox, the

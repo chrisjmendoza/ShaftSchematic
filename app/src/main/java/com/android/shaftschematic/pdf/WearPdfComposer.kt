@@ -21,6 +21,9 @@ import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.pitHalfArm
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.sequenceWearTraces
+import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
+import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
+import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -35,6 +38,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Public entry point
@@ -341,6 +345,7 @@ fun composeWearPdf(
             linerDiaReadings = effectiveRecord.diaReadings.filter { it.componentId == group.liner.id },
             deepestWearDepthMm = deepestLinerWearMm,
             traceDepthFrac = traceDepthFrac,
+            bandShadeAlpha = wearBandShadeAlpha(pdfPrefs.wearBandShadeFrac),
             blankValues = blankValues,
         )
     }
@@ -651,7 +656,7 @@ private fun drawWearShaftProfile(
  * spots, at their true axial position — "visible but not dominant" (proposal §6.2). The band
  * is filled with **vertical** strokes (matching how the shop marks wear areas by
  * hand — see the reference sketch); the broken-out detail strips, which are what pits get
- * hand-marked into, fill theirs a light grey instead ([WEAR_BAND_FILL_ALPHA]).
+ * hand-marked into, fill theirs a user-set light grey instead ([wearBandShadeAlpha]).
  * Bands are clamped to the liner's own span for rendering; the underlying [WearSpot] data is
  * never mutated.
  */
@@ -845,6 +850,7 @@ private fun drawWearDetailStrip(
     linerDiaReadings: List<WearDiaReading> = emptyList(),
     deepestWearDepthMm: Float = 0f,
     traceDepthFrac: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
+    bandShadeAlpha: Int = wearBandShadeAlpha(PDF_WEAR_BAND_SHADE_DEFAULT),
     blankValues: Boolean = false,
 ) {
     val ln = group.liner
@@ -963,7 +969,7 @@ private fun drawWearDetailStrip(
     // A traced band fills between its traced edges instead of the full rect, so the material
     // measured away stays white above and below the grey.
     val bandFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL; color = Color.argb(WEAR_BAND_FILL_ALPHA, 0, 0, 0)
+        style = Paint.Style.FILL; color = Color.argb(bandShadeAlpha, 0, 0, 0)
     }
     clampedBands.forEachIndexed { i, clamp ->
         if (clamp.lengthMm <= 0f) return@forEachIndexed
@@ -1316,13 +1322,18 @@ private const val WEAR_OVERFLOW_NOTE_HEIGHT_PT   = 16f  // reserved band for the
 private const val WEAR_PROFILE_RADIUS_MARGIN_PT  = 8f   // headroom above/below the shaft's actual drawn radius
 
 /**
- * Black alpha of a detail strip's wear-area fill — the same value the sheet's other shaded
- * fills use (`shadeFill`), i.e. a light grey wash. The band is where pits get marked, by the
- * printed "X"s and by the machinist's pen on the printed sheet, and a fill any heavier — a
- * diagonal hatch above all — buries both (on-device report). The MAIN profile's bands are a
- * different mark and keep their vertical strokes ([drawVerticalBand]), the shop convention there.
+ * Black alpha of a detail strip's wear-area fill, from the user-set `PdfPrefs.wearBandShadeFrac`
+ * (Settings → Drawing → "Wear area shade" and the wear preview's PDF options sheet). The
+ * default, [PDF_WEAR_BAND_SHADE_DEFAULT], is the light grey wash the sheet's other shaded fills
+ * use.
+ *
+ * The band is where pits get marked, by the printed "X"s and by the machinist's pen on the
+ * printed sheet, and a fill any heavier — a diagonal hatch above all — buries both (on-device
+ * report); that is what the pref's cap protects. The MAIN profile's bands are a different mark
+ * and keep their vertical strokes ([drawVerticalBand]), the shop convention there.
  */
-private const val WEAR_BAND_FILL_ALPHA = 40
+private fun wearBandShadeAlpha(frac: Float): Int =
+    (frac.coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX) * 255f).roundToInt()
 
 private const val COMPRESS_TRIGGER_PT = 220f
 // Classic central gap; breakPairLayout may widen it to keep the pair clear.

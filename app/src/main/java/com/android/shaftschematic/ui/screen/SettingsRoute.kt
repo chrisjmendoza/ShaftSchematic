@@ -71,6 +71,7 @@ import com.android.shaftschematic.geom.defaultShaftHeightPt
 import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
+import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
@@ -140,6 +141,7 @@ fun SettingsRoute(
     val pdfCurveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
     val pdfWearTraceDepthFrac by vm.pdfWearTraceDepthFrac.collectAsState()
+    val pdfWearBandShadeFrac by vm.pdfWearBandShadeFrac.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
 
@@ -320,6 +322,13 @@ fun SettingsRoute(
                     WearTraceDepthControl(
                         frac = pdfWearTraceDepthFrac,
                         onCommit = { vm.setPdfWearTraceDepthFrac(it) },
+                    )
+
+                    // Same slider the wear preview's PDF options sheet carries — one
+                    // PdfPrefs.wearBandShadeFrac. App-wide, with no per-job override.
+                    WearBandShadeControl(
+                        frac = pdfWearBandShadeFrac,
+                        onCommit = { vm.setPdfWearBandShadeFrac(it) },
                     )
 
                     // Same picker both PDF options sheets carry — one PdfPrefs.arrowSizePt.
@@ -796,13 +805,44 @@ private fun WearTraceDepthControl(
                 TextButton(
                     onClick = { onCommit(WEAR_TRACE_MAX_DEPTH_FRAC) },
                     enabled = frac != WEAR_TRACE_MAX_DEPTH_FRAC,
-                ) { Text("Default (${fmtTraceDepthPct(WEAR_TRACE_MAX_DEPTH_FRAC)})") }
+                ) { Text("Default (${fmtWholePct(WEAR_TRACE_MAX_DEPTH_FRAC)})") }
             },
         )
         Text(
             "On the wear document, the deepest measured wear draws at this fraction of the " +
                 "liner radius so a hairline cut still reads. Drawing only — printed Ø values " +
                 "never change, and wear deeper than this keeps its true proportion.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * Wear-area shade on the Settings page: the shared [WearBandShadeSlider] — the same control the
+ * wear preview's PDF options sheet carries — plus a reset to the shipped wash and the
+ * explanatory caption this page has room for. App-wide; no document pins its own.
+ */
+@Composable
+private fun WearBandShadeControl(
+    frac: Float,
+    onCommit: (Float) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        WearBandShadeSlider(
+            frac = frac,
+            onCommit = onCommit,
+            trailing = {
+                TextButton(
+                    onClick = { onCommit(PDF_WEAR_BAND_SHADE_DEFAULT) },
+                    enabled = frac != PDF_WEAR_BAND_SHADE_DEFAULT,
+                ) { Text("Default (${fmtWholePct(PDF_WEAR_BAND_SHADE_DEFAULT)})") }
+            },
+        )
+        Text(
+            "Grey of a measured wear area in the wear document's detail strips. The range " +
+                "stops where a heavier wash would start burying the pit marks that get drawn " +
+                "into the band.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
