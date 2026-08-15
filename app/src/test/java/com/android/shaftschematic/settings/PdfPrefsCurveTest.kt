@@ -1,13 +1,16 @@
 package com.android.shaftschematic.settings
 
+import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
  * The user-adjustable drawing prefs on Settings → Drawing: the "Default drawing size"
- * sizing-curve pair and the "Body S-break" threshold. Pins the shipped defaults (the
- * proportional hand-sheet anchors 4" → 1/2", 8" → 1"; S-break at half of true), the pt
- * conversion the composers consume, and the clamps to each settable range.
+ * sizing-curve pair, the "Body S-break" threshold, and the "Wear depth exaggeration" default.
+ * Pins the shipped defaults (the proportional hand-sheet anchors 4" → 1/2", 8" → 1"; S-break at
+ * half of true; wear trace at the 25% high end), the pt conversion the composers consume, and
+ * the clamps to each settable range.
  */
 class PdfPrefsCurveTest {
 
@@ -48,6 +51,32 @@ class PdfPrefsCurveTest {
     fun `clamped coerces the S-break threshold into 0 to 1`() {
         assertEquals(0f, PdfPrefs(sBreakThresholdFrac = -0.4f).clamped().sBreakThresholdFrac, 1e-6f)
         assertEquals(1f, PdfPrefs(sBreakThresholdFrac = 2.5f).clamped().sBreakThresholdFrac, 1e-6f)
+    }
+
+    // ── Wear trace depth (Settings → Drawing → "Wear depth exaggeration") ──────
+
+    @Test
+    fun `wear trace depth defaults to the shipped high end`() {
+        assertEquals(WEAR_TRACE_MAX_DEPTH_FRAC, PdfPrefs().wearTraceDepthFrac, 1e-6f)
+    }
+
+    @Test
+    fun `clamped coerces the wear trace depth into the settable range`() {
+        assertEquals(
+            WEAR_TRACE_MIN_DEPTH_FRAC,
+            PdfPrefs(wearTraceDepthFrac = 0f).clamped().wearTraceDepthFrac, 1e-6f,
+        )
+        assertEquals(
+            WEAR_TRACE_MAX_DEPTH_FRAC,
+            PdfPrefs(wearTraceDepthFrac = 0.8f).clamped().wearTraceDepthFrac, 1e-6f,
+        )
+    }
+
+    @Test
+    fun `in-range wear trace depths pass through clamped verbatim`() {
+        assertEquals(0.05f, PdfPrefs(wearTraceDepthFrac = 0.05f).clamped().wearTraceDepthFrac, 1e-6f)
+        assertEquals(0.13f, PdfPrefs(wearTraceDepthFrac = 0.13f).clamped().wearTraceDepthFrac, 1e-6f)
+        assertEquals(0.25f, PdfPrefs(wearTraceDepthFrac = 0.25f).clamped().wearTraceDepthFrac, 1e-6f)
     }
 
     @Test

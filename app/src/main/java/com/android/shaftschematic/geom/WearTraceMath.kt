@@ -20,8 +20,33 @@ package com.android.shaftschematic.geom
  * Cap on the drawn (exaggerated) wear depth, as a fraction of the drawn radius — the record's
  * deepest reading draws at this depth; shallower readings scale proportionally. Same
  * display-exaggeration posture as the undercut notch: real wear is a hairline at drawing scale.
+ *
+ * The high end of the user-set range AND the shipped default ("25% should be our high end" —
+ * on-device verdict): [WEAR_TRACE_MIN_DEPTH_FRAC]..[WEAR_TRACE_MAX_DEPTH_FRAC], picked per job
+ * (`WearRecord.traceDepthFrac`) over a Settings → Drawing default (`PdfPrefs.wearTraceDepthFrac`)
+ * and resolved by [effectiveWearTraceDepthFrac].
  */
 const val WEAR_TRACE_MAX_DEPTH_FRAC = 0.25f
+
+/**
+ * Low end of the settable exaggeration range — the shallowest a trace may be *exaggerated* to.
+ * It is not a floor on the drawn depth: `buildWearTrace` still never draws shallower than true
+ * scale, so a monstrous wear keeps its true proportion at every setting.
+ */
+const val WEAR_TRACE_MIN_DEPTH_FRAC = 0.05f
+
+/**
+ * The exaggeration cap a document actually draws with — the ONE resolution of the per-job
+ * override against the global default. [recordFrac] is `WearRecord.traceDepthFrac`: `null` means
+ * "follow the Settings default", so a job that never touched its slider tracks later changes to
+ * [globalFrac] while a touched job stays pinned.
+ *
+ * Coercing here is correct rather than a golden-rule violation: this is a display dial, not a
+ * measurement (the `RunoutConfig.heightScale` posture). Every consumer — both draw sites and the
+ * slider UIs — goes through this; no site re-derives it.
+ */
+fun effectiveWearTraceDepthFrac(recordFrac: Float?, globalFrac: Float): Float =
+    (recordFrac ?: globalFrac).coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC)
 
 /**
  * One vertex of a wear trace: component-local axial mm + drawn depth as a fraction of the drawn

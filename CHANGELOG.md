@@ -8,6 +8,31 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### feat: dye pen PASS/FAIL selectable in-app on the wear sheet
+
+The wear sheet's "Dye pen inspection: PASS □ FAIL □" row was hand-marking only. The Wear
+tab now carries Pass/Fail chips: selecting one prints an "X" inside that checkbox, the
+other box stays present and blank, and tapping the selected chip again deselects it —
+returning both boxes to blank exactly as before (which is also what every blank write-in
+draft prints, unchanged). The selection saves with the document.
+
+### feat: adjustable worn-profile trace depth (5–25%), per job + Settings default
+
+The trace shipped with a fixed 25% exaggeration cap; the on-device verdict was "25% should
+be our high end" — so it's now a dial. The Wear tab gets a "Trace depth exaggeration"
+slider (5–25%, 1% steps) that pins the value for the open document, with a **Save as
+default** button that promotes the current value to Settings → Drawing → "Wear depth
+exaggeration" and un-pins the document in one tap — the job then follows the default it
+just created. A document that never touches its slider always follows the Settings
+default; a touched one keeps its chosen look forever (the value rides the wear record in
+the saved file).
+
+One shared slider construction serves both rows, one pure resolver
+(`effectiveWearTraceDepthFrac`) decides the drawn value everywhere — the detail overlay,
+the wear PDF, and the Output tab's Export All can never disagree. The safety rule is
+unchanged at every setting: the trace never draws shallower than true scale, and printed
+Ø values never move.
+
 ### feat: wear document field-use fixes + the worn-profile trace
 
 Four changes from a day of real shop use (on-device reports):

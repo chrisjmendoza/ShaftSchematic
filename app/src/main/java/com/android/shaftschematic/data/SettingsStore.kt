@@ -13,6 +13,8 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
@@ -87,6 +89,7 @@ object SettingsStore {
     private val KEY_PDF_SBREAK_THRESHOLD_FRAC = floatPreferencesKey("pdf_sbreak_threshold_frac")
     private val KEY_PDF_ARROW_SIZE_PT = floatPreferencesKey("pdf_arrow_size_pt")
     private val KEY_PDF_FRACTION_STYLE = stringPreferencesKey("pdf_fraction_style")
+    private val KEY_PDF_WEAR_TRACE_DEPTH_FRAC = floatPreferencesKey("pdf_wear_trace_depth_frac")
 
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
@@ -147,6 +150,19 @@ object SettingsStore {
         ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SBREAK_THRESHOLD_FRAC] ?: PdfPrefs().sBreakThresholdFrac }
     suspend fun setPdfSBreakThresholdFrac(ctx: Context, v: Float) {
         ctx.settingsDataStore.edit { it[KEY_PDF_SBREAK_THRESHOLD_FRAC] = v.coerceIn(0f, 1f) }
+    }
+
+    // Default worn-profile trace exaggeration: how deep the deepest liner reading draws, as a
+    // fraction of the drawn radius. A job may pin its own value (WearRecord.traceDepthFrac).
+    fun pdfWearTraceDepthFracFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p ->
+            (p[KEY_PDF_WEAR_TRACE_DEPTH_FRAC] ?: PdfPrefs().wearTraceDepthFrac)
+                .coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC)
+        }
+    suspend fun setPdfWearTraceDepthFrac(ctx: Context, v: Float) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PDF_WEAR_TRACE_DEPTH_FRAC] = v.coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC)
+        }
     }
 
     // Dimension-rail arrowhead size (pt): one of PDF_ARROW_SIZES_PT.

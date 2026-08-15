@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,6 +63,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
+import com.android.shaftschematic.model.DyePenResult
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.collidingIds
@@ -77,6 +80,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.setPdfWearTraceDepthFrac
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
@@ -134,6 +138,12 @@ fun WearRoute(
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
+    val wearTraceDefault   by vm.pdfWearTraceDepthFrac.collectAsState()
+
+    // The ONE resolution of this job's trace-depth override against the Settings default. Every
+    // consumer on this tab — the slider, the detail overlay's canvas, and every composeWearPdf
+    // call below — reads this same value, which is what keeps the two draw sites identical.
+    val traceDepthFrac = effectiveWearTraceDepthFrac(wearRecord.traceDepthFrac, wearTraceDefault)
 
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
@@ -169,6 +179,7 @@ fun WearRoute(
                     lineThicknessScale = lineThicknessScale,
                     wearRecord = wearRecord,
                     blankValues = blankDraft,
+                    traceDepthFrac = traceDepthFrac,
                 )
             }
             if (wrote && openAfterExport) openWearPdf(ctx, uri)
@@ -177,10 +188,12 @@ fun WearRoute(
 
     // pdfFractionStyle is a key only: the style reaches the ink through
     // FractionTypography.active, which is not snapshot state — without the key a style
-    // change would leave the rasterized preview drawing the old construction.
+    // change would leave the rasterized preview drawing the old construction. traceDepthFrac
+    // is a key for the other half of its pair: a job's own override rides `wearRecord`, but a
+    // change to the Settings default reaches an un-overridden document only through this.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   wearRecord, blankDraft, pdfFractionStyle) {
+                   wearRecord, blankDraft, pdfFractionStyle, traceDepthFrac) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
@@ -193,7 +206,7 @@ fun WearRoute(
                     page = page, spec = spec, project = projectSnapshot, unit = unit,
                     pdfPrefs = prefsSnapshot, resolvedComponents = resolvedComponents,
                     lineThicknessScale = thicknessSnapshot, wearRecord = wearRecord,
-                    blankValues = blankDraft,
+                    blankValues = blankDraft, traceDepthFrac = traceDepthFrac,
                 )
             }
         }
@@ -343,6 +356,58 @@ fun WearRoute(
 
             Spacer(Modifier.height(4.dp))
 
+            // ── Worn-profile trace depth ──────────────────────────────────────
+            // Sits under the shaft it restyles (the undercut sheet's exaggeration slider
+            // posture). Moving it pins THIS job's value; "Save as default" promotes the
+            // current value to the Settings → Drawing default and clears the override in the
+            // same action, so the job then follows the default it just created.
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                WearTraceDepthSlider(
+                    frac = traceDepthFrac,
+                    onCommit = { vm.setWearTraceDepthFrac(it) },
+                    title = "Trace depth exaggeration",
+                    trailing = {
+                        TextButton(
+                            onClick = {
+                                vm.setPdfWearTraceDepthFrac(traceDepthFrac)
+                                vm.setWearTraceDepthFrac(null)
+                            },
+                            enabled = traceDepthFrac != wearTraceDefault,
+                            modifier = Modifier.testTag("wear_trace_save_default"),
+                        ) { Text("Save as default") }
+                    },
+                )
+                Text(
+                    "Deepest measured wear draws at this fraction of the liner radius. " +
+                        "Drawing only — printed Ø values never change.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // ── Dye pen inspection result ─────────────────────────────────────
+            // Selecting a chip prints an "X" inside that PASS/FAIL checkbox on the sheet's
+            // notes row; the other box stays present and blank. Tapping the selected chip
+            // deselects it, returning both boxes to blank for hand-marking (the original
+            // form posture, and what a blank draft always prints).
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Dye pen inspection:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val result = wearRecord.dyePenResult
+                WearChip("Pass", result == DyePenResult.PASS) {
+                    vm.setDyePenResult(if (result == DyePenResult.PASS) null else DyePenResult.PASS)
+                }
+                WearChip("Fail", result == DyePenResult.FAIL) {
+                    vm.setDyePenResult(if (result == DyePenResult.FAIL) null else DyePenResult.FAIL)
+                }
+            }
+
             // ── Blank draft toggle ────────────────────────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
@@ -391,6 +456,7 @@ fun WearRoute(
                     val thicknessSnapshot = lineThicknessScale
                     val recordSnapshot = wearRecord
                     val blankSnapshot = blankDraft
+                    val traceDepthSnapshot = traceDepthFrac
                     printShaftPdfPage(ctx, jobName) { page ->
                         composeWearPdf(
                             page = page, spec = specSnapshot,
@@ -400,6 +466,7 @@ fun WearRoute(
                             lineThicknessScale = thicknessSnapshot,
                             wearRecord = recordSnapshot,
                             blankValues = blankSnapshot,
+                            traceDepthFrac = traceDepthSnapshot,
                         )
                     }
                 },
@@ -466,6 +533,7 @@ fun WearRoute(
             onUpdateDiaReading = vm::updateWearDiaReading,
             onRemoveDiaReading = vm::removeWearDiaReading,
             onClose = { selectedComponentId = null },
+            traceDepthFrac = traceDepthFrac,
         )
     }
 }

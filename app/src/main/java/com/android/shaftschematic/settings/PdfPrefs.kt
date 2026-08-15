@@ -1,5 +1,7 @@
 package com.android.shaftschematic.settings
 
+import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.util.FractionStyle
 
 /**
@@ -89,6 +91,15 @@ data class PdfPrefs(
      * the draw sites actually read.
      */
     val fractionStyle: FractionStyle = FractionStyle.Default,
+    /**
+     * Default worn-profile trace exaggeration (`geom/WearTraceMath.kt`): how deep a record's
+     * deepest liner reading draws, as a fraction of the drawn radius. Settings → Drawing →
+     * "Wear depth exaggeration", [WEAR_TRACE_MIN_DEPTH_FRAC]..[WEAR_TRACE_MAX_DEPTH_FRAC].
+     *
+     * A job may pin its own value (`WearRecord.traceDepthFrac`); this is what a job that never
+     * touched its slider follows, so changing it here restyles every such document.
+     */
+    val wearTraceDepthFrac: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
 ) {
     /** The anchor heights in PDF points (72 pt per paper inch) — what the geometry consumes. */
     val curveLoHeightPt: Float get() = curveLoHeightIn * 72f
@@ -100,5 +111,7 @@ data class PdfPrefs(
             curveHiHeightIn = curveHiHeightIn.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN),
             sBreakThresholdFrac = sBreakThresholdFrac.coerceIn(0f, 1f),
             arrowSizePt = arrowSizePt.coerceIn(PDF_ARROW_SIZE_SMALL_PT, PDF_ARROW_SIZE_LARGE_PT),
+            wearTraceDepthFrac = wearTraceDepthFrac
+                .coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC),
         )
 }

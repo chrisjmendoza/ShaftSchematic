@@ -26,6 +26,8 @@ import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
 import com.android.shaftschematic.ui.input.oalAfterTaperAddMm
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
+import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.geom.clampPitAcrossFrac
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.resolveComponents
@@ -256,6 +258,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // rasterizes with the current PdfPrefs.
     internal val _pdfSBreakThresholdFrac = MutableStateFlow(PdfPrefs().sBreakThresholdFrac)
     val pdfSBreakThresholdFrac: StateFlow<Float> = _pdfSBreakThresholdFrac.asStateFlow()
+
+    // Default worn-profile trace exaggeration — what a document that never touched its own
+    // "Trace depth exaggeration" slider draws with. Also a preview re-render key on the wear
+    // document, whose trace depth follows it.
+    internal val _pdfWearTraceDepthFrac = MutableStateFlow(PdfPrefs().wearTraceDepthFrac)
+    val pdfWearTraceDepthFrac: StateFlow<Float> = _pdfWearTraceDepthFrac.asStateFlow()
 
     // Dimension-rail arrowhead size (pt). Also a preview re-render key on every tab that
     // rasterizes with the current PdfPrefs.
@@ -626,6 +634,33 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /** Remove a reading by [id]. Confirm-free — deleted from its edit dialog. */
     fun removeWearDiaReading(id: String) {
         _wearRecord.update { rec -> rec.copy(diaReadings = rec.diaReadings.filterNot { it.id == id }) }
+    }
+
+    /**
+     * Pin this job's worn-profile trace exaggeration ([WearRecord.traceDepthFrac]), clamped to
+     * [WEAR_TRACE_MIN_DEPTH_FRAC]..[WEAR_TRACE_MAX_DEPTH_FRAC]; `null` clears the override so
+     * the document follows the Settings → Drawing default again.
+     *
+     * Display-only styling for the wear drawing, the undercut-exaggeration posture: the trace
+     * never draws shallower than true scale and stored/printed Ø values never move, so the
+     * golden rule is untouched — but it is per-document, so it lives in the record.
+     */
+    fun setWearTraceDepthFrac(frac: Float?) {
+        val clamped = frac?.coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC)
+        _wearRecord.update { rec ->
+            if (rec.traceDepthFrac == clamped) rec else rec.copy(traceDepthFrac = clamped)
+        }
+    }
+
+    /**
+     * Record the dye penetrant inspection's outcome ([WearRecord.dyePenResult]) — printed as
+     * an "X" in the matching PASS/FAIL checkbox on the wear sheet; `null` returns both boxes
+     * to blank for hand-marking. Reference-only, no geometry effect.
+     */
+    fun setDyePenResult(result: DyePenResult?) {
+        _wearRecord.update { rec ->
+            if (rec.dyePenResult == result) rec else rec.copy(dyePenResult = result)
+        }
     }
 
     // ── Worn sections (consolidated runout/wear sheet) ─────────────────────────
@@ -1199,6 +1234,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfArrowSizePtFlow(getApplication()).collectLatest { persisted ->
                 _pdfArrowSizePt.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(arrowSizePt = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfWearTraceDepthFracFlow(getApplication()).collectLatest { persisted ->
+                _pdfWearTraceDepthFrac.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(wearTraceDepthFrac = persisted) }
             }
         }
         viewModelScope.launch {

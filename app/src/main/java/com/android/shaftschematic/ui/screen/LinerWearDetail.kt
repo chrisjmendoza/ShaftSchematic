@@ -75,6 +75,7 @@ import com.android.shaftschematic.geom.DiaHitTarget
 import com.android.shaftschematic.geom.PitHitTarget
 import com.android.shaftschematic.geom.WearTraceReading
 import com.android.shaftschematic.geom.acrossFracFromTapY
+import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.buildWearTrace
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -165,6 +166,13 @@ fun ComponentWearDetailOverlay(
     onUpdateDiaReading: (id: String, diaMm: Float) -> Unit,
     onRemoveDiaReading: (id: String) -> Unit,
     onClose: () -> Unit,
+    /**
+     * Worn-profile trace exaggeration for this document: how deep the record's deepest valued
+     * liner reading draws, as a fraction of the drawn radius (`geom/WearTraceMath.kt`). The
+     * caller resolves it with `effectiveWearTraceDepthFrac` and hands the SAME value to
+     * `composeWearPdf`, so this canvas and the printed strip render identically.
+     */
+    traceDepthFrac: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
 ) {
     BackHandler { onClose() }
 
@@ -477,6 +485,7 @@ fun ComponentWearDetailOverlay(
                                     readings = traceReadings,
                                     nominalOdMm = liner.odMm,
                                     deepestDepthMm = deepestWearDepth,
+                                    maxDepthFrac = traceDepthFrac,
                                 )
                             }
                         )

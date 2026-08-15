@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.defaultVisualScale
+import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.model.ProjectInfo
@@ -361,6 +362,10 @@ fun OutputRoute(
                             wearRecord = wearRecord,
                             lineThicknessScale = lineThicknessScale,
                             blankValues = blankDraft,
+                            // Same per-job-over-Settings resolution the Wear tab draws with.
+                            traceDepthFrac = effectiveWearTraceDepthFrac(
+                                wearRecord.traceDepthFrac, prefs.wearTraceDepthFrac,
+                            ),
                         )
                         OutputDoc.UNDERCUT -> composeUndercutPdf(
                             page = page, spec = spec, project = project, unit = unit,

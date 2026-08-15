@@ -83,6 +83,15 @@ data class WearSpot(
 enum class PitSize { SMALL, LARGE }
 
 /**
+ * The dye penetrant inspection's recorded outcome. `null` (no selection on [WearRecord])
+ * means "not recorded in-app": both printed checkboxes stay blank for hand-marking, the
+ * original form posture. A selection prints an "X" inside its box; the other box stays
+ * present and blank, so the sheet always reads as the same two-box form.
+ */
+@Serializable
+enum class DyePenResult { PASS, FAIL }
+
+/**
  * A single pit / dye-penetrant failure marker on a component, drawn as an "X".
  *
  * A **pure reference feature**, the same contract class as [WearSpot] / [CouplerBoltSlot] /
@@ -173,6 +182,19 @@ data class WearDiaReading(
  * @property wornSections Designated worn areas whose measured Ø values print inside the
  *   shaft profile on the runout sheet (see [WornSection] — shaft-space, never pruned at
  *   decode). Additive + defaulted, same no-version-bump rule as [pits].
+ * @property dyePenResult The dye penetrant inspection's in-app selection, printed as an "X"
+ *   in the matching PASS/FAIL checkbox of the wear sheet's notes row; `null` keeps both
+ *   boxes blank for hand-marking (see [DyePenResult]). Reference-only data — no geometry
+ *   effect anywhere. Additive + defaulted, same no-version-bump rule as [pits].
+ * @property traceDepthFrac This job's worn-profile trace exaggeration — how deep the record's
+ *   deepest liner reading draws, as a fraction of the drawn radius
+ *   (`geom/WearTraceMath.kt`). `null` = follow the Settings → Drawing default
+ *   (`PdfPrefs.wearTraceDepthFrac`), so a job that never touched its slider tracks later
+ *   changes to that default while a touched job stays pinned; `effectiveWearTraceDepthFrac`
+ *   resolves the pair for every consumer. Display-only styling — it never changes a stored or
+ *   printed Ø, and the trace still never draws shallower than true scale — but it is
+ *   per-document (a sheet keeps its chosen look), so it lives here rather than only in app
+ *   prefs. Additive + defaulted, same no-version-bump rule as [pits].
  */
 @Serializable
 data class WearRecord(
@@ -180,4 +202,6 @@ data class WearRecord(
     val pits: List<WearPit> = emptyList(),
     val diaReadings: List<WearDiaReading> = emptyList(),
     val wornSections: List<WornSection> = emptyList(),
+    val traceDepthFrac: Float? = null,
+    val dyePenResult: DyePenResult? = null,
 )

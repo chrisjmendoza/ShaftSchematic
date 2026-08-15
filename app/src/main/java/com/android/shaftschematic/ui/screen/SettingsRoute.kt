@@ -66,6 +66,7 @@ import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.ui.viewmodel.*
+import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.defaultShaftHeightPt
 import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
@@ -138,6 +139,7 @@ fun SettingsRoute(
     val pdfCurveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
     val pdfCurveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    val pdfWearTraceDepthFrac by vm.pdfWearTraceDepthFrac.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
 
@@ -311,6 +313,13 @@ fun SettingsRoute(
                     SBreakThresholdControl(
                         frac = pdfSBreakThresholdFrac,
                         onCommit = { vm.setPdfSBreakThresholdFrac(it) },
+                    )
+
+                    // The default a wear document follows until it pins its own value from the
+                    // Wear tab's slider (WearRecord.traceDepthFrac).
+                    WearTraceDepthControl(
+                        frac = pdfWearTraceDepthFrac,
+                        onCommit = { vm.setPdfWearTraceDepthFrac(it) },
                     )
 
                     // Same picker both PDF options sheets carry — one PdfPrefs.arrowSizePt.
@@ -761,6 +770,39 @@ private fun SBreakThresholdControl(
             "A body run shows the S-break once it draws shorter than this much of its " +
                 "true length. At Never, compression stays hidden and only very long runs " +
                 "break. Bodies only — liners and tapers never break.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * Worn-profile trace exaggeration on the Settings page: the shared [WearTraceDepthSlider] — the
+ * same control the Wear tab carries — plus a reset to the shipped high end and the explanatory
+ * caption this page has room for. A document that pins its own value from the Wear tab stops
+ * following this one.
+ */
+@Composable
+private fun WearTraceDepthControl(
+    frac: Float,
+    onCommit: (Float) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        WearTraceDepthSlider(
+            frac = frac,
+            onCommit = onCommit,
+            title = "Wear depth exaggeration",
+            trailing = {
+                TextButton(
+                    onClick = { onCommit(WEAR_TRACE_MAX_DEPTH_FRAC) },
+                    enabled = frac != WEAR_TRACE_MAX_DEPTH_FRAC,
+                ) { Text("Default (${fmtTraceDepthPct(WEAR_TRACE_MAX_DEPTH_FRAC)})") }
+            },
+        )
+        Text(
+            "On the wear document, the deepest measured wear draws at this fraction of the " +
+                "liner radius so a hairline cut still reads. Drawing only — printed Ø values " +
+                "never change, and wear deeper than this keeps its true proportion.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

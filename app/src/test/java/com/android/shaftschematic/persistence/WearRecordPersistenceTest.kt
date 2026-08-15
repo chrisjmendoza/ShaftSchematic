@@ -1,6 +1,7 @@
 package com.android.shaftschematic.persistence
 
 import com.android.shaftschematic.doc.ShaftDocCodec
+import com.android.shaftschematic.model.DyePenResult
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.ShaftSpec
@@ -12,6 +13,7 @@ import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.model.WearSpotReference
 import com.android.shaftschematic.model.WornSection
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -59,6 +61,32 @@ class WearRecordPersistenceTest {
         assertEquals(40f, decodedSpot.lengthMm, 0.001f)
         assertEquals(138.5f, decodedSpot.minDiaMm, 0.001f)
         assertEquals("scored, 6 o'clock", decodedSpot.note)
+    }
+
+    @Test
+    fun `dyePenResult round trips through the envelope without a version bump`() {
+        // Additive, defaulted field on WearRecord — no envelope version bump; the selected
+        // outcome must come back exactly.
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(dyePenResult = DyePenResult.FAIL),
+        )
+
+        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
+
+        assertEquals(ShaftDocCodec.Format.ENVELOPE_V1, decoded.format)
+        assertEquals(DyePenResult.FAIL, decoded.wearRecord.dyePenResult)
+    }
+
+    @Test
+    fun `wear record without dyePenResult decodes to no selection`() {
+        // A file saved before the field existed keeps both printed checkboxes blank.
+        val doc = ShaftDocCodec.ShaftDocV1(spec = linerSpec("ln1"), wearRecord = WearRecord())
+        val raw = ShaftDocCodec.encodeV1(doc).replace(Regex(""""dyePenResult"\s*:\s*[^,}]+,?"""), "")
+
+        val decoded = ShaftDocCodec.decode(raw)
+
+        assertNull(decoded.wearRecord.dyePenResult)
     }
 
     @Test
@@ -347,6 +375,45 @@ class WearRecordPersistenceTest {
 
         assertEquals(1, decoded.wearRecord.spots.size)
         assertTrue(decoded.wearRecord.wornSections.isEmpty())
+    }
+
+    // ── Trace depth exaggeration (per-job override of the Settings default) ───
+
+    @Test
+    fun `envelope round trip preserves a pinned trace depth`() {
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(traceDepthFrac = 0.12f),
+        )
+
+        val raw = ShaftDocCodec.encodeV1(doc)
+        assertTrue("expected traceDepthFrac key in JSON", raw.contains("\"traceDepthFrac\""))
+
+        val decoded = ShaftDocCodec.decode(raw)
+        assertEquals(ShaftDocCodec.Format.ENVELOPE_V1, decoded.format)
+        assertEquals(0.12f, decoded.wearRecord.traceDepthFrac!!, 1e-6f)
+    }
+
+    @Test
+    fun `a wear_record json without traceDepthFrac decodes to null (follow the default)`() {
+        // Simulates a file written before the slider existed: null is what makes such a
+        // document track the Settings → Drawing default instead of pinning the old cap.
+        val raw = """
+            {
+              "version": 1, "preferred_unit": "INCHES", "unit_locked": true,
+              "job_number": "", "customer": "", "vessel": "", "shaft_position": "OTHER", "notes": "",
+              "spec": {
+                "overallLengthMm": 500.0,
+                "liners": [ { "id": "ln1", "startMmPhysical": 0.0, "lengthMm": 200.0, "odMm": 50.0, "endMmPhysical": 200.0 } ]
+              },
+              "wear_record": { "spots": [ { "id": "spot-1", "linerId": "ln1", "startMm": 25.0, "lengthMm": 40.0 } ] }
+            }
+        """.trimIndent()
+
+        val decoded = ShaftDocCodec.decode(raw)
+
+        assertEquals(1, decoded.wearRecord.spots.size)
+        assertNull(decoded.wearRecord.traceDepthFrac)
     }
 
     @Test

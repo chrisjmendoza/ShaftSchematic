@@ -161,6 +161,73 @@ class WearTraceMathTest {
         assertEquals(5f / 50f, trace.single { it.localMm == 10f }.depthFrac, 1e-5f)
     }
 
+    @Test
+    fun `a lowered cap scales the whole trace down without touching true scale`() {
+        // The same 11" liner as above at the 5% low end: the deepest reading follows the cap,
+        // and every shallower one keeps its ratio to it.
+        val nominal = inch(11f)
+        val readings = listOf(
+            WearTraceReading(10f, inch(10.5f)),
+            WearTraceReading(20f, inch(10.535f)),
+        )
+        val deepest = deepestWearDepthMm(readings.map { nominal to it.diaMm })
+        val trace = buildWearTrace(
+            bandStartMm = 0f, bandLengthMm = 50f,
+            readings = readings, nominalOdMm = nominal, deepestDepthMm = deepest,
+            maxDepthFrac = WEAR_TRACE_MIN_DEPTH_FRAC,
+        )
+        val byMm = trace.associate { it.localMm to it.depthFrac }
+        assertEquals(WEAR_TRACE_MIN_DEPTH_FRAC, byMm.getValue(10f), 1e-5f)
+        assertEquals(
+            (11f - 10.535f) / (11f - 10.5f) * WEAR_TRACE_MIN_DEPTH_FRAC,
+            byMm.getValue(20f), 1e-5f,
+        )
+    }
+
+    @Test
+    fun `true scale still wins at the lowest cap`() {
+        // 45 mm of radius gone on a 100 mm shaft: true scale is 0.9. Lowering the cap may not
+        // draw a monstrous wear shallower than it truly is.
+        val trace = buildWearTrace(
+            bandStartMm = 0f, bandLengthMm = 20f,
+            readings = listOf(WearTraceReading(10f, 10f)),
+            nominalOdMm = 100f, deepestDepthMm = 45f,
+            maxDepthFrac = WEAR_TRACE_MIN_DEPTH_FRAC,
+        )
+        assertEquals(0.9f, trace.single { it.localMm == 10f }.depthFrac, 1e-5f)
+    }
+
+    // ── effectiveWearTraceDepthFrac (per-job override over the global default) ─
+
+    @Test
+    fun `no per-job override follows the global default`() {
+        assertEquals(0.12f, effectiveWearTraceDepthFrac(null, 0.12f), 1e-6f)
+        assertEquals(
+            WEAR_TRACE_MAX_DEPTH_FRAC,
+            effectiveWearTraceDepthFrac(null, WEAR_TRACE_MAX_DEPTH_FRAC), 1e-6f,
+        )
+    }
+
+    @Test
+    fun `a per-job override wins over the global default`() {
+        assertEquals(0.08f, effectiveWearTraceDepthFrac(0.08f, 0.25f), 1e-6f)
+    }
+
+    @Test
+    fun `the effective value is coerced into the settable range at both ends`() {
+        assertEquals(WEAR_TRACE_MIN_DEPTH_FRAC, effectiveWearTraceDepthFrac(0f, 0.25f), 1e-6f)
+        assertEquals(WEAR_TRACE_MAX_DEPTH_FRAC, effectiveWearTraceDepthFrac(0.9f, 0.25f), 1e-6f)
+        // A stored-out-of-range global is clamped too, not just the override.
+        assertEquals(WEAR_TRACE_MIN_DEPTH_FRAC, effectiveWearTraceDepthFrac(null, -1f), 1e-6f)
+        assertEquals(WEAR_TRACE_MAX_DEPTH_FRAC, effectiveWearTraceDepthFrac(null, 5f), 1e-6f)
+    }
+
+    @Test
+    fun `the settable range runs from 5 to 25 percent`() {
+        assertEquals(0.05f, WEAR_TRACE_MIN_DEPTH_FRAC, 1e-6f)
+        assertEquals(0.25f, WEAR_TRACE_MAX_DEPTH_FRAC, 1e-6f)
+    }
+
     // ── sequenceWearTraces ───────────────────────────────────────────────────
 
     @Test

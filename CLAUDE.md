@@ -104,7 +104,12 @@ callout engine unchanged. Valued **liner** readings inside a wear band additiona
 drawn **worn-profile trace** — the liner's surface line dips through the measured diameters in
 the liner detail strip and the detail overlay, drawn identically in both sites from the pure
 `geom/WearTraceMath.kt` and display-exaggerated like the undercut notch (normalized to the
-record's deepest liner reading, never shallower than true scale). See `RunoutSheet.md` (Wear Diameter
+record's deepest liner reading, never shallower than true scale). That exaggeration cap is
+**user-set**, 5–25% (`WEAR_TRACE_MIN_DEPTH_FRAC`..`WEAR_TRACE_MAX_DEPTH_FRAC`, the max also the
+default): per job via `WearRecord.traceDepthFrac` (additive/optional, `null` = follow the
+Settings → Drawing "Wear depth exaggeration" default, `PdfPrefs.wearTraceDepthFrac`), resolved
+ONCE by `effectiveWearTraceDepthFrac` and handed to both draw sites from the same call site.
+See `RunoutSheet.md` (Wear Diameter
 Measurements) and `WearDiaMeasurements_PLAN.md`.
 
 ### Worn sections are reference features

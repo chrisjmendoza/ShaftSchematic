@@ -12,6 +12,7 @@ import com.android.shaftschematic.geom.PlacedDiaCallout
 import com.android.shaftschematic.geom.SetPositions
 import com.android.shaftschematic.geom.WearTraceReading
 import com.android.shaftschematic.geom.WearTraceVertex
+import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.buildWearTrace
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -105,6 +106,14 @@ fun composeWearPdf(
      * posture).
      */
     blankValues: Boolean = false,
+    /**
+     * Worn-profile trace exaggeration for this sheet: how deep the record's deepest valued liner
+     * reading draws, as a fraction of the drawn radius (`geom/WearTraceMath.kt`). Resolve it at
+     * the call site with `effectiveWearTraceDepthFrac(wearRecord.traceDepthFrac,
+     * pdfPrefs.wearTraceDepthFrac)` — the SAME value the detail overlay draws with, so the two
+     * sites stay identical. Defaults to the shipped high end.
+     */
+    traceDepthFrac: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
 ) {
     val c = page.canvas
     c.drawColor(Color.WHITE)
@@ -331,6 +340,7 @@ fun composeWearPdf(
             linerPits = effectiveRecord.pits.filter { it.componentId == group.liner.id },
             linerDiaReadings = effectiveRecord.diaReadings.filter { it.componentId == group.liner.id },
             deepestWearDepthMm = deepestLinerWearMm,
+            traceDepthFrac = traceDepthFrac,
             blankValues = blankValues,
         )
     }
@@ -339,7 +349,8 @@ fun composeWearPdf(
     }
 
     // ── Notes / dye-pen area ──────────────────────────────────────────────
-    drawWearNotesArea(c, text, contentLeft, contentRight, notesY)
+    // effectiveRecord, not wearRecord: a blank write-in draft keeps both boxes empty.
+    drawWearNotesArea(c, text, contentLeft, contentRight, notesY, effectiveRecord.dyePenResult)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -802,8 +813,9 @@ private fun drawDiaCallouts(c: Canvas, placed: List<PlacedDiaCallout>, dim: Pain
  * the cylinder's top and bottom edges dip through the readings instead of running straight, and
  * the band's grey fill follows them, so the bite reads at a glance (a liner measured half an inch
  * down used to print as a perfect cylinder — on-device report). Depth is display-exaggerated
- * against [deepestWearDepthMm] but never drawn shallower than true scale; the pure construction
- * is `geom/WearTraceMath.kt`, shared with the detail overlay's canvas so both render identically.
+ * against [deepestWearDepthMm], capped at the user-set [traceDepthFrac] but never drawn
+ * shallower than true scale; the pure construction is `geom/WearTraceMath.kt`, shared with the
+ * detail overlay's canvas so both render identically.
  * A band with no valued reading keeps its straight edges and full-rect fill.
  *
  * A liner with no recorded wear (spots empty — every liner gets a strip)
@@ -832,6 +844,7 @@ private fun drawWearDetailStrip(
     linerPits: List<WearPit> = emptyList(),
     linerDiaReadings: List<WearDiaReading> = emptyList(),
     deepestWearDepthMm: Float = 0f,
+    traceDepthFrac: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
     blankValues: Boolean = false,
 ) {
     val ln = group.liner
@@ -881,6 +894,7 @@ private fun drawWearDetailStrip(
             readings = traceReadings,
             nominalOdMm = ln.odMm,
             deepestDepthMm = deepestWearDepthMm,
+            maxDepthFrac = traceDepthFrac,
         )
     }
     val traceVerts = sequenceWearTraces(bandTraces)
@@ -1228,8 +1242,10 @@ private fun drawWearOverflowNote(
 /**
  * Draw the dye penetrant result checkboxes and a notes field at the bottom of the page.
  *
- * The machinist circles PASS or FAIL by hand, then adds free-form notes about damage,
- * pitting locations, or other observations. Phase 2 will add digital entry for these.
+ * [dyePenResult] is the in-app selection ([WearRecord.dyePenResult]): the chosen box gets
+ * an "X" drawn inside it, the other stays present and blank — the form always reads as the
+ * same two-box row. `null` (nothing selected, and every blank write-in draft) leaves both
+ * boxes empty for hand-marking, the original posture. Free-form notes remain hand-written.
  */
 private fun drawWearNotesArea(
     c: Canvas,
@@ -1237,21 +1253,30 @@ private fun drawWearNotesArea(
     left: Float,
     right: Float,
     y: Float,
+    dyePenResult: DyePenResult? = null,
 ) {
     val boxSize = 10f
     var x = left
 
+    fun drawCheckbox(marked: Boolean) {
+        c.drawRect(x, y - boxSize, x + boxSize, y, Paint(text).apply { style = Paint.Style.STROKE; strokeWidth = 1f })
+        if (marked) {
+            // Inset X so the strokes read inside the box rather than merging with its border.
+            val inset = 1.6f
+            val mark = Paint(text).apply { style = Paint.Style.STROKE; strokeWidth = 1.2f }
+            c.drawLine(x + inset, y - boxSize + inset, x + boxSize - inset, y - inset, mark)
+            c.drawLine(x + inset, y - inset, x + boxSize - inset, y - boxSize + inset, mark)
+        }
+        x += boxSize + 4f
+    }
+
     c.drawText("Dye pen inspection: ", x, y, text)
     x += text.measureText("Dye pen inspection: ")
 
-    // PASS checkbox
-    c.drawRect(x, y - boxSize, x + boxSize, y, Paint(text).apply { style = Paint.Style.STROKE; strokeWidth = 1f })
-    x += boxSize + 4f
+    drawCheckbox(marked = dyePenResult == DyePenResult.PASS)
     c.drawText("PASS", x, y, text); x += text.measureText("PASS") + 20f
 
-    // FAIL checkbox
-    c.drawRect(x, y - boxSize, x + boxSize, y, Paint(text).apply { style = Paint.Style.STROKE; strokeWidth = 1f })
-    x += boxSize + 4f
+    drawCheckbox(marked = dyePenResult == DyePenResult.FAIL)
     c.drawText("FAIL", x, y, text); x += text.measureText("FAIL") + 24f
 
     // Notes fill-in line

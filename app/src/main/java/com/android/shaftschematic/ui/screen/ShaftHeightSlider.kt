@@ -32,6 +32,8 @@ import com.android.shaftschematic.geom.PROFILE_MAX_SHAFT_HEIGHT_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
 import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
+import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.hasKeyway
@@ -173,6 +175,62 @@ internal fun SBreakThresholdSlider(
         }
     }
 }
+
+/**
+ * The worn-profile trace exaggeration slider, shared by Settings → Drawing (where it sets the
+ * global default, `PdfPrefs.wearTraceDepthFrac`) and the Wear tab (where it pins this job's
+ * `WearRecord.traceDepthFrac`) — ONE construction behind both, so the two rows read alike and
+ * the range can never drift apart.
+ *
+ * [WEAR_TRACE_MIN_DEPTH_FRAC]..[WEAR_TRACE_MAX_DEPTH_FRAC] in 1% steps; 25% is the shipped high
+ * end and the default ("25% should be our high end" — on-device verdict). Drag is tracked
+ * locally and committed once on release, so drag frames never write DataStore and never mark
+ * the document dirty. [trailing] is the caller's header-row button — a reset in Settings, a
+ * "Save as default" on the Wear tab.
+ */
+@Composable
+internal fun WearTraceDepthSlider(
+    frac: Float,
+    onCommit: (Float) -> Unit,
+    title: String,
+    trailing: @Composable () -> Unit = {},
+) {
+    var depthDrag by remember { mutableStateOf<Float?>(null) }
+    val shown = (depthDrag ?: frac).coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "$title  ${(shown * 100).roundToInt()}%",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            trailing()
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(fmtTraceDepthPct(WEAR_TRACE_MIN_DEPTH_FRAC), style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = {
+                    val stepped = (it * 100f).roundToInt() / 100f
+                    depthDrag = stepped
+                },
+                onValueChangeFinished = {
+                    depthDrag?.let(onCommit)
+                    depthDrag = null
+                },
+                valueRange = WEAR_TRACE_MIN_DEPTH_FRAC..WEAR_TRACE_MAX_DEPTH_FRAC,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .testTag("wear_trace_depth_slider"),
+            )
+            Text(fmtTraceDepthPct(WEAR_TRACE_MAX_DEPTH_FRAC), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/** Whole-percent label for a trace-depth fraction — ONE formatter for every site that shows one. */
+internal fun fmtTraceDepthPct(v: Float): String = "${(v * 100).roundToInt()}%"
 
 /**
  * The "Dimension arrows" size picker, shared by both PDF options sheets and

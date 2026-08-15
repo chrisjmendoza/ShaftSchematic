@@ -373,11 +373,37 @@ they render identically (the draw-both-sites rule, same posture as the pit "X").
 Depth is **display-exaggerated**, the undercut notch's posture: it is normalized to the
 record's deepest valued **liner** reading (`deepestWearDepthMm`, computed ONCE per sheet, so
 every band scales against the same worst wear; body/taper readings never trace and stay out of
-the baseline), which draws at `WEAR_TRACE_MAX_DEPTH_FRAC` of the drawn radius — but **never
-shallower than true scale**, so a monstrous wear past the cap keeps its true proportion. A band
-with no valued reading keeps its straight edges and full-rect fill; readings at or above
-nominal contribute a surface (0-depth) vertex. Draw-only: no model, resolve, OAL, collision, or
-codec change, and printed Ø values stay the stored numbers.
+the baseline), which draws at the sheet's exaggeration cap — but **never shallower than true
+scale**, so a monstrous wear past the cap keeps its true proportion. A band with no valued
+reading keeps its straight edges and full-rect fill; readings at or above nominal contribute a
+surface (0-depth) vertex. Draw-only: no model, resolve, OAL, collision, or codec change, and
+printed Ø values stay the stored numbers.
+
+The cap is **user-set**, `WEAR_TRACE_MIN_DEPTH_FRAC`..`WEAR_TRACE_MAX_DEPTH_FRAC`
+(**5–25%** in 1% steps; 25% is both the hard high end and the shipped default — on-device
+verdict "25% should be our high end"):
+
+- **Per job** — `WearRecord.traceDepthFrac`, an additive optional field on the existing
+  `wear_record` envelope (no codec plumbing; an older file decodes to `null`). `null` = *follow
+  the global default*, so a job that never touched its slider tracks later changes to that
+  default while a touched job stays pinned. Display dial, not a measurement: coercing it into
+  range is correct (the `RunoutConfig.heightScale` posture), and it never moves a stored or
+  printed Ø.
+- **Global default** — `PdfPrefs.wearTraceDepthFrac`, Settings → Drawing → **"Wear depth
+  exaggeration"** (full DataStore round-trip, coerced into range on read and write).
+- **One resolution** — `effectiveWearTraceDepthFrac(recordFrac, globalFrac)` in
+  `geom/WearTraceMath.kt`. Every consumer goes through it; no site re-derives. It reaches the
+  PDF as `composeWearPdf(traceDepthFrac = …)` (threaded on to `drawWearDetailStrip` →
+  `buildWearTrace(maxDepthFrac = …)`) and the canvas as
+  `ComponentWearDetailOverlay(traceDepthFrac = …)`, both resolved at the same call site so the
+  two draw sites can never disagree. It is also a **re-render key** on the wear preview: a job's
+  own override rides `wearRecord`, but a change to the Settings default reaches an
+  un-overridden document only through the key.
+- **UI** — the Wear tab's "Trace depth exaggeration" row (shared `WearTraceDepthSlider`, drag
+  tracked locally and committed once on release) writes the per-job override; its
+  **"Save as default"** button — enabled only while the effective value differs from the stored
+  global — writes the current value to the global pref AND clears the override in the same
+  action, so the job then follows the default it just created.
 
 ---
 
@@ -905,6 +931,12 @@ dimension line below it) — see "Label rule" above.
 - Witness (extension) lines are drawn at `x0` and `x1` from just above the shaft top up through the dimension line, matching standard engineering drawing convention.
 - **Direction reference** (`drawWearDirectionRef`, 2026-07-21): "← AFT" (left) and "FWD →" (right) drawn just below the shaft's bottom edge so a shop reader can orient the whole sheet (AFT drawn left, FWD right — the SET/schematic convention).
 - Notes row is anchored at `contentBot − WEAR_NOTES_BOTTOM_OFFSET_PT`, independent of shaft size.
+- **Dye pen PASS/FAIL is selectable in-app** (`WearRecord.dyePenResult` — additive, defaulted,
+  no version bump; Wear tab "Dye pen inspection:" Pass/Fail chips, tap the selected chip to
+  deselect). A selection draws an "X" inside its checkbox (`drawWearNotesArea`); the other box
+  stays present and blank so the form always reads as the same two-box row. No selection — and
+  every blank write-in draft, via `effectiveRecord` — keeps both boxes blank for hand-marking,
+  the original posture. Reference-only: no geometry effect anywhere.
 
 **Layout constants (`WearPdfComposer.kt`):**
 
@@ -1256,7 +1288,8 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
 - Printable measurement table rows below each bubble.
 - User-selectable keyway reference angle (the cutout is currently fixed at 12 o'clock; the high-spot
   marker is already fully user-placed).
-- Severity rating / dye-pen pass-fail digitization and photos on wear spots (explicitly out of
-  scope for the liner wear feature — see `docs/LinerWearAreas_Proposal.md` §1).
+- Severity rating and photos on wear spots (explicitly out of scope for the liner wear
+  feature — see `docs/LinerWearAreas_Proposal.md` §1). The sheet-level dye-pen PASS/FAIL is
+  digitized (see "Key layout decisions" above); a per-spot rating is not.
 - Wear *bands* on bodies/tapers, not just liners (pit "X" markers already work on all three — see
   "Wear Pits" above; bands remain liner-only for now). Was the proposal's §10.5 open question.

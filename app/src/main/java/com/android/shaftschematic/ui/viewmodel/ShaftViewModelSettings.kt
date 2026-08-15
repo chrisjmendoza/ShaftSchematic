@@ -2,6 +2,8 @@ package com.android.shaftschematic.ui.viewmodel
 
 import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
+import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.pdf.PdfExportMode
 import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
@@ -100,6 +102,18 @@ fun ShaftViewModel.setPdfSBreakThresholdFrac(v: Float, persist: Boolean = true) 
     _pdfSBreakThresholdFrac.value = clamped
     SettingsStore.updatePdfPrefs { it.copy(sBreakThresholdFrac = clamped) }
     if (persist) viewModelScope.launch { SettingsStore.setPdfSBreakThresholdFrac(getApplication(), clamped) }
+}
+
+/**
+ * Wired to Settings → Drawing → "Wear depth exaggeration" and to the Wear tab's
+ * "Save as default" button — the value a document with no `WearRecord.traceDepthFrac`
+ * override draws its worn-profile trace with.
+ */
+fun ShaftViewModel.setPdfWearTraceDepthFrac(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC)
+    _pdfWearTraceDepthFrac.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(wearTraceDepthFrac = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfWearTraceDepthFrac(getApplication(), clamped) }
 }
 
 /** Wired to the PDF options sheets and Settings → Drawing → "Dimension arrows". */
