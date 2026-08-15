@@ -942,8 +942,12 @@ private fun pitCenterPx(
     return cx to cy
 }
 
-/** Base half-arm (dp) of a SMALL pit "X" on the detail canvas; LARGE scales by the shared ratio. */
-private const val PIT_SMALL_HALF_DP = 4.5f
+/**
+ * Base half-arm (dp) of a SMALL pit "X" on the detail canvas; LARGE scales by the shared ratio.
+ * Sized so LARGE lands where SMALL used to draw (on-device report: the old SMALL was the right
+ * size for a big cavity, and a small hole's mark belongs proportionally under it).
+ */
+private const val PIT_SMALL_HALF_DP = 2.25f
 
 /**
  * Clear space (dp) reserved outside each neighbor stub for its S-curve break edge. The

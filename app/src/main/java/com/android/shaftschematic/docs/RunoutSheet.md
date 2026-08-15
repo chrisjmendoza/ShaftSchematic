@@ -281,14 +281,19 @@ all pits** button. The tap handler and the Canvas renderer share one layout
 `geom/WearPitMath.kt`, generous touch pad).
 
 **Rendering** (all draw sites, in lockstep — same crossed-line construction, same small:large
-ratio; only the destination units and API differ, exactly like the runout marker):
+ratio; only the destination units and API differ, exactly like the runout marker). Every base
+half-arm was halved 2026-08-14 so LARGE lands exactly where SMALL used to draw (on-device
+report: the old SMALL read as the right size for a big cavity, and a small hole's mark belongs
+proportionally under it); the PDF X stroke now derives from the arm (30%, floored at
+`WEAR_PIT_MIN_STROKE_PT` 0.6pt — the canvas's own rule) instead of the outline width, or the
+halved arms would blob:
 - **Canvas detail:** `LinerWearDetail.kt`'s `drawPitX` (Compose `DrawScope`), base half-arm
-  `PIT_SMALL_HALF_DP` (4.5dp; large 9dp).
+  `PIT_SMALL_HALF_DP` (2.25dp; large 4.5dp).
 - **PDF main profile:** `WearPdfComposer.drawWearPitsOnProfile` — X at each pit's true axial +
   across position, taper diameter interpolated at the pit's axial. Base half-arm
-  `WEAR_PIT_SMALL_HALF_PROFILE_PT` (1.7pt; large 3.4pt). The shaft profile is always drawn now (see "Wear PDF
+  `WEAR_PIT_SMALL_HALF_PROFILE_PT` (0.85pt; large 1.7pt). The shaft profile is always drawn now (see "Wear PDF
   Rendering Modes"), so body/taper pits always have a whole-shaft view.
-- **PDF detail strip:** liner pits also drawn on the broken-out strip (base half-arm 2.5pt; large 5.0pt),
+- **PDF detail strip:** liner pits also drawn on the broken-out strip (base half-arm 1.25pt; large 2.5pt),
   reinforcing the profile pits at the strip's larger scale.
 
 ---
