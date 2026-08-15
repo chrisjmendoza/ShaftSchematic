@@ -92,16 +92,24 @@ const val PROFILE_MIN_BODY_RUN_PT = 64f // write a diameter, hang runout leaders
 const val PROFILE_MIN_LINER_PT = 100f   // room to write wear values in / read the liner
 
 // Ratio-preserving taper floor: tapers keep at least this fraction of their true drawn
-// width (λ-fit like the liner raises — the drawn height never yields to it).
-const val PROFILE_TAPER_MIN_FRAC_OF_TRUE = 0.5f
+// width (λ-fit like the liner raises — the drawn height never yields to it). Deliberately
+// the LARGEST fraction in the λ pool: within the shared λ, width flows to spans in
+// proportion to their fraction, so tapers out-prioritize body runs by this ratio
+// (on-device request: "sacrifice a little more of the body compression to make the
+// tapers more proportional — liners get the most proportionality but tapers are
+// important too").
+const val PROFILE_TAPER_MIN_FRAC_OF_TRUE = 0.7f
 
 // Ratio-preserving BODY-RUN floor: body gaps join the same λ pool so liner raises can
 // never consume the whole page (on-device report: with proportional liners the body
 // runs collapsed to their flat floors — equalized slivers, "I can't tell that the span
 // between the aft and mid liner is longer"). Body runs keep at least this fraction of
 // true width × λ, so their relative lengths always read; when space is tight, liners
-// and bodies shrink TOGETHER (one λ) instead of liners taking all the slack.
-const val PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE = 0.35f
+// and bodies shrink TOGETHER (one λ) instead of liners taking all the slack. Body runs
+// carry the SMALLEST fraction in the pool — they are the give that funds taper
+// proportionality (see the taper floor above); their relative lengths still read at any
+// squeeze because the fraction is ratio-preserving.
+const val PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE = 0.30f
 
 // Schematic-only lean floors (on-device direction, experiment: the schematic needs
 // PROPORTION more than write-in room — its values live on dimension rails and

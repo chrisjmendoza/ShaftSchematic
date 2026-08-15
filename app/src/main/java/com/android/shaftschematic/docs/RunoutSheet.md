@@ -627,14 +627,19 @@ On-device request following the worn-sections review:
     that still lays out; "doesn't have to be perfectly proportional, just close").
     **Tapers may shrink but never equalize**: no flat floor (a flat floor equalizes
     unequal tapers when both clamp to it — on-device report) — a ratio-preserving
-    fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE`, λ-fit, never
-    lowers the height; relative taper widths always read true). The x axis is
+    fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` 0.7, λ-fit, never
+    lowers the height; relative taper widths always read true). The taper fraction is
+    deliberately the pool's LARGEST — within the shared λ, width flows to spans in
+    proportion to their fraction, so tapers out-prioritize body runs ("sacrifice a
+    little more of the body compression to make the tapers more proportional" —
+    on-device request, 2026-08-14; body runs fund it at 0.30 and their relative lengths
+    still read because their fraction is ratio-preserving too). The x axis is
     otherwise schematic: spans may foreshorten but each kind keeps a writable minimum
     drawn width
     (`PROFILE_MIN_THREAD_PT` 36; `PROFILE_MIN_BODY_RUN_PT` 64 — room to write
     diameters and hang runout leaders, on-device request — and body runs additionally
     carry a ratio-preserving fraction-of-true floor in the SHARED λ pool,
-    `PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` 0.35, the same mechanism tapers and liners use
+    `PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` 0.30, the same mechanism tapers and liners use
     (on-device report: with proportional liners the body runs starved down to their
     flat floors — equalized slivers, "I can't tell that the span between the aft and
     mid liner is longer"), so gaps and raises shrink TOGETHER under one λ and relative

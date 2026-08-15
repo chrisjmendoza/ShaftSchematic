@@ -516,7 +516,7 @@ class ProfileCompressionTest {
         val gapAft = map.xAt(500f) - map.xAt(0f)      // 500mm run
         val gapMid = map.xAt(2100f) - map.xAt(1200f)  // 900mm run
         assertEquals("body runs keep true ratio", 900f / 500f, gapMid / gapAft, 0.02f)
-        assertTrue("runs draw above the flat floor ($gapAft)", gapAft > PROFILE_MIN_BODY_RUN_PT + 5f)
+        assertTrue("runs draw above the flat floor ($gapAft)", gapAft > PROFILE_MIN_BODY_RUN_PT + 1f)
         // Liners also keep their own ratio (700mm vs 300mm) under the shared λ.
         val linerA = map.xAt(1200f) - map.xAt(500f)
         val linerB = map.xAt(2400f) - map.xAt(2100f)
@@ -543,6 +543,35 @@ class ProfileCompressionTest {
         val wFwd = map.xAt(1992f) - map.xAt(1700f)
         assertEquals("true ratio must survive the squeeze", 495f / 292f, wAft / wFwd, 1e-2f)
         assertTrue("frac floor holds", wAft >= 495f * PROFILE_TAPER_MIN_FRAC_OF_TRUE - 0.5f)
+    }
+
+    @Test
+    fun `tapers out-prioritize body runs in the shared lambda pool`() {
+        // On-device request: "sacrifice a little more of the body compression to make the
+        // tapers more proportional." Under a hard squeeze both floors λ-fit, so neither is
+        // absolute — the guarantee is PRIORITY: each span's kept fraction of true width
+        // scales with its pool fraction (same λ), so the taper's kept fraction exceeds the
+        // body run's by exactly the ratio of the two constants.
+        val map = buildCompressedProfileXMap(
+            windowStartMm = 0f, windowEndMm = 3000f,
+            features = listOf(
+                ProfileFeatureSpan(0f, 400f, 0f, minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE),
+            ),
+            contentLeft = 0f, contentRight = 700f,
+            diaPtPerMm = 1f,
+        )
+        val taperKept = (map.xAt(400f) - map.xAt(0f)) / 400f
+        val bodyKept = (map.xAt(3000f) - map.xAt(400f)) / 2600f
+        assertEquals(
+            "kept fractions must scale with the pool fractions",
+            PROFILE_TAPER_MIN_FRAC_OF_TRUE / PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE,
+            taperKept / bodyKept,
+            0.02f,
+        )
+        assertTrue(
+            "taper fraction must stay the pool's largest for the priority to hold",
+            PROFILE_TAPER_MIN_FRAC_OF_TRUE > PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE,
+        )
     }
 
     @Test

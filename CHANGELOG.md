@@ -16,6 +16,20 @@ other box stays present and blank, and tapping the selected chip again deselects
 returning both boxes to blank exactly as before (which is also what every blank write-in
 draft prints, unchanged). The selection saves with the document.
 
+### feat: tapers draw more proportional; body runs give a little more compression
+
+On the consolidated sheet a short taper drew barely wider than the S-breaks beside it
+(on-device request: "sacrifice a little more of the body compression to make the tapers
+more proportional — liners get the most proportionality but tapers are important too").
+The taper fraction-of-true floor rises from 50% to 70% of true width and the body-run
+fraction eases from 35% to 30% — within the shared λ pool, width flows in proportion to
+the fractions, so tapers now out-prioritize body runs on every squeezed sheet
+(schematic, runout, and consolidated all share the constants).
+
+Nothing structural changes: both floors stay ratio-preserving, so unequal tapers still
+never equalize and body-run relative lengths still read; liner behavior, keyway pins,
+and the drawn height are untouched.
+
 ### feat: adjustable worn-profile trace depth (5–25%), per job + Settings default
 
 The trace shipped with a fixed 25% exaggeration cap; the on-device verdict was "25% should

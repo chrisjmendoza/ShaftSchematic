@@ -145,9 +145,12 @@ spans foreshortened above per-kind width floors via the
 pure mapping `geom/ProfileCompression.kt`, everything through the one piecewise `xAt`.
 **TAPERS may shrink but NEVER equalize** — they carry NO flat floor (a flat floor made
 a 19.5" and an 11.5" taper draw identical, on-device report); instead a
-ratio-preserving fraction-of-true floor (`PROFILE_TAPER_MIN_FRAC_OF_TRUE`, λ-fit like
-the liner raises — ratio preservation is structural: same λ, same K threshold, so
+ratio-preserving fraction-of-true floor (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` 0.7, λ-fit
+like the liner raises — ratio preservation is structural: same λ, same K threshold, so
 relative taper widths always read true, and the drawn height never yields to it). The
+taper fraction is deliberately the λ pool's largest: width flows in proportion to the
+fractions, so tapers out-prioritize body runs (on-device request — body compression is
+the give that funds taper proportionality). The
 SCHEMATIC composer uses the lean `SCHEMATIC_MIN_*` floors (28/40/56 — its values live
 on rails/callouts, so proportion wins); the runout/consolidated sheet keeps the
 writable `PROFILE_MIN_*` floors.
@@ -176,7 +179,7 @@ scale solve, and λ-fit whatever room the page has at the selected height
 Output tab + schematic Tune sheet with a live kept-% readout
 (`estimatedLinerKeptFracOfTrue`); ONLY keyway-bearing bodies stay pinned at true width
 with the height yielding (`solveMaxProfileScale`). Body runs join the same λ pool
-(`PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` 0.35 — ratio-preserving gap floors), so liner raises
+(`PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` 0.30 — ratio-preserving gap floors), so liner raises
 can never consume the page and body-run relative lengths always read.
 The **"Shaft height" slider** (`RunoutConfig.heightScale`,
 per-job in the envelope — ONE value behind the runout/consolidated sheets AND the
