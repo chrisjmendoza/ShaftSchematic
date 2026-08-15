@@ -684,18 +684,14 @@ private fun drawWearBandsOnProfile(
     }
 }
 
-// Pit half-arms are sized so LARGE lands where SMALL used to draw (on-device report: the old
-// SMALL was the right size for a big cavity; a small hole's mark belongs proportionally under
-// it). The stroke follows the arm (drawWearPitX), so the halved symbols stay crisp X's.
+// Printed pit sizes are the confirmed-good baseline (on-device clarification: only the detail
+// OVERLAY drew its X's oversized — these PDF arms and their outline-width stroke were right).
 
 /** SMALL pit half-arm (pt) on the main shaft profile; LARGE scales by the shared ratio. */
-internal const val WEAR_PIT_SMALL_HALF_PROFILE_PT = 0.85f
+internal const val WEAR_PIT_SMALL_HALF_PROFILE_PT = 1.7f
 
 /** SMALL pit half-arm (pt) on a broken-out detail strip (zoomed, so a touch larger). */
-private const val WEAR_PIT_SMALL_HALF_STRIP_PT = 1.25f
-
-/** Floor on a printed pit X's stroke so the smallest mark still inks reliably. */
-private const val WEAR_PIT_MIN_STROKE_PT = 0.6f
+private const val WEAR_PIT_SMALL_HALF_STRIP_PT = 2.5f
 
 /**
  * Pit "X" markers on the MAIN shaft profile, at each pit's true axial + across position. A pit
@@ -741,18 +737,10 @@ internal fun drawWearPitsOnProfile(
     }
 }
 
-/**
- * A pit "X": two crossed strokes centred on `(cx, cy)`, half-arm [half]. Stroke width derives
- * from the arm (30%, floored at [WEAR_PIT_MIN_STROKE_PT]) — the detail canvas's exact rule — so
- * the symbol keeps its proportions at every size; a fixed outline-width stroke would blob the
- * halved arms into dots. [paint] contributes color/caps only.
- */
+/** A pit "X": two crossed strokes centred on `(cx, cy)`, half-arm [half]. */
 private fun drawWearPitX(c: Canvas, cx: Float, cy: Float, half: Float, paint: Paint) {
-    val p = Paint(paint).apply {
-        strokeWidth = (half * 0.30f).coerceAtLeast(WEAR_PIT_MIN_STROKE_PT)
-    }
-    c.drawLine(cx - half, cy - half, cx + half, cy + half, p)
-    c.drawLine(cx - half, cy + half, cx + half, cy - half, p)
+    c.drawLine(cx - half, cy - half, cx + half, cy + half, paint)
+    c.drawLine(cx - half, cy + half, cx + half, cy - half, paint)
 }
 
 /**

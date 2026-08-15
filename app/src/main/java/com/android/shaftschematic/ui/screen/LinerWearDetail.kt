@@ -944,8 +944,9 @@ private fun pitCenterPx(
 
 /**
  * Base half-arm (dp) of a SMALL pit "X" on the detail canvas; LARGE scales by the shared ratio.
- * Sized so LARGE lands where SMALL used to draw (on-device report: the old SMALL was the right
- * size for a big cavity, and a small hole's mark belongs proportionally under it).
+ * Halved from its original value so LARGE lands where SMALL used to draw — an OVERLAY-only
+ * correction (on-device clarification: this canvas drew its X's oversized; the printed sizes
+ * were already right and are untouched).
  */
 private const val PIT_SMALL_HALF_DP = 2.25f
 

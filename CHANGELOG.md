@@ -8,15 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
-### fix: pit X marks sized to the hand convention — old Small is the new Large
+### fix: pit X marks sized to the hand convention — old Small is the new Large (overlay only)
 
-The pit "X" symbols drew oversized (on-device report: "these are my small x marks — these
-should be the large, and the small proportionally smaller"). Every draw site's base size is
-halved, so a Large X now lands exactly where Small used to, and Small sits proportionally
-under it — detail canvas, wear-sheet profile, detail strips, and the consolidated sheet all
-move together (shared construction). The printed X's stroke now follows the symbol's arm
-(the on-screen rule) instead of the outline width, so the smaller marks print as crisp X's
-rather than blobs.
+The wear-inspection overlay drew its pit "X"s oversized (on-device report: "these are my
+small x marks — these should be the large, and the small proportionally smaller"). The
+overlay's base size is halved, so a Large X now lands exactly where Small used to and Small
+sits proportionally under it. Printed output is untouched: the wear sheet, detail strips,
+and consolidated sheet were confirmed right on paper and keep their exact sizes and stroke.
+(An initial over-correction also halved the printed marks; it was reverted the same day —
+only intermediate builds between the two commits carried it.)
 
 ### feat: the wear preview's PDF options tune the sheet being looked at
 
