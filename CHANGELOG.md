@@ -8,6 +8,31 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-15
 
+### fix: wear strip ends, break gaps, and titles read the way the shaft actually is
+
+Three corrections to the wear sheet's detail strips, all from printed sheets.
+
+**A strip end only breaks where the shaft continues.** The S-curve break is a promise that there
+is more shaft past the stub, and it was being drawn at every window end — including the end of the
+shaft itself. Now the end style follows what is actually beyond the window edge: nothing beyond
+draws no stub at all, just the component's own end face at full weight; a remainder that is
+nothing but the threaded end draws that whole thread, flat-ended and hatched; and only a genuine
+continuation keeps the break. This is the convention the on-screen wear detail already used, now
+matched on paper.
+
+**A compressed gap draws the shaft that is really there.** The outline used to jump straight to
+the adjacent component's edge diameter, which made the component itself look like it had shifted,
+and the break sat hard against that edge with no connecting shaft drawn at all. Each break now
+stands off by a short lead-in of the gap's true outline, so the strip reads: component edge → a
+bit of real shaft → break → the removed length → break → a bit of real shaft → next component.
+
+**Titles belong to what is attached.** A compressed break means the components either side are
+*not* adjacent, so a single joined "A + B — 110 FROM AFT S.E.T." title across one misread as a
+continuous area. Each attached cluster now titles itself, centred under its own drawn span. And an
+attached taper + liner prints no from-SET measurement: the strip's dimension rail is the measuring
+surface, and a taper sitting at the shaft end needs no distance to explain where it is. A lone
+liner or a lone body run keeps the anchor dimension, in exactly the placement it has always had.
+
 ### feat: coupling face — the end view, digitized
 
 The shops hand-draw a coupling end view in the corner of a runout sheet: the coupling OD, the

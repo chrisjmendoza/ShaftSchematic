@@ -427,6 +427,17 @@ const val WEAR_STRIP_TRUE_GAP_MAX_MM = PDF_WEAR_JOIN_GAP_DEFAULT_MM      // 3"
 /** Fixed drawn width of a compressed gap — the open run between the S-break pair. */
 const val WEAR_STRIP_BREAK_GAP_PT = 40f
 
+/**
+ * Short run of TRUE shaft outline drawn from each component edge into a compressed gap, before
+ * that side's S-break edge. Without it the break sits hard against the component edge with no
+ * connecting shaft between the two (on-device report); with it the strip reads
+ * "edge cap → a bit of real shaft → break → removed length → break → a bit of real shaft".
+ *
+ * Constraint: must stay below [WEAR_STRIP_BREAK_GAP_PT] / 2, or the two lead-ins meet and the
+ * break pair loses the open space that marks the removed length.
+ */
+const val WEAR_STRIP_BREAK_LEAD_PT = 10f
+
 /** Which kind of component a strip segment holds; each draws its own silhouette. */
 enum class WearStripComponentKind { LINER, TAPER, BODY }
 
@@ -518,7 +529,7 @@ data class WearStripWindow(val segments: List<WearStripSegment>) {
     val components: List<WearStripComponent>
         get() = segments.filterIsInstance<WearStripComponentSeg>().map { it.component }
 
-    /** The window's liner, if it has one — it owns the title's anchor label and the wear rail. */
+    /** The window's liner, if it has one — it owns the wear rail and its cluster's anchor label. */
     val liner: WearStripComponent? get() = components.firstOrNull { it.kind == WearStripComponentKind.LINER }
 
     /** Largest diameter drawn in this window — the reference the strip's radii scale against. */
@@ -555,6 +566,53 @@ data class WearStripWindow(val segments: List<WearStripSegment>) {
         return x + (mm - endMm) * ptPerMm
     }
 }
+
+/**
+ * One run of a window's components that the drawing shows as physically ATTACHED — everything
+ * joined by true-scale gaps, or touching outright. A cluster is what one strip title names.
+ *
+ * A compressed gap means the components either side of it are NOT adjacent, so they land in
+ * different clusters: one joined "A + B — dist FROM SET" title across a break reads as one
+ * continuous area and misleads (on-device request).
+ */
+data class WearStripCluster(val components: List<WearStripComponent>) {
+    val startMm: Float get() = components.firstOrNull()?.startMm ?: 0f
+    val endMm: Float get() = components.lastOrNull()?.endMm ?: 0f
+}
+
+/**
+ * Splits [window]'s component run at every COMPRESSED gap segment, AFT→FWD; components joined by
+ * true-scale gaps (or touching) stay in one cluster. A window with no compressed gap — every
+ * single-component window included — is one cluster, so the historical single-title strip is
+ * unchanged.
+ */
+fun wearStripClusters(window: WearStripWindow): List<WearStripCluster> {
+    val out = mutableListOf<WearStripCluster>()
+    var run = mutableListOf<WearStripComponent>()
+    window.segments.forEach { seg ->
+        when (seg) {
+            is WearStripComponentSeg -> run += seg.component
+            is WearStripGapSeg -> if (!seg.trueScale && run.isNotEmpty()) {
+                out += WearStripCluster(run)
+                run = mutableListOf()
+            }
+        }
+    }
+    if (run.isNotEmpty()) out += WearStripCluster(run)
+    return out
+}
+
+/**
+ * Whether a cluster prints an anchor-from-SET dimension under its name: it does unless the
+ * cluster holds a **taper** — i.e. only a lone liner or a lone body run carries one.
+ *
+ * An attached taper + liner needs no from-SET measurement (on-device request): the strip's own
+ * dimension rail is the measuring surface, and a taper sitting at the shaft end is
+ * self-evidently placed. A lone liner or body keeps the anchor dimension the strip has always
+ * printed — the "110 FROM CPLG S.E.T." line of the shop sketch.
+ */
+fun wearStripClusterShowsAnchor(cluster: WearStripCluster): Boolean =
+    cluster.components.none { it.kind == WearStripComponentKind.TAPER }
 
 /** Which side of a liner a taper attaches on — at most one taper joins from each. */
 private enum class TaperSide { AFT, FWD }
@@ -1112,6 +1170,74 @@ fun neighborDiaMmAtFwd(spec: ShaftSpec, linerFwdMm: Float, epsMm: Float = NEIGHB
     spec.tapers.forEach { if (abs(it.startFromAftMm - linerFwdMm) <= epsMm) return it.startDiaMm }
     spec.threads.forEach { if (abs(it.startFromAftMm - linerFwdMm) <= epsMm) return it.majorDiaMm }
     return null
+}
+
+/** How a strip window's outer end is drawn — see [wearStripEndStyle]. */
+enum class WearStripEndStyle {
+    /** Shaft continues past the window: the fixed-width stub truncates it, so it ends in an S-break. */
+    BREAK,
+    /** All that remains beyond is threaded: a flat outer edge + thread hatch, no break. */
+    THREAD_END,
+    /** Nothing lies beyond: the shaft physically ends at the window edge, so no stub is drawn. */
+    FLAT,
+}
+
+/**
+ * How the strip window's end at [edgeMm] should be drawn — [aftSide] picks which end
+ * ([WearStripWindow.startMm] vs [WearStripWindow.endMm]).
+ *
+ * Every component span in [spec] (bodies, tapers, liners, threads) that extends beyond the edge
+ * by more than [epsMm] is considered:
+ * - none → [WearStripEndStyle.FLAT],
+ * - all of them threads → [WearStripEndStyle.THREAD_END],
+ * - otherwise → [WearStripEndStyle.BREAK].
+ *
+ * The stub's S-break says "the shaft continues past here", so it may only be drawn where it
+ * does. Where the remaining shaft is nothing but the threaded end, the stub shows the WHOLE
+ * remainder rather than a truncation, and so gets a flat outer edge + thread hatch instead of the
+ * S-curve — the wear detail overlay's `leftIsEndThread`/`rightIsEndThread` convention
+ * (`ui/screen/LinerWearDetail.kt`), mirrored here. Where nothing at all lies beyond, the shaft
+ * simply ends and no stub belongs there.
+ *
+ * [spec] must have its bodies already resolved (`ShaftSpec.withResolvedBodies`), the same
+ * contract [neighborDiaMmAtAft] carries: raw spec bodies may legally run under a liner and would
+ * otherwise report a continuation that the drawn shaft doesn't have.
+ */
+fun wearStripEndStyle(
+    spec: ShaftSpec,
+    edgeMm: Float,
+    aftSide: Boolean,
+    epsMm: Float = NEIGHBOR_EPS_MM,
+): WearStripEndStyle {
+    fun beyond(startMm: Float, lengthMm: Float): Boolean =
+        if (aftSide) startMm < edgeMm - epsMm else startMm + lengthMm > edgeMm + epsMm
+
+    spec.bodies.forEach { if (beyond(it.startFromAftMm, it.lengthMm)) return WearStripEndStyle.BREAK }
+    spec.tapers.forEach { if (beyond(it.startFromAftMm, it.lengthMm)) return WearStripEndStyle.BREAK }
+    spec.liners.forEach { if (beyond(it.startFromAftMm, it.lengthMm)) return WearStripEndStyle.BREAK }
+    val thread = spec.threads.any { beyond(it.startFromAftMm, it.lengthMm) }
+    return if (thread) WearStripEndStyle.THREAD_END else WearStripEndStyle.FLAT
+}
+
+/**
+ * Major diameter of the threaded shaft end beyond [edgeMm] — the largest of the threads that
+ * extend past it, `0` when none do. Sizes the [WearStripEndStyle.THREAD_END] stub, which draws
+ * the real remaining shaft rather than a truncation and so must carry the thread's own diameter.
+ * Same side convention and resolved-bodies contract as [wearStripEndStyle].
+ */
+fun wearStripEndThreadDiaMm(
+    spec: ShaftSpec,
+    edgeMm: Float,
+    aftSide: Boolean,
+    epsMm: Float = NEIGHBOR_EPS_MM,
+): Float {
+    var dia = 0f
+    spec.threads.forEach {
+        val out = if (aftSide) it.startFromAftMm < edgeMm - epsMm
+        else it.startFromAftMm + it.lengthMm > edgeMm + epsMm
+        if (out) dia = maxOf(dia, it.majorDiaMm)
+    }
+    return dia
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

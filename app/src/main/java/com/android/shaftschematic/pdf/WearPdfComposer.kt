@@ -868,21 +868,33 @@ private fun drawDiaCallouts(c: Canvas, placed: List<PlacedDiaCallout>, dim: Pain
 }
 
 /**
- * One broken-out detail strip — a [WearStripWindow]: neighbor stubs with S-curve break edges at
- * the window's outer ends, its components drawn at the sheet's shared scale through the window's
- * single piecewise mapping, and the shaft between them either drawn true or compressed to an
- * S-break pair.
+ * One broken-out detail strip — a [WearStripWindow]: neighbor stubs at the window's outer ends,
+ * its components drawn at the sheet's shared scale through the window's single piecewise mapping,
+ * and the shaft between them either drawn true or compressed to an S-break pair (each break stood
+ * off its component by a [WEAR_STRIP_BREAK_LEAD_PT] lead-in of the gap's TRUE outline).
+ *
+ * An end stub's style follows [wearStripEndStyle], never a blanket S-break: the break claims the
+ * shaft continues past the stub, so a threaded shaft end draws flat + hatched and an end with
+ * nothing beyond it draws no stub at all, just its own edge cap at full weight.
  *
  * A **liner** segment carries everything the strip has always had: light-grey wear bands with a
  * chained dimension rail above the cylinder (liner AFT edge → first band start → each band's
  * length → inter-band gaps → trailing remainder to the liner FWD edge, standard
  * witness-line/arrowed-span convention — see
  * `buildWearStripRailSpans`/`layoutWearStripRail`/`drawWearStripRail`), measured-Ø value callouts
- * below the cylinder when recorded, pit "X"s, and the liner's anchor dimension from its nearer SET
- * (the "110 FROM CPLG S.E.T." line in the shop sketch this feature digitizes). A **taper** segment
- * draws its trapezoid silhouette and a **body** segment its rectangle; both carry their own pits
- * and measured-Ø callouts, which is why a component with a strip no longer prints its readings
- * under the main profile.
+ * below the cylinder when recorded, and pit "X"s. A **taper** segment draws its trapezoid
+ * silhouette and a **body** segment its rectangle; both carry their own pits and measured-Ø
+ * callouts, which is why a component with a strip no longer prints its readings under the main
+ * profile.
+ *
+ * **Titles are per attachment cluster** ([wearStripClusters]), not one joined title per window:
+ * components split by a compressed gap are not adjacent, so each side names itself. A cluster
+ * holding a taper prints names only ([wearStripClusterShowsAnchor] — the rail measures it and a
+ * taper at the shaft end is self-evidently placed); a lone liner or lone body run adds its
+ * anchor dimension from the nearer SET (the "110 FROM CPLG S.E.T." line in the shop sketch this
+ * feature digitizes). A window whose ONE cluster carries an anchor keeps the historical
+ * placement — left-aligned, or right-aligned when measured from the FWD SET; every other label
+ * centers under its own cluster's drawn span, pushed clear of its predecessor when they'd meet.
  *
  * Every segment's radius scales against the window's largest diameter, which fills the strip's
  * vertical budget — so a single-liner window is drawn exactly as it always was, and in a combined
@@ -902,10 +914,11 @@ private fun drawDiaCallouts(c: Canvas, placed: List<PlacedDiaCallout>, dim: Pain
  * liner-edge witness bars — no spanning line, arrowheads, or value, since that span would just
  * re-state the liner's own length and the rail exists to measure distances to wear areas
  * (device feedback). With [blankValues] the strip keeps its dimension LINES but drops
- * the VALUES: rail labels are omitted and the anchor title's number becomes a writing rule — the
- * write-in template posture shared with the blank schematic (and since a blank sheet has no
- * bands, every blank strip's rail is witness-bars-only). Taper and body strips follow the same
- * lines-in/values-out rule.
+ * the VALUES: rail labels are omitted and an anchored cluster's title number becomes a writing
+ * rule — the write-in template posture shared with the blank schematic (and since a blank sheet
+ * has no bands, every blank strip's rail is witness-bars-only). Taper and body strips follow the
+ * same lines-in/values-out rule; a cluster that prints no anchor leaves no write-in blank either,
+ * since its location needs no measurement.
  *
  * [spots], [pits], and [diaReadings] must already be filtered to this window's components; the
  * shared strip scale [stripPtPerMm] comes from `sharedWearStripWindowPtPerMm`, so relative
@@ -946,27 +959,33 @@ private fun drawWearStripWindow(
 
     val titleText = Paint(text).apply { textSize = (text.textSize - 1f).coerceAtLeast(7f) }
     val dimText = Paint(text).apply { textSize = (text.textSize - 2f).coerceAtLeast(7f) }
-    // A combined window names every component it holds, AFT→FWD.
-    val joinedTitle = comps.joinToString(" + ") { titles[it.id] ?: "Component" }
     val linerComp = window.liner
-    val linerModel = linerComp?.let { lc -> docSpec.liners.firstOrNull { it.id == lc.id } }
-    // EVERY strip carries an anchor-from-SET dimension — wear is measured from a S.E.T. or a
-    // liner edge, so a taper/body strip needs it too (on-device answer). A window that holds a
-    // liner keeps the LINER's anchor, combined windows included; one without measures its own
-    // span against the nearer SET through the same shared rule.
-    val anchorLabel = if (linerModel != null) {
-        buildLinerAnchorLabel(docSpec, linerModel, setPositions, unit)
-    } else {
-        buildSpanAnchorLabel(docSpec, window.startMm, window.endMm, setPositions, unit)
+    // Titles are per attachment CLUSTER, not per window (wearStripClusters): a compressed gap
+    // means the components either side of it are NOT adjacent, so one joined
+    // "A + B — dist FROM SET" title across the break would misread as one continuous area
+    // (on-device request). Each cluster names its own components, AFT→FWD.
+    //
+    // A cluster holding a taper prints NO anchor dimension (wearStripClusterShowsAnchor): the
+    // strip's dimension rail is the measuring surface, and a taper at the shaft end is
+    // self-evidently placed. A lone liner keeps the LINER's anchor — the same number the
+    // schematic prints — and a lone body run measures its own span against the nearer SET
+    // through the same shared rule.
+    val clusterTitles = wearStripClusters(window).map { cl ->
+        val names = cl.components.joinToString(" + ") { titles[it.id] ?: "Component" }
+        if (!wearStripClusterShowsAnchor(cl)) {
+            ClusterTitle(cl, names, null, null)
+        } else {
+            val ln = cl.components.firstOrNull { it.kind == WearStripComponentKind.LINER }
+                ?.let { lc -> docSpec.liners.firstOrNull { it.id == lc.id } }
+            val label = if (ln != null) buildLinerAnchorLabel(docSpec, ln, setPositions, unit)
+            else buildSpanAnchorLabel(docSpec, cl.startMm, cl.endMm, setPositions, unit)
+            val from = if (ln != null) linerAnchorForPdf(docSpec, ln)
+            else wearStripAnchorForSpan(docSpec, cl.startMm, cl.endMm, setPositions).anchor
+            ClusterTitle(cl, names, label.takeIf { it.isNotEmpty() }, from)
+        }
     }
-    val title = if (anchorLabel.isEmpty()) joinedTitle else "$joinedTitle — $anchorLabel"
-    val titleAnchor = if (linerModel != null) {
-        linerAnchorForPdf(docSpec, linerModel)
-    } else {
-        wearStripAnchorForSpan(docSpec, window.startMm, window.endMm, setPositions).anchor
-    }
-    // The title (+ its anchor dimension) is drawn LAST, at the bottom of the strip, to
-    // match the hand-marked sheet. See the title block near the end.
+    // The titles are drawn LAST, at the bottom of the strip, to match the hand-marked sheet.
+    // See the title block near the end.
 
     // Measured-Ø callout plan (readings with a recorded value only — a placed-but-empty
     // station is an overlay-only affordance and never prints). Planned BEFORE the inner
@@ -1072,8 +1091,10 @@ private fun drawWearStripWindow(
                 c.drawLine(x1, cy - rF, x1, cy + rF, dimPaint)
             }
             is WearStripGapSeg -> {
-                val rL = rOf((window.segments.getOrNull(i - 1) as? WearStripComponentSeg)?.component?.fwdDiaMm ?: aftDia)
-                val rR = rOf((window.segments.getOrNull(i + 1) as? WearStripComponentSeg)?.component?.aftDiaMm ?: fwdDia)
+                val diaL = (window.segments.getOrNull(i - 1) as? WearStripComponentSeg)?.component?.fwdDiaMm ?: aftDia
+                val diaR = (window.segments.getOrNull(i + 1) as? WearStripComponentSeg)?.component?.aftDiaMm ?: fwdDia
+                val rL = rOf(diaL)
+                val rR = rOf(diaR)
                 if (seg.trueScale) {
                     // The real shaft between the two components, at true scale.
                     val verts = wearStripGapProfile(
@@ -1100,28 +1121,80 @@ private fun drawWearStripWindow(
                     // S-break edges marks the removed length, open space between them. Same
                     // glyph and eye convention as the window's own neighbor stubs — material
                     // toward the component, void toward the gap.
-                    drawBreakEdge(c, x0, cy - rL, cy + rL, rL * 0.6f, outline, eyeAtTop = false)
-                    drawBreakEdge(c, x1, cy - rR, cy + rR, rR * 0.6f, outline, eyeAtTop = true)
+                    //
+                    // Each break stands off its component by a short lead-in of the shaft as it
+                    // ACTUALLY is just inside the gap (WEAR_STRIP_BREAK_LEAD_PT). Jumping the
+                    // outline straight to the adjacent component's edge Ø made the component
+                    // itself look shifted, and a break drawn hard against that edge left no
+                    // connecting shaft at all (on-device report).
+                    val rGapL = rOf(outerDiaMmAt(docSpec, seg.startMm + 0.5f).takeIf { it > 0f } ?: diaL)
+                    val rGapR = rOf(outerDiaMmAt(docSpec, seg.endMm - 0.5f).takeIf { it > 0f } ?: diaR)
+                    val lead = WEAR_STRIP_BREAK_LEAD_PT
+                    c.drawLine(x0, cy - rGapL, x0 + lead, cy - rGapL, outline)
+                    c.drawLine(x0, cy + rGapL, x0 + lead, cy + rGapL, outline)
+                    drawBreakEdge(c, x0 + lead, cy - rGapL, cy + rGapL, rGapL * 0.6f, outline, eyeAtTop = false)
+                    drawBreakEdge(c, x1 - lead, cy - rGapR, cy + rGapR, rGapR * 0.6f, outline, eyeAtTop = true)
+                    c.drawLine(x1 - lead, cy - rGapR, x1, cy - rGapR, outline)
+                    c.drawLine(x1 - lead, cy + rGapR, x1, cy + rGapR, outline)
                 }
             }
         }
     }
 
-    // Neighbor stubs, broken out with the S-curve edge convention (BreakSymbol.kt). Each stub's
-    // break sits at its own far/outer end (void beyond it, material toward the window) — the
-    // inverse of a centered compression break's shared-gap geometry — so eyeAtTop is the
-    // opposite of the compression-break convention: left/AFT stub void is to its left
+    // Window ends. A stub's S-break says "the shaft continues past here", so it is drawn only
+    // where it does (wearStripEndStyle): a threaded end shows the WHOLE remaining shaft — flat
+    // outer edge + thread hatch — and an end with nothing beyond it gets no stub at all, its
+    // edge cap redrawn at full weight so the shaft reads as physically ending there (the
+    // per-segment caps are thin). Mirror of the wear detail overlay's convention
+    // (`LinerWearDetail.kt`).
+    //
+    // A break stub's own break sits at its far/outer end (void beyond it, material toward the
+    // window) — the inverse of a centered compression break's shared-gap geometry — so eyeAtTop
+    // is the opposite of the compression-break convention: left/AFT stub void is to its left
     // (eyeAtTop = true), right/FWD stub void is to its right (eyeAtTop = false). See
-    // `LinerWearDetail.kt`'s `drawBreakEdgeCompose` KDoc (device review fix).
-    val aftR = radii.aftRPt; val fwdR = radii.fwdRPt
+    // `LinerWearDetail.kt`'s `drawBreakEdgeCompose` KDoc.
     val stubLeftX = hLayout.linerLeftPt - hLayout.stubWidthPt
     val stubRightX = hLayout.linerRightPt + hLayout.stubWidthPt
-    c.drawLine(stubLeftX, cy - aftR, hLayout.linerLeftPt, cy - aftR, outline)
-    c.drawLine(stubLeftX, cy + aftR, hLayout.linerLeftPt, cy + aftR, outline)
-    drawBreakEdge(c, stubLeftX, cy - aftR, cy + aftR, aftR * 0.6f, outline, eyeAtTop = true)
-    c.drawLine(hLayout.linerRightPt, cy - fwdR, stubRightX, cy - fwdR, outline)
-    c.drawLine(hLayout.linerRightPt, cy + fwdR, stubRightX, cy + fwdR, outline)
-    drawBreakEdge(c, stubRightX, cy - fwdR, cy + fwdR, fwdR * 0.6f, outline, eyeAtTop = false)
+    when (wearStripEndStyle(docSpec, window.startMm, aftSide = true)) {
+        WearStripEndStyle.BREAK -> {
+            val r = radii.aftRPt
+            c.drawLine(stubLeftX, cy - r, hLayout.linerLeftPt, cy - r, outline)
+            c.drawLine(stubLeftX, cy + r, hLayout.linerLeftPt, cy + r, outline)
+            drawBreakEdge(c, stubLeftX, cy - r, cy + r, r * 0.6f, outline, eyeAtTop = true)
+        }
+        WearStripEndStyle.THREAD_END -> {
+            val threadDia = wearStripEndThreadDiaMm(docSpec, window.startMm, aftSide = true)
+            val r = if (threadDia > 0f) rOf(threadDia) else radii.aftRPt
+            c.drawLine(stubLeftX, cy - r, hLayout.linerLeftPt, cy - r, outline)
+            c.drawLine(stubLeftX, cy + r, hLayout.linerLeftPt, cy + r, outline)
+            c.drawLine(stubLeftX, cy - r, stubLeftX, cy + r, outline)
+            drawThreadStubHatch(c, stubLeftX, cy - r, hLayout.linerLeftPt, cy + r, outline)
+        }
+        WearStripEndStyle.FLAT -> {
+            val r = rOf(comps.first().aftDiaMm)
+            c.drawLine(hLayout.linerLeftPt, cy - r, hLayout.linerLeftPt, cy + r, outline)
+        }
+    }
+    when (wearStripEndStyle(docSpec, window.endMm, aftSide = false)) {
+        WearStripEndStyle.BREAK -> {
+            val r = radii.fwdRPt
+            c.drawLine(hLayout.linerRightPt, cy - r, stubRightX, cy - r, outline)
+            c.drawLine(hLayout.linerRightPt, cy + r, stubRightX, cy + r, outline)
+            drawBreakEdge(c, stubRightX, cy - r, cy + r, r * 0.6f, outline, eyeAtTop = false)
+        }
+        WearStripEndStyle.THREAD_END -> {
+            val threadDia = wearStripEndThreadDiaMm(docSpec, window.endMm, aftSide = false)
+            val r = if (threadDia > 0f) rOf(threadDia) else radii.fwdRPt
+            c.drawLine(hLayout.linerRightPt, cy - r, stubRightX, cy - r, outline)
+            c.drawLine(hLayout.linerRightPt, cy + r, stubRightX, cy + r, outline)
+            c.drawLine(stubRightX, cy - r, stubRightX, cy + r, outline)
+            drawThreadStubHatch(c, hLayout.linerRightPt, cy - r, stubRightX, cy + r, outline)
+        }
+        WearStripEndStyle.FLAT -> {
+            val r = rOf(comps.last().fwdDiaMm)
+            c.drawLine(hLayout.linerRightPt, cy - r, hLayout.linerRightPt, cy + r, outline)
+        }
+    }
 
     // Wear bands (light grey fill + edge ticks on the liner itself) — per spot. The dimension
     // story (offsets/lengths) is the chained rail above; the diameter story is the
@@ -1214,33 +1287,108 @@ private fun drawWearStripWindow(
             drawLabels = !blankValues, drawSpanLines = hasWearBands)
     }
 
-    // Title (+ its anchor dimension), drawn LAST at the BOTTOM of the strip. Direction cue: a
+    // Titles, drawn LAST at the BOTTOM of the strip — one per attachment cluster, all sharing
+    // this one baseline. A cluster that isn't the window's lone anchored one sits CENTERED under
+    // its own drawn span, so a name always points at the metal it names; the historical
+    // single-liner / single-body strip keeps its SET-direction alignment cue instead — a
     // FWD-SET-referenced title right-aligns (toward the FWD end drawn on the right), an
-    // AFT-SET-referenced one stays left-aligned — mirrors the measurement direction.
+    // AFT-SET-referenced one stays left-aligned.
     val titleBaselineY = (stripBottom - 2f).coerceAtLeast(inner.cylBottom + titleText.textSize)
-    if (blankValues) {
-        // Write-in title: "Name — ____ FROM  AFT / FWD  S.E.T." — the anchor VALUE becomes a
-        // writing rule and BOTH directions print for the machinist to circle one
-        // (WEAR_BLANK_ANCHOR_SUFFIX). Taper/body strips take the same construction: their
-        // anchor is measured the same way, so a write-in sheet must leave the same blank.
-        // Always left-aligned: the FWD right-align cue mirrors a KNOWN measurement direction,
-        // which a write-in sheet doesn't have. drawLabelWithRule needs LEFT-aligned paint.
+    val loneAnchored = clusterTitles.size == 1 && clusterTitles[0].anchor != null
+    // Labels are placed left→right; one that would run into its predecessor is pushed clear of
+    // it and then clamped/ellipsized against the strip's right edge.
+    var prevRightPt = Float.NEGATIVE_INFINITY
+    fun placeLeftPt(preferredLeft: Float, width: Float): Float =
+        maxOf(preferredLeft, prevRightPt + WEAR_STRIP_TITLE_GAP_PT)
+            .coerceIn(contentLeft, (contentRight - width).coerceAtLeast(contentLeft))
+
+    clusterTitles.forEach { ct ->
+        val cx = (xAtStrip(ct.cluster.startMm) + xAtStrip(ct.cluster.endMm)) / 2f
         titleText.textAlign = Paint.Align.LEFT
-        val prefix = "$joinedTitle —"
-        val afterRule = drawLabelWithRule(
-            c, prefix, contentLeft, titleBaselineY, titleText,
-            ruleWidth = BLANK_DIM_GAP_PT, maxRight = contentRight,
-        )
-        c.drawText(WEAR_BLANK_ANCHOR_SUFFIX, afterRule - 8f, titleBaselineY, titleText)
-    } else {
-        val titleFit = ellipsizeToWidth(title, titleText, contentRight - contentLeft, rich = true)
-        if (titleAnchor == LinerAnchor.FWD_SET) {
-            titleText.textAlign = Paint.Align.RIGHT
-            c.drawRichText(titleFit, contentRight, titleBaselineY, titleText)
+        if (blankValues && ct.anchor != null) {
+            // Write-in title: "Name — ____ FROM  AFT / FWD  S.E.T." — the anchor VALUE becomes a
+            // writing rule and BOTH directions print for the machinist to circle one
+            // (WEAR_BLANK_ANCHOR_SUFFIX). A body strip takes the same construction: its anchor is
+            // measured the same way, so a write-in sheet must leave the same blank.
+            // Always left-aligned: the FWD right-align cue mirrors a KNOWN measurement direction,
+            // which a write-in sheet doesn't have. drawLabelWithRule needs LEFT-aligned paint.
+            val prefix = "${ct.names} —"
+            val suffixW = titleText.measureText(WEAR_BLANK_ANCHOR_SUFFIX)
+            val totalW = titleText.measureText(prefix) + BLANK_RULE_LEAD_PT + BLANK_DIM_GAP_PT +
+                BLANK_RULE_TRAIL_PT + suffixW
+            val x = if (loneAnchored) contentLeft else placeLeftPt(cx - totalW / 2f, totalW)
+            val afterRule = drawLabelWithRule(
+                c, prefix, x, titleBaselineY, titleText,
+                ruleWidth = BLANK_DIM_GAP_PT, maxRight = contentRight,
+            )
+            c.drawText(WEAR_BLANK_ANCHOR_SUFFIX, afterRule - 8f, titleBaselineY, titleText)
+            prevRightPt = afterRule - 8f + suffixW
         } else {
-            c.drawRichText(titleFit, contentLeft, titleBaselineY, titleText)
+            // A cluster with no anchor prints names only — on a blank sheet too, since a location
+            // that needs no measurement needs no write-in blank either.
+            val label = if (ct.anchor == null) ct.names else "${ct.names} — ${ct.anchor}"
+            if (loneAnchored && !blankValues) {
+                val fit = ellipsizeToWidth(label, titleText, contentRight - contentLeft, rich = true)
+                if (ct.from == LinerAnchor.FWD_SET) {
+                    titleText.textAlign = Paint.Align.RIGHT
+                    c.drawRichText(fit, contentRight, titleBaselineY, titleText)
+                    prevRightPt = contentRight
+                } else {
+                    c.drawRichText(fit, contentLeft, titleBaselineY, titleText)
+                    prevRightPt = contentLeft + titleText.measureRichText(fit)
+                }
+            } else {
+                val w = titleText.measureRichText(label)
+                val x = placeLeftPt(cx - w / 2f, w)
+                val fit = ellipsizeToWidth(label, titleText, contentRight - x, rich = true)
+                c.drawRichText(fit, x, titleBaselineY, titleText)
+                prevRightPt = x + titleText.measureRichText(fit)
+            }
         }
     }
+}
+
+/** One strip title: a cluster's names, its anchor dimension (null when it prints none), and the
+ *  SET that anchor is measured from (the alignment cue on a lone anchored cluster). */
+private data class ClusterTitle(
+    val cluster: WearStripCluster,
+    val names: String,
+    val anchor: String?,
+    val from: LinerAnchor?,
+)
+
+/** Clear run kept between two cluster titles sharing a strip's title baseline. */
+private const val WEAR_STRIP_TITLE_GAP_PT = 8f
+
+/** `drawLabelWithRule`'s label→rule lead-in, mirrored here so a blank title can be pre-measured. */
+private const val BLANK_RULE_LEAD_PT = 4f
+
+/** `drawLabelWithRule`'s trailing advance, less the suffix's own pull-back (`afterRule - 8f`). */
+private const val BLANK_RULE_TRAIL_PT = 6f
+
+/** Fixed hatch pitch inside a thread-end stub — the stub is symbolic, never drawn to scale. */
+private const val WEAR_STRIP_THREAD_HATCH_PITCH_PT = 6f
+
+/**
+ * Diagonal thread hatch filling a strip window's thread-end stub — the PDF port of the wear
+ * detail overlay's `drawThreadStubHatch` (`ui/screen/LinerWearDetail.kt`), drawn with the same
+ * thin part-transparent recipe the main profile's thread hatch uses, so a threaded shaft end
+ * reads the same on the strip as it does on the profile above it. Only a
+ * [WearStripEndStyle.THREAD_END] end gets one: it shows the whole remaining shaft, so it carries
+ * a flat outer edge and this hatch instead of an S-break.
+ */
+private fun drawThreadStubHatch(c: Canvas, x0: Float, top: Float, x1: Float, bot: Float, outline: Paint) {
+    if (x1 <= x0 || bot <= top) return
+    val hatch = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.6f; alpha = 160 }
+    val h = bot - top
+    val saved = c.save()
+    c.clipRect(x0, top, x1, bot)
+    var hx = x0 - h
+    while (hx <= x1) {
+        c.drawLine(hx, bot, hx + h, top, hatch)
+        hx += WEAR_STRIP_THREAD_HATCH_PITCH_PT
+    }
+    c.restoreToCount(saved)
 }
 
 /**

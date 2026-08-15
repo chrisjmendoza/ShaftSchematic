@@ -1199,7 +1199,20 @@ liner-only election groups and lays out bit-for-bit as `collectWearLinerGroups` 
   a vertex pair either side of every component edge so a step in Ø draws as a step — and anything
   longer compresses to a fixed `WEAR_STRIP_BREAK_GAP_PT` (40 pt) run marked by the S-break pair
   (`drawBreakEdge`, same glyph and eye convention as the window's own neighbor stubs). Touching
-  components get no gap segment at all.
+  components get no gap segment at all. Each break stands off its component by a
+  `WEAR_STRIP_BREAK_LEAD_PT` (10 pt, < half the gap run) **lead-in of the gap's TRUE outline** —
+  `outerDiaMmAt` half a millimetre inside the gap, falling back to the adjacent component's edge
+  Ø only where nothing resolves. Jumping the outline straight to the neighbour's edge Ø made the
+  component itself look shifted, and a break drawn hard against that edge left no connecting
+  shaft at all (on-device report).
+- **Window ends** are NOT a blanket S-break: `wearStripEndStyle(spec, edgeMm, aftSide)` looks at
+  every component span extending past the edge — none → `FLAT`, all threads → `THREAD_END`,
+  otherwise → `BREAK`. The break claims "the shaft continues past here", so a `THREAD_END` draws
+  the whole remaining threaded shaft (flat outer edge + diagonal hatch at a fixed pitch, sized by
+  `wearStripEndThreadDiaMm`) and a `FLAT` end draws no stub at all — just its own edge cap at full
+  `outline` weight, the thin per-segment caps being component boundaries rather than shaft ends.
+  This is the wear detail overlay's `leftIsEndThread`/`rightIsEndThread` convention
+  (`ui/screen/LinerWearDetail.kt`), applied to the printed strip.
 - **The join threshold is user-set** (2026-08-15, on-device answer: "make it a slider, up to a
   foot"). `PdfPrefs.wearJoinGapMaxMm`, **canonical mm**, `PDF_WEAR_JOIN_GAP_MIN_MM` 0 ..
   `PDF_WEAR_JOIN_GAP_MAX_MM` 304.8 (12"), default `PDF_WEAR_JOIN_GAP_DEFAULT_MM` = 76.2 (3") —
@@ -1227,16 +1240,26 @@ liner-only election groups and lays out bit-for-bit as `collectWearLinerGroups` 
   radius scales against the window's largest Ø, which fills the strip's vertical budget — so a
   single-liner window is drawn exactly as before, and a combined window keeps the taper's true Ø
   ratio to the liner. The chained rail measures WEAR, so it belongs to the window's liner; a
-  taper/body-only window has none. Blank drafts follow the same lines-in/values-out rule, and
-  since 2026-08-15 EVERY strip takes the same write-in title — name, a writing rule where the
-  anchor value goes, then `WEAR_BLANK_ANCHOR_SUFFIX` — because a taper/body strip's anchor is
-  measured the same way a liner's is.
-- **Titles** — a window names every component it holds, AFT→FWD, joined with " + ", and **every**
-  strip brings an anchor-from-SET dimension (2026-08-15, on-device answer: wear is measured from
-  the S.E.T. or the liner edge, so a taper/body strip needs the dimension too):
-  `"<Liner> — 110 FROM AFT S.E.T."` for a liner-only window, `"<Taper> + <Liner> — 110 FROM AFT
-  S.E.T."` for a combined one (the LINER's anchor — unchanged), and `"<Taper> — 42 FROM FWD
-  S.E.T."` for a strip with no liner, measuring the window's own span. One rule for both:
+  taper/body-only window has none. Blank drafts follow the same lines-in/values-out rule: every
+  cluster that prints an anchor takes the same write-in title — name, a writing rule where the
+  anchor value goes, then `WEAR_BLANK_ANCHOR_SUFFIX` — because a body strip's anchor is measured
+  the same way a liner's is (see "Titles" below for the clusters that print none).
+- **Titles are per attachment CLUSTER**, not one joined title per window (2026-08-15, on-device
+  request). `wearStripClusters(window)` splits the component run at every **compressed** gap —
+  components joined by true-scale gaps, or touching, stay in one cluster — because a break means
+  the two sides are NOT adjacent and one joined `"A + B — dist FROM SET"` title would misread as a
+  single continuous area. Each cluster names its own components AFT→FWD, joined with " + ".
+  `wearStripClusterShowsAnchor(cluster)` then decides the anchor-from-SET dimension: a cluster
+  holding a **taper** prints none — the strip's own dimension rail is the measuring surface and a
+  taper at the shaft end is self-evidently placed — while a lone liner or lone body run keeps it:
+  `"<Liner> — 110 FROM AFT S.E.T."`, `"<Body #2> — 42 FROM FWD S.E.T."`. Placement: a window whose
+  ONE cluster carries an anchor keeps the historical form (left at `contentLeft`, or right-aligned
+  when measured from the FWD SET); every other label **centers under its own cluster's drawn
+  span**, processed left→right and pushed 8 pt clear of its predecessor before being clamped /
+  ellipsized against `contentRight`. All labels share the one title baseline. Blank drafts cluster
+  identically — an anchored cluster keeps the write-in construction (name, a writing rule,
+  `WEAR_BLANK_ANCHOR_SUFFIX`), a cluster with no anchor prints names only, since a location that
+  needs no measurement needs no blank. The anchor value itself is one rule for both:
   `wearStripAnchorForSpan` / `buildSpanAnchorLabel` (`pdf/WearStripLayout.kt`) take a shaft-space
   span + the measurement-space `SetPositions` and apply `mapToLinerDimsForPdf`'s comparison —
   edges rebased through `computeOalWindow`, AFT SET → span start vs. span end → FWD SET, the
