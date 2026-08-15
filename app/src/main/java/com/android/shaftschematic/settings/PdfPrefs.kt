@@ -40,6 +40,22 @@ const val PDF_WEAR_BAND_SHADE_MIN = 0.05f
 const val PDF_WEAR_BAND_SHADE_MAX = 0.35f
 
 /**
+ * Taper–liner join threshold: how much bare shaft may sit between two components in the same
+ * wear detail strip before the run is compressed to an S-break instead of drawn true
+ * (`PdfPrefs.wearJoinGapMaxMm`, consumed as `wearStripGapDrawsTrue`'s `trueGapMaxMm`).
+ *
+ * Canonical millimetres — the Settings row and the options sheet convert at the UI edge only.
+ * The default is the shipped 3", which `pdf/WearStripLayout.WEAR_STRIP_TRUE_GAP_MAX_MM` reads
+ * as its pure-API default so there is one number behind both. `0` breaks on any positive gap
+ * (touching components still draw contiguous — they produce no gap segment at all); the 12" cap
+ * is a foot of shaft drawn true between a taper and its liner, past which the strip stops being
+ * a detail view.
+ */
+const val PDF_WEAR_JOIN_GAP_DEFAULT_MM = 76.2f   // 3"
+const val PDF_WEAR_JOIN_GAP_MIN_MM = 0f
+const val PDF_WEAR_JOIN_GAP_MAX_MM = 304.8f      // 12"
+
+/**
  * Dimension-rail arrowhead sizes (pt, length along the line — the barb spread is half of it).
  * Three fixed choices, not a range: an arrowhead reads correct or it doesn't. Small is the
  * shipped size; Large restores the historical head.
@@ -125,6 +141,15 @@ data class PdfPrefs(
      * different mark (vertical strokes, the shop convention) and are not styled by this.
      */
     val wearBandShadeFrac: Float = PDF_WEAR_BAND_SHADE_DEFAULT,
+    /**
+     * How much bare shaft may sit between two components sharing a wear detail strip before the
+     * run compresses to an S-break rather than drawing true (canonical mm — Settings → Drawing
+     * → "Taper–liner join" and the wear preview's PDF options sheet convert at the UI edge).
+     * [PDF_WEAR_JOIN_GAP_MIN_MM]..[PDF_WEAR_JOIN_GAP_MAX_MM], default the shipped 3".
+     *
+     * App-wide, the same posture as the body S-break threshold: a document never pins its own.
+     */
+    val wearJoinGapMaxMm: Float = PDF_WEAR_JOIN_GAP_DEFAULT_MM,
 ) {
     /** The anchor heights in PDF points (72 pt per paper inch) — what the geometry consumes. */
     val curveLoHeightPt: Float get() = curveLoHeightIn * 72f
@@ -140,5 +165,7 @@ data class PdfPrefs(
                 .coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC),
             wearBandShadeFrac = wearBandShadeFrac
                 .coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX),
+            wearJoinGapMaxMm = wearJoinGapMaxMm
+                .coerceIn(PDF_WEAR_JOIN_GAP_MIN_MM, PDF_WEAR_JOIN_GAP_MAX_MM),
         )
 }

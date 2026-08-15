@@ -215,7 +215,9 @@ fun composeWearPdf(
     // — the default — makes one single-component window per liner, exactly the historical sheet.
     val stripComponents = wearStripComponentsFor(spec, resolvedComponents)
     val stripTitles = buildWearStripTitleById(spec, stripComponents)
-    val windows = collectWearStripWindows(stripComponents, wearRecord.stripComponentIds)
+    val windows = collectWearStripWindows(
+        stripComponents, wearRecord.stripComponentIds, pdfPrefs.wearJoinGapMaxMm,
+    )
     // Liner groups still drive the MAIN profile's wear bands and liner names; the elected liners
     // are exactly the liners the windows hold.
     val wearGroups = collectWearLinerGroups(docSpec.liners, effectiveRecord, wearRecord.stripComponentIds)
@@ -944,15 +946,26 @@ private fun drawWearStripWindow(
 
     val titleText = Paint(text).apply { textSize = (text.textSize - 1f).coerceAtLeast(7f) }
     val dimText = Paint(text).apply { textSize = (text.textSize - 2f).coerceAtLeast(7f) }
-    // A combined window names every component it holds, AFT→FWD; only a liner brings the
-    // anchor-from-SET dimension with it.
+    // A combined window names every component it holds, AFT→FWD.
     val joinedTitle = comps.joinToString(" + ") { titles[it.id] ?: "Component" }
     val linerComp = window.liner
     val linerModel = linerComp?.let { lc -> docSpec.liners.firstOrNull { it.id == lc.id } }
-    val title = if (linerModel != null) {
-        joinedTitle + " — " + buildLinerAnchorLabel(docSpec, linerModel, setPositions, unit)
-    } else joinedTitle
-    // The title (+ any liner-anchor dimension) is drawn LAST, at the bottom of the strip, to
+    // EVERY strip carries an anchor-from-SET dimension — wear is measured from a S.E.T. or a
+    // liner edge, so a taper/body strip needs it too (on-device answer). A window that holds a
+    // liner keeps the LINER's anchor, combined windows included; one without measures its own
+    // span against the nearer SET through the same shared rule.
+    val anchorLabel = if (linerModel != null) {
+        buildLinerAnchorLabel(docSpec, linerModel, setPositions, unit)
+    } else {
+        buildSpanAnchorLabel(docSpec, window.startMm, window.endMm, setPositions, unit)
+    }
+    val title = if (anchorLabel.isEmpty()) joinedTitle else "$joinedTitle — $anchorLabel"
+    val titleAnchor = if (linerModel != null) {
+        linerAnchorForPdf(docSpec, linerModel)
+    } else {
+        wearStripAnchorForSpan(docSpec, window.startMm, window.endMm, setPositions).anchor
+    }
+    // The title (+ its anchor dimension) is drawn LAST, at the bottom of the strip, to
     // match the hand-marked sheet. See the title block near the end.
 
     // Measured-Ø callout plan (readings with a recorded value only — a placed-but-empty
@@ -1201,17 +1214,17 @@ private fun drawWearStripWindow(
             drawLabels = !blankValues, drawSpanLines = hasWearBands)
     }
 
-    // Title (+ liner-anchor dimension), drawn LAST at the BOTTOM of the strip. Direction cue: a
+    // Title (+ its anchor dimension), drawn LAST at the BOTTOM of the strip. Direction cue: a
     // FWD-SET-referenced title right-aligns (toward the FWD end drawn on the right), an
-    // AFT-SET-referenced one stays left-aligned — mirrors the measurement direction. A window
-    // with no liner has no anchor to mirror, so it stays left-aligned.
+    // AFT-SET-referenced one stays left-aligned — mirrors the measurement direction.
     val titleBaselineY = (stripBottom - 2f).coerceAtLeast(inner.cylBottom + titleText.textSize)
-    if (blankValues && linerModel != null) {
+    if (blankValues) {
         // Write-in title: "Name — ____ FROM  AFT / FWD  S.E.T." — the anchor VALUE becomes a
         // writing rule and BOTH directions print for the machinist to circle one
-        // (WEAR_BLANK_ANCHOR_SUFFIX). Always left-aligned: the FWD right-align cue mirrors a
-        // KNOWN measurement direction, which a write-in sheet doesn't have.
-        // drawLabelWithRule needs LEFT-aligned paint.
+        // (WEAR_BLANK_ANCHOR_SUFFIX). Taper/body strips take the same construction: their
+        // anchor is measured the same way, so a write-in sheet must leave the same blank.
+        // Always left-aligned: the FWD right-align cue mirrors a KNOWN measurement direction,
+        // which a write-in sheet doesn't have. drawLabelWithRule needs LEFT-aligned paint.
         titleText.textAlign = Paint.Align.LEFT
         val prefix = "$joinedTitle —"
         val afterRule = drawLabelWithRule(
@@ -1219,14 +1232,9 @@ private fun drawWearStripWindow(
             ruleWidth = BLANK_DIM_GAP_PT, maxRight = contentRight,
         )
         c.drawText(WEAR_BLANK_ANCHOR_SUFFIX, afterRule - 8f, titleBaselineY, titleText)
-    } else if (blankValues) {
-        // A taper/body strip has no anchor dimension to blank — the name is the whole title.
-        titleText.textAlign = Paint.Align.LEFT
-        c.drawText(ellipsizeToWidth(joinedTitle, titleText, contentRight - contentLeft), contentLeft, titleBaselineY, titleText)
     } else {
-        val anchor = linerModel?.let { linerAnchorForPdf(docSpec, it) }
         val titleFit = ellipsizeToWidth(title, titleText, contentRight - contentLeft, rich = true)
-        if (anchor == LinerAnchor.FWD_SET) {
+        if (titleAnchor == LinerAnchor.FWD_SET) {
             titleText.textAlign = Paint.Align.RIGHT
             c.drawRichText(titleFit, contentRight, titleBaselineY, titleText)
         } else {

@@ -46,9 +46,13 @@ import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
+import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MAX_MM
+import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MIN_MM
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.setPdfWearTraceDepthFrac
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.LengthFormat
+import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -328,6 +332,82 @@ internal fun WearBandShadeSlider(
                     .testTag("wear_band_shade_slider"),
             )
             Text(fmtWholePct(PDF_WEAR_BAND_SHADE_MAX), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/**
+ * Step the "Taper–liner join" slider snaps to, in canonical mm: 1/2" in inches mode, 10 mm in
+ * millimetres mode. Display granularity only — the stored value stays mm either way.
+ */
+private fun joinGapStepMm(unit: UnitSystem): Float = if (unit == UnitSystem.INCHES) 12.7f else 10f
+
+/** Snaps a canonical-mm join gap to [joinGapStepMm] and back into the settable range. */
+internal fun snappedJoinGapMm(mm: Float, unit: UnitSystem): Float {
+    val step = joinGapStepMm(unit)
+    return ((mm / step).roundToInt() * step)
+        .coerceIn(PDF_WEAR_JOIN_GAP_MIN_MM, PDF_WEAR_JOIN_GAP_MAX_MM)
+}
+
+/**
+ * Reads a canonical-mm join gap in the session's unit — the UI edge, and the only place this
+ * value is ever anything but millimetres. Inches take the app's own smart inch format (so 12.7 mm
+ * prints as `1/2"`); millimetres print whole.
+ */
+internal fun fmtJoinGap(mm: Float, unit: UnitSystem): String = when {
+    mm <= 0f -> if (unit == UnitSystem.INCHES) "0\"" else "0 mm"
+    unit == UnitSystem.INCHES -> LengthFormat.formatInchesSmart(mm / 25.4) + "\""
+    else -> "${mm.roundToInt()} mm"
+}
+
+/**
+ * The "Taper–liner join" slider, shared by Settings → Drawing and the wear preview's PDF options
+ * sheet — ONE `PdfPrefs.wearJoinGapMaxMm` behind both, so the threshold can be judged against the
+ * strips it reshapes.
+ *
+ * How much bare shaft two components sharing a wear detail strip may have between them before the
+ * run compresses to an S-break instead of drawing true. The value is canonical **mm** at every
+ * layer; the display unit and the snap step ([snappedJoinGapMm]) are a UI-edge conversion only.
+ * `0` breaks on any positive gap — touching components draw contiguous at every setting, since
+ * they produce no gap segment at all. Drag is tracked locally and committed once on release, so
+ * drag frames never write DataStore (the wear preview has no live-tuning channel; the release
+ * commit re-renders the page). [trailing] is the caller's header-row button — a reset in
+ * Settings, nothing on the sheet, which stays compact.
+ */
+@Composable
+internal fun WearJoinGapSlider(
+    gapMm: Float,
+    unit: UnitSystem,
+    onCommit: (Float) -> Unit,
+    trailing: @Composable () -> Unit = {},
+) {
+    var gapDrag by remember { mutableStateOf<Float?>(null) }
+    val shown = (gapDrag ?: gapMm).coerceIn(PDF_WEAR_JOIN_GAP_MIN_MM, PDF_WEAR_JOIN_GAP_MAX_MM)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Taper–liner join  ${fmtJoinGap(shown, unit)}",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            trailing()
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(fmtJoinGap(PDF_WEAR_JOIN_GAP_MIN_MM, unit), style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { gapDrag = snappedJoinGapMm(it, unit) },
+                onValueChangeFinished = {
+                    gapDrag?.let(onCommit)
+                    gapDrag = null
+                },
+                valueRange = PDF_WEAR_JOIN_GAP_MIN_MM..PDF_WEAR_JOIN_GAP_MAX_MM,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .testTag("wear_join_gap_slider"),
+            )
+            Text(fmtJoinGap(PDF_WEAR_JOIN_GAP_MAX_MM, unit), style = MaterialTheme.typography.bodySmall)
         }
     }
 }

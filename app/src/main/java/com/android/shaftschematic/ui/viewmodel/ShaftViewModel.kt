@@ -271,6 +271,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfWearBandShadeFrac = MutableStateFlow(PdfPrefs().wearBandShadeFrac)
     val pdfWearBandShadeFrac: StateFlow<Float> = _pdfWearBandShadeFrac.asStateFlow()
 
+    // How much bare shaft may sit between two components in one wear detail strip before the run
+    // compresses to an S-break (canonical mm). Also a preview re-render key on the wear document:
+    // the composer reads it through the PdfPrefs snapshot, which is not snapshot state.
+    internal val _pdfWearJoinGapMaxMm = MutableStateFlow(PdfPrefs().wearJoinGapMaxMm)
+    val pdfWearJoinGapMaxMm: StateFlow<Float> = _pdfWearJoinGapMaxMm.asStateFlow()
+
     // Dimension-rail arrowhead size (pt). Also a preview re-render key on every tab that
     // rasterizes with the current PdfPrefs.
     internal val _pdfArrowSizePt = MutableStateFlow(PdfPrefs().arrowSizePt)
@@ -1278,6 +1284,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfWearBandShadeFracFlow(getApplication()).collectLatest { persisted ->
                 _pdfWearBandShadeFrac.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(wearBandShadeFrac = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfWearJoinGapMaxMmFlow(getApplication()).collectLatest { persisted ->
+                _pdfWearJoinGapMaxMm.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(wearJoinGapMaxMm = persisted) }
             }
         }
         viewModelScope.launch {

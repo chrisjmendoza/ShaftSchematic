@@ -2,6 +2,7 @@ package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.WearRecord
+import com.android.shaftschematic.settings.PdfPrefs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -135,6 +136,58 @@ class WearStripWindowTest {
         ).single()
         val farGap = far.segments.filterIsInstance<WearStripGapSeg>().single()
         assertFalse(farGap.trueScale)
+    }
+
+    // ── User-set join threshold (PdfPrefs.wearJoinGapMaxMm) ────────────────────
+
+    @Test
+    fun `the threshold is a parameter, and the shipped default is the 3 inch constant`() {
+        assertTrue(wearStripGapDrawsTrue(280f, trueGapMaxMm = 304.8f))    // 11" gap, 12" setting
+        assertFalse(wearStripGapDrawsTrue(101.6f, trueGapMaxMm = 76.2f))  // 4" gap, 3" setting
+        assertEquals(76.2f, WEAR_STRIP_TRUE_GAP_MAX_MM, 1e-4f)
+        assertEquals(PdfPrefs().wearJoinGapMaxMm, WEAR_STRIP_TRUE_GAP_MAX_MM, 1e-6f)
+    }
+
+    @Test
+    fun `at zero every positive gap breaks`() {
+        assertTrue(wearStripGapDrawsTrue(0f, trueGapMaxMm = 0f))
+        assertFalse(wearStripGapDrawsTrue(0.1f, trueGapMaxMm = 0f))
+    }
+
+    @Test
+    fun `collectWearStripWindows threads the threshold through to every gap`() {
+        val pair = listOf(taper("t", 0f, 100f), liner("l", 380f, 200f))   // an 11" gap
+        val ids = listOf("t", "l")
+
+        fun gapOf(maxMm: Float) = collectWearStripWindows(pair, ids, maxMm)
+            .single().segments.filterIsInstance<WearStripGapSeg>().single()
+
+        assertTrue("11 inches of shaft draws true at a 12 inch setting", gapOf(304.8f).trueScale)
+        assertFalse("…and breaks at the shipped 3 inch setting", gapOf(76.2f).trueScale)
+        assertFalse("…and at Never", gapOf(0f).trueScale)
+    }
+
+    @Test
+    fun `at zero, touching components still draw contiguous`() {
+        // Never means "any GAP breaks", not "always break": abutting components produce no gap
+        // segment at all, so there is nothing to compress.
+        val w = collectWearStripWindows(
+            listOf(taper("t", 0f, 100f), liner("l", 100f, 200f)), listOf("t", "l"), 0f,
+        ).single()
+        assertTrue(w.segments.none { it is WearStripGapSeg })
+    }
+
+    @Test
+    fun `the threshold changes how a gap draws, never which components share a window`() {
+        // The nearest-liner contest is decided on true mm, so the grouping is identical at
+        // every setting — only the gap's draw mode moves.
+        val comps = listOf(taper("t", 0f, 100f), liner("l1", 380f, 200f), liner("l2", 900f, 100f))
+        val ids = listOf("t", "l1", "l2")
+        val grouping = listOf(0f, 76.2f, 304.8f).map { max ->
+            collectWearStripWindows(comps, ids, max).map { idsOf(it) }
+        }
+        assertEquals(listOf(listOf("t", "l1"), listOf("l2")), grouping[0])
+        assertTrue(grouping.all { it == grouping[0] })
     }
 
     @Test

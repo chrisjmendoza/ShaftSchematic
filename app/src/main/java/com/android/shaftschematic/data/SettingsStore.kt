@@ -20,6 +20,8 @@ import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
+import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MAX_MM
+import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MIN_MM
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfPrefs
@@ -93,6 +95,7 @@ object SettingsStore {
     private val KEY_PDF_FRACTION_STYLE = stringPreferencesKey("pdf_fraction_style")
     private val KEY_PDF_WEAR_TRACE_DEPTH_FRAC = floatPreferencesKey("pdf_wear_trace_depth_frac")
     private val KEY_PDF_WEAR_BAND_SHADE_FRAC = floatPreferencesKey("pdf_wear_band_shade_frac")
+    private val KEY_PDF_WEAR_JOIN_GAP_MAX_MM = floatPreferencesKey("pdf_wear_join_gap_max_mm")
 
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
@@ -178,6 +181,19 @@ object SettingsStore {
     suspend fun setPdfWearBandShadeFrac(ctx: Context, v: Float) {
         ctx.settingsDataStore.edit {
             it[KEY_PDF_WEAR_BAND_SHADE_FRAC] = v.coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX)
+        }
+    }
+
+    // How much bare shaft may sit between two components in one wear detail strip before the run
+    // compresses to an S-break. Canonical mm; the UI converts for display only. App-wide.
+    fun pdfWearJoinGapMaxMmFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p ->
+            (p[KEY_PDF_WEAR_JOIN_GAP_MAX_MM] ?: PdfPrefs().wearJoinGapMaxMm)
+                .coerceIn(PDF_WEAR_JOIN_GAP_MIN_MM, PDF_WEAR_JOIN_GAP_MAX_MM)
+        }
+    suspend fun setPdfWearJoinGapMaxMm(ctx: Context, v: Float) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PDF_WEAR_JOIN_GAP_MAX_MM] = v.coerceIn(PDF_WEAR_JOIN_GAP_MIN_MM, PDF_WEAR_JOIN_GAP_MAX_MM)
         }
     }
 

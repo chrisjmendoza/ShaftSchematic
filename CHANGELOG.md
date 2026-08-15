@@ -6,6 +6,40 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-15
+
+### feat: wear strip follow-ups — anchor dimensions everywhere, a settable join, and one-tap contents
+
+Three on-device answers to the questions the strip-windows work left open.
+
+**Every strip prints its anchor dimension.** Wear is measured from the S.E.T. or the liner edge,
+so a taper or body strip needs the same "110 FROM AFT S.E.T." line a liner strip has always
+carried — it used to print the bare component name. A strip with no liner now measures its own
+span against the nearer S.E.T. (ties go AFT, the liner rule exactly) and right-aligns its title
+when FWD-referenced, the same direction cue. Blank write-in drafts follow: the value becomes a
+writing rule with "AFT / FWD" printed for circling, on every strip rather than only the liner
+ones. Combined taper+liner strips still print the LINER's anchor, unchanged. One shared helper
+(`wearStripAnchorForSpan` / `buildSpanAnchorLabel`) now backs the liner label, the span label,
+and the title-alignment cue, so the number, the wording, and the alignment can never disagree —
+and the liner path prints exactly what it always did, pinned by test.
+
+**Taper–liner join is a slider.** How much bare shaft may sit between a taper and the liner
+sharing its detail strip before the run compresses to an S-break was a fixed 3". It is now
+`PdfPrefs.wearJoinGapMaxMm`, **0–12"** in 1/2" steps (10 mm steps in metric), default the
+shipped 3" — in Settings → Drawing → "Taper–liner join" and in the wear preview's PDF Options,
+one pref behind both, commit-on-release. At 0 any gap breaks; touching components still draw
+joined at every setting, since they have no gap to compress. The threshold changes only how a
+gap *draws* — which taper joins which liner is decided on true millimetres either way. Stored in
+canonical mm and converted only for display, like every other length in the app.
+
+**Components quick actions.** The Components list gains **Default (all liners)** / **All** /
+**None**. Default is the important one: it clears the election so the sheet *follows the shaft*
+again, and a liner added later gets a strip on its own — the recovery path for a document whose
+shaft was built out after the contents were authored. Hand-ticking every box is not the same
+thing: an authored list is a fixed set, and later components arrive unticked.
+
+---
+
 ## 2026-08-14
 
 ### feat: wear detail strips keep their proportions, and the sheet's contents are elective

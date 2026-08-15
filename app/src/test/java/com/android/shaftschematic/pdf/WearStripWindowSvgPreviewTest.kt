@@ -1,9 +1,12 @@
 package com.android.shaftschematic.pdf
 
+import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
+import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -182,7 +185,22 @@ class WearStripWindowSvgPreviewTest {
         val d = windowSvg(spec, linerOnly, linerScale, "AFT Liner — default liner-only strip")
         File(outDir, "d-liner-only.svg").writeText(d.svg)
 
-        assertTrue(outDir.listFiles()!!.size >= 4)
+        // E) A taper elected on its own — it carries the SAME anchor-from-SET dimension a liner
+        //    strip does (wear is measured from a S.E.T.), so the title is name + anchor label.
+        val sets = computeSetPositionsInMeasureSpace(computeOalWindow(spec), spec)
+        val taperWindow = collectWearStripWindows(comps, listOf("t1")).single()
+        assertEquals(listOf("t1"), taperWindow.components.map { it.id })
+        val anchorLabel = buildSpanAnchorLabel(
+            spec, taperWindow.startMm, taperWindow.endMm, sets, UnitSystem.INCHES,
+        )
+        assertTrue("a taper strip must print an anchor dimension", anchorLabel.contains("S.E.T."))
+        val taperScale = sharedWearStripWindowPtPerMm(listOf(taperWindow), listOf(inner))
+        val e = windowSvg(spec, taperWindow, taperScale, "AFT Taper — $anchorLabel")
+        File(outDir, "e-taper-only-anchor-label.svg").writeText(e.svg)
+        assertTrue("the anchor text must reach the drawing", e.svg.contains("S.E.T."))
+        assertTrue(e.minX >= cellLeft - 1e-3f && e.maxX <= cellRight + 1e-3f)
+
+        assertTrue(outDir.listFiles()!!.size >= 5)
     }
 
     @Test

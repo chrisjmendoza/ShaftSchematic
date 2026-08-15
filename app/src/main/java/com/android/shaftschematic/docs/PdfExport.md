@@ -32,10 +32,14 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
 | `sBreakThresholdFrac` | `0.5` | Body S-break threshold: a body run breaks once drawn below this fraction of its true length (0–1; `0` = never break on compression) |
 | `arrowSizePt` | `4` | Dimension-rail arrowhead length (pt): Small `3` / Medium `4` / Large `5` |
+| `wearJoinGapMaxMm` | `76.2` (3") | Taper–liner join threshold: bare shaft between two components in one wear detail strip that still draws true, in canonical mm (0–304.8; `0` = break on any gap) |
 
 All fields are also reachable in the preview screen's Tune sheet, except the sizing-curve
 anchors, which live only in Settings → Drawing (app-level defaults) under "Default
 drawing size"; the per-job "Shaft height" slider multiplies on top of the sizing curve.
+`wearJoinGapMaxMm` is a second exception: it governs only the wear document's strips, so it
+lives in Settings → Drawing and the **wear** preview's own PDF Options sheet, not the
+schematic Tune sheet this section otherwise describes.
 
 - **Body S-break** (`sBreakThresholdFrac`): slider in 5% steps, commits on release, with a
   "Default (50%)" reset button — the same posture as Line Thickness, and like Line
@@ -58,6 +62,14 @@ drawing size"; the per-job "Shaft height" slider multiplies on top of the sizing
   `PdfDimensionRenderer` — the schematic and the consolidated sheet; the wear/undercut strip
   rails keep their own fixed 4 pt head. A smaller head also slightly widens inline
   eligibility, since a break's stubs must each be at least `arrowSize` long.
+- **Taper–liner join** (`wearJoinGapMaxMm`): slider 0–12", commits on release, with a
+  "Default (3")" reset — in Settings → Drawing → "Taper–liner join" and the **wear** preview's
+  PDF Options sheet (one shared `WearJoinGapSlider`, one app-wide pref). It is the only
+  **length-valued** drawing pref, so it is stored in canonical mm and converted at the UI edge
+  only: inches snap to 1/2" and read through `LengthFormat.formatInchesSmart` (12.7 mm → `1/2"`),
+  millimetres snap to 10 mm. It reaches only `collectWearStripWindows`, deciding whether the run
+  between a taper and the liner sharing its detail strip draws true or compresses to an S-break;
+  every other document ignores it. See `docs/RunoutSheet.md` ("Strip windows").
 - **Fractions** (`fractionStyle`): three chips — Stacked / **Diagonal (default)** / Plain — in
   Settings → Drawing → "Fractions" and in both PDF Options sheets (one shared
   `FractionStyleChips`, one app-wide pref). **Ungated in the sheets**, unlike the arrowhead

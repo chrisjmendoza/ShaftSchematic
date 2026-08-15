@@ -911,4 +911,103 @@ class WearStripLayoutTest {
         assertTrue(WEAR_BLANK_ANCHOR_SUFFIX.endsWith("S.E.T."))
     }
 
+    // ── Span anchor labels — the SAME construction for taper/body strips ───────
+    //
+    // Wear is measured from a S.E.T. or a liner edge, so a taper/body strip needs the anchor
+    // dimension a liner strip has always printed (on-device answer). The rule must be the
+    // liner's exactly: nearer edge to its own SET, ties AFT.
+
+    /** A 1000 mm shaft with end tapers, so AFT SET = 0 and FWD SET = 1000. */
+    private fun setSpec(vararg extra: Taper): ShaftSpec = ShaftSpec(
+        overallLengthMm = 1000f,
+        tapers = listOf(
+            Taper(id = "aftEnd", startFromAftMm = 0f, lengthMm = 200f, startDiaMm = 100f, endDiaMm = 80f),
+            Taper(id = "fwdEnd", startFromAftMm = 800f, lengthMm = 200f, startDiaMm = 80f, endDiaMm = 100f),
+        ) + extra.toList(),
+    )
+
+    private val sets1000 = SetPositions(aftSETxMm = 0.0, fwdSETxMm = 1000.0)
+
+    @Test
+    fun `a span nearer the AFT SET is measured from it`() {
+        val spec = setSpec()
+        val dim = wearStripAnchorForSpan(spec, 250f, 350f, sets1000)
+        assertEquals(com.android.shaftschematic.model.LinerAnchor.AFT_SET, dim.anchor)
+        assertEquals(250.0, dim.distanceMm, 1e-6)
+        assertEquals(
+            "250.000 mm FROM AFT S.E.T.",
+            buildSpanAnchorLabel(spec, 250f, 350f, sets1000, UnitSystem.MILLIMETERS),
+        )
+    }
+
+    @Test
+    fun `a span nearer the FWD SET is measured from it, FWD edge first`() {
+        val spec = setSpec()
+        // FWD edge at 900 → 100 from the FWD SET; AFT edge at 700 → 700 from the AFT SET.
+        val dim = wearStripAnchorForSpan(spec, 700f, 900f, sets1000)
+        assertEquals(com.android.shaftschematic.model.LinerAnchor.FWD_SET, dim.anchor)
+        assertEquals(100.0, dim.distanceMm, 1e-6)
+        assertEquals(
+            "100.000 mm FROM FWD S.E.T.",
+            buildSpanAnchorLabel(spec, 700f, 900f, sets1000, UnitSystem.MILLIMETERS),
+        )
+    }
+
+    @Test
+    fun `an equidistant span goes to the AFT SET`() {
+        // AFT edge 300 from the AFT SET, FWD edge 300 from the FWD SET — the tie goes AFT,
+        // exactly as the liner rule does.
+        val spec = setSpec()
+        val dim = wearStripAnchorForSpan(spec, 300f, 700f, sets1000)
+        assertEquals(com.android.shaftschematic.model.LinerAnchor.AFT_SET, dim.anchor)
+        assertEquals(300.0, dim.distanceMm, 1e-6)
+    }
+
+    @Test
+    fun `the liner label is exactly the span label over the liner's own span`() {
+        // The pin for the shared helper: refactoring the liner path onto it must not move a
+        // single character of what a liner strip prints.
+        listOf(
+            liner("aftish", 250f, 100f),   // AFT-referenced
+            liner("fwdish", 700f, 200f),   // FWD-referenced
+            liner("tie", 300f, 400f),      // equidistant — AFT wins
+        ).forEach { ln ->
+            val spec = setSpec().copy(liners = listOf(ln))
+            listOf(UnitSystem.MILLIMETERS, UnitSystem.INCHES).forEach { unit ->
+                assertEquals(
+                    "liner ${ln.id} in $unit",
+                    buildSpanAnchorLabel(
+                        spec, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm, sets1000, unit,
+                    ),
+                    buildLinerAnchorLabel(spec, ln, sets1000, unit),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `liner anchor labels keep their printed wording`() {
+        // Byte-level pin of the two shipped forms, so neither the number nor the wording can
+        // drift under the shared helper.
+        val aft = setSpec().copy(liners = listOf(liner("a", 250f, 100f)))
+        assertEquals(
+            "250.000 mm FROM AFT S.E.T.",
+            buildLinerAnchorLabel(aft, aft.liners[0], sets1000, UnitSystem.MILLIMETERS),
+        )
+        val fwd = setSpec().copy(liners = listOf(liner("f", 700f, 200f)))
+        assertEquals(
+            "100.000 mm FROM FWD S.E.T.",
+            buildLinerAnchorLabel(fwd, fwd.liners[0], sets1000, UnitSystem.MILLIMETERS),
+        )
+    }
+
+    @Test
+    fun `the title alignment cue reads the same anchor the label does`() {
+        val aft = setSpec().copy(liners = listOf(liner("a", 250f, 100f)))
+        assertEquals(com.android.shaftschematic.model.LinerAnchor.AFT_SET, linerAnchorForPdf(aft, aft.liners[0]))
+        val fwd = setSpec().copy(liners = listOf(liner("f", 700f, 200f)))
+        assertEquals(com.android.shaftschematic.model.LinerAnchor.FWD_SET, linerAnchorForPdf(fwd, fwd.liners[0]))
+        assertNull(linerAnchorForPdf(aft, liner("ghost", 0f, 10f)))
+    }
+
 }

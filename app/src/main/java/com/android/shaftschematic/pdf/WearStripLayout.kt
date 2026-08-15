@@ -3,14 +3,14 @@ package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.geom.SetPositions
+import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.LinerAnchor
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
-import com.android.shaftschematic.settings.PdfTieringMode
-import com.android.shaftschematic.pdf.dim.SpanKind
-import com.android.shaftschematic.pdf.dim.buildLinerSpans
+import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_DEFAULT_MM
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
 
@@ -416,8 +416,13 @@ fun computeWearStripHorizontalLayout(
 // as `geom/ProfileCompression.kt`). A window with a single component is exactly the historical
 // per-liner strip, so a liner-only sheet's geometry is unchanged.
 
-/** A gap up to this wide draws at the sheet's true scale; anything longer compresses. */
-const val WEAR_STRIP_TRUE_GAP_MAX_MM = 76.2f      // 3"
+/**
+ * Shipped default for the taper–liner join threshold: a gap up to this wide draws at the sheet's
+ * true scale, anything longer compresses. It is the SAME number as the user-set pref's default
+ * ([PDF_WEAR_JOIN_GAP_DEFAULT_MM]) — one constant behind both, so the pure API's default and
+ * an untouched install can never disagree.
+ */
+const val WEAR_STRIP_TRUE_GAP_MAX_MM = PDF_WEAR_JOIN_GAP_DEFAULT_MM      // 3"
 
 /** Fixed drawn width of a compressed gap — the open run between the S-break pair. */
 const val WEAR_STRIP_BREAK_GAP_PT = 40f
@@ -486,8 +491,17 @@ data class WearStripGapSeg(
     val trueScale: Boolean,
 ) : WearStripSegment()
 
-/** Whether a gap of [gapMm] draws at true scale rather than compressing to a break. */
-fun wearStripGapDrawsTrue(gapMm: Float): Boolean = gapMm <= WEAR_STRIP_TRUE_GAP_MAX_MM
+/**
+ * Whether a gap of [gapMm] draws at true scale rather than compressing to a break.
+ *
+ * [trueGapMaxMm] is the user-set join threshold (`PdfPrefs.wearJoinGapMaxMm`, canonical mm),
+ * defaulting to the shipped [WEAR_STRIP_TRUE_GAP_MAX_MM]. At `0` every positive gap compresses;
+ * touching components produce no gap segment at all, so they stay contiguous at any setting.
+ */
+fun wearStripGapDrawsTrue(
+    gapMm: Float,
+    trueGapMaxMm: Float = WEAR_STRIP_TRUE_GAP_MAX_MM,
+): Boolean = gapMm <= trueGapMaxMm
 
 /**
  * One detail strip's window onto the shaft: an ordered, contiguous run of component and gap
@@ -559,10 +573,15 @@ private enum class TaperSide { AFT, FWD }
  * default election — every drawable liner, exactly the historical sheet, which yields one
  * single-component window per liner. Ids that resolve to nothing are simply absent from
  * [components] and skipped here — orphan handling at the render layer, never at decode.
+ *
+ * [trueGapMaxMm] is the user-set join threshold (`PdfPrefs.wearJoinGapMaxMm`) handed to
+ * [wearStripGapDrawsTrue]; it changes only how a gap DRAWS, never which components share a
+ * window — the nearest-liner contest is decided on true mm at every setting.
  */
 fun collectWearStripWindows(
     components: List<WearStripComponent>,
     stripComponentIds: List<String>? = null,
+    trueGapMaxMm: Float = WEAR_STRIP_TRUE_GAP_MAX_MM,
 ): List<WearStripWindow> {
     val elected = stripComponentIds?.toSet()
     val selected = components
@@ -602,9 +621,9 @@ fun collectWearStripWindows(
     val windows = mutableListOf<WearStripWindow>()
     liners.forEach { ln ->
         val run = listOfNotNull(aftOf[ln.id]?.taper, ln, fwdOf[ln.id]?.taper).sortedBy { it.startMm }
-        windows += buildWearStripWindow(run)
+        windows += buildWearStripWindow(run, trueGapMaxMm)
     }
-    loners.forEach { windows += buildWearStripWindow(listOf(it)) }
+    loners.forEach { windows += buildWearStripWindow(listOf(it), trueGapMaxMm) }
     return windows.sortedBy { it.startMm }
 }
 
@@ -613,13 +632,18 @@ fun collectWearStripWindows(
  * between consecutive components whose mode follows [wearStripGapDrawsTrue]. Touching or
  * overlapping components get no gap segment at all.
  */
-private fun buildWearStripWindow(run: List<WearStripComponent>): WearStripWindow {
+private fun buildWearStripWindow(
+    run: List<WearStripComponent>,
+    trueGapMaxMm: Float = WEAR_STRIP_TRUE_GAP_MAX_MM,
+): WearStripWindow {
     val segs = mutableListOf<WearStripSegment>()
     run.forEachIndexed { i, comp ->
         if (i > 0) {
             val prevEnd = run[i - 1].endMm
             val gapMm = comp.startMm - prevEnd
-            if (gapMm > 0f) segs += WearStripGapSeg(prevEnd, comp.startMm, wearStripGapDrawsTrue(gapMm))
+            if (gapMm > 0f) {
+                segs += WearStripGapSeg(prevEnd, comp.startMm, wearStripGapDrawsTrue(gapMm, trueGapMaxMm))
+            }
         }
         segs += WearStripComponentSeg(comp)
     }
@@ -1095,18 +1119,65 @@ fun neighborDiaMmAtFwd(spec: ShaftSpec, linerFwdMm: Float, epsMm: Float = NEIGHB
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * Builds the strip's anchor-from-SET callout — the digital equivalent of the shop
- * sketch's "110 FROM CPLG S.E.T." line — by reusing the exact same math the main
- * schematic PDF uses for liner dimensions (`mapToLinerDimsForPdf` +
- * `buildLinerSpans`), so the number printed here is always identical to the one
- * on the schematic page. Returns "" if [liner] isn't found (should not happen —
- * defensive only).
+ * One strip title's anchor dimension: which SET it is measured from and how far, in
+ * measurement-space mm. See [wearStripAnchorForSpan].
+ */
+data class WearStripAnchorDim(val anchor: LinerAnchor, val distanceMm: Double)
+
+/**
+ * The anchor-from-SET dimension for ANY shaft-space span `[startMm, endMm]` — a liner, a taper,
+ * or a body run. Wear is measured from a S.E.T. or a liner edge, so a taper/body strip needs the
+ * same dimension a liner strip has always printed (on-device answer).
+ *
+ * The rule is `mapToLinerDimsForPdf`'s, applied to a span instead of a `Liner`: edges are rebased
+ * into measurement space (`computeOalWindow`), the AFT SET → span-start and span-end → FWD SET
+ * distances are compared, and the NEARER edge wins with **ties going AFT**. [sets] must be the
+ * measurement-space SET pair for [spec] (`computeSetPositionsInMeasureSpace`) — the same pair the
+ * composer already holds.
+ */
+fun wearStripAnchorForSpan(
+    spec: ShaftSpec,
+    startMm: Float,
+    endMm: Float,
+    sets: SetPositions,
+): WearStripAnchorDim {
+    val win = computeOalWindow(spec)
+    val aftEdge = win.toMeasureX(startMm.toDouble())
+    val fwdEdge = aftEdge + (endMm - startMm).toDouble().coerceAtLeast(0.0)
+    val distAft = (aftEdge - sets.aftSETxMm).coerceAtLeast(0.0)      // AFT SET → AFT edge
+    val distFwd = (sets.fwdSETxMm - fwdEdge).coerceAtLeast(0.0)      // FWD SET → FWD edge
+    return if (distFwd < distAft) WearStripAnchorDim(LinerAnchor.FWD_SET, distFwd)
+    else WearStripAnchorDim(LinerAnchor.AFT_SET, distAft)
+}
+
+/**
+ * The printed anchor callout for a shaft-space span — the digital equivalent of the shop
+ * sketch's "110 FROM CPLG S.E.T." line: [wearStripAnchorForSpan]'s distance formatted with the
+ * sheet's own length format, then [linerAnchorSuffix].
+ *
+ * ONE construction for every strip title, so a taper/body strip's anchor reads exactly like a
+ * liner's — see [buildLinerAnchorLabel], which is this function applied to the liner's span.
+ */
+fun buildSpanAnchorLabel(
+    spec: ShaftSpec,
+    startMm: Float,
+    endMm: Float,
+    sets: SetPositions,
+    unit: UnitSystem,
+): String {
+    val dim = wearStripAnchorForSpan(spec, startMm, endMm, sets)
+    return "${formatLenDim(dim.distanceMm, unit)} ${linerAnchorSuffix(dim.anchor)}"
+}
+
+/**
+ * The strip's anchor-from-SET callout for a liner — [buildSpanAnchorLabel] over the liner's own
+ * span, which reproduces the `mapToLinerDimsForPdf` + `buildLinerSpans` DATUM label the main
+ * schematic PDF prints, so the number here is always identical to the one on the schematic page.
+ * Returns "" if [liner] isn't found (should not happen — defensive only).
  */
 fun buildLinerAnchorLabel(spec: ShaftSpec, liner: Liner, sets: SetPositions, unit: UnitSystem): String {
-    val dim = mapToLinerDimsForPdf(spec, PdfTieringMode.AUTO).firstOrNull { it.id == liner.id } ?: return ""
-    val datum = buildLinerSpans(listOf(dim), sets, unit, PdfTieringMode.AUTO)
-        .firstOrNull { it.kind == SpanKind.DATUM } ?: return ""
-    return "${datum.labelTop} ${linerAnchorSuffix(dim.anchor)}"
+    val ln = spec.liners.firstOrNull { it.id == liner.id } ?: return ""
+    return buildSpanAnchorLabel(spec, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm, sets, unit)
 }
 
 /**
@@ -1128,9 +1199,13 @@ const val WEAR_BLANK_ANCHOR_SUFFIX = "FROM  AFT / FWD  S.E.T."
 /**
  * Which SET a liner's wear-strip anchor dimension is measured from ([LinerAnchor.AFT_SET] vs
  * [LinerAnchor.FWD_SET]), or `null` if the liner has no resolvable dimension. Used to align the
- * strip title (left for AFT-referenced, right for FWD-referenced) as a direction cue — same source
- * (`mapToLinerDimsForPdf`) as [buildLinerAnchorLabel]'s `FROM ... S.E.T.` text, so the two agree.
+ * strip title (left for AFT-referenced, right for FWD-referenced) as a direction cue — the same
+ * [wearStripAnchorForSpan] rule that produces [buildLinerAnchorLabel]'s `FROM ... S.E.T.` text,
+ * so the alignment and the wording can never disagree.
  */
-fun linerAnchorForPdf(spec: ShaftSpec, liner: Liner): LinerAnchor? =
-    mapToLinerDimsForPdf(spec, PdfTieringMode.AUTO).firstOrNull { it.id == liner.id }?.anchor
+fun linerAnchorForPdf(spec: ShaftSpec, liner: Liner): LinerAnchor? {
+    val ln = spec.liners.firstOrNull { it.id == liner.id } ?: return null
+    val sets = computeSetPositionsInMeasureSpace(computeOalWindow(spec), spec)
+    return wearStripAnchorForSpan(spec, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm, sets).anchor
+}
 

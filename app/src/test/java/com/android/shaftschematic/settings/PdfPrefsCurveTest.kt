@@ -117,6 +117,37 @@ class PdfPrefsCurveTest {
         )
     }
 
+    // ── Taper–liner join threshold (Settings → Drawing → "Taper–liner join") ───
+
+    @Test
+    fun `the join threshold defaults to the shipped 3 inches, in canonical mm`() {
+        assertEquals(76.2f, PDF_WEAR_JOIN_GAP_DEFAULT_MM, 1e-4f)
+        assertEquals(PDF_WEAR_JOIN_GAP_DEFAULT_MM, PdfPrefs().wearJoinGapMaxMm, 1e-6f)
+        // 0–12": the low end breaks on any gap, the high end draws a foot of shaft true.
+        assertEquals(0f, PDF_WEAR_JOIN_GAP_MIN_MM, 1e-6f)
+        assertEquals(304.8f, PDF_WEAR_JOIN_GAP_MAX_MM, 1e-4f)
+    }
+
+    @Test
+    fun `clamped coerces the join threshold into the settable range`() {
+        assertEquals(
+            PDF_WEAR_JOIN_GAP_MIN_MM,
+            PdfPrefs(wearJoinGapMaxMm = -50f).clamped().wearJoinGapMaxMm, 1e-6f,
+        )
+        assertEquals(
+            PDF_WEAR_JOIN_GAP_MAX_MM,
+            PdfPrefs(wearJoinGapMaxMm = 1000f).clamped().wearJoinGapMaxMm, 1e-6f,
+        )
+    }
+
+    @Test
+    fun `in-range join thresholds pass through clamped verbatim`() {
+        // Both ends are legal settings: 0 = break on any gap, 12" = a foot drawn true.
+        listOf(0f, 12.7f, 76.2f, 152.4f, 304.8f).forEach { mm ->
+            assertEquals(mm, PdfPrefs(wearJoinGapMaxMm = mm).clamped().wearJoinGapMaxMm, 1e-6f)
+        }
+    }
+
     @Test
     fun `in-range S-break thresholds pass through clamped verbatim`() {
         // Both ends are legal settings: 0 = never break on compression, 1 = always.

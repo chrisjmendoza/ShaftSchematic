@@ -116,6 +116,7 @@ import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
+import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_DEFAULT_MM
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.RunoutConfig
@@ -1150,8 +1151,9 @@ internal fun RunoutWearOptionsSheet(
     /** The app-wide `PdfPrefs.sBreakThresholdFrac`; read only when [showSBreak]. */
     sBreakThresholdFrac: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
     /**
-     * Shows the wear-document tuning block: the "Trace depth exaggeration" row (the Wear tab's
-     * own control, shared construction) and the "Wear area shade" slider. On only for the wear
+     * Shows the wear-document tuning block: the Components election, the "Trace depth
+     * exaggeration" row (the Wear tab's own control, shared construction), the "Wear area shade"
+     * slider, and the "Taper–liner join" threshold. On only for the wear
      * preview — the sheet exists so the drawing being looked at can be tuned against itself
      * (on-device request) — and inert on every other document, which draws no wear strips.
      */
@@ -1162,6 +1164,15 @@ internal fun RunoutWearOptionsSheet(
     traceDepthDefault: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
     /** The app-wide `PdfPrefs.wearBandShadeFrac`; read only when [showWearControls]. */
     wearBandShadeFrac: Float = PDF_WEAR_BAND_SHADE_DEFAULT,
+    /**
+     * The app-wide `PdfPrefs.wearJoinGapMaxMm` (canonical mm); read only when [showWearControls].
+     */
+    wearJoinGapMaxMm: Float = PDF_WEAR_JOIN_GAP_DEFAULT_MM,
+    /**
+     * The session's display unit — the UI edge for [wearJoinGapMaxMm], the one length-valued
+     * control on this sheet. Read only when [showWearControls].
+     */
+    unit: UnitSystem = UnitSystem.INCHES,
     /**
      * Strip-eligible components for the wear sheet's "Components" section, AFT→FWD
      * (`buildWearStripComponentOptions`); read only when [showWearControls].
@@ -1264,8 +1275,9 @@ internal fun RunoutWearOptionsSheet(
         Spacer(Modifier.height(12.dp))
 
         // ── Wear drawing (wear document only) ────────────────────────────────
-        // The same two controls the Wear tab and Settings → Drawing carry — here so the
-        // trace depth and the band's grey can be judged against the sheet they print on.
+        // The same controls the Wear tab and Settings → Drawing carry — here so the trace
+        // depth, the band's grey, and the join threshold can be judged against the sheet
+        // they print on.
         // Commit-on-release, like every slider on this sheet; the wear preview re-renders
         // from its own keys rather than a live tuning channel.
         if (showWearControls) {
@@ -1277,6 +1289,8 @@ internal fun RunoutWearOptionsSheet(
                 defaultIds = wearStripDefaultIds,
                 showShaftProfile = wearShowShaftProfile,
                 onSetShowShaftProfile = { vm.setWearShowShaftProfile(it) },
+                // Nullable: the "Default (all liners)" quick action clears the election so the
+                // sheet follows the shaft again.
                 onSetSelection = { vm.setWearStripComponents(it) },
             )
 
@@ -1295,6 +1309,16 @@ internal fun RunoutWearOptionsSheet(
             WearBandShadeSlider(
                 frac = wearBandShadeFrac,
                 onCommit = { vm.setPdfWearBandShadeFrac(it) },
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // How much bare shaft a combined taper+liner strip draws true before it breaks —
+            // the same app-wide pref Settings → Drawing sets.
+            WearJoinGapSlider(
+                gapMm = wearJoinGapMaxMm,
+                unit = unit,
+                onCommit = { vm.setPdfWearJoinGapMaxMm(it) },
             )
 
             Spacer(Modifier.height(12.dp))

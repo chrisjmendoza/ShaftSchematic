@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -142,6 +143,7 @@ fun WearRoute(
     val wearRecord         by vm.wearRecord.collectAsState()
     val wearTraceDefault   by vm.pdfWearTraceDepthFrac.collectAsState()
     val wearBandShadeFrac  by vm.pdfWearBandShadeFrac.collectAsState()
+    val wearJoinGapMaxMm   by vm.pdfWearJoinGapMaxMm.collectAsState()
 
     // The ONE resolution of this job's trace-depth override against the Settings default. Every
     // consumer on this tab — the slider, the detail overlay's canvas, and every composeWearPdf
@@ -201,11 +203,12 @@ fun WearRoute(
     // change would leave the rasterized preview drawing the old construction. traceDepthFrac
     // is a key for the other half of its pair: a job's own override rides `wearRecord`, but a
     // change to the Settings default reaches an un-overridden document only through this.
-    // wearBandShadeFrac is a key for the same reason: the composer reads it off the PdfPrefs
-    // snapshot taken inside this effect, which is not snapshot state either.
+    // wearBandShadeFrac and wearJoinGapMaxMm are keys for the same reason: the composer reads
+    // them off the PdfPrefs snapshot taken inside this effect, which is not snapshot state either.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   wearRecord, blankDraft, pdfFractionStyle, traceDepthFrac, wearBandShadeFrac) {
+                   wearRecord, blankDraft, pdfFractionStyle, traceDepthFrac, wearBandShadeFrac,
+                   wearJoinGapMaxMm) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
@@ -497,7 +500,7 @@ fun WearRoute(
             optionsSheet = {
                 // The sheet tunes the drawing being looked at (on-device request): the same
                 // blank-draft switch as the tab body (ONE state, so the two always agree) and
-                // the wear block — trace depth + wear-area shade.
+                // the wear block — contents, trace depth, wear-area shade, taper–liner join.
                 RunoutWearOptionsSheet(
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
@@ -511,6 +514,8 @@ fun WearRoute(
                     traceDepthFrac = traceDepthFrac,
                     traceDepthDefault = wearTraceDefault,
                     wearBandShadeFrac = wearBandShadeFrac,
+                    wearJoinGapMaxMm = wearJoinGapMaxMm,
+                    unit = unit,
                     wearStripOptions = stripOptions,
                     wearStripSelection = wearRecord.stripComponentIds,
                     wearStripDefaultIds = stripDefaultIds,
@@ -567,11 +572,17 @@ internal fun buildWearStripComponentOptions(
 }
 
 /**
- * The wear sheet's "Components" section: the whole-shaft profile toggle plus one checkbox per
- * strip-eligible component. [selection] is the job's authored election
+ * The wear sheet's "Components" section: the whole-shaft profile toggle, one checkbox per
+ * strip-eligible component, and a quick-action row. [selection] is the job's authored election
  * (`WearRecord.stripComponentIds`); `null` shows the default — every drawable liner ticked,
  * everything else clear. The first component toggle materializes [defaultIds] and then applies
  * the change, so a liner added later can never silently rewrite an authored sheet.
+ *
+ * **"Default" is not the same as hand-ticking every liner.** Default clears the election back to
+ * `null`, so the sheet FOLLOWS the shaft — a liner added afterwards gets a strip on its own. An
+ * authored list, however complete, is a fixed set: later components arrive unticked and stay
+ * that way until someone ticks them. That is the recovery path for a document whose shaft was
+ * built out after the election was authored (save-as, template, or an added liner).
  *
  * Ids the current geometry no longer offers stay in the stored list untouched (they simply have
  * no row here and are skipped when the sheet draws) — the render-layer orphan rule.
@@ -583,7 +594,8 @@ internal fun WearStripComponentChecks(
     defaultIds: List<String>,
     showShaftProfile: Boolean,
     onSetShowShaftProfile: (Boolean) -> Unit,
-    onSetSelection: (List<String>) -> Unit,
+    /** `null` restores the un-authored default election; a list is an authored set. */
+    onSetSelection: (List<String>?) -> Unit,
 ) {
     Column {
         Text("Components", style = MaterialTheme.typography.titleSmall)
@@ -625,6 +637,28 @@ internal fun WearStripComponentChecks(
                 Spacer(Modifier.width(8.dp))
                 Text(opt.label, style = MaterialTheme.typography.bodyLarge)
             }
+        }
+
+        // Quick actions. "Default" hands the sheet back to the shaft (selection = null, so
+        // future components join on their own); "All" and "None" author the two extremes of
+        // the currently offered set, in sheet order.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                onClick = { onSetSelection(null) },
+                modifier = Modifier.testTag("wear_strip_default"),
+            ) { Text("Default (all liners)") }
+            TextButton(
+                onClick = { onSetSelection(options.map { it.id }) },
+                modifier = Modifier.testTag("wear_strip_all"),
+            ) { Text("All") }
+            TextButton(
+                onClick = { onSetSelection(emptyList()) },
+                modifier = Modifier.testTag("wear_strip_none"),
+            ) { Text("None") }
         }
     }
 }

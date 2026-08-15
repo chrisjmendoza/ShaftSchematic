@@ -9,6 +9,8 @@ import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
+import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MAX_MM
+import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MIN_MM
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
@@ -128,6 +130,19 @@ fun ShaftViewModel.setPdfWearBandShadeFrac(v: Float, persist: Boolean = true) {
     _pdfWearBandShadeFrac.value = clamped
     SettingsStore.updatePdfPrefs { it.copy(wearBandShadeFrac = clamped) }
     if (persist) viewModelScope.launch { SettingsStore.setPdfWearBandShadeFrac(getApplication(), clamped) }
+}
+
+/**
+ * Wired to Settings → Drawing → "Taper–liner join" and the same slider in the wear preview's
+ * PDF options sheet — how much bare shaft two components in one detail strip may have between
+ * them before the run compresses to an S-break. Canonical **mm**; the sliders convert to the
+ * session's unit for display only. App-wide, like the body S-break threshold.
+ */
+fun ShaftViewModel.setPdfWearJoinGapMaxMm(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_WEAR_JOIN_GAP_MIN_MM, PDF_WEAR_JOIN_GAP_MAX_MM)
+    _pdfWearJoinGapMaxMm.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(wearJoinGapMaxMm = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfWearJoinGapMaxMm(getApplication(), clamped) }
 }
 
 /** Wired to the PDF options sheets and Settings → Drawing → "Dimension arrows". */

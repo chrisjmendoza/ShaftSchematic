@@ -72,6 +72,7 @@ import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
+import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_DEFAULT_MM
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
@@ -142,6 +143,7 @@ fun SettingsRoute(
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
     val pdfWearTraceDepthFrac by vm.pdfWearTraceDepthFrac.collectAsState()
     val pdfWearBandShadeFrac by vm.pdfWearBandShadeFrac.collectAsState()
+    val pdfWearJoinGapMaxMm by vm.pdfWearJoinGapMaxMm.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
 
@@ -329,6 +331,15 @@ fun SettingsRoute(
                     WearBandShadeControl(
                         frac = pdfWearBandShadeFrac,
                         onCommit = { vm.setPdfWearBandShadeFrac(it) },
+                    )
+
+                    // Same slider the wear preview's PDF options sheet carries — one
+                    // PdfPrefs.wearJoinGapMaxMm, stored in canonical mm and read here in the
+                    // session's unit.
+                    WearJoinGapControl(
+                        gapMm = pdfWearJoinGapMaxMm,
+                        unit = unit,
+                        onCommit = { vm.setPdfWearJoinGapMaxMm(it) },
                     )
 
                     // Same picker both PDF options sheets carry — one PdfPrefs.arrowSizePt.
@@ -843,6 +854,42 @@ private fun WearBandShadeControl(
             "Grey of a measured wear area in the wear document's detail strips. The range " +
                 "stops where a heavier wash would start burying the pit marks that get drawn " +
                 "into the band.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * Taper–liner join threshold on the Settings page: the shared [WearJoinGapSlider] — the same
+ * control the wear preview's PDF options sheet carries — plus a reset to the shipped 3" and the
+ * explanatory caption this page has room for. App-wide; no document pins its own.
+ *
+ * The value is canonical mm everywhere; [unit] is the display edge only.
+ */
+@Composable
+private fun WearJoinGapControl(
+    gapMm: Float,
+    unit: UnitSystem,
+    onCommit: (Float) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        WearJoinGapSlider(
+            gapMm = gapMm,
+            unit = unit,
+            onCommit = onCommit,
+            trailing = {
+                TextButton(
+                    onClick = { onCommit(PDF_WEAR_JOIN_GAP_DEFAULT_MM) },
+                    enabled = gapMm != PDF_WEAR_JOIN_GAP_DEFAULT_MM,
+                ) { Text("Default (${fmtJoinGap(PDF_WEAR_JOIN_GAP_DEFAULT_MM, unit)})") }
+            },
+        )
+        Text(
+            "On the wear document, a taper and the liner beside it share one detail strip. " +
+                "This is how much bare shaft may sit between them before the strip breaks " +
+                "instead of drawing the run true. At 0 any gap breaks; touching components " +
+                "always draw joined.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
