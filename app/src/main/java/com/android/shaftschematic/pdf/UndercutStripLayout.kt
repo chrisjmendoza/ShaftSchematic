@@ -384,6 +384,11 @@ fun computeUndercutStripInnerLayout(
         labelHeadroomPt = labelHeadroomPt,
         maxLabelRows = maxLabelRows,
         diaBandPt = diaBandPt,
+        // No witness run reserved here: this layout places both its rail lines itself, off
+        // [UndercutStripInnerLayout.cylTop], and `belowRows` (never 0 — see [planUndercutRailRows])
+        // already holds a full label row of clear air between the chained rail and the cylinder.
+        // Reserving the wear strip's run on top of it would only widen that gap.
+        witnessRunPt = 0f,
     )
 
     // Cylinder cap + surplus spend (see the KDoc): the drawn cylinder keeps `cylH - surplus`,

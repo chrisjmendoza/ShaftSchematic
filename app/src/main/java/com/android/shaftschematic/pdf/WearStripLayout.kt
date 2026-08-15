@@ -397,23 +397,42 @@ const val WEAR_STRIP_LABEL_HEADROOM_PT = 11f
  */
 const val WEAR_RAIL_MAX_LABEL_ROWS = 2
 
+/**
+ * Clear run left between the chained rail line and the cylinder top — the band the rail's
+ * witness lines cross, and nothing else. Fallback label rows stack on the FAR side of the rail
+ * (above it): a value parked between the rail and the cylinder prints across those witness
+ * lines (on-device report), and every other rail in the app puts a value that cannot seat in
+ * the line above it.
+ */
+const val WEAR_RAIL_WITNESS_RUN_PT = 9f
+
 data class WearStripInnerLayout(
     val cylTop: Float,
     val cylBottom: Float,
-    /** Y coordinate of the strip's single chained dimension-rail line (drawn ABOVE the cylinder). */
+    /** Y coordinate of the strip's single chained dimension-rail line, sitting one
+     *  [WEAR_RAIL_WITNESS_RUN_PT] above [cylTop]. */
     val railY: Float,
-    /** How many of [WEAR_RAIL_MAX_LABEL_ROWS] stacked label rows actually fit between [railY] and
-     *  [cylTop] — 0 in a pathologically short strip (the rail line still draws, but no label is
-     *  placed on it). */
+    /** How many of [WEAR_RAIL_MAX_LABEL_ROWS] stacked label rows actually fit between the strip's
+     *  top and [railY] — i.e. ABOVE the rail line — 0 in a pathologically short strip (the rail
+     *  line still draws, but no fallback label is placed on it). */
     val railLabelRows: Int,
 )
 
 /**
- * Splits one strip's vertical band `[stripTop, stripBottom]` into the single chained
- * dimension rail (at the TOP), the liner-cylinder region (middle), and the title
- * (at the BOTTOM) — the strip-local analogue of [computeWearVerticalLayout].
+ * Splits one strip's vertical band `[stripTop, stripBottom]` into the fallback label rows and
+ * the single chained dimension rail (at the TOP), the liner-cylinder region (middle), and the
+ * title (at the BOTTOM) — the strip-local analogue of [computeWearVerticalLayout].
  * (The rail sits above the cylinder and the title below it, matching how the shop
  * marks the sheet by hand: dimensions above the shaft, the liner title/anchor below it.)
+ *
+ * Top to bottom the band holds: [maxLabelRows] × [rowHeightPt] of stacked label rows, the rail
+ * line, a [witnessRunPt] run of nothing but the rail's witness lines, the cylinder, the
+ * [labelHeadroomPt] gap, any [diaBandPt] callout band, and the title.
+ *
+ * The label rows sit ABOVE the rail line, not between it and the cylinder: the band under the
+ * rail is where the witness lines run, so a value parked there prints across them (on-device
+ * report) — and above the line is where every other dimension rail in the app puts a value too
+ * wide to seat in its own span. `drawWearStripRail` stacks its fallback rows upward to match.
  *
  * [titleHeightPt] is the space the title text line itself consumes (its own line
  * height); [labelHeadroomPt] is then an EXTRA, explicit gap reserved above the title,
@@ -423,7 +442,8 @@ data class WearStripInnerLayout(
  * The rail's own vertical budget is a FIXED [maxLabelRows] × [rowHeightPt] —
  * not proportional to how many wear spots the liner has, since the rail is always
  * one chained line no matter how many spans it's divided into. Guarantees
- * `stripTop <= railY <= cylTop <= cylBottom <= stripBottom` for ANY
+ * `stripTop <= railY - railLabelRows × rowHeightPt` and
+ * `railY <= cylTop <= cylBottom <= stripBottom` for ANY
  * input, including pathological ones (e.g. a very large-diameter liner on a very short
  * strip, where the preferred cylinder + rail sizes don't fit together): the
  * cylinder shrinks first, and once it hits zero height, [railLabelRows] drops
@@ -436,6 +456,10 @@ data class WearStripInnerLayout(
  * with leaders below the cylinder). `0` (the default) reproduces the pre-callout layout
  * exactly; the cylinder shrinks first when the band doesn't fit, same degradation order
  * as everything else here.
+ *
+ * [witnessRunPt] is `0` for the undercut strips (`computeUndercutStripInnerLayout`), which
+ * place their own rail lines off [cylTop] and already keep a full label row of clear air
+ * between the chained rail and the cylinder.
  */
 fun computeWearStripInnerLayout(
     stripTop: Float,
@@ -445,19 +469,21 @@ fun computeWearStripInnerLayout(
     labelHeadroomPt: Float = WEAR_STRIP_LABEL_HEADROOM_PT,
     maxLabelRows: Int = WEAR_RAIL_MAX_LABEL_ROWS,
     diaBandPt: Float = 0f,
+    witnessRunPt: Float = WEAR_RAIL_WITNESS_RUN_PT,
 ): WearStripInnerLayout {
     // Title sits at the BOTTOM (its own height + an explicit headroom gap reserved just below the
-    // cylinder, then any measured-Ø callout band); the chained rail sits ABOVE the cylinder
-    // (fixed maxLabelRows budget at the top).
+    // cylinder, then any measured-Ø callout band); the chained rail sits just above the cylinder
+    // with its fallback label rows stacked over it (fixed maxLabelRows budget at the top).
     val cylBottom = (stripBottom - titleHeightPt - labelHeadroomPt - diaBandPt.coerceAtLeast(0f))
         .coerceIn(stripTop, stripBottom.coerceAtLeast(stripTop))
     val available = (cylBottom - stripTop).coerceAtLeast(0f)
-    val railBudgetH = maxLabelRows.coerceAtLeast(0) * rowHeightPt
+    val witnessRun = witnessRunPt.coerceAtLeast(0f)
+    val railBudgetH = maxLabelRows.coerceAtLeast(0) * rowHeightPt + witnessRun
     val cylH = (available - railBudgetH).coerceIn(0f, available)
     val cylTop = cylBottom - cylH
-    val remainingForRail = (cylTop - stripTop).coerceAtLeast(0f)
+    val railY = (cylTop - witnessRun).coerceAtLeast(stripTop)
+    val remainingForRail = (railY - stripTop).coerceAtLeast(0f)
     val railLabelRows = (remainingForRail / rowHeightPt).toInt().coerceIn(0, maxLabelRows)
-    val railY = cylTop - railLabelRows * rowHeightPt
     return WearStripInnerLayout(cylTop, cylBottom, railY, railLabelRows)
 }
 

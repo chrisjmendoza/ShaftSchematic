@@ -375,12 +375,13 @@ class WearStripLayoutTest {
     }
 
     // ── computeWearStripInnerLayout (dimension rail: fixed budget, independent of
-    // spot count) ──────────────────────────────────────────────
+    // spot count; fallback label rows ABOVE the rail line) ──────────────────────
 
     @Test
     fun `inner layout fits the cylinder and the full rail row budget in an ordinary strip`() {
         val stripTop = 100f
-        val stripBottom = stripTop + 15f + WEAR_STRIP_LABEL_HEADROOM_PT + 40f + 2 * WEAR_STRIP_ROW_HEIGHT_PT
+        val stripBottom = stripTop + 15f + WEAR_STRIP_LABEL_HEADROOM_PT + 40f +
+            2 * WEAR_STRIP_ROW_HEIGHT_PT + WEAR_RAIL_WITNESS_RUN_PT
         val inner = computeWearStripInnerLayout(
             stripTop = stripTop, stripBottom = stripBottom, titleHeightPt = 15f,
         )
@@ -390,7 +391,25 @@ class WearStripLayoutTest {
         assertTrue(inner.cylBottom > inner.cylTop)
         assertTrue(inner.cylBottom <= stripBottom + 1e-3f)
         assertEquals(WEAR_RAIL_MAX_LABEL_ROWS, inner.railLabelRows)
-        assertEquals(inner.cylTop - inner.railLabelRows * WEAR_STRIP_ROW_HEIGHT_PT, inner.railY, 1e-3f)
+        // Only the witness run separates the rail from the cylinder; the label rows live above.
+        assertEquals(inner.cylTop - WEAR_RAIL_WITNESS_RUN_PT, inner.railY, 1e-3f)
+    }
+
+    @Test
+    fun `the fallback label band sits entirely above the rail and inside the strip`() {
+        // The regression this pins: rows stacked BELOW the rail land in the witness lines' run
+        // between the rail and the cylinder, so the value prints across them (on-device report).
+        val stripTop = 100f
+        val stripBottom = stripTop + 15f + WEAR_STRIP_LABEL_HEADROOM_PT + 40f +
+            2 * WEAR_STRIP_ROW_HEIGHT_PT + WEAR_RAIL_WITNESS_RUN_PT
+        val inner = computeWearStripInnerLayout(
+            stripTop = stripTop, stripBottom = stripBottom, titleHeightPt = 15f,
+        )
+        val bandTop = inner.railY - inner.railLabelRows * WEAR_STRIP_ROW_HEIGHT_PT
+        assertTrue("label rows must fit above the rail, inside the strip", bandTop >= stripTop - 1e-3f)
+        assertTrue("the label band must end at the rail line", inner.railY <= inner.cylTop + 1e-3f)
+        assertTrue("the rail-to-cylinder run belongs to the witness lines alone",
+            inner.cylTop - inner.railY <= WEAR_RAIL_WITNESS_RUN_PT + 1e-3f)
     }
 
     @Test
@@ -416,10 +435,10 @@ class WearStripLayoutTest {
         val titleH = 15f
         val rowH = WEAR_STRIP_ROW_HEIGHT_PT
         val stripTop = 0f
-        // After reserving the title (+ headroom) at the bottom, the space left above the cylinder is
-        // between 1 and 2 rail rows: the cylinder collapses to zero first, then the rail drops from
-        // its full budget to a single row.
-        val stripBottom = titleH + WEAR_STRIP_LABEL_HEADROOM_PT + 20f // 20pt left for cyl + rail
+        // After reserving the title (+ headroom) at the bottom and the rail's witness run, the
+        // space left above the rail is between 1 and 2 label rows: the cylinder collapses to zero
+        // first, then the rail drops from its full budget to a single row.
+        val stripBottom = titleH + WEAR_STRIP_LABEL_HEADROOM_PT + WEAR_RAIL_WITNESS_RUN_PT + 18f
         val inner = computeWearStripInnerLayout(stripTop, stripBottom, titleH, rowHeightPt = rowH)
         val cylBottomExpected = stripBottom - titleH - WEAR_STRIP_LABEL_HEADROOM_PT
         assertEquals(cylBottomExpected, inner.cylBottom, 1e-3f)

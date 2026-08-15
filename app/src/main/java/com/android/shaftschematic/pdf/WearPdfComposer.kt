@@ -10,11 +10,16 @@ import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.PlacedDiaCallout
 import com.android.shaftschematic.geom.SetPositions
+import com.android.shaftschematic.geom.WearTraceReading
+import com.android.shaftschematic.geom.WearTraceVertex
+import com.android.shaftschematic.geom.buildWearTrace
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.deepestWearDepthMm
 import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.pitHalfArm
 import com.android.shaftschematic.geom.planDiaCallouts
+import com.android.shaftschematic.geom.sequenceWearTraces
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -43,7 +48,7 @@ import kotlin.math.min
  * A printable form the machinist uses in the field to mark damage, pitting, and
  * dye-penetrant inspection results on a simplified shaft outline. The interior is
  * left largely blank for hand annotation, but any wear recorded in-app is printed at
- * its true position: liner wear bands (hatched) and pit "X" markers (small/large) on
+ * its true position: liner wear bands (marked) and pit "X" markers (small/large) on
  * bodies, tapers, and liners — see "Wear Pits" in `docs/RunoutSheet.md`.
  *
  * ## Page layout (landscape US Letter, 792 × 612 pt)
@@ -275,7 +280,7 @@ fun composeWearPdf(
     drawWearShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
 
-    // Thin hatched wear bands (liner spots) + pit "X"s at true position on the profile. Bands
+    // Vertical-stroke wear bands (liner spots) + pit "X"s at true position on the profile. Bands
     // clamp to the liner span for rendering only; the stored data is never touched.
     drawWearBandsOnProfile(c, wearGroups, shaftCy, ::xAt, ::rPx, outline)
     if (resolvedComponents != null) {
@@ -307,6 +312,16 @@ fun composeWearPdf(
     }
 
     // ── Per-liner detail strips ─────────────────────────────────────────────
+    // Worn-profile trace baseline (geom/WearTraceMath.kt): the deepest valued reading on ANY
+    // liner, computed ONCE so every strip on the sheet exaggerates against the same worst
+    // wear. Body/taper readings never trace, so they stay out of the baseline.
+    val linerOdMmById = docSpec.liners.associate { it.id to it.odMm }
+    val deepestLinerWearMm = deepestWearDepthMm(
+        effectiveRecord.diaReadings.mapNotNull { r ->
+            val odMm = linerOdMmById[r.componentId] ?: return@mapNotNull null
+            odMm to r.diaMm
+        }
+    )
     onPage.forEachIndexed { i, group ->
         val cell = stripCells[i]
         drawWearDetailStrip(
@@ -315,6 +330,7 @@ fun composeWearPdf(
             linerTitle = linerTitles[group.liner.id] ?: "Liner",
             linerPits = effectiveRecord.pits.filter { it.componentId == group.liner.id },
             linerDiaReadings = effectiveRecord.diaReadings.filter { it.componentId == group.liner.id },
+            deepestWearDepthMm = deepestLinerWearMm,
             blankValues = blankValues,
         )
     }
@@ -623,7 +639,8 @@ private fun drawWearShaftProfile(
  * Thin vertical-line bands on the MAIN shaft profile for every liner with recorded wear
  * spots, at their true axial position — "visible but not dominant" (proposal §6.2). The band
  * is filled with **vertical** strokes (matching how the shop marks wear areas by
- * hand — see the reference sketch); the broken-out detail strips keep the diagonal hatch.
+ * hand — see the reference sketch); the broken-out detail strips, which are what pits get
+ * hand-marked into, fill theirs a light grey instead ([WEAR_BAND_FILL_ALPHA]).
  * Bands are clamped to the liner's own span for rendering; the underlying [WearSpot] data is
  * never mutated.
  */
@@ -774,12 +791,20 @@ private fun drawDiaCallouts(c: Canvas, placed: List<PlacedDiaCallout>, dim: Pain
 
 /**
  * One broken-out liner detail strip: neighbor stubs with S-curve break edges, the liner at
- * strip-local large scale, hatched wear bands with a chained dimension rail below the
+ * strip-local large scale, light-grey wear bands with a chained dimension rail above the
  * cylinder (liner AFT edge → first band start → each band's length → inter-band gaps →
  * trailing remainder to the liner FWD edge, standard witness-line/arrowed-span convention —
  * see `buildWearStripRailSpans`/`layoutWearStripRail`/`drawWearStripRail`), measured-Ø value
  * callouts below the cylinder when recorded, and the liner's anchor dimension from its nearer
  * SET (the "110 FROM CPLG S.E.T." line in the shop sketch this feature digitizes).
+ *
+ * A wear band whose measured-Ø readings show material gone draws its **worn-profile trace**:
+ * the cylinder's top and bottom edges dip through the readings instead of running straight, and
+ * the band's grey fill follows them, so the bite reads at a glance (a liner measured half an inch
+ * down used to print as a perfect cylinder — on-device report). Depth is display-exaggerated
+ * against [deepestWearDepthMm] but never drawn shallower than true scale; the pure construction
+ * is `geom/WearTraceMath.kt`, shared with the detail overlay's canvas so both render identically.
+ * A band with no valued reading keeps its straight edges and full-rect fill.
  *
  * A liner with no recorded wear (spots empty — every liner gets a strip)
  * degenerates cleanly: no bands, no callouts, and the band-less rail draws only the two
@@ -806,6 +831,7 @@ private fun drawWearDetailStrip(
     linerTitle: String,
     linerPits: List<WearPit> = emptyList(),
     linerDiaReadings: List<WearDiaReading> = emptyList(),
+    deepestWearDepthMm: Float = 0f,
     blankValues: Boolean = false,
 ) {
     val ln = group.liner
@@ -839,6 +865,26 @@ private fun drawWearDetailStrip(
     val diaBandPt = diaPlan?.let { it.labelsHeightPt(dimText.textSize, WEAR_DIA_ROW_GAP_PT) + 2f } ?: 0f
 
     val sortedSpots = group.spots.sortedBy { it.startMm }
+    // Bands clamp to the liner's own span for rendering; the stored spots are never touched.
+    val clampedBands = sortedSpots.map { spot -> clampWearBandToLiner(spot.startMm, spot.lengthMm, ln.lengthMm) }
+
+    // Worn-profile traces, one per band (geom/WearTraceMath.kt). Pure mm→depth-fraction math,
+    // so it is computed before any px geometry and mapped through the strip's scale below —
+    // the same output the detail overlay's canvas walks.
+    val traceReadings = linerDiaReadings
+        .filter { it.diaMm > 0f }
+        .map { WearTraceReading(it.axialMm.coerceIn(0f, ln.lengthMm), it.diaMm) }
+    val bandTraces = clampedBands.map { clamp ->
+        buildWearTrace(
+            bandStartMm = clamp.startMm,
+            bandLengthMm = clamp.lengthMm,
+            readings = traceReadings,
+            nominalOdMm = ln.odMm,
+            deepestDepthMm = deepestWearDepthMm,
+        )
+    }
+    val traceVerts = sequenceWearTraces(bandTraces)
+
     val inner = computeWearStripInnerLayout(
         stripTop, stripBottom,
         titleHeightPt = titleText.textSize,
@@ -858,10 +904,24 @@ private fun drawWearDetailStrip(
     val linerR = radii.linerRPt
     val top = cy - linerR; val bot = cy + linerR
 
-    // Liner cylinder outline
+    // Liner cylinder outline. The top and bottom edges run straight except inside a traced wear
+    // band, where they dip through the measured diameters (mirrored, so the bite is symmetric);
+    // with no trace the two paths are exactly the old straight lines.
     val dimPaint = Paint(outline).apply { strokeWidth = WEAR_DIM_PT }
-    c.drawLine(hLayout.linerLeftPt, top, hLayout.linerRightPt, top, outline)
-    c.drawLine(hLayout.linerLeftPt, bot, hLayout.linerRightPt, bot, outline)
+    if (traceVerts.isEmpty()) {
+        c.drawLine(hLayout.linerLeftPt, top, hLayout.linerRightPt, top, outline)
+        c.drawLine(hLayout.linerLeftPt, bot, hLayout.linerRightPt, bot, outline)
+    } else {
+        val xAtLocal: (Float) -> Float = { mm -> xAtStrip(aftMm + mm) }
+        c.drawPath(
+            tracedLinerEdgePath(hLayout.linerLeftPt, hLayout.linerRightPt, top, 1f, linerR, traceVerts, xAtLocal),
+            outline,
+        )
+        c.drawPath(
+            tracedLinerEdgePath(hLayout.linerLeftPt, hLayout.linerRightPt, bot, -1f, linerR, traceVerts, xAtLocal),
+            outline,
+        )
+    }
     c.drawLine(hLayout.linerLeftPt, top, hLayout.linerLeftPt, bot, dimPaint)
     c.drawLine(hLayout.linerRightPt, top, hLayout.linerRightPt, bot, dimPaint)
 
@@ -881,18 +941,29 @@ private fun drawWearDetailStrip(
     c.drawLine(hLayout.linerRightPt, cy + fwdR, stubRightX, cy + fwdR, outline)
     drawBreakEdge(c, stubRightX, cy - fwdR, cy + fwdR, fwdR * 0.6f, outline, eyeAtTop = false)
 
-    // Wear bands (hatch fill + edge ticks on the cylinder itself) — per spot. The dimension
+    // Wear bands (light grey fill + edge ticks on the cylinder itself) — per spot. The dimension
     // story (offsets/lengths) is the chained rail above; the diameter story is the
     // measured-Ø callouts below, exclusively: printing a per-band min-Ø label here would
     // collide with the callout values under a wear band (on-device report).
     // [WearSpot.minDiaMm] is model-only, for older files.
-    val bandHatch = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.6f; alpha = 160 }
-    val clampedBands = sortedSpots.map { spot -> clampWearBandToLiner(spot.startMm, spot.lengthMm, ln.lengthMm) }
-    clampedBands.forEach { clamp ->
-        if (clamp.lengthMm <= 0f) return@forEach
+    // A traced band fills between its traced edges instead of the full rect, so the material
+    // measured away stays white above and below the grey.
+    val bandFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL; color = Color.argb(WEAR_BAND_FILL_ALPHA, 0, 0, 0)
+    }
+    clampedBands.forEachIndexed { i, clamp ->
+        if (clamp.lengthMm <= 0f) return@forEachIndexed
         val x0 = xAtStrip(aftMm + clamp.startMm)
         val x1 = xAtStrip(aftMm + clamp.startMm + clamp.lengthMm)
-        drawHatchBand(c, x0, x1, top, bot, bandHatch, pitchPt = 5f)
+        val trace = bandTraces[i]
+        if (trace.isEmpty()) {
+            c.drawRect(x0, top, x1, bot, bandFill)
+        } else {
+            c.drawPath(
+                tracedBandFillPath(top, bot, linerR, trace) { mm -> xAtStrip(aftMm + mm) },
+                bandFill,
+            )
+        }
         c.drawLine(x0, top, x0, bot, dimPaint); c.drawLine(x1, top, x1, bot, dimPaint)
     }
 
@@ -980,6 +1051,52 @@ private fun drawWearDetailStrip(
 }
 
 /**
+ * One traced liner surface edge as a polyline: it runs along [edgeY] from [leftPt] to [rightPt]
+ * and dips to `edgeY + dir × depthFrac × radiusPt` at each worn-profile vertex ([verts], one
+ * left-to-right run from `sequenceWearTraces`). [dir] is `+1` for the TOP edge and `-1` for the
+ * BOTTOM, so both edges bite the same amount out of the cylinder. [xAtLocalMm] maps a
+ * liner-local mm to strip x.
+ */
+private fun tracedLinerEdgePath(
+    leftPt: Float,
+    rightPt: Float,
+    edgeY: Float,
+    dir: Float,
+    radiusPt: Float,
+    verts: List<WearTraceVertex>,
+    xAtLocalMm: (Float) -> Float,
+): android.graphics.Path = android.graphics.Path().apply {
+    moveTo(leftPt, edgeY)
+    verts.forEach { v -> lineTo(xAtLocalMm(v.localMm), edgeY + dir * v.depthFrac * radiusPt) }
+    lineTo(rightPt, edgeY)
+}
+
+/**
+ * A traced band's grey fill: the closed polygon between the traced TOP edge (left→right) and the
+ * traced BOTTOM edge (right→left), from ONE band's [verts]. The material measured away is left
+ * white outside it.
+ */
+private fun tracedBandFillPath(
+    topY: Float,
+    botY: Float,
+    radiusPt: Float,
+    verts: List<WearTraceVertex>,
+    xAtLocalMm: (Float) -> Float,
+): android.graphics.Path = android.graphics.Path().apply {
+    if (verts.isEmpty()) return@apply
+    verts.forEachIndexed { i, v ->
+        val x = xAtLocalMm(v.localMm)
+        val y = topY + v.depthFrac * radiusPt
+        if (i == 0) moveTo(x, y) else lineTo(x, y)
+    }
+    for (i in verts.indices.reversed()) {
+        val v = verts[i]
+        lineTo(xAtLocalMm(v.localMm), botY - v.depthFrac * radiusPt)
+    }
+    close()
+}
+
+/**
  * Draws one strip's chained dimension rail (`buildWearStripRailSpans`/`layoutWearStripRail` in
  * `WearStripLayout.kt`): witness lines from just above the cylinder edge up to the rail (a
  * small clear gap at the liner, matching the main profile's OAL witness convention), an arrowed
@@ -987,10 +1104,14 @@ private fun drawWearDetailStrip(
  * span (the inward-arrow test, which also guarantees stub room at [DIM_BREAK_TEXT_PAD_PT])
  * **seats in a break cut in the span line**, vertically centred — the schematic's
  * value-in-a-break convention, consistent across drawing outputs. A label wider than its
- * span (short bands/gaps) falls back to the stacked below-line rows assigned by
- * `layoutWearStripRail`, clamped to [maxLabelRows] (rows beyond the budget
- * `computeWearStripInnerLayout` actually fit for this strip are never drawn) — break-seated
- * labels can never collide with each other since chained spans are disjoint.
+ * span (short bands/gaps) falls back to the stacked rows assigned by `layoutWearStripRail`,
+ * stacked ABOVE the rail line (row 0 nearest it) and clamped to [maxLabelRows] (rows beyond
+ * the budget `computeWearStripInnerLayout` actually fit for this strip are never drawn) —
+ * break-seated labels can never collide with each other since chained spans are disjoint.
+ *
+ * The fallback rows go above because the band between the rail and the cylinder is the witness
+ * lines' run: a value parked there prints across them (on-device report). Above is also where
+ * the schematic's dimension rails put a value that cannot seat in its line.
  *
  * [drawLabels] = false (blank write-in draft) keeps every line and arrowhead but skips the
  * value labels — the lines-in/values-out template rule.
@@ -1013,15 +1134,17 @@ private fun drawWearStripRail(
 ) {
     if (layout.isEmpty()) return
     val arrow = 4f
-    val labelGapPt = 2f
     val rowStepPt = dimText.textSize + 3f
     val witnessExt = 3f
     val witnessGap = 3f   // gap between the liner's top edge and the witness line start — same
                           // convention as the main profile's OAL witness lines (device feedback)
+    // Clears the witness lines' overshoot past the rail, so a fallback value never prints over
+    // one of them.
+    val labelGapPt = witnessExt + 1f
 
     // The rail sits ABOVE the cylinder: witness lines run up from just above the cylinder top
-    // past the rail line, and the span labels stack downward from the rail line toward the
-    // cylinder.
+    // past the rail line, and any fallback span label stacks UPWARD from the rail line, away
+    // from the witness run below it.
     layout.forEach { s ->
         c.drawLine(s.x0Pt, cylTop - witnessGap, s.x0Pt, railY - witnessExt, dim)
         c.drawLine(s.x1Pt, cylTop - witnessGap, s.x1Pt, railY - witnessExt, dim)
@@ -1031,7 +1154,7 @@ private fun drawWearStripRail(
 
         // Value-in-a-break when the label fits its span (the layout's seatsInBreak guarantees
         // the break's stubs still have arrow room); otherwise a continuous line with the
-        // below-line fallback row — the schematic's value-in-a-break rule, mirrored.
+        // above-line fallback row — the schematic's value-in-a-break rule, mirrored.
         val lw = dimText.measureRichText(s.label)
         val seatsInBreak = drawLabels && s.seatsInBreak
         if (seatsInBreak) {
@@ -1054,7 +1177,10 @@ private fun drawWearStripRail(
         if (drawLabels && !seatsInBreak) {
             val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
             if (row >= 0) {
-                val ly = railY + labelGapPt + dimText.textSize + row * rowStepPt
+                // Row 0 sits just above the rail (clear of the witness overshoot), the rest
+                // stack upward into the band computeWearStripInnerLayout reserved there.
+                val fm = dimText.fontMetrics
+                val ly = railY - labelGapPt - fm.descent - row * rowStepPt
                 c.drawRichText(s.label, s.labelCxPt - lw * 0.5f, ly, dimText)
             }
         }
@@ -1074,19 +1200,6 @@ internal fun drawVerticalBand(c: Canvas, x0: Float, x1: Float, top: Float, bot: 
         vx += pitchPt
     }
     c.drawLine(x1, top, x1, bot, paint)
-}
-
-/** Diagonal hatch fill clipped to `[x0,x1] × [top,bot]` — used by the broken-out detail strips. */
-private fun drawHatchBand(c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, pitchPt: Float) {
-    if (x1 <= x0) return
-    val saved = c.save()
-    c.clipRect(x0, top, x1, bot)
-    var hx = x0 - (bot - top)
-    while (hx <= x1) {
-        c.drawLine(hx, bot, hx + (bot - top), top, paint)
-        hx += pitchPt
-    }
-    c.restoreToCount(saved)
 }
 
 /** Text note for liners that didn't fit within [WEAR_STRIP_MAX_PER_PAGE] strips on this page. */
@@ -1176,6 +1289,15 @@ private const val WEAR_NOTES_GAP_PT           = 28f   // gap from drawing area b
 // about THIS composer's own reserved space and stay local.
 private const val WEAR_OVERFLOW_NOTE_HEIGHT_PT   = 16f  // reserved band for the "+N more liners" text note
 private const val WEAR_PROFILE_RADIUS_MARGIN_PT  = 8f   // headroom above/below the shaft's actual drawn radius
+
+/**
+ * Black alpha of a detail strip's wear-area fill — the same value the sheet's other shaded
+ * fills use (`shadeFill`), i.e. a light grey wash. The band is where pits get marked, by the
+ * printed "X"s and by the machinist's pen on the printed sheet, and a fill any heavier — a
+ * diagonal hatch above all — buries both (on-device report). The MAIN profile's bands are a
+ * different mark and keep their vertical strokes ([drawVerticalBand]), the shop convention there.
+ */
+private const val WEAR_BAND_FILL_ALPHA = 40
 
 private const val COMPRESS_TRIGGER_PT = 220f
 // Classic central gap; breakPairLayout may widen it to keep the pair clear.

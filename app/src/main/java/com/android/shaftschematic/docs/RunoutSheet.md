@@ -357,6 +357,28 @@ via an elbow above the row-0 band so drops provably clear every label; uniform c
 - **Blank draft**: readings omitted entirely (`effectiveRecord = WearRecord()`), consistent
   with bands/pits.
 
+### Worn-profile trace
+
+Inside a **wear band**, the valued readings additionally pull the drawn surface in: the liner's
+top and bottom edges dip through the measured diameters instead of running straight, and the
+band's fill follows them, so the material measured away shows as white slivers above and below
+(on-device report: a liner measured almost half an inch down still printed as a perfect
+cylinder). Pure construction in **`geom/WearTraceMath.kt`** (`buildWearTrace` /
+`sequenceWearTraces`, `WearTraceMathTest`); the two draw sites — the **PDF liner detail strip**
+(`WearPdfComposer.drawWearDetailStrip`) and the **canvas overlay**
+(`ComponentWearDetailOverlay`, whose silhouette path carries the dip so fill, stroke and the
+clipped red band tint all bite together) — walk that same output through their own scale, so
+they render identically (the draw-both-sites rule, same posture as the pit "X").
+
+Depth is **display-exaggerated**, the undercut notch's posture: it is normalized to the
+record's deepest valued **liner** reading (`deepestWearDepthMm`, computed ONCE per sheet, so
+every band scales against the same worst wear; body/taper readings never trace and stay out of
+the baseline), which draws at `WEAR_TRACE_MAX_DEPTH_FRAC` of the drawn radius — but **never
+shallower than true scale**, so a monstrous wear past the cap keeps its true proportion. A band
+with no valued reading keeps its straight edges and full-rect fill; readings at or above
+nominal contribute a surface (0-depth) vertex. Draw-only: no model, resolve, OAL, collision, or
+codec change, and printed Ø values stay the stored numbers.
+
 ---
 
 ## Worn Sections (in-profile measured Ø, 2026-08-04 — runout/wear consolidation step 1)
@@ -981,8 +1003,11 @@ layouts (see "Wear PDF Rendering Modes" above for how each positions the strips)
 liner span (`clampWearBandToLiner`), drawn after the profile's own liner outlines. Visible but
 not dominant — same alpha/weight/pitch as the old diagonal hatch, only the stroke orientation
 changed (2026-07-22, to match how the shop marks wear areas by hand — the vertical tick style
-in the reference sketch). The broken-out detail strips still use the diagonal hatch
-(`drawHatchBand`). Each on-page liner's **name** is also printed centered under its span
+in the reference sketch). The broken-out detail strips fill their bands a **light grey**
+instead (`WEAR_BAND_FILL_ALPHA` = 40 on a black FILL paint, the same wash as `shadeFill`):
+they are the surface pits get marked into, by the printed "X"s and by the machinist's pen on
+the printed sheet, and the diagonal hatch they used to carry buried both (2026-08-14 on-device
+report; `drawHatchBand` retired). Each on-page liner's **name** is also printed centered under its span
 (`drawWearLinerNamesOnProfile`, 2026-07-22), sharing the row with the "← AFT / FWD →" labels
 (clamped clear of them) — a lightweight reference tying each band to its broken-out strip, using
 the same shared title the strip title shows: `buildLinerTitleById` (`util/LinerTitles.kt`) —
@@ -1005,10 +1030,10 @@ By construction the last strip's bottom always lands exactly on the reserved are
 **Per-strip layout** — `computeWearStripHorizontalLayout` centers a break-out liner
 (scaled `ptPerMm` local to the strip, capped/floored so very short/long liners don't
 explode/vanish) between two fixed-width neighbor stubs; `computeWearStripInnerLayout`
-then splits the strip's own vertical band into the single chained dimension rail (top), the
-liner cylinder, and the title row (bottom) (see "Dimension rail" below) — the cylinder
-shrinks first, and if a pathological input leaves no room at all, the rail's label rows
-drop toward zero (the rail line still draws; labels are simply not placed) rather than
+then splits the strip's own vertical band into the chained rail's fallback label rows and its
+rail line (top), the liner cylinder, and the title row (bottom) (see "Dimension rail" below) —
+the cylinder shrinks first, and if a pathological input leaves no room at all, the rail's label
+rows drop toward zero (the rail line still draws; labels are simply not placed) rather than
 let anything render past the strip's bottom edge. (The rail and title were **swapped**
 2026-07-22 — dimensions above the shaft, the liner title/anchor below it — to match how the
 shop marks the sheet by hand.) The liner cylinder's radius always fills that vertical
@@ -1023,7 +1048,7 @@ height-encoded either (product decision). Each strip draws:
   scaled to their true diameter ratio against the liner and clamped to the liner's own
   radius (an oversized neighbor can't overflow the cylinder band), broken out with the
   standard S-curve edge (`BreakSymbol.drawBreakEdge`).
-- Hatched wear bands on the liner at strip-local scale (diagonal hatch, unlike the
+- Light-grey wear bands on the liner at strip-local scale (a solid wash, unlike the
   main-profile bands' vertical lines), clamped the same way. (The per-band min-Ø reading
   that printed below each band is retired — superseded by the measured-Ø callouts, see
   "Wear Diameter Measurements" above.)
@@ -1066,7 +1091,7 @@ witness-line/arrowed-span/centered-label convention the main schematic uses
   also guarantees the break's stubs keep arrow room at `DIM_BREAK_TEXT_PAD_PT`) **seats in
   a break cut in the span line, vertically centred** — the schematic's value-in-a-break
   convention, consistent across drawing outputs. Only overhanging labels use the stacked
-  below-line rows; break-seated labels can never collide since chained spans are disjoint.
+  ABOVE-line rows; break-seated labels can never collide since chained spans are disjoint.
   The wear/runout end-to-end OAL lines follow the same rule.
   `PdfDimensionRenderer` itself isn't reused directly: it's built around the schematic's
   multi-tier DATUM/LOCAL rail stacking (spans that overlap in x get assigned different
@@ -1075,15 +1100,29 @@ witness-line/arrowed-span/centered-label convention the main schematic uses
   direction, collision-bump) is replicated as small pure functions in `WearStripLayout.kt`
   instead of bending that renderer's API to a shape it wasn't built for. (Both now draw the
   rail above the cylinder/outline.)
-- The rail's own vertical budget is now FIXED — `WEAR_RAIL_MAX_LABEL_ROWS` (2) stacked
-  label rows reserved between the rail line and the cylinder top (they stack downward from
-  the rail line toward the cylinder), regardless of how many wear spots the liner
-  has (the rail is always one chained line no matter how many spans it's divided into;
-  the old per-spot row budget scaled with spot count, which no longer applies).
-  `computeWearStripInnerLayout` no longer takes a `spotCount` parameter. `WearPdfComposer`'s
-  `drawWearStripRail` draws the witness lines, arrowed spans, and labels, clamping any
-  label row beyond what `computeWearStripInnerLayout` actually fit for this strip's height
-  to the last available row rather than draw past the strip's bottom edge.
+- The rail's own vertical budget is FIXED — `WEAR_RAIL_MAX_LABEL_ROWS` (2) stacked
+  label rows, regardless of how many wear spots the liner has (the rail is always one chained
+  line no matter how many spans it's divided into; the old per-spot row budget scaled with
+  spot count, which no longer applies). `computeWearStripInnerLayout` no longer takes a
+  `spotCount` parameter. `WearPdfComposer`'s `drawWearStripRail` draws the witness lines,
+  arrowed spans, and labels, clamping any label row beyond what `computeWearStripInnerLayout`
+  actually fit for this strip's height to the last available row rather than draw past the
+  strip's edges.
+- **Fallback rows sit ABOVE the rail line (2026-08-14).** The rail line drops to one
+  `WEAR_RAIL_WITNESS_RUN_PT` (9 pt) above the cylinder — that run carries the witness lines
+  and nothing else — and the row budget moves to `[stripTop, railY]`, row 0 nearest the rail
+  and stacking upward (`drawWearStripRail` baselines at
+  `railY − labelGapPt − fm.descent − row × rowStepPt`, `labelGapPt` = witness overshoot + 1 so
+  a value never prints over a witness line). Rows used to stack *downward* into that same
+  witness run, so a label too wide for its span — a short end span, say — printed across the
+  witness lines (on-device report on a printed sheet). Above is also where the schematic's
+  dimension rails put a value that cannot seat in its line, so the two surfaces now agree.
+  `computeWearStripInnerLayout`'s guarantees widen to
+  `stripTop ≤ railY − railLabelRows × rowHeightPt` and `railY ≤ cylTop ≤ cylBottom ≤ stripBottom`;
+  the cylinder still shrinks first and the rows still drop toward zero rather than overflow.
+  The undercut strips pass `witnessRunPt = 0` (`computeUndercutStripInnerLayout`) — they place
+  both of their own rail lines off `cylTop` and already reserve a full label row of clear air
+  there — so their geometry is untouched by this change.
 
 ---
 

@@ -100,7 +100,11 @@ use `formatDiaWithUnit`, no `Ø` prefix. On the **consolidated runout sheet** th
 readings instead draw INSIDE the profile at their station — one rotated haloed column via
 `drawDiaReadingsInProfile` (`RunoutPdfComposer`), liners included, `Ø`-prefixed — replacing
 below-shaft callouts there; the wear document itself (the authoring surface) keeps its
-callout engine unchanged. See `RunoutSheet.md` (Wear Diameter
+callout engine unchanged. Valued **liner** readings inside a wear band additionally drive the
+drawn **worn-profile trace** — the liner's surface line dips through the measured diameters in
+the liner detail strip and the detail overlay, drawn identically in both sites from the pure
+`geom/WearTraceMath.kt` and display-exaggerated like the undercut notch (normalized to the
+record's deepest liner reading, never shallower than true scale). See `RunoutSheet.md` (Wear Diameter
 Measurements) and `WearDiaMeasurements_PLAN.md`.
 
 ### Worn sections are reference features

@@ -8,6 +8,31 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### feat: wear document field-use fixes + the worn-profile trace
+
+Four changes from a day of real shop use (on-device reports):
+
+- **The worn-profile trace.** A liner measured almost half an inch down still printed as a
+  perfect cylinder — the measured diameters never reached the drawing. Now, inside a wear
+  area, the liner's surface line dips through the measured Ø stations (both edges, mirrored)
+  in the detail strip and the on-screen detail overlay, and the band's fill follows the dip so
+  the material measured away reads as white slivers. Depth is display-exaggerated the same way
+  undercut notches are — normalized to the record's deepest liner reading, never drawn
+  shallower than true scale. Pure math in `geom/WearTraceMath.kt`, one construction for both
+  draw sites. Draw-only: no model, codec, or printed-value change.
+- **Wear areas fill light grey, not diagonal hatch.** The detail strips are where pits get
+  marked — by the printed X's and by pen on the printed sheet — and the diagonal hatch buried
+  both. The on-screen overlay's red band likewise drops its diagonals for a flat tint. The
+  main profile's vertical-stroke bands (the hand-marking convention) are unchanged.
+- **Rail values sit above the rail.** A label too wide for its short span used to fall back
+  to rows *below* the rail line — straight across the witness lines. Fallback rows now stack
+  above the rail, matching the schematic's dimension rails. Undercut strips already did this
+  and are untouched.
+- **The wear screen stays put while adding Ø readings.** Adding measured diameters kept
+  scrolling the screen back down to the wear-spot card: the card's field silently kept focus,
+  and every dialog dismissal handed it back, IME and all. Canvas taps and the Ø dialog now
+  release focus, so the view stays on the drawing.
+
 ### feat: station counts go to 0 — skip the bubbles on components not being measured
 
 The runout station editor's − button stopped at 1, so every body, taper, and liner always

@@ -47,5 +47,14 @@ class WearStripDiaBandTest {
         assertTrue(l.railY <= l.cylTop)
         assertTrue(l.cylTop <= l.cylBottom)
         assertTrue(l.cylBottom <= 118f)
+        // The fallback label rows live ABOVE the rail; they must still fit inside the strip.
+        assertTrue(l.railY - l.railLabelRows * WEAR_STRIP_ROW_HEIGHT_PT >= 100f - 1e-3f)
+    }
+
+    @Test
+    fun `the dia band pushes the rail down but never its label rows out of the strip`() {
+        val banded = computeWearStripInnerLayout(100f, 240f, titleHeightPt = titleH, diaBandPt = 21f)
+        assertEquals(banded.cylTop - WEAR_RAIL_WITNESS_RUN_PT, banded.railY, 1e-3f)
+        assertTrue(banded.railY - banded.railLabelRows * WEAR_STRIP_ROW_HEIGHT_PT >= 100f - 1e-3f)
     }
 }

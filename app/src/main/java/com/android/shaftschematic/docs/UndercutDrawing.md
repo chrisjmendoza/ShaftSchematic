@@ -656,7 +656,13 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   a value pushed under the span line read as orphaned, so fallbacks stack ABOVE the line instead
   (`drawUndercutRail`'s `fallbackLabelAbove`, rows upward on the 17 pt pitch; the band above the
   rail is reserved via `chainAboveBandPt`, mutually exclusive with the total band; below keeps
-  just the 1-row clear air).
+  just the 1-row clear air). The wear strips reached the same conclusion later, from the same
+  symptom, and moved their fallback rows above unconditionally (`RunoutSheet.md`, "Dimension
+  rail") — the total-rail exception here stays, because there the band above the chain is the
+  total rail's own witness run, and both fallback rows print over a page-white halo either way.
+  `computeUndercutStripInnerLayout` therefore passes `witnessRunPt = 0` to
+  `computeWearStripInnerLayout`: it places both of its rail lines itself off `cylTop`, and
+  `belowRows` (never 0) already holds the clear air the wear strip's witness run holds.
 - **Cylinder cap** — `max(UNDERCUT_CYL_MAX_FLOOR_PT, min(band × UNDERCUT_CYL_MAX_HEIGHT_FRAC,
   UNDERCUT_CYL_MAX_ABS_PT))`: 0.38 of the strip's band, never past 170 pt, never below the 96 pt
   floor (so a full-width strip draws ≈ 157 pt rather than the ≈ 207 pt a half-band fraction gave —

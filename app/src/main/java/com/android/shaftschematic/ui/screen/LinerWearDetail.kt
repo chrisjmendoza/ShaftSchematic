@@ -61,24 +61,30 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.DiaHitTarget
 import com.android.shaftschematic.geom.PitHitTarget
+import com.android.shaftschematic.geom.WearTraceReading
 import com.android.shaftschematic.geom.acrossFracFromTapY
+import com.android.shaftschematic.geom.buildWearTrace
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.deepestWearDepthMm
 import com.android.shaftschematic.geom.pickDiaReadingAt
 import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.pitHalfArm
 import com.android.shaftschematic.geom.pickPitAt
 import com.android.shaftschematic.geom.planDiaCallouts
+import com.android.shaftschematic.geom.sequenceWearTraces
 import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearPit
@@ -113,7 +119,7 @@ import com.android.shaftschematic.util.drawRichText
  * Originally liner-only (`docs/LinerWearAreas_Proposal.md` Phase 3); generalized so a
  * **body** or **taper** can be opened the same way (the proposal's §10.5 "wear on bodies/tapers"
  * open question). What the overlay offers depends on the component:
- * - **Liners** get the full liner-wear-band editor (hatched bands + per-spot dimension rail +
+ * - **Liners** get the full liner-wear-band editor (tinted bands + per-spot dimension rail +
  *   `WearSpotCard`s with the "Measure From" references) **and** pit markers.
  * - **Bodies / tapers** get pit markers only (wear bands are a liner-only concept).
  *
@@ -185,6 +191,24 @@ fun ComponentWearDetailOverlay(
     val lenMm = remember(component) {
         (component.endMmPhysical - component.startMmPhysical).coerceAtLeast(0.001f)
     }
+
+    // ── Worn-profile trace inputs (geom/WearTraceMath.kt) ───────────────────────
+    // The exaggeration baseline is the deepest valued reading on ANY liner in the record — one
+    // record-wide reference, the same the wear PDF computes, so a given wear draws to the same
+    // depth here and on the printed strip. Body/taper readings never trace, so they stay out.
+    val deepestWearDepth = remember(wearRecord, resolvedComponents) {
+        val odByLinerId = resolvedComponents.filterIsInstance<ResolvedLiner>().associate { it.id to it.odMm }
+        deepestWearDepthMm(
+            wearRecord.diaReadings.mapNotNull { r ->
+                val odMm = odByLinerId[r.componentId] ?: return@mapNotNull null
+                odMm to r.diaMm
+            }
+        )
+    }
+    val traceReadings = remember(diaReadings, lenMm) {
+        diaReadings.filter { it.diaMm > 0f }
+            .map { WearTraceReading(it.axialMm.coerceIn(0f, lenMm), it.diaMm) }
+    }
     val (startDiaMm, endDiaMm) = remember(component) { componentEdgeDias(component) }
 
     // SET positions (AFT/FWD SET "Measure from" references — liner spots only).
@@ -232,7 +256,7 @@ fun ComponentWearDetailOverlay(
     val outlineColor = SheetInk.Outline
     val fillColor = SheetInk.LinerTint.copy(alpha = 0.18f)
     val wearTintColor = SheetInk.WearRed.copy(alpha = 0.20f)
-    val wearHatchColor = SheetInk.WearRed.copy(alpha = 0.80f)
+    val wearBorderColor = SheetInk.WearRed.copy(alpha = 0.80f)
     val pitColor = SheetInk.WearRed
     val textColorArgb = SheetInk.Outline.toArgb()
     val textPaint = remember(textColorArgb) {
@@ -256,6 +280,7 @@ fun ComponentWearDetailOverlay(
     // Pending Ø-reading dialog: existingId == null → adding at axialMm (the reading is only
     // created when the dialog SAVES, so cancelling never leaves a ghost zero-value station).
     var diaDialog by remember { mutableStateOf<DiaDialogState?>(null) }
+    val focusManager = LocalFocusManager.current
 
     // Pinch-to-zoom on the broken-out canvas (on-device request: accurate pit / band / Ø
     // placement) — the RunoutRoute preview's exact pattern: transformable state drives a
@@ -332,6 +357,14 @@ fun ComponentWearDetailOverlay(
                         .transformable(zoomTransformState)
                         .pointerInput(componentId, pits, diaReadings, brushSize, tool, lenMm, startDiaMm, endDiaMm) {
                             detectTapGestures { rawTap ->
+                                // Focus must leave the wear-spot cards before any canvas tool
+                                // runs: a card field that still holds focus while a dialog takes
+                                // the window gets it back on dismissal, and its IME
+                                // bring-into-view then scrolls the column back down to that card,
+                                // away from the canvas the machinist is working on (on-device
+                                // report). Clearing here also commits a dirty field through its
+                                // normal blur path, so no typed value is lost.
+                                focusManager.clearFocus()
                                 // Invert the Canvas graphicsLayer transform (scale about the
                                 // centre pivot, then translate) so hit-testing/placement math
                                 // stays in untransformed canvas space at any zoom.
@@ -428,12 +461,37 @@ fun ComponentWearDetailOverlay(
                         fun rPx(diaMm: Float) = diaMm * 0.5f * lay.pxPerMm
 
                         // ── Focus component body (trapezoid — a rect when start Ø == end Ø) ──
+                        // Inside a liner's wear bands the top and bottom edges dip through the
+                        // measured diameters (the worn-profile trace, geom/WearTraceMath.kt):
+                        // fill and stroke share this path, so the silhouette and its tint bite
+                        // together. Built from the SAME trace the wear PDF's liner strip walks,
+                        // mapped through this canvas's scale, so both sites read identically.
                         val rStart = rPx(startDiaMm)
                         val rEnd = rPx(endDiaMm)
+                        val traceVerts = if (liner == null) emptyList() else sequenceWearTraces(
+                            spots.map { spot ->
+                                val band = clampWearBandToLiner(spot.startMm, spot.lengthMm, lenMm)
+                                buildWearTrace(
+                                    bandStartMm = band.startMm,
+                                    bandLengthMm = band.lengthMm,
+                                    readings = traceReadings,
+                                    nominalOdMm = liner.odMm,
+                                    deepestDepthMm = deepestWearDepth,
+                                )
+                            }
+                        )
+                        fun traceXPx(localMm: Float) = startPx + localMm * lay.pxPerMm
                         val bodyPath = Path().apply {
                             moveTo(startPx, cy - rStart)
+                            traceVerts.forEach { v ->
+                                lineTo(traceXPx(v.localMm), cy - rStart + v.depthFrac * rStart)
+                            }
                             lineTo(endPx, cy - rEnd)
                             lineTo(endPx, cy + rEnd)
+                            for (i in traceVerts.indices.reversed()) {
+                                val v = traceVerts[i]
+                                lineTo(traceXPx(v.localMm), cy + rStart - v.depthFrac * rStart)
+                            }
                             lineTo(startPx, cy + rStart)
                             close()
                         }
@@ -484,7 +542,11 @@ fun ComponentWearDetailOverlay(
                                 val band = clampWearBandToLiner(spot.startMm, spot.lengthMm, lenMm)
                                 val (bx0, bx1) = wearBandToPx(band, startPx, lay.pxPerMm)
                                 if (!band.isEmpty) {
-                                    drawWearBand(bx0, bx1, cy - rStart, cy + rStart, wearTintColor, wearHatchColor)
+                                    // Clipped to the traced silhouette: the tint marks material
+                                    // that is still there, never the bite taken out of it.
+                                    clipPath(bodyPath) {
+                                        drawWearBand(bx0, bx1, cy - rStart, cy + rStart, wearTintColor, wearBorderColor)
+                                    }
                                 }
                                 val railY = stubRowHeightPx + diaBandPx + railTopGapPx + railRowHeightPx * i + railRowHeightPx * 0.5f
                                 drawDimSegment(startPx, bx0, railY, dimLabel(spot.startMm, unit), textPaint)
@@ -728,7 +790,7 @@ fun ComponentWearDetailOverlay(
         }
         val parsedMm = toMmOrNull(valueText, unit)
         AlertDialog(
-            onDismissRequest = { diaDialog = null },
+            onDismissRequest = { focusManager.clearFocus(); diaDialog = null },
             title = { Text(if (existing == null) "Add Ø reading" else "Edit Ø reading") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -753,6 +815,7 @@ fun ComponentWearDetailOverlay(
                         val mm = parsedMm ?: return@TextButton
                         if (existing == null) onAddDiaReading(componentId, dlg.axialMm, mm)
                         else onUpdateDiaReading(existing.id, mm)
+                        focusManager.clearFocus()
                         diaDialog = null
                     },
                 ) { Text("Save") }
@@ -762,10 +825,11 @@ fun ComponentWearDetailOverlay(
                     if (existing != null) {
                         TextButton(onClick = {
                             onRemoveDiaReading(existing.id)
+                            focusManager.clearFocus()
                             diaDialog = null
                         }) { Text("Delete") }
                     }
-                    TextButton(onClick = { diaDialog = null }) { Text("Cancel") }
+                    TextButton(onClick = { focusManager.clearFocus(); diaDialog = null }) { Text("Cancel") }
                 }
             },
         )
@@ -1116,19 +1180,17 @@ private fun DrawScope.drawPitX(cx: Float, cy: Float, halfArm: Float, color: Colo
     drawLine(color, Offset(cx - halfArm, cy + halfArm), Offset(cx + halfArm, cy - halfArm), w, cap = StrokeCap.Round)
 }
 
-/** Hatched/tinted wear band, reusing the diagonal-hatch approach from `ShaftRenderer`'s thread hatch. */
-private fun DrawScope.drawWearBand(x0: Float, x1: Float, top: Float, bottom: Float, tint: Color, hatch: Color) {
+/**
+ * Wear band on the broken-out cylinder: a flat [tint] wash inside a [border] outline. The red
+ * tint is the on-screen authoring affordance (it marks the area being edited); it carries no
+ * hatch, because a band the machinist marks pits into has to stay readable under hand-drawn and
+ * printed "X"s (on-device report) — the PDF strips fill the same band a light grey for the same
+ * reason.
+ */
+private fun DrawScope.drawWearBand(x0: Float, x1: Float, top: Float, bottom: Float, tint: Color, border: Color) {
     if (x1 <= x0 || bottom <= top) return
     drawRect(color = tint, topLeft = Offset(x0, top), size = Size(x1 - x0, bottom - top))
-    val h = bottom - top
-    withTransform({ clipRect(x0, top, x1, bottom) }) {
-        var hx = x0 - h
-        while (hx <= x1 + h) {
-            drawLine(hatch, Offset(hx, bottom), Offset(hx + h, top), strokeWidth = 1.4f)
-            hx += 10f
-        }
-    }
-    drawRect(color = hatch, topLeft = Offset(x0, top), size = Size(x1 - x0, bottom - top), style = Stroke(width = 1.2f))
+    drawRect(color = border, topLeft = Offset(x0, top), size = Size(x1 - x0, bottom - top), style = Stroke(width = 1.2f))
 }
 
 /** One labeled dimension segment (witness ticks + centered value) on the rail below the liner. */
