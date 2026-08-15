@@ -2,15 +2,20 @@
 package com.android.shaftschematic.ui.nav
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -21,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -38,6 +44,7 @@ import com.android.shaftschematic.ui.screen.StartScreen
 import com.android.shaftschematic.ui.screen.TemplatesRoute
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -89,6 +96,10 @@ fun AppNav(vm: ShaftViewModel) {
                 val docName = currentDocumentName
                 if (docName != null) {
                     // Known filename → quick-save, then continue the action.
+                    // Deliberately no rename offer here (the editor's own quick-save has one):
+                    // this save exists to clear the way for a session-replacing action, so the
+                    // snackbar would outlive the screen it belongs to and act on a document the
+                    // user has already left.
                     appScope.launch {
                         withContext(Dispatchers.IO) {
                             InternalStorage.save(appCtx, docName, vm.exportJson())
@@ -185,6 +196,19 @@ fun AppNav(vm: ShaftViewModel) {
         composable("editor") {
             val ctx = LocalContext.current
             val scope = rememberCoroutineScope()
+            val editorSnackbarHostState = remember { SnackbarHostState() }
+
+            // Project info behind the suggested filename — the same four inputs the save screen
+            // suggests from, so a quick-save can tell when the saved name has fallen behind it.
+            val jobNumber by vm.jobNumber.collectAsState()
+            val customer by vm.customer.collectAsState()
+            val vessel by vm.vessel.collectAsState()
+            val shaftPosition by vm.shaftPosition.collectAsState()
+
+            // Session-scoped dedup for the rename offer, keyed "<from>→<to>". A declined offer
+            // must not reappear on every following save; later job-info edits produce a new pair
+            // and are offered again.
+            val offeredRenames = remember { mutableSetOf<String>() }
 
             val goHome: () -> Unit = {
                 nav.navigate("start") {
@@ -193,39 +217,60 @@ fun AppNav(vm: ShaftViewModel) {
                 }
             }
 
-            ShaftEditorRoute(
-                vm = vm,
-                onNavigateHome = goHome,
-                onNew = { runGuarded { vm.newDocument() } },
-                // OPEN/SAVE = internal storage
-                onOpen = { runGuarded { nav.navigate("openLocal") } },
-                onSave = {
-                    val docName = currentDocumentName
-                    if (docName != null) {
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                InternalStorage.save(ctx, docName, vm.exportJson())
+            Box(Modifier.fillMaxSize()) {
+                ShaftEditorRoute(
+                    vm = vm,
+                    onNavigateHome = goHome,
+                    onNew = { runGuarded { vm.newDocument() } },
+                    // OPEN/SAVE = internal storage
+                    onOpen = { runGuarded { nav.navigate("openLocal") } },
+                    onSave = {
+                        val docName = currentDocumentName
+                        if (docName != null) {
+                            scope.launch {
+                                withContext(Dispatchers.IO) {
+                                    InternalStorage.save(ctx, docName, vm.exportJson())
+                                }
+                                vm.markDocumentSaved()
+                                offerRenameAfterQuickSave(
+                                    ctx = ctx,
+                                    vm = vm,
+                                    docName = docName,
+                                    jobNumber = jobNumber,
+                                    customer = customer,
+                                    vessel = vessel,
+                                    positionSuffix = shaftPosition.printableLabelOrNull(),
+                                    offeredRenames = offeredRenames,
+                                    snackbarHostState = editorSnackbarHostState,
+                                )
                             }
-                            vm.markDocumentSaved()
+                        } else {
+                            nav.navigate("saveLocal")
                         }
-                    } else {
-                        nav.navigate("saveLocal")
-                    }
-                },
-                onSaveAs = { nav.navigate("saveLocal") },
-                // Close = reset to a blank doc and return home. Guarded so unsaved work prompts
-                // Save/Don't save/Cancel first (the draft ring keeps the work either way).
-                onCloseDocument = {
-                    runGuarded {
-                        vm.newDocument()
-                        goHome()
-                    }
-                },
-                onOpenSettings = { nav.navigate("settings") },
-                onOpenDeveloperOptions = { nav.navigate("developerOptions") },
-                // PDF EXPORT = show preview first, then SAF
-                onExportPdf = { nav.navigate("pdfPreview") }
-            )
+                    },
+                    onSaveAs = { nav.navigate("saveLocal") },
+                    // Close = reset to a blank doc and return home. Guarded so unsaved work prompts
+                    // Save/Don't save/Cancel first (the draft ring keeps the work either way).
+                    onCloseDocument = {
+                        runGuarded {
+                            vm.newDocument()
+                            goHome()
+                        }
+                    },
+                    onOpenSettings = { nav.navigate("settings") },
+                    onOpenDeveloperOptions = { nav.navigate("developerOptions") },
+                    // PDF EXPORT = show preview first, then SAF
+                    onExportPdf = { nav.navigate("pdfPreview") }
+                )
+
+                // The tabs own their own insets, so the host needs only the navigation bar's.
+                SnackbarHost(
+                    editorSnackbarHostState,
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding(),
+                )
+            }
         }
 
         /* ───────── Templates ─────────
@@ -319,6 +364,58 @@ fun AppNav(vm: ShaftViewModel) {
         composable("exportPdf") {
             PdfExportRoute(nav = nav, vm = vm) { nav.popBackStack() }
         }
+    }
+}
+
+/**
+ * Offers a one-tap rename after a quick-save when the document's project information now
+ * suggests a different filename than the one it was saved under (the first save names the
+ * document; job info filled in afterwards would otherwise leave a stale name with no prompt).
+ *
+ * Does nothing when there is no better name to offer, when this exact from→to pair has already
+ * been offered this editor session ([offeredRenames], so a declined offer cannot nag on every
+ * save), or when a document already occupies the target name — the offer never overwrites, the
+ * same posture as the Open screen's rename dialog.
+ */
+private suspend fun offerRenameAfterQuickSave(
+    ctx: Context,
+    vm: ShaftViewModel,
+    docName: String,
+    jobNumber: String,
+    customer: String,
+    vessel: String,
+    positionSuffix: String?,
+    offeredRenames: MutableSet<String>,
+    snackbarHostState: SnackbarHostState,
+) {
+    val suggestionBase = DocumentNaming.renameSuggestionBase(
+        currentDocumentName = docName,
+        jobNumber = jobNumber,
+        customer = customer,
+        vessel = vessel,
+        positionSuffix = positionSuffix,
+    ) ?: return
+
+    val toName = InternalStorage.normalizeShaftDocName(suggestionBase) ?: return
+    if (!offeredRenames.add("$docName→$toName")) return
+
+    val targetTaken = withContext(Dispatchers.IO) { InternalStorage.exists(ctx, toName) }
+    if (targetTaken) return
+
+    val result = snackbarHostState.showSnackbar(
+        message = "Saved. Rename to ‘$suggestionBase’?",
+        actionLabel = "Rename",
+        withDismissAction = true,
+        duration = SnackbarDuration.Long,
+    )
+    if (result != SnackbarResult.ActionPerformed) return
+
+    val renamed = withContext(Dispatchers.IO) { InternalStorage.rename(ctx, docName, toName) }
+    if (renamed) {
+        vm.setCurrentDocumentName(toName)
+        snackbarHostState.showSnackbar("Renamed to ‘$suggestionBase’")
+    } else {
+        snackbarHostState.showSnackbar("Could not rename to ‘$suggestionBase’.")
     }
 }
 

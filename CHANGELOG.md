@@ -8,6 +8,24 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### feat: offer a one-tap rename after quick-save when job info suggests a new name
+
+The Save screen suggests a filename from Job # / Customer / Vessel at the first save, but the
+toolbar Save on an already-named document silently reuses the existing name. A shaft saved
+before its job information was filled in therefore kept a stale date-based name — "Shaft_2026…"
+— with nothing to prompt otherwise (on-device report).
+
+The editor's quick-save now compares the saved name against the same suggestion the Save screen
+would make, and when they differ it offers the change in a snackbar: "Saved. Rename to ‘…’?"
+with a one-tap **Rename**. Taking it renames the file and updates the document name, so the
+title strip on every tab follows immediately.
+
+It stays out of the way by design. The offer never overwrites — a name already taken by another
+save is skipped silently — and each from→to pair is offered at most once per editor session, so
+declining it once ends it until the job information actually changes. The unsaved-changes
+prompt's Save is left alone: the user is on their way to another document there, and a snackbar
+would outlive the screen it came from.
+
 ### fix: post-merge cleanup of the fraction typography system
 
 Four small items from a same-day review of the merged fraction work:

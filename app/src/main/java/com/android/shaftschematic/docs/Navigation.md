@@ -68,6 +68,18 @@ Document title strip (`ui/screen/EditorDocumentTitle.kt`)
   the asterisk is actionable where it is seen — otherwise the user must navigate back to
   the Schematic to save. `onSave` is plumbed from `AppNav` through `ShaftEditorRoute`; it
   quick-saves a named document and routes to `saveLocal` for an unnamed one.
+- **Rename offer after a quick-save.** A document saved before its Job # / Customer / Vessel
+  existed keeps whatever name it was first given, so after the editor's quick-save AppNav
+  compares that name against `DocumentNaming.renameSuggestionBase` (the same suggestion the
+  save screen makes) and, when they differ, shows a snackbar — "Saved. Rename to ‘…’?" with a
+  one-tap **Rename** action — on the editor's own `SnackbarHost`. Rename succeeds → the
+  document name is updated via `setCurrentDocumentName`, so the title strip follows on every
+  tab. Constraints: it **never overwrites** (skipped when a save already occupies the target
+  name, the same posture as the Open screen's rename dialog), and each distinct from→to pair
+  is offered **at most once per editor session** so a declined offer cannot nag on every save
+  — later job-info edits form a new pair and are offered again. The unsaved-changes guard's
+  Save path deliberately does **not** carry the offer: that save clears the way for a
+  session-replacing action, so its snackbar would outlive the screen it belongs to.
 - The composable applies **no window insets of its own** — the caller owns them.
   `ShaftScreen` passes the status-bar inset (its `TopAppBar` then zeroes its own); the
   other four tabs already sit inside a `systemBarsPadding()` column and pass nothing.

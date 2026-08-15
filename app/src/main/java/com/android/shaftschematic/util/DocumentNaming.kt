@@ -1,5 +1,7 @@
 package com.android.shaftschematic.util
 
+import com.android.shaftschematic.doc.stripShaftDocExtension
+
 /**
  * DocumentNaming
  *
@@ -31,6 +33,41 @@ object DocumentNaming {
         val extra = sanitizePart(suffix ?: "")
         return (core + listOfNotNull(extra.takeIf { it.isNotBlank() }))
             .joinToString(" - ")
+    }
+
+    /**
+     * Returns the base name (no extension) a saved document should be offered as, or null when
+     * no rename is worth offering.
+     *
+     * Null when:
+     * - [currentDocumentName] is null — an unnamed document is named by the save screen, which
+     *   already suggests from the same project information.
+     * - [suggestedBaseName] has nothing to build from (all project fields blank).
+     * - the current name's base already equals the suggestion, compared case-insensitively —
+     *   there is nothing to change.
+     *
+     * Otherwise the suggestion itself, verbatim as [suggestedBaseName] built it.
+     */
+    fun renameSuggestionBase(
+        currentDocumentName: String?,
+        jobNumber: String,
+        customer: String,
+        vessel: String,
+        positionSuffix: String? = null,
+    ): String? {
+        if (currentDocumentName == null) return null
+
+        val suggested = suggestedBaseName(
+            jobNumber = jobNumber,
+            customer = customer,
+            vessel = vessel,
+            suffix = positionSuffix,
+        ) ?: return null
+
+        val currentBase = stripShaftDocExtension(currentDocumentName)
+        if (currentBase.equals(suggested, ignoreCase = true)) return null
+
+        return suggested
     }
 
     private fun sanitizePart(raw: String): String {
