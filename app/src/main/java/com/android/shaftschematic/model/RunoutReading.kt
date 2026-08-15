@@ -4,6 +4,18 @@ package com.android.shaftschematic.model
 import kotlinx.serialization.Serializable
 
 /**
+ * Reserved [RunoutReading.componentId] for the **coupling pilot (register bore) runout** drawn in
+ * the coupling end view on the runout sheets.
+ *
+ * The pilot reading is not a station on a resolved component — it is one value for the whole
+ * coupling face — so it rides the existing readings list under this sentinel id at
+ * [RunoutReading.stationIndex] `0`. The id never matches a resolved component, which makes it
+ * look like an orphan to any component-keyed sweep: nothing may prune readings on that basis
+ * (readings are never pruned at decode, and the render layer only *skips* what it cannot place).
+ */
+const val COUPLING_PILOT_COMPONENT_ID = "coupling_pilot"
+
+/**
  * A recorded runout (TIR) reading for one measurement station (bubble) on the runout sheet.
  *
  * **Pure reference feature** — same contract class as [WearSpot]/[CouplerBoltSlot] (see
@@ -24,6 +36,9 @@ import kotlinx.serialization.Serializable
  * pruned on the next edit. This mirrors the [WearSpot] orphan-drop policy, but resolved at the
  * render layer rather than at decode (station identity depends on resolved components + count
  * overrides, which the codec does not have).
+ *
+ * [COUPLING_PILOT_COMPONENT_ID] is the one reserved key that deliberately matches no component;
+ * it is never an orphan and must survive any sweep that keys on live stations.
  *
  * @property componentId Resolved-component id the station belongs to.
  * @property stationIndex 0-based ordinal of the station within its component (AFT→FWD order).

@@ -54,6 +54,14 @@ import kotlinx.serialization.Serializable
  *   floor of (1 − value) × true width; the geometry consumes [linerMinFracOfTrue] and
  *   never trades drawn height for it. Per-job, on the runout/consolidated sheets AND
  *   the schematic, like [heightScale].
+ * @param showCouplingFace Draw the **coupling end view** (outer OD circle, pilot/register
+ *   bore with its outward keyseat, bolt circle) in the bottom-right of the runout and
+ *   consolidated sheets, captioned "looking fwd" — the hand-sketched face the shops draw.
+ *   Additive and defaulted **off**: not every inspection measures the coupling, so the face
+ *   is elected per job (on-device request) and a document written before the field existed
+ *   reprints unchanged. Elected in the PDF options sheets of both the Runout and Output
+ *   tabs — per-job, so it belongs here and not in `PdfPrefs`. Runout content: it follows the
+ *   bubble election, so a Schematic + Wear sheet carries no face.
  */
 @Serializable
 data class RunoutConfig(
@@ -62,6 +70,7 @@ data class RunoutConfig(
     val heightScale: Float = 1.0f,
     val linersProportional: Boolean = false,
     val linerCompression: Float = 1.0f,
+    val showCouplingFace: Boolean = false,
 ) {
     /**
      * The liner width floor as a fraction of true drawn width — what the composers hand

@@ -476,6 +476,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutConfig.update { it.copy(linerCompression = fraction.coerceIn(0f, 1f)) }
     }
 
+    /**
+     * "Coupling face" — elect the coupling end view onto the runout/consolidated sheets.
+     * Per-job (rides the envelope's `RunoutConfig`), off by default: not every inspection
+     * measures the coupling. See [RunoutConfig.showCouplingFace].
+     */
+    fun setShowCouplingFace(show: Boolean) {
+        _runoutConfig.update { it.copy(showCouplingFace = show) }
+    }
+
     // ── Runout per-station readings (bubble value + high-spot marker) ──────────
     // Reference-only data, same posture as _wearRecord below: plain state updates, no
     // geometry side effects. Keyed by (componentId, stationIndex). Both fields optional;

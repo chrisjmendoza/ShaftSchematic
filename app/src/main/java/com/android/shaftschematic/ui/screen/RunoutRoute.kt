@@ -49,6 +49,7 @@ import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -108,6 +109,7 @@ import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.pickBubbleAt
 import com.android.shaftschematic.geom.planRunoutBubbles
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.model.COUPLING_PILOT_COMPONENT_ID
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.ShaftSpec
@@ -508,6 +510,37 @@ fun RunoutRoute(
                 TirButton("Not set",         runoutConfig.tirDirection == TirDirection.UNSET)   { vm.setTirDirection(TirDirection.UNSET) }
             }
 
+            // ── Coupling face + its pilot runout ──────────────────────────────
+            // Same per-job field the PDF options sheets elect (one field, three surfaces —
+            // they cannot drift). The pilot runout opens the ordinary bubble editor: the
+            // reading rides the readings list under the reserved coupling-pilot id, so the
+            // face's value and a station's value are authored identically.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = runoutConfig.showCouplingFace,
+                    onCheckedChange = { vm.setShowCouplingFace(it) },
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Coupling face", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "End view drawn bottom-right, taken looking forward.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(
+                    enabled = runoutConfig.showCouplingFace,
+                    onClick = {
+                        editingBubble = EditingRunoutBubble(
+                            componentId = COUPLING_PILOT_COMPONENT_ID,
+                            stationIndex = 0,
+                            title = "Coupling pilot",
+                        )
+                    },
+                ) { Text("Pilot runout…") }
+            }
+
             // ── Blank draft toggle ────────────────────────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
@@ -621,6 +654,8 @@ fun RunoutRoute(
                     pdfShadedTapers = pdfShadedTapers,
                     pdfShadedLiners = pdfShadedLiners,
                     vm = vm,
+                    showCouplingFaceRow = true,
+                    couplingFaceOn = runoutConfig.showCouplingFace,
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     fractionStyle = pdfFractionStyle,
@@ -1143,6 +1178,16 @@ internal fun RunoutWearOptionsSheet(
     /** Locks the "Liners" shade row — see [ShadeInPdfChecks]. */
     linerShadeLocked: Boolean = false,
     /**
+     * Shows the per-job "Coupling face" election. On for the runout and consolidated sheets,
+     * the two documents that can draw the end view; off for the wear and undercut sheets,
+     * where the control would be inert. Both hosting surfaces bind the SAME
+     * `RunoutConfig.showCouplingFace` through [ShaftViewModel.setShowCouplingFace], so the
+     * two sheets can never disagree about what this job prints.
+     */
+    showCouplingFaceRow: Boolean = false,
+    /** This job's `RunoutConfig.showCouplingFace`; read only when [showCouplingFaceRow]. */
+    couplingFaceOn: Boolean = false,
+    /**
      * Shows the shared "Body S-break" threshold slider. On for the runout and consolidated
      * sheets, which draw compression breaks; off for the wear and undercut documents, whose
      * profiles never break, so the control would be inert noise there.
@@ -1252,6 +1297,32 @@ internal fun RunoutWearOptionsSheet(
                     Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
                     Text(
                         "Job info, dimensions, and recorded values are blanked for handwriting.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // ── Coupling face (runout + consolidated sheets) ─────────────────────
+        // A content election, so it sits with the other "what does this sheet carry"
+        // controls rather than the styling sliders. Per-job: it rides the envelope's
+        // RunoutConfig, not PdfPrefs — one job may measure the coupling and the next not.
+        if (showCouplingFaceRow) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = couplingFaceOn,
+                    onCheckedChange = { vm.setShowCouplingFace(it) },
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Coupling face", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "End view in the bottom-right: coupling OD, pilot bore, bolt circle.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

@@ -2,12 +2,14 @@ package com.android.shaftschematic.pdf
 
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.DimensionRailLayout
+import com.android.shaftschematic.geom.couplingFaceLayout
 import com.android.shaftschematic.geom.PlacedRunoutBubble
 import com.android.shaftschematic.geom.RunoutBubbleGeometry
 import com.android.shaftschematic.geom.RunoutComponentKind
@@ -54,6 +56,7 @@ import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.sin
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Public entry point
@@ -74,8 +77,8 @@ import kotlin.math.min
  * │   ╲  ╲  ╲  ╲   ╲  ╲  ╲   ╲  ╲  ╲     ← leader lines (straight/dogleg)  │
  * │   ○     ○      ○      ○      ○        ← row-0 bubbles (closer to shaft) │
  * │      ○      ○     ○      ○       ○    ← row-1 bubbles (alternating)     │
- * │  TIR's taken looking: _______________________                             │
- * │  [footer: AFT taper | Customer/Vessel/Job#/Date/Side | FWD taper]         │
+ * │  TIR's taken looking: ______________________              ((◎))  ← coupling │
+ * │  [footer: AFT taper | Customer/Vessel/Job#/Date/Side | FWD taper]  end view │
  * └───────────────────────────────────────────────────────────────────────────┘
  * ```
  *
@@ -124,6 +127,11 @@ import kotlin.math.min
  * keyway-at-top centre, matching the hand-drawn shop sheets. A recorded high spot prints
  * as a short dash straddling the rim at its clock position; the notch is the 12-o'clock
  * reference.
+ *
+ * ## Coupling end view
+ * Both sheets can carry the shop's hand-sketched coupling face in the bottom-right of the
+ * TIR band — see [drawCouplingFace]. Elected per job (`RunoutConfig.showCouplingFace`, off
+ * by default) and gated with the bubbles, since it is runout content.
  *
  * @param page     Target PDF page (US Letter landscape, already started).
  * @param spec     Shaft specification in millimeters.
@@ -180,6 +188,9 @@ fun composeRunoutPdf(
     // on, wear info never), whatever the variant flags say.
     val drawBubbles = !consolidated || includeBubbles
     val drawWear = consolidated && includeWearInfo
+    // The coupling end view is runout content: it rides the bubble election, so a
+    // Schematic + Wear sheet carries no face.
+    val drawFace = config.showCouplingFace && drawBubbles
     val c = page.canvas
     c.drawColor(Color.WHITE)
 
@@ -337,6 +348,18 @@ fun composeRunoutPdf(
     // No TIR line when bubbles are elected out — its lane returns to the shaft area.
     val tirY = footerTop - (if (drawBubbles) TIR_LINE_HEIGHT_PT else 0f)
 
+    // ── Bottom lane ───────────────────────────────────────────────────────────
+    // The TIR line (left) and the coupling end view (right) share the band above the
+    // footer. They never collide in x, so everything above reserves the TALLER of the two
+    // lanes and the TIR line keeps its own y. Reserving off `tirY` alone would let the
+    // shaft and its bubbles run down through the face.
+    val couplingCx = contentRight - COUPLING_FACE_PAD_PT - COUPLING_FACE_OUTER_R_PT
+    val bottomLaneH = maxOf(
+        if (drawBubbles) TIR_LINE_HEIGHT_PT else 0f,
+        if (drawFace) COUPLING_FACE_BLOCK_PT else 0f,
+    )
+    val bottomLaneTopY = footerTop - bottomLaneH
+
     // ── Vertical budget ───────────────────────────────────────────────────────
     // The diameter scale needs the shaft's height budget, the budget needs the bubble row
     // count, and the final bubble x positions need the (scale-dependent) compressed
@@ -344,7 +367,7 @@ fun composeRunoutPdf(
     // plan used for drawing is re-solved on the real mapping below.
     val maxOuterDiaMm  = docSpec.maxOuterDiaMm().coerceAtLeast(10f)
     val shaftTopBudgetY = margin + railsBlockH
-    val availableH     = tirY - shaftTopBudgetY
+    val availableH     = bottomLaneTopY - shaftTopBudgetY
     val prelimPlan     = planRunoutBubbles(
         collectRunoutStations(
             stationSpans, config.componentOverrides, ::xAtLinear,
@@ -614,7 +637,34 @@ fun composeRunoutPdf(
     // Runout content only — elected out with the bubbles on a Schematic + Wear sheet.
     if (drawBubbles) {
         val effectiveTir = if (blankValues) TirDirection.UNSET else config.tirDirection
-        drawTirLine(c, text, contentLeft, contentRight, tirY, effectiveTir)
+        // The write-in rule stops short of the coupling face's block rather than running
+        // under it — the two share this band.
+        val tirRight =
+            if (drawFace) couplingCx - COUPLING_FACE_OUTER_R_PT - COUPLING_FACE_PAD_PT
+            else contentRight
+        drawTirLine(c, text, contentLeft, tirRight, tirY, effectiveTir)
+    }
+
+    // ── Coupling end view (bottom-right of the bottom lane) ───────────────────
+    // Drawn after the profile, marks, bubbles, and the TIR line: it owns its own reserved
+    // block, so nothing above it moves and the in-profile "marks first, text last" order
+    // is untouched. The bolt count is the coupling bolt slot's — no slots authored means
+    // the plain two-circle face the hand sketch shows at minimum.
+    if (drawFace) {
+        drawCouplingFace(
+            c = c,
+            cx = couplingCx,
+            cy = footerTop - COUPLING_FACE_BOTTOM_PAD_PT - COUPLING_FACE_CAPTION_LANE_PT -
+                COUPLING_FACE_OUTER_R_PT,
+            outerR = COUPLING_FACE_OUTER_R_PT,
+            boltCount = spec.couplerBoltSlots.firstOrNull()?.count ?: 0,
+            outline = outline,
+            dim = dim,
+            text = text,
+            reading = runoutReadings.find(COUPLING_PILOT_COMPONENT_ID, 0),
+            unit = unit,
+            blankValues = blankValues,
+        )
     }
 
     // ── Footer — the schematic's 3-column block (AFT taper | job info | FWD taper) ──
@@ -1320,6 +1370,133 @@ private fun drawRunoutBubbleRingPdf(c: Canvas, cx: Float, cy: Float, r: Float, o
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Coupling end view
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Draw the **coupling face** — the end view the shops hand-sketch on a runout sheet, taken
+ * looking forward: the coupling OD, the pilot (register) bore with its keyseat, a dashed bolt
+ * circle carrying the bolt holes, and the recorded pilot runout written inside the bore.
+ *
+ * ## Keyseat direction
+ * The keyseat straddles the pilot rim at 12 o'clock and stands **outward**, into the hub
+ * material — a small open-bottomed box on top of the bore. That is deliberately the opposite
+ * of the runout bubble's inward slot: the key sits between shaft and hub, so the shaft's
+ * keyway is cut in and the coupling's keyseat is cut out. Both constructions share the arc-gap
+ * technique, and neither may be unified onto the other.
+ *
+ * ## Value + high spot
+ * The pilot runout is one value for the whole face, so it rides [RunoutReadings] under the
+ * reserved [COUPLING_PILOT_COMPONENT_ID] at station 0 — the same reading shape (optional value
+ * + optional high-spot clock tick) the bubbles use, so the existing bubble editor authors it
+ * unchanged. The value centres in the bore at the bubble's text ratio; the high spot prints as
+ * the same short dash straddling the rim — the PILOT rim here.
+ *
+ * Blank drafts ([blankValues]) draw all the geometry and omit both the value and the marker, so
+ * the face is a write-in circle exactly like a blank bubble.
+ *
+ * PDF-only: both in-app previews rasterize the real PDF, so there is no canvas twin to keep in
+ * sync. All ratios come from `geom/CouplingFaceMath.kt`.
+ *
+ * @param cx,cy Centre of the outer circle.
+ * @param outerR Drawn coupling OD radius.
+ * @param boltCount Bolt holes to draw; below 1 draws the plain two-circle face.
+ */
+internal fun drawCouplingFace(
+    c: Canvas,
+    cx: Float,
+    cy: Float,
+    outerR: Float,
+    boltCount: Int,
+    outline: Paint,
+    dim: Paint,
+    text: Paint,
+    reading: RunoutReading?,
+    unit: UnitSystem,
+    blankValues: Boolean,
+) {
+    val layout = couplingFaceLayout(outerR, boltCount)
+
+    // Coupling OD.
+    c.drawCircle(cx, cy, layout.outerR, outline)
+
+    // Bolt circle: a dashed thin construction line carrying solid-stroke holes. The dash rides
+    // a LOCAL copy of the dim paint — mutating the shared one would dash every later line.
+    if (layout.boltAngleDegs.isNotEmpty()) {
+        val boltCircle = Paint(dim).apply {
+            style = Paint.Style.STROKE
+            pathEffect = DashPathEffect(
+                floatArrayOf(COUPLING_BOLT_DASH_ON_PT, COUPLING_BOLT_DASH_OFF_PT), 0f,
+            )
+        }
+        c.drawCircle(cx, cy, layout.boltCircleR, boltCircle)
+        layout.boltAngleDegs.forEach { deg ->
+            val rad = Math.toRadians(deg.toDouble())
+            c.drawCircle(
+                cx + (cos(rad).toFloat() * layout.boltCircleR),
+                cy + (sin(rad).toFloat() * layout.boltCircleR),
+                layout.boltHoleR,
+                outline,
+            )
+        }
+    }
+
+    // Pilot bore with the keyseat: arc everywhere except the gap at 12 o'clock, then two walls
+    // running outward from the gap edges and a flat cap closing them.
+    val pr = layout.pilotR
+    val half = layout.keywaySlotHalf
+    val gapDeg = Math.toDegrees(asin((half / pr).coerceIn(0f, 1f).toDouble())).toFloat()
+    val oval = RectF(cx - pr, cy - pr, cx + pr, cy + pr)
+    c.drawArc(oval, -90f + gapDeg, 360f - 2f * gapDeg, false, outline)
+
+    val rimY = cy - pr * cos(Math.toRadians(gapDeg.toDouble())).toFloat()
+    val capY = cy - (pr + layout.keywayDepth)
+    c.drawLine(cx - half, rimY, cx - half, capY, outline)
+    c.drawLine(cx + half, rimY, cx + half, capY, outline)
+    c.drawLine(cx - half, capY, cx + half, capY, outline)
+
+    // Recorded pilot runout, centred in the bore.
+    if (!blankValues) {
+        reading?.valueMm?.let { valueMm ->
+            val valuePaint = Paint(text).apply {
+                textSize = pr * COUPLING_VALUE_TEXT_FRAC
+                textAlign = Paint.Align.CENTER
+            }
+            val fm = valuePaint.fontMetrics
+            c.drawText(
+                formatRunoutValue(valueMm, unit),
+                cx, cy - (fm.ascent + fm.descent) / 2f, valuePaint,
+            )
+        }
+        reading?.highSpotHalfHours?.let { tick ->
+            val highSpot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(198, 40, 40) // red — the high spot, per shop convention
+                style = Paint.Style.STROKE
+                strokeCap = Paint.Cap.ROUND
+                strokeWidth = outline.strokeWidth * 1.7f
+            }
+            val (ux, uy) = clockTickRimOffset(tick, 1f)
+            c.drawLine(
+                cx + ux * pr * 0.70f, cy + uy * pr * 0.70f,
+                cx + ux * pr * 1.30f, cy + uy * pr * 1.30f, highSpot,
+            )
+        }
+    }
+
+    // Caption, centred under the circle.
+    val caption = Paint(text).apply {
+        textSize = COUPLING_CAPTION_TEXT_PT
+        textAlign = Paint.Align.CENTER
+    }
+    c.drawText(
+        COUPLING_FACE_CAPTION,
+        cx,
+        cy + layout.outerR + COUPLING_FACE_CAPTION_LANE_PT - 2f,
+        caption,
+    )
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // TIR direction line
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -1327,7 +1504,8 @@ private fun drawRunoutBubbleRingPdf(c: Canvas, cx: Float, cy: Float, r: Float, o
  * Draw the "TIR's taken looking: ___" line at the bottom of the runout sheet.
  *
  * If the TIR direction has been set in [RunoutConfig], the direction label is printed
- * in the blank. Otherwise a fill-in line is drawn for handwriting.
+ * in the blank. Otherwise a fill-in line is drawn for handwriting — shortened, never
+ * wrapped, when [right] is pulled in by the coupling face sharing this band.
  */
 private fun drawTirLine(
     c: Canvas,
@@ -1345,7 +1523,8 @@ private fun drawTirLine(
     when (direction) {
         TirDirection.UNSET -> {
             // Blank fill-in line for handwriting
-            c.drawLine(fillStart, y + 2f, fillStart + 180f, y + 2f, Paint(text).apply {
+            val fillEnd = min(fillStart + TIR_FILL_RULE_PT, right).coerceAtLeast(fillStart)
+            c.drawLine(fillStart, y + 2f, fillEnd, y + 2f, Paint(text).apply {
                 style = Paint.Style.STROKE; strokeWidth = 0.7f
             })
         }
@@ -1366,6 +1545,20 @@ private const val TEXT_PT    = 10f
 // Page layout
 private const val PAGE_MARGIN_PT   = 36f    // 0.5 in margins
 private const val TIR_LINE_HEIGHT_PT = 20f  // Space for TIR direction line at bottom
+private const val TIR_FILL_RULE_PT   = 180f // Write-in rule after "TIR's taken looking:"
+
+// Coupling end view — bottom-right of the band the TIR line shares. The block is the tallest
+// thing in that band, so everything above reserves against it rather than the TIR lane.
+private const val COUPLING_FACE_OUTER_R_PT = 36f       // 1 in diameter on paper
+private const val COUPLING_FACE_BLOCK_PT = 96f         // 2·R + caption lane + pads
+private const val COUPLING_FACE_PAD_PT = 8f            // Clear space right of / left of the block
+private const val COUPLING_FACE_BOTTOM_PAD_PT = 4f     // Caption baseline lane → footer top
+private const val COUPLING_FACE_CAPTION_LANE_PT = 14f  // Circle bottom → caption baseline
+private const val COUPLING_CAPTION_TEXT_PT = 8f
+private const val COUPLING_FACE_CAPTION = "Coupling — looking fwd"
+private const val COUPLING_VALUE_TEXT_FRAC = 0.60f     // Bubble's value ratio, on the pilot bore
+private const val COUPLING_BOLT_DASH_ON_PT = 4f
+private const val COUPLING_BOLT_DASH_OFF_PT = 3f
 
 // Classic-sheet layout (consolidated = false)
 private const val HEADER_HEIGHT_PT = 22f    // Compact single-line header

@@ -775,6 +775,116 @@ Keep the radius and the `0.60` text ratio identical in both draw sites (`RunoutR
 
 ---
 
+## Coupling Face (end view, 2026-08-15)
+
+The shops hand-draw a coupling end view on the runout sheet — an outer circle at the coupling
+OD, an inner circle at the pilot (register) bore with its keyseat, the **pilot runout** written
+in the bore, and the note that it was taken *looking forward*. That sketch is now printed.
+
+### Data posture — reference-only, no new plumbing
+
+- **The pilot runout rides the existing readings list.** It is one value for the whole face, not
+  a station on a component, so it is stored as an ordinary `RunoutReading` under the reserved
+  `COUPLING_PILOT_COMPONENT_ID = "coupling_pilot"` (`model/RunoutReading.kt`) at
+  `stationIndex = 0`. Value and high-spot marker are both optional, exactly like a bubble's, and
+  the value is stored verbatim (golden rule).
+  **The reserved id deliberately matches no resolved component**, which makes it look like an
+  orphan to anything keyed on live stations. Nothing may prune it: runout readings are never
+  pruned at decode (`ShaftDocCodec` passes them through untouched — verified, there is no
+  component-keyed prune pass anywhere in the app), and the render layer only *skips* what it
+  cannot place. Same posture as wear pits and dia readings.
+- **Reference-only**, like every other mark on this sheet: the face never touches
+  `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End badge.
+- **Visibility is a per-job election** — `RunoutConfig.showCouplingFace`, additive and defaulted
+  **`false`** (on-device request: not every inspection measures the coupling, and a document
+  written before the field existed reprints byte-identically until the face is elected).
+  No codec change. ViewModel setter `setShowCouplingFace`, the `setTirDirection` pattern.
+- The face is **runout content**: `drawFace = config.showCouplingFace && drawBubbles`, so a
+  Schematic + Wear consolidated sheet carries no face, exactly as it carries no TIR line.
+
+### Geometry — `geom/CouplingFaceMath.kt`
+
+Pure Kotlin (no Android imports), so the composer and `CouplingFaceMathTest` read one set of
+numbers. `couplingFaceLayout(outerR, boltCount)` resolves everything from the drawn OD radius:
+
+| Feature | Ratio |
+|---|---|
+| Pilot bore radius | `COUPLING_PILOT_FRAC = 0.44` × outer R |
+| Keyseat half-width | `COUPLING_KEYWAY_SLOT_HALF_FRAC = 0.22` × pilot R |
+| Keyseat outward depth | `COUPLING_KEYWAY_DEPTH_FRAC = 0.25` × pilot R |
+| Bolt circle radius | `(outerR + pilotR) / 2` |
+| Bolt hole radius | `COUPLING_BOLT_HOLE_FRAC = 0.10` × outer R |
+| Bolt angles | `-90° + (360°/count) · (i + 0.5)` |
+
+**The coupling keyseat protrudes OUTWARD from the pilot bore** — the key sits between shaft and
+hub, so the shaft carries a keyway cut *into* it while the coupling carries a keyseat cut into
+the surrounding hub material. It is drawn as an arc gap at 12 o'clock with two walls running
+outward to `pilotR + keywayDepth` and a flat cap: a small box standing on the bore, open into
+it. This is **deliberately opposite the runout bubble glyph's inward slot** (which is the shaft
+convention and stays unchanged). Both share the arc-gap technique; neither may be unified onto
+the other.
+
+Bolts are rotated a **half pitch** off 12 o'clock so no hole ever lands behind the keyseat, and
+the keyseat cap always stops short of the bolt holes
+(`pilotR + depth < boltCircleR − boltHoleR` — pinned by test). `boltCount < 1` draws no bolt
+circle at all: the plain two-circle face, which is the hand-sketch minimum.
+
+**Bolt count source:** `spec.couplerBoltSlots.firstOrNull()?.count ?: 0` — a coupler bolt slot's
+count *is* the coupling's bolt count, so no new field is authored for it.
+
+### Drawing — PDF-only
+
+ONE implementation, `drawCouplingFace` in `pdf/RunoutPdfComposer.kt`, serving both the classic
+and consolidated sheets. **PDF-only by design** — the same posture as the schematic's diameter
+callouts: both in-app previews rasterize the real PDF, and the Runout tab's pinned canvas stays
+lean (runouts only). There is no canvas twin, so no draw-both-sites rule applies here.
+
+- Outer circle in outline paint, no fill.
+- Bolt circle as a **dashed** thin construction line on a **local copy** of the dim paint (the
+  shared paint is never mutated), carrying solid-stroke holes.
+- Pilot bore + outward keyseat as above.
+- Value centred in the bore at `pilotR × 0.60` — the bubble's text ratio — through the shared
+  `util/RunoutValueFormat.formatRunoutValue`. High spot as the same short red dash straddling
+  the rim via `clockTickRimOffset`, here on the **pilot** rim.
+- Caption `"Coupling — looking fwd"` centred under the circle at 8 pt.
+- **Blank drafts** draw all the geometry and omit the value and marker — a write-in circle,
+  exactly the rule the bubbles follow.
+
+### Placement + vertical budget
+
+The face sits bottom-right, sharing the band above the footer with the TIR line. Everything
+above therefore reserves the **taller of the two lanes**:
+
+```
+bottomLaneH   = max(drawBubbles ? TIR_LINE_HEIGHT_PT : 0, drawFace ? COUPLING_FACE_BLOCK_PT : 0)
+bottomLaneTopY = footerTop − bottomLaneH
+availableH     = bottomLaneTopY − shaftTopBudgetY      // prelim AND final pass, one value
+```
+
+`COUPLING_FACE_OUTER_R_PT = 36` (1 in dia on paper), `COUPLING_FACE_BLOCK_PT = 96`
+(2·R + caption lane + pads), `COUPLING_FACE_PAD_PT = 8`. Reserving off `tirY` alone would let the
+shaft and its bubbles run down through the face. The TIR line itself keeps its own y
+(`footerTop − TIR_LINE_HEIGHT_PT`); its write-in rule is **clamped** to stop short of the face's
+block rather than running under it (`drawTirLine`'s `right` parameter). The face draws after the
+profile, marks, bubbles, and TIR line — it owns a reserved block, so the consolidated sheet's
+"marks first, text last" in-profile ordering is untouched.
+
+### Authoring UI — three surfaces, ONE field
+
+The election is a checkbox in both **PDF options sheets** — the Runout tab preview's and the
+Output tab's consolidated one (`RunoutWearOptionsSheet(showCouplingFaceRow, couplingFaceOn)`,
+gated off for the wear/undercut documents where it would be inert) — and again on the Runout
+tab body, where it pairs with a **"Pilot runout…"** button (enabled only when the face is on).
+All three bind `vm.setShowCouplingFace`, so they cannot drift. It is a checkbox commit, not a
+drag, so there is no live-tuning channel: `runoutConfig` is already a re-render key in both
+previews' render-inputs records, which is what refreshes the page.
+
+The button opens the **existing** `RunoutBubbleDialog` titled "Coupling pilot", seeded from
+`runoutReadings.find(COUPLING_PILOT_COMPONENT_ID, 0)` and saving through the ordinary
+`vm.setRunoutReading` — the face's value and a station's value are authored identically.
+
+---
+
 ## Bubble Placement Algorithm (RunoutRoute only)
 
 **Single source of truth: `geom/RunoutBubbleLayout.kt`.** Both the canvas preview and

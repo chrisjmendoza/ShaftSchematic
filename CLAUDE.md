@@ -314,8 +314,10 @@ fine with neither. Keyed by `(componentId, stationIndex)` with render-layer orph
 and the keyway cutout must be drawn **identically in both bubble draw sites** —
 `RunoutRoute.drawRunoutMarkers` (canvas) and `RunoutPdfComposer.drawPlacedBubbles` (PDF).
 Pure clock/hit-test math lives in `geom/RunoutReadingMath.kt` (shared, no `pdf → ui` dep);
-value formatting in `util/RunoutValueFormat.kt`. See `RunoutSheet.md` (Runout Bubble
-Editor) and `docs/RunoutBubbleEditor_PLAN.md`.
+value formatting in `util/RunoutValueFormat.kt`. One reserved key, `COUPLING_PILOT_COMPONENT_ID`
+(`"coupling_pilot"`, station 0 — the coupling face's pilot runout), deliberately matches no
+resolved component and must **never** be pruned as an orphan. See `RunoutSheet.md` (Runout Bubble
+Editor, Coupling Face) and `docs/RunoutBubbleEditor_PLAN.md`.
 
 ### Spooned keyways are a draw-only variant
 `keywaySpooned` (on `Taper` and `Body`) is a **drawing** flag — it changes nothing in the model,

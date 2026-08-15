@@ -8,6 +8,33 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-15
 
+### feat: coupling face — the end view, digitized
+
+The shops hand-draw a coupling end view in the corner of a runout sheet: the coupling OD, the
+pilot (register) bore with its keyseat, the pilot runout written inside it, and the note that it
+was taken looking forward. That sketch now prints, on both the classic runout sheet and the
+consolidated one, bottom-right in the band the "TIR's taken looking" line already occupied.
+
+**The pilot runout is authored like any other reading.** "Pilot runout…" on the Runout tab opens
+the same bubble editor a station opens — a value and a high-spot clock marker, both optional —
+and the reading rides the existing readings list under a reserved id rather than any new field.
+The value centres in the bore, the high spot straddles its rim, and a blank write-in draft draws
+the whole face with the numbers left out, exactly as the bubbles behave.
+
+**The keyseat points outward.** The key sits between shaft and hub, so the shaft's keyway is cut
+into it while the coupling's is cut into the surrounding hub material: on the face it reads as a
+small box standing on top of the bore, deliberately the opposite of the runout bubble's inward
+slot. Bolt holes come from the coupler bolt slot's count and are rotated half a pitch off
+12 o'clock, so no hole ever hides behind the keyseat; a shaft with no slots authored draws the
+plain two-circle face the sketch shows at minimum.
+
+**Elected per job, off by default** — not every inspection measures the coupling, and a document
+saved before this existed reprints unchanged. The "Coupling face" checkbox appears in the PDF
+options of both the Runout and the Output tab preview and again beside the pilot-runout button,
+all three writing the one per-job field, so the two sheets can never disagree. Everything above
+the face reserves against it rather than the TIR lane, so the shaft and its bubbles never run
+down through it, and the TIR write-in rule stops short of the block instead of crossing it.
+
 ### feat: wear strip follow-ups — anchor dimensions everywhere, a settable join, and one-tap contents
 
 Three on-device answers to the questions the strip-windows work left open.

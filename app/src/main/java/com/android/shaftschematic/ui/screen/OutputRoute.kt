@@ -791,6 +791,8 @@ fun OutputRoute(
                     pdfShadedLiners = pdfShadedLiners,
                     vm = vm,
                     linerShadeLocked = linerShadeLocked,
+                    showCouplingFaceRow = true,
+                    couplingFaceOn = runoutConfig.showCouplingFace,
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     showDimensionArrows = true,
