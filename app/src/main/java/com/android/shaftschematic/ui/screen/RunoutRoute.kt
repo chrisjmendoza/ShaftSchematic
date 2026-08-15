@@ -1163,6 +1163,17 @@ internal fun RunoutWearOptionsSheet(
     /** The app-wide `PdfPrefs.wearBandShadeFrac`; read only when [showWearControls]. */
     wearBandShadeFrac: Float = PDF_WEAR_BAND_SHADE_DEFAULT,
     /**
+     * Strip-eligible components for the wear sheet's "Components" section, AFT→FWD
+     * (`buildWearStripComponentOptions`); read only when [showWearControls].
+     */
+    wearStripOptions: List<WearStripComponentOption> = emptyList(),
+    /** This job's authored strip election (`WearRecord.stripComponentIds`); `null` = the default. */
+    wearStripSelection: List<String>? = null,
+    /** The default election — every drawable liner — materialized on the first component toggle. */
+    wearStripDefaultIds: List<String> = emptyList(),
+    /** This job's `WearRecord.showShaftProfile`; read only when [showWearControls]. */
+    wearShowShaftProfile: Boolean = true,
+    /**
      * Shows the shared "Dimension arrows" size picker. On for the consolidated sheet, the only
      * document here that draws dimension rails; the classic runout/wear/undercut sheets draw
      * their own fixed-head marks, so the control would be inert there.
@@ -1258,6 +1269,21 @@ internal fun RunoutWearOptionsSheet(
         // Commit-on-release, like every slider on this sheet; the wear preview re-renders
         // from its own keys rather than a live tuning channel.
         if (showWearControls) {
+            // What the sheet draws comes first: the whole-shaft profile toggle and the
+            // per-component strip election, above the controls that restyle what's drawn.
+            WearStripComponentChecks(
+                options = wearStripOptions,
+                selection = wearStripSelection,
+                defaultIds = wearStripDefaultIds,
+                showShaftProfile = wearShowShaftProfile,
+                onSetShowShaftProfile = { vm.setWearShowShaftProfile(it) },
+                onSetSelection = { vm.setWearStripComponents(it) },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+
             WearTraceDepthControlRow(
                 vm = vm,
                 effectiveFrac = traceDepthFrac,

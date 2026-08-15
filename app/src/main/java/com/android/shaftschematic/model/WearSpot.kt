@@ -195,6 +195,19 @@ data class WearDiaReading(
  *   printed Ø, and the trace still never draws shallower than true scale — but it is
  *   per-document (a sheet keeps its chosen look), so it lives here rather than only in app
  *   prefs. Additive + defaulted, same no-version-bump rule as [pits].
+ * @property stripComponentIds Which components get a broken-out detail strip on the wear
+ *   sheet. `null` (the default) is the default election — every drawable liner, the historical
+ *   sheet — while a non-null list is the machinist's authored set of **resolved component ids**
+ *   (liners, tapers, bodies, explicit or auto), so a liner added later never silently rewrites
+ *   an authored sheet. An empty list means no strips. Ids that no longer resolve are skipped at
+ *   the render layer, NEVER pruned at decode (auto-body/taper ids aren't known to the codec) —
+ *   the [WearPit]/[WearDiaReading] rule. Layout-only: it changes what the sheet draws, never a
+ *   stored or printed value. Additive + defaulted, same no-version-bump rule as [pits].
+ * @property showShaftProfile Whether the whole-shaft profile band prints on the wear sheet
+ *   (with its OAL rail, on-profile wear bands and pits, liner names, and direction reference).
+ *   `false` gives that vertical budget to the detail strips; the header, dye-pen row, and every
+ *   elected strip still print. Layout-only, and per-document, so it lives here. Additive +
+ *   defaulted, same no-version-bump rule as [pits].
  */
 @Serializable
 data class WearRecord(
@@ -204,4 +217,6 @@ data class WearRecord(
     val wornSections: List<WornSection> = emptyList(),
     val traceDepthFrac: Float? = null,
     val dyePenResult: DyePenResult? = null,
+    val stripComponentIds: List<String>? = null,
+    val showShaftProfile: Boolean = true,
 )

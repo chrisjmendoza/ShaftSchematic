@@ -416,6 +416,68 @@ class WearRecordPersistenceTest {
         assertNull(decoded.wearRecord.traceDepthFrac)
     }
 
+    // ── Strip election + shaft-profile toggle (per-job wear sheet shape) ──────
+
+    @Test
+    fun `envelope round trip preserves the strip election and the profile toggle`() {
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(
+                // Taper/body ids ride along exactly like a pit's: never pruned at decode.
+                stripComponentIds = listOf("ln1", "auto_body_0.000_100.000", "taper-9"),
+                showShaftProfile = false,
+            ),
+        )
+
+        val raw = ShaftDocCodec.encodeV1(doc)
+        assertTrue("expected stripComponentIds key in JSON", raw.contains("\"stripComponentIds\""))
+        assertTrue("expected showShaftProfile key in JSON", raw.contains("\"showShaftProfile\""))
+
+        val decoded = ShaftDocCodec.decode(raw)
+        assertEquals(ShaftDocCodec.Format.ENVELOPE_V1, decoded.format)
+        assertEquals(
+            listOf("ln1", "auto_body_0.000_100.000", "taper-9"),
+            decoded.wearRecord.stripComponentIds,
+        )
+        assertEquals(false, decoded.wearRecord.showShaftProfile)
+    }
+
+    @Test
+    fun `an empty strip election round trips as empty, not as the default`() {
+        // Empty means "no detail strips"; null means "every drawable liner" — the two must
+        // never collapse into each other across a save/load.
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(stripComponentIds = emptyList()),
+        )
+
+        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
+
+        assertEquals(emptyList<String>(), decoded.wearRecord.stripComponentIds)
+    }
+
+    @Test
+    fun `a wear_record json without the strip fields decodes to the default sheet`() {
+        // A file written before the election existed: null election (every drawable liner) and
+        // the whole-shaft profile drawn — exactly the historical sheet.
+        val raw = """
+            {
+              "version": 1, "preferred_unit": "INCHES", "unit_locked": true,
+              "job_number": "", "customer": "", "vessel": "", "shaft_position": "OTHER", "notes": "",
+              "spec": {
+                "overallLengthMm": 500.0,
+                "liners": [ { "id": "ln1", "startMmPhysical": 0.0, "lengthMm": 200.0, "odMm": 50.0, "endMmPhysical": 200.0 } ]
+              },
+              "wear_record": { "spots": [ { "id": "spot-1", "linerId": "ln1", "startMm": 25.0, "lengthMm": 40.0 } ] }
+            }
+        """.trimIndent()
+
+        val decoded = ShaftDocCodec.decode(raw)
+
+        assertNull(decoded.wearRecord.stripComponentIds)
+        assertTrue(decoded.wearRecord.showShaftProfile)
+    }
+
     @Test
     fun `worn sections are never pruned at decode`() {
         // Shaft-space, no component key — even a span past the current OAL survives decode

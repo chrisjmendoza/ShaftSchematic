@@ -8,6 +8,50 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-14
 
+### feat: wear detail strips keep their proportions, and the sheet's contents are elective
+
+Two changes to the wear document, both from an on-device report.
+
+**Proportional strips.** Every detail strip was scaled to fill its own grid cell, so a liner
+less than half the length of its siblings printed just as wide as they did. All strips on a
+sheet now share ONE mm→pt scale (`sharedWearStripWindowPtPerMm`, over the primitive
+`sharedWearStripPtPerMm`): the largest scale that still fits
+every strip inside its cell. A 22" liner draws half the width of a 44" one, and a shorter
+strip centers in its cell's slack. The shared scale is capped but deliberately **not** floored
+— flooring it would overflow the longest strip's cell — so one long component shrinks the page
+together rather than lying about the others. The undercut document's strips reuse the same
+layout function and are untouched (the shared scale arrives as an optional override).
+
+**Elective contents.** The wear preview's PDF Options gains a **Components** section: a
+"Complete shaft" checkbox for the whole-shaft profile band, then one checkbox per
+strip-eligible component (liners, tapers, and bodies including bare-shaft runs), listed
+AFT→FWD under the same titles the sheet prints. Unticking the complete shaft drops the profile
+band — profile, OAL rail, on-profile wear bands and pits, liner names, direction reference —
+and hands its height to the strips, leaving no gap behind; the header, the strips, and the
+dye-pen row are unaffected.
+
+The election is per document (`WearRecord.stripComponentIds`, additive/defaulted — it rides the
+existing `wear_record` envelope field, no file-format bump) and defaults to exactly today's
+sheet: profile plus every drawable liner. The first component tick materializes that default
+before applying the change, so a liner added later never silently rewrites an authored sheet;
+an id whose component has been edited away is skipped when the sheet draws, never pruned from
+the file. Blank write-in drafts follow the same election and profile toggle — a draft blanks
+values, never the drawing's shape.
+
+**Taper, body, and combined strips.** An elected taper draws its trapezoid and an elected body
+its rectangle, each with the neighbor stubs, pits, and measured-Ø callouts a liner strip has
+always had. An elected taper whose nearest elected liner is also on the sheet joins that liner's
+strip instead of taking its own: drawn contiguously with the real shaft outline between them when
+they are within 3", or joined by an S-break connector when they are further apart. Bodies always
+get their own strip. A strip is now a *window* onto the shaft — components and the gaps between
+them, all drawn through one piecewise mm→pt mapping — so a liner-only sheet, which is one
+single-component window per liner, prints exactly as it always did.
+
+Titles follow: `"AFT Taper + AFT Liner — 110 FROM AFT S.E.T."` for a combined strip, the plain
+component name for a taper or body strip, and the unchanged `"AFT Liner — 110 FROM AFT S.E.T."`
+for a liner's. A body or taper measured-Ø reading now prints IN its own strip when it has one,
+at the zoomed scale, and only keeps its under-the-main-profile placement when it doesn't.
+
 ### fix: pit X marks sized to the hand convention — old Small is the new Large (overlay only)
 
 The wear-inspection overlay drew its pit "X"s oversized (on-device report: "these are my

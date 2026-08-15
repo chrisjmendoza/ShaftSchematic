@@ -80,24 +80,71 @@ class WearStripLayoutTest {
         assertEquals(2, groups[0].spots.size)
     }
 
-    // ── selectWearStripsForPage ───────────────────────────────────────────────
+    // ── Strip election (WearRecord.stripComponentIds) ─────────────────────────
+
+    @Test
+    fun `a null election prints every drawable liner - the default sheet`() {
+        val liners = listOf(liner("a", 0f, 200f), liner("b", 300f, 200f))
+        val groups = collectWearLinerGroups(liners, WearRecord(), stripComponentIds = null)
+        assertEquals(listOf("a", "b"), groups.map { it.liner.id })
+        assertEquals(defaultWearStripComponentIds(liners), groups.map { it.liner.id })
+    }
+
+    @Test
+    fun `an explicit election filters the strips down to the elected liners`() {
+        val liners = listOf(liner("a", 0f, 200f), liner("b", 300f, 200f), liner("c", 600f, 200f))
+        val groups = collectWearLinerGroups(liners, WearRecord(), stripComponentIds = listOf("c", "a"))
+        // Election order is irrelevant — strips always print aft→fwd.
+        assertEquals(listOf("a", "c"), groups.map { it.liner.id })
+    }
+
+    @Test
+    fun `an empty election prints no strips at all`() {
+        val liners = listOf(liner("a", 0f, 200f), liner("b", 300f, 200f))
+        assertTrue(collectWearLinerGroups(liners, WearRecord(), stripComponentIds = emptyList()).isEmpty())
+    }
+
+    @Test
+    fun `elected ids that resolve to no liner are skipped, never fatal`() {
+        // Taper/body ids are legal in the election (they get strips in a later phase) and an id
+        // whose component was edited away is an orphan — both are simply skipped at render.
+        val liners = listOf(liner("a", 0f, 200f))
+        val groups = collectWearLinerGroups(
+            liners, WearRecord(),
+            stripComponentIds = listOf("a", "taper-1", "auto_body_0.000_100.000", "ghost"),
+        )
+        assertEquals(listOf("a"), groups.map { it.liner.id })
+    }
+
+    @Test
+    fun `the default election skips degenerate liners, same as the strip collector`() {
+        val liners = listOf(liner("ok", 0f, 200f), liner("no-len", 300f, 0f), liner("no-od", 400f, 100f, odMm = 0f))
+        assertEquals(listOf("ok"), defaultWearStripComponentIds(liners))
+    }
+
+    // ── selectWearStripWindowsForPage ─────────────────────────────────────────
+
+    private fun linerWindow(id: String, startMm: Float, lengthMm: Float): WearStripWindow =
+        WearStripWindow(listOf(WearStripComponentSeg(WearStripComponent(
+            id, WearStripComponentKind.LINER, startMm, startMm + lengthMm, 100f, 100f,
+        ))))
 
     @Test
     fun `at or under the page limit produces no overflow`() {
-        val groups = (1..3).map { WearLinerGroup(liner("l$it", it * 100f, 50f), listOf(spot("l$it"))) }
-        val selection = selectWearStripsForPage(groups)
+        val windows = (1..3).map { linerWindow("l$it", it * 100f, 50f) }
+        val selection = selectWearStripWindowsForPage(windows)
         assertEquals(3, selection.onPage.size)
         assertTrue(selection.overflow.isEmpty())
     }
 
     @Test
     fun `over the page limit overflows the remainder`() {
-        val groups = (1..5).map { WearLinerGroup(liner("l$it", it * 100f, 50f), listOf(spot("l$it"))) }
-        val selection = selectWearStripsForPage(groups)
+        val windows = (1..5).map { linerWindow("l$it", it * 100f, 50f) }
+        val selection = selectWearStripWindowsForPage(windows)
         assertEquals(3, selection.onPage.size)
         assertEquals(2, selection.overflow.size)
         // Overflow keeps the aft→fwd tail, not an arbitrary subset.
-        assertEquals(listOf("l4", "l5"), selection.overflow.map { it.liner.id })
+        assertEquals(listOf("l4", "l5"), selection.overflow.map { w -> w.components.single().id })
     }
 
     // ── determineWearPdfMode (rule: 0 -> profile form, 1 -> combined, 2+ -> grid;
@@ -372,6 +419,112 @@ class WearStripLayoutTest {
         val hLayout = computeWearStripHorizontalLayout(36f, 756f, linerLengthMm = 100000f)
         assertTrue(hLayout.ptPerMm >= WEAR_STRIP_MIN_PT_PER_MM - 1e-6f)
         assertTrue(hLayout.linerRightPt > hLayout.linerLeftPt)
+    }
+
+    // ── sharedWearStripPtPerMm — one scale per sheet, so lengths read true ─────
+
+    private fun innerWidth(left: Float, right: Float) = right - left - 2f * WEAR_STRIP_STUB_WIDTH_PT
+
+    @Test
+    fun `two liners in equal cells draw at their true length ratio`() {
+        // The bug this pins: each strip scaled to fill its own cell, so a half-length liner
+        // printed just as wide as its sibling (on-device report).
+        val left = 36f; val right = 396f
+        val inner = innerWidth(left, right)
+        val shared = sharedWearStripPtPerMm(listOf(400f, 200f), listOf(inner, inner))
+        val long = computeWearStripHorizontalLayout(left, right, 400f, ptPerMmOverride = shared)
+        val short = computeWearStripHorizontalLayout(left, right, 200f, ptPerMmOverride = shared)
+        val longW = long.linerRightPt - long.linerLeftPt
+        val shortW = short.linerRightPt - short.linerLeftPt
+        assertEquals(2f, longW / shortW, 1e-3f)
+        // The longest strip still fills its cell exactly; the short one is centered in the slack.
+        assertEquals(inner, longW, 1e-3f)
+        assertEquals((left + right) / 2f, (short.linerLeftPt + short.linerRightPt) / 2f, 1e-3f)
+    }
+
+    @Test
+    fun `the shared scale keeps every strip inside its own cell`() {
+        val left = 36f; val right = 396f
+        val inner = innerWidth(left, right)
+        val lengths = listOf(120f, 900f, 55f)
+        val shared = sharedWearStripPtPerMm(lengths, List(lengths.size) { inner })
+        lengths.forEach { len ->
+            val h = computeWearStripHorizontalLayout(left, right, len, ptPerMmOverride = shared)
+            assertTrue(h.linerLeftPt - h.stubWidthPt >= left - 1e-3f)
+            assertTrue(h.linerRightPt + h.stubWidthPt <= right + 1e-3f)
+        }
+    }
+
+    @Test
+    fun `the shared scale is capped, so a page of short liners does not explode`() {
+        val shared = sharedWearStripPtPerMm(listOf(2f, 3f), listOf(600f, 600f))
+        assertEquals(WEAR_STRIP_MAX_PT_PER_MM, shared, 1e-6f)
+    }
+
+    @Test
+    fun `the shared scale is NOT floored - a very long liner shrinks everything together`() {
+        // Flooring a SHARED scale would overflow the longest strip's cell; proportion wins.
+        val inner = innerWidth(36f, 396f)
+        val shared = sharedWearStripPtPerMm(listOf(100000f, 200f), listOf(inner, inner))
+        assertTrue("shared scale must be free to fall below the per-strip floor",
+            shared < WEAR_STRIP_MIN_PT_PER_MM)
+        val h = computeWearStripHorizontalLayout(36f, 396f, 100000f, ptPerMmOverride = shared)
+        assertTrue(h.linerRightPt + h.stubWidthPt <= 396f + 1e-3f)
+    }
+
+    @Test
+    fun `an empty page yields the cap and no strips to place`() {
+        assertEquals(WEAR_STRIP_MAX_PT_PER_MM, sharedWearStripPtPerMm(emptyList(), emptyList()), 1e-6f)
+    }
+
+    @Test
+    fun `a null override reproduces the legacy per-strip layout exactly`() {
+        // The undercut document's strips call through this same function with no override —
+        // their behavior must be byte-identical.
+        listOf(1f, 150f, 4000f, 100000f).forEach { len ->
+            val legacy = computeWearStripHorizontalLayout(36f, 756f, len)
+            val explicitNull = computeWearStripHorizontalLayout(36f, 756f, len, ptPerMmOverride = null)
+            assertEquals(legacy.ptPerMm, explicitNull.ptPerMm, 0f)
+            assertEquals(legacy.linerLeftPt, explicitNull.linerLeftPt, 0f)
+            assertEquals(legacy.linerRightPt, explicitNull.linerRightPt, 0f)
+            assertEquals(legacy.stubWidthPt, explicitNull.stubWidthPt, 0f)
+        }
+    }
+
+    @Test
+    fun `a non-positive override falls back to the per-strip fit`() {
+        val legacy = computeWearStripHorizontalLayout(36f, 756f, 150f)
+        val zero = computeWearStripHorizontalLayout(36f, 756f, 150f, ptPerMmOverride = 0f)
+        assertEquals(legacy.ptPerMm, zero.ptPerMm, 0f)
+        assertEquals(legacy.linerLeftPt, zero.linerLeftPt, 0f)
+    }
+
+    // ── Hidden shaft profile (WearRecord.showShaftProfile = false) ────────────
+
+    @Test
+    fun `a hidden profile band leaves no phantom gap and hands its height to the strips`() {
+        // What composeWearPdf passes with showShaftProfile = false: no floor, no preference,
+        // no profile→strips gap, no per-strip growth cap.
+        val areaTop = 88f; val areaBottom = 524f
+        val hidden = computeWearVerticalLayout(
+            areaTop, areaBottom, stripCount = 2,
+            minProfileHeightPt = 0f,
+            profileToStripsGapPt = 0f,
+            preferredProfileHeightPt = 0f,
+            maxStripHeightPt = Float.MAX_VALUE,
+        )
+        assertEquals("the band starts where the profile would have", areaTop, hidden.profileBottom, 1e-3f)
+        assertEquals(areaTop, hidden.stripTops.first(), 1e-3f)
+        assertEquals(areaBottom, hidden.stripBottoms.last(), 1e-3f)
+
+        val shown = computeWearVerticalLayout(
+            areaTop, areaBottom, stripCount = 2,
+            preferredProfileHeightPt = 140f,
+            maxStripHeightPt = WEAR_STRIP_HEIGHT_PT,
+        )
+        val hiddenH = hidden.stripBottoms[0] - hidden.stripTops[0]
+        val shownH = shown.stripBottoms[0] - shown.stripTops[0]
+        assertTrue("hiding the profile must grow the strips ($hiddenH vs $shownH)", hiddenH > shownH)
     }
 
     // ── computeWearStripInnerLayout (dimension rail: fixed budget, independent of

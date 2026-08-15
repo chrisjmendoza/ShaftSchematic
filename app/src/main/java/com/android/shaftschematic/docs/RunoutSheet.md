@@ -339,8 +339,9 @@ via an elbow above the row-0 band so drops provably clear every label; uniform c
 (`pickDiaReadingAt`, point-to-tick distance).
 
 **Rendering** (draw-both-sites lockstep, all through the one engine):
-- **PDF detail strip** (`WearPdfComposer.drawWearDetailStrip`): liner readings print on
-  their liner's strip — witness tick across the full cylinder height (overshoot
+- **PDF detail strip** (`WearPdfComposer.drawWearStripWindow`): a reading prints on the strip of
+  the component it belongs to, whenever that component has one — liners always, and (since
+  2026-08-14) an elected taper or body too — witness tick across the full cylinder height (overshoot
   `WEAR_DIA_TICK_OVERSHOOT_PT`), value labels in a band reserved **below** the cylinder by
   `computeWearStripInnerLayout(diaBandPt = …)` (label rows only; the leader region reuses
   the existing label headroom, so a reading-free strip's layout is byte-identical to
@@ -350,11 +351,14 @@ via an elbow above the row-0 band so drops provably clear every label; uniform c
   these values under a wear band) — measured-Ø readings ARE the diameter story now; the
   spot card no longer offers the min-Ø field and `WearSpot.minDiaMm` survives only for
   old files (stored value passed through commits verbatim, never printed).
-- **PDF main profile**: body/taper readings print under the whole-shaft profile, in a band
+- **PDF main profile**: a body/taper reading whose component has **no strip on this page** prints
+  under the whole-shaft profile, in a band
   below the names/direction row; the leader originates on the drawn bottom surface (taper Ø
   interpolated at the station, same as pits). The profile band reserves the height via
-  `preferredProfileHeightPt` only when such readings exist. Liner readings do **not** draw
-  on the profile (the strip is the zoomed reading surface); a liner past the strip cap
+  `preferredProfileHeightPt` only when such readings exist. The strip is always the preferred
+  surface — it is the zoomed one — so liner readings never draw on the profile, and a body/taper
+  reading moves off the profile as soon as its component is elected onto a strip
+  (`buildProfileDiaCalloutInput(skipComponentIds = …)`). A component past the strip cap
   loses its readings on print — same class of limitation as other strip-overflow content.
 - **Canvas overlay**: same engine in px, anchored under the drawn segment.
 - **Blank draft**: readings omitted entirely (`effectiveRecord = WearRecord()`), consistent
@@ -962,11 +966,16 @@ dimension line below it) — see "Label rule" above.
 
 ### Wear PDF Rendering Modes (2026-07-21 — profile always on top)
 
-The **shaft profile is always drawn on top** of the wear document now (2026-07-21, user
-request): body/taper pit "X"s live on the whole-shaft profile, so it must stay visible. The
-detail strips below pick their layout from `determineWearPdfMode(collectWearLinerGroups(
-docSpec.liners, wearRecord).size)` — since 2026-07-27 that is a pure function of the shaft's
-**drawable liner count**: every liner with positive length and OD gets a strip, whether or
+The **shaft profile is drawn on top** of the wear document (2026-07-21, user request):
+body/taper pit "X"s live on the whole-shaft profile, so it stays visible by default. Since
+2026-08-14 it is elective — `WearRecord.showShaftProfile = false` drops the whole band (profile,
+OAL rail, on-profile bands/pits, liner names, direction reference) and hands its height to the
+detail strips, with no phantom gap left where it was; the header, strips, and dye-pen row are
+unaffected. The
+detail strips below pick their layout from `determineWearPdfMode(collectWearStripWindows(
+components, wearRecord.stripComponentIds).size)` — a pure function of the
+**elected strip-window count** (an elected taper joins its nearest elected liner in one combined
+window; see "Strip windows" below), which by default is every liner with positive length and OD, whether or
 not it has recorded wear (the shop's normal operating procedure — the sheet always shows all
 liners; a spotless liner's strip simply has no bands/callouts and its rail shows edge witness bars
 only — a band-less rail draws no spanning length). Orphan spots on a since-deleted liner are dropped by `collectWearLinerGroups`; pits
@@ -1027,18 +1036,79 @@ layouts (see "Wear PDF Rendering Modes" above for how each positions the strips)
 
 **Selection & pagination** — `pdf/WearStripLayout.kt` (android-free, unit-tested directly,
 `WearStripLayoutTest`):
-- `collectWearLinerGroups` builds one group per **drawable liner** (positive length + OD),
-  attaching whatever spots `wearRecord` holds against it — including none (2026-07-27: every
-  liner gets a strip regardless of recorded wear), sorted aft → fwd. Orphaned spots (stale
+- `collectWearLinerGroups` builds one group per **elected drawable liner** (positive length +
+  OD), attaching whatever spots `wearRecord` holds against it — including none (2026-07-27:
+  every liner gets a strip regardless of recorded wear), sorted aft → fwd. Orphaned spots (stale
   `linerId`) are dropped defensively (the authoritative drop is at decode time,
   `ShaftDocCodec`).
-- `selectWearStripsForPage` caps at `WEAR_STRIP_MAX_PER_PAGE` (3). Liners beyond that are
+- The election is `WearRecord.stripComponentIds` (2026-08-14, additive/defaulted — no envelope
+  version bump): `null` means the default election, every drawable liner (`defaultWearStripComponentIds`),
+  which is exactly the historical sheet; a non-null list is the machinist's authored set of
+  **resolved component ids** (liners, tapers, bodies — explicit or auto), and an empty list
+  prints no strips. Ids that no
+  longer resolve are skipped at the **render layer**, never pruned at decode — the pit/Ø-reading
+  rule. Both the election and `WearRecord.showShaftProfile` are read from the passed record even
+  in blank-draft mode: a write-in sheet blanks values, never the drawing's shape.
+- `selectWearStripWindowsForPage` caps at `WEAR_STRIP_MAX_PER_PAGE` (3). Strips beyond that are
   **not** put on a second PDF page — `composeWearPdf` only ever receives a single
   caller-supplied `PdfDocument.Page` (every call site does one `startPage` /
   `finishPage`), and growing that into true multi-page output would mean changing the
   function's signature and every call site. Instead, overflow renders as one text note
-  line ("+N more liner(s): ...") in a reserved band just above the notes area. Revisit
-  if/when `composeWearPdf` grows multi-page support.
+  line ("+N more liner(s)/component(s): ...") in a reserved band just above the notes area.
+  Revisit if/when `composeWearPdf` grows multi-page support.
+
+**Strip windows — taper/body strips and combined taper+liner strips (2026-08-14)**
+
+A strip is a **window** onto the shaft (`WearStripWindow`, `pdf/WearStripLayout.kt`): an ordered
+run of `WearStripComponentSeg` (a component's own span — liner, taper, or body) and
+`WearStripGapSeg` (the shaft between two components in the same window). A window with a single
+component is exactly the historical per-liner strip, which is the compatibility guarantee: a
+liner-only election groups and lays out bit-for-bit as `collectWearLinerGroups` +
+`computeWearStripHorizontalLayout` always did (pinned by `WearStripWindowTest` and
+`WearStripWindowSvgPreviewTest`).
+
+- **Grouping** (`collectWearStripWindows`): each elected **taper** attaches to the NEAREST
+  elected liner — smallest gap, ties go AFT (the more aftward liner wins) — forming one combined
+  window. At most one taper joins a liner from each side; a taper that loses the contest, a taper
+  elected with no liners on the sheet, and every elected **body** get their own single-component
+  window. Bodies never join a liner: they are the shaft's fluid base, so a body strip is its own
+  run. Windows come out AFT→FWD, and the window count feeds `determineWearPdfMode` /
+  grid selection exactly as the liner count used to.
+- **Gap mode** is decided from **mm alone** (`wearStripGapDrawsTrue`), so the shared-scale solve
+  stays non-circular: `gapMm ≤ WEAR_STRIP_TRUE_GAP_MAX_MM` (76.2 mm = 3") draws TRUE — the real
+  shaft outline under the gap, sampled off `docSpec` by `wearStripGapProfile`/`outerDiaMmAt` with
+  a vertex pair either side of every component edge so a step in Ø draws as a step — and anything
+  longer compresses to a fixed `WEAR_STRIP_BREAK_GAP_PT` (40 pt) run marked by the S-break pair
+  (`drawBreakEdge`, same glyph and eye convention as the window's own neighbor stubs). Touching
+  components get no gap segment at all.
+- **One mapping per window**: `WearStripWindow.xAt(mm, leftPt, ptPerMm)` — true-scale segments at
+  the sheet's shared scale, a compressed gap mapped linearly across its fixed width. Monotone,
+  exact at every segment boundary, extrapolating at the sheet scale outside the window (the
+  stubs' own space). Everything in the strip draws through it — the same one-piecewise-mapping
+  posture as `geom/ProfileCompression.kt`.
+- **Drawn content** — a liner segment keeps everything it has always had (wear bands, worn-profile
+  trace, chained spots rail, pits, Ø callouts, end caps, title + anchor label); a taper segment
+  draws its trapezoid from the resolved start/end Ø, a body segment its rectangle. Every segment's
+  radius scales against the window's largest Ø, which fills the strip's vertical budget — so a
+  single-liner window is drawn exactly as before, and a combined window keeps the taper's true Ø
+  ratio to the liner. The chained rail measures WEAR, so it belongs to the window's liner; a
+  taper/body-only window has none. Blank drafts follow the same lines-in/values-out rule (a
+  taper/body strip has no anchor dimension to blank, so its name is the whole title).
+- **Titles** — a window names every component it holds, AFT→FWD, joined with " + ", and only a
+  liner brings the anchor-from-SET dimension: `"<Liner> — 110 FROM AFT S.E.T."` for a liner-only
+  window (unchanged), `"<Taper> + <Liner> — 110 FROM AFT S.E.T."` for a combined one, and just the
+  name for a taper/body strip. `pdf/WearStripComponents.kt` owns the shared
+  `wearStripComponentsFor` / `buildWearStripTitleById` pair, which BOTH the printed titles and the
+  options sheet's checkboxes read, so a checkbox and the strip it elects always read the same.
+- **Pits and Ø readings** follow their component: a body/taper reading whose component has a strip
+  on this page prints IN that strip (at the zoomed scale, same helpers as a liner —
+  `pitCenterY`/`pitHalfArm`, `planDiaCallouts`, taper radius interpolated), and only a reading
+  whose component has no strip keeps the under-the-main-profile placement
+  (`buildProfileDiaCalloutInput(skipComponentIds = …)`). Profile pits keep drawing on the profile
+  regardless.
+- **Shared scale** — `sharedWearStripWindowPtPerMm` takes each window's fixed break-gap points off
+  its cell first (they are spent whatever the scale is), then solves `sharedWearStripPtPerMm` over
+  what's left. For liner-only pages it is identical to solving on the raw liner lengths.
 
 **Main profile** — liners with ≥1 wear spot get thin **vertical-line** bands
 (`drawWearBandsOnProfile` → `drawVerticalBand`) at their true axial position, clamped to the
@@ -1081,9 +1151,21 @@ diameter + names row, `preferredProfileHeightPt`) and the strips absorb the surp
 whose shaft is slack-centered (2026-07-28 device feedback: dead white between shaft and strips).
 By construction the last strip's bottom always lands exactly on the reserved area's bottom edge.
 
-**Per-strip layout** — `computeWearStripHorizontalLayout` centers a break-out liner
-(scaled `ptPerMm` local to the strip, capped/floored so very short/long liners don't
-explode/vanish) between two fixed-width neighbor stubs; `computeWearStripInnerLayout`
+**Per-strip layout** — `computeWearStripHorizontalLayout` centers a break-out liner between
+two fixed-width neighbor stubs. Its scale is **one shared mm→pt value for the whole sheet**
+(2026-08-14, on-device report: each strip scaled to fill its own cell, so a liner less than
+half the length of its siblings printed just as wide): `sharedWearStripPtPerMm` takes the
+largest scale that still fits every strip inside its own cell — `min(innerWidth_i / length_i)`,
+capped at `WEAR_STRIP_MAX_PT_PER_MM` and deliberately **not** floored to
+`WEAR_STRIP_MIN_PT_PER_MM`, since flooring a shared scale would overflow the longest strip's
+cell. One long component therefore shrinks the whole page together — proportion wins — and a
+shorter liner centers in its cell's slack. The composer passes it as
+`ptPerMmOverride`; `null` (the undercut document's strips, which reuse this same function)
+keeps the legacy per-strip fit, capped/floored so very short/long spans don't explode/vanish.
+The wear composer itself now goes through `computeWearStripWindowLayout`, the multi-component
+form of the same arithmetic (a window's drawn run centered between the two stubs) — geometrically
+identical for a single-component window; see "Strip windows" below.
+`computeWearStripInnerLayout`
 then splits the strip's own vertical band into the chained rail's fallback label rows and its
 rail line (top), the liner cylinder, and the title row (bottom) (see "Dimension rail" below) —
 the cylinder shrinks first, and if a pathological input leaves no room at all, the rail's label

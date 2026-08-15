@@ -659,6 +659,32 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Elect which components get a broken-out detail strip on the wear sheet
+     * ([WearRecord.stripComponentIds] — resolved component ids: liners, tapers, bodies).
+     * `null` restores the default election (every drawable liner); an empty list prints no
+     * strips at all.
+     *
+     * Layout-only, reference-only: no geometry side effects, and ids that no longer resolve are
+     * skipped when the sheet is drawn rather than pruned here (the pit/reading posture).
+     */
+    fun setWearStripComponents(ids: List<String>?) {
+        _wearRecord.update { rec ->
+            if (rec.stripComponentIds == ids) rec else rec.copy(stripComponentIds = ids)
+        }
+    }
+
+    /**
+     * Show or hide the wear sheet's whole-shaft profile band ([WearRecord.showShaftProfile]).
+     * Hiding it hands that vertical budget to the detail strips; the header, dye-pen row, and
+     * elected strips are unaffected. Layout-only, per document.
+     */
+    fun setWearShowShaftProfile(show: Boolean) {
+        _wearRecord.update { rec ->
+            if (rec.showShaftProfile == show) rec else rec.copy(showShaftProfile = show)
+        }
+    }
+
+    /**
      * Record the dye penetrant inspection's outcome ([WearRecord.dyePenResult]) — printed as
      * an "X" in the matching PASS/FAIL checkbox on the wear sheet; `null` returns both boxes
      * to blank for hand-marking. Reference-only, no geometry effect.

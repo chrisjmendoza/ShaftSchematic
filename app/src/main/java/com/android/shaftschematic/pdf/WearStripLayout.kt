@@ -42,23 +42,45 @@ data class WearLinerGroup(val liner: Liner, val spots: List<WearSpot>)
  * Sorted aft → fwd by the liner's physical start position, matching the proposal's
  * "order aft→fwd" rule (§10.4).
  *
+ * [stripComponentIds] is the document's per-job strip election
+ * ([WearRecord.stripComponentIds]): `null` (the default) means the default election —
+ * every drawable liner, exactly the historical sheet — and a non-null list is the
+ * machinist's authored set of **resolved component ids**. An empty list therefore yields no
+ * strips at all. Ids that name a taper or a body are accepted and simply produce no group
+ * here (those components have no strip yet); ids that resolve to nothing are skipped the
+ * same way — orphan handling at the render layer, never at decode.
+ *
  * Spots whose `linerId` doesn't match any liner in [liners] are silently dropped
  * here. The authoritative orphan-drop already happens at decode time
  * (`ShaftDocCodec`); this is a defensive second filter so a stale in-memory
  * [WearRecord] (e.g. liner deleted after load, before next save) can never crash
  * PDF layout.
  */
-fun collectWearLinerGroups(liners: List<Liner>, wearRecord: WearRecord): List<WearLinerGroup> {
+fun collectWearLinerGroups(
+    liners: List<Liner>,
+    wearRecord: WearRecord,
+    stripComponentIds: List<String>? = null,
+): List<WearLinerGroup> {
     if (liners.isEmpty()) return emptyList()
     val byLiner = wearRecord.spots.groupBy { it.linerId }
+    val elected = stripComponentIds?.toSet()
     return liners
         .filter { it.lengthMm > 0f && it.odMm > 0f }
+        .filter { elected == null || it.id in elected }
         .map { ln -> WearLinerGroup(ln, byLiner[ln.id].orEmpty()) }
         .sortedBy { it.liner.startFromAftMm }
 }
 
-/** Result of paginating strips: what fits on this page vs. what overflows. */
-data class WearStripSelection(val onPage: List<WearLinerGroup>, val overflow: List<WearLinerGroup>)
+/**
+ * The default strip election — every drawable liner, aft → fwd. `null`
+ * ([WearRecord.stripComponentIds] unset) renders exactly this set; the options sheet
+ * materializes it into an explicit list on the first component toggle, so a later liner add
+ * can't silently change an authored sheet.
+ */
+fun defaultWearStripComponentIds(liners: List<Liner>): List<String> =
+    liners.filter { it.lengthMm > 0f && it.odMm > 0f }
+        .sortedBy { it.startFromAftMm }
+        .map { it.id }
 
 /** Max detail strips per page (proposal §10.4: "auto ... max 3 strips/page with overflow page"). */
 const val WEAR_STRIP_MAX_PER_PAGE = 3
@@ -89,10 +111,11 @@ enum class WearPdfMode {
 }
 
 /**
- * Resolves the wear PDF's rendering mode from how many liners get a detail strip
- * ([collectWearLinerGroups]'s result size — that is EVERY drawable liner,
- * with or without recorded wear, so the mode is effectively a function of the shaft's liner
- * count). Pure rule so `WearPdfComposer` never has to re-derive the threshold inline:
+ * Resolves the wear PDF's rendering mode from how many detail strips the sheet carries
+ * ([collectWearStripWindows]'s result size — one per elected component, except that an elected
+ * taper joins its nearest elected liner in a combined window; under the default election that is
+ * EVERY drawable liner, with or without recorded wear). Pure rule so `WearPdfComposer` never has
+ * to re-derive the threshold inline:
  * `0` → [WearPdfMode.PROFILE_FORM], `1` → [WearPdfMode.COMBINED],
  * `[WEAR_STRIP_GRID_MIN_LINERS]` or more → [WearPdfMode.GRID].
  */
@@ -100,28 +123,6 @@ fun determineWearPdfMode(wearLinerGroupCount: Int): WearPdfMode = when {
     wearLinerGroupCount <= 0 -> WearPdfMode.PROFILE_FORM
     wearLinerGroupCount < WEAR_STRIP_GRID_MIN_LINERS -> WearPdfMode.COMBINED
     else -> WearPdfMode.GRID
-}
-
-/**
- * Splits [groups] into what fits on one page vs. overflow.
- *
- * NOTE on overflow handling: the current `composeWearPdf` signature draws into a
- * single caller-supplied `PdfDocument.Page` (see `WearRoute.kt` — it calls
- * `doc.startPage` once, passes that one `Page` in, then `doc.finishPage`). Growing
- * that into true multi-page output would require changing the function's
- * signature to accept the `PdfDocument` itself (or return a list of draw
- * callbacks) and updating every call site — out of scope for this pass per the
- * file-ownership split (`ui/` call sites are owned by a concurrent agent). Until
- * that lands, overflow beyond [WEAR_STRIP_MAX_PER_PAGE] is rendered as a single
- * text note line instead of a second page (see `drawWearOverflowNote` in
- * `WearPdfComposer.kt`).
- */
-fun selectWearStripsForPage(
-    groups: List<WearLinerGroup>,
-    maxPerPage: Int = WEAR_STRIP_MAX_PER_PAGE,
-): WearStripSelection {
-    if (groups.size <= maxPerPage) return WearStripSelection(groups, emptyList())
-    return WearStripSelection(groups.take(maxPerPage), groups.drop(maxPerPage))
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -343,11 +344,47 @@ data class WearStripHorizontalLayout(
 )
 
 /**
+ * ONE mm→pt scale for every detail strip on a wear sheet, so relative component lengths read
+ * true across the page: a 22" liner draws half the width of a 44" one (on-device report — each
+ * strip scaled to fill its own cell, which made a short liner look as long as its siblings).
+ *
+ * The scale is the largest that still fits every strip inside its own cell —
+ * `min(innerWidth_i / lengthMm_i)` — capped at [maxPtPerMm] so a page of only short components
+ * doesn't blow up. It is deliberately **NOT** floored to [WEAR_STRIP_MIN_PT_PER_MM]: flooring a
+ * shared scale would overflow the longest strip's cell. When one long component forces a small
+ * scale, everything shrinks together — proportion wins.
+ *
+ * [innerWidthsPt] is each strip's usable width (its cell minus both neighbor stubs); a list
+ * shorter than [lengthsMm] reuses its last entry (grid cells are equal-width by construction).
+ * An empty page returns [maxPtPerMm] — there is nothing to fit.
+ */
+fun sharedWearStripPtPerMm(
+    lengthsMm: List<Float>,
+    innerWidthsPt: List<Float>,
+    maxPtPerMm: Float = WEAR_STRIP_MAX_PT_PER_MM,
+): Float {
+    if (lengthsMm.isEmpty()) return maxPtPerMm
+    var scale = maxPtPerMm
+    lengthsMm.forEachIndexed { i, lenMm ->
+        val inner = (innerWidthsPt.getOrNull(i) ?: innerWidthsPt.lastOrNull() ?: 1f).coerceAtLeast(1f)
+        val len = lenMm.coerceAtLeast(1f)
+        val fit = inner / len
+        if (fit < scale) scale = fit
+    }
+    return scale
+}
+
+/**
  * Lays out one detail strip horizontally: a fixed-width neighbor stub on each
  * side, the liner itself scaled to fill the remaining width (capped so a very
  * short liner doesn't blow up the scale, floored so a very long one doesn't
  * vanish), and the whole group centered in `[stripLeftPt, stripRightPt]` when the
  * cap/floor leaves slack.
+ *
+ * [ptPerMmOverride] (the wear sheet's shared scale, [sharedWearStripPtPerMm]) replaces that
+ * per-strip fit: the liner draws `lengthMm × override` wide and the group centers in the cell,
+ * so a shorter component keeps its true proportion instead of filling the cell. `null` — the
+ * default, and what the undercut strips pass — keeps the per-strip fit exactly as it was.
  */
 fun computeWearStripHorizontalLayout(
     stripLeftPt: Float,
@@ -356,16 +393,365 @@ fun computeWearStripHorizontalLayout(
     stubWidthPt: Float = WEAR_STRIP_STUB_WIDTH_PT,
     minPtPerMm: Float = WEAR_STRIP_MIN_PT_PER_MM,
     maxPtPerMm: Float = WEAR_STRIP_MAX_PT_PER_MM,
+    ptPerMmOverride: Float? = null,
 ): WearStripHorizontalLayout {
     val innerWidth = (stripRightPt - stripLeftPt - 2f * stubWidthPt).coerceAtLeast(1f)
     val lenMm = linerLengthMm.coerceAtLeast(1f)
-    val ptPerMm = (innerWidth / lenMm).coerceIn(minPtPerMm, maxPtPerMm)
+    val ptPerMm = ptPerMmOverride?.takeIf { it > 0f }
+        ?: (innerWidth / lenMm).coerceIn(minPtPerMm, maxPtPerMm)
     val linerWidthPt = lenMm * ptPerMm
     val usedWidth = linerWidthPt + 2f * stubWidthPt
     val leftPad = (((stripRightPt - stripLeftPt) - usedWidth) / 2f).coerceAtLeast(0f)
     val linerLeftPt = stripLeftPt + leftPad + stubWidthPt
     val linerRightPt = linerLeftPt + linerWidthPt
     return WearStripHorizontalLayout(stubWidthPt, linerLeftPt, linerRightPt, ptPerMm)
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Strip windows — one strip may hold several components with the gaps between them
+// ──────────────────────────────────────────────────────────────────────────────
+//
+// A strip is a WINDOW onto the shaft: an ordered run of component spans and the gaps
+// between them, all drawn through ONE piecewise mm→pt mapping (the same one-mapping posture
+// as `geom/ProfileCompression.kt`). A window with a single component is exactly the historical
+// per-liner strip, so a liner-only sheet's geometry is unchanged.
+
+/** A gap up to this wide draws at the sheet's true scale; anything longer compresses. */
+const val WEAR_STRIP_TRUE_GAP_MAX_MM = 76.2f      // 3"
+
+/** Fixed drawn width of a compressed gap — the open run between the S-break pair. */
+const val WEAR_STRIP_BREAK_GAP_PT = 40f
+
+/** Which kind of component a strip segment holds; each draws its own silhouette. */
+enum class WearStripComponentKind { LINER, TAPER, BODY }
+
+/**
+ * One strip-eligible component flattened to what strip layout needs: its span, the diameters at
+ * its two edges (equal for a liner/body, the taper's start/end pair for a taper), and whether it
+ * is an auto (bare-shaft) body. Keyed by **resolved component id**, the same key wear pits and
+ * measured-Ø readings use.
+ *
+ * Deliberately a layout-local type rather than `ResolvedComponent`: this file stays pure
+ * (no `ui` import) so every rule below is directly unit-testable.
+ */
+data class WearStripComponent(
+    val id: String,
+    val kind: WearStripComponentKind,
+    val startMm: Float,
+    val endMm: Float,
+    val aftDiaMm: Float,
+    val fwdDiaMm: Float,
+    val auto: Boolean = false,
+) {
+    val lengthMm: Float get() = (endMm - startMm).coerceAtLeast(0f)
+    val maxDiaMm: Float get() = maxOf(aftDiaMm, fwdDiaMm)
+
+    /** Drawable at all — a degenerate span or diameter would only claim an empty cell. */
+    val drawable: Boolean get() = lengthMm > 0f && maxDiaMm > 0f
+
+    /**
+     * Diameter at a component-local position, interpolated linearly for a taper — the same
+     * local-radius math the detail overlay and `drawWearPitsOnProfile` use, so a pit or a
+     * measured-Ø leader lands on the sloped surface.
+     */
+    fun diaAtLocalMm(localMm: Float): Float {
+        if (lengthMm <= 0f) return aftDiaMm
+        val t = (localMm / lengthMm).coerceIn(0f, 1f)
+        return aftDiaMm + (fwdDiaMm - aftDiaMm) * t
+    }
+}
+
+/** One ordered piece of a [WearStripWindow] — a component span or the gap before the next one. */
+sealed class WearStripSegment {
+    abstract val startMm: Float
+    abstract val endMm: Float
+    val lengthMm: Float get() = (endMm - startMm).coerceAtLeast(0f)
+}
+
+/** A component's own span, drawn at the sheet's shared scale. */
+data class WearStripComponentSeg(val component: WearStripComponent) : WearStripSegment() {
+    override val startMm: Float get() = component.startMm
+    override val endMm: Float get() = component.endMm
+}
+
+/**
+ * The shaft between two components in the same window. [trueScale] gaps draw at the sheet scale
+ * with the connecting shaft outline; the rest compress to [WEAR_STRIP_BREAK_GAP_PT] and print the
+ * S-break pair instead. The mode is decided from **mm alone** ([wearStripGapDrawsTrue]) so the
+ * shared-scale solve stays non-circular.
+ */
+data class WearStripGapSeg(
+    override val startMm: Float,
+    override val endMm: Float,
+    val trueScale: Boolean,
+) : WearStripSegment()
+
+/** Whether a gap of [gapMm] draws at true scale rather than compressing to a break. */
+fun wearStripGapDrawsTrue(gapMm: Float): Boolean = gapMm <= WEAR_STRIP_TRUE_GAP_MAX_MM
+
+/**
+ * One detail strip's window onto the shaft: an ordered, contiguous run of component and gap
+ * segments. Everything in the strip draws through [xAt], the window's single piecewise mm→pt
+ * mapping — true-scale segments run at the sheet's shared scale and a compressed gap maps
+ * linearly across its fixed drawn width, so the mapping is monotone and exact at every segment
+ * boundary.
+ */
+data class WearStripWindow(val segments: List<WearStripSegment>) {
+    val startMm: Float get() = segments.firstOrNull()?.startMm ?: 0f
+    val endMm: Float get() = segments.lastOrNull()?.endMm ?: 0f
+
+    /** The window's components, AFT→FWD. */
+    val components: List<WearStripComponent>
+        get() = segments.filterIsInstance<WearStripComponentSeg>().map { it.component }
+
+    /** The window's liner, if it has one — it owns the title's anchor label and the wear rail. */
+    val liner: WearStripComponent? get() = components.firstOrNull { it.kind == WearStripComponentKind.LINER }
+
+    /** Largest diameter drawn in this window — the reference the strip's radii scale against. */
+    val refDiaMm: Float get() = components.maxOfOrNull { it.maxDiaMm } ?: 0f
+
+    /** One segment's drawn width: mm at [ptPerMm], except a compressed gap's fixed run. */
+    fun segmentWidthPt(seg: WearStripSegment, ptPerMm: Float): Float = when {
+        seg is WearStripGapSeg && !seg.trueScale -> WEAR_STRIP_BREAK_GAP_PT
+        else -> seg.lengthMm * ptPerMm
+    }
+
+    /** Total drawn width: component spans + true gaps at scale + each break gap's fixed run. */
+    fun drawnWidthPt(ptPerMm: Float): Float =
+        segments.fold(0f) { acc, seg -> acc + segmentWidthPt(seg, ptPerMm) }
+
+    /**
+     * The window's piecewise mm→pt mapping, with the window's AFT edge at [leftPt]. Positions
+     * outside the window extrapolate at [ptPerMm] (the neighbor stubs' own space), so callers
+     * never need a bounds check.
+     */
+    fun xAt(mm: Float, leftPt: Float, ptPerMm: Float): Float {
+        if (segments.isEmpty()) return leftPt
+        if (mm <= startMm) return leftPt + (mm - startMm) * ptPerMm
+        var x = leftPt
+        segments.forEach { seg ->
+            val w = segmentWidthPt(seg, ptPerMm)
+            if (mm <= seg.endMm) {
+                val len = seg.lengthMm
+                val f = if (len <= 0f) 0f else ((mm - seg.startMm) / len).coerceIn(0f, 1f)
+                return x + w * f
+            }
+            x += w
+        }
+        return x + (mm - endMm) * ptPerMm
+    }
+}
+
+/** Which side of a liner a taper attaches on — at most one taper joins from each. */
+private enum class TaperSide { AFT, FWD }
+
+/**
+ * Groups the elected components into strip windows, AFT→FWD.
+ *
+ * Each elected **taper** attaches to the NEAREST elected liner (smallest gap; ties go AFT, i.e.
+ * the more aftward liner wins), forming one combined window with that liner — the machinist reads
+ * a taper and the liner beside it as one area. At most one taper joins a liner from each side; a
+ * taper that loses the contest, a taper elected with no liners on the sheet, and every elected
+ * **body** get their own single-component window. Bodies never join a liner: they are the shaft's
+ * fluid base, so a body window is its own run.
+ *
+ * [stripComponentIds] is the job's election ([WearRecord.stripComponentIds]): `null` is the
+ * default election — every drawable liner, exactly the historical sheet, which yields one
+ * single-component window per liner. Ids that resolve to nothing are simply absent from
+ * [components] and skipped here — orphan handling at the render layer, never at decode.
+ */
+fun collectWearStripWindows(
+    components: List<WearStripComponent>,
+    stripComponentIds: List<String>? = null,
+): List<WearStripWindow> {
+    val elected = stripComponentIds?.toSet()
+    val selected = components
+        .filter { it.drawable }
+        .filter { c -> if (elected == null) c.kind == WearStripComponentKind.LINER else c.id in elected }
+        .sortedBy { it.startMm }
+    if (selected.isEmpty()) return emptyList()
+
+    val liners = selected.filter { it.kind == WearStripComponentKind.LINER }
+    val tapers = selected.filter { it.kind == WearStripComponentKind.TAPER }
+    val loners = selected.filter { it.kind == WearStripComponentKind.BODY }.toMutableList()
+
+    // Each taper's claim on its nearest liner. Ties go AFT: candidates sort by (gap, liner start),
+    // so an equidistant pair hands the taper to the more aftward liner.
+    data class Claim(val taper: WearStripComponent, val liner: WearStripComponent, val side: TaperSide, val gapMm: Float)
+    val claims = tapers.mapNotNull { t ->
+        liners
+            .map { ln ->
+                val side = if (t.startMm < ln.startMm) TaperSide.AFT else TaperSide.FWD
+                val gap = if (side == TaperSide.AFT) ln.startMm - t.endMm else t.startMm - ln.endMm
+                Claim(t, ln, side, gap.coerceAtLeast(0f))
+            }
+            .minWithOrNull(compareBy({ it.gapMm }, { it.liner.startMm }))
+    }
+    // At most one taper per liner side — the nearest wins (ties go AFT again, by taper start);
+    // the rest fall back to their own windows.
+    val winners = claims
+        .groupBy { it.liner.id to it.side }
+        .mapValues { (_, group) -> group.minWithOrNull(compareBy({ it.gapMm }, { it.taper.startMm }))!! }
+        .values
+    val wonTaperIds = winners.map { it.taper.id }.toSet()
+    loners += tapers.filter { it.id !in wonTaperIds }
+
+    val aftOf = winners.filter { it.side == TaperSide.AFT }.associateBy { it.liner.id }
+    val fwdOf = winners.filter { it.side == TaperSide.FWD }.associateBy { it.liner.id }
+
+    val windows = mutableListOf<WearStripWindow>()
+    liners.forEach { ln ->
+        val run = listOfNotNull(aftOf[ln.id]?.taper, ln, fwdOf[ln.id]?.taper).sortedBy { it.startMm }
+        windows += buildWearStripWindow(run)
+    }
+    loners.forEach { windows += buildWearStripWindow(listOf(it)) }
+    return windows.sortedBy { it.startMm }
+}
+
+/**
+ * One window over [run] (already AFT→FWD): each component's span, with a [WearStripGapSeg]
+ * between consecutive components whose mode follows [wearStripGapDrawsTrue]. Touching or
+ * overlapping components get no gap segment at all.
+ */
+private fun buildWearStripWindow(run: List<WearStripComponent>): WearStripWindow {
+    val segs = mutableListOf<WearStripSegment>()
+    run.forEachIndexed { i, comp ->
+        if (i > 0) {
+            val prevEnd = run[i - 1].endMm
+            val gapMm = comp.startMm - prevEnd
+            if (gapMm > 0f) segs += WearStripGapSeg(prevEnd, comp.startMm, wearStripGapDrawsTrue(gapMm))
+        }
+        segs += WearStripComponentSeg(comp)
+    }
+    return WearStripWindow(segs)
+}
+
+/** Result of paginating strip windows: what fits on this page vs. what overflows. */
+data class WearStripWindowSelection(val onPage: List<WearStripWindow>, val overflow: List<WearStripWindow>)
+
+/**
+ * Splits [windows] into what fits on one page vs. overflow.
+ *
+ * NOTE on overflow handling: `composeWearPdf` draws into a single caller-supplied
+ * `PdfDocument.Page` (see `WearRoute.kt` — one `doc.startPage`, one `doc.finishPage`), so
+ * overflow beyond [maxPerPage] is rendered as a single text note line instead of a second
+ * page (`drawWearOverflowNote` in `WearPdfComposer.kt`). True multi-page output would need
+ * the composer to accept the `PdfDocument` itself and every call site to change with it.
+ */
+fun selectWearStripWindowsForPage(
+    windows: List<WearStripWindow>,
+    maxPerPage: Int = WEAR_STRIP_MAX_PER_PAGE,
+): WearStripWindowSelection {
+    if (windows.size <= maxPerPage) return WearStripWindowSelection(windows, emptyList())
+    return WearStripWindowSelection(windows.take(maxPerPage), windows.drop(maxPerPage))
+}
+
+/**
+ * The shared mm→pt scale for a page of windows: [sharedWearStripPtPerMm] with each window's
+ * fixed break-gap runs taken off its cell first, since those points are spent no matter what the
+ * scale is. A window whose breaks alone fill its cell keeps 1 pt to solve against rather than
+ * driving the scale to zero.
+ */
+fun sharedWearStripWindowPtPerMm(
+    windows: List<WearStripWindow>,
+    innerWidthsPt: List<Float>,
+    maxPtPerMm: Float = WEAR_STRIP_MAX_PT_PER_MM,
+): Float {
+    if (windows.isEmpty()) return maxPtPerMm
+    val scaledLengths = windows.map { w ->
+        w.segments.sumOf { seg -> if (seg is WearStripGapSeg && !seg.trueScale) 0.0 else seg.lengthMm.toDouble() }
+            .toFloat()
+    }
+    val budgets = windows.mapIndexed { i, w ->
+        val inner = innerWidthsPt.getOrNull(i) ?: innerWidthsPt.lastOrNull() ?: 1f
+        val breaks = w.segments.count { it is WearStripGapSeg && !it.trueScale } * WEAR_STRIP_BREAK_GAP_PT
+        (inner - breaks).coerceAtLeast(1f)
+    }
+    return sharedWearStripPtPerMm(scaledLengths, budgets, maxPtPerMm)
+}
+
+/**
+ * Horizontal placement of one window in its cell: a fixed-width neighbor stub on each side and
+ * the window's drawn run centered in whatever slack is left — the multi-component form of
+ * [computeWearStripHorizontalLayout] with the shared scale, and geometrically identical to it for
+ * a single-component window.
+ */
+fun computeWearStripWindowLayout(
+    stripLeftPt: Float,
+    stripRightPt: Float,
+    drawnWidthPt: Float,
+    ptPerMm: Float,
+    stubWidthPt: Float = WEAR_STRIP_STUB_WIDTH_PT,
+): WearStripHorizontalLayout {
+    // Floor of one mm's worth of width, matching the legacy per-liner path's `lenMm >= 1`
+    // clamp, so a sub-millimetre component still has something to draw.
+    val widthPt = drawnWidthPt.coerceAtLeast(ptPerMm)
+    val usedWidth = widthPt + 2f * stubWidthPt
+    val leftPad = (((stripRightPt - stripLeftPt) - usedWidth) / 2f).coerceAtLeast(0f)
+    val leftPt = stripLeftPt + leftPad + stubWidthPt
+    return WearStripHorizontalLayout(stubWidthPt, leftPt, leftPt + widthPt, ptPerMm)
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Gap profile — the connecting shaft outline drawn across a true-scale gap
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** One vertex of the outer-surface polyline drawn across a strip's true-scale gap. */
+data class WearStripProfileVertex(val mm: Float, val diaMm: Float)
+
+/**
+ * Outer diameter of the drawn shaft at [mm] — the largest of whatever covers that station
+ * (bodies, tapers interpolated, threads, liners). `0` where nothing does. Callers must pass a
+ * spec whose bodies are already resolved (`ShaftSpec.withResolvedBodies`) so auto-fill spans
+ * count too.
+ */
+fun outerDiaMmAt(spec: ShaftSpec, mm: Float): Float {
+    var dia = 0f
+    spec.bodies.forEach {
+        if (mm >= it.startFromAftMm && mm <= it.startFromAftMm + it.lengthMm) dia = maxOf(dia, it.diaMm)
+    }
+    spec.tapers.forEach {
+        val len = it.lengthMm
+        if (len > 0f && mm >= it.startFromAftMm && mm <= it.startFromAftMm + len) {
+            val t = ((mm - it.startFromAftMm) / len).coerceIn(0f, 1f)
+            dia = maxOf(dia, it.startDiaMm + (it.endDiaMm - it.startDiaMm) * t)
+        }
+    }
+    spec.threads.forEach {
+        if (mm >= it.startFromAftMm && mm <= it.startFromAftMm + it.lengthMm) dia = maxOf(dia, it.majorDiaMm)
+    }
+    spec.liners.forEach {
+        if (mm >= it.startFromAftMm && mm <= it.startFromAftMm + it.lengthMm) dia = maxOf(dia, it.odMm)
+    }
+    return dia
+}
+
+/**
+ * The outer-surface polyline across `[fromMm, toMm]` for a strip's true-scale gap: [samples]
+ * evenly-spaced stations plus a pair either side of every component edge inside the run, so a
+ * step in diameter draws as a step rather than a long diagonal. Returns an empty list when
+ * nothing covers the run (a true void) — the caller then bridges its two neighbors directly.
+ */
+fun wearStripGapProfile(
+    spec: ShaftSpec,
+    fromMm: Float,
+    toMm: Float,
+    samples: Int = 24,
+): List<WearStripProfileVertex> {
+    if (toMm <= fromMm) return emptyList()
+    val eps = 0.01f
+    val stations = sortedSetOf(fromMm, toMm)
+    val n = samples.coerceIn(2, 256)
+    for (i in 1 until n) stations += fromMm + (toMm - fromMm) * i / n
+    fun edge(mm: Float) {
+        if (mm > fromMm + eps && mm < toMm - eps) { stations += mm - eps; stations += mm + eps }
+    }
+    spec.bodies.forEach { edge(it.startFromAftMm); edge(it.startFromAftMm + it.lengthMm) }
+    spec.tapers.forEach { edge(it.startFromAftMm); edge(it.startFromAftMm + it.lengthMm) }
+    spec.threads.forEach { edge(it.startFromAftMm); edge(it.startFromAftMm + it.lengthMm) }
+    spec.liners.forEach { edge(it.startFromAftMm); edge(it.startFromAftMm + it.lengthMm) }
+    val verts = stations.map { WearStripProfileVertex(it, outerDiaMmAt(spec, it)) }
+    return if (verts.all { it.diaMm <= 0f }) emptyList() else verts
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -379,7 +765,7 @@ const val WEAR_STRIP_ROW_HEIGHT_PT = 13f
  * liner cylinder. Without this gap, the cylinder would consume the strip's whole
  * remaining band right up against the title with no headroom at all — the measured-Ø
  * callout leaders departing the cylinder bottom (see
- * `WearPdfComposer.drawWearDetailStrip`) would then land only a few points above the
+ * `WearPdfComposer.drawWearStripWindow`) would then land only a few points above the
  * title text, reading as crowded/overlapping.
  */
 const val WEAR_STRIP_LABEL_HEADROOM_PT = 11f
@@ -448,7 +834,7 @@ data class WearStripInnerLayout(
  * strip, where the preferred cylinder + rail sizes don't fit together): the
  * cylinder shrinks first, and once it hits zero height, [railLabelRows] drops
  * toward zero (labels omitted, not drawn) rather than letting anything overflow
- * the strip. This is what keeps `WearPdfComposer.drawWearDetailStrip`'s Canvas
+ * the strip. This is what keeps `WearPdfComposer.drawWearStripWindow`'s Canvas
  * calls inside the content rect without needing per-call bounds checks there.
  *
  * [diaBandPt] reserves an extra band between the label headroom and the title for the

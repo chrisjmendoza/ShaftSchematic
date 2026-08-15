@@ -94,8 +94,9 @@ pruned at decode (same rule as pits/runout readings). `diaMm` is a typed measure
 stored **verbatim** (golden rule); `0` = placed-but-empty, drawn only in the overlay, never
 printed. Callouts are placed by the shared pure engine `geom/WearDiaCalloutLayout.kt`
 (order-preserving spread, two-row stagger, dogleg leaders) and must render **identically**
-in both draw sites: `ComponentWearDetailOverlay` (canvas) and `WearPdfComposer` (liner
-readings → that liner's detail strip; body/taper readings → under the main profile). Labels
+in both draw sites: `ComponentWearDetailOverlay` (canvas) and `WearPdfComposer` (a reading draws
+in its component's detail strip whenever that component has one on the sheet — liners always, a
+taper or body once elected onto a strip — and under the main profile otherwise). Labels
 use `formatDiaWithUnit`, no `Ø` prefix. On the **consolidated runout sheet** the same
 readings instead draw INSIDE the profile at their station — one rotated haloed column via
 `drawDiaReadingsInProfile` (`RunoutPdfComposer`), liners included, `Ø`-prefixed — replacing

@@ -54,7 +54,7 @@ fun determineUndercutPdfMode(stripCount: Int): WearPdfMode = determineWearPdfMod
 /**
  * Detail strips shown on one undercut page for [mode] — the grid's 2 × 2 cap, or the
  * single-column cap below that. Strips past this print as a "+N more" text note (the
- * single-page constraint documented on [selectWearStripsForPage]).
+ * single-page constraint documented on [selectWearStripWindowsForPage]).
  */
 fun undercutStripsPerPage(mode: WearPdfMode): Int =
     if (mode == WearPdfMode.GRID) WEAR_STRIP_GRID_MAX_PER_PAGE else WEAR_STRIP_MAX_PER_PAGE

@@ -89,6 +89,53 @@ class AutosaveSnapshotWearRecordTest {
     }
 
     @Test
+    fun `session snapshot round trip preserves the wear sheet's strip election`() {
+        val snapshot = AutosaveManager.SessionSnapshot(
+            shaftSpec = ShaftSpec(overallLengthMm = 400f),
+            unitSystem = UnitSystem.INCHES,
+            shaftPosition = ShaftPosition.PORT,
+            customer = "Acme Tug Co",
+            vessel = "Tidewater",
+            jobNumber = "J-934918",
+            notes = "",
+            runoutConfig = RunoutConfig(),
+            unitLocked = true,
+            overallIsManual = false,
+            wearRecord = WearRecord(
+                stripComponentIds = listOf("ln1", "auto_body_0.000_100.000"),
+                showShaftProfile = false,
+            ),
+        )
+
+        val raw = json.encodeToString(snapshot)
+        val restored = json.decodeFromString<AutosaveManager.SessionSnapshot>(raw)
+
+        assertEquals(listOf("ln1", "auto_body_0.000_100.000"), restored.wearRecord.stripComponentIds)
+        assertEquals(false, restored.wearRecord.showShaftProfile)
+    }
+
+    @Test
+    fun `an empty strip election survives the draft round trip as empty`() {
+        val snapshot = AutosaveManager.SessionSnapshot(
+            shaftSpec = ShaftSpec(overallLengthMm = 400f),
+            unitSystem = UnitSystem.INCHES,
+            shaftPosition = ShaftPosition.PORT,
+            customer = "",
+            vessel = "",
+            jobNumber = "",
+            notes = "",
+            runoutConfig = RunoutConfig(),
+            unitLocked = true,
+            overallIsManual = false,
+            wearRecord = WearRecord(stripComponentIds = emptyList()),
+        )
+
+        val restored = json.decodeFromString<AutosaveManager.SessionSnapshot>(json.encodeToString(snapshot))
+
+        assertEquals(emptyList<String>(), restored.wearRecord.stripComponentIds)
+    }
+
+    @Test
     fun `older draft json without wearRecord field decodes to empty record`() {
         // Simulates a draft written before this field existed.
         val raw = """
@@ -106,5 +153,8 @@ class AutosaveSnapshotWearRecordTest {
         val restored = json.decodeFromString<AutosaveManager.SessionSnapshot>(raw)
 
         assertTrue(restored.wearRecord.spots.isEmpty())
+        // Strip election unset = the default sheet: every drawable liner, profile drawn.
+        assertTrue(restored.wearRecord.stripComponentIds == null)
+        assertTrue(restored.wearRecord.showShaftProfile)
     }
 }

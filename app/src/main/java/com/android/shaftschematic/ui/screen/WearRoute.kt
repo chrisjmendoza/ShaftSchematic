@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,6 +69,9 @@ import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeWearPdf
+import com.android.shaftschematic.pdf.buildWearStripTitleById
+import com.android.shaftschematic.pdf.defaultWearStripComponentIds
+import com.android.shaftschematic.pdf.wearStripComponentsFor
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
@@ -143,6 +147,13 @@ fun WearRoute(
     // consumer on this tab — the slider, the detail overlay's canvas, and every composeWearPdf
     // call below — reads this same value, which is what keeps the two draw sites identical.
     val traceDepthFrac = effectiveWearTraceDepthFrac(wearRecord.traceDepthFrac, wearTraceDefault)
+
+    // Strip election rows for the PDF options sheet: the eligible components in AFT→FWD order and
+    // the default election (every drawable liner) the first toggle materializes.
+    val stripOptions = remember(spec, resolvedComponents) {
+        buildWearStripComponentOptions(spec, resolvedComponents)
+    }
+    val stripDefaultIds = remember(spec.liners) { defaultWearStripComponentIds(spec.liners) }
 
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
@@ -500,6 +511,10 @@ fun WearRoute(
                     traceDepthFrac = traceDepthFrac,
                     traceDepthDefault = wearTraceDefault,
                     wearBandShadeFrac = wearBandShadeFrac,
+                    wearStripOptions = stripOptions,
+                    wearStripSelection = wearRecord.stripComponentIds,
+                    wearStripDefaultIds = stripDefaultIds,
+                    wearShowShaftProfile = wearRecord.showShaftProfile,
                 )
             },
         )
@@ -526,6 +541,91 @@ fun WearRoute(
             onClose = { selectedComponentId = null },
             traceDepthFrac = traceDepthFrac,
         )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Strip election — which components print a broken-out detail strip
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One strip-eligible component as the options sheet lists it: resolved id + printed title. */
+internal data class WearStripComponentOption(val id: String, val label: String)
+
+/**
+ * Strip-eligible resolved components (liner, taper, body — explicit or auto) in AFT→FWD order,
+ * labelled by the SAME shared builders the printed strips use (`pdf/WearStripComponents.kt`),
+ * so a checkbox and the strip it elects always read the same name. Degenerate components are
+ * left out: they can't be drawn, so electing one would only claim an empty cell.
+ */
+internal fun buildWearStripComponentOptions(
+    spec: com.android.shaftschematic.model.ShaftSpec,
+    components: List<ResolvedComponent>,
+): List<WearStripComponentOption> {
+    val eligible = wearStripComponentsFor(spec, components).filter { it.drawable }
+    val titles = buildWearStripTitleById(spec, eligible)
+    return eligible.map { WearStripComponentOption(it.id, titles[it.id] ?: "Component") }
+}
+
+/**
+ * The wear sheet's "Components" section: the whole-shaft profile toggle plus one checkbox per
+ * strip-eligible component. [selection] is the job's authored election
+ * (`WearRecord.stripComponentIds`); `null` shows the default — every drawable liner ticked,
+ * everything else clear. The first component toggle materializes [defaultIds] and then applies
+ * the change, so a liner added later can never silently rewrite an authored sheet.
+ *
+ * Ids the current geometry no longer offers stay in the stored list untouched (they simply have
+ * no row here and are skipped when the sheet draws) — the render-layer orphan rule.
+ */
+@Composable
+internal fun WearStripComponentChecks(
+    options: List<WearStripComponentOption>,
+    selection: List<String>?,
+    defaultIds: List<String>,
+    showShaftProfile: Boolean,
+    onSetShowShaftProfile: (Boolean) -> Unit,
+    onSetSelection: (List<String>) -> Unit,
+) {
+    Column {
+        Text("Components", style = MaterialTheme.typography.titleSmall)
+        Text(
+            "What this sheet draws. Hiding the complete shaft gives its height to the " +
+                "detail strips.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(4.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = showShaftProfile,
+                onCheckedChange = onSetShowShaftProfile,
+                modifier = Modifier.testTag("wear_strip_complete_shaft"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("Complete shaft", style = MaterialTheme.typography.bodyLarge)
+        }
+
+        val elected = (selection ?: defaultIds).toSet()
+        options.forEach { opt ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = opt.id in elected,
+                    onCheckedChange = { checked ->
+                        val base = selection ?: defaultIds
+                        val next = if (checked) (base + opt.id).toSet() else (base - opt.id).toSet()
+                        // Store in sheet order (AFT→FWD), keeping any elected id this geometry
+                        // no longer offers rather than pruning it.
+                        val known = options.map { it.id }
+                        onSetSelection(
+                            known.filter { it in next } + base.filter { it in next && it !in known }
+                        )
+                    },
+                    modifier = Modifier.testTag("wear_strip_component_${opt.id}"),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(opt.label, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
     }
 }
 
