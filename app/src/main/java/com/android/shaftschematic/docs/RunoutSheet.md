@@ -1112,7 +1112,7 @@ don't affect the mode:
 |---|---|---|
 | 0 | `PROFILE_FORM` | Shaft profile only (still prints any recorded pits). |
 | 1 | `COMBINED` | Shaft profile + wear bands, with one full-width detail strip below. |
-| 2+ | `GRID` | Shaft profile on top + the detail strips in a **2-column grid** below — two side by side, the third on the next row, so the strips take ~2 rows and the profile keeps the top. Up to `WEAR_STRIP_GRID_MAX_PER_PAGE` = 4 shown; "+N more" overflow note beyond. |
+| 2+ | `GRID` | Shaft profile on top + the detail strips **packed into rows by their actual drawn width** below (`packWearStripWindows`) — the fewest rows that hold the election, as many strips per row as the page's width allows (up to `WEAR_STRIP_MAX_PER_ROW` = 3). Row BUDGET: **2 with the profile shown, 3 with it hidden** (`wearStripMaxRows`) — capacity, not a target. Whatever doesn't fit is a "+N more" overflow note. |
 
 **Blank draft (write-in) mode** (`blankValues = true`, 2026-07-27; header/OAL reworked
 2026-07-28): the same page — profile AND every liner's zoomed strip — renders as a hand-fill
@@ -1140,25 +1140,97 @@ This replaced the old strips-only mode (which dropped the profile at 3+ wear lin
 bodies/tapers can carry pits, keeping the shaft always visible matters more than giving the strips
 the whole page; compressing the strips two-up is what keeps the combined page from crowding.
 
-**`GRID` layout** — `computeWearStripGridLayout` (`pdf/WearStripLayout.kt`) reuses
-`computeWearVerticalLayout` with the **row** count (`ceil(strips / 2)`), so the profile still never
-shrinks below its minimum and the "nothing wasted / nothing overflows" guarantee carries over
-unchanged; each strip then takes its row's vertical band and one equal-width column slot across the
-content width (`WEAR_STRIP_COL_GAP_PT` gutter). A partial last row (e.g. the lone third strip) is
-**centered** at the same column width as a full row. Everything inside a strip — horizontal
-cylinder/stub layout, dimension rail, measured-Ø callouts, anchor-from-SET title, and now pit "X"s — is the
-same `drawWearDetailStrip` used by the single-column path; only the per-strip rectangle differs.
+**`GRID` layout — dynamic row packing** (2026-08-15, on-device request; `packWearStripWindows`,
+`pdf/WearStripLayout.kt`, pure/unit-tested). The fixed 2-column grid gave every strip half the page
+whatever it drew, so two short components hogged a row a third could have shared, and a FWD taper
+fell into the "+N more" note even on a sheet with the profile hidden. The packer instead fills each
+row by the windows' REAL drawn widths:
+
+The rule, in order: **fewest rows that fit, then the largest scale within them, then re-expand
+whitespace.**
+
+- **Row budget** — `wearStripMaxRows(showShaftProfile)`: **2 rows with the profile shown, 3 with it
+  hidden** (`WEAR_STRIP_MAX_ROWS_WITH_PROFILE` / `WEAR_STRIP_MAX_ROWS_NO_PROFILE`). The page holds
+  three bands of content either way; with the shaft on it, one of them IS the shaft, so hiding it
+  hands the strips that band as a third row. ONE rule — the composer never re-derives it inline.
+  It is a **capacity limit, not a target**: an election that fits in two rows takes two rows whether
+  or not the profile is drawn.
+- **Fewest rows first.** A row is the page's scarce VERTICAL resource — the row count divides the
+  band in `computeWearVerticalLayout`, so spending a row buys width for every strip and costs every
+  strip height. The row count is therefore taken at the **scale floor**, where every footprint is
+  smallest and the greedy packing reaches the fewest rows any scale can. (Maximizing the scale
+  subject only to `≤ maxRows` instead re-laid the most common sheet: two strips that printed 2-up
+  and tall became two stacked strips, twice as long and half as tall.)
+- **Rows are filled by width**, greedy first-fit over the windows **in order** (AFT→FWD is never
+  rearranged to fit more; first-fit is optimal in row count for a fixed order, which is what makes
+  the scale solve's monotonicity argument hold), capped at `WEAR_STRIP_MAX_PER_ROW` = 3 — past
+  three side by side a strip's rail values and title have no room left to read.
+- **Whitespace before drawn size.** A window's footprint is its drawn run plus a neighbor stub on
+  each side, and rows are separated by a gutter. The scale is solved at **tight** spacing
+  (`WEAR_STRIP_STUB_MIN_PT` 20 pt / `WEAR_STRIP_COL_GAP_MIN_PT` 16 pt — the most permissive test):
+  binary search the largest `ptPerMm` in `[WEAR_STRIP_MIN_PT_PER_MM, WEAR_STRIP_MAX_PT_PER_MM]` at
+  which the windows still pack into **exactly the row count chosen above** AND no row overruns the
+  content width. A page that fits at the cap shrinks not at all. Then, with the scale and row
+  assignment fixed, a second binary search re-expands the spacing toward full
+  (`WEAR_STRIP_STUB_WIDTH_PT` 34 / `WEAR_STRIP_COL_GAP_PT` 22) as far as the rows allow. So an
+  election spends its whitespace before any component draws smaller, and one that would have
+  overflowed instead fits by drawing smaller.
+- **Overflow** — when even the scale floor can't pack the election into the row budget, the longest
+  prefix that fits is settled there (the most permissive packing, so it is the longest prefix any
+  scale reaches) and the scale/whitespace passes then run on that prefix alone, so the surviving
+  strips draw as large as the page allows rather than staying pinned at the floor. The tail goes to
+  the "+N more" note.
+- **Row height is capped on the packed path whether or not the profile is drawn**
+  (`WEAR_STRIP_HEIGHT_MAX_PT`). Because the packer takes the fewest rows, a row is often the only
+  one on the page, and uncapped it would stretch to the whole band and print a short fat cylinder.
+  The height it gives back goes to the page BOTTOM: with no profile band above them the rows pin to
+  the top of the content band, so the spare white sits above the notes as ordinary bottom margin
+  rather than a hole under the header. With the profile shown nothing moves — its band absorbs the
+  slack as before and its shaft is slack-centered inside it. The single-column `COMBINED` path
+  keeps its own posture (the cap lifts when the profile is hidden, so the lone full-width strip
+  fills the page).
+- **Spacing is uniform page-wide** — one stub width and one gutter for the whole sheet; a page whose
+  strips had different stub widths would read as a mistake. The composer threads the packed stub
+  into `drawWearStripWindow(stubWidthPt = …)`, so every end style (S-break edge, thread hatch, flat
+  cap) measures off the packed value and can never overrun the cell it was sized for. The two
+  floors are set by the break glyph, not by taste: the S-break sits at the stub's outer end and
+  reaches ~0.17 × the stub radius back inward (so 20 pt still leaves a clear run of shaft to the
+  component's edge cap) and ~0.26 × outward across the cell edge — two neighbours both bulge, which
+  is what the 16 pt gutter floor has to host.
+- **The ONE shared scale invariant is unchanged.** The packer divides the page's WIDTH only; it
+  never gives a window its own scale, so relative component lengths still read true (a 22" liner
+  draws half the width of a 44" one). On a `GRID` page `WearStripPacking.ptPerMm` replaces the
+  `sharedWearStripWindowPtPerMm` solve; the `COMBINED` single full-width strip and the undercut
+  sheet still call that function.
+- **Cells** — each window's cell is exactly its own footprint wide, laid left to right a gutter
+  apart, with the whole row **centered** in the content width (the fixed grid's "a partial row is
+  centered" convention, now applied to every row). Leftover slack sits at the page margins, never
+  between strips. Vertically the packed ROW count feeds `computeWearVerticalLayout` — the same
+  split `computeWearStripGridLayout` makes internally — so the profile still never shrinks below its
+  minimum and the "nothing wasted / nothing overflows" guarantee carries over unchanged.
+- Degenerate inputs (no windows, non-positive content width, `maxRows ≤ 0`) return an empty packing
+  rather than throwing.
+
+**The undercut sheet keeps the fixed 2-column grid.** `computeWearStripGridLayout`,
+`WEAR_STRIP_GRID_COLUMNS`, `WEAR_STRIP_GRID_MAX_PER_PAGE` and `selectWearStripWindowsForPage` are
+unchanged in behavior and signature because `pdf/UndercutStripLayout.kt` /
+`UndercutPdfComposer.kt` still use them; the packer is purely additive and only the WEAR composer's
+`GRID` branch calls it.
+
+Everything inside a strip — horizontal cylinder/stub layout, dimension rail, measured-Ø callouts,
+anchor-from-SET title, pit "X"s — is the same `drawWearStripWindow` the single-column path uses;
+only the per-strip rectangle and the page's stub width differ.
 
 ---
 
-### Wear Detail Strips (Phase 4, 2026-07-18; 2-column grid 2026-07-21)
+### Wear Detail Strips (Phase 4, 2026-07-18; 2-column grid 2026-07-21; dynamic row packing 2026-08-15)
 
 `composeWearPdf` takes an optional `wearRecord: WearRecord = WearRecord()` param (see
 `docs/LinerWearAreas_Proposal.md` §6.2). Every existing call site is unaffected by the
 default. All strip geometry (liner spans, neighbor diameters for the break-out stubs)
 comes from `docSpec` — the spec after `withResolvedBodies(resolvedComponents)` — never
 raw `spec.bodies`, same contract as the rest of this document. This section describes the
-strip content itself, shared by the `COMBINED` (single full-width) and `GRID` (2-column)
+strip content itself, shared by the `COMBINED` (single full-width) and `GRID` (packed rows)
 layouts (see "Wear PDF Rendering Modes" above for how each positions the strips).
 
 **Selection & pagination** — `pdf/WearStripLayout.kt` (android-free, unit-tested directly,
@@ -1197,7 +1269,10 @@ layouts (see "Wear PDF Rendering Modes" above for how each positions the strips)
   shaft was built out after the election was authored (save-as, template, a late liner add) —
   the rows are rebuilt from the live shaft on every composition, so a late component always
   *appears*, it just arrives unticked.
-- `selectWearStripWindowsForPage` caps at `WEAR_STRIP_MAX_PER_PAGE` (3). Strips beyond that are
+- Pagination depends on the mode. A `GRID` page paginates off the **packer**: `placedCount` says
+  how many windows fit in the row budget, and the tail overflows (see "dynamic row packing" below).
+  The single-column paths still use `selectWearStripWindowsForPage`, which caps at
+  `WEAR_STRIP_MAX_PER_PAGE` (3). Strips beyond either limit are
   **not** put on a second PDF page — `composeWearPdf` only ever receives a single
   caller-supplied `PdfDocument.Page` (every call site does one `startPage` /
   `finishPage`), and growing that into true multi-page output would mean changing the
@@ -1321,7 +1396,10 @@ liner-only election groups and lays out bit-for-bit as `collectWearLinerGroups` 
   regardless.
 - **Shared scale** — `sharedWearStripWindowPtPerMm` takes each window's fixed break-gap points off
   its cell first (they are spent whatever the scale is), then solves `sharedWearStripPtPerMm` over
-  what's left. For liner-only pages it is identical to solving on the raw liner lengths.
+  what's left. For liner-only pages it is identical to solving on the raw liner lengths. A `GRID`
+  page takes its scale from `packWearStripWindows` instead (which solves it against the whole page
+  width, whitespace squeezed first); `COMBINED` and the undercut strips still call this function.
+  Either way there is exactly ONE mm→pt scale on the sheet.
 
 **Main profile** — liners with ≥1 wear spot get thin **vertical-line** bands
 (`drawWearBandsOnProfile` → `drawVerticalBand`) at their true axial position, clamped to the

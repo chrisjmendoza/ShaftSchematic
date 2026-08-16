@@ -99,19 +99,34 @@ class WearStripWindowSvgPreviewTest {
         val titles: List<String>,
     )
 
-    /** Faithful to drawWearStripWindow's silhouette geometry (rails/values omitted). */
+    /**
+     * Faithful to drawWearStripWindow's silhouette geometry (rails/values omitted).
+     *
+     * The cell rect and [stubWidthPt] default to the single-strip fixture; the packed-page preview
+     * passes one packed cell and the page's own squeezed stub instead, and hands in an [into]
+     * canvas so every strip lands on one sheet. With [into] set the returned `svg` is empty — the
+     * caller wraps the whole page itself.
+     */
     private fun windowSvg(
         spec: ShaftSpec,
         window: WearStripWindow,
         ptPerMm: Float,
         names: Map<String, String>,
         caption: String,
+        left: Float = cellLeft,
+        right: Float = cellRight,
+        top: Float = cellTop,
+        bottom: Float = cellBottom,
+        stubWidthPt: Float = WEAR_STRIP_STUB_WIDTH_PT,
+        into: Svg? = null,
     ): Drawn {
-        val svg = Svg()
-        val h = computeWearStripWindowLayout(cellLeft, cellRight, window.drawnWidthPt(ptPerMm), ptPerMm)
+        val svg = into ?: Svg()
+        val h = computeWearStripWindowLayout(
+            left, right, window.drawnWidthPt(ptPerMm), ptPerMm, stubWidthPt = stubWidthPt,
+        )
         fun xAt(mm: Float) = window.xAt(mm, h.linerLeftPt, ptPerMm)
 
-        val inner = computeWearStripInnerLayout(cellTop, cellBottom, titleHeightPt = 9f)
+        val inner = computeWearStripInnerLayout(top, bottom, titleHeightPt = 9f)
         val cy = (inner.cylTop + inner.cylBottom) / 2f
         val rCap = (inner.cylBottom - inner.cylTop) / 2f
         val refDia = window.refDiaMm
@@ -147,8 +162,8 @@ class WearStripWindowSvgPreviewTest {
             }
         }
 
-        svg.rect(cellLeft, cellTop, cellRight - cellLeft, cellBottom - cellTop, stroke = "#bbb", sw = 0.5f)
-        svg.text(cellLeft, cellTop + 8f, esc(caption), size = 7f, color = "#888")
+        svg.rect(left, top, right - left, bottom - top, stroke = "#bbb", sw = 0.5f)
+        svg.text(left, top + 8f, esc(caption), size = 7f, color = "#888")
 
         val gapBreakXs = mutableListOf<Float>()
 
@@ -270,10 +285,10 @@ class WearStripWindowSvgPreviewTest {
         // The historical lone anchored cluster keeps its start-aligned title; anything else
         // centres under its own cluster's drawn span so a name points at the metal it names.
         val loneAnchored = labels.size == 1 && labels[0].anchored
-        val baselineY = cellBottom - 2f
+        val baselineY = bottom - 2f
         labels.forEach { l ->
             if (loneAnchored) {
-                svg.text(cellLeft, baselineY, esc(l.text))
+                svg.text(left, baselineY, esc(l.text))
             } else {
                 val cx = (xAt(l.cluster.startMm) + xAt(l.cluster.endMm)) / 2f
                 svg.text(cx, baselineY, esc(l.text), anchor = "middle")
@@ -281,7 +296,7 @@ class WearStripWindowSvgPreviewTest {
         }
 
         return Drawn(
-            svg = svg.wrap(cellRight - cellLeft + 20f, cellBottom - cellTop + 10f),
+            svg = if (into != null) "" else svg.wrap(right - left + 20f, bottom - top + 10f),
             minX = minX, maxX = maxX,
             leftPt = h.linerLeftPt, rightPt = h.linerRightPt, stubWidthPt = h.stubWidthPt,
             gapBreakXs = gapBreakXs, titles = labels.map { it.text },
@@ -550,6 +565,111 @@ class WearStripWindowSvgPreviewTest {
         val file = File(outDir, "g-smooth-worn-trace.svg")
         file.writeText(svg.wrap(cellRight - cellLeft + 20f, cellBottom - cellTop + 10f))
         assertTrue(file.exists())
+    }
+
+    @Test
+    fun `render the packed-page preview SVGs`() {
+        // Whole-page previews of the dynamic row packing: the FEWEST rows that hold the election,
+        // then the largest scale within them, then whitespace (stubs + gutters) re-expanded as far
+        // as the rows allow. The row BUDGET follows the profile toggle — two rows with the shaft on
+        // the page, three without — so the freed band is capacity, spent only when two rows can't
+        // hold everything. Same page geometry the wear sheet uses (landscape US Letter).
+        val outDir = File("build/reports/wear-strip-preview").apply { mkdirs() }
+        val pageLeft = 36f
+        val pageRight = 756f
+        val bandTop = 84f
+        val bandBottom = 500f
+
+        // Seven liners on one shaft — an election two rows cannot hold, so the profile toggle
+        // decides whether the seventh prints or goes to the "+N more" note. Under the fixed
+        // 2-column grid only four ever printed.
+        val packSpec = ShaftSpec(
+            overallLengthMm = 4200f,
+            bodies = listOf(Body(id = "bp", startFromAftMm = 0f, lengthMm = 4200f, diaMm = 150f)),
+            liners = listOf(
+                Liner(id = "l1", startFromAftMm = 100f, lengthMm = 150f, odMm = 160f),
+                Liner(id = "l2", startFromAftMm = 600f, lengthMm = 200f, odMm = 160f),
+                Liner(id = "l3", startFromAftMm = 1100f, lengthMm = 150f, odMm = 160f),
+                Liner(id = "l4", startFromAftMm = 1700f, lengthMm = 250f, odMm = 160f),
+                Liner(id = "l5", startFromAftMm = 2400f, lengthMm = 180f, odMm = 160f),
+                Liner(id = "l6", startFromAftMm = 3000f, lengthMm = 160f, odMm = 160f),
+                Liner(id = "l7", startFromAftMm = 3600f, lengthMm = 220f, odMm = 160f),
+            ),
+        )
+        val packWindows = collectWearStripWindows(wearStripComponentsFor(packSpec, null), null)
+        assertEquals(7, packWindows.size)
+        val packNames = packSpec.liners.mapIndexed { i, ln -> ln.id to "Liner ${i + 1}" }.toMap()
+
+        /** One packed sheet, drawn exactly as `composeWearPdf`'s GRID branch lays it out. */
+        fun page(showProfile: Boolean, file: String): WearStripPacking {
+            val packing = packWearStripWindows(
+                packWindows, pageLeft, pageRight, maxRows = wearStripMaxRows(showProfile),
+            )
+            val v = computeWearVerticalLayout(
+                bandTop, bandBottom, packing.rowCount,
+                minProfileHeightPt = if (showProfile) WEAR_MIN_PROFILE_HEIGHT_PT else 0f,
+                profileToStripsGapPt = if (showProfile) WEAR_STRIP_TOP_GAP_PT else 0f,
+                preferredProfileHeightPt = if (showProfile) 190f else 0f,
+                maxStripHeightPt = if (showProfile) 170f else Float.MAX_VALUE,
+            )
+            val svg = Svg()
+            svg.rect(pageLeft, bandTop, pageRight - pageLeft, bandBottom - bandTop, stroke = "#ddd", sw = 0.5f)
+            if (showProfile) {
+                svg.rect(pageLeft, v.profileTop, pageRight - pageLeft, v.profileBottom - v.profileTop,
+                    stroke = "#ccc", sw = 0.5f)
+                svg.text(pageLeft + 4f, v.profileTop + 12f, esc("[ shaft profile band ]"), size = 8f, color = "#aaa")
+            }
+            svg.text(
+                pageLeft, bandTop - 4f,
+                esc(
+                    (if (showProfile) "profile shown — " else "profile hidden — ") +
+                        "${packing.rowCount} row(s), ${packing.placedCount}/${packWindows.size} strips, " +
+                        "scale ${"%.3f".format(packing.ptPerMm)} pt/mm, " +
+                        "stub ${"%.1f".format(packing.spacing.stubWidthPt)} pt, " +
+                        "gutter ${"%.1f".format(packing.spacing.colGapPt)} pt",
+                ),
+                size = 8f, color = "#666",
+            )
+            packing.cells.forEach { cell ->
+                val w = packWindows[cell.windowIndex]
+                val drawn = windowSvg(
+                    packSpec, w, packing.ptPerMm, packNames, "",
+                    left = cell.left, right = cell.right,
+                    top = v.stripTops[cell.row], bottom = v.stripBottoms[cell.row],
+                    stubWidthPt = packing.spacing.stubWidthPt, into = svg,
+                )
+                assertTrue(
+                    "strip ${cell.windowIndex} escaped its packed cell",
+                    drawn.minX >= cell.left - 1e-3f && drawn.maxX <= cell.right + 1e-3f,
+                )
+                assertEquals("the page's one stub width", packing.spacing.stubWidthPt, drawn.stubWidthPt, 1e-4f)
+            }
+            File(outDir, file).writeText(svg.wrap(pageRight + 20f, bandBottom + 10f))
+            return packing
+        }
+
+        val shown = page(showProfile = true, file = "h1-packed-page-profile-shown.svg")
+        assertEquals("the shaft keeps one of the page's three bands", 2, shown.rowCount)
+        assertEquals("two rows hold six of the seven strips", 6, shown.placedCount)
+        // Whitespace reclaimed: a row carries THREE short components, which the fixed 2-column
+        // grid could never do (its cells were half the page whatever the strips drew).
+        assertEquals(3, shown.cells.count { it.row == 0 })
+        assertTrue(
+            "stubs squeezed toward their floor to seat three in a row",
+            shown.spacing.stubWidthPt < WEAR_STRIP_STUB_WIDTH_PT &&
+                shown.spacing.stubWidthPt >= WEAR_STRIP_STUB_MIN_PT - 1e-4f,
+        )
+
+        val hidden = page(showProfile = false, file = "h2-packed-page-profile-hidden.svg")
+        assertEquals("the freed profile band becomes the third row this election needs", 3, hidden.rowCount)
+        assertEquals("…so the whole election prints", 7, hidden.placedCount)
+        // Fewer strips per row, so the whole page draws bigger on its ONE shared scale.
+        assertTrue(
+            "the third row buys drawn size (${hidden.ptPerMm} vs ${shown.ptPerMm})",
+            hidden.ptPerMm > shown.ptPerMm,
+        )
+        assertTrue(File(outDir, "h1-packed-page-profile-shown.svg").exists())
+        assertTrue(File(outDir, "h2-packed-page-profile-hidden.svg").exists())
     }
 
     @Test

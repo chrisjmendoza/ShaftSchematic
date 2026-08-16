@@ -90,10 +90,12 @@ import kotlin.math.roundToInt
  *                  recorded pits).
  *                - **1 strip** ([WearPdfMode.COMBINED]) — profile + one full-width detail
  *                  strip below.
- *                - **2+ strips** ([WearPdfMode.GRID]) — profile + a 2-column grid of detail
- *                  strips (two side by side, third on the next row), so the strips take ~2 rows and
- *                  the profile always keeps the top of the page. Up to
- *                  [WEAR_STRIP_GRID_MAX_PER_PAGE] shown; the single-column path caps at
+ *                - **2+ strips** ([WearPdfMode.GRID]) — profile + detail strips packed into rows
+ *                  by their ACTUAL drawn width ([packWearStripWindows]): whitespace shrinks to its
+ *                  floor before the shared scale does, so a row carries as many strips as its
+ *                  width allows (up to [WEAR_STRIP_MAX_PER_ROW]). The row budget is
+ *                  [wearStripMaxRows] — two with the profile on the page, three without, since
+ *                  hiding the shaft frees a whole band. The single-column path caps at
  *                  [WEAR_STRIP_MAX_PER_PAGE]. Any remainder is a "+N more" text note (see
  *                  `selectWearStripWindowsForPage`'s KDoc for the single-page constraint).
  *                Defaults to empty so every existing call site is unaffected.
@@ -204,8 +206,8 @@ fun composeWearPdf(
     // ── Wear strip selection (pure — pdf/WearStripLayout.kt) ──────────────────
     // The job's elected components, defaulting to EVERY drawable liner, aft→fwd, with or without
     // recorded wear (normal shop procedure; also what makes the blank write-in template render
-    // all zoomed strips). GRID mode (2+ strips) shows up to 4 in a 2-column grid; the
-    // single-column path (0-1 strips) uses the smaller cap.
+    // all zoomed strips). GRID mode (2+ strips) packs them into width-filled rows; the
+    // single-column path (0-1 strips) uses the fixed cap.
     //
     // The election and the profile toggle read `wearRecord`, not `effectiveRecord`: a blank
     // write-in draft blanks the VALUES, never the sheet's shape — the machinist writes into the
@@ -223,8 +225,17 @@ fun composeWearPdf(
     // are exactly the liners the windows hold.
     val wearGroups = collectWearLinerGroups(docSpec.liners, effectiveRecord, wearRecord.stripComponentIds)
     val wearMode   = determineWearPdfMode(windows.size)
-    val maxPerPage = if (wearMode == WearPdfMode.GRID) WEAR_STRIP_GRID_MAX_PER_PAGE else WEAR_STRIP_MAX_PER_PAGE
-    val stripSelection = selectWearStripWindowsForPage(windows, maxPerPage)
+    // GRID pages pack by ACTUAL drawn width (packWearStripWindows): rows are filled to the page's
+    // width, whitespace is squeezed to its floor before the shared scale gives way, and the row
+    // budget follows the profile toggle — two rows with the shaft on the page, three without,
+    // since hiding it frees a whole band. The packing therefore decides what fits, so it runs
+    // BEFORE the overflow note reserves its height. The single-column paths keep their fixed cap.
+    val packing = if (wearMode == WearPdfMode.GRID) packWearStripWindows(
+        windows, contentLeft, contentRight, maxRows = wearStripMaxRows(showProfile),
+    ) else null
+    val stripSelection = if (packing != null)
+        WearStripWindowSelection(windows.take(packing.placedCount), windows.drop(packing.placedCount))
+    else selectWearStripWindowsForPage(windows, WEAR_STRIP_MAX_PER_PAGE)
     val onPage         = stripSelection.onPage
     val onPageLinerIds = onPage.mapNotNull { it.liner?.id }.toSet()
     val onPageComponentIds = onPage.flatMap { w -> w.components.map { it.id } }.toSet()
@@ -283,20 +294,37 @@ fun composeWearPdf(
         blankValues -> WEAR_STRIP_TOP_GAP_BLANK_PT
         else -> WEAR_STRIP_TOP_GAP_PT
     }
-    // With no profile band there is nothing for a capped strip's leftover height to flow back
-    // to, so the cap lifts and the strips fill the page instead of stranding white at the top.
+    // Single-column path only: with no profile band there is nothing for a capped strip's leftover
+    // height to flow back to, so the cap lifts and the lone COMBINED strip fills the page instead
+    // of stranding white at the top.
     val maxStripHeightPt = if (showProfile) WEAR_STRIP_HEIGHT_MAX_PT else Float.MAX_VALUE
-    if (wearMode == WearPdfMode.GRID) {
-        val grid = computeWearStripGridLayout(
-            midTopFull, midBotFull, contentLeft, contentRight, onPage.size,
+    if (packing != null) {
+        // The packer owns the horizontal split (one cell per window, rows centered); the vertical
+        // band is the same count-driven split the fixed grid makes internally, fed the PACKED row
+        // count instead of ceil(strips / 2).
+        //
+        // The per-row height cap holds whether or not the profile is drawn. The packer takes the
+        // FEWEST rows that hold the election, so a row is often the only one on the page; uncapped
+        // it would stretch to the whole band and print a short fat cylinder. The reclaimed height
+        // goes to the page BOTTOM: with no profile band above them the rows pin to the top of the
+        // content band, so the spare white sits above the notes as ordinary bottom margin rather
+        // than as a hole under the header. With the profile shown nothing moves — its band absorbs
+        // the slack exactly as before, and its shaft is slack-centered inside it.
+        val v = computeWearVerticalLayout(
+            midTopFull, midBotFull, packing.rowCount,
             reservedBottomPt = overflowNoteH, minProfileHeightPt = minProfileHeightPt,
             profileToStripsGapPt = profileToStripsGap,
             preferredProfileHeightPt = preferredProfileHeightPt,
-            maxStripHeightPt = maxStripHeightPt,
+            maxStripHeightPt = WEAR_STRIP_HEIGHT_MAX_PT,
         )
-        profileTop = grid.profileTop; profileBottom = grid.profileBottom
-        stripCells = grid.cells
-        overflowBandTop = grid.cells.lastOrNull()?.bottom ?: profileBottom
+        val lift = if (showProfile) 0f else (v.stripTops.firstOrNull() ?: midTopFull) - midTopFull
+        profileTop = v.profileTop; profileBottom = v.profileBottom - lift
+        stripCells = packing.cells.map { cell ->
+            WearStripCell(
+                v.stripTops[cell.row] - lift, v.stripBottoms[cell.row] - lift, cell.left, cell.right,
+            )
+        }
+        overflowBandTop = (v.stripBottoms.lastOrNull() ?: v.profileBottom) - lift
     } else {
         val v = computeWearVerticalLayout(
             midTopFull, midBotFull, onPage.size,
@@ -382,9 +410,11 @@ fun composeWearPdf(
     )
     // ONE mm→pt scale across every strip on the page, so relative component lengths read true —
     // a 22" liner draws half the width of a 44" one instead of both filling their own cells.
-    // A window's compressed gaps spend a fixed number of points whatever the scale, so they come
-    // off the cell before the scale is solved.
-    val stripPtPerMm = sharedWearStripWindowPtPerMm(
+    // A packed page's scale comes out of the packer, which solved it against the whole page width;
+    // the single-column paths fit each window to its own full-width cell (a window's compressed
+    // gaps spend a fixed number of points whatever the scale, so they come off the cell first).
+    val stripStubWidthPt = packing?.spacing?.stubWidthPt ?: WEAR_STRIP_STUB_WIDTH_PT
+    val stripPtPerMm = packing?.ptPerMm ?: sharedWearStripWindowPtPerMm(
         windows = onPage,
         innerWidthsPt = stripCells.map { it.right - it.left - 2f * WEAR_STRIP_STUB_WIDTH_PT },
     )
@@ -396,6 +426,7 @@ fun composeWearPdf(
             c, docSpec, window, cell.top, cell.bottom, cell.left, cell.right,
             unit, setPositions, text, outline, dim,
             stripPtPerMm = stripPtPerMm,
+            stubWidthPt = stripStubWidthPt,
             titles = stripTitles,
             spots = window.liner?.let { spotsByLinerId[it.id] }.orEmpty(),
             pits = effectiveRecord.pits.filter { it.componentId in ids },
@@ -922,8 +953,11 @@ private fun drawDiaCallouts(c: Canvas, placed: List<PlacedDiaCallout>, dim: Pain
  * since its location needs no measurement.
  *
  * [spots], [pits], and [diaReadings] must already be filtered to this window's components; the
- * shared strip scale [stripPtPerMm] comes from `sharedWearStripWindowPtPerMm`, so relative
- * lengths read true across the whole page.
+ * shared strip scale [stripPtPerMm] comes from the page's packer (or
+ * `sharedWearStripWindowPtPerMm` on the single-column paths), so relative lengths read true across
+ * the whole page. [stubWidthPt] is the page's uniform neighbor-stub width — every end style here
+ * measures off it through `hLayout.stubWidthPt`, so a packed page's squeezed stub can never
+ * overrun the cell it was sized for.
  */
 private fun drawWearStripWindow(
     c: Canvas,
@@ -939,6 +973,7 @@ private fun drawWearStripWindow(
     outline: Paint,
     dim: Paint,
     stripPtPerMm: Float,
+    stubWidthPt: Float = WEAR_STRIP_STUB_WIDTH_PT,
     titles: Map<String, String>,
     spots: List<WearSpot> = emptyList(),
     pits: List<WearPit> = emptyList(),
@@ -955,6 +990,7 @@ private fun drawWearStripWindow(
 
     val hLayout = computeWearStripWindowLayout(
         contentLeft, contentRight, window.drawnWidthPt(stripPtPerMm), stripPtPerMm,
+        stubWidthPt = stubWidthPt,
     )
     fun xAtStrip(mm: Float): Float = window.xAt(mm, hLayout.linerLeftPt, stripPtPerMm)
 

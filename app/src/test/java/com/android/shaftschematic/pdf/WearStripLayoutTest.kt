@@ -1010,4 +1010,251 @@ class WearStripLayoutTest {
         assertNull(linerAnchorForPdf(aft, liner("ghost", 0f, 10f)))
     }
 
+    // ── packWearStripWindows — rows filled by ACTUAL drawn width, whitespace first ─
+
+    /** Landscape US Letter content width, the real page the wear sheet packs into. */
+    private val packLeft = 36f
+    private val packRight = 756f
+    private val packWidth = packRight - packLeft
+
+    private val fullSpacing = WearStripSpacing(WEAR_STRIP_STUB_WIDTH_PT, WEAR_STRIP_COL_GAP_PT)
+    private val tightSpacing = WearStripSpacing(WEAR_STRIP_STUB_MIN_PT, WEAR_STRIP_COL_GAP_MIN_PT)
+
+    private fun packWindows(count: Int, lengthMm: Float): List<WearStripWindow> =
+        (0 until count).map { linerWindow("p$it", it * 2000f, lengthMm) }
+
+    private fun rowsOf(p: WearStripPacking): List<List<Int>> =
+        p.cells.groupBy { it.row }.toSortedMap().values.map { row -> row.map { it.windowIndex } }
+
+    /** Every packed cell must sit inside the content span, in order, without overlapping. */
+    private fun assertCellsWellFormed(p: WearStripPacking) {
+        assertEquals(
+            "cells must map to windows 0..placedCount-1 in AFT→FWD order",
+            (0 until p.placedCount).toList(),
+            p.cells.map { it.windowIndex },
+        )
+        p.cells.forEach { c ->
+            assertTrue("cell inside the content span", c.left >= packLeft - 1e-3f && c.right <= packRight + 1e-3f)
+            assertTrue("cell has positive width", c.right > c.left)
+        }
+        rowsOf(p).indices.forEach { r ->
+            val row = p.cells.filter { it.row == r }
+            row.zipWithNext { a, b ->
+                assertTrue("cells in a row must not overlap", b.left >= a.right - 1e-3f)
+            }
+            // Rows are centered: the slack at each margin is equal.
+            val leadPad = row.first().left - packLeft
+            val trailPad = packRight - row.last().right
+            assertEquals("row $r is centered", leadPad, trailPad, 1e-2f)
+        }
+    }
+
+    @Test
+    fun `wearStripMaxRows gives the strips the profile band's row when it is hidden`() {
+        assertEquals(2, wearStripMaxRows(showShaftProfile = true))
+        assertEquals(3, wearStripMaxRows(showShaftProfile = false))
+        assertEquals(WEAR_STRIP_MAX_ROWS_WITH_PROFILE, wearStripMaxRows(true))
+        assertEquals(WEAR_STRIP_MAX_ROWS_NO_PROFILE, wearStripMaxRows(false))
+    }
+
+    /**
+     * Largest scale for the row count the packer chose: either it is already at the cap, or a
+     * nudge upward would need another row (or overrun the page).
+     */
+    private fun assertScaleMaximalForItsRows(p: WearStripPacking, windows: List<WearStripWindow>) {
+        if (p.ptPerMm >= WEAR_STRIP_MAX_PT_PER_MM - 1e-4f) return
+        val bumped = packWearStripWindows(
+            windows, packLeft, packRight, maxRows = p.rowCount, minPtPerMm = p.ptPerMm * 1.02f,
+        )
+        assertTrue(
+            "a 2% larger scale must cost a row or overrun the page",
+            bumped.rowCount > p.rowCount || bumped.placedCount < p.placedCount ||
+                bumped.cells.any { it.right > packRight + 1e-3f },
+        )
+    }
+
+    @Test
+    fun `long windows fill a row by width, so a fourth is pushed to the next row`() {
+        // Four long components: two fill the page's width between them, so the rows come out 2 + 2
+        // — a row's capacity is its WIDTH, not a fixed column count.
+        val windows = packWindows(4, 900f)
+        val p = packWearStripWindows(windows, packLeft, packRight, maxRows = 2)
+        assertEquals(4, p.placedCount)
+        assertEquals(listOf(listOf(0, 1), listOf(2, 3)), rowsOf(p))
+        assertCellsWellFormed(p)
+        assertScaleMaximalForItsRows(p, windows)
+    }
+
+    @Test
+    fun `two windows that fit side by side stay on ONE row`() {
+        // The regression this pins: maximizing the scale subject only to the row BUDGET stacked a
+        // two-strip sheet — each strip twice as long and, once the band was split in two, half as
+        // tall. A row is the scarce vertical resource, so the packer spends the fewest it can.
+        val windows = packWindows(2, 150f)
+        listOf(2, 3).forEach { budget ->
+            val p = packWearStripWindows(windows, packLeft, packRight, maxRows = budget)
+            assertEquals("row budget $budget", 1, p.rowCount)
+            assertEquals(2, p.placedCount)
+            assertEquals(listOf(listOf(0, 1)), rowsOf(p))
+            assertCellsWellFormed(p)
+        }
+    }
+
+    @Test
+    fun `the row count never exceeds what capacity requires`() {
+        // Five short components fit in two rows, so they take two rows whether or not the profile
+        // is on the page — the third row is capacity, never a licence to spread out.
+        val windows = packWindows(5, 200f)
+        val shown = packWearStripWindows(windows, packLeft, packRight, wearStripMaxRows(true))
+        val hidden = packWearStripWindows(windows, packLeft, packRight, wearStripMaxRows(false))
+        assertEquals(2, shown.rowCount)
+        assertEquals("the freed band is not spent when two rows already hold the election",
+            shown.rowCount, hidden.rowCount)
+        assertEquals(shown.ptPerMm, hidden.ptPerMm, 1e-6f)
+        assertEquals(rowsOf(shown), rowsOf(hidden))
+        assertEquals(5, hidden.placedCount)
+        assertScaleMaximalForItsRows(shown, windows)
+    }
+
+    @Test
+    fun `the freed profile band is spent only when two rows cannot hold the election`() {
+        // Seven components need three rows even at the scale floor: with the shaft on the page the
+        // tail overflows to the "+N more" note, and hiding it prints the whole election.
+        val windows = packWindows(7, 200f)
+        val shown = packWearStripWindows(windows, packLeft, packRight, wearStripMaxRows(true))
+        val hidden = packWearStripWindows(windows, packLeft, packRight, wearStripMaxRows(false))
+        assertEquals(2, shown.rowCount)
+        assertEquals(6, shown.placedCount)
+        assertEquals("the overflowing tail keeps its order", listOf(0, 1, 2, 3, 4, 5),
+            shown.cells.map { it.windowIndex })
+        assertEquals(3, hidden.rowCount)
+        assertEquals(7, hidden.placedCount)
+        assertCellsWellFormed(shown)
+        assertCellsWellFormed(hidden)
+        // An overflowing page still draws its survivors as large as they fit, not pinned at the
+        // scale floor.
+        assertTrue("survivors must not be stuck at the floor", shown.ptPerMm > WEAR_STRIP_MIN_PT_PER_MM)
+    }
+
+    @Test
+    fun `three short windows share one row - the whitespace a fixed 2-column grid wasted`() {
+        // The on-device case: two short strips each hogged half the page, so a third could never
+        // join them. Four short windows now pack 3 + 1 instead of 2 + 2.
+        val p = packWearStripWindows(packWindows(4, 60f), packLeft, packRight, maxRows = 2)
+        assertEquals(4, p.placedCount)
+        assertEquals(listOf(listOf(0, 1, 2), listOf(3)), rowsOf(p))
+        assertEquals("a row never holds more than the cap", WEAR_STRIP_MAX_PER_ROW, rowsOf(p)[0].size)
+        assertCellsWellFormed(p)
+    }
+
+    @Test
+    fun `whitespace is spent before the scale - a page that only fits tightened keeps full scale`() {
+        // Three 40 mm components at the cap draw 120 pt each: 3 × (120 + 2 × stub) + 2 × gutter is
+        // 608 pt at full spacing and 500 pt at tight, so a 550 pt page fits only once the stubs and
+        // gutters give. The scale must not move.
+        val windows = packWindows(3, 40f)
+        val narrowRight = packLeft + 550f
+        val p = packWearStripWindows(windows, packLeft, narrowRight, maxRows = 1)
+        assertEquals(3, p.placedCount)
+        assertEquals(1, p.rowCount)
+        assertEquals("scale untouched — whitespace paid for it", WEAR_STRIP_MAX_PT_PER_MM, p.ptPerMm, 1e-4f)
+        assertTrue("stub squeezed below full", p.spacing.stubWidthPt < fullSpacing.stubWidthPt)
+        assertTrue("…but never past its floor", p.spacing.stubWidthPt >= tightSpacing.stubWidthPt - 1e-4f)
+        assertTrue(p.spacing.colGapPt <= fullSpacing.colGapPt + 1e-4f)
+        assertTrue(p.spacing.colGapPt >= tightSpacing.colGapPt - 1e-4f)
+    }
+
+    @Test
+    fun `nothing is squeezed when the page has room to spare`() {
+        val p = packWearStripWindows(packWindows(2, 8f), packLeft, packRight, maxRows = 2)
+        assertEquals(WEAR_STRIP_MAX_PT_PER_MM, p.ptPerMm, 1e-4f)
+        assertEquals("full stub", fullSpacing.stubWidthPt, p.spacing.stubWidthPt, 1e-4f)
+        assertEquals("full gutter", fullSpacing.colGapPt, p.spacing.colGapPt, 1e-4f)
+        assertCellsWellFormed(p)
+    }
+
+    @Test
+    fun `the shared scale shrinks only once tight spacing is not enough`() {
+        // Six 700 mm components can't fit two rows at any comfortable scale, so everything draws
+        // smaller together rather than a strip being dropped.
+        val windows = packWindows(6, 700f)
+        val p = packWearStripWindows(windows, packLeft, packRight, maxRows = 2)
+        assertEquals("every window still placed", 6, p.placedCount)
+        assertTrue("the shared scale gave way", p.ptPerMm < WEAR_STRIP_MAX_PT_PER_MM)
+        assertTrue(p.ptPerMm > 0f)
+        assertCellsWellFormed(p)
+        assertScaleMaximalForItsRows(p, windows)
+    }
+
+    @Test
+    fun `an election too big even at the scale floor places a prefix and overflows the rest`() {
+        // 5 m components: one alone fills the page at the floor scale, so only maxRows of them
+        // can print. The overflow is the aft→fwd TAIL — order is never rearranged to fit more.
+        val windows = packWindows(4, 5000f)
+        val p = packWearStripWindows(windows, packLeft, packRight, maxRows = 2)
+        assertEquals(WEAR_STRIP_MIN_PT_PER_MM, p.ptPerMm, 1e-4f)
+        assertEquals(2, p.placedCount)
+        assertEquals(2, p.rowCount)
+        assertEquals(listOf(0, 1), p.cells.map { it.windowIndex })
+    }
+
+    @Test
+    fun `one shared scale - every cell is exactly its own window's drawn width plus two stubs`() {
+        // The proportionality invariant: the packer divides the page's WIDTH, it never gives a
+        // window its own scale. A 900 mm window must draw exactly three times a 300 mm one.
+        val windows = listOf(
+            linerWindow("a", 0f, 300f), linerWindow("b", 2000f, 900f), linerWindow("c", 4000f, 150f),
+        )
+        val p = packWearStripWindows(windows, packLeft, packRight, maxRows = 3)
+        assertEquals(3, p.placedCount)
+        p.cells.forEach { cell ->
+            val expected = windows[cell.windowIndex].drawnWidthPt(p.ptPerMm) + 2f * p.spacing.stubWidthPt
+            assertEquals("cell ${cell.windowIndex}", expected, cell.right - cell.left, 1e-3f)
+        }
+        val drawn = p.cells.map { windows[it.windowIndex].drawnWidthPt(p.ptPerMm) }
+        assertEquals(3f, drawn[1] / drawn[0], 1e-3f)
+        assertEquals(0.5f, drawn[2] / drawn[0], 1e-3f)
+        assertCellsWellFormed(p)
+    }
+
+    @Test
+    fun `a capped packed row pins to the top of the band when the profile is hidden`() {
+        // What composeWearPdf's packed branch passes with showShaftProfile = false. The per-row
+        // height cap holds even with no profile band: the packer takes the FEWEST rows, so a lone
+        // uncapped row would stretch to the whole band and print a short fat cylinder. The height
+        // it gives back is lifted out from under the header, landing above the notes as ordinary
+        // bottom margin instead of as a white hole at the top.
+        val areaTop = 84f
+        val areaBottom = 500f
+        val capPt = 170f      // mirrors the composer's private WEAR_STRIP_HEIGHT_MAX_PT
+        val v = computeWearVerticalLayout(
+            areaTop, areaBottom, stripCount = 1,
+            minProfileHeightPt = 0f, profileToStripsGapPt = 0f, preferredProfileHeightPt = 0f,
+            maxStripHeightPt = capPt,
+        )
+        assertEquals("the cap holds", capPt, v.stripBottoms[0] - v.stripTops[0], 1e-3f)
+        assertTrue("uncapped, the row would start at the band top", v.stripTops[0] > areaTop + 1e-3f)
+        val lift = v.stripTops[0] - areaTop
+        assertEquals("the row pins to the band top", areaTop, v.stripTops[0] - lift, 1e-3f)
+        assertTrue(
+            "…so the reclaimed height ends up as bottom margin",
+            (v.stripBottoms[0] - lift) < areaBottom - 1e-3f,
+        )
+    }
+
+    @Test
+    fun `degenerate packing inputs come back empty rather than throwing`() {
+        val windows = packWindows(3, 200f)
+        listOf(
+            packWearStripWindows(emptyList(), packLeft, packRight, maxRows = 2),
+            packWearStripWindows(windows, packLeft, packLeft, maxRows = 2),
+            packWearStripWindows(windows, packLeft, packRight, maxRows = 0),
+        ).forEach { p ->
+            assertEquals(0, p.rowCount)
+            assertEquals(0, p.placedCount)
+            assertTrue(p.cells.isEmpty())
+        }
+        assertEquals("a 720 pt page is wider than nothing", 720f, packWidth, 1e-6f)
+    }
+
 }

@@ -247,10 +247,13 @@ const val WEAR_STRIP_GRID_COLUMNS = 2
 const val WEAR_STRIP_COL_GAP_PT = 22f
 
 /**
- * Max detail strips shown on a [WearPdfMode.GRID] page: [WEAR_STRIP_GRID_COLUMNS] columns × 2 rows
- * = 4, so the strips never grow past ~2 rows (by design — "only take 2 rows") and the shaft profile
- * always keeps the top of the page. Liners beyond this render as a "+N more" overflow note, same
- * as [WEAR_STRIP_MAX_PER_PAGE] does for the single-column path.
+ * Max detail strips shown on a fixed-grid [WearPdfMode.GRID] page: [WEAR_STRIP_GRID_COLUMNS]
+ * columns × 2 rows = 4, so the strips never grow past ~2 rows (by design — "only take 2 rows") and
+ * the shaft profile always keeps the top of the page. Strips beyond this render as a "+N more"
+ * overflow note, same as [WEAR_STRIP_MAX_PER_PAGE] does for the single-column path.
+ *
+ * This is the **undercut** sheet's cap (`pdf/UndercutStripLayout.kt`); the wear sheet's `GRID`
+ * pages pack dynamically instead and paginate off [packWearStripWindows]'s `placedCount`.
  */
 const val WEAR_STRIP_GRID_MAX_PER_PAGE = WEAR_STRIP_GRID_COLUMNS * 2
 
@@ -281,6 +284,10 @@ data class WearStripGridLayout(
  * that isn't full (e.g. the lone third strip of three) is **centered**: its strips keep the same
  * column width as a full row and sit centred in the content width, so a 2+1 layout reads as two
  * over one centred rather than one hugging the left margin.
+ *
+ * This fixed grid is the **undercut** sheet's layout (`pdf/UndercutStripLayout.kt`). The wear
+ * sheet's `GRID` pages fill their rows by the strips' actual drawn width instead — see
+ * [packWearStripWindows].
  */
 fun computeWearStripGridLayout(
     areaTop: Float,
@@ -791,6 +798,301 @@ fun computeWearStripWindowLayout(
     val leftPad = (((stripRightPt - stripLeftPt) - usedWidth) / 2f).coerceAtLeast(0f)
     val leftPt = stripLeftPt + leftPad + stubWidthPt
     return WearStripHorizontalLayout(stubWidthPt, leftPt, leftPt + widthPt, ptPerMm)
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Dynamic row packing — rows filled by ACTUAL drawn width (WearPdfMode.GRID)
+// ──────────────────────────────────────────────────────────────────────────────
+//
+// The fixed 2-column grid above ([computeWearStripGridLayout]) gives every strip half the page
+// whatever it draws, so two short components hog a row a third could have shared. The packer
+// below fills each row by the windows' real drawn widths instead: whitespace (the neighbor stubs
+// and the gutter between windows) is squeezed to its floor FIRST, and only a page that still
+// doesn't fit shrinks the shared scale. The fixed grid stays as it is — the undercut sheet
+// (`pdf/UndercutStripLayout.kt`) keeps using it.
+
+/** Most windows one packed row may hold, whatever the widths allow — beyond three side by side a
+ *  strip's rail values and title have no room left to read. */
+const val WEAR_STRIP_MAX_PER_ROW = 3
+
+/**
+ * Floor the neighbor stub may be squeezed to before the shared scale gives way.
+ *
+ * The stub is where the window's end style draws ([wearStripEndStyle]): a flat cap, a thread-end
+ * hatch, or the S-break glyph, which sits at the stub's OUTER end and reaches back inward roughly
+ * `√3/6 × 0.6 × r` (≈ 0.17 × the stub radius, `BREAK_PAIR_REACH_FRAC`'s geometry). At the tallest
+ * strip this sheet draws that is ~10 pt, so a 20 pt stub still leaves a clear run of shaft between
+ * the glyph and the component's edge cap — the same daylight [WEAR_STRIP_BREAK_LEAD_PT] gives a
+ * compressed gap's break. Narrower than this the glyph would sit on the edge cap and the end would
+ * stop reading as a break-out.
+ */
+const val WEAR_STRIP_STUB_MIN_PT = 20f
+
+/**
+ * Floor the gutter between two packed windows may be squeezed to.
+ *
+ * A packed cell is exactly its window's footprint, so a BREAK end's S glyph sits ON the cell edge
+ * and bulges OUTWARD into the gutter by about `0.43 × 0.6 × r` (≈ 0.26 × the stub radius — the
+ * return sweep's own reach, see `BreakSymbol.kt`). Two neighbors both bulge, so the gutter has to
+ * host two of them; below ~16 pt a tall strip's two break curls would touch across the gutter and
+ * read as one broken shaft. (The spec'd 10 pt left no daylight at the strip heights a
+ * profile-less 3-row page draws.)
+ */
+const val WEAR_STRIP_COL_GAP_MIN_PT = 16f
+
+/** Packed strip rows when the shaft profile band keeps the top of the page. */
+const val WEAR_STRIP_MAX_ROWS_WITH_PROFILE = 2
+
+/** Packed strip rows when the profile is elected out and its whole band goes to the strips. */
+const val WEAR_STRIP_MAX_ROWS_NO_PROFILE = 3
+
+/**
+ * How many rows of detail strips the page allows: the sheet holds three bands of content either
+ * way, and with the shaft profile on ([WearRecord.showShaftProfile]) one of them IS the shaft.
+ * Hiding it frees a whole band, so the strips get the third row rather than pushing a component
+ * into the "+N more" note (on-device request). ONE rule, so the composer never re-derives the row
+ * budget inline.
+ */
+fun wearStripMaxRows(showShaftProfile: Boolean): Int =
+    if (showShaftProfile) WEAR_STRIP_MAX_ROWS_WITH_PROFILE else WEAR_STRIP_MAX_ROWS_NO_PROFILE
+
+/**
+ * Horizontal whitespace a packed page spends: the neighbor stub on each side of a window, and the
+ * gutter between two windows in a row. UNIFORM page-wide — a sheet whose strips had different stub
+ * widths would read as a mistake.
+ */
+data class WearStripSpacing(val stubWidthPt: Float, val colGapPt: Float)
+
+/** One packed window: which row it landed in and the exact cell it owns (points). */
+data class WearStripPackedCell(val windowIndex: Int, val row: Int, val left: Float, val right: Float)
+
+/**
+ * Result of [packWearStripWindows].
+ *
+ * **ONE shared mm→pt scale across the whole page** ([ptPerMm]), the same invariant
+ * [sharedWearStripWindowPtPerMm] carries: relative component lengths must read true, so a 22"
+ * liner draws half the width of a 44" one. The packer only decides how the page's WIDTH is
+ * divided; it never gives a window its own scale.
+ *
+ * [cells] holds the windows that fit, in window order (AFT→FWD reading order is never reordered) —
+ * windows `[0, placedCount)`. Anything past [placedCount] overflows to the "+N more" note.
+ */
+data class WearStripPacking(
+    val rowCount: Int,
+    val cells: List<WearStripPackedCell>,
+    val ptPerMm: Float,
+    val spacing: WearStripSpacing,
+    val placedCount: Int,
+)
+
+/** Binary-search budget for both solves below — 40 halvings, or an interval too small to matter. */
+private const val WEAR_PACK_SOLVE_ITERS = 40
+private const val WEAR_PACK_SOLVE_EPS = 1e-4f
+private const val WEAR_PACK_WIDTH_EPS_PT = 1e-3f
+
+/**
+ * One window's footprint at [ptPerMm]: its drawn run plus a stub on each side. The run keeps
+ * [computeWearStripWindowLayout]'s one-millimetre floor so a packed cell is exactly the width that
+ * function then uses — otherwise a sub-millimetre component would draw wider than its own cell.
+ */
+private fun wearStripFootprintPt(window: WearStripWindow, ptPerMm: Float, stubWidthPt: Float): Float =
+    window.drawnWidthPt(ptPerMm).coerceAtLeast(ptPerMm) + 2f * stubWidthPt
+
+/** Total drawn width of one packed row: every footprint plus a gutter between neighbors. */
+private fun wearStripRowWidthPt(
+    windows: List<WearStripWindow>,
+    row: List<Int>,
+    ptPerMm: Float,
+    spacing: WearStripSpacing,
+): Float = row.fold(0f) { acc, i -> acc + wearStripFootprintPt(windows[i], ptPerMm, spacing.stubWidthPt) } +
+    (row.size - 1).coerceAtLeast(0) * spacing.colGapPt
+
+/**
+ * Greedy first-fit over [windows] **in order**: open a row, keep adding while the row still fits
+ * inside [widthPt] (counting one gutter per neighbor) and holds fewer than [maxPerRow], otherwise
+ * start a new row. Order is never changed — the strips read AFT→FWD down the page. First-fit is
+ * optimal in row count for a fixed order, which is what makes the scale solve's monotonicity
+ * argument hold.
+ *
+ * A window too wide for the page on its own still claims a row (it has to go somewhere); the
+ * caller's fit test checks row WIDTH separately, so such a page shrinks its scale instead of
+ * declaring a row-count success with a cell hanging off the paper.
+ */
+private fun packWearStripRows(
+    windows: List<WearStripWindow>,
+    ptPerMm: Float,
+    spacing: WearStripSpacing,
+    widthPt: Float,
+    maxPerRow: Int,
+): List<List<Int>> {
+    val rows = mutableListOf<List<Int>>()
+    var cur = mutableListOf<Int>()
+    var curW = 0f
+    windows.indices.forEach { i ->
+        val fp = wearStripFootprintPt(windows[i], ptPerMm, spacing.stubWidthPt)
+        if (cur.isNotEmpty() &&
+            (cur.size >= maxPerRow || curW + spacing.colGapPt + fp > widthPt + WEAR_PACK_WIDTH_EPS_PT)
+        ) {
+            rows += cur
+            cur = mutableListOf()
+            curW = 0f
+        }
+        curW = if (cur.isEmpty()) fp else curW + spacing.colGapPt + fp
+        cur += i
+    }
+    if (cur.isNotEmpty()) rows += cur
+    return rows
+}
+
+/**
+ * Packs [windows] into at most [maxRows] rows across `[contentLeftPt, contentRightPt]`, spending
+ * WHITESPACE before drawn size (on-device request: two short strips each hogging half the page,
+ * with no room left for a third).
+ *
+ * The objective is **lexicographic — fewest rows that fit, then the largest scale within them,
+ * then re-expand whitespace**:
+ *
+ * 1. **Fewest rows.** A row is the page's scarce VERTICAL resource: the row count divides the band
+ *    in `computeWearVerticalLayout`, so spending a row buys width for every strip and costs every
+ *    strip height. Row count is taken at the scale FLOOR, where every footprint is smallest and the
+ *    greedy packing therefore reaches the fewest rows any scale can. Maximizing the scale subject
+ *    only to `≤ maxRows` would instead re-lay a two-strip sheet as two stacked strips, twice as
+ *    long and half as tall — a worse drawing.
+ * 2. **Largest scale within exactly that row count** — binary search the largest `ptPerMm` in
+ *    `[minPtPerMm, maxPtPerMm]` at which the windows still pack into that many rows AND no row
+ *    overruns the content width, tested at **tight** spacing (the most permissive test, so
+ *    whitespace is always given up first). A page that fits at [maxPtPerMm] shrinks not at all.
+ * 3. **Whitespace re-expansion** — with the scale and the row assignment fixed, binary search one
+ *    blend factor lerping tight→full spacing and take the largest that still fits. Spacing stays
+ *    uniform page-wide ([WearStripSpacing]).
+ * 4. **Cells** — each window gets a cell exactly its own footprint wide, laid left to right a
+ *    gutter apart, with the whole row **centered** in the content width (the fixed grid's
+ *    "a partial row is centered" convention, now applied to every row). Leftover slack sits at the
+ *    page margins, never between strips.
+ *
+ * **Overflow**: when even the scale floor can't pack the election into [maxRows] rows, the longest
+ * prefix that fits is fixed there (the most permissive packing, so it is the longest prefix any
+ * scale reaches) and steps 2–4 then run on that prefix alone — the surviving strips draw as large
+ * as the page allows instead of staying pinned at the floor. The tail overflows to the caller's
+ * "+N more" note; window order is never rearranged to fit more.
+ *
+ * Degenerate inputs — no windows, non-positive content width, `maxRows ≤ 0` — return an empty
+ * packing rather than throwing.
+ */
+fun packWearStripWindows(
+    windows: List<WearStripWindow>,
+    contentLeftPt: Float,
+    contentRightPt: Float,
+    maxRows: Int,
+    maxPerRow: Int = WEAR_STRIP_MAX_PER_ROW,
+    maxPtPerMm: Float = WEAR_STRIP_MAX_PT_PER_MM,
+    minPtPerMm: Float = WEAR_STRIP_MIN_PT_PER_MM,
+    fullSpacing: WearStripSpacing = WearStripSpacing(WEAR_STRIP_STUB_WIDTH_PT, WEAR_STRIP_COL_GAP_PT),
+    tightSpacing: WearStripSpacing = WearStripSpacing(WEAR_STRIP_STUB_MIN_PT, WEAR_STRIP_COL_GAP_MIN_PT),
+): WearStripPacking {
+    val widthPt = contentRightPt - contentLeftPt
+    if (windows.isEmpty() || widthPt <= 0f || maxRows <= 0) {
+        return WearStripPacking(0, emptyList(), maxPtPerMm, fullSpacing, 0)
+    }
+    val perRow = maxPerRow.coerceAtLeast(1)
+    val hiScale = maxOf(minPtPerMm, maxPtPerMm)
+    val loScale = minOf(minPtPerMm, maxPtPerMm)
+
+    fun rowsOf(list: List<WearStripWindow>, s: Float) =
+        packWearStripRows(list, s, tightSpacing, widthPt, perRow)
+    fun rowsWithinWidth(list: List<WearStripWindow>, rows: List<List<Int>>, s: Float): Boolean =
+        rows.all { wearStripRowWidthPt(list, it, s, tightSpacing) <= widthPt + WEAR_PACK_WIDTH_EPS_PT }
+    // Both halves of the test are monotone in the scale (every footprint grows with it), so the
+    // conjunction is too — which is what makes the binary search valid.
+    fun fits(list: List<WearStripWindow>, s: Float, rowBudget: Int): Boolean {
+        val rows = rowsOf(list, s)
+        return rows.size <= rowBudget && rowsWithinWidth(list, rows, s)
+    }
+    fun solveScale(list: List<WearStripWindow>, rowBudget: Int): Float = when {
+        fits(list, hiScale, rowBudget) -> hiScale
+        !fits(list, loScale, rowBudget) -> loScale
+        else -> {
+            var lo = loScale
+            var hi = hiScale
+            var i = 0
+            while (i < WEAR_PACK_SOLVE_ITERS && hi - lo > WEAR_PACK_SOLVE_EPS) {
+                val mid = (lo + hi) * 0.5f
+                if (fits(list, mid, rowBudget)) lo = mid else hi = mid
+                i++
+            }
+            lo
+        }
+    }
+
+    // Step 1 — fewest rows. At the scale floor every footprint is at its smallest, so the greedy
+    // packing there uses the fewest rows any scale can reach; that count, not maxRows, is the
+    // budget the scale is then solved against.
+    val floorRows = rowsOf(windows, loScale)
+    val floorWithinWidth = rowsWithinWidth(windows, floorRows, loScale)
+    val layoutList: List<WearStripWindow>
+    val ptPerMm: Float
+    val rows: List<List<Int>>
+    when {
+        floorRows.size <= maxRows && floorWithinWidth -> {
+            layoutList = windows
+            ptPerMm = solveScale(windows, floorRows.size)
+            rows = rowsOf(windows, ptPerMm).take(floorRows.size)
+        }
+        !floorWithinWidth -> {
+            // One window is wider than the whole page even at the scale floor: no scale rescues it,
+            // so draw at the floor and let the row budget decide what prints.
+            layoutList = windows
+            ptPerMm = loScale
+            rows = floorRows.take(maxRows)
+        }
+        else -> {
+            // Capacity overflow: the row budget can't hold the election at any scale. The longest
+            // prefix that fits is settled at the floor, then solved on its own so the surviving
+            // strips aren't left pinned there.
+            val prefixCount = floorRows.take(maxRows).sumOf { it.size }
+            layoutList = windows.take(prefixCount)
+            ptPerMm = solveScale(layoutList, maxRows)
+            rows = rowsOf(layoutList, ptPerMm).take(maxRows)
+        }
+    }
+    val placedCount = rows.sumOf { it.size }
+
+    fun spacingAt(t: Float) = WearStripSpacing(
+        stubWidthPt = tightSpacing.stubWidthPt + (fullSpacing.stubWidthPt - tightSpacing.stubWidthPt) * t,
+        colGapPt = tightSpacing.colGapPt + (fullSpacing.colGapPt - tightSpacing.colGapPt) * t,
+    )
+    // A row already over the width at TIGHT spacing (one window longer than the whole page, at the
+    // scale floor) can never be satisfied, so it must not drag every other row down to tight.
+    val hopeless = rows.map {
+        wearStripRowWidthPt(layoutList, it, ptPerMm, tightSpacing) > widthPt + WEAR_PACK_WIDTH_EPS_PT
+    }
+    fun spacingFits(t: Float): Boolean = rows.indices.all { r ->
+        hopeless[r] ||
+            wearStripRowWidthPt(layoutList, rows[r], ptPerMm, spacingAt(t)) <= widthPt + WEAR_PACK_WIDTH_EPS_PT
+    }
+    val spacing = if (spacingFits(1f)) fullSpacing else {
+        var lo = 0f
+        var hi = 1f
+        var i = 0
+        while (i < WEAR_PACK_SOLVE_ITERS && hi - lo > WEAR_PACK_SOLVE_EPS) {
+            val mid = (lo + hi) * 0.5f
+            if (spacingFits(mid)) lo = mid else hi = mid
+            i++
+        }
+        spacingAt(lo)
+    }
+
+    val cells = mutableListOf<WearStripPackedCell>()
+    rows.forEachIndexed { r, row ->
+        val rowW = wearStripRowWidthPt(layoutList, row, ptPerMm, spacing)
+        var x = contentLeftPt + ((widthPt - rowW) / 2f).coerceAtLeast(0f)
+        row.forEach { idx ->
+            val fp = wearStripFootprintPt(layoutList[idx], ptPerMm, spacing.stubWidthPt)
+            cells += WearStripPackedCell(idx, r, x, x + fp)
+            x += fp + spacing.colGapPt
+        }
+    }
+    return WearStripPacking(rows.size, cells, ptPerMm, spacing, placedCount)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

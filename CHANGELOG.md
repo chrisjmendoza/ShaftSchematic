@@ -6,6 +6,37 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-16
+
+### feat: wear detail strips fill the page instead of the grid
+
+The wear sheet used to lay its detail strips into a fixed two-per-row grid: every strip got half
+the page whatever it actually drew. Two short components therefore hogged a whole row between
+them, a third could never join them however much white space was going spare, and only four
+strips fit on a sheet at all — a fifth, or a forward taper, dropped into the "+N more" note.
+
+Strips are now packed by the width they really draw. A row takes as many as fit across the page,
+up to three, and the page spends its white space before it spends drawn size: the gaps beside and
+between the strips shrink toward their floor first, and only an election that still will not fit
+draws smaller. Every strip on the sheet keeps the one shared scale it always had, so a 22" liner
+still draws half the width of a 44" one — the packing decides how the page's width is divided,
+never how big one component draws relative to another. A row that does not fill the page stays
+centred, so the leftover slack sits at the margins rather than between two strips.
+
+A row is the page's scarce height, so the sheet takes the fewest rows that hold the election and
+then draws as large as those rows allow. A pair of strips that fits side by side stays side by
+side, tall, exactly as it printed before; nothing spreads itself over more rows than it needs.
+
+Hiding the shaft profile buys a third row when — and only when — two rows cannot hold everything.
+The page holds three bands of content either way, and with the shaft drawn one of them is the
+shaft; electing it out hands that band to the strips instead of dropping a component into the
+"+N more" note. A sheet that does overflow now draws its surviving strips at full size rather than
+shrinking them all to make room for something that was never going to fit.
+
+The undercut drawing's strips are unchanged — they keep the fixed two-column grid.
+
+---
+
 ## 2026-08-15
 
 ### fix: the wear preview's options menu no longer hides the page it changes
