@@ -1218,15 +1218,17 @@ whitespace.**
   scale reaches) and the scale/whitespace passes then run on that prefix alone, so the surviving
   strips draw as large as the page allows rather than staying pinned at the floor. The tail goes to
   the "+N more" note.
-- **Row height is capped on the packed path whether or not the profile is drawn**
-  (`WEAR_STRIP_HEIGHT_MAX_PT`). Because the packer takes the fewest rows, a row is often the only
-  one on the page, and uncapped it would stretch to the whole band and print a short fat cylinder.
-  The height it gives back goes to the page BOTTOM: with no profile band above them the rows pin to
-  the top of the content band, so the spare white sits above the notes as ordinary bottom margin
-  rather than a hole under the header. With the profile shown nothing moves — its band absorbs the
-  slack as before and its shaft is slack-centered inside it. The single-column `COMBINED` path
-  keeps its own posture (the cap lifts when the profile is hidden, so the lone full-width strip
-  fills the page).
+- **Row height on the packed path follows the profile toggle.** With the profile shown the fixed
+  cap holds (`WEAR_STRIP_HEIGHT_MAX_PT`) and the profile band absorbs the slack as before, its
+  shaft slack-centered inside it. With the profile hidden the rows OWN the band: a multi-row page
+  splits the whole height between its rows — capping them too stranded the bottom half of the page
+  as dead white under two top-pinned rows (on-device report). Only a LONE row keeps a guard, at
+  the height a two-row page would give it (`max(WEAR_STRIP_HEIGHT_MAX_PT, (band − gap) / 2)`), so
+  it cannot stretch into a short fat cylinder; its leftover height goes to the page bottom (the
+  rows pin to the top of the content band, so the spare white sits above the notes as ordinary
+  bottom margin rather than a hole under the header). The single-column `COMBINED` path keeps its
+  own posture (the cap lifts when the profile is hidden, so the lone full-width strip fills the
+  page).
 - **Spacing is uniform page-wide** — one stub width and one gutter for the whole sheet; a page whose
   strips had different stub widths would read as a mistake. The composer threads the packed stub
   into `drawWearStripWindow(stubWidthPt = …)`, so every end style (S-break edge, thread hatch, flat

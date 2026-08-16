@@ -303,19 +303,23 @@ fun composeWearPdf(
         // band is the same count-driven split the fixed grid makes internally, fed the PACKED row
         // count instead of ceil(strips / 2).
         //
-        // The per-row height cap holds whether or not the profile is drawn. The packer takes the
-        // FEWEST rows that hold the election, so a row is often the only one on the page; uncapped
-        // it would stretch to the whole band and print a short fat cylinder. The reclaimed height
-        // goes to the page BOTTOM: with no profile band above them the rows pin to the top of the
-        // content band, so the spare white sits above the notes as ordinary bottom margin rather
-        // than as a hole under the header. With the profile shown nothing moves — its band absorbs
-        // the slack exactly as before, and its shaft is slack-centered inside it.
+        // Per-row height cap: with the profile shown the fixed cap holds and the profile band
+        // absorbs the slack (its shaft slack-centered inside it). With the profile hidden the
+        // rows OWN the band — a multi-row page splits the whole height between its rows, so the
+        // cap must never bite there (capping every packed row stranded the bottom half of the
+        // page as dead white under two top-pinned rows, on-device report). Only a LONE row keeps
+        // a guard, at the height a two-row page would give it, so it still cannot stretch into a
+        // short fat cylinder; its leftover height goes to the page bottom via the lift below.
+        val packedRowCap = if (showProfile) WEAR_STRIP_HEIGHT_MAX_PT else {
+            val bandH = (midBotFull - overflowNoteH - midTopFull).coerceAtLeast(0f)
+            maxOf(WEAR_STRIP_HEIGHT_MAX_PT, (bandH - WEAR_STRIP_GAP_PT) / 2f)
+        }
         val v = computeWearVerticalLayout(
             midTopFull, midBotFull, packing.rowCount,
             reservedBottomPt = overflowNoteH, minProfileHeightPt = minProfileHeightPt,
             profileToStripsGapPt = profileToStripsGap,
             preferredProfileHeightPt = preferredProfileHeightPt,
-            maxStripHeightPt = WEAR_STRIP_HEIGHT_MAX_PT,
+            maxStripHeightPt = packedRowCap,
         )
         val lift = if (showProfile) 0f else (v.stripTops.firstOrNull() ?: midTopFull) - midTopFull
         profileTop = v.profileTop; profileBottom = v.profileBottom - lift

@@ -32,6 +32,18 @@ tab's canvas and the PDF stay identical:
   keep the geometric clearance, which preserves the engine's zero-collision convergence
   guarantee unchanged.
 
+### fix: packed wear strips use the page height when the profile is hidden
+
+Yesterday's packing change capped every packed row at the same fixed height whether or not the
+shaft profile was on the page. On a profile-less sheet that pinned two short rows under the header
+and left the bottom half of the page as dead white (on-device report).
+
+With the profile hidden, the strip rows now own the whole content band again: a multi-row page
+splits the full height between its rows, so the strips draw as tall as the page allows. Only a
+lone row keeps a growth guard — at the height a two-row page would give it — so a single packed
+row still cannot stretch into a short fat cylinder. Pages with the profile shown are unchanged:
+the fixed cap holds and the profile band absorbs the slack, exactly as before.
+
 ### fix: the wear tab's document buttons sit under the shaft, not under the options
 
 Preview, Print and Export had drifted to the bottom of the Wear tab, below the trace-depth
