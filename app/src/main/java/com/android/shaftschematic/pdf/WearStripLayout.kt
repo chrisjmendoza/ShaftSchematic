@@ -495,6 +495,13 @@ data class WearStripComponentSeg(val component: WearStripComponent) : WearStripS
  * with the connecting shaft outline; the rest compress to [WEAR_STRIP_BREAK_GAP_PT] and print the
  * S-break pair instead. The mode is decided from **mm alone** ([wearStripGapDrawsTrue]) so the
  * shared-scale solve stays non-circular.
+ *
+ * The compressed mode is a **defensive** posture under the current builder: since the join
+ * threshold decides window MEMBERSHIP too ([collectWearStripWindows]), every gap
+ * [collectWearStripWindows] emits is inside the threshold and therefore true-scale. A window
+ * constructed directly with a compressed gap still draws and clusters
+ * ([wearStripClusters]) correctly — the type is a general model of a strip window, not only of
+ * what that one builder produces.
  */
 data class WearStripGapSeg(
     override val startMm: Float,
@@ -508,6 +515,8 @@ data class WearStripGapSeg(
  * [trueGapMaxMm] is the user-set join threshold (`PdfPrefs.wearJoinGapMaxMm`, canonical mm),
  * defaulting to the shipped [WEAR_STRIP_TRUE_GAP_MAX_MM]. At `0` every positive gap compresses;
  * touching components produce no gap segment at all, so they stay contiguous at any setting.
+ * [collectWearStripWindows] applies the same threshold to window membership, so a gap it emits
+ * always answers `true` here; this predicate remains the general rule for any window.
  */
 fun wearStripGapDrawsTrue(
     gapMm: Float,
@@ -621,20 +630,26 @@ private enum class TaperSide { AFT, FWD }
  * Groups the elected components into strip windows, AFT→FWD.
  *
  * Each elected **taper** attaches to the NEAREST elected liner (smallest gap; ties go AFT, i.e.
- * the more aftward liner wins), forming one combined window with that liner — the machinist reads
- * a taper and the liner beside it as one area. At most one taper joins a liner from each side; a
- * taper that loses the contest, a taper elected with no liners on the sheet, and every elected
- * **body** get their own single-component window. Bodies never join a liner: they are the shaft's
- * fluid base, so a body window is its own run.
+ * the more aftward liner wins) **when that gap is within [trueGapMaxMm]**, forming one combined
+ * window with that liner — the machinist reads a taper and the liner beside it as one area. At
+ * most one taper joins a liner from each side; a taper that loses the contest, a taper farther
+ * from its nearest liner than the threshold, a taper elected with no liners on the sheet, and
+ * every elected **body** get their own single-component window. Bodies never join a liner: they
+ * are the shaft's fluid base, so a body window is its own run.
  *
  * [stripComponentIds] is the job's election ([WearRecord.stripComponentIds]): `null` is the
  * default election — every drawable liner, exactly the historical sheet, which yields one
  * single-component window per liner. Ids that resolve to nothing are simply absent from
  * [components] and skipped here — orphan handling at the render layer, never at decode.
  *
- * [trueGapMaxMm] is the user-set join threshold (`PdfPrefs.wearJoinGapMaxMm`) handed to
- * [wearStripGapDrawsTrue]; it changes only how a gap DRAWS, never which components share a
- * window — the nearest-liner contest is decided on true mm at every setting.
+ * [trueGapMaxMm] is the user-set join threshold (`PdfPrefs.wearJoinGapMaxMm`), and it governs
+ * BOTH which components share a window and how a gap inside one draws
+ * ([wearStripGapDrawsTrue]). A taper past the threshold is a separate strip, drawn like any
+ * other lone component: sharing a window with a distant liner pushed the liner off-center by the
+ * window's total width, crowded the taper against it, and pressed the break hard against the
+ * taper's large end (on-device report). Consequently every gap inside a window built here draws
+ * at TRUE scale; at `0` only touching tapers join at all. The nearest-liner contest itself is
+ * still decided on true mm — the threshold only says whether the winner's claim stands.
  */
 fun collectWearStripWindows(
     components: List<WearStripComponent>,
@@ -664,6 +679,10 @@ fun collectWearStripWindows(
             }
             .minWithOrNull(compareBy({ it.gapMm }, { it.liner.startMm }))
     }
+        // Membership follows the join threshold: a taper farther than it from its nearest liner
+        // does not attach at all and gets its own strip. Nearest-liner selection above stays on
+        // true mm — the threshold only decides whether that claim stands.
+        .filter { it.gapMm <= trueGapMaxMm }
     // At most one taper per liner side — the nearest wins (ties go AFT again, by taper start);
     // the rest fall back to their own windows.
     val winners = claims

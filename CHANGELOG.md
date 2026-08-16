@@ -8,6 +8,38 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-15
 
+### fix: the wear preview's options menu no longer hides the page it changes
+
+Opening the tune menu over the wear preview covered the sheet completely, so every change had to
+be made blind — choose, close the menu, look, reopen. The wear preview now uses the same layout
+the runout and output previews already had: the page stays pinned above the menu as a full-width
+strip, cropped to where the drawing actually is so no blank margin eats the view, and the menu is
+capped to the room left under it. Each change still commits on release and redraws the whole page,
+and now that redraw is visible as it happens.
+
+### feat: pick which components print, without opening the preview
+
+The Components section — the complete-shaft toggle, a checkbox per liner, taper, and body, and the
+Default / All / None row — used to live only inside the preview's tune menu. Choosing what a sheet
+draws is part of building the document, not part of styling the print, so it now sits on the Wear
+tab itself, under the dye-pen result. It is the same section in both places, backed by the same
+choice: tick a liner on the tab and it is already ticked in the menu, and the other way round.
+
+### feat: the worn profile curves the way worn metal does
+
+The traced liner surface — the drawn edge that dips through the measured diameters inside a wear
+band — used to run straight from one reading to the next, so a worn area printed as a chain of
+bevels with a sharp corner at every station. Shop photos of the real thing show a smooth, flowing
+hollow, and that is what prints now: the transitions between depth stations curve.
+
+The curve is fitted so it can never say more than the measurements do. It passes exactly through
+every measured station, at exactly the depth that station drew before, and between two stations it
+stays inside their two depths — it cannot bulge out past the surface just outside a hollow, and it
+cannot dig deeper than anything that was actually measured. Unworn shaft between two bands stays
+dead flat, and a band with no readings still draws its plain straight edges. Everything built on
+the trace follows it: the band's grey fill, the surface outline, and the tinted area on screen all
+bite together, on paper and in the on-screen wear detail alike.
+
 ### fix: wear strip ends, break gaps, and titles read the way the shaft actually is
 
 Three corrections to the wear sheet's detail strips, all from printed sheets.
@@ -32,6 +64,21 @@ continuous area. Each attached cluster now titles itself, centred under its own 
 attached taper + liner prints no from-SET measurement: the strip's dimension rail is the measuring
 surface, and a taper sitting at the shaft end needs no distance to explain where it is. A lone
 liner or a lone body run keeps the anchor dimension, in exactly the placement it has always had.
+
+### fix: a taper far from its liner now prints on its own strip
+
+A taper used to be pulled into the nearest liner's detail strip no matter how far away it sat, the
+distance between them drawn as a compressed break inside the shared window. On paper that read
+badly: the window had to be wide enough for both, which pushed the liner well off the centre of its
+cell, left the taper crowded up against it, and put the break almost touching the taper's large
+end.
+
+The taper–liner join slider now decides **attachment**, not just how the gap between them is drawn.
+A taper within the set distance of its nearest liner shares that liner's strip, with the shaft
+between them drawn true, exactly as before; a taper beyond it simply gets its own strip, centred in
+its own cell like any other lone component and titled by name. So the slider reads the way it
+sounds: how close a taper has to be before it counts as part of the liner's area — from touching
+only, at zero, out to a foot.
 
 ### feat: coupling face — the end view, digitized
 

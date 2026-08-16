@@ -16,9 +16,13 @@ import org.junit.Test
  * - [wearStripEndStyle] / [wearStripEndThreadDiaMm] — an end stub's S-break claims "the shaft
  *   continues past here", so it may only be drawn where it does; a threaded shaft end shows the
  *   whole remainder (flat + hatched) and an end with nothing beyond it gets no stub at all.
+ * - [collectWearStripWindows] — the join threshold decides window MEMBERSHIP: a taper farther than
+ *   it from its nearest liner gets its own strip, so a window the builder produces never carries a
+ *   compressed gap.
  * - [wearStripClusters] / [wearStripClusterShowsAnchor] — a compressed gap means the components
  *   either side are NOT adjacent, so each side titles itself, and a cluster holding a taper needs
- *   no from-SET dimension.
+ *   no from-SET dimension. The split rule is pinned on directly-constructed windows, since it is
+ *   the general model's behavior rather than something the current builder emits.
  */
 class WearStripEndsAndClustersTest {
 
@@ -161,11 +165,39 @@ class WearStripEndsAndClustersTest {
     }
 
     @Test
-    fun `a compressed gap splits the window into two clusters, aft to fwd`() {
-        val w = collectWearStripWindows(
+    fun `a taper past the join threshold gets its own window instead of sharing one`() {
+        // 300 mm apart, far past the default threshold: the taper does not attach at all, so the
+        // pair prints as two single-component strips (AFT→FWD) rather than one shared window
+        // whose total width pushed the liner off-center.
+        val windows = collectWearStripWindows(
             listOf(taper("t", 0f, 100f), liner("l", 400f, 200f)), listOf("t", "l"),
-        ).single()
-        assertFalse(w.segments.filterIsInstance<WearStripGapSeg>().single().trueScale)
+        )
+        assertEquals(
+            listOf(listOf("t"), listOf("l")),
+            windows.map { w -> w.components.map { it.id } },
+        )
+        assertTrue(
+            "a separated window holds no gap segment at all",
+            windows.all { w -> w.segments.none { it is WearStripGapSeg } },
+        )
+        assertEquals(0f, windows[0].startMm, 1e-4f)
+        assertEquals(100f, windows[0].endMm, 1e-4f)
+        assertEquals(400f, windows[1].startMm, 1e-4f)
+        assertEquals(600f, windows[1].endMm, 1e-4f)
+    }
+
+    @Test
+    fun `a compressed gap splits a window into two clusters, aft to fwd`() {
+        // The current builder never emits a compressed gap (membership follows the same
+        // threshold), so the split rule is pinned on a directly-constructed window — the model is
+        // general, and any window carrying a break must still title each side separately.
+        val w = WearStripWindow(
+            listOf(
+                WearStripComponentSeg(taper("t", 0f, 100f)),
+                WearStripGapSeg(100f, 400f, trueScale = false),
+                WearStripComponentSeg(liner("l", 400f, 200f)),
+            ),
+        )
         val clusters = wearStripClusters(w)
         assertEquals(listOf(listOf("t"), listOf("l")), clusters.map { idsOf(it) })
         assertEquals(0f, clusters[0].startMm, 1e-4f)
@@ -175,14 +207,67 @@ class WearStripEndsAndClustersTest {
     }
 
     @Test
-    fun `a window with one true and one compressed gap splits only at the compressed one`() {
-        val w = collectWearStripWindows(
+    fun `only the taper within the threshold joins the liner`() {
+        // tA touches within the threshold and joins; tF sits 300 mm off the liner's FWD edge, so
+        // it separates into its own window rather than riding a compressed gap.
+        val windows = collectWearStripWindows(
             listOf(taper("tA", 0f, 100f), liner("l", 150f, 200f), taper("tF", 650f, 100f)),
             listOf("tA", "l", "tF"),
-        ).single()
-        val gaps = w.segments.filterIsInstance<WearStripGapSeg>()
-        assertEquals(listOf(true, false), gaps.map { it.trueScale })
+        )
+        assertEquals(
+            listOf(listOf("tA", "l"), listOf("tF")),
+            windows.map { w -> w.components.map { it.id } },
+        )
+        assertTrue(windows[0].segments.filterIsInstance<WearStripGapSeg>().single().trueScale)
+        assertTrue(windows[1].segments.none { it is WearStripGapSeg })
+    }
+
+    @Test
+    fun `a window with one true and one compressed gap splits only at the compressed one`() {
+        val w = WearStripWindow(
+            listOf(
+                WearStripComponentSeg(taper("tA", 0f, 100f)),
+                WearStripGapSeg(100f, 150f, trueScale = true),
+                WearStripComponentSeg(liner("l", 150f, 200f)),
+                WearStripGapSeg(350f, 650f, trueScale = false),
+                WearStripComponentSeg(taper("tF", 650f, 100f)),
+            ),
+        )
         assertEquals(listOf(listOf("tA", "l"), listOf("tF")), wearStripClusters(w).map { idsOf(it) })
+    }
+
+    // ── Where the threshold cuts ──────────────────────────────────────────────
+
+    @Test
+    fun `a gap exactly at the threshold still joins, one epsilon past it separates`() {
+        val threshold = 100f
+        val atThreshold = collectWearStripWindows(
+            listOf(taper("t", 0f, 100f), liner("l", 200f, 200f)),
+            listOf("t", "l"),
+            trueGapMaxMm = threshold,
+        )
+        assertEquals(listOf(listOf("t", "l")), atThreshold.map { w -> w.components.map { it.id } })
+        assertTrue(atThreshold.single().segments.filterIsInstance<WearStripGapSeg>().single().trueScale)
+
+        val past = collectWearStripWindows(
+            listOf(taper("t", 0f, 100f), liner("l", 200.01f, 200f)),
+            listOf("t", "l"),
+            trueGapMaxMm = threshold,
+        )
+        assertEquals(listOf(listOf("t"), listOf("l")), past.map { w -> w.components.map { it.id } })
+    }
+
+    @Test
+    fun `at a zero threshold only a touching taper joins`() {
+        val touching = collectWearStripWindows(
+            listOf(taper("t", 0f, 100f), liner("l", 100f, 200f)), listOf("t", "l"), trueGapMaxMm = 0f,
+        )
+        assertEquals(listOf(listOf("t", "l")), touching.map { w -> w.components.map { it.id } })
+
+        val apart = collectWearStripWindows(
+            listOf(taper("t", 0f, 100f), liner("l", 101f, 200f)), listOf("t", "l"), trueGapMaxMm = 0f,
+        )
+        assertEquals(listOf(listOf("t"), listOf("l")), apart.map { w -> w.components.map { it.id } })
     }
 
     // ── Which clusters print an anchor dimension ──────────────────────────────

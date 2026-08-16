@@ -84,7 +84,9 @@ import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.buildOpenPdfIntent
+import com.android.shaftschematic.util.inkBand
 import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
@@ -165,6 +167,10 @@ fun WearRoute(
     // and the LaunchedEffect below regenerates it anyway.
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
+    // Where the rendered page carries ink, for the tuning page strip (`PdfPreviewOverlay`'s
+    // `inkBand`). This tab has no live-drag channel — every control commits on release and
+    // re-renders the whole page — so there are no draft frames to skip: each pass measures.
+    var previewInkBand by remember { mutableStateOf<InkBand?>(null) }
     // Which component's wear-detail overlay is open, if any. Doubles as the overlay's visibility
     // flag. A body, taper, or liner id (all pit-eligible); see ComponentWearDetailOverlay.
     var selectedComponentId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -209,14 +215,15 @@ fun WearRoute(
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
                    wearRecord, blankDraft, pdfFractionStyle, traceDepthFrac, wearBandShadeFrac,
                    wearJoinGapMaxMm) {
-        if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
+        if (!showPreview) { previewBitmap = null; previewInkBand = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
         val thicknessSnapshot = lineThicknessScale
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
             jobNumber = jobNumber, side = shaftPosition)
-        val bmp = withContext(Dispatchers.IO) {
-            renderPdfPageBitmap(ctx) { page ->
+        // The ink band is measured off the raw raster, on the same IO pass that produced it.
+        val (bmp, band) = withContext(Dispatchers.IO) {
+            val raster = renderPdfPageBitmap(ctx) { page ->
                 composeWearPdf(
                     page = page, spec = spec, project = projectSnapshot, unit = unit,
                     pdfPrefs = prefsSnapshot, resolvedComponents = resolvedComponents,
@@ -224,8 +231,10 @@ fun WearRoute(
                     blankValues = blankDraft, traceDepthFrac = traceDepthFrac,
                 )
             }
+            raster to raster?.inkBand()
         }
         previewBitmap = bmp?.asImageBitmap()
+        previewInkBand = band
         previewLoading = false
     }
 
@@ -404,6 +413,23 @@ fun WearRoute(
                 }
             }
 
+            // ── Strip election ────────────────────────────────────────────────
+            // The same section the preview's PDF options sheet carries, from the one
+            // construction and bound to the one ViewModel state, so the two surfaces always
+            // agree. It lives here as well because electing components is authoring work, not
+            // print-time styling — reaching it should not require opening the preview
+            // (on-device request). Distinct tag prefix: this row stays composed behind the
+            // overlay while the sheet's copy is on screen.
+            WearStripComponentChecks(
+                options = stripOptions,
+                selection = wearRecord.stripComponentIds,
+                defaultIds = stripDefaultIds,
+                showShaftProfile = wearRecord.showShaftProfile,
+                onSetShowShaftProfile = { vm.setWearShowShaftProfile(it) },
+                onSetSelection = { vm.setWearStripComponents(it) },
+                testTagPrefix = "wear_tab_strip",
+            )
+
             // ── Blank draft toggle ────────────────────────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
@@ -522,6 +548,12 @@ fun WearRoute(
                     wearShowShaftProfile = wearRecord.showShaftProfile,
                 )
             },
+            // The sheet reshapes this page, so it must not cover it: a full-screen sheet hid
+            // the preview entirely, leaving the changes unjudgeable as they were made
+            // (on-device report). Each control commits on release and re-renders the page
+            // under the open sheet's strip.
+            sheetTunesPage = true,
+            inkBand = previewInkBand,
         )
     }
 
@@ -572,6 +604,28 @@ internal fun buildWearStripComponentOptions(
 }
 
 /**
+ * The election after ticking (or clearing) [id], given the rows currently [offered] and the
+ * election [base] the surface is showing (`selection ?: defaultIds` — an un-authored sheet
+ * materializes its default here, so a liner added later can never silently rewrite it).
+ *
+ * The result is ordered by the offered rows (AFT→FWD, so the stored list reads like the sheet),
+ * with any elected id this geometry no longer offers **kept** on the tail rather than pruned —
+ * the render-layer orphan rule, so a component that comes back is still elected.
+ *
+ * Pure: the "Components" section on the Wear tab body and the one in the preview's options sheet
+ * both toggle through this, so the two can only ever produce the same list.
+ */
+internal fun toggleWearStripSelection(
+    offered: List<String>,
+    base: List<String>,
+    id: String,
+    checked: Boolean,
+): List<String> {
+    val next = if (checked) (base + id).toSet() else (base - id).toSet()
+    return offered.filter { it in next } + base.filter { it in next && it !in offered }
+}
+
+/**
  * The wear sheet's "Components" section: the whole-shaft profile toggle, one checkbox per
  * strip-eligible component, and a quick-action row. [selection] is the job's authored election
  * (`WearRecord.stripComponentIds`); `null` shows the default — every drawable liner ticked,
@@ -586,6 +640,11 @@ internal fun buildWearStripComponentOptions(
  *
  * Ids the current geometry no longer offers stay in the stored list untouched (they simply have
  * no row here and are skipped when the sheet draws) — the render-layer orphan rule.
+ *
+ * Two surfaces host this section — the Wear tab body and the preview's PDF options sheet — and
+ * both bind the same ViewModel state, so they can never disagree. They CAN be composed at the
+ * same time (the tab body stays in the tree behind the preview overlay), hence [testTagPrefix]:
+ * a shared literal tag would resolve to two nodes and break any tag lookup.
  */
 @Composable
 internal fun WearStripComponentChecks(
@@ -596,6 +655,8 @@ internal fun WearStripComponentChecks(
     onSetShowShaftProfile: (Boolean) -> Unit,
     /** `null` restores the un-authored default election; a list is an authored set. */
     onSetSelection: (List<String>?) -> Unit,
+    /** Test-tag namespace, so the tab body's rows and the sheet's rows stay distinguishable. */
+    testTagPrefix: String = "wear_strip",
 ) {
     Column {
         Text("Components", style = MaterialTheme.typography.titleSmall)
@@ -611,7 +672,7 @@ internal fun WearStripComponentChecks(
             Checkbox(
                 checked = showShaftProfile,
                 onCheckedChange = onSetShowShaftProfile,
-                modifier = Modifier.testTag("wear_strip_complete_shaft"),
+                modifier = Modifier.testTag("${testTagPrefix}_complete_shaft"),
             )
             Spacer(Modifier.width(8.dp))
             Text("Complete shaft", style = MaterialTheme.typography.bodyLarge)
@@ -623,16 +684,16 @@ internal fun WearStripComponentChecks(
                 Checkbox(
                     checked = opt.id in elected,
                     onCheckedChange = { checked ->
-                        val base = selection ?: defaultIds
-                        val next = if (checked) (base + opt.id).toSet() else (base - opt.id).toSet()
-                        // Store in sheet order (AFT→FWD), keeping any elected id this geometry
-                        // no longer offers rather than pruning it.
-                        val known = options.map { it.id }
                         onSetSelection(
-                            known.filter { it in next } + base.filter { it in next && it !in known }
+                            toggleWearStripSelection(
+                                offered = options.map { it.id },
+                                base = selection ?: defaultIds,
+                                id = opt.id,
+                                checked = checked,
+                            )
                         )
                     },
-                    modifier = Modifier.testTag("wear_strip_component_${opt.id}"),
+                    modifier = Modifier.testTag("${testTagPrefix}_component_${opt.id}"),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(opt.label, style = MaterialTheme.typography.bodyLarge)
@@ -649,15 +710,15 @@ internal fun WearStripComponentChecks(
         ) {
             TextButton(
                 onClick = { onSetSelection(null) },
-                modifier = Modifier.testTag("wear_strip_default"),
+                modifier = Modifier.testTag("${testTagPrefix}_default"),
             ) { Text("Default (all liners)") }
             TextButton(
                 onClick = { onSetSelection(options.map { it.id }) },
-                modifier = Modifier.testTag("wear_strip_all"),
+                modifier = Modifier.testTag("${testTagPrefix}_all"),
             ) { Text("All") }
             TextButton(
                 onClick = { onSetSelection(emptyList()) },
-                modifier = Modifier.testTag("wear_strip_none"),
+                modifier = Modifier.testTag("${testTagPrefix}_none"),
             ) { Text("None") }
         }
     }

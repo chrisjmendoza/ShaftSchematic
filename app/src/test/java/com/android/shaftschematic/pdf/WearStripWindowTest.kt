@@ -10,9 +10,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pure-math tests for the wear sheet's strip WINDOWS — the grouping rule that puts a taper in
- * its nearest liner's strip, the true-vs-compressed gap threshold, the window's single piecewise
- * mm→pt mapping, and the shared page scale once fixed-width break gaps are in play.
+ * Pure-math tests for the wear sheet's strip WINDOWS — the grouping rule that puts a taper in its
+ * nearest liner's strip when the join threshold says the two are attached (and gives it a strip of
+ * its own when they are not), the true-vs-compressed gap rule, the window's single piecewise mm→pt
+ * mapping, and the shared page scale once fixed-width break gaps are in play. The compressed-gap
+ * cases construct their window directly: the type is a general model of a strip window, while the
+ * current builder — membership following the same threshold — only ever emits true-scale gaps.
  *
  * The equivalence tests at the end are the load-bearing ones: a liner-only sheet — the default
  * election, and every document authored before strips became elective — must group and lay out
@@ -124,18 +127,17 @@ class WearStripWindowTest {
     }
 
     @Test
-    fun `a close taper draws contiguously and a distant one gets a break connector`() {
+    fun `a close taper shares the liner's window and a distant one takes its own`() {
         val close = collectWearStripWindows(
             listOf(taper("t", 0f, 100f), liner("l", 150f, 200f)), listOf("t", "l"),
         ).single()
-        val closeGap = close.segments.filterIsInstance<WearStripGapSeg>().single()
-        assertTrue(closeGap.trueScale)
+        assertTrue(close.segments.filterIsInstance<WearStripGapSeg>().single().trueScale)
 
         val far = collectWearStripWindows(
             listOf(taper("t", 0f, 100f), liner("l", 400f, 200f)), listOf("t", "l"),
-        ).single()
-        val farGap = far.segments.filterIsInstance<WearStripGapSeg>().single()
-        assertFalse(farGap.trueScale)
+        )
+        assertEquals(listOf(listOf("t"), listOf("l")), far.map { idsOf(it) })
+        assertTrue(far.all { w -> w.segments.none { it is WearStripGapSeg } })
     }
 
     // ── User-set join threshold (PdfPrefs.wearJoinGapMaxMm) ────────────────────
@@ -155,16 +157,19 @@ class WearStripWindowTest {
     }
 
     @Test
-    fun `collectWearStripWindows threads the threshold through to every gap`() {
+    fun `collectWearStripWindows threads the threshold through to membership`() {
         val pair = listOf(taper("t", 0f, 100f), liner("l", 380f, 200f))   // an 11" gap
         val ids = listOf("t", "l")
 
-        fun gapOf(maxMm: Float) = collectWearStripWindows(pair, ids, maxMm)
-            .single().segments.filterIsInstance<WearStripGapSeg>().single()
+        fun windowsAt(maxMm: Float) = collectWearStripWindows(pair, ids, maxMm)
 
-        assertTrue("11 inches of shaft draws true at a 12 inch setting", gapOf(304.8f).trueScale)
-        assertFalse("…and breaks at the shipped 3 inch setting", gapOf(76.2f).trueScale)
-        assertFalse("…and at Never", gapOf(0f).trueScale)
+        val joined = windowsAt(304.8f).single()
+        assertTrue(
+            "11 inches of shaft joins, drawn true, at a 12 inch setting",
+            joined.segments.filterIsInstance<WearStripGapSeg>().single().trueScale,
+        )
+        assertEquals("…and separates at the shipped 3 inch setting", 2, windowsAt(76.2f).size)
+        assertEquals("…and at Never", 2, windowsAt(0f).size)
     }
 
     @Test
@@ -178,16 +183,18 @@ class WearStripWindowTest {
     }
 
     @Test
-    fun `the threshold changes how a gap draws, never which components share a window`() {
-        // The nearest-liner contest is decided on true mm, so the grouping is identical at
-        // every setting — only the gap's draw mode moves.
+    fun `the threshold decides which components share a window`() {
+        // The nearest-liner contest is still decided on true mm — l1 wins the taper at every
+        // setting — but the taper's claim only STANDS within the threshold: past it the taper
+        // takes its own strip rather than riding a compressed gap in l1's window.
         val comps = listOf(taper("t", 0f, 100f), liner("l1", 380f, 200f), liner("l2", 900f, 100f))
         val ids = listOf("t", "l1", "l2")
-        val grouping = listOf(0f, 76.2f, 304.8f).map { max ->
-            collectWearStripWindows(comps, ids, max).map { idsOf(it) }
-        }
-        assertEquals(listOf(listOf("t", "l1"), listOf("l2")), grouping[0])
-        assertTrue(grouping.all { it == grouping[0] })
+        fun groupingAt(max: Float) = collectWearStripWindows(comps, ids, max).map { idsOf(it) }
+
+        val separate = listOf(listOf("t"), listOf("l1"), listOf("l2"))
+        assertEquals(separate, groupingAt(0f))
+        assertEquals(separate, groupingAt(76.2f))
+        assertEquals(listOf(listOf("t", "l1"), listOf("l2")), groupingAt(304.8f))
     }
 
     @Test
@@ -201,9 +208,18 @@ class WearStripWindowTest {
 
     // ── The window's one piecewise mm→pt mapping ──────────────────────────────
 
-    private fun brokenWindow() = collectWearStripWindows(
-        listOf(taper("t", 0f, 100f), liner("l", 400f, 200f)), listOf("t", "l"),
-    ).single()
+    /**
+     * A window carrying a COMPRESSED gap, constructed directly: the join threshold decides
+     * membership, so the builder never emits one — but the mapping, the drawn-width rule, and the
+     * shared-scale solve are properties of the window type itself and must hold for any window.
+     */
+    private fun brokenWindow() = WearStripWindow(
+        listOf(
+            WearStripComponentSeg(taper("t", 0f, 100f)),
+            WearStripGapSeg(100f, 400f, trueScale = false),
+            WearStripComponentSeg(liner("l", 400f, 200f)),
+        ),
+    )
 
     @Test
     fun `drawn width is spans plus true gaps at scale plus each break gap's fixed run`() {

@@ -21,6 +21,7 @@ import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.pitHalfArm
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.sequenceWearTraces
+import com.android.shaftschematic.geom.smoothWearTrace
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
@@ -1018,17 +1019,23 @@ private fun drawWearStripWindow(
     // so it is computed before any px geometry and mapped through the strip's scale below —
     // the same output the detail overlay's canvas walks. Only a liner traces: body/taper
     // readings never drive a worn profile.
+    //
+    // Each band is smoothed HERE, before sequencing, so the surface edges and that band's own
+    // grey fill (which takes its band trace directly) walk exactly the same vertices — and so
+    // the overlay canvas, which smooths per band too, curves identically.
     val traceReadings = if (linerComp == null) emptyList() else valuedReadings
         .filter { it.componentId == linerComp.id }
         .map { WearTraceReading(it.axialMm.coerceIn(0f, linerComp.lengthMm), it.diaMm) }
     val bandTraces = clampedBands.map { clamp ->
-        buildWearTrace(
-            bandStartMm = clamp.startMm,
-            bandLengthMm = clamp.lengthMm,
-            readings = traceReadings,
-            nominalOdMm = linerComp?.aftDiaMm ?: 0f,
-            deepestDepthMm = deepestWearDepthMm,
-            maxDepthFrac = traceDepthFrac,
+        smoothWearTrace(
+            buildWearTrace(
+                bandStartMm = clamp.startMm,
+                bandLengthMm = clamp.lengthMm,
+                readings = traceReadings,
+                nominalOdMm = linerComp?.aftDiaMm ?: 0f,
+                deepestDepthMm = deepestWearDepthMm,
+                maxDepthFrac = traceDepthFrac,
+            )
         )
     }
     val traceVerts = sequenceWearTraces(bandTraces)
@@ -1064,8 +1071,8 @@ private fun drawWearStripWindow(
                 when (comp.kind) {
                     WearStripComponentKind.LINER -> {
                         // The liner's edges run straight except inside a traced wear band, where
-                        // they dip through the measured diameters (mirrored, so the bite is
-                        // symmetric); with no trace the two paths are exactly straight lines.
+                        // they curve down through the measured diameters (mirrored, so the bite
+                        // is symmetric); with no trace the two paths are exactly straight lines.
                         val top = cy - rA
                         val bot = cy + rA
                         if (traceVerts.isEmpty()) {
@@ -1394,9 +1401,11 @@ private fun drawThreadStubHatch(c: Canvas, x0: Float, top: Float, x1: Float, bot
 /**
  * One traced liner surface edge as a polyline: it runs along [edgeY] from [leftPt] to [rightPt]
  * and dips to `edgeY + dir × depthFrac × radiusPt` at each worn-profile vertex ([verts], one
- * left-to-right run from `sequenceWearTraces`). [dir] is `+1` for the TOP edge and `-1` for the
- * BOTTOM, so both edges bite the same amount out of the cylinder. [xAtLocalMm] maps a
- * liner-local mm to strip x.
+ * left-to-right run from `sequenceWearTraces`). The run arrives already smoothed
+ * (`smoothWearTrace`), so walking it with straight segments still draws a flowing curve — the
+ * curve lives in the vertices, never in this path's construction. [dir] is `+1` for the TOP edge
+ * and `-1` for the BOTTOM, so both edges bite the same amount out of the cylinder. [xAtLocalMm]
+ * maps a liner-local mm to strip x.
  */
 private fun tracedLinerEdgePath(
     leftPt: Float,

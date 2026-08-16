@@ -67,9 +67,10 @@ schematic Tune sheet this section otherwise describes.
   PDF Options sheet (one shared `WearJoinGapSlider`, one app-wide pref). It is the only
   **length-valued** drawing pref, so it is stored in canonical mm and converted at the UI edge
   only: inches snap to 1/2" and read through `LengthFormat.formatInchesSmart` (12.7 mm → `1/2"`),
-  millimetres snap to 10 mm. It reaches only `collectWearStripWindows`, deciding whether the run
-  between a taper and the liner sharing its detail strip draws true or compresses to an S-break;
-  every other document ignores it. See `docs/RunoutSheet.md` ("Strip windows").
+  millimetres snap to 10 mm. It reaches only `collectWearStripWindows`, where it decides how close
+  a taper must be to its nearest liner to SHARE that liner's detail strip — within the setting they
+  join and the run between them draws true, past it the taper takes a strip of its own; every other
+  document ignores it. See `docs/RunoutSheet.md` ("Strip windows").
 - **Fractions** (`fractionStyle`): three chips — Stacked / **Diagonal (default)** / Plain — in
   Settings → Drawing → "Fractions" and in both PDF Options sheets (one shared
   `FractionStyleChips`, one app-wide pref). **Ungated in the sheets**, unlike the arrowhead

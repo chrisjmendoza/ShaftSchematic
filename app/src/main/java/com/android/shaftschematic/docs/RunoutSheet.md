@@ -371,11 +371,28 @@ top and bottom edges dip through the measured diameters instead of running strai
 band's fill follows them, so the material measured away shows as white slivers above and below
 (on-device report: a liner measured almost half an inch down still printed as a perfect
 cylinder). Pure construction in **`geom/WearTraceMath.kt`** (`buildWearTrace` /
-`sequenceWearTraces`, `WearTraceMathTest`); the two draw sites — the **PDF liner detail strip**
-(`WearPdfComposer.drawWearDetailStrip`) and the **canvas overlay**
+`smoothWearTrace` / `sequenceWearTraces`, `WearTraceMathTest`); the two draw sites — the **PDF
+liner detail strip** (`WearPdfComposer.drawWearDetailStrip`) and the **canvas overlay**
 (`ComponentWearDetailOverlay`, whose silhouette path carries the dip so fill, stroke and the
 clipped red band tint all bite together) — walk that same output through their own scale, so
 they render identically (the draw-both-sites rule, same posture as the pit "X").
+
+The trace is **smoothed**: real wear flows rather than bevelling (on-device request), so
+`smoothWearTrace` fits a **monotone cubic Hermite (Fritsch–Carlson)** curve through the vertices
+in `(localMm, depthFrac)` space and hands back a *denser vertex run of the same type* —
+`WEAR_TRACE_SMOOTH_SAMPLES` (16) samples between each pair — which both sites keep walking with
+their existing straight `lineTo` loops. Sampled points, never Bézier control points: each site
+maps a vertex through its **own** x function, and only sampled points survive that mapping. The
+scheme is Fritsch–Carlson specifically because it **cannot overshoot** — every sample stays
+inside the depth range of its own segment's endpoints, so a deep station beside a shallow one
+never bulges outside the metal or digs deeper than measured (a Catmull-Rom spline would do
+both). The **invariants are unchanged**: the original vertices are emitted verbatim, so at each
+station the drawn depth is still exactly `max(exaggerated, true-scale)`; equal-x pairs (a reading
+on a band edge) stay a verbatim vertical jump; flat runs — notably the zero-depth shaft between
+two bands — stay dead flat; a run under three vertices passes through untouched. Both sites
+smooth **per band**, before sequencing, so a band's grey fill and its surface edges walk exactly
+the same vertices. The rendered curve has a same-math SVG preview in
+`WearStripWindowSvgPreviewTest` (scenario **G**, `build/reports/wear-strip-preview/`).
 
 Depth is **display-exaggerated**, the undercut notch's posture: it is normalized to the
 record's deepest valued **liner** reading (`deepestWearDepthMm`, computed ONCE per sheet, so
@@ -1159,9 +1176,21 @@ layouts (see "Wear PDF Rendering Modes" above for how each positions the strips)
   longer resolve are skipped at the **render layer**, never pruned at decode — the pit/Ø-reading
   rule. Both the election and `WearRecord.showShaftProfile` are read from the passed record even
   in blank-draft mode: a write-in sheet blanks values, never the drawing's shape.
+- **Two hosts, one state** (2026-08-15): the "Components" section (`WearStripComponentChecks`)
+  renders BOTH on the **Wear tab body** — under the dye-pen row, above the blank-draft switch —
+  and in the **preview's PDF options sheet**, from the one composable with the same
+  `WearRecord.stripComponentIds` / `WearRecord.showShaftProfile` bindings and the same
+  `vm.setWearStripComponents` / `vm.setWearShowShaftProfile` setters, so the two surfaces can
+  never disagree. Electing components is authoring work, not print-time styling, so reaching it
+  must not require opening the preview (on-device request). Both can be composed at once — the
+  tab body stays in the tree behind the preview overlay — so the composable takes a
+  `testTagPrefix` (`wear_strip` on the sheet, `wear_tab_strip` on the tab body); a shared literal
+  tag would resolve to two nodes. The per-checkbox rule lives in the pure
+  `toggleWearStripSelection` (`WearRoute.kt`, `WearStripSelectionTest`), not in either surface's
+  lambda.
 - **Quick actions** (2026-08-15) sit under the checkbox list: **Default (all liners)** →
   `onSetSelection(null)`, **All** → every currently offered id in sheet order, **None** → the
-  empty list (test tags `wear_strip_default` / `wear_strip_all` / `wear_strip_none`). Default is
+  empty list (test tags `<prefix>_default` / `<prefix>_all` / `<prefix>_none`). Default is
   NOT the same as hand-ticking every liner: clearing back to `null` makes the sheet *follow the
   shaft*, so a liner added afterwards gets a strip on its own, whereas an authored list is a
   fixed set and later components arrive unticked. That is the recovery path for a document whose
@@ -1188,11 +1217,18 @@ liner-only election groups and lays out bit-for-bit as `collectWearLinerGroups` 
 
 - **Grouping** (`collectWearStripWindows`): each elected **taper** attaches to the NEAREST
   elected liner — smallest gap, ties go AFT (the more aftward liner wins) — forming one combined
-  window. At most one taper joins a liner from each side; a taper that loses the contest, a taper
-  elected with no liners on the sheet, and every elected **body** get their own single-component
-  window. Bodies never join a liner: they are the shaft's fluid base, so a body strip is its own
-  run. Windows come out AFT→FWD, and the window count feeds `determineWearPdfMode` /
-  grid selection exactly as the liner count used to.
+  window, **but only when that gap is within the join threshold** (`trueGapMaxMm`, below): the
+  contest picks the nearest liner on true mm, and the threshold then says whether the winner's
+  claim stands. At most one taper joins a liner from each side; a taper that loses the contest, a
+  taper **farther from its nearest liner than the threshold**, a taper elected with no liners on
+  the sheet, and every elected **body** get their own single-component window. Bodies never join a
+  liner: they are the shaft's fluid base, so a body strip is its own run. Windows come out
+  AFT→FWD, and the window count feeds `determineWearPdfMode` / grid selection exactly as the liner
+  count used to.
+  A far pair used to share a window regardless (2026-08-15 on-device report): the window's total
+  width pushed the liner off-centre in its cell, the taper crowded it, and the S-break sat almost
+  against the taper's large end. Two separate strips read correctly — each component centres in
+  its own cell, on the page's one shared scale, and each end stub stands a full stub width clear.
 - **Gap mode** is decided from **mm alone** (`wearStripGapDrawsTrue`), so the shared-scale solve
   stays non-circular: `gapMm ≤ trueGapMaxMm` draws TRUE — the real
   shaft outline under the gap, sampled off `docSpec` by `wearStripGapProfile`/`outerDiaMmAt` with
@@ -1220,8 +1256,12 @@ liner-only election groups and lays out bit-for-bit as `collectWearLinerGroups` 
   number behind the pref and the layout code. `composeWearPdf` hands it to
   `collectWearStripWindows(components, ids, trueGapMaxMm)`. **0 breaks on any positive gap**
   (touching components still draw contiguous — they produce no gap segment at all); 12" draws a
-  foot of shaft true between a taper and its liner. It changes only how a gap DRAWS, never which
-  components share a window: the nearest-liner contest is decided on true mm at every setting.
+  foot of shaft true between a taper and its liner. It decides **attachment outright** (see
+  "Grouping"): a taper past it is a separate strip, so under the current builder every gap inside
+  a window draws TRUE and a compressed gap is never emitted. The compressed-gap segment mode, its
+  break/lead-in draw path, and the per-cluster title split are all KEPT — `WearStripWindow` is a
+  general model of a strip window, and a window constructed with a compressed gap still draws and
+  titles correctly (pinned on directly-constructed windows in `WearStripEndsAndClustersTest`).
   App-wide with no per-job override (the body S-break posture), full DataStore round-trip, and a
   **re-render key** on the wear preview because the composer reads it off the `PdfPrefs` snapshot,
   which is not snapshot state. Two hosts, one `WearJoinGapSlider`: Settings → Drawing →
@@ -1248,7 +1288,10 @@ liner-only election groups and lays out bit-for-bit as `collectWearLinerGroups` 
   request). `wearStripClusters(window)` splits the component run at every **compressed** gap —
   components joined by true-scale gaps, or touching, stay in one cluster — because a break means
   the two sides are NOT adjacent and one joined `"A + B — dist FROM SET"` title would misread as a
-  single continuous area. Each cluster names its own components AFT→FWD, joined with " + ".
+  single continuous area. Under the membership rule above every built window is a SINGLE cluster
+  (its gaps are all true-scale), so in practice each strip prints one title; the split machinery
+  stays and governs any window that does carry a compressed gap. Each cluster names its own
+  components AFT→FWD, joined with " + ".
   `wearStripClusterShowsAnchor(cluster)` then decides the anchor-from-SET dimension: a cluster
   holding a **taper** prints none — the strip's own dimension rail is the measuring surface and a
   taper at the shaft end is self-evidently placed — while a lone liner or lone body run keeps it:
@@ -1482,7 +1525,7 @@ PdfPreviewOverlay(
 )
 ```
 
-When `optionsSheet` is non-null, a **Tune** icon appears in the overlay toolbar. Tapping it opens a `ModalBottomSheet` (skips partial expansion) containing the composable, height-capped by the overlay itself. `sheetTunesPage` says that sheet reshapes THIS page live (Runout and Consolidated Output pass `true`; Wear and Undercut take the `false` default): it switches the open preview to the page-strip layout and takes the sheet's scrim off — see **Live tuning** below. `inkBand` is where that page carries ink (`util/PdfInkBounds.kt`), supplied by the routes whose sheets tune; the strip crops to it.
+When `optionsSheet` is non-null, a **Tune** icon appears in the overlay toolbar. Tapping it opens a `ModalBottomSheet` (skips partial expansion) containing the composable, height-capped by the overlay itself. `sheetTunesPage` says that sheet reshapes THIS page (Runout, Consolidated Output, and **Wear** pass `true`; Undercut takes the `false` default): it switches the open preview to the page-strip layout and takes the sheet's scrim off — see **Live tuning** below. `inkBand` is where that page carries ink (`util/PdfInkBounds.kt`), supplied by the routes whose sheets tune; the strip crops to it.
 
 **Stacking:** the zoom/pan `Box` is `clipToBounds()`, so the transformed page tucks **behind** the toolbar instead of sliding over it. A `graphicsLayer` scale/translate draws outside its layout node unless clipped, which let a zoomed-in page cover Close/Export (on-device report); hit testing was always bounded by layout, so this is a drawing fix, not a touch one. Also used by the undercut tab.
 
@@ -1496,7 +1539,7 @@ All four routes (Runout, Wear, Undercut, Consolidated Output) pass `RunoutWearOp
 | Line thickness (Slider 50–200%) | `vm.setLineThicknessScale()` |
 | Trace depth exaggeration (Slider + "Save as default") | `vm.setWearTraceDepthFrac()` / `vm.setPdfWearTraceDepthFrac()` — only when `showWearControls` (Wear only) |
 | Wear area shade (Slider 5–35%, 1% steps) | `vm.setPdfWearBandShadeFrac()` — only when `showWearControls` (Wear only) |
-| Components (Checkboxes + Default / All / None) | `vm.setWearShowShaftProfile()` / `vm.setWearStripComponents()` — only when `showWearControls` (Wear only); the selection callback is nullable, and `null` is the "Default (all liners)" action |
+| Components (Checkboxes + Default / All / None) | `vm.setWearShowShaftProfile()` / `vm.setWearStripComponents()` — only when `showWearControls` (Wear only); the selection callback is nullable, and `null` is the "Default (all liners)" action. The **Wear tab body** hosts the same section, same bindings (see "Selection & pagination") |
 | Taper–liner join (Slider 0–12", 1/2" steps; 10 mm in metric) | `vm.setPdfWearJoinGapMaxMm()` — only when `showWearControls` (Wear only); canonical mm, displayed in the session's unit |
 | Body S-break (Slider Never–Always, 5% steps) | `vm.setPdfSBreakThresholdFrac()` — only when `showSBreak` (see below) |
 | Shaft height (Slider) | `vm.setRunoutHeightScale()` — only when `showHeightControls` (Consolidated Output only) |
@@ -1524,9 +1567,12 @@ shaft + per-component checkboxes + the Default/All/None quick actions) → Trace
 exaggeration → Wear area shade → Taper–liner join → Fractions → Shade in PDF; the **Undercut** sheet shows Blank
 draft → Line thickness → Fractions → Shade in PDF; the **Runout** sheet Line thickness → Body
 S-break → Fractions → Shade in PDF. The wear sliders are commit-on-release like every other
-slider here, but the Wear preview is **not** a live-tuning surface (`tuning` stays null and
-`sheetTunesPage` stays `false`): the release commit re-renders the page through the route's
-render keys.
+slider here, so the Wear preview is **not** a live-drag surface (`tuning` stays null): the
+release commit re-renders the whole page through the route's render keys. It does pass
+`sheetTunesPage = true` all the same — a commit that redraws the page is worthless if the sheet
+covers it (the wear sheet hid the preview outright, on-device report) — so the Wear route
+measures the ink band on every render pass (there are no draft frames to skip here) and hands it
+to the overlay.
 
 All of these values are included in the render loop's `RenderInputs` holder so changing any option immediately re-renders the preview bitmap.
 
@@ -1535,7 +1581,7 @@ All of these values are included in the render loop's `RenderInputs` holder so c
 - **Visual only.** A drag frame never writes DataStore and never updates `RunoutConfig` — persistence and the per-job dirty mark stay on commit-on-release. The Wear and Undercut routes leave `tuning` at its `null` default and are unaffected.
 - **Draft then sharp.** The loop is `snapshotFlow { RenderInputs(…) }.conflate().collect { … }` — latest-wins, so intermediate drag values are dropped while a render is in flight — and drag frames raster at `renderScale = 1` (¼ the pixels). When the drag ends the overrides go null, the inputs change once more, and that pass restores `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back across drag frames and that release pass so the page never strobes.
 - **The page keeps a strip on top.** Both routes pass `sheetTunesPage = true` to `PdfPreviewOverlay`, because live rendering is worthless if the menu covers the page ("It may render live but the menu with the sliders is in the way. I can see the PDF Preview area lighten up on moving a slider but I can't see anything. I need to close the menu to see the changes." — on-device report). While such a sheet is open the overlay drops the centered full-size `Image` for a **page strip** pinned `TopCenter` under the toolbar (a `Canvas` with the same modifier chain plus an explicit `contentDescription`, drawing through the shared `drawPageBand`): the sheets are LANDSCAPE, so a whole page needs only `screenWidthDp × (PDF_PAGE_HEIGHT_PT / PDF_PAGE_WIDTH_PT)` of height (`fitWidthPageHeightDp`, `ui/screen/PreviewTuning.kt` — the real page constants, never a magic ratio). The strip actually shows the page's **ink band** — `util/PdfInkBounds.kt` measures the rendered bitmap's first/last inked rows, the routes hold it in a `previewInkBand` state updated on **sharp passes only** (a drag frame must not resize the strip under the finger) and pass it as `PdfPreviewOverlay(inkBand = …)`, so the blank top margin stops eating the strip while inked content — rail, footer — is never cropped. Opening the sheet **resets zoom/pan** to fit; predictable over preserved, since an inspection zoom would push the strip off-screen exactly when the sliders need it. Closing restores the normal layout (fill, pinch 0.5×–8×).
-- **Sheet capped below the strip — by the overlay.** `PdfPreviewOverlay` wraps `optionsSheet()` in a `Box(heightIn(max = …))`: `tuningSheetMaxHeightDp(screenHeight, strip, sheetChrome)` = screen height − strip − `PREVIEW_TOP_CHROME_DP` (88 dp of status bar + toolbar) − the sheet's own chrome, clamped to `[TUNING_SHEET_MIN_FRAC 40%, PREVIEW_SHEET_MAX_FRAC 78%]` of the screen. **Sheet chrome** is `TUNING_SHEET_CHROME_DP` (48 dp: M3's drag handle) plus the measured `WindowInsets.navigationBars` bottom — both stack OUTSIDE a content-column cap, so ignoring them left the sheet overlapping the strip and swallowing the drawing's lowest callouts and footer (on-device report). On a 393 × 851 dp phone with a 48 dp nav bar: a 303.7 dp strip over a 363.3 dp sheet. The clamp order is **sheet floor first, strip takes the remainder** (`tuningPageStripHeightDp`, computed first so the cap derives from it) — on a short/wide screen the page fits to the shrunken strip, because it is zoomable once the sheet closes and crushed sliders are not usable at all. The sheet already scrolls internally, so the cap never loses content. `RunoutWearOptionsSheet` itself carries **no** cap: only the overlay knows the strip. The **Wear and Undercut** previews take `sheetTunesPage = false` and get the plain `PREVIEW_SHEET_MAX_FRAC` (78%) cap with the full-size centered preview — they carry no LIVE-tuning channel (the wear sheet's own sliders commit on release and re-render the whole page), so there is nothing to watch mid-drag.
+- **Sheet capped below the strip — by the overlay.** `PdfPreviewOverlay` wraps `optionsSheet()` in a `Box(heightIn(max = …))`: `tuningSheetMaxHeightDp(screenHeight, strip, sheetChrome)` = screen height − strip − `PREVIEW_TOP_CHROME_DP` (88 dp of status bar + toolbar) − the sheet's own chrome, clamped to `[TUNING_SHEET_MIN_FRAC 40%, PREVIEW_SHEET_MAX_FRAC 78%]` of the screen. **Sheet chrome** is `TUNING_SHEET_CHROME_DP` (48 dp: M3's drag handle) plus the measured `WindowInsets.navigationBars` bottom — both stack OUTSIDE a content-column cap, so ignoring them left the sheet overlapping the strip and swallowing the drawing's lowest callouts and footer (on-device report). On a 393 × 851 dp phone with a 48 dp nav bar: a 303.7 dp strip over a 363.3 dp sheet. The clamp order is **sheet floor first, strip takes the remainder** (`tuningPageStripHeightDp`, computed first so the cap derives from it) — on a short/wide screen the page fits to the shrunken strip, because it is zoomable once the sheet closes and crushed sliders are not usable at all. The sheet already scrolls internally, so the cap never loses content. `RunoutWearOptionsSheet` itself carries **no** cap: only the overlay knows the strip. The **Wear** preview carries no LIVE-tuning channel — its own controls commit on release and re-render the whole page — but it takes `sheetTunesPage = true` anyway, because the page it redraws has to stay visible while the sheet that redrew it is open. Only the **Undercut** preview keeps `sheetTunesPage = false` and the plain `PREVIEW_SHEET_MAX_FRAC` (78%) cap with the full-size centered preview: its sheet changes nothing about the page's shape.
 - **Undimmed scrim.** `ModalBottomSheet`'s scrim is one **full-window** rect — it covers the page strip too and cannot be restricted to the gap below it — so a tuning sheet passes `Color.Transparent` for the whole time it is open, not just during a drag. The overlay's black surround already reads as separation between strip and sheet. (The schematic's `PdfPreviewScreen`, which has no black surround, paints the strip-to-sheet gap itself and drops that during a drag.) Tap-outside-to-dismiss is unaffected: the transparent scrim still takes the tap.
 
 The option blocks are shared composables in `ui/screen/ShaftHeightSlider.kt` — `LineThicknessSlider`, `SBreakThresholdSlider`, `WearTraceDepthControlRow`, `WearBandShadeSlider`, `WearJoinGapSlider`, and `ShadeInPdfChecks` (heading + the three checkboxes + the `linerShadeLocked` behavior) — used by this sheet and by the schematic preview's `PdfOptionsSheet`, so an added option lands on both surfaces at once. The wear controls have further hosts: `WearTraceDepthControlRow` is also the Wear tab body's row, and `WearBandShadeSlider` / `WearJoinGapSlider` also sit in Settings → Drawing (wrapped there with a Default reset and a caption), so no surface can drift from another. Settings → PDF Export keeps its own copy of the checkbox rows: they sit in a `spacedBy(12.dp)` column with a padded heading, and adopting the sheets' tighter block would restyle that page. Same prefs, same setters. `SBreakThresholdSlider` is additionally the Settings → Drawing control (that page adds only its explanatory caption), so the threshold reads and writes the one app-wide pref from every surface.

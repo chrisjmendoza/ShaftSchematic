@@ -245,4 +245,97 @@ class WearTraceMathTest {
         val seq = sequenceWearTraces(listOf(a, overlapping))
         assertEquals(listOf(0f, 10f, 20f), seq.map { it.localMm })
     }
+
+    // ── smoothWearTrace (monotone cubic, no overshoot) ───────────────────────
+
+    /** A band-shaped run: surface edge, three worn stations, surface edge. */
+    private fun band(vararg pairs: Pair<Float, Float>) =
+        pairs.map { (mm, depth) -> WearTraceVertex(mm, depth) }
+
+    @Test
+    fun `smoothing passes exactly through every input vertex in order`() {
+        val verts = band(0f to 0f, 10f to 0.10f, 20f to 0.25f, 30f to 0.08f, 40f to 0f)
+        val smooth = smoothWearTrace(verts)
+        assertTrue("smoothing must densify the run", smooth.size > verts.size)
+        // Every original vertex survives, verbatim and in order — the drawn depth at a station
+        // stays exactly what buildWearTrace computed.
+        var next = 0
+        smooth.forEach { v -> if (next < verts.size && v == verts[next]) next++ }
+        assertEquals("every input vertex must appear, in order", verts.size, next)
+    }
+
+    @Test
+    fun `smoothing never overshoots a segment's endpoint depths`() {
+        // A deep dip between shallow neighbours — the case an unlimited cubic (Catmull-Rom)
+        // would bulge past, drawing metal that was never measured away (or a hump above the
+        // surface just outside the pit).
+        val verts = band(0f to 0f, 10f to 0.02f, 20f to 0.24f, 30f to 0.02f, 40f to 0f)
+        val smooth = smoothWearTrace(verts)
+        // Walk the smoothed run segment by segment between the original vertices.
+        var vi = 0
+        smooth.forEach { s ->
+            while (vi < verts.size - 2 && s.localMm > verts[vi + 1].localMm) vi++
+            val lo = minOf(verts[vi].depthFrac, verts[vi + 1].depthFrac)
+            val hi = maxOf(verts[vi].depthFrac, verts[vi + 1].depthFrac)
+            assertTrue(
+                "sample at ${s.localMm} = ${s.depthFrac} escaped [$lo, $hi]",
+                s.depthFrac >= lo - 1e-6f && s.depthFrac <= hi + 1e-6f,
+            )
+        }
+    }
+
+    @Test
+    fun `the zero-depth gap between two bands stays exactly on the surface`() {
+        val a = band(0f to 0f, 5f to 0.2f, 10f to 0f)
+        val b = band(20f to 0f, 25f to 0.1f, 30f to 0f)
+        val smooth = smoothWearTrace(sequenceWearTraces(listOf(a, b)))
+        smooth.filter { it.localMm in 10f..20f }.forEach {
+            assertEquals("the shaft between two bands is unworn", 0f, it.depthFrac, 0f)
+        }
+    }
+
+    @Test
+    fun `an equal-x vertical jump is kept verbatim`() {
+        // A reading landing exactly on a band edge: two vertices at the same mm, different
+        // depths. There is no slope to fit, so the pair passes through untouched.
+        val verts = band(0f to 0f, 10f to 0f, 10f to 0.2f, 20f to 0.25f, 30f to 0f)
+        val smooth = smoothWearTrace(verts)
+        val atTen = smooth.filter { it.localMm == 10f }
+        assertEquals(listOf(0f, 0.2f), atTen.map { it.depthFrac })
+    }
+
+    @Test
+    fun `a run too short to curve is returned unchanged`() {
+        val two = band(0f to 0f, 10f to 0.2f)
+        assertEquals(two, smoothWearTrace(two))
+        assertEquals(emptyList<WearTraceVertex>(), smoothWearTrace(emptyList()))
+    }
+
+    @Test
+    fun `smoothed localMm never runs backwards`() {
+        val verts = band(0f to 0f, 3f to 0.05f, 3f to 0.2f, 12f to 0.25f, 40f to 0.01f, 50f to 0f)
+        val smooth = smoothWearTrace(verts)
+        smooth.zipWithNext().forEach { (a, b) ->
+            assertTrue("localMm ran backwards: ${a.localMm} → ${b.localMm}", b.localMm >= a.localMm)
+        }
+    }
+
+    @Test
+    fun `a smoothed band actually curves between its stations`() {
+        // The point of the whole pass: the midpoint of a segment must not sit on the straight
+        // chord between its stations (on-device request — real wear flows, it does not bevel).
+        val verts = band(0f to 0f, 10f to 0.10f, 20f to 0.25f, 30f to 0.10f, 40f to 0f)
+        val smooth = smoothWearTrace(verts)
+        val mid = smooth.first { it.localMm > 5f }
+        val chord = 0.10f * (mid.localMm / 10f)
+        assertTrue("the lead-in must ease rather than run straight", kotlin.math.abs(mid.depthFrac - chord) > 1e-4f)
+    }
+
+    @Test
+    fun `the sample count is the shipped constant`() {
+        assertEquals(16, WEAR_TRACE_SMOOTH_SAMPLES)
+        val verts = band(0f to 0f, 10f to 0.2f, 20f to 0f)
+        // 3 vertices → 2 segments, each carrying WEAR_TRACE_SMOOTH_SAMPLES interior samples.
+        assertEquals(3 + 2 * WEAR_TRACE_SMOOTH_SAMPLES, smoothWearTrace(verts).size)
+    }
 }

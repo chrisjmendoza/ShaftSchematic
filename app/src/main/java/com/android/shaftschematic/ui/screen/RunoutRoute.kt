@@ -967,7 +967,10 @@ internal fun openRunoutPdf(context: Context, uri: Uri) {
  *                      left below the strip — and the sheet's scrim comes off, because
  *                      dimming the page being judged is exactly what the layout exists to
  *                      prevent (the black surround already separates strip from sheet).
- *                      Wear and undercut leave it false: their sheets tune nothing.
+ *                      Wear passes true as well — its controls commit on release rather than
+ *                      mid-drag, but the commit still redraws THIS page, and a sheet that
+ *                      covered it left the change unjudgeable (on-device report). Undercut
+ *                      leaves it false: its sheet tunes nothing on the page.
  * @param inkBand       Where [bitmap] carries ink, from the route's render loop. The strip
  *                      crops to it so the page's blank top margin does not take room from
  *                      the drawing; null shows the whole page. Measured on sharp passes
@@ -1010,7 +1013,7 @@ internal fun PdfPreviewOverlay(
             sheetChromeDp,
         ).dp
     } else {
-        // The wear and undercut sheets tune nothing: no strip to stay clear of, just the
+        // A sheet that reshapes nothing on the page has no strip to stay clear of, just the
         // swipe-down edge at the top.
         (configuration.screenHeightDp * PREVIEW_SHEET_MAX_FRAC).dp
     }

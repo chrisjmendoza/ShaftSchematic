@@ -1,7 +1,12 @@
 package com.android.shaftschematic.pdf
 
+import com.android.shaftschematic.geom.WearTraceReading
+import com.android.shaftschematic.geom.WearTraceVertex
+import com.android.shaftschematic.geom.buildWearTrace
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.deepestWearDepthMm
+import com.android.shaftschematic.geom.smoothWearTrace
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
@@ -27,16 +32,24 @@ import java.io.File
  * - **Window ends** follow [wearStripEndStyle] — a BREAK stub (the shaft genuinely continues), a
  *   THREAD_END stub drawn at [wearStripEndThreadDiaMm] with a flat outer edge + thread hatch, or
  *   FLAT: no stub at all, just a full-weight end cap where the shaft physically ends.
- * - **Compressed gaps** lead in from each component edge with [WEAR_STRIP_BREAK_LEAD_PT] of the
- *   gap's TRUE outline (`outerDiaMmAt` half a millimetre inside the gap, falling back to the
- *   adjacent component's edge Ø) before that side's break edge.
+ * - **Window MEMBERSHIP follows the join threshold** ([collectWearStripWindows]): a taper within
+ *   it shares one window with its nearest liner (the gap drawn true, with the real shaft outline
+ *   under it), and a taper past it becomes its own strip — so no window here carries a compressed
+ *   gap, and the two ends of the far pair each centre in their own cell.
  * - **Titles are per attachment cluster** ([wearStripClusters]): a taper-bearing cluster prints
- *   names only ([wearStripClusterShowsAnchor]), a lone liner/body keeps its from-SET anchor, and
- *   a multi-cluster window centres each label under its own cluster's drawn span.
+ *   names only ([wearStripClusterShowsAnchor]) and a lone liner/body keeps its from-SET anchor.
  *
- * Doubles as a geometry regression: every drawn segment must stay inside its cell, the
- * near/far taper cases must pick different gap modes, a FLAT end must draw nothing past the
- * window edge, and a liner-only window must land exactly where the legacy per-liner strip did.
+ * The rendered scenarios: **A** near taper + liner in one window with a threaded aft end,
+ * **B1/B2** a far liner and a far taper as separate strips on the page's one shared scale,
+ * **C** a lone body, **D** the default liner-only strip, **E** a lone taper, **F** a liner at the
+ * shaft's own end, **G** a liner's smoothed worn-profile trace over a wear band with five
+ * measured stations (`buildWearTrace` → `smoothWearTrace`), the straight run it replaces drawn
+ * under it in dashed grey.
+ *
+ * Doubles as a geometry regression: every drawn segment must stay inside its cell, the near/far
+ * taper cases must produce different window counts, a FLAT end must draw nothing past the window
+ * edge while a BREAK end stands its glyph a full stub width off it, and a liner-only window must
+ * land exactly where the legacy per-liner strip did.
  */
 class WearStripWindowSvgPreviewTest {
 
@@ -333,9 +346,10 @@ class WearStripWindowSvgPreviewTest {
         // The thread end still draws a stub — it is the whole remaining shaft, not a truncation.
         assertEquals(a.leftPt - a.stubWidthPt, a.minX, 1e-3f)
 
-        // B) The same pair pushed far apart — the gap compresses to the fixed break run, which
-        //    splits the window into TWO clusters: the taper titles itself (no anchor) and the
-        //    lone liner keeps its from-SET dimension.
+        // B) The same pair pushed far apart — past the join threshold the taper does not attach
+        //    at all: two single-component strips, sharing the page's one scale. The taper titles
+        //    itself (no anchor) and the lone liner keeps its from-SET dimension, each centred in
+        //    its own cell instead of the liner being pushed off-centre by a shared window.
         val farSpec = spec.copy(
             overallLengthMm = 1200f,
             bodies = listOf(
@@ -345,30 +359,40 @@ class WearStripWindowSvgPreviewTest {
             liners = listOf(Liner(id = "lnFar", startFromAftMm = 900f, lengthMm = 200f, odMm = 160f)),
         )
         val farComps = wearStripComponentsFor(farSpec, null)
-        val far = collectWearStripWindows(farComps, listOf("t1", "lnFar")).single()
-        val farGap = far.segments.filterIsInstance<WearStripGapSeg>().single()
-        assertTrue("a 400 mm gap must compress", !farGap.trueScale)
+        val farWindows = collectWearStripWindows(farComps, listOf("t1", "lnFar"))
         assertEquals(
+            "a 400 mm gap is past the join threshold, so neither joins",
             listOf(listOf("t1"), listOf("lnFar")),
-            wearStripClusters(far).map { cl -> cl.components.map { it.id } },
+            farWindows.map { w -> w.components.map { it.id } },
         )
-        val farScale = sharedWearStripWindowPtPerMm(listOf(far), listOf(inner))
-        val b = windowSvg(farSpec, far, farScale, names, "B — taper + liner, compressed gap, two clusters")
-        File(outDir, "b-taper-liner-break-gap.svg").writeText(b.svg)
-        assertTrue(b.minX >= cellLeft - 1e-3f && b.maxX <= cellRight + 1e-3f)
-        assertEquals(2, b.titles.size)
-        assertEquals("AFT Taper", b.titles[0])
-        assertTrue("the lone liner cluster keeps its anchor", b.titles[1].contains("S.E.T."))
-        // The break edges stand a lead-in inside the compressed run's two drawn ends, so a bit of
-        // real shaft connects each component to its break.
-        val hFar = computeWearStripWindowLayout(cellLeft, cellRight, far.drawnWidthPt(farScale), farScale)
-        val gx0 = far.xAt(farGap.startMm, hFar.linerLeftPt, farScale)
-        val gx1 = far.xAt(farGap.endMm, hFar.linerLeftPt, farScale)
-        assertEquals(WEAR_STRIP_BREAK_GAP_PT, gx1 - gx0, 1e-3f)
-        assertEquals(2, b.gapBreakXs.size)
-        assertEquals(gx0 + WEAR_STRIP_BREAK_LEAD_PT, b.gapBreakXs[0], 1e-3f)
-        assertEquals(gx1 - WEAR_STRIP_BREAK_LEAD_PT, b.gapBreakXs[1], 1e-3f)
-        assertTrue("the pair must keep open space between them", b.gapBreakXs[1] > b.gapBreakXs[0])
+        val farTaperW = farWindows[0]
+        val farLinerW = farWindows[1]
+        assertTrue(
+            "a separated window carries no gap segment at all",
+            farWindows.all { w -> w.segments.none { it is WearStripGapSeg } },
+        )
+        // ONE page scale solved over both windows, exactly as the sheet does it.
+        val farScale = sharedWearStripWindowPtPerMm(listOf(farTaperW, farLinerW), listOf(inner))
+        File(outDir, "b-taper-liner-break-gap.svg").delete()   // superseded by the two strips below
+        val b1 = windowSvg(farSpec, farLinerW, farScale, names, "B1 — far liner on its own strip")
+        File(outDir, "b1-far-liner-own-strip.svg").writeText(b1.svg)
+        assertTrue(b1.minX >= cellLeft - 1e-3f && b1.maxX <= cellRight + 1e-3f)
+        assertTrue("the lone liner keeps its anchor", b1.titles.single().contains("S.E.T."))
+
+        val b2 = windowSvg(farSpec, farTaperW, farScale, names, "B2 — far taper on its own strip")
+        File(outDir, "b2-far-taper-own-strip.svg").writeText(b2.svg)
+        assertTrue(b2.minX >= cellLeft - 1e-3f && b2.maxX <= cellRight + 1e-3f)
+        assertEquals(listOf("AFT Taper"), b2.titles)
+        assertFalse("a taper cluster prints no from-SET anchor", b2.svg.contains("S.E.T."))
+        // Body b2 runs on past the taper's LARGE (fwd) end, so that side is a BREAK stub: the
+        // glyph now stands a full stub width off the component edge instead of being pressed
+        // against it inside a shared window (on-device report).
+        assertEquals(
+            WearStripEndStyle.BREAK,
+            wearStripEndStyle(farSpec, farTaperW.endMm, aftSide = false),
+        )
+        assertEquals(b2.rightPt + b2.stubWidthPt, b2.maxX, 1e-3f)
+        assertEquals(b2.leftPt - b2.stubWidthPt, b2.minX, 1e-3f)
 
         // C) A body elected on its own — a plain rectangle strip.
         val bodyWindow = collectWearStripWindows(comps, listOf("b1")).single()
@@ -430,6 +454,102 @@ class WearStripWindowSvgPreviewTest {
         assertEquals("…while the breaking side still draws its stub", f.rightPt + f.stubWidthPt, f.maxX, 1e-3f)
 
         assertTrue(outDir.listFiles()!!.size >= 6)
+    }
+
+    @Test
+    fun `render the smoothed worn-profile trace preview SVG`() {
+        // The worn liner surface: same math the wear sheet's liner strip draws with
+        // (`buildWearTrace` → `smoothWearTrace`), so the SVG shows exactly the curve that prints.
+        // The straight run it replaces is drawn under it in dashed grey for markup comparison.
+        val outDir = File("build/reports/wear-strip-preview").apply { mkdirs() }
+        val spec = spec()
+        val comps = wearStripComponentsFor(spec, null)
+        val inner = cellRight - cellLeft - 2f * WEAR_STRIP_STUB_WIDTH_PT
+        val window = collectWearStripWindows(comps, null).single()
+        val liner = window.components.single { it.kind == WearStripComponentKind.LINER }
+        val ptPerMm = sharedWearStripWindowPtPerMm(listOf(window), listOf(inner))
+
+        // One wear band over most of the liner, five measured stations inside it — a deep dip
+        // flanked by shallower readings, the shape that shows both the easing and the fact that
+        // the curve never bulges past a station.
+        val nominal = liner.aftDiaMm
+        val readings = listOf(
+            WearTraceReading(40f, 156f),
+            WearTraceReading(70f, 150f),
+            WearTraceReading(100f, 146f),
+            WearTraceReading(130f, 152f),
+            WearTraceReading(160f, 158f),
+        )
+        val deepest = deepestWearDepthMm(readings.map { nominal to it.diaMm })
+        val band = clampWearBandToLiner(30f, 140f, liner.lengthMm)
+        val raw = buildWearTrace(
+            bandStartMm = band.startMm, bandLengthMm = band.lengthMm,
+            readings = readings, nominalOdMm = nominal, deepestDepthMm = deepest,
+        )
+        val smooth = smoothWearTrace(raw)
+        assertTrue("the fixture must actually trace", raw.size >= 5)
+
+        // Regression, not just a picture: the drawn curve keeps every authored station depth and
+        // never digs past one — the whole reason the smoother is monotone cubic.
+        assertTrue("every authored station must survive smoothing", smooth.containsAll(raw))
+        val deepestFrac = raw.maxOf { it.depthFrac }
+        smooth.forEach {
+            assertTrue("a sample dug past the deepest reading", it.depthFrac <= deepestFrac + 1e-6f)
+            assertTrue("a sample rose above the liner surface", it.depthFrac >= -1e-6f)
+        }
+
+        val svg = Svg()
+        val h = computeWearStripWindowLayout(cellLeft, cellRight, window.drawnWidthPt(ptPerMm), ptPerMm)
+        fun xAt(mm: Float) = window.xAt(mm, h.linerLeftPt, ptPerMm)
+        fun xLocal(mm: Float) = xAt(liner.startMm + mm)
+        val innerLay = computeWearStripInnerLayout(cellTop, cellBottom, titleHeightPt = 9f)
+        val cy = (innerLay.cylTop + innerLay.cylBottom) / 2f
+        val rCap = (innerLay.cylBottom - innerLay.cylTop) / 2f
+        val r = (rCap * (nominal / window.refDiaMm)).coerceIn(0f, rCap)
+        val top = cy - r
+        val bot = cy + r
+        val x0 = xLocal(0f)
+        val x1 = xLocal(liner.lengthMm)
+
+        svg.rect(cellLeft, cellTop, cellRight - cellLeft, cellBottom - cellTop, stroke = "#bbb", sw = 0.5f)
+        svg.text(cellLeft, cellTop + 8f, esc("G — smoothed worn-profile trace (dashed grey = the straight run it replaces)"), size = 7f, color = "#888")
+
+        /** One traced edge, exactly as `tracedLinerEdgePath` walks it: straight lineTo per vertex. */
+        fun edge(verts: List<WearTraceVertex>, dir: Float, color: String, w: Float, dash: String?) {
+            val edgeY = cy - dir * r      // dir +1 = the TOP edge, -1 = the BOTTOM
+            var px = x0
+            var py = edgeY
+            verts.forEach { v ->
+                val vx = xLocal(v.localMm)
+                val vy = edgeY + dir * v.depthFrac * r
+                svg.line(px, py, vx, vy, w = w, color = color, dash = dash)
+                px = vx; py = vy
+            }
+            svg.line(px, py, x1, edgeY, w = w, color = color, dash = dash)
+        }
+        // The unsmoothed run first, so the curve draws over it.
+        edge(raw, 1f, "#999", 0.7f, "3,2")
+        edge(raw, -1f, "#999", 0.7f, "3,2")
+        edge(smooth, 1f, "black", 1.2f, null)
+        edge(smooth, -1f, "black", 1.2f, null)
+        svg.line(x0, top, x0, bot, w = 0.7f)
+        svg.line(x1, top, x1, bot, w = 0.7f)
+
+        // Band edges + a witness tick and value at each measured station, so the curve can be
+        // read against the numbers it was built from.
+        listOf(band.startMm, band.startMm + band.lengthMm).forEach { mm ->
+            svg.line(xLocal(mm), top, xLocal(mm), bot, w = 0.7f, color = "#c60", dash = "2,2")
+        }
+        readings.forEach { rd ->
+            val sx = xLocal(rd.localMm)
+            svg.line(sx, top - 3f, sx, bot + 3f, w = 0.5f, color = "#06c")
+            svg.text(sx, top - 5f, esc("Ø${rd.diaMm}"), size = 6f, anchor = "middle", color = "#06c")
+        }
+        svg.text(cellLeft, cellBottom - 2f, esc("AFT Liner — worn profile, ${smooth.size} vertices from ${raw.size}"))
+
+        val file = File(outDir, "g-smooth-worn-trace.svg")
+        file.writeText(svg.wrap(cellRight - cellLeft + 20f, cellBottom - cellTop + 10f))
+        assertTrue(file.exists())
     }
 
     @Test

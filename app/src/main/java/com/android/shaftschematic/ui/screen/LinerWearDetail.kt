@@ -86,6 +86,7 @@ import com.android.shaftschematic.geom.pitHalfArm
 import com.android.shaftschematic.geom.pickPitAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.sequenceWearTraces
+import com.android.shaftschematic.geom.smoothWearTrace
 import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearPit
@@ -470,22 +471,26 @@ fun ComponentWearDetailOverlay(
 
                         // ── Focus component body (trapezoid — a rect when start Ø == end Ø) ──
                         // Inside a liner's wear bands the top and bottom edges dip through the
-                        // measured diameters (the worn-profile trace, geom/WearTraceMath.kt):
+                        // measured diameters (the worn-profile trace, geom/WearTraceMath.kt),
+                        // smoothed per band so the surface flows the way real wear does:
                         // fill and stroke share this path, so the silhouette and its tint bite
-                        // together. Built from the SAME trace the wear PDF's liner strip walks,
-                        // mapped through this canvas's scale, so both sites read identically.
+                        // together. Built from the SAME trace the wear PDF's liner strip walks —
+                        // same per-band smoothing — mapped through this canvas's scale, so both
+                        // sites read identically.
                         val rStart = rPx(startDiaMm)
                         val rEnd = rPx(endDiaMm)
                         val traceVerts = if (liner == null) emptyList() else sequenceWearTraces(
                             spots.map { spot ->
                                 val band = clampWearBandToLiner(spot.startMm, spot.lengthMm, lenMm)
-                                buildWearTrace(
-                                    bandStartMm = band.startMm,
-                                    bandLengthMm = band.lengthMm,
-                                    readings = traceReadings,
-                                    nominalOdMm = liner.odMm,
-                                    deepestDepthMm = deepestWearDepth,
-                                    maxDepthFrac = traceDepthFrac,
+                                smoothWearTrace(
+                                    buildWearTrace(
+                                        bandStartMm = band.startMm,
+                                        bandLengthMm = band.lengthMm,
+                                        readings = traceReadings,
+                                        nominalOdMm = liner.odMm,
+                                        deepestDepthMm = deepestWearDepth,
+                                        maxDepthFrac = traceDepthFrac,
+                                    )
                                 )
                             }
                         )

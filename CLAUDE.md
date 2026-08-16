@@ -206,9 +206,12 @@ sharp passes only so it can't resize under a dragging finger) and the cap counts
 sheet's OWN chrome that stacks outside the content column — drag handle +
 navigation-bar inset, `TUNING_SHEET_CHROME_DP` — or the menu eats the callouts and footer.
 ONE draw helper feeds both strip sites (`drawPageBand`). The Wear/Undercut sheets carry no
-LIVE-tuning channel — their own controls (wear: trace depth + wear-area shade +
-taper–liner join; both: blank draft) commit on release and re-render the whole page — so
-they keep the plain 78% cap with the centered full-size page. Liners follow `shadedLiners` like
+LIVE-tuning channel — their own controls (wear: strip election + trace depth + wear-area
+shade + taper–liner join; both: blank draft) commit on release and re-render the whole page
+— but the WEAR sheet still takes the **page-strip layout** (`sheetTunesPage = true`, ink band
+measured on every pass since there are no draft frames to skip): a commit that redraws the
+page is worthless while the sheet covers it (on-device report). Only the UNDERCUT sheet keeps
+the plain 78% cap with the centered full-size page. Liners follow `shadedLiners` like
 bodies and tapers **except when in-profile values print** — a sheet-white knockout halo over
 grey reads as a pasted box, so on such a sheet liners draw unfilled whatever the pref says.
 ONE predicate decides it, `consolidatedSheetHasInProfileValues`
