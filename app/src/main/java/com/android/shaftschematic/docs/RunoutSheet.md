@@ -75,6 +75,23 @@ The pinned block, its padding, and its divider are all inside the same
 `spec.overallLengthMm > 0f` guard, so an OAL-less spec leaves no orphan rule above the
 controls.
 
+### Wear tab body order
+
+The Wear tab follows the **same convention** — output first, options after (on-device request):
+options placed above the buttons push the thing the page exists for off the screen. Its scroll
+region reads, top to bottom:
+
+1. **Interactive shaft canvas** + the "Tap a body, taper, or liner…" hint. (Unlike RunoutRoute's,
+   the wear canvas scrolls with the content — it is a tap surface for authoring, not a preview
+   being watched while something else is adjusted.)
+2. **Document output group** — the blank-draft switch, the gate message when the export gate is
+   closed, then Preview / Print / Export. **Blank draft belongs to this group**, not to the
+   options below it: it selects WHICH document the three buttons produce, rather than restyling
+   one.
+3. `HorizontalDivider`, then the **per-job customization rows** — trace depth
+   (`WearTraceDepthControlRow`), the dye-pen PASS/FAIL chips, and the Components election
+   (`WearStripComponentChecks`).
+
 ---
 
 ## Measurement stations (counts, fragments, identity)
@@ -1249,8 +1266,9 @@ layouts (see "Wear PDF Rendering Modes" above for how each positions the strips)
   rule. Both the election and `WearRecord.showShaftProfile` are read from the passed record even
   in blank-draft mode: a write-in sheet blanks values, never the drawing's shape.
 - **Two hosts, one state** (2026-08-15): the "Components" section (`WearStripComponentChecks`)
-  renders BOTH on the **Wear tab body** — under the dye-pen row, above the blank-draft switch —
-  and in the **preview's PDF options sheet**, from the one composable with the same
+  renders BOTH on the **Wear tab body** — last of the customization rows, below the output block
+  (see "Wear tab body order") — and in the **preview's PDF options sheet**, from the one
+  composable with the same
   `WearRecord.stripComponentIds` / `WearRecord.showShaftProfile` bindings and the same
   `vm.setWearStripComponents` / `vm.setWearShowShaftProfile` setters, so the two surfaces can
   never disagree. Electing components is authoring work, not print-time styling, so reaching it

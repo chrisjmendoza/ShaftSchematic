@@ -380,55 +380,12 @@ fun WearRoute(
 
             Spacer(Modifier.height(4.dp))
 
-            // ── Worn-profile trace depth ──────────────────────────────────────
-            // Sits under the shaft it restyles (the undercut sheet's exaggeration slider
-            // posture). The wear preview's PDF options sheet carries this same row, from
-            // the one construction, so the two surfaces can never drift.
-            WearTraceDepthControlRow(
-                vm = vm,
-                effectiveFrac = traceDepthFrac,
-                globalDefault = wearTraceDefault,
-            )
-
-            // ── Dye pen inspection result ─────────────────────────────────────
-            // Selecting a chip prints an "X" inside that PASS/FAIL checkbox on the sheet's
-            // notes row; the other box stays present and blank. Tapping the selected chip
-            // deselects it, returning both boxes to blank for hand-marking (the original
-            // form posture, and what a blank draft always prints).
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "Dye pen inspection:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                val result = wearRecord.dyePenResult
-                WearChip("Pass", result == DyePenResult.PASS) {
-                    vm.setDyePenResult(if (result == DyePenResult.PASS) null else DyePenResult.PASS)
-                }
-                WearChip("Fail", result == DyePenResult.FAIL) {
-                    vm.setDyePenResult(if (result == DyePenResult.FAIL) null else DyePenResult.FAIL)
-                }
-            }
-
-            // ── Strip election ────────────────────────────────────────────────
-            // The same section the preview's PDF options sheet carries, from the one
-            // construction and bound to the one ViewModel state, so the two surfaces always
-            // agree. It lives here as well because electing components is authoring work, not
-            // print-time styling — reaching it should not require opening the preview
-            // (on-device request). Distinct tag prefix: this row stays composed behind the
-            // overlay while the sheet's copy is on screen.
-            WearStripComponentChecks(
-                options = stripOptions,
-                selection = wearRecord.stripComponentIds,
-                defaultIds = stripDefaultIds,
-                showShaftProfile = wearRecord.showShaftProfile,
-                onSetShowShaftProfile = { vm.setWearShowShaftProfile(it) },
-                onSetSelection = { vm.setWearStripComponents(it) },
-                testTagPrefix = "wear_tab_strip",
-            )
+            // ── Document output ───────────────────────────────────────────────
+            // The output actions sit directly under the drawing they produce, and every
+            // per-job customization row follows BELOW them (on-device request): options
+            // above the buttons push the thing the page exists for off the screen. Blank
+            // draft belongs to this block rather than to the options below it — it selects
+            // WHICH document the three buttons produce.
 
             // ── Blank draft toggle ────────────────────────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -509,6 +466,58 @@ fun WearRoute(
                 Spacer(Modifier.width(8.dp))
                 Text("Export Wear Document PDF")
             }
+
+            HorizontalDivider()
+
+            // ── Worn-profile trace depth ──────────────────────────────────────
+            // First of the per-job customization rows, below the output block. The wear
+            // preview's PDF options sheet carries this same row, from the one construction,
+            // so the two surfaces can never drift.
+            WearTraceDepthControlRow(
+                vm = vm,
+                effectiveFrac = traceDepthFrac,
+                globalDefault = wearTraceDefault,
+            )
+
+            // ── Dye pen inspection result ─────────────────────────────────────
+            // Selecting a chip prints an "X" inside that PASS/FAIL checkbox on the sheet's
+            // notes row; the other box stays present and blank. Tapping the selected chip
+            // deselects it, returning both boxes to blank for hand-marking (the original
+            // form posture, and what a blank draft always prints).
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Dye pen inspection:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val result = wearRecord.dyePenResult
+                WearChip("Pass", result == DyePenResult.PASS) {
+                    vm.setDyePenResult(if (result == DyePenResult.PASS) null else DyePenResult.PASS)
+                }
+                WearChip("Fail", result == DyePenResult.FAIL) {
+                    vm.setDyePenResult(if (result == DyePenResult.FAIL) null else DyePenResult.FAIL)
+                }
+            }
+
+            // ── Strip election ────────────────────────────────────────────────
+            // The same section the preview's PDF options sheet carries, from the one
+            // construction and bound to the one ViewModel state, so the two surfaces always
+            // agree. It lives here as well because electing components is authoring work, not
+            // print-time styling — reaching it should not require opening the preview
+            // (on-device request). Distinct tag prefix: this row stays composed behind the
+            // overlay while the sheet's copy is on screen.
+            WearStripComponentChecks(
+                options = stripOptions,
+                selection = wearRecord.stripComponentIds,
+                defaultIds = stripDefaultIds,
+                showShaftProfile = wearRecord.showShaftProfile,
+                onSetShowShaftProfile = { vm.setWearShowShaftProfile(it) },
+                onSetSelection = { vm.setWearStripComponents(it) },
+                testTagPrefix = "wear_tab_strip",
+            )
         }
     }
 

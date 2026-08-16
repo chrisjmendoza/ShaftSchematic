@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-16
 
+### fix: the wear tab's document buttons sit under the shaft, not under the options
+
+Preview, Print and Export had drifted to the bottom of the Wear tab, below the trace-depth
+dial, the dye-pen chips and the component election — so producing a sheet, which is the routine
+thing the page is for, meant scrolling past every option that tunes it.
+
+The output group now sits directly under the shaft canvas and its tap hint, and the
+customization rows follow below a divider. The blank-draft switch moves up with the buttons: it
+chooses which document they produce rather than restyling one. This is the order the Runout tab
+already used.
+
 ### feat: wear detail strips fill the page instead of the grid
 
 The wear sheet used to lay its detail strips into a fixed two-per-row grid: every strip got half
