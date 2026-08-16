@@ -1257,4 +1257,85 @@ class WearStripLayoutTest {
         assertEquals("a 720 pt page is wider than nothing", 720f, packWidth, 1e-6f)
     }
 
+    // ── spreadWearStripRowGutters — facing break curls get the gutter they need ──
+
+    private fun cell(idx: Int, row: Int, left: Float, width: Float) =
+        WearStripPackedCell(windowIndex = idx, row = row, left = left, right = left + width)
+
+    @Test
+    fun `deficient gutter widens to the requirement and the row re-centers`() {
+        // Two cells (450 + 220 wide) at a 22pt gutter, centered: row spans 692 in 720.
+        val rowW = 450f + 22f + 220f
+        val x0 = packLeft + (packWidth - rowW) / 2f
+        val cells = listOf(cell(0, 0, x0, 450f), cell(1, 0, x0 + 472f, 220f))
+        val out = spreadWearStripRowGutters(cells, packLeft, packRight) { _, _ -> 49f }
+        assertEquals("footprints preserved", 450f, out[0].right - out[0].left, 1e-3f)
+        assertEquals("footprints preserved", 220f, out[1].right - out[1].left, 1e-3f)
+        assertEquals("gutter widened to the requirement", 49f, out[1].left - out[0].right, 1e-2f)
+        val leadPad = out[0].left - packLeft
+        val trailPad = packRight - out[1].right
+        assertEquals("row re-centered", leadPad, trailPad, 1e-2f)
+    }
+
+    @Test
+    fun `zero requirement and already-wide gutters stay exactly where they were`() {
+        val cells = listOf(cell(0, 0, 100f, 200f), cell(1, 0, 322f, 200f))
+        assertEquals(cells, spreadWearStripRowGutters(cells, packLeft, packRight) { _, _ -> 0f })
+        // Requirement below the current gutter: never shrinks, never moves.
+        assertEquals(cells, spreadWearStripRowGutters(cells, packLeft, packRight) { _, _ -> 10f })
+    }
+
+    @Test
+    fun `insufficient slack widens proportionally and never overruns the page`() {
+        // 340 + 340 wide at a 22pt gutter = 702 of 720: only 18pt of slack for a 60pt ask.
+        val rowW = 340f + 22f + 340f
+        val x0 = packLeft + (packWidth - rowW) / 2f
+        val cells = listOf(cell(0, 0, x0, 340f), cell(1, 0, x0 + 362f, 340f))
+        val out = spreadWearStripRowGutters(cells, packLeft, packRight) { _, _ -> 60f }
+        assertEquals("all slack spent", 22f + 18f, out[1].left - out[0].right, 1e-2f)
+        assertTrue("row inside the content span", out[0].left >= packLeft - 1e-3f)
+        assertTrue("row inside the content span", out[1].right <= packRight + 1e-3f)
+    }
+
+    @Test
+    fun `single-cell rows and other rows are untouched by a widening row`() {
+        val lone = cell(0, 0, 200f, 300f)
+        val a = cell(1, 1, 100f, 250f)
+        val b = cell(2, 1, 372f, 250f)
+        val out = spreadWearStripRowGutters(listOf(lone, a, b), packLeft, packRight) { _, _ -> 50f }
+        assertEquals("lone row untouched", lone, out[0])
+        assertEquals("output keeps input order", listOf(0, 1, 2), out.map { it.windowIndex })
+        assertEquals("row 1 widened", 50f, out[2].left - out[1].right, 1e-2f)
+    }
+
+    @Test
+    fun `per-pair requirements widen only the gutters that ask`() {
+        val cells = listOf(cell(0, 0, 50f, 150f), cell(1, 0, 222f, 150f), cell(2, 0, 394f, 150f))
+        val out = spreadWearStripRowGutters(cells, packLeft, packRight) { l, r ->
+            if (l == 0 && r == 1) 60f else 0f
+        }
+        assertEquals("asking gutter widened", 60f, out[1].left - out[0].right, 1e-2f)
+        assertEquals("silent gutter unchanged", 22f, out[2].left - out[1].right, 1e-2f)
+    }
+
+    // ── wearStripBreakAmplitudePt — the curl flattens before it ever crosses ──
+
+    @Test
+    fun `break amplitude is full when the void side is unbounded or roomy`() {
+        assertEquals(0.6f * 80f, wearStripBreakAmplitudePt(80f), 1e-3f)
+        assertEquals(0.6f * 80f, wearStripBreakAmplitudePt(80f, outwardRoomPt = 500f, strokeWidthPt = 1.4f), 1e-3f)
+    }
+
+    @Test
+    fun `break amplitude clamps to the outward room and reaches zero gracefully`() {
+        val r = 80f
+        val stroke = 1.4f
+        val room = 10f
+        val amp = wearStripBreakAmplitudePt(r, room, stroke)
+        assertTrue("clamped below full", amp < 0.6f * r)
+        assertEquals("reach fills exactly the room", room - stroke, amp * BREAK_EDGE_OUTWARD_REACH_FRAC, 1e-2f)
+        assertEquals("no room, no curl", 0f, wearStripBreakAmplitudePt(r, 0f, stroke), 1e-3f)
+        assertEquals("negative room, no curl", 0f, wearStripBreakAmplitudePt(r, -5f, stroke), 1e-3f)
+    }
+
 }

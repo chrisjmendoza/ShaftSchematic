@@ -8,6 +8,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-16
 
+### fix: facing wear-strip S-breaks spread apart instead of crossing
+
+Two strips side by side both ending in an S-break put their break curls in the same gutter,
+and at the heights the packed rows now draw, the curls reached far enough to interweave — every
+strip-to-strip gutter on the exported sheet read as one woven knot (on-device report), while the
+centered rows parked spare width at the page margins.
+
+The page now spends that slack where the glyphs need it: after packing, the gutters whose facing
+ends are breaks widen to the two curls' actual reach at the drawn radius plus daylight, and the
+row re-centers — strip sizes and the shared scale never change. A row without enough slack widens
+as far as it can and then flattens the curls to fit (the same degrade-not-overlap posture the
+compression break pair already had), so facing breaks can never cross at any layout.
+
 ### feat: runout bubble pointers read straight to their stations
 
 On a sheet whose stations cluster under compressed runs, the even-spread waterfill filled

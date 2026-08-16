@@ -287,6 +287,10 @@ fun composeWearPdf(
     val profileBottom: Float
     val stripCells: List<WearStripCell>
     val overflowBandTop: Float
+    // Per-window outward room for the stub-end break curls (left, right), aligned with
+    // `onPage` — this end's share of the (spread) gutter beside it, MAX_VALUE where nothing
+    // bounds the void side. See `spreadWearStripRowGutters`/`wearStripBreakAmplitudePt`.
+    val stripBreakRooms: List<Pair<Float, Float>>
     // The blank template's taller header is paid for here: its profile→strips gap shrinks
     // (WEAR_STRIP_TOP_GAP_BLANK_PT) instead of the strips themselves getting shorter.
     val profileToStripsGap = when {
@@ -322,8 +326,50 @@ fun composeWearPdf(
             maxStripHeightPt = packedRowCap,
         )
         val lift = if (showProfile) 0f else (v.stripTops.firstOrNull() ?: midTopFull) - midTopFull
+
+        // Facing S-break curls must never cross a gutter: widen each row's gutters to what
+        // its facing break ends need at the radius these rows will actually draw, funded by
+        // the slack a centered row parks at the margins (`spreadWearStripRowGutters`). The
+        // radius bound is the tallest cylinder a strip this tall can draw (no Ø-callout
+        // band) — an overestimate only ever buys a little extra daylight.
+        val rowH = ((v.stripBottoms.firstOrNull() ?: 0f) - (v.stripTops.firstOrNull() ?: 0f))
+            .coerceAtLeast(0f)
+        val innerBound = computeWearStripInnerLayout(
+            0f, rowH, titleHeightPt = (text.textSize - 1f).coerceAtLeast(7f),
+        )
+        val stubRBoundPt = ((innerBound.cylBottom - innerBound.cylTop) / 2f).coerceAtLeast(0f)
+        fun endReachPt(windowIdx: Int, aftSide: Boolean): Float {
+            val w = onPage[windowIdx]
+            val style = wearStripEndStyle(docSpec, if (aftSide) w.startMm else w.endMm, aftSide)
+            return if (style == WearStripEndStyle.BREAK)
+                BREAK_EDGE_OUTWARD_REACH_FRAC * (WEAR_STRIP_BREAK_AMP_FRAC * stubRBoundPt)
+            else 0f
+        }
+        val spreadCells = spreadWearStripRowGutters(packing.cells, contentLeft, contentRight) { li, ri ->
+            val reach = endReachPt(li, aftSide = false) + endReachPt(ri, aftSide = true)
+            if (reach <= 0f) 0f
+            else reach + outline.strokeWidth + WEAR_STRIP_GUTTER_DAYLIGHT_PT
+        }
+        // Each end's share of the gutter beside it, proportional to its curl's reach — the
+        // amplitude backstop for a row whose slack couldn't fund the full widening.
+        val roomL = FloatArray(onPage.size) { Float.MAX_VALUE }
+        val roomR = FloatArray(onPage.size) { Float.MAX_VALUE }
+        spreadCells.groupBy { it.row }.forEach { (_, row) ->
+            val ordered = row.sortedBy { it.left }
+            for (k in 0 until ordered.size - 1) {
+                val a = ordered[k]; val b = ordered[k + 1]
+                val reachA = endReachPt(a.windowIndex, aftSide = false)
+                val reachB = endReachPt(b.windowIndex, aftSide = true)
+                if (reachA + reachB <= 0f) continue
+                val usable = (b.left - a.right - WEAR_STRIP_GUTTER_DAYLIGHT_PT).coerceAtLeast(0f)
+                roomR[a.windowIndex] = usable * reachA / (reachA + reachB)
+                roomL[b.windowIndex] = usable * reachB / (reachA + reachB)
+            }
+        }
+        stripBreakRooms = onPage.indices.map { roomL[it] to roomR[it] }
+
         profileTop = v.profileTop; profileBottom = v.profileBottom - lift
-        stripCells = packing.cells.map { cell ->
+        stripCells = spreadCells.map { cell ->
             WearStripCell(
                 v.stripTops[cell.row] - lift, v.stripBottoms[cell.row] - lift, cell.left, cell.right,
             )
@@ -341,6 +387,8 @@ fun composeWearPdf(
         stripCells = onPage.indices.map { i ->
             WearStripCell(v.stripTops[i], v.stripBottoms[i], contentLeft, contentRight)
         }
+        // Single-column strips are alone in their row — nothing bounds their break curls.
+        stripBreakRooms = onPage.indices.map { Float.MAX_VALUE to Float.MAX_VALUE }
         overflowBandTop = v.stripBottoms.lastOrNull() ?: profileBottom
     }
 
@@ -431,6 +479,8 @@ fun composeWearPdf(
             unit, setPositions, text, outline, dim,
             stripPtPerMm = stripPtPerMm,
             stubWidthPt = stripStubWidthPt,
+            breakRoomLeftPt = stripBreakRooms[i].first,
+            breakRoomRightPt = stripBreakRooms[i].second,
             titles = stripTitles,
             spots = window.liner?.let { spotsByLinerId[it.id] }.orEmpty(),
             pits = effectiveRecord.pits.filter { it.componentId in ids },
@@ -978,6 +1028,11 @@ private fun drawWearStripWindow(
     dim: Paint,
     stripPtPerMm: Float,
     stubWidthPt: Float = WEAR_STRIP_STUB_WIDTH_PT,
+    // Outward room for each end's break curl — its share of the packed gutter beside it
+    // (MAX_VALUE = unbounded void side). Clamps the glyph amplitude via
+    // `wearStripBreakAmplitudePt` so facing curls can never cross a gutter.
+    breakRoomLeftPt: Float = Float.MAX_VALUE,
+    breakRoomRightPt: Float = Float.MAX_VALUE,
     titles: Map<String, String>,
     spots: List<WearSpot> = emptyList(),
     pits: List<WearPit> = emptyList(),
@@ -1207,7 +1262,8 @@ private fun drawWearStripWindow(
             val r = radii.aftRPt
             c.drawLine(stubLeftX, cy - r, hLayout.linerLeftPt, cy - r, outline)
             c.drawLine(stubLeftX, cy + r, hLayout.linerLeftPt, cy + r, outline)
-            drawBreakEdge(c, stubLeftX, cy - r, cy + r, r * 0.6f, outline, eyeAtTop = true)
+            val amp = wearStripBreakAmplitudePt(r, breakRoomLeftPt, outline.strokeWidth)
+            drawBreakEdge(c, stubLeftX, cy - r, cy + r, amp, outline, eyeAtTop = true)
         }
         WearStripEndStyle.THREAD_END -> {
             val threadDia = wearStripEndThreadDiaMm(docSpec, window.startMm, aftSide = true)
@@ -1227,7 +1283,8 @@ private fun drawWearStripWindow(
             val r = radii.fwdRPt
             c.drawLine(hLayout.linerRightPt, cy - r, stubRightX, cy - r, outline)
             c.drawLine(hLayout.linerRightPt, cy + r, stubRightX, cy + r, outline)
-            drawBreakEdge(c, stubRightX, cy - r, cy + r, r * 0.6f, outline, eyeAtTop = false)
+            val amp = wearStripBreakAmplitudePt(r, breakRoomRightPt, outline.strokeWidth)
+            drawBreakEdge(c, stubRightX, cy - r, cy + r, amp, outline, eyeAtTop = false)
         }
         WearStripEndStyle.THREAD_END -> {
             val threadDia = wearStripEndThreadDiaMm(docSpec, window.endMm, aftSide = false)

@@ -93,6 +93,18 @@ private const val EYE_SHADE_COLOR = 0x2E000000
  */
 internal val BREAK_PAIR_REACH_FRAC = (1f + RETURN_SWEEP_FULLNESS) * (kotlin.math.sqrt(3f) / 6f)
 
+/**
+ * How far a break edge's curves reach horizontally OUTWARD past its x — into the void
+ * side — as a fraction of the amplitude. The return sweep is the far reacher: its cubic
+ * (controls at [RETURN_SWEEP_FULLNESS]·amp/2 and /4) simplifies to
+ * `(3k/4)·t(1−t)(2−t)·amp`, which peaks at `k·√3/6·amp` — past the main S's own `√3/6`.
+ * Two packed wear strips' facing break stubs each bulge this far into their shared
+ * gutter, so the gutter must host both reaches plus daylight — see
+ * `spreadWearStripRowGutters` / `wearStripBreakAmplitudePt` (`WearStripLayout.kt`).
+ * Changing the glyph's control geometry changes this fraction.
+ */
+internal val BREAK_EDGE_OUTWARD_REACH_FRAC = RETURN_SWEEP_FULLNESS * (kotlin.math.sqrt(3f) / 6f)
+
 /** Minimum daylight between the pair's nearest curves ("at worst 1px" — on-device report). */
 internal const val BREAK_PAIR_MIN_CLEAR_PT = 1f
 

@@ -1232,7 +1232,19 @@ whitespace.**
 - **Spacing is uniform page-wide** — one stub width and one gutter for the whole sheet; a page whose
   strips had different stub widths would read as a mistake. The composer threads the packed stub
   into `drawWearStripWindow(stubWidthPt = …)`, so every end style (S-break edge, thread hatch, flat
-  cap) measures off the packed value and can never overrun the cell it was sized for. The two
+  cap) measures off the packed value and can never overrun the cell it was sized for.
+- **Facing S-break curls never cross a gutter.** A BREAK end's glyph sits on the cell edge and its
+  return sweep bulges outward by `BREAK_EDGE_OUTWARD_REACH_FRAC` (= fullness · √3/6 ≈ 0.43) of the
+  amplitude — at the radii a tall page draws, two facing curls interweave across the packed gutter
+  (on-device report: every strip-to-strip gutter on an exported sheet read as one woven knot).
+  After packing, `spreadWearStripRowGutters` widens exactly the gutters whose facing ends are
+  BREAKs to `reach_L + reach_R + stroke + WEAR_STRIP_GUTTER_DAYLIGHT_PT` (radius bound: the
+  tallest cylinder a strip that row height can draw), funded by the slack a centered row parks at
+  its margins — footprints and the shared scale never move, the row re-centers. A row without the
+  slack widens proportionally, and the backstop `wearStripBreakAmplitudePt` clamps each curl's
+  amplitude to its share of the gutter (the same degrade-not-overlap posture as `breakPairLayout`)
+  — so the curls flatten rather than ever cross. Gutter widths may therefore differ between pairs;
+  only the stub width stays uniform. The two
   floors are set by the break glyph, not by taste: the S-break sits at the stub's outer end and
   reaches ~0.17 × the stub radius back inward (so 20 pt still leaves a clear run of shaft to the
   component's edge cap) and ~0.26 × outward across the cell edge — two neighbours both bulge, which
@@ -1244,10 +1256,12 @@ whitespace.**
   sheet still call that function.
 - **Cells** — each window's cell is exactly its own footprint wide, laid left to right a gutter
   apart, with the whole row **centered** in the content width (the fixed grid's "a partial row is
-  centered" convention, now applied to every row). Leftover slack sits at the page margins, never
-  between strips. Vertically the packed ROW count feeds `computeWearVerticalLayout` — the same
-  split `computeWearStripGridLayout` makes internally — so the profile still never shrinks below its
-  minimum and the "nothing wasted / nothing overflows" guarantee carries over unchanged.
+  centered" convention, now applied to every row). Leftover slack sits at the page margins —
+  except what the post-packing `spreadWearStripRowGutters` pass spends widening the gutters whose
+  facing ends draw S-break curls (see the facing-curls bullet below). Vertically the packed ROW
+  count feeds `computeWearVerticalLayout` — the same split `computeWearStripGridLayout` makes
+  internally — so the profile still never shrinks below its minimum and the "nothing wasted /
+  nothing overflows" guarantee carries over unchanged.
 - Degenerate inputs (no windows, non-positive content width, `maxRows ≤ 0`) return an empty packing
   rather than throwing.
 

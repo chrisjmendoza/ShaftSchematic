@@ -829,14 +829,15 @@ const val WEAR_STRIP_MAX_PER_ROW = 3
 const val WEAR_STRIP_STUB_MIN_PT = 20f
 
 /**
- * Floor the gutter between two packed windows may be squeezed to.
+ * Floor the gutter between two packed windows may be squeezed to — a PACKING floor only.
  *
  * A packed cell is exactly its window's footprint, so a BREAK end's S glyph sits ON the cell edge
- * and bulges OUTWARD into the gutter by about `0.43 × 0.6 × r` (≈ 0.26 × the stub radius — the
- * return sweep's own reach, see `BreakSymbol.kt`). Two neighbors both bulge, so the gutter has to
- * host two of them; below ~16 pt a tall strip's two break curls would touch across the gutter and
- * read as one broken shaft. (The spec'd 10 pt left no daylight at the strip heights a
- * profile-less 3-row page draws.)
+ * and bulges OUTWARD into the gutter by [BREAK_EDGE_OUTWARD_REACH_FRAC] of its amplitude
+ * (≈ 0.26 × the stub radius — the return sweep's reach, see `BreakSymbol.kt`). Two neighbors both
+ * bulge, and at the radii a tall page draws the pair needs far more than any fixed floor — so the
+ * no-crossing guarantee does NOT live here: after packing, [spreadWearStripRowGutters] widens the
+ * gutters whose facing ends bulge (slack-funded, radius-aware) and [wearStripBreakAmplitudePt]
+ * flattens whatever a slack-less row still can't host.
  */
 const val WEAR_STRIP_COL_GAP_MIN_PT = 16f
 
@@ -968,7 +969,9 @@ private fun packWearStripRows(
  * 4. **Cells** — each window gets a cell exactly its own footprint wide, laid left to right a
  *    gutter apart, with the whole row **centered** in the content width (the fixed grid's
  *    "a partial row is centered" convention, now applied to every row). Leftover slack sits at the
- *    page margins, never between strips.
+ *    page margins — except what [spreadWearStripRowGutters] then spends widening the gutters whose
+ *    facing ends draw S-break curls (the caller runs that pass once row heights, and so the drawn
+ *    radii, are known).
  *
  * **Overflow**: when even the scale floor can't pack the election into [maxRows] rows, the longest
  * prefix that fits is fixed there (the most permissive packing, so it is the longest prefix any
@@ -1093,6 +1096,92 @@ fun packWearStripWindows(
         }
     }
     return WearStripPacking(rows.size, cells, ptPerMm, spacing, placedCount)
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Gutter spreading — facing S-break curls must never cross a packed gutter
+// ──────────────────────────────────────────────────────────────────────────────
+//
+// A packed cell is exactly its window's footprint, so a BREAK end's glyph sits ON the cell
+// edge and its return sweep bulges OUTWARD into the gutter by BREAK_EDGE_OUTWARD_REACH_FRAC
+// of the amplitude (`BreakSymbol.kt`). The packer's uniform gutter is sized for packing, not
+// for the drawn radius — on a page whose strips draw tall, two facing curls interweave across
+// it (on-device report, exported sheet: every strip-to-strip gutter read as one woven knot).
+// The pass below spends each row's leftover slack — the width a centered row parks at the
+// margins — widening exactly the gutters whose facing ends bulge, then re-centers the row.
+// The amplitude clamp (`wearStripBreakAmplitudePt`) is the backstop for a row with no slack
+// to give: the curl flattens rather than ever cross into its neighbor.
+
+/** Amplitude of a stub-end / gap-pair break glyph relative to its radius — the draw sites' 0.6·r. */
+const val WEAR_STRIP_BREAK_AMP_FRAC = 0.6f
+
+/** Daylight kept between two facing break curls across a packed gutter. */
+const val WEAR_STRIP_GUTTER_DAYLIGHT_PT = 6f
+
+/**
+ * Widens each packed row's gutters to [requiredGutterPt] (whatever that pair of facing ends
+ * needs — `0` for a pair with no break curls, which therefore never widens), funded by the
+ * row's leftover slack, and re-centers the row in the content width. Cells keep their exact
+ * footprint widths — only the gaps between them and the row's placement move, so the shared
+ * scale and every drawn run are untouched.
+ *
+ * A row without enough slack widens every deficient gutter by the same fraction of its need
+ * (never past the content width, never below the packed gutter); the amplitude clamp then
+ * keeps the curls apart. Single-cell rows and rows already over the width return unchanged.
+ * Cells are returned in the input order.
+ */
+fun spreadWearStripRowGutters(
+    cells: List<WearStripPackedCell>,
+    contentLeftPt: Float,
+    contentRightPt: Float,
+    requiredGutterPt: (leftWindowIndex: Int, rightWindowIndex: Int) -> Float,
+): List<WearStripPackedCell> {
+    val contentW = contentRightPt - contentLeftPt
+    if (cells.isEmpty() || contentW <= 0f) return cells
+    val moved = mutableMapOf<Int, WearStripPackedCell>()
+    cells.groupBy { it.row }.forEach { (_, row) ->
+        if (row.size < 2) return@forEach
+        val ordered = row.sortedBy { it.left }
+        val fps = ordered.map { it.right - it.left }
+        val g0 = (0 until ordered.size - 1).map { ordered[it + 1].left - ordered[it].right }
+        val want = (0 until ordered.size - 1).map { k ->
+            maxOf(g0[k], requiredGutterPt(ordered[k].windowIndex, ordered[k + 1].windowIndex))
+        }
+        val extra = want.indices.fold(0f) { a, k -> a + (want[k] - g0[k]) }
+        if (extra <= 0f) return@forEach
+        // Slack the row can spend; a row already at (or over) the width stays put.
+        val budget = (contentW - fps.sum() - g0.sum()).coerceAtLeast(0f)
+        val s = (budget / extra).coerceAtMost(1f)
+        if (s <= 0f) return@forEach
+        val gaps = want.indices.map { g0[it] + (want[it] - g0[it]) * s }
+        val rowW = fps.sum() + gaps.sum()
+        var x = contentLeftPt + ((contentW - rowW) / 2f).coerceAtLeast(0f)
+        ordered.forEachIndexed { k, cell ->
+            moved[cell.windowIndex] = cell.copy(left = x, right = x + fps[k])
+            x += fps[k] + (gaps.getOrNull(k) ?: 0f)
+        }
+    }
+    return cells.map { moved[it.windowIndex] ?: it }
+}
+
+/**
+ * Drawn amplitude for a strip end's break glyph: the full [WEAR_STRIP_BREAK_AMP_FRAC] of the
+ * stub radius, clamped so the curl's outward reach ([BREAK_EDGE_OUTWARD_REACH_FRAC] ×
+ * amplitude, plus the stroke) stays inside [outwardRoomPt] — this end's share of the gutter
+ * beside it. The backstop behind [spreadWearStripRowGutters]: on a row too full to widen,
+ * the S flattens rather than ever cross into the neighboring strip — the same degrade-not-
+ * overlap posture as `breakPairLayout`. Pass [outwardRoomPt] = `Float.MAX_VALUE` where
+ * nothing bounds the void side (a page margin, the single-column paths).
+ */
+fun wearStripBreakAmplitudePt(
+    stubRPt: Float,
+    outwardRoomPt: Float = Float.MAX_VALUE,
+    strokeWidthPt: Float = 0f,
+): Float {
+    val full = WEAR_STRIP_BREAK_AMP_FRAC * stubRPt.coerceAtLeast(0f)
+    if (outwardRoomPt == Float.MAX_VALUE) return full
+    val cap = ((outwardRoomPt - strokeWidthPt) / BREAK_EDGE_OUTWARD_REACH_FRAC).coerceAtLeast(0f)
+    return minOf(full, cap)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
