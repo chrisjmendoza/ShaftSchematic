@@ -535,6 +535,20 @@ Same-day review feedback on step 4; supersedes step 4's picker placement:
     rerouted one keeps the clean vertical-drop dogleg. Floors only ever grow — no
     collision guarantee changes ("I did have two make contact" — the engine still makes
     contact geometrically impossible).
+  - *Pointer legibility rework (2026-08-16, on-device report: "hard to see where they
+    land")*: three refinements, all in the shared engine so canvas and PDF stay
+    identical. (1) The waterfill is **braked by station fidelity** — the spread level is
+    the largest whose least-squares solve keeps every |bubbleX − stationX| within
+    `spreadMaxOffset` (= 1 × sameRowPitch); an unbraked page-filling comb over clustered
+    stations turned the pointers near-horizontal. A sheet whose geometric minimums
+    already exceed the bound takes no widening at all. (2) **Straight leaders aim at the
+    circle's center** and stop on the rim (the hand-sheet drafting convention) — the
+    arrival direction alone identifies the landing circle. (3) **Split clearances**:
+    straight leaders are verified against foreign circles at the wider visual clearance
+    (`STRAIGHT_LEADER_CLEARANCE_RADIUS_FRAC` 0.35 × radius ≈ 8 pt on the PDF) and reroute
+    to a dogleg when they'd graze; dogleg segments keep the geometric 0.5 × minGap —
+    their diagonals legitimately skim the lane just above the row-0 tops, and testing
+    them at the visual clearance would break the repair loop's convergence guarantee.
 
 ---
 
@@ -961,19 +975,17 @@ Spacing invariants (centre-to-centre horizontal, enforced between x-adjacent bub
 dx. Because `2 × crossRowPitch ≥ sameRowPitch`, adjacent-pair constraints are sufficient
 for all pairs.
 
-**Leader clearance — comfort margin beyond the geometric minimum.** `crossRowPitch` is the
-bare minimum that keeps a deeper bubble's leader from touching a shallower neighbour — it
-does not leave room for a machinist to write a reading beside that neighbour without the
-pen crossing the leader (reported from a real field PDF: a row-0 bubble sitting right next
-to a row-1 bubble's leader between two mid-shaft liners). When a row has horizontal slack —
-station spacing wide enough that the pitch constraint isn't the only thing pinning bubble
-positions — every cross-row adjacent gap is widened by up to `RunoutBubbleGeometry
-.leaderClearance` (`= minGap × LEADER_CLEARANCE_FACTOR`, `LEADER_CLEARANCE_FACTOR = 1.6`,
-i.e. 8 pt at the PDF's `minGap = 5 pt`) on top of `crossRowPitch`. The extra is split evenly
-across the eligible gaps and capped so the total never exceeds the row's actual available
-span, so it can only ever grow a gap — never shrink one below its geometric minimum. A tight
-row (no slack to spend) degrades to exactly the old behaviour: zero widening, same pitches
-as before this existed.
+**Even-spread waterfill, braked by station fidelity (engine rule 7).** The minimum pitches
+are collision floors, not a layout goal. When the page has slack, every adjacent gap floor
+rises toward one common level (`Σ max(gap, L) = available`, capped at
+`RunoutBubbleGeometry.spreadPitch` = 1.5 × sameRowPitch) so the bubbles use the width and a
+machinist can write beside a circle without the pen crossing a neighbour's leader — but the
+spread is **braked**: the level taken is the largest whose least-squares solve keeps every
+`|bubbleX − stationX|` within `RunoutBubbleGeometry.spreadMaxOffset` (= 1 × sameRowPitch).
+An unbraked page-filling comb over clustered stations turned the pointers near-horizontal
+(on-device report, 2026-08-16). A sheet whose geometric floors alone already exceed the
+bound takes no widening at all; a page with no slack keeps the exact minimum-pitch layout.
+Floors only ever grow, so no collision guarantee changes.
 
 **Two rows is a hard design point, not a simplification.** Every leader's final drop
 passes through every row band above its bubble and needs its own horizontal lane
@@ -988,16 +1000,25 @@ degenerate configs only — the collision guarantees are void in that case and
 `RunoutBubbleResult.unresolvedCollisions` reports what's left).
 
 ### Bubble x — least-squares under constraints
-Bubble x positions minimise Σ(bubbleX − stationX)² subject to the pitch constraints and
-page bounds (isotonic regression / pool-adjacent-violators). Bubbles sit **directly under
-their stations** whenever there is room; dense clusters spread symmetrically and stay
-centred over their stations. Bubble order always equals station order.
+Bubble x positions minimise Σ(bubbleX − stationX)² subject to the (waterfilled) pitch
+floors and page bounds (isotonic regression / pool-adjacent-violators). Bubbles sit
+**directly under their stations** whenever there is room; dense clusters spread
+symmetrically and stay centred over their stations. Bubble order always equals station
+order.
 
 ### Leaders — verified, with dogleg fallback
-Each leader is first tried as a straight diagonal from `(stationX, shaftSurfaceY)` to the
-top of its bubble. The engine then runs an explicit collision check — segment-vs-circle
-against every other bubble (inflated by `minGap/2`) and segment-vs-segment against every
-other leader. Any leader that fails is re-routed as a **dogleg**:
+Each leader is first tried as a straight segment from `(stationX, shaftSurfaceY)` **aimed
+at the circle's center and clipped at the rim** (engine rule 5, the hand-sheet drafting
+convention — the arrival direction alone identifies the landing circle; a station so close
+the segment degenerates keeps the plain top-center attach). The engine then runs an
+explicit collision check — segment-vs-circle against every other bubble and
+segment-vs-segment against every other leader. A **straight** leader is verified at the
+wider visual clearance (`STRAIGHT_LEADER_CLEARANCE_RADIUS_FRAC` = 0.35 × radius, ≈ 8 pt on
+the PDF): one that would merely graze a foreign circle reads as entering it, so it fails
+and reroutes. **Dogleg** segments keep the geometric `minGap/2` — their diagonals
+legitimately skim the corridor 0.75·minGap above the row-0 circle tops, and testing them
+at the visual clearance would flag every dogleg and break the convergence argument below.
+Any leader that fails is re-routed as a **dogleg**:
 
 ```
 (stationX, surfaceY)          vertical stub down to the common departure line

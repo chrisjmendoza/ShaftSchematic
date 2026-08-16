@@ -1289,8 +1289,8 @@ private fun drawTapersForRunout(
  *
  * Placement comes from the shared engine (`geom/RunoutBubbleLayout.kt`), which guarantees bubbles
  * never touch and leaders never enter a bubble or cross each other. A leader polyline is either a
- * straight station→bubble diagonal (2 vertices) or a dogleg with a vertical drop (3 vertices) when
- * the straight route would collide.
+ * straight station→rim segment aimed at the circle's centre (2 vertices) or a dogleg ending in a
+ * vertical drop to the bubble top (4 vertices) when the straight route would collide or graze.
  *
  * The keyway cutout and marker geometry mirror the on-screen canvas
  * (`RunoutRoute.drawRunoutMarkers` / `drawRunoutBubbleRing`) so preview and export are identical.
@@ -1319,7 +1319,7 @@ private fun drawPlacedBubbles(
     }
 
     for (b in bubbles) {
-        // Leader polyline from the shaft surface to the top of the circle.
+        // Leader polyline from the shaft surface to the circle's rim.
         b.leader.zipWithNext { p, q -> c.drawLine(p.x, p.y, q.x, q.y, outline) }
 
         // Ring with keyway cutout at 12 o'clock (top arc broken across an open-topped slot).

@@ -8,6 +8,30 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-16
 
+### feat: runout bubble pointers read straight to their stations
+
+On a sheet whose stations cluster under compressed runs, the even-spread waterfill filled
+the page with one uniform comb of bubbles — and the pointer lines from the bunched stations
+to the spread-out circles went so flat you could not see where they landed (on-device
+report, against the hand-drawn reference sheet).
+
+Three changes in the shared placement engine (`geom/RunoutBubbleLayout.kt`), so the Runout
+tab's canvas and the PDF stay identical:
+
+- **The spread is braked by station fidelity.** The waterfill still widens the bubble
+  pitches toward one common level when the page has slack — but never so far that a bubble
+  strays more than one same-row pitch from its own station. Pointers stay traceably their
+  station's; a sheet whose geometric minimums already exceed the bound takes no widening at
+  all. Sheets whose spread never strained the bound lay out exactly as before.
+- **Straight leaders aim at the circle's center** and stop on the rim, the way the shop
+  draws them by hand — the arrival direction alone tells you which circle the pointer lands
+  in, where a line bent to a distant bubble's top-center read ambiguously.
+- **A straight leader that would graze a foreign circle reroutes to a dogleg.** Straight
+  leaders are now verified with a wider visual clearance (≈ 8 pt on the PDF) instead of the
+  hairline geometric one; the dogleg's vertical drop lands unambiguously. Dogleg segments
+  keep the geometric clearance, which preserves the engine's zero-collision convergence
+  guarantee unchanged.
+
 ### fix: the wear tab's document buttons sit under the shaft, not under the options
 
 Preview, Print and Export had drifted to the bottom of the Wear tab, below the trace-depth

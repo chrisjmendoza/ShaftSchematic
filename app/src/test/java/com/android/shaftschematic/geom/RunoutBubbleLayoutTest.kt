@@ -3,6 +3,7 @@ package com.android.shaftschematic.geom
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.random.Random
 
@@ -54,9 +55,14 @@ class RunoutBubbleLayoutTest {
             )
         }
 
-        // 2. No leader enters a foreign bubble (at exact radius, no clearance slack)
+        // 2. No leader enters a foreign bubble (at exact radius, no clearance slack) — and a
+        //    STRAIGHT leader (2 vertices) additionally keeps the wider visual clearance that
+        //    makes its landing readable (rule 5); one that can't is rerouted as a dogleg.
+        val straightClearance =
+            maxOf(0.5f * geom.minGap, STRAIGHT_LEADER_CLEARANCE_RADIUS_FRAC * geom.radius)
         for (i in bubbles.indices) {
             val leader = bubbles[i].leader
+            val clearance = if (leader.size == 2) straightClearance else 0f
             for (j in bubbles.indices) {
                 if (j == i) continue
                 for (s in 0 until leader.size - 1) {
@@ -64,7 +70,8 @@ class RunoutBubbleLayoutTest {
                         "leader of bubble $i enters bubble $j",
                         !segmentIntersectsCircle(
                             leader[s], leader[s + 1],
-                            bubbles[j].bubbleX, bubbles[j].bubbleCenterY, geom.radius,
+                            bubbles[j].bubbleX, bubbles[j].bubbleCenterY,
+                            geom.radius + clearance - 1e-3f,
                         ),
                     )
                 }
@@ -197,12 +204,13 @@ class RunoutBubbleLayoutTest {
     }
 
     @Test
-    fun `ample slack spreads a bubble clear of a foreign leader's leg`() {
-        // Mirrors the reported field defect: two liners' worth of stations mid-shaft, packed
-        // just tight enough to alternate rows, but with a wide-open page around them. With
-        // room to spare, every adjacent pair rises to the spreadPitch cap — far beyond the
-        // bare crossRowPitch minimum — so a hand-written reading fits beside the bubble
-        // without the pen crossing the neighbour's leader.
+    fun `ample slack spreads bubbles apart but never past the fidelity bound`() {
+        // Two liners' worth of stations bunched mid-shaft on a wide-open page. The spread
+        // pulls the bubbles well past the bare crossRowPitch minimum (room to hand-write a
+        // reading beside the circle) — but stops where a bubble would stray more than
+        // spreadMaxOffset from its own station, so every pointer stays traceably its
+        // station's (rule 7's brake; unbraked, this cluster would fan to the spreadPitch
+        // cap and the outer pointers would lean twice as far).
         val stations = listOf(
             RunoutStationX("linerA", 400f, 400f),
             RunoutStationX("linerA", 410f, 410f),
@@ -213,26 +221,39 @@ class RunoutBubbleLayoutTest {
         for (i in 0 until plan.bubbleX.size - 1) {
             val dx = plan.bubbleX[i + 1] - plan.bubbleX[i]
             assertTrue(
-                "gap $i..${i + 1} = $dx wants >= ${geom.spreadPitch}",
-                dx >= geom.spreadPitch - 1e-2f,
+                "gap $i..${i + 1} = $dx wants well above crossRowPitch ${geom.crossRowPitch}",
+                dx >= geom.crossRowPitch + 10f,
+            )
+        }
+        plan.stations.forEachIndexed { i, st ->
+            val off = abs(plan.bubbleX[i] - st.stationX)
+            assertTrue(
+                "bubble $i strayed $off past the fidelity bound ${geom.spreadMaxOffset}",
+                off <= geom.spreadMaxOffset + 1e-2f,
             )
         }
         assertInvariants(place(stations))
     }
 
     @Test
-    fun `tight page divides its width evenly and still resolves with zero collisions`() {
+    fun `tight page spreads to one level inside the fidelity bound, zero collisions`() {
         // A narrow content window (160pt available) with 6 alternating-row stations needing
-        // 5 * crossRowPitch(25) = 125pt minimum. The waterfill raises every gap to the
-        // common level that exactly consumes the width (160 / 5 = 32pt), never compresses,
-        // never collides.
+        // 5 * crossRowPitch(25) = 125pt minimum. The waterfill raises every gap toward the
+        // width-consuming level (32pt) but the fidelity brake stops it where the end
+        // bubbles would stray past spreadMaxOffset (rule 7) — one common level, never
+        // compressed, never colliding, every pointer still traceably its station's.
         val tight = geom.copy(contentLeft = 0f, contentRight = 200f)
         val stations = List(6) { i -> RunoutStationX("c0", i * 20f, i * 20f + 10f) }
         val plan = planRunoutBubbles(stations, tight)
         assertTrue("should not need to compress", !plan.compressed)
-        val expectedGap = 160f / 5f
-        for (i in 1 until plan.bubbleX.size) {
-            assertEquals(expectedGap, plan.bubbleX[i] - plan.bubbleX[i - 1], 1e-1f)
+        val gaps = (1 until plan.bubbleX.size).map { plan.bubbleX[it] - plan.bubbleX[it - 1] }
+        for (g in gaps) assertEquals("one common level", gaps[0], g, 1e-1f)
+        assertTrue("level ${gaps[0]} should exceed the crossRowPitch floor", gaps[0] > tight.crossRowPitch + 1f)
+        plan.stations.forEachIndexed { i, st ->
+            assertTrue(
+                "bubble $i strayed past the fidelity bound",
+                abs(plan.bubbleX[i] - st.stationX) <= tight.spreadMaxOffset + 1e-2f,
+            )
         }
         val result = plan.finish(300f) { 300f }
         assertEquals(0, result.unresolvedCollisions)
@@ -240,19 +261,45 @@ class RunoutBubbleLayoutTest {
     }
 
     @Test
-    fun `waterfill distributes a bunched sheet evenly - the hand-sheet spread`() {
-        // 12 stations bunched into 150pt of page (compressed runs) on a wide sheet: the
-        // even-spread waterfill must pull the bubbles apart to one common pitch instead of
-        // leaving them packed at the minimums under the bunch (on-device request, from the
-        // hand-drawn reference: circles distribute the space under the shaft evenly).
+    fun `bunch already past the fidelity bound takes no widening at all`() {
+        // 12 stations bunched into 132pt of page: even at the bare minimum pitches the
+        // cluster's ends already sit further off-station than spreadMaxOffset, so the
+        // waterfill adds nothing — widening could only make the pointers flatter (rule 7's
+        // brake; the unbraked fill spread this bunch across the whole page and the outer
+        // pointers went near-horizontal, on-device report).
         val stations = List(12) { i -> RunoutStationX("c${i / 3}", i * 10f, 300f + i * 12f) }
         val plan = planRunoutBubbles(stations, geom)
         val gaps = (1 until plan.bubbleX.size).map { plan.bubbleX[it] - plan.bubbleX[it - 1] }
-        // One common level: every gap equal (all floors below the level here)…
-        for (g in gaps) assertEquals(gaps[0], g, 1e-1f)
-        // …and well above the bare cross-row minimum.
-        assertTrue("spread level ${gaps[0]} should exceed crossRowPitch", gaps[0] > geom.crossRowPitch + 1f)
+        // Every adjacent pair alternates rows here, so the geometric floor is crossRowPitch —
+        // and every gap must sit exactly on it.
+        for ((i, g) in gaps.withIndex()) {
+            assertEquals("gap $i widened past the geometric floor", geom.crossRowPitch, g, 1e-1f)
+        }
         assertInvariants(place(stations))
+    }
+
+    @Test
+    fun `straight leaders aim at their circle's center`() {
+        // Well-separated stations with a deliberate offset between station and bubble: the
+        // straight leader must stop on the rim, collinear with the circle center (rule 5) —
+        // the arrival direction is what tells the reader which circle the pointer lands in.
+        val stations = listOf(
+            RunoutStationX("a", 100f, 150f),
+            RunoutStationX("a", 300f, 400f),
+            RunoutStationX("b", 500f, 650f),
+        )
+        val result = place(stations)
+        for (b in result.bubbles) {
+            if (b.leader.size != 2) continue
+            val end = b.leader.last()
+            val start = b.leader.first()
+            val toCenter = hypot((b.bubbleX - end.x).toDouble(), (b.bubbleCenterY - end.y).toDouble())
+            assertEquals("leader end not on the rim", geom.radius.toDouble(), toCenter, 1e-2)
+            // Collinear: cross product of (start→end) × (start→center) ≈ 0.
+            val cross = (end.x - start.x) * (b.bubbleCenterY - start.y) -
+                (end.y - start.y) * (b.bubbleX - start.x)
+            assertEquals("leader does not aim at the center", 0f, cross, 1e-1f)
+        }
     }
 
     @Test

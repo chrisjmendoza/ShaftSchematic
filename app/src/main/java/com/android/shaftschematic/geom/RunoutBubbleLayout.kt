@@ -1,9 +1,11 @@
 package com.android.shaftschematic.geom
 
 import com.android.shaftschematic.settings.RunoutConfig
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 /**
  * RunoutBubbleLayout — shared placement engine for runout-sheet measurement bubbles.
@@ -31,11 +33,20 @@ import kotlin.math.min
  *    subject to the pitch constraints (isotonic regression / pool-adjacent-violators),
  *    so bubbles sit directly under their stations whenever there is room and clusters
  *    stay centred over their stations when there is not.
- * 5. Leaders are straight station→bubble-top diagonals when that segment provably clears
- *    every other bubble and leader. Otherwise the leader becomes a DOGLEG: a diagonal
- *    from the station to an elbow ABOVE the first bubble row at the bubble's x, then a
- *    vertical drop to the bubble top. The diagonal lives entirely above every circle and
- *    the drop is guaranteed clear by invariant 3 — a dogleg can never enter a bubble.
+ * 5. Leaders are straight station→bubble diagonals when the segment provably clears
+ *    every other bubble and leader. A straight leader AIMS AT ITS CIRCLE'S CENTER and
+ *    stops on the rim (the hand-sheet drafting convention): the arrival direction alone
+ *    says which circle it lands in, where a leader bent to the top-center of a distant
+ *    bubble read ambiguously (on-device report). Straight leaders are also verified with
+ *    a wider VISUAL clearance ([STRAIGHT_LEADER_CLEARANCE_RADIUS_FRAC] of the radius) —
+ *    a segment that grazes a foreign circle by a hair is geometrically legal but
+ *    unreadable. Otherwise the leader becomes a DOGLEG: a diagonal from the station to an
+ *    elbow ABOVE the first bubble row at the bubble's x, then a vertical drop to the
+ *    bubble top. The diagonal lives entirely above every circle and the drop is
+ *    guaranteed clear by invariant 3 — a dogleg can never enter a bubble. Dogleg segments
+ *    keep the tighter geometric clearance (0.5·minGap): their diagonals legitimately skim
+ *    the lane just above the row-0 circle tops, and the vertical drop already lands
+ *    unambiguously.
  * 6. Two rows is not just the shop convention — it is width-optimal. Every leader's
  *    final drop passes through every row band above its bubble and needs its own
  *    horizontal lane (`crossRowPitch`) past the circles there, so each bubble consumes
@@ -45,15 +56,18 @@ import kotlin.math.min
  *    page), spacing compresses uniformly and the plan flags itself
  *    ([RunoutBubblePlan.compressed]; [RunoutBubbleResult.unresolvedCollisions] reports
  *    anything the repair pass could not fix in that degenerate state).
- * 7. Even-spread waterfill (on-device request, hand-sheet reference): the minimum pitches
- *    are collision floors, not a layout goal — a sheet that packs its bubbles at the
- *    minimums under compressed runs leaves the rest of the width empty and the leaders
- *    tangled. When the page has slack, every adjacent gap floor rises toward one common
- *    level (Σ max(gap_i, L) = available, capped at [RunoutBubbleGeometry.spreadPitch]),
- *    so bubbles distribute the space under the shaft evenly — leaders stay straight
- *    wherever they clear, and a rerouted one is the clean vertical-drop dogleg.
- *    A dense sheet divides the width evenly among its bubbles; a sparse sheet
- *    spreads comfortably near its stations (the cap), never flung to the page corners.
+ * 7. Even-spread waterfill, BRAKED by station fidelity (both on-device direction): the
+ *    minimum pitches are collision floors, not a layout goal — a sheet that packs its
+ *    bubbles at the minimums under compressed runs leaves the rest of the width empty.
+ *    When the page has slack, every adjacent gap floor rises toward one common level
+ *    (Σ max(gap_i, L) = available, capped at [RunoutBubbleGeometry.spreadPitch]) — but
+ *    the spread may never pull a bubble further than [RunoutBubbleGeometry.spreadMaxOffset]
+ *    (one same-row pitch) from its own station. An unbraked page-filling comb over
+ *    clustered stations turned the pointer lines near-horizontal — you could not see
+ *    where they landed (on-device report). The brake takes the largest level whose
+ *    least-squares solve keeps every |bubbleX − stationX| inside the bound; a sheet whose
+ *    geometric floors alone already exceed the bound takes no widening at all (its
+ *    pointers stay as straight as the minimums allow, and the doglegs carry the rest).
  *    Floors only ever grow — never below the geometric minimum — so no collision
  *    guarantee changes, and a page with no slack keeps the exact minimum-pitch layout.
  */
@@ -73,6 +87,26 @@ const val RUNOUT_EDGE_INSET_MAX_FRACTION = 0.20f
  * among the bubbles, the hand-sheet look); a sparse sheet stops here.
  */
 const val BUBBLE_SPREAD_PITCH_CAP_FACTOR = 1.5f
+
+/**
+ * Multiplier on [RunoutBubbleGeometry.sameRowPitch] bounding how far the even-spread
+ * waterfill may pull a bubble off its own station ([RunoutBubbleGeometry.spreadMaxOffset]
+ * — see [planRunoutBubbles] rule 7). One same-row pitch: a bubble never strays more than
+ * one bubble-diameter-and-gap from the station it reads, so its pointer stays traceable.
+ * The bound brakes only the OPTIONAL spread — geometric minimum pitches may still exceed
+ * it on a genuinely dense sheet.
+ */
+const val BUBBLE_SPREAD_MAX_OFFSET_FACTOR = 1.0f
+
+/**
+ * Fraction of the bubble radius kept as VISUAL clearance between a straight leader and
+ * every foreign circle (≈ 8 pt at PDF scale). A straight leader that would pass closer is
+ * rerouted as a dogleg even though it misses geometrically — a segment shaving past a
+ * circle's rim reads as entering it (on-device report: "hard to see where they land").
+ * Doglegs keep the tighter 0.5·minGap geometric clearance; their elbow lane legitimately
+ * runs just above the row-0 circle tops, and the vertical drop is unambiguous anyway.
+ */
+const val STRAIGHT_LEADER_CLEARANCE_RADIUS_FRAC = 0.35f
 
 /**
  * Axial mm positions of [count] measurement stations within one component.
@@ -301,12 +335,20 @@ data class RunoutBubbleGeometry(
      * readings, not a collision requirement.
      */
     val spreadPitch: Float get() = sameRowPitch * BUBBLE_SPREAD_PITCH_CAP_FACTOR
+
+    /**
+     * Station-fidelity brake on the waterfill (rule 7): the furthest the optional spread
+     * may pull a bubble from its own station. See [BUBBLE_SPREAD_MAX_OFFSET_FACTOR].
+     */
+    val spreadMaxOffset: Float get() = sameRowPitch * BUBBLE_SPREAD_MAX_OFFSET_FACTOR
 }
 
 /** One vertex of a leader polyline. */
 data class LeaderVertex(val x: Float, val y: Float)
 
-/** A fully placed bubble: circle centre, row, and its leader polyline (2 or 3 vertices). */
+/** A fully placed bubble: circle centre, row, and its leader polyline — a straight
+ *  station→rim segment (2 vertices, aimed at the circle centre) or a dogleg (4 vertices,
+ *  ending in a vertical drop to the bubble top). */
 data class PlacedRunoutBubble(
     val componentId: String,
     val stationMm: Float,
@@ -359,14 +401,17 @@ fun planRunoutBubbles(
     }
 
     // Even-spread waterfill (see class KDoc rule 7): raise every adjacent gap floor toward
-    // one common level so the bubbles distribute the width under the shaft evenly instead
-    // of bunching beneath compressed runs (on-device request, hand-sheet reference: the
-    // circles spread across the sheet and the pointer lines stay easy to follow). The
-    // level solves Σ max(gap_i, L) = available, capped at `spreadPitch` — a dense sheet
-    // divides the width evenly among its bubbles, a sparse sheet spreads comfortably near
-    // its stations, never flung to the page corners. Floors only ever GROW here (never
-    // below the geometric minimum), so every collision guarantee is untouched, and a page
-    // with no slack gets zero widening.
+    // one common level so the bubbles distribute the width under the shaft instead of
+    // bunching beneath compressed runs (on-device request, hand-sheet reference). The
+    // level solves Σ max(gap_i, L) = available, capped at `spreadPitch` — and then BRAKED
+    // by station fidelity: the spread may never pull a bubble further than
+    // `spreadMaxOffset` from its own station (on-device report: a page-filling comb over
+    // clustered stations turned the pointer lines near-horizontal — hard to see where
+    // they landed). The brake searches the largest level whose least-squares solve keeps
+    // every |bubbleX − stationX| inside the bound; a sheet whose geometric floors alone
+    // already exceed it takes no widening at all. Floors only ever GROW here (never below
+    // the geometric minimum), so every collision guarantee is untouched, and a page with
+    // no slack gets zero widening.
     val baseNeeded = gaps.sum()
     if (available - baseNeeded > 0f && n > 1) {
         fun totalAt(level: Float): Float {
@@ -374,8 +419,15 @@ fun planRunoutBubbles(
             for (g in gaps) t += max(g, level)
             return t
         }
+        fun maxOffsetAt(level: Float): Float {
+            val raised = FloatArray(gaps.size) { max(gaps[it], level) }
+            val bx = solveBubbleX(desired, raised, geom)
+            var worst = 0f
+            for (i in bx.indices) worst = max(worst, abs(bx[i] - desired[i]))
+            return worst
+        }
         val cap = geom.spreadPitch
-        val level = if (totalAt(cap) <= available) {
+        val fillLevel = if (totalAt(cap) <= available) {
             cap
         } else {
             var lo = 0f
@@ -386,7 +438,21 @@ fun planRunoutBubbles(
             }
             lo
         }
-        for (i in gaps.indices) gaps[i] = max(gaps[i], level)
+        val bound = geom.spreadMaxOffset
+        val level = when {
+            maxOffsetAt(fillLevel) <= bound -> fillLevel
+            maxOffsetAt(0f) >= bound -> 0f
+            else -> {
+                var lo = 0f
+                var hi = fillLevel
+                repeat(30) {
+                    val mid = (lo + hi) / 2f
+                    if (maxOffsetAt(mid) <= bound) lo = mid else hi = mid
+                }
+                lo
+            }
+        }
+        if (level > 0f) for (i in gaps.indices) gaps[i] = max(gaps[i], level)
     }
 
     // Degenerate fallback: compress uniformly so the group still fits the page.
@@ -541,12 +607,32 @@ class RunoutBubblePlan internal constructor(
         // the repair provably converge to zero collisions (when spacing isn't compressed).
         val elbowY = anchor + geom.shortLeader - 0.75f * geom.minGap
         val clearance = 0.5f * geom.minGap
+        // Straight leaders take a wider VISUAL clearance (rule 5): geometrically-legal
+        // grazes read as entering the circle they shave past. Dogleg segments keep the
+        // geometric clearance — their diagonals legitimately run in the thin lane above
+        // the row-0 tops (the elbow line sits only 0.75·minGap above them), so testing
+        // them at the visual clearance would flag every dogleg and break the repair
+        // loop's convergence guarantee.
+        val straightClearance = max(clearance, STRAIGHT_LEADER_CLEARANCE_RADIUS_FRAC * geom.radius)
 
+        // Straight leaders aim at the circle's CENTER and stop on the rim (rule 5) — the
+        // arrival direction alone says which circle the pointer lands in. A station close
+        // enough that the segment degenerates keeps the plain top-center attach.
         val paths = Array(n) { i ->
-            listOf(
-                LeaderVertex(stations[i].stationX, surfaceY[i]),
-                LeaderVertex(bubbleX[i], centerY[i] - geom.radius),
-            )
+            val sx = stations[i].stationX
+            val sy = surfaceY[i]
+            val dx = bubbleX[i] - sx
+            val dy = centerY[i] - sy
+            val d = sqrt(dx * dx + dy * dy)
+            if (d <= geom.radius + 1e-3f) {
+                listOf(
+                    LeaderVertex(sx, sy),
+                    LeaderVertex(bubbleX[i], centerY[i] - geom.radius),
+                )
+            } else {
+                val f = (d - geom.radius) / d
+                listOf(LeaderVertex(sx, sy), LeaderVertex(sx + dx * f, sy + dy * f))
+            }
         }
         val dogleg = BooleanArray(n)
         fun makeDogleg(i: Int) {
@@ -563,10 +649,11 @@ class RunoutBubblePlan internal constructor(
 
         fun pathHitsForeignCircle(i: Int): Boolean {
             val p = paths[i]
+            val clr = if (dogleg[i]) clearance else straightClearance
             for (j in 0 until n) {
                 if (j == i) continue
                 for (s in 0 until p.size - 1) {
-                    if (segmentIntersectsCircle(p[s], p[s + 1], bubbleX[j], centerY[j], geom.radius + clearance)) {
+                    if (segmentIntersectsCircle(p[s], p[s + 1], bubbleX[j], centerY[j], geom.radius + clr)) {
                         return true
                     }
                 }
