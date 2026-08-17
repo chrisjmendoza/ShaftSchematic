@@ -124,8 +124,8 @@ Resolved component pipeline (shipped):
   0 = derive from neighbors). See the "Auto-body promotion" invariant in `CLAUDE.md`.
 - **Golden rule — user inputs are sacred.** Committed field values reach the ViewModel
   verbatim: no snap, rounding, or "helpful" adjustment on any typed-commit path (the old
-  snap-to-anchor update wrappers were removed 2026-07-26). Snapping exists only for coarse
-  gestures (tap-to-add, `ui/viewmodel/SnapUtils.kt`).
+  snap-to-anchor update wrappers were removed 2026-07-26). No position snapping exists at all
+  any more — the last consumer, tap-to-add, was removed with its `SnapUtils` pipeline.
 - **Reference-only state flows.** The ViewModel also owns `_wearRecord`, `_runoutReadings`,
   and `_runoutConfig` (plain state updates, no geometry side effects), wired into autosave,
   snapshot restore, JSON import/export, and `newDocument` exactly like the spec.

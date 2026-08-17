@@ -176,12 +176,6 @@ fun ShaftScreen(
     onSetOverallIsManual: (Boolean) -> Unit,
     onSelectComponentById: (String?) -> Unit,
 
-    // Tap-to-add pipeline
-    pendingAddPositionMm: Float? = null,
-    pendingAddGapMm: Float = 50f,
-    onTapAtRawMm: (Float) -> Unit = {},
-    onClearPendingAddPosition: () -> Unit = {},
-
     // Adds (all mm)
     onAddBody: (startMm: Float, lengthMm: Float, diaMm: Float,
                 keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
@@ -266,12 +260,12 @@ fun ShaftScreen(
     var addSlotOpen by rememberSaveable { mutableStateOf(false) }
     var addSlotStartMm by rememberSaveable { mutableFloatStateOf(0f) }
 
-    // Tap-to-add: after chooser selection, position is captured here while the add dialog is open
-    var tapAddBodyOpen by rememberSaveable { mutableStateOf(false) }
-    var tapAddLinerOpen by rememberSaveable { mutableStateOf(false) }
-    var tapAddTaperOpen by rememberSaveable { mutableStateOf(false) }
-    var tapAddStartMm by rememberSaveable { mutableFloatStateOf(0f) }
-    var tapAddGapMm by rememberSaveable { mutableFloatStateOf(50f) }
+    // Add-chooser handoff: the chosen start/length ride here while the add dialog is open.
+    var addBodyOpen by rememberSaveable { mutableStateOf(false) }
+    var addLinerOpen by rememberSaveable { mutableStateOf(false) }
+    var addTaperOpen by rememberSaveable { mutableStateOf(false) }
+    var addStartMm by rememberSaveable { mutableFloatStateOf(0f) }
+    var addLengthMm by rememberSaveable { mutableFloatStateOf(50f) }
 
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
     var projectInfoOpen by rememberSaveable { mutableStateOf(false) }
@@ -436,7 +430,6 @@ fun ShaftScreen(
                 highlightEnabled = showHighlightSelection,
                 highlightId = selectedComponentId,
                 onTapComponentId = { onSelectComponentById(it) },
-                onTapAtMm = onTapAtRawMm,
                 showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
                 showRenderOalMarkers = showRenderOalMarkers,
                 previewOutline = previewOutline,
@@ -710,19 +703,19 @@ fun ShaftScreen(
                         onDismiss = { chooserOpen = false },
                         onAddBody = {
                             chooserOpen = false
-                            tapAddStartMm = d.startMm
-                            tapAddGapMm = if (overallIsManual && spec.overallLengthMm > d.startMm) {
+                            addStartMm = d.startMm
+                            addLengthMm = if (overallIsManual && spec.overallLengthMm > d.startMm) {
                                 spec.overallLengthMm - d.startMm
                             } else {
                                 sessionAddDefaults.bodyLenMm
                             }
-                            tapAddBodyOpen = true
+                            addBodyOpen = true
                         },
                         onAddLiner = {
                             chooserOpen = false
-                            tapAddStartMm = d.startMm
-                            tapAddGapMm = sessionAddDefaults.linerLenMm
-                            tapAddLinerOpen = true
+                            addStartMm = d.startMm
+                            addLengthMm = sessionAddDefaults.linerLenMm
+                            addLinerOpen = true
                         },
                         onAddThread = {
                             chooserOpen = false
@@ -731,9 +724,9 @@ fun ShaftScreen(
                         },
                         onAddTaper = {
                             chooserOpen = false
-                            tapAddStartMm = d.startMm
-                            tapAddGapMm = sessionAddDefaults.taperLenMm
-                            tapAddTaperOpen = true
+                            addStartMm = d.startMm
+                            addLengthMm = sessionAddDefaults.taperLenMm
+                            addTaperOpen = true
                         },
                         onAddCouplerBoltSlot = {
                             chooserOpen = false
@@ -787,90 +780,53 @@ fun ShaftScreen(
                     )
                 }
 
-                // Tap-to-add chooser — shown when the user taps empty space in the preview.
-                // Position is already snapped by the ViewModel before we receive it.
-                val tapPosition = pendingAddPositionMm
-                if (tapPosition != null) {
-                    InlineAddChooserDialog(
-                        onDismiss = { onClearPendingAddPosition() },
-                        onAddBody = {
-                            tapAddStartMm = tapPosition
-                            tapAddGapMm = pendingAddGapMm
-                            onClearPendingAddPosition()
-                            tapAddBodyOpen = true
-                        },
-                        onAddLiner = {
-                            tapAddStartMm = tapPosition
-                            tapAddGapMm = pendingAddGapMm
-                            onClearPendingAddPosition()
-                            tapAddLinerOpen = true
-                        },
-                        onAddTaper = {
-                            tapAddStartMm = tapPosition
-                            tapAddGapMm = pendingAddGapMm
-                            onClearPendingAddPosition()
-                            tapAddTaperOpen = true
-                        },
-                        onAddThread = {
-                            addThreadStartMm = tapPosition
-                            onClearPendingAddPosition()
-                            addThreadOpen = true
-                        },
-                        onAddCouplerBoltSlot = {
-                            addSlotStartMm = tapPosition
-                            onClearPendingAddPosition()
-                            addSlotOpen = true
-                        },
-                    )
-                }
-
-                if (tapAddBodyOpen) {
+                if (addBodyOpen) {
                     AddBodyDialog(
                         unit = unit,
                         spec = spec,
-                        initialStartMm = tapAddStartMm,
-                        initialLengthMm = tapAddGapMm,
+                        initialStartMm = addStartMm,
+                        initialLengthMm = addLengthMm,
                         onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90 ->
-                            tapAddBodyOpen = false
+                            addBodyOpen = false
                             onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned)
                             onSetKeyways180Apart(k180)
                             onSetKeyways90Apart(k90)
                             if (k90) onSetKeyways90Cw(cw90)
                         },
-                        onCancel = { tapAddBodyOpen = false }
+                        onCancel = { addBodyOpen = false }
                     )
                 }
 
-                if (tapAddLinerOpen) {
+                if (addLinerOpen) {
                     AddLinerDialog(
                         unit = unit,
                         spec = spec,
                         overallIsManual = overallIsManual,
-                        initialStartMm = tapAddStartMm,
-                        initialLengthMm = tapAddGapMm,
+                        initialStartMm = addStartMm,
+                        initialLengthMm = addLengthMm,
                         onSubmit = { s, l, od, ref ->
-                            tapAddLinerOpen = false
+                            addLinerOpen = false
                             onAddLiner(s, l, od, ref)
                         },
-                        onCancel = { tapAddLinerOpen = false }
+                        onCancel = { addLinerOpen = false }
                     )
                 }
 
-                if (tapAddTaperOpen) {
+                if (addTaperOpen) {
                     AddTaperDialog(
                         unit = unit,
                         spec = spec,
                         overallIsManual = overallIsManual,
-                        initialStartMm = tapAddStartMm,
-                        initialLengthMm = tapAddGapMm,
+                        initialStartMm = addStartMm,
+                        initialLengthMm = addLengthMm,
                         onSubmit = { s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90 ->
-                            tapAddTaperOpen = false
+                            addTaperOpen = false
                             onAddTaper(s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned)
                             onSetKeyways180Apart(k180)
                             onSetKeyways90Apart(k90)
                             if (k90) onSetKeyways90Cw(cw90)
                         },
-                        onCancel = { tapAddTaperOpen = false }
+                        onCancel = { addTaperOpen = false }
                     )
                 }
 

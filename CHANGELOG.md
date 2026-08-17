@@ -6,6 +6,26 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-17
+
+### remove: tap-to-add on the shaft builder preview
+
+Tapping a gap in the Schematic tab's preview opened an add-component chooser at the tapped
+position. It fired when no add was intended and was never reached for on purpose, so it is
+gone: the preview's tap is now **selection only** — tapping a component still highlights it,
+and tapping bare canvas does nothing at all.
+
+Components are added the way they already were, from the add chooser, which is now the single
+entry point. Nothing about the add dialogs, their defaults, or the placement of a component
+changes.
+
+The gesture was the only thing in the editor that snapped a position, so its snap pipeline
+retires with it — anchor building, the unit-aware snap tolerance, the gap-to-next-anchor
+prefill, and the pending-tap-position state. Typed values were already never snapped (a
+long-standing rule), so nothing a user enters behaves differently.
+
+---
+
 ## 2026-08-16
 
 ### feat: runout bubbles drag to the spot that was actually measured

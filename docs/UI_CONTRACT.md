@@ -83,14 +83,20 @@ All Add/Edit dialogs follow the same conventions:
 
 ### 3.1.1 Add Entry Points & Implicit (Auto) Bodies
 
-There are two paths to open an add dialog:
+There is ONE path to open an add dialog: the **FAB chooser**
+(`InlineAddChooserDialog`), which computes the default start via `computeAddDefaults()`
+(see §3.1.2), sets `addStartMm`/`addLengthMm`, and opens the matching `add*Open` dialog state.
 
-1. **Tap-to-add** (tap on canvas gap): sets `tapAddStartMm` and `tapAddGapMm` from the tapped
-   position (`ShaftScreen.kt`, tap-to-add state ~lines 299-303, dialog wiring ~lines 768-861),
-   then opens the appropriate `tapAdd*Open` dialog state.
-2. **FAB chooser** (`InlineAddChooserDialog`): computes default start via `computeAddDefaults()` (see §3.1.2), sets the same state vars, then opens the same dialogs.
+It goes through the full dialog — there is **no quick-add bypass** that skips user input.
 
-Both paths go through the full dialog — there is **no quick-add bypass** that skips user input.
+**Tap-to-add is removed.** Tapping a gap in the preview canvas used to snap the tapped position
+and open the same chooser there. It fired unintentionally far more often than it was wanted and
+was never used deliberately (on-device report), so the canvas tap is now **selection only** — a
+tap on a component highlights it, and a tap on bare canvas does nothing. Removing it retired the
+whole snap pipeline with it (`ui/viewmodel/SnapUtils.kt`, `ShaftViewModel.snapRawPositionMm` /
+`gapToNextAnchorMm` / the pending-position state): nothing else ever snapped a position. Do not
+reintroduce a bare-canvas tap action without asking — the complaint was about the gesture
+existing at all, not about how it behaved.
 
 **Implicit (auto) bodies** — shipped, not planned. Derived, read-only gap-fillers; never
 persisted in `ShaftSpec`:

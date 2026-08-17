@@ -50,7 +50,6 @@ internal fun PreviewCard(
     highlightEnabled: Boolean,
     highlightId: String?,
     onTapComponentId: ((String) -> Unit)?,
-    onTapAtMm: ((Float) -> Unit)? = null,
     showRenderLayoutDebugOverlay: Boolean,
     showRenderOalMarkers: Boolean,
     previewOutline: PreviewColorSetting,
@@ -86,7 +85,6 @@ internal fun PreviewCard(
                 highlightEnabled = highlightEnabled && (highlightId != null),
                 highlightId = highlightId,
                 onTapComponentId = onTapComponentId,
-                onTapAtMm = onTapAtMm,
                 showLayoutDebugOverlay = showRenderLayoutDebugOverlay,
                 showOalMarkers = showRenderOalMarkers
             )

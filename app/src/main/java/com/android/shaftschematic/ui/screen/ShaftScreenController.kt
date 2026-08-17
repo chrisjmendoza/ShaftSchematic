@@ -5,8 +5,8 @@ package com.android.shaftschematic.ui.screen
  *
  * Extracted from ShaftScreen.kt. Typed field commits are never snapped to component-edge
  * anchors: that would silently rewrite values the user just entered (e.g. undoing a
- * sub-tolerance taper-length edit). Typed values are exact; snapping is reserved for coarse
- * gestures (tap-to-add, `ui/viewmodel/SnapUtils.kt`).
+ * sub-tolerance taper-length edit). Typed values are exact. Nothing in the editor snaps a
+ * position any more — the one coarse gesture that did, tap-to-add, is gone.
  */
 
 import com.android.shaftschematic.model.ShaftSpec

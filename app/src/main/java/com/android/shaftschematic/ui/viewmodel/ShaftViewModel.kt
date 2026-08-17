@@ -994,28 +994,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Tap-to-add pending position: non-null while the user has tapped empty space and
-    // has not yet confirmed or dismissed the add-at-position flow.
-    private val _pendingAddPositionMm = MutableStateFlow<Float?>(null)
-    val pendingAddPositionMm: StateFlow<Float?> = _pendingAddPositionMm.asStateFlow()
-
-    /** Called by UI when the user taps empty space in the preview. Snaps and stores the position. */
-    fun setTapAddPosition(rawMm: Float) {
-        _pendingAddPositionMm.value = snapRawPositionMm(rawMm)
-    }
-
-    /** Clear the pending tap-add intent (called when the chooser or dialog is dismissed/confirmed). */
-    fun clearPendingAddPosition() {
-        _pendingAddPositionMm.value = null
-    }
-
-    /**
-     * Distance from [positionMm] to the next snap anchor (component start/end or OAL boundary),
-     * clamped to at least [minimumMm]. Used to prefill the length field in tap-to-add dialogs.
-     */
-    fun gapToNextAnchorMm(positionMm: Float, minimumMm: Float = DEFAULT_ADD_GAP_MM): Float =
-        gapToNextAnchorMm(_spec.value, positionMm, minimumMm)
-
     // Incrementing key used by the editor UI to reset Compose-local state (dialogs, focus, scroll, etc.)
     // without relocating that state into the ViewModel.
     private val _editorResetNonce = MutableStateFlow(0)
@@ -2929,14 +2907,5 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
          */
         fun parseRateText(text: String): Float? = parseTaperRateText(text, allowAmbiguousBareOne = true)
     }
-
-    /**
-     * Snap a raw mm position against the current spec, using anchors built from the
-     * latest [ShaftSpec] and a unit-aware tolerance. This is the main entry point for
-     * tap-to-add and future cursor-based snapping.
-     */
-    fun snapRawPositionMm(rawMm: Float): Float =
-        snapRawPositionMm(rawMm, _spec.value, _unit.value)
-
 
 }

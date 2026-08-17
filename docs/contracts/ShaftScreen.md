@@ -148,10 +148,16 @@ Notes
   `applySnapped{…}Update` wrappers (removed 2026-07-26) snapped the recomputed start/end
   to component-edge anchors (±1 mm) and silently rewrote typed values — a taper-length
   edit smaller than the tolerance was undone entirely (the start snapped back to the old
-  boundary and the length recomputed to its previous value). Snapping is reserved for
-  coarse gestures: tap-to-add (`ui/viewmodel/SnapUtils.kt`). Do not reintroduce snapping
+  boundary and the length recomputed to its previous value). Do not reintroduce snapping
   into any typed-commit update path — same invariant as the 2026-06-19 removal of the
-  `snapForwardFrom` cascade from ViewModel updates.
+  `snapForwardFrom` cascade from ViewModel updates. **Nothing in the editor snaps a position
+  any longer**: the one coarse gesture that did — tap-to-add — was removed with its whole
+  snap pipeline (`ui/viewmodel/SnapUtils.kt`).
+- **The preview canvas tap is selection only.** A tap on a component highlights it
+  (`onTapComponentId`); a tap on bare canvas does nothing. It used to open an add chooser at
+  the tapped position, which fired unintentionally far more often than it was wanted and was
+  never used deliberately (on-device report). Components are added from the FAB chooser,
+  which is the only add entry point (`docs/UI_CONTRACT.md` §3.1.1).
 
 ---
 
@@ -167,6 +173,15 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.15 (2026-08-17)**
+- **Tap-to-add removed.** The preview canvas tap is selection only. The add-at-tapped-position
+  chooser fired unintentionally and was never used on purpose (on-device report), so the
+  gesture, its pending-position state (`setTapAddPosition`/`clearPendingAddPosition`/
+  `pendingAddPositionMm`), and the entire snap pipeline it was the sole consumer of
+  (`ui/viewmodel/SnapUtils.kt`, `snapRawPositionMm`, `gapToNextAnchorMm`) are gone. The FAB
+  chooser is now the only add entry point; its handoff state was renamed off the dead gesture
+  (`tapAdd*` → `add*`).
+
 **v0.14 (2026-08-14)**
 - **Project Information sheet gains Save/Cancel:** the sheet now edits a local draft and
   commits on **Save** (changed fields only); **Cancel** reverts. Replaces the per-field

@@ -10,7 +10,8 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 
 **Delivered:**
 - Core architecture (MVVM, mm-only model, Layout/Renderer pipeline)
-- Snap engine + tap-to-add pipeline
+- Snap engine + tap-to-add pipeline *(both removed in v0.5.x — the gesture fired
+  unintentionally and was never used on purpose, and nothing else snapped)*
 - OAL window + excluded thread logic
 - Taper rate input (all formats: 1:12, 3/4, decimal)
 - Full single-page PDF export (landscape, theme-safe, dimension tiers, footer)
@@ -61,6 +62,8 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   move, and lower priority
 
 **Delivered in v0.5.x so far** (newest first):
+- Tap-to-add removed — the Schematic preview's canvas tap is selection only; components are
+  added from the FAB chooser, the single entry point. Took the whole snap pipeline with it
 - Draggable runout bubbles — press and hold a bubble on the Runout tab's live preview to slide
   it along its component and mark the spot actually measured; the drag pins that one station
   (its siblings stay automatic) and is clamped between its neighbours, so the sheet still reads

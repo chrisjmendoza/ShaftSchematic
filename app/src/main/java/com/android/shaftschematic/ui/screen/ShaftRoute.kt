@@ -127,8 +127,6 @@ fun ShaftRoute(
     val hasUnsavedChanges by vm.hasUnsavedChanges.collectAsState()
 
     val sessionAddDefaults by vm.sessionAddDefaults.collectAsState()
-    val pendingAddPositionMm by vm.pendingAddPositionMm.collectAsState()
-    val pendingAddGapMm = pendingAddPositionMm?.let { vm.gapToNextAnchorMm(it) } ?: 50f
 
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
@@ -249,10 +247,5 @@ fun ShaftRoute(
         onRedo = vm::redoEdit,
 
         sessionAddDefaults = sessionAddDefaults,
-
-        pendingAddPositionMm = pendingAddPositionMm,
-        pendingAddGapMm = pendingAddGapMm,
-        onTapAtRawMm = { vm.setTapAddPosition(it) },
-        onClearPendingAddPosition = vm::clearPendingAddPosition,
     )
 }

@@ -505,10 +505,20 @@ committed field values **verbatim** — no snap-to-anchor on any typed-commit pa
 `applySnapped{…}Update` wrappers (2026-07-26) snapped recomputed start/end to
 component-edge anchors (±1 mm) and silently rewrote typed values: shortening a
 FWD-referenced taper by less than the tolerance snapped its start back to the old
-boundary, undoing the edit entirely. Snapping is for coarse gestures only (tap-to-add,
-`ui/viewmodel/SnapUtils.kt`). Same posture as the 2026-06-19 removal of the
+boundary, undoing the edit entirely. **Nothing snaps a position any more**: the only coarse
+gesture that did — tap-to-add — was removed along with its whole snap pipeline
+(`ui/viewmodel/SnapUtils.kt`), so any reintroduced snapping is new code, not a restoration.
+Same posture as the 2026-06-19 removal of the
 `snapForwardFrom` cascade from ViewModel updates: positions are user-authored; nothing
 mutates them except a direct user action. See `docs/contracts/ShaftScreen.md`.
+
+### The preview canvas tap is selection only
+Tapping a component in the Schematic tab's preview highlights it (`onTapComponentId`); tapping
+bare canvas does **nothing**. The bare-canvas tap used to open an add-component chooser at the
+tapped position — it fired unintentionally far more often than it was wanted and was never used
+deliberately (on-device report). Components are added from the FAB chooser, the single add
+entry point. Do not reintroduce a bare-canvas tap action without asking: the objection was to
+the gesture existing, not to its behavior. See `docs/UI_CONTRACT.md` §3.1.1.
 
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus
