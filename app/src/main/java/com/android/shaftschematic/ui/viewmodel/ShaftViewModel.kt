@@ -85,7 +85,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val currentPdfPrefs: PdfPrefs
             get() = SettingsStore.pdfPrefs
     // Draft ring state (up to 3 unsaved sessions, newest-first). See
-    // docs/Autosave_Incident_2026-07-25.md.
+    // docs/archive/Autosave_Incident_2026-07-25.md.
     private val _drafts = MutableStateFlow<List<AutosaveManager.DraftEntry>>(emptyList())
     val drafts: StateFlow<List<AutosaveManager.DraftEntry>> = _drafts.asStateFlow()
 
@@ -208,7 +208,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * comparison as the autosave dirty gate ([shouldWriteDraft]) so *every* tracked field —
      * spec, metadata, position, unit-lock, OAL mode, wear record, runout readings/config —
      * counts as unsaved work; a partial comparison risks missing wear/runout edits and letting
-     * unsaved work slip past the dirty gate. See docs/Autosave_Incident_2026-07-25.md.
+     * unsaved work slip past the dirty gate. See docs/archive/Autosave_Incident_2026-07-25.md.
      */
     fun hasUnsavedWork(): Boolean {
         if (isSessionDefault()) return false
@@ -489,7 +489,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // Reference-only data, same posture as _wearRecord below: plain state updates, no
     // geometry side effects. Keyed by (componentId, stationIndex). Both fields optional;
     // an entry with neither value nor marker is dropped by RunoutReadings.withReading.
-    // See docs/RunoutBubbleEditor_PLAN.md and model/RunoutReading.kt.
+    // See docs/archive/RunoutBubbleEditor_PLAN.md and model/RunoutReading.kt.
 
     private val _runoutReadings = MutableStateFlow(RunoutReadings())
     val runoutReadings: StateFlow<RunoutReadings> = _runoutReadings.asStateFlow()
@@ -521,7 +521,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ── Liner wear inspection record ──────────────────────────────────────────
     // Persisted alongside the spec in the .shaft file, same as runoutConfig above.
     // Reference-only data: plain state updates, no geometry side effects, no
-    // ensureOverall/auto-body interaction. See docs/LinerWearAreas_Proposal.md §5, §7.
+    // ensureOverall/auto-body interaction. See docs/archive/LinerWearAreas_Proposal.md §5, §7.
 
     private val _wearRecord = MutableStateFlow(WearRecord())
     val wearRecord: StateFlow<WearRecord> = _wearRecord.asStateFlow()
@@ -769,7 +769,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // Reference-only data, same posture as _wearRecord/_runoutReadings above: plain state
     // updates, no geometry side effects, no ensureOverall/auto-body interaction. Undercuts
     // have no component key, so there is no orphan concept here. See
-    // docs/UndercutDrawing_PLAN.md §2, §6.
+    // docs/archive/UndercutDrawing_PLAN.md §2, §6.
 
     private val _undercutRecord = MutableStateFlow(UndercutRecord())
     val undercutRecord: StateFlow<UndercutRecord> = _undercutRecord.asStateFlow()

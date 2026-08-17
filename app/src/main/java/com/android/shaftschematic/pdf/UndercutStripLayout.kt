@@ -13,7 +13,7 @@ import kotlin.math.abs
 
 /**
  * Pure-math layout helpers for the undercut-PDF detail strips
- * (`docs/UndercutDrawing_PLAN.md` §8). Deliberately free of any `android.graphics` import
+ * (`docs/archive/UndercutDrawing_PLAN.md` §8). Deliberately free of any `android.graphics` import
  * so the rail chain, the strip banding, the anchor-from-SET choice, and the measured-Ø
  * station build can be unit-tested directly on a plain JVM — the same posture (and the
  * same package) as [WearStripLayout.kt]'s wear helpers, several of which this file reuses

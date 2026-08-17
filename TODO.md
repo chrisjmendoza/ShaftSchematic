@@ -28,12 +28,12 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 | Shared signing config | ✅ debug.keystore committed; all machines update-install |
 | Internal save/open | ✅ Working |
 | Backup & restore | ✅ Zip backup/restore via file picker, per-shaft import/export, pre-update snapshots (keep 3), Auto Backup rules; sample pruning made non-destructive (seed-hash ledger) |
-| Autosave / draft restore | ✅ Reworked 2026-07-25 — dirty-gated 3-entry draft ring (per-document identity) replaces the single always-overwriting slot that caused a data-loss incident; StartScreen shows an "Unsaved drafts" list. See `docs/Autosave_Incident_2026-07-25.md` |
+| Autosave / draft restore | ✅ Reworked 2026-07-25 — dirty-gated 3-entry draft ring (per-document identity) replaces the single always-overwriting slot that caused a data-loss incident; StartScreen shows an "Unsaved drafts" list. See `docs/archive/Autosave_Incident_2026-07-25.md` |
 | ShaftScreen.kt | ✅ Carousel, preview panel, and event wiring extracted (2322 → 1235 lines) |
 | Sidebar nav (5 tabs) | ✅ Schematic / Runout Sheet / Wear Document / Undercut Drawing / Consolidated Output (`EditorSidebar` + `EditorTab` + `ShaftEditorRoute`) |
 | Runout drawing | ✅ RunoutPdfComposer, inline shaft preview, scrollable layout, collision-free alternating bubble layout via shared `geom/RunoutBubbleLayout.kt`; resolved-component geometry (2026-07-18) |
 | Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes; resolved-component geometry (2026-07-18). Reworked 2026-07-28: every liner gets a detail strip (with or without wear), blank write-in template (circle-one AFT/FWD anchors, edge-bar rails), profile-band space reclaim, uniform strip heights, shared positional liner titles. On-device verified through the layout round |
-| Liner wear areas | ✅ Built 2026-07-18 (all 4 phases + input spec: SET/liner-edge references, blocking span validation, PDF detail strips with dimension rails) — awaiting on-device verification. Build record in git history (`docs/LinerWearAreas_BuildLog_2026-07-18.md`) |
+| Liner wear areas | ✅ Built 2026-07-18 (all 4 phases + input spec: SET/liner-edge references, blocking span validation, PDF detail strips with dimension rails) — awaiting on-device verification. Build record in git history (`LinerWearAreas_BuildLog_2026-07-18.md`, pruned in `35ca87f`); design record in `docs/archive/LinerWearAreas_Proposal.md` |
 | Wear pits (X markers) | ✅ Built 2026-07-21 — small/large pit "X"s on bodies, tapers & liners (tap to open a segment; explicit Add X / Remove X / Clear all tools); drawn on the wear PDF profile + strips. Wear PDF now keeps the shaft profile always on top with a 2-column detail-strip grid. See CHANGELOG + "Wear Pits" in `app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md`. Awaiting on-device verification |
 | Body keyways | ✅ Built 2026-07-20 — taper-style keyway on bodies (open + floating), 180°-apart hidden-line toggle, auto-body promotion via the "Explicit body" checkbox (checkbox-only, reworked 2026-07-25); split/merge carry keeps keyway at absolute position |
 | Runout bubble editor | ✅ Built 2026-07-21 — tap a bubble to record TIR value + high-spot clock marker; open-topped keyway cutout in the bubble; drawn identically on canvas + PDF |
@@ -100,7 +100,7 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
   as `Taper.authoredReference`, and `addTaperAt`/`updateTaper` derivation lost the stale-OAL
   face bug. Data-repair normalization deliberately **declined** — reversed pairs stored by
   earlier builds decode exactly as saved (golden rule; pinned by test). Full detail:
-  CHANGELOG 2026-08-06 + `docs/TaperOrientation_Analysis_2026-07-26.md` (marked RESOLVED).
+  CHANGELOG 2026-08-06 + `docs/archive/TaperOrientation_Analysis_2026-07-26.md` (marked RESOLVED).
 - [ ] **OAL reload edge (low):** a file saved with manual OAL exactly equal to the content end
   reloads as "auto" (`importJson` uses `> coverageEnd + 1e-3`), and the auto-sync effect then
   keeps OAL glued to the content end — silently dropping a *leading* auto span (components not

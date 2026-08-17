@@ -106,7 +106,7 @@ import kotlin.math.roundToInt
  * UndercutRoute
  *
  * Screen for the Undercut Drawing tab — the shop's record of machined-below-surface sections
- * (weld-repair undercuts, cleanup cuts). See `docs/UndercutDrawing_PLAN.md`.
+ * (weld-repair undercuts, cleanup cuts). See `docs/archive/UndercutDrawing_PLAN.md`.
  *
  * ## Layout
  * - **Overview canvas** — `ShaftLayout.compute` + `ShaftRenderer.draw` over

@@ -11,7 +11,7 @@ import org.junit.Test
 /**
  * Tests for the undercut drawing record state operations (`ShaftViewModel.addUndercut` /
  * `updateUndercut` / `updateUndercutReference` / `removeUndercut`, Phase 1 of
- * `docs/UndercutDrawing_PLAN.md` §6, §7).
+ * `docs/archive/UndercutDrawing_PLAN.md` §6, §7).
  *
  * These mirror what each function does inside `_undercutRecord.update {}` — plain list
  * operations on [UndercutRecord], with no geometry side effects — so they stay fast JVM

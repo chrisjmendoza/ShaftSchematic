@@ -16,7 +16,7 @@ import org.junit.Test
 
 /**
  * The autosave draft snapshot must carry the wear record alongside the spec, exactly like
- * it already carries `runoutConfig` — see docs/LinerWearAreas_Proposal.md §4/§5 and
+ * it already carries `runoutConfig` — see docs/archive/LinerWearAreas_Proposal.md §4/§5 and
  * `ShaftViewModel`'s autosave `combine(...)` block.
  */
 class AutosaveSnapshotWearRecordTest {

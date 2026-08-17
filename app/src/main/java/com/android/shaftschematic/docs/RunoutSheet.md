@@ -160,7 +160,7 @@ tuning sections (bubbles, sliders, worn sections), then Export all.
 
 ## Liner Wear Inspection (UI, Phase 2/3, 2026-07-18)
 
-See `docs/LinerWearAreas_Proposal.md` for the full feature scope; this section covers only
+See `docs/archive/LinerWearAreas_Proposal.md` for the full feature scope; this section covers only
 the UI contract added on top of the existing wear-document tab.
 
 **Overview canvas (`WearRoute.kt`)** — same rendering pattern as `RunoutRoute`'s preview
@@ -318,7 +318,7 @@ printed sizes below were confirmed right and are untouched):
 The digital form of the shop's hand-written diameter values under a worn section (reference
 photo: values fanned below the shaft, each with a leader pointing at the measured spot, plus
 the nominal at an unworn edge). The fifth reference-only feature — see `CLAUDE.md` and
-`docs/WearDiaMeasurements_PLAN.md` for the full design.
+`docs/archive/WearDiaMeasurements_PLAN.md` for the full design.
 
 **Data model** (`model/WearSpot.kt`): `WearDiaReading(id, componentId, axialMm, diaMm)` in
 `WearRecord.diaReadings` — additive/defaulted, rides the existing `wear_record` envelope
@@ -1282,7 +1282,7 @@ only the per-strip rectangle and the page's stub width differ.
 ### Wear Detail Strips (Phase 4, 2026-07-18; 2-column grid 2026-07-21; dynamic row packing 2026-08-15)
 
 `composeWearPdf` takes an optional `wearRecord: WearRecord = WearRecord()` param (see
-`docs/LinerWearAreas_Proposal.md` §6.2). Every existing call site is unaffected by the
+`docs/archive/LinerWearAreas_Proposal.md` §6.2). Every existing call site is unaffected by the
 default. All strip geometry (liner spans, neighbor diameters for the break-out stubs)
 comes from `docSpec` — the spec after `withResolvedBodies(resolvedComponents)` — never
 raw `spec.bodies`, same contract as the rest of this document. This section describes the
@@ -1767,7 +1767,7 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
 - User-selectable keyway reference angle (the cutout is currently fixed at 12 o'clock; the high-spot
   marker is already fully user-placed).
 - Severity rating and photos on wear spots (explicitly out of scope for the liner wear
-  feature — see `docs/LinerWearAreas_Proposal.md` §1). The sheet-level dye-pen PASS/FAIL is
+  feature — see `docs/archive/LinerWearAreas_Proposal.md` §1). The sheet-level dye-pen PASS/FAIL is
   digitized (see "Key layout decisions" above); a per-spot rating is not.
 - Wear *bands* on bodies/tapers, not just liners (pit "X" markers already work on all three — see
   "Wear Pits" above; bands remain liner-only for now). Was the proposal's §10.5 open question.

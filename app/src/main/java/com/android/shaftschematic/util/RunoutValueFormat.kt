@@ -7,7 +7,7 @@ package com.android.shaftschematic.util
  * here, at the UI/output edge — the model always stores canonical mm.
  *
  * Shared by the runout bubble editor dialog, the on-screen preview, and the PDF composer so the
- * value renders identically everywhere. See `docs/RunoutBubbleEditor_PLAN.md`.
+ * value renders identically everywhere. See `docs/archive/RunoutBubbleEditor_PLAN.md`.
  */
 fun formatRunoutValue(valueMm: Float, unit: UnitSystem): String {
     val display = unit.fromMillimeters(valueMm.toDouble())

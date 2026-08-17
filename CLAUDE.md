@@ -111,7 +111,7 @@ default): per job via `WearRecord.traceDepthFrac` (additive/optional, `null` = f
 Settings → Drawing "Wear depth exaggeration" default, `PdfPrefs.wearTraceDepthFrac`), resolved
 ONCE by `effectiveWearTraceDepthFrac` and handed to both draw sites from the same call site.
 See `RunoutSheet.md` (Wear Diameter
-Measurements) and `WearDiaMeasurements_PLAN.md`.
+Measurements) and `docs/archive/WearDiaMeasurements_PLAN.md`.
 
 ### Worn sections are reference features
 Worn sections (`WearRecord.wornSections` — a `WornSection` per designated measured area,
@@ -269,7 +269,7 @@ liner shade — `UNDERCUT_SECTION_FILL_ALPHA`, half the liner's alpha) must rend
 and `UndercutPdfComposer` (PDF) — from the shared pure pipeline `geom/SurfaceProfileMath.kt`
 + `geom/UndercutMath.kt` (cluster windows, clamps, hit-tests; no `pdf → ui` dep) with
 `ui/resolved/SurfaceSegs.kt` as the single resolved→surface mapping. See
-`UndercutDrawing_PLAN.md`.
+`docs/archive/UndercutDrawing_PLAN.md`.
 
 ### Paper sheets are theme-independent
 The app theme (Settings → Appearance: System/Light/Dark + high contrast; default Light =
@@ -320,7 +320,7 @@ Pure clock/hit-test math lives in `geom/RunoutReadingMath.kt` (shared, no `pdf �
 value formatting in `util/RunoutValueFormat.kt`. One reserved key, `COUPLING_PILOT_COMPONENT_ID`
 (`"coupling_pilot"`, station 0 — the coupling face's pilot runout), deliberately matches no
 resolved component and must **never** be pruned as an orphan. See `RunoutSheet.md` (Runout Bubble
-Editor, Coupling Face) and `docs/RunoutBubbleEditor_PLAN.md`.
+Editor, Coupling Face) and `docs/archive/RunoutBubbleEditor_PLAN.md`.
 
 ### Spooned keyways are a draw-only variant
 `keywaySpooned` (on `Taper` and `Body`) is a **drawing** flag — it changes nothing in the model,

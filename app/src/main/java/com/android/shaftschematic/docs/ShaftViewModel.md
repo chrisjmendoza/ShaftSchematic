@@ -20,7 +20,7 @@ Responsibilities
 - Hold persisted display settings: `lineThicknessScale` (0.5–2.0, applied to preview and PDF stroke widths; 1.0 = default thin weight, 2.0 = original thick weight).
 - Own autosave/draft-history state (`data/AutosaveManager.kt`, `data/DraftRing.kt`;
   full contract in `docs/Persistence.md`, incident background in
-  `docs/Autosave_Incident_2026-07-25.md`):
+  `docs/archive/Autosave_Incident_2026-07-25.md`):
   - `currentDraftId` — a UUID identifying this editing session's ring slot. Minted at
     construction; re-minted in `newDocument()` and `importJson()` so switching
     documents can never touch another document's draft entry.
@@ -54,7 +54,7 @@ Responsibilities
     `_savedSpec`/`_savedJobNumber`/`_savedCustomer`/`_savedVessel`/`_savedNotes`
     fields are gone; `markDocumentSaved()` now sets only `savedSnapshot`. Backs the
     universal unsaved-changes guard in `AppNav.kt` (`docs/Navigation.md`). See
-    `docs/Autosave_Incident_2026-07-25.md` (root cause #4) for why the old
+    `docs/archive/Autosave_Incident_2026-07-25.md` (root cause #4) for why the old
     partial comparison mattered.
   - `drafts: StateFlow<List<AutosaveManager.DraftEntry>>` — replaces the old
     single-slot `_hasDraft` boolean; backs the StartScreen "Unsaved drafts" list
@@ -157,7 +157,7 @@ Change Log
 
 **v0.6 (2026-07-25)**
 - Autosave draft-history rework (fixes the 2026-07-25 data-loss incident — see
-  `docs/Autosave_Incident_2026-07-25.md`): `currentDraftId` (per-session identity)
+  `docs/archive/Autosave_Incident_2026-07-25.md`): `currentDraftId` (per-session identity)
   and `savedSnapshot` (dirty-gate baseline) added; `_hasDraft` boolean replaced by
   `drafts: StateFlow<List<AutosaveManager.DraftEntry>>`; new
   `continueDraft(id)`/`discardDraft(id)`, no-arg `discardDraft()` kept. The autosave

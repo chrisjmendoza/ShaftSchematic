@@ -67,7 +67,7 @@ import kotlin.math.min
  * Both value and marker are optional and independent. The working state seeds from the passed
  * initial values, so reopening a saved bubble shows its saved data until the user edits it.
  *
- * See `docs/RunoutBubbleEditor_PLAN.md` and `model/RunoutReading.kt`.
+ * See `docs/archive/RunoutBubbleEditor_PLAN.md` and `model/RunoutReading.kt`.
  *
  * @param onSave (valueMm, highSpotHalfHours) — either may be null. Called then the dialog closes.
  */

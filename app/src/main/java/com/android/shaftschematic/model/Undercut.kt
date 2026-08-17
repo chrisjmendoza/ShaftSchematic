@@ -32,7 +32,7 @@ enum class UndercutReference { AFT_SET, FWD_SET, LINER_AFT, LINER_FWD }
 /**
  * A recorded undercut section — an axial span machined below the surrounding shaft
  * surface (weld-repair undercut, cleanup cut), documented on its own printed drawing
- * with zoomed detail windows (see `docs/UndercutDrawing_PLAN.md`).
+ * with zoomed detail windows (see `docs/archive/UndercutDrawing_PLAN.md`).
  *
  * A **pure reference feature**, the same contract class as [WearSpot] / [WearPit] /
  * [WearDiaReading] / [com.android.shaftschematic.model.RunoutReading] /

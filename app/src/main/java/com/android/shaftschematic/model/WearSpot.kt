@@ -23,7 +23,7 @@ enum class WearSpotReference { LINER_AFT, LINER_FWD, AFT_SET, FWD_SET }
  * A recorded wear band on a liner.
  *
  * This is a **pure reference feature** — same contract class as [CouplerBoltSlot]
- * (see `CLAUDE.md` and `docs/LinerWearAreas_Proposal.md` §7):
+ * (see `CLAUDE.md` and `docs/archive/LinerWearAreas_Proposal.md` §7):
  * - It never affects `coverageEndMm`, `ensureOverall`, body resolution, collision/overlap
  *   validation, or the Free-to-End badge.
  * - It lives outside [ShaftSpec] entirely (flat list in [WearRecord], stored beside

@@ -57,7 +57,7 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * UndercutPdfComposer
  *
  * Generates the undercut drawing PDF page — the printable record of a shaft's undercut
- * sections (see `docs/UndercutDrawing_PLAN.md` §8): header, an orientation row, and the
+ * sections (see `docs/archive/UndercutDrawing_PLAN.md` §8): header, an orientation row, and the
  * zoomed detail strips — one per **liner holding cuts** plus one per bare-shaft cluster
  * (chained dimension rail + total above, measured-Ø callouts below, anchor-from-SET title).
  *
@@ -394,7 +394,7 @@ fun composeUndercutPdf(
 
     // ── Notes row ────────────────────────────────────────────────────────────
     // Notes only: the dye-pen PASS/FAIL checkboxes are a wear/inspection concern and have no
-    // place on a machining record (`docs/UndercutDrawing_PLAN.md` §11.4).
+    // place on a machining record (`docs/archive/UndercutDrawing_PLAN.md` §11.4).
     drawUndercutNotesRow(c, text, contentLeft, contentRight, notesY)
 }
 

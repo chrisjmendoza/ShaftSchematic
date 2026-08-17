@@ -18,7 +18,7 @@ import org.junit.Test
 
 /**
  * Pure-math tests for the undercut-PDF detail-strip layout
- * (`docs/UndercutDrawing_PLAN.md` §8) — plain JVM assertions, no Robolectric, exercising
+ * (`docs/archive/UndercutDrawing_PLAN.md` §8) — plain JVM assertions, no Robolectric, exercising
  * `UndercutStripLayout.kt`'s functions directly rather than replicating their formulas.
  */
 class UndercutStripLayoutTest {

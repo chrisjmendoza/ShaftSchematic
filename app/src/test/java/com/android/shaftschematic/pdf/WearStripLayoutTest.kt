@@ -16,7 +16,7 @@ import org.junit.Test
 
 /**
  * Pure-math tests for the wear-PDF detail-strip layout (Phase 4,
- * `docs/LinerWearAreas_Proposal.md` §6.2/§9). Mirrors the style of
+ * `docs/archive/LinerWearAreas_Proposal.md` §6.2/§9). Mirrors the style of
  * `PdfLayoutBoundsTest` — plain JVM assertions, no Robolectric — but exercises the
  * extracted functions in `WearStripLayout.kt` directly rather than replicating
  * their formulas in the test.

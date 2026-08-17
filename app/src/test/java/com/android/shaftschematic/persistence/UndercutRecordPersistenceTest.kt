@@ -11,7 +11,7 @@ import org.junit.Test
 
 /**
  * Persistence tests for the undercut drawing record (Phase 1 of
- * `docs/UndercutDrawing_PLAN.md` §7): envelope round-trip, legacy/older-file defaults, and
+ * `docs/archive/UndercutDrawing_PLAN.md` §7): envelope round-trip, legacy/older-file defaults, and
  * the no-orphan-pruning rule — undercuts have no component key, so nothing is dropped at
  * decode (unlike wear spots).
  */

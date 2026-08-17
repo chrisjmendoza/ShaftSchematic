@@ -118,7 +118,7 @@ import com.android.shaftschematic.util.drawRichText
  * a neighbor thread that ends the shaft is drawn as a flat-ended, thread-hatched stub — the
  * shaft physically stops there, so a break edge would misread as "continues".
  *
- * Originally liner-only (`docs/LinerWearAreas_Proposal.md` Phase 3); generalized so a
+ * Originally liner-only (`docs/archive/LinerWearAreas_Proposal.md` Phase 3); generalized so a
  * **body** or **taper** can be opened the same way (the proposal's §10.5 "wear on bodies/tapers"
  * open question). What the overlay offers depends on the component:
  * - **Liners** get the full liner-wear-band editor (tinted bands + per-spot dimension rail +

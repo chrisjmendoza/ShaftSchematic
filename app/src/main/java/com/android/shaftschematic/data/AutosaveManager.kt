@@ -25,7 +25,7 @@ private val Context.dataStore by preferencesDataStore(name = "autosave_datastore
  * [DRAFTS_KEY]. Each editing session owns a stable `draftId`, so opening/creating a document
  * upserts only *its* entry and can never clobber another document's draft. Legacy
  * single-slot drafts (`autosave_last_session`) migrate into the ring on first [loadDrafts].
- * See docs/Autosave_Incident_2026-07-25.md.
+ * See docs/archive/Autosave_Incident_2026-07-25.md.
  */
 object AutosaveManager {
     private val json = Json {

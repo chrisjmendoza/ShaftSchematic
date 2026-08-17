@@ -24,7 +24,7 @@ import kotlin.math.sin
  * (`n × 15°`). Screen/PDF space is y-down, so a tick's rim point is
  * `(cx + r·sinθ, cy − r·cosθ)` with `θ = n × 15°`.
  *
- * See `docs/RunoutBubbleEditor_PLAN.md` and `model/RunoutReading.kt`.
+ * See `docs/archive/RunoutBubbleEditor_PLAN.md` and `model/RunoutReading.kt`.
  */
 
 /** Number of clock ticks around the face (30-minute increments on a 12-hour clock). */

@@ -19,7 +19,7 @@ import org.junit.Test
 
 /**
  * Persistence tests for the liner wear-inspection record (Phase 1 of
- * `docs/LinerWearAreas_Proposal.md`): envelope round-trip, legacy-file default,
+ * `docs/archive/LinerWearAreas_Proposal.md`): envelope round-trip, legacy-file default,
  * and the orphan-filtering policy (§3, §7 rule 6).
  */
 class WearRecordPersistenceTest {

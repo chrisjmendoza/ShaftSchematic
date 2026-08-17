@@ -5,7 +5,7 @@ Files: `io/InternalStorage.kt`, `doc/ShaftDocCodec.kt`, `data/AutosaveManager.kt
 `data/DraftRing.kt`  
 Version: v1.1 (2026-07-25) — adds the draft-ring autosave rewrite (was v1.0,
 2026-07-18, which consolidated the former `InternalStorage.md` and `Units.md`).
-Backup & restore design lives in `docs/BackupRestore_Strategy.md`
+Backup & restore design lives in `docs/archive/BackupRestore_Strategy.md`
 (implementation: `io/ShaftBackup.kt`).
 
 ---
@@ -77,7 +77,7 @@ desired unit without re-saving the document.
 ## Autosave / draft ring (`data/AutosaveManager.kt`, `data/DraftRing.kt`)
 
 Root cause and full writeup of the 2026-07-25 data-loss incident that motivated this
-design: `docs/Autosave_Incident_2026-07-25.md`.
+design: `docs/archive/Autosave_Incident_2026-07-25.md`.
 
 - **Storage**: one DataStore key, `autosave_drafts` — a JSON list of up to
   `DEFAULT_DRAFT_RING_MAX` (3) `DraftEntry(draftId, documentName?, updatedAtEpochMs,

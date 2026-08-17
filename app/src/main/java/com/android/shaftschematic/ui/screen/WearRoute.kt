@@ -105,7 +105,7 @@ import kotlinx.coroutines.withContext
  * dye-penetrant results by hand on the page.
  *
  * ## Layout
- * - **Interactive shaft canvas** (`docs/LinerWearAreas_Proposal.md`) — same pattern as
+ * - **Interactive shaft canvas** (`docs/archive/LinerWearAreas_Proposal.md`) — same pattern as
  *   `RunoutRoute`'s preview canvas: `ShaftLayout.compute` + `ShaftRenderer.draw` against
  *   `resolvedComponents` (never raw spec). Liners are tap targets (faint tint affordance); a
  *   tap hit-tests in mm space via [ShaftLayout.Result.xMmFromPx] + [pickLinerIdAtMm] and opens

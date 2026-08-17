@@ -17,7 +17,7 @@ import org.junit.Test
 /**
  * The autosave draft snapshot must carry the undercut record alongside the spec, exactly
  * like it already carries `wearRecord`/`runoutReadings` — see
- * `docs/UndercutDrawing_PLAN.md` §7 and `ShaftViewModel`'s autosave `combine(...)` block.
+ * `docs/archive/UndercutDrawing_PLAN.md` §7 and `ShaftViewModel`'s autosave `combine(...)` block.
  */
 class AutosaveSnapshotUndercutTest {
 

@@ -12,7 +12,7 @@ import kotlin.math.min
  * hit-testing, coordinate mapping, and clamping rules are directly unit-testable in a plain
  * JVM test, independent of the Compose canvas that calls them.
  *
- * See `docs/LinerWearAreas_Proposal.md` §2 (tap hit-testing), §6.1 (detail-view scale + clamp),
+ * See `docs/archive/LinerWearAreas_Proposal.md` §2 (tap hit-testing), §6.1 (detail-view scale + clamp),
  * §7 (invariants — wear is reference-only; clamping affects rendering, never stored data).
  */
 

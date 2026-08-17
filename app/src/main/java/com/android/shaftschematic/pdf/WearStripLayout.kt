@@ -16,7 +16,7 @@ import kotlin.math.abs
 
 /**
  * Pure-math layout helpers for the wear-PDF per-liner detail strips
- * (`docs/LinerWearAreas_Proposal.md` §6.2, Phase 4). Deliberately free of any
+ * (`docs/archive/LinerWearAreas_Proposal.md` §6.2, Phase 4). Deliberately free of any
  * `android.graphics`/`android.graphics.pdf` import so selection, clamping, and
  * vertical/horizontal banding can be unit-tested directly on the JVM (this repo's
  * unit tests are plain JUnit, no Robolectric) — see `WearStripLayoutTest`.
@@ -135,7 +135,7 @@ data class WearBandClamp(val startMm: Float, val lengthMm: Float)
 /**
  * Clamps a wear spot's `[start, start+length)` span to the liner's own
  * `[0, linerLengthMm]` range for RENDERING only — the underlying [WearSpot] is
- * never mutated (contract: `docs/LinerWearAreas_Proposal.md` §3, "Clamp rendering
+ * never mutated (contract: `docs/archive/LinerWearAreas_Proposal.md` §3, "Clamp rendering
  * (not data) when a spot extends past the liner end").
  */
 fun clampWearBandToLiner(spotStartMm: Float, spotLengthMm: Float, linerLengthMm: Float): WearBandClamp {

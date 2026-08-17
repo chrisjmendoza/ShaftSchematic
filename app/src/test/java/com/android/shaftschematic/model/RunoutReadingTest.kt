@@ -8,7 +8,7 @@ import org.junit.Test
 
 /**
  * Tests for [RunoutReading]/[RunoutReadings] and their round-trip through [ShaftDocCodec].
- * See `docs/RunoutBubbleEditor_PLAN.md`.
+ * See `docs/archive/RunoutBubbleEditor_PLAN.md`.
  */
 class RunoutReadingTest {
 

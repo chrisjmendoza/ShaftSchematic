@@ -101,7 +101,7 @@ Unsaved-changes guard (`AppNav.kt`)
   session closes to Start immediately; a dirty one goes through the same guard
   (Save-then-close / Don't-save-close / Cancel-stay). Close itself is
   `newDocument()` + navigate home.
-- See `docs/Autosave_Incident_2026-07-25.md` (root cause #4 / fix #4) and
+- See `docs/archive/Autosave_Incident_2026-07-25.md` (root cause #4 / fix #4) and
   `docs/ShaftViewModel.md` (`hasUnsavedWork()`) for the full-snapshot comparison this
   guard relies on.
 

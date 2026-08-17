@@ -16,7 +16,7 @@ import org.junit.Test
 /**
  * Wire-format tests for the draft ring ([AutosaveManager.DraftEntry]). Pins the JSON list shape
  * that data/AutosaveManager.kt reads/writes, incl. an embedded legacy [SessionSnapshot] and
- * unknown-key tolerance. See docs/Autosave_Incident_2026-07-25.md.
+ * unknown-key tolerance. See docs/archive/Autosave_Incident_2026-07-25.md.
  */
 class AutosaveDraftSerializationTest {
 

@@ -8,7 +8,7 @@ package com.android.shaftschematic.data
  * Kept out of [AutosaveManager] so it is unit-testable without a `Context`/DataStore.
  *
  * A draft ring is a newest-first list of [DraftEntry] capped at [DEFAULT_DRAFT_RING_MAX].
- * See docs/Autosave_Incident_2026-07-25.md.
+ * See docs/archive/Autosave_Incident_2026-07-25.md.
  */
 
 /** Default maximum number of distinct unsaved-session drafts retained. */

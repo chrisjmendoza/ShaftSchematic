@@ -3,7 +3,8 @@
 **Date:** 2026-07-18 · **Scoped by:** Fable (for implementation by other models)
 **Status:** ✅ IMPLEMENTED 2026-07-18 (all 4 phases, plus Chris's post-review input
 spec: SET/liner-edge start references + blocking span validation). Decisions and
-deviations: `docs/LinerWearAreas_BuildLog_2026-07-18.md`. This document is the design
+deviations: `LinerWearAreas_BuildLog_2026-07-18.md`, pruned from the tree in `35ca87f` —
+read it in git history. This document is the design
 record; the living contract is the wear section of the in-source `RunoutSheet.md`.
 Post-implementation note (2026-07-29): the per-band min-Ø reading designed here was later
 retired from entry and print — superseded by measured-Ø readings (`WearDiaReading`, see

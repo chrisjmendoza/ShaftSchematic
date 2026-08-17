@@ -1,7 +1,7 @@
 # Templates — contract
 
 Reusable starting points for a new drawing: a shaft's **shape**, saved apart from the job it
-came from. Design plan and open questions: `docs/Templates_And_DiaVisibility_PLAN.md`.
+came from. Design plan and open questions: `docs/archive/Templates_And_DiaVisibility_PLAN.md`.
 
 ## Files
 

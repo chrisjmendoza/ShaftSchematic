@@ -16,7 +16,7 @@ import kotlin.math.sqrt
  * JVM — the same posture as `geom/WearPitMath.kt` and `ui/screen/LinerWearMath.kt`.
  *
  * Undercuts are canonical **shaft space** (mm from the AFT face, x=0) and are NOT keyed
- * to components — see `model/Undercut.kt` and `docs/UndercutDrawing_PLAN.md`. The SET x
+ * to components — see `model/Undercut.kt` and `docs/archive/UndercutDrawing_PLAN.md`. The SET x
  * positions used by the conversion pair come from `geom/OalComputations.kt`'s
  * `computeSetPositionsInMeasureSpace` (its `measureStartMm` is always `0.0`, so its
  * measure-space output already *is* physical shaft-space mm).

@@ -9,8 +9,9 @@ data model, validation, glossary, roadmap) live in `docs/` at the repo root.
 **v1.0 consolidation:** the pack was reorganized from 31 micro-docs down to the
 per-subsystem contracts below (16 at the time, **19** today) — per-file API restatements
 were merged into subsystem contracts or deleted where they merely mirrored code.
-(Sweep record in git history.) Design plans (`*_PLAN.md`) are not contracts; each is
-listed under the contract it belongs to.
+(Sweep record in git history.) Design plans (`*_PLAN.md`) are not contracts — once their
+work ships they move to `docs/archive/` (indexed there); each is listed under the contract
+it belongs to.
 
 ## Screen & editing
 
@@ -43,10 +44,10 @@ listed under the contract it belongs to.
 - **RunoutSheet.md** — runout + wear tabs **and the Consolidated Output tab** (consolidated
   sheet variants, worn sections, shaft-height slider, Export all), bubble collision engine
   (`geom/RunoutBubbleLayout.kt`), profile compression, OAL alignment, PDF appearance
-  options. Design plan: `WearDiaMeasurements_PLAN.md`.
+  options. Design plan: `docs/archive/WearDiaMeasurements_PLAN.md`.
 - **UndercutDrawing.md** — Undercut Drawing tab/PDF: shaft-space (not component-keyed)
   undercut sections, cluster-window zoom, notch geometry against the local outer surface,
-  chained + total dimension rails. Design plan: `UndercutDrawing_PLAN.md`.
+  chained + total dimension rails. Design plan: `docs/archive/UndercutDrawing_PLAN.md`.
 - **PdfExport.md** — export route (SAF, Letter landscape 792×612) and PDF preview
   screen (options sheet, orientation unlock). Composer pipeline: `docs/PDF_EXPORT.md`.
 - **FractionTypography.md** — how a fraction is SET wherever the app draws one: the pure
@@ -60,7 +61,7 @@ listed under the contract it belongs to.
   seeding), doc envelope format, units policy
 - **Templates.md** — the template store (geometry-only, scrubbed on write), derived
   size/count bucketing, the browser + thumbnail, and why a loaded template starts unnamed
-  and dirty. Design plan: `docs/Templates_And_DiaVisibility_PLAN.md`
+  and dirty. Design plan: `docs/archive/Templates_And_DiaVisibility_PLAN.md`
 - **Navigation.md** — route graph, editor container (sidebar + tabs), screen wiring
 - **Appearance.md** — app theme (System/Light/Dark + high contrast) and the sheet-ink
   invariant: paper-sheet canvases draw fixed ink, never theme colors

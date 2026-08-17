@@ -77,7 +77,7 @@ object ShaftDocCodec {
         val runoutConfig: RunoutConfig = RunoutConfig(),
         /**
          * Liner wear-inspection record. Absent in older files → default empty record.
-         * Additive + defaulted: no version bump needed. See `docs/LinerWearAreas_Proposal.md`.
+         * Additive + defaulted: no version bump needed. See `docs/archive/LinerWearAreas_Proposal.md`.
          */
         @SerialName("wear_record")
         val wearRecord: WearRecord = WearRecord(),
@@ -86,7 +86,7 @@ object ShaftDocCodec {
          * older files → default empty set. Additive + defaulted: no version bump needed. Orphan
          * readings (station no longer exists) are dropped at the render layer, not here — station
          * identity depends on resolved components + count overrides the codec doesn't have. See
-         * `docs/RunoutBubbleEditor_PLAN.md` and `model/RunoutReading.kt`.
+         * `docs/archive/RunoutBubbleEditor_PLAN.md` and `model/RunoutReading.kt`.
          */
         @SerialName("runout_readings")
         val runoutReadings: RunoutReadings = RunoutReadings(),
@@ -94,7 +94,7 @@ object ShaftDocCodec {
          * Undercut drawing record — recorded weld/cleanup undercut sections (distance from a
          * S.E.T., length, measured Ø). Absent in older files → default empty record. Additive
          * + defaulted: no version bump needed. Undercuts have no component key, so there is no
-         * decode-time pruning — see `docs/UndercutDrawing_PLAN.md` §2, §7.
+         * decode-time pruning — see `docs/archive/UndercutDrawing_PLAN.md` §2, §7.
          */
         @SerialName("undercut_record")
         val undercutRecord: UndercutRecord = UndercutRecord(),

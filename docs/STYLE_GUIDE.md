@@ -30,7 +30,7 @@ This document defines the conventions for Kotlin, Compose, architectural boundar
   not "the old X did Y and was removed".
 - Dates and history ARE welcome in `docs/*.md`, `CHANGELOG.md`, and commit messages —
   that is the changelog layer. Citing a doc by filename (e.g.
-  `docs/Autosave_Incident_2026-07-25.md`) from a comment is fine.
+  `docs/archive/Autosave_Incident_2026-07-25.md`) from a comment is fine.
 - Attribute user-driven changes neutrally ("on-device report"), never by name.
 
 ---

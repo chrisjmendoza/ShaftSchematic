@@ -799,7 +799,7 @@ component labels should be scrubbed from templates.
 
 ## 2026-08-11
 
-Spec: `docs/Templates_And_DiaVisibility_PLAN.md` (parts A1, A2, B, C, D, E). Open questions
+Spec: `docs/archive/Templates_And_DiaVisibility_PLAN.md` (parts A1, A2, B, C, D, E). Open questions
 in that doc's §7 are unanswered; every one was resolved with the recommendation stated there,
 so each is a one-line change if the answer differs.
 
@@ -1206,7 +1206,7 @@ and the keyway's SET reference all key on the taper's **physical half** (midpoin
 The two are independent choices — where you measured from says nothing about which half the
 taper lands in. When they disagreed the taper drew small-end-inboard, the card printed
 S.E.T. 7 / L.E.T. 6 against the typed 6 / 7, and a keyway "from SET" started at the far face
-(`docs/TaperOrientation_Analysis_2026-07-26.md`, §4 Scenario A).
+(`docs/archive/TaperOrientation_Analysis_2026-07-26.md`, §4 Scenario A).
 
 `AddTaperDialog`'s submit now orders the typed values with `taperAddDiameterOrder` over
 `classifyTaperSideByMidpoint` (`ui/input/TaperSetLetMapping.kt`), which is also the rule
@@ -2098,7 +2098,7 @@ cut in another liner owned the sheet's exaggeration reference.
   on sheets that also carry a much deeper cut; deepest-draws-at-slider and
   deeper-draws-deeper are unchanged.
 
-Docs: `docs/UndercutDrawing.md`, `docs/UndercutDrawing_PLAN.md`.
+Docs: `docs/UndercutDrawing.md`, `docs/archive/UndercutDrawing_PLAN.md`.
 
 ---
 
@@ -2125,7 +2125,7 @@ the void fill).
 - Fix folded in: a Ø at/above the local surface degenerates to the surface instead of
   drawing outside the shaft.
 
-Docs: `docs/UndercutDrawing.md`, `CLAUDE.md` invariant block, `docs/UndercutDrawing_PLAN.md`.
+Docs: `docs/UndercutDrawing.md`, `CLAUDE.md` invariant block, `docs/archive/UndercutDrawing_PLAN.md`.
 
 ---
 
@@ -2157,7 +2157,7 @@ off a cut did nothing, and cuts could not be removed without opening the overlay
 - **Recorded undercuts list** on the route: one row per cut (reference-aware distance,
   length, Ø, stale warning), tap to zoom, per-row delete.
 
-Docs: `docs/UndercutDrawing.md` (contract), `docs/UndercutDrawing_PLAN.md` (status),
+Docs: `docs/UndercutDrawing.md` (contract), `docs/archive/UndercutDrawing_PLAN.md` (status),
 `CLAUDE.md` invariant block.
 
 ---
@@ -2252,7 +2252,7 @@ unworn edge). The fifth reference-only feature — never affects OAL/resolve/col
   same-math SVG preview generator (`WearDiaCalloutSvgPreviewTest` →
   `app/build/reports/wear-dia-preview/`).
 - **Docs**: CLAUDE.md invariant block; `RunoutSheet.md` §Wear Diameter Measurements;
-  as-built plan `docs/WearDiaMeasurements_PLAN.md`; root-doc refresh (ARCHITECTURE,
+  as-built plan `docs/archive/WearDiaMeasurements_PLAN.md`; root-doc refresh (ARCHITECTURE,
   DATA_MODEL, PDF_EXPORT, UI_CONTRACT, GLOSSARY, COMPONENT_CONTRACT, ROADMAP — envelope
   records, `geom/` shared-engine layer, checkbox-only auto-body promotion, blank-mode
   strip retention).
@@ -2573,7 +2573,7 @@ had already deleted the entire old delete-undo subsystem). Full JVM suite green.
 
 ### docs: taper orientation discrepancy analysis (TODO §2.3)
 
-- Investigation written to `docs/TaperOrientation_Analysis_2026-07-26.md` — no code
+- Investigation written to `docs/archive/TaperOrientation_Analysis_2026-07-26.md` — no code
   change. Finding: three SET/LET conventions coexist (Add dialog keys the swap on the
   measure-from toggle; derivation/labels key on the midpoint half; keyway placement
   keys on diameter magnitude), so a taper added into the opposite half from its
@@ -2782,7 +2782,7 @@ had already deleted the entire old delete-undo subsystem). Full JVM suite green.
 - **Root cause**: the single-slot autosave (`autosave_last_session`) wrote unconditionally
   every 1.5 s debounce tick, including the write triggered by *loading* a document, so
   reopening an edited-but-never-saved shaft let the pristine reload silently overwrite the
-  only copy of the edits within seconds. See `docs/Autosave_Incident_2026-07-25.md`.
+  only copy of the edits within seconds. See `docs/archive/Autosave_Incident_2026-07-25.md`.
 - **Dirty gate**: the autosave observer now writes a draft only when the live session
   differs from the last saved/loaded baseline (`DraftRing.shouldWriteDraft`); a
   freshly-loaded pristine document can never clobber anything again, and the entry is
@@ -3101,7 +3101,7 @@ bodies and flagged those normal overlaps as errors — labeling them by a stored
 Digitizes the hand-filled runout bubble. Tapping a bubble on the Runout tab opens a "zoom-in"
 editor (`ui/screen/RunoutBubbleDialog.kt`) to record that station's TIR reading and high-spot
 direction; both print on the preview and PDF export. Both are optional — a sheet still exports
-blank. See `docs/RunoutBubbleEditor_PLAN.md` and the "Runout Bubble Editor" section of
+blank. See `docs/archive/RunoutBubbleEditor_PLAN.md` and the "Runout Bubble Editor" section of
 `docs/RunoutSheet.md`.
 
 - **Model/persistence:** `model/RunoutReading.kt` (`RunoutReading`/`RunoutReadings`) — reference-only
@@ -3206,7 +3206,7 @@ layout bounds/cap/fill); suite 527 → 541 green.
 
 ### feat: liner wear areas — inspection recording on the Wear tab + PDF detail strips
 
-Digitizes the shop-sketch liner wear workflow (`docs/LinerWearAreas_Proposal.md`; build
+Digitizes the shop-sketch liner wear workflow (`docs/archive/LinerWearAreas_Proposal.md`; build
 record: `docs/LinerWearAreas_BuildLog_2026-07-18.md`). Uncommitted decisions from the
 proposal's §10 were resolved and are logged there.
 
@@ -3302,7 +3302,7 @@ selector, and drew body rectangles through the taper trapezoid on the wear docum
 
 ### docs: liner wear-area feature proposal
 
-`docs/LinerWearAreas_Proposal.md` — scoping document for tap-a-liner wear inspection
+`docs/archive/LinerWearAreas_Proposal.md` — scoping document for tap-a-liner wear inspection
 on the Wear tab (break-out detail view matching the shop-sketch convention, wear spots
 with liner-local start/length + min-Ø reading, `wear_record` envelope field, 4-phase
 implementation plan). Awaiting review; 5 open questions listed in §10.

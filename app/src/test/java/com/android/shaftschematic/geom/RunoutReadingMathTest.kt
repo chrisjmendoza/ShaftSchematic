@@ -9,7 +9,7 @@ import org.junit.Test
 /**
  * Tests for the runout bubble editor's pure interaction math (`RunoutReadingMath.kt`):
  * clock snapping (30-min increments), angle↔rim mapping, ring-band hit-testing, and
- * bubble picking. See `docs/RunoutBubbleEditor_PLAN.md`.
+ * bubble picking. See `docs/archive/RunoutBubbleEditor_PLAN.md`.
  */
 class RunoutReadingMathTest {
 

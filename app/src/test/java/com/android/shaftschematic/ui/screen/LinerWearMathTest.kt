@@ -13,7 +13,7 @@ import org.junit.Test
  * wear spot that extends past its liner's current length, and (post-review spec)
  * the four "Measure from" reference conversions plus blocking in-span validation.
  *
- * See `docs/LinerWearAreas_Proposal.md` §2, §6.1, §7.
+ * See `docs/archive/LinerWearAreas_Proposal.md` §2, §6.1, §7.
  */
 class LinerWearMathTest {
 

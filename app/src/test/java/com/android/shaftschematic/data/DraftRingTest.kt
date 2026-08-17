@@ -14,7 +14,7 @@ import org.junit.Test
 
 /**
  * Pure ring/eviction + dirty-gate logic for the autosave draft history. No Android deps.
- * See docs/Autosave_Incident_2026-07-25.md and data/DraftRing.kt.
+ * See docs/archive/Autosave_Incident_2026-07-25.md and data/DraftRing.kt.
  */
 class DraftRingTest {
 

@@ -4,7 +4,7 @@ Shipped contract for the Undercut Drawing tab/PDF — the shop's record of machi
 sections (weld-repair undercuts, cleanup cuts), documented as zoomed detail windows with chained
 dimensions. The sixth reference-only feature, same posture as wear spots / pits / dia readings /
 runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
-`docs/UndercutDrawing_PLAN.md`; this file documents shipped, current behavior.
+`docs/archive/UndercutDrawing_PLAN.md`; this file documents shipped, current behavior.
 
 **Files:**
 - `model/Undercut.kt` — `Undercut`, `UndercutRecord`, `UndercutReference`
@@ -838,7 +838,7 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   "Measured Ø field" note above.
 - Document title string ("UNDERCUT RECORD" vs "WELD UNDERCUTS", etc.) and the
   `UNDERCUT_CLUSTER_GAP_MM`/`UNDERCUT_WINDOW_PAD_MM` constants are tunable on device feedback —
-  each a one-line change (see `UndercutDrawing_PLAN.md` §11 for the original defaults list).
+  each a one-line change (see `docs/archive/UndercutDrawing_PLAN.md` §11 for the original defaults list).
   `UNDERCUT_WINDOW_PAD_MM` also sizes the **on-screen** overview affordances and the detail
   overlay's zoom windows, so it stays at 1 in; how wide the PDF's pad *prints* is the PDF's own
   `UNDERCUT_STRIP_MIN_PAD_PT` floor, tunable independently.
