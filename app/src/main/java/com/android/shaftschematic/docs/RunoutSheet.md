@@ -1150,7 +1150,7 @@ don't affect the mode:
 |---|---|---|
 | 0 | `PROFILE_FORM` | Shaft profile only (still prints any recorded pits). |
 | 1 | `COMBINED` | Shaft profile + wear bands, with one full-width detail strip below. |
-| 2+ | `GRID` | Shaft profile on top + the detail strips **packed into rows by their actual drawn width** below (`packWearStripWindows`) — the fewest rows that hold the election, as many strips per row as the page's width allows (up to `WEAR_STRIP_MAX_PER_ROW` = 3). Row BUDGET: **2 with the profile shown, 3 with it hidden** (`wearStripMaxRows`) — capacity, not a target. Whatever doesn't fit is a "+N more" overflow note. |
+| 2+ | `GRID` | Shaft profile on top + the detail strips **packed into rows by their actual drawn width** below (`packWearStripWindows`) — fewest rows by default, a deeper row count when it buys a ≥ `WEAR_PACK_ROW_SCALE_GAIN` larger shared scale, as many strips per row as the page's width allows (up to `WEAR_STRIP_MAX_PER_ROW` = 3). Row BUDGET: **2 with the profile shown, 3 with it hidden** (`wearStripMaxRows`). Whatever doesn't fit is a "+N more" overflow note. |
 
 **Blank draft (write-in) mode** (`blankValues = true`, 2026-07-27; header/OAL reworked
 2026-07-28): the same page — profile AND every liner's zoomed strip — renders as a hand-fill
@@ -1184,21 +1184,23 @@ whatever it drew, so two short components hogged a row a third could have shared
 fell into the "+N more" note even on a sheet with the profile hidden. The packer instead fills each
 row by the windows' REAL drawn widths:
 
-The rule, in order: **fewest rows that fit, then the largest scale within them, then re-expand
-whitespace.**
+The rule, in order: **the row count whose scale earns it, then the largest scale within it, then
+re-expand whitespace.**
 
 - **Row budget** — `wearStripMaxRows(showShaftProfile)`: **2 rows with the profile shown, 3 with it
   hidden** (`WEAR_STRIP_MAX_ROWS_WITH_PROFILE` / `WEAR_STRIP_MAX_ROWS_NO_PROFILE`). The page holds
   three bands of content either way; with the shaft on it, one of them IS the shaft, so hiding it
   hands the strips that band as a third row. ONE rule — the composer never re-derives it inline.
-  It is a **capacity limit, not a target**: an election that fits in two rows takes two rows whether
-  or not the profile is drawn.
-- **Fewest rows first.** A row is the page's scarce VERTICAL resource — the row count divides the
-  band in `computeWearVerticalLayout`, so spending a row buys width for every strip and costs every
-  strip height. The row count is therefore taken at the **scale floor**, where every footprint is
-  smallest and the greedy packing reaches the fewest rows any scale can. (Maximizing the scale
-  subject only to `≤ maxRows` instead re-laid the most common sheet: two strips that printed 2-up
-  and tall became two stacked strips, twice as long and half as tall.)
+- **Fewest rows by default, more when the scale earns them.** The baseline is the fewest rows any
+  scale can reach (the greedy packing at the **scale floor**, where every footprint is smallest) —
+  but merely FITTING a row count is not a reason to stay there: three liners that fit one row were
+  forced into it at a fraction of the size the page could print, cramped over a half-empty band
+  (on-device report). Every deeper count up to the budget is auditioned, and a deeper one wins
+  when its solved shared scale beats the current choice by **`WEAR_PACK_ROW_SCALE_GAIN` (1.25×)**
+  — an extra row must buy a meaningfully bigger drawing. The guard is what keeps the common
+  short-strip sheet honest the other way: a pair already at (or near) `WEAR_STRIP_MAX_PT_PER_MM`
+  sharing a row stays side by side, tall, because stacking it would buy almost nothing (the
+  regression the old strict fewest-rows rule was written against).
 - **Rows are filled by width**, greedy first-fit over the windows **in order** (AFT→FWD is never
   rearranged to fit more; first-fit is optimal in row count for a fixed order, which is what makes
   the scale solve's monotonicity argument hold), capped at `WEAR_STRIP_MAX_PER_ROW` = 3 — past
@@ -1407,9 +1409,14 @@ liner-only election groups and lays out bit-for-bit as `collectWearLinerGroups` 
 - **Drawn content** — a liner segment keeps everything it has always had (wear bands, worn-profile
   trace, chained spots rail, pits, Ø callouts, end caps, title + anchor label); a taper segment
   draws its trapezoid from the resolved start/end Ø, a body segment its rectangle. Every segment's
-  radius scales against the window's largest Ø, which fills the strip's vertical budget — so a
-  single-liner window is drawn exactly as before, and a combined window keeps the taper's true Ø
-  ratio to the liner. The chained rail measures WEAR, so it belongs to the window's liner; a
+  radius scales against the window's largest Ø — and ACROSS strips, heights are page-proportional
+  (`wearStripHeightFrac`): the window with the page's largest reference Ø fills its band and every
+  other strip draws at its true diameter ratio to it, the vertical analogue of the one shared
+  mm→pt width scale (on-device report: a body strip drew at the same height as a liner almost an
+  inch larger in OD; the earlier every-strip-fills-its-band rule is superseded). The rail's
+  witness bars run down to the liner's ACTUAL drawn top, so a height-scaled strip's bars never
+  stop in the air above its surface. A combined window keeps the taper's true Ø ratio to the
+  liner as before. The chained rail measures WEAR, so it belongs to the window's liner; a
   taper/body-only window has none. Blank drafts follow the same lines-in/values-out rule: every
   cluster that prints an anchor takes the same write-in title — name, a writing rule where the
   anchor value goes, then `WEAR_BLANK_ANCHOR_SUFFIX` — because a body strip's anchor is measured

@@ -1086,14 +1086,15 @@ class WearStripLayoutTest {
     }
 
     @Test
-    fun `two windows that fit side by side stay on ONE row`() {
-        // The regression this pins: maximizing the scale subject only to the row BUDGET stacked a
-        // two-strip sheet — each strip twice as long and, once the band was split in two, half as
-        // tall. A row is the scarce vertical resource, so the packer spends the fewest it can.
-        val windows = packWindows(2, 150f)
+    fun `a pair already at the scale cap stays side by side on ONE row`() {
+        // Two short strips reach WEAR_STRIP_MAX_PT_PER_MM sharing a row, so a second row would
+        // buy nothing — the packer keeps them side by side, tall, whatever the row budget
+        // (WEAR_PACK_ROW_SCALE_GAIN: an extra row must buy a meaningfully bigger drawing).
+        val windows = packWindows(2, 100f)
         listOf(2, 3).forEach { budget ->
             val p = packWearStripWindows(windows, packLeft, packRight, maxRows = budget)
             assertEquals("row budget $budget", 1, p.rowCount)
+            assertEquals(WEAR_STRIP_MAX_PT_PER_MM, p.ptPerMm, 1e-4f)
             assertEquals(2, p.placedCount)
             assertEquals(listOf(listOf(0, 1)), rowsOf(p))
             assertCellsWellFormed(p)
@@ -1101,19 +1102,40 @@ class WearStripLayoutTest {
     }
 
     @Test
-    fun `the row count never exceeds what capacity requires`() {
-        // Five short components fit in two rows, so they take two rows whether or not the profile
-        // is on the page — the third row is capacity, never a licence to spread out.
+    fun `a pair below the cap stacks when a row each buys real scale`() {
+        // Two 150mm strips share a row only at ~2.1 pt/mm; a row each reaches the 3.0 cap — a
+        // ≥ WEAR_PACK_ROW_SCALE_GAIN gain, so the packer spends the second row and each strip
+        // draws page-wide instead of cramped side by side over a half-empty band (on-device
+        // report: an election forced into one row at a fraction of the page's possible size).
+        val p = packWearStripWindows(packWindows(2, 150f), packLeft, packRight, maxRows = 2)
+        assertEquals(2, p.rowCount)
+        assertEquals(WEAR_STRIP_MAX_PT_PER_MM, p.ptPerMm, 1e-4f)
+        assertEquals(listOf(listOf(0), listOf(1)), rowsOf(p))
+        assertCellsWellFormed(p)
+    }
+
+    @Test
+    fun `the freed profile band is spent when a deeper layout draws bigger`() {
+        // Five 200mm components fit two rows — but three rows re-split the election so the
+        // binding row carries two windows instead of three, a ≥ WEAR_PACK_ROW_SCALE_GAIN scale
+        // gain. With the profile shown the budget stops at two rows; hiding it frees the third
+        // and the whole election draws larger (on-device report: use the white space).
         val windows = packWindows(5, 200f)
         val shown = packWearStripWindows(windows, packLeft, packRight, wearStripMaxRows(true))
         val hidden = packWearStripWindows(windows, packLeft, packRight, wearStripMaxRows(false))
         assertEquals(2, shown.rowCount)
-        assertEquals("the freed band is not spent when two rows already hold the election",
-            shown.rowCount, hidden.rowCount)
-        assertEquals(shown.ptPerMm, hidden.ptPerMm, 1e-6f)
-        assertEquals(rowsOf(shown), rowsOf(hidden))
+        assertEquals(3, hidden.rowCount)
+        assertTrue(
+            "the third row must buy the gain that earned it " +
+                "(${hidden.ptPerMm} vs ${shown.ptPerMm})",
+            hidden.ptPerMm >= shown.ptPerMm * WEAR_PACK_ROW_SCALE_GAIN - 1e-4f,
+        )
+        assertEquals(5, shown.placedCount)
         assertEquals(5, hidden.placedCount)
+        assertCellsWellFormed(shown)
+        assertCellsWellFormed(hidden)
         assertScaleMaximalForItsRows(shown, windows)
+        assertScaleMaximalForItsRows(hidden, windows)
     }
 
     @Test
@@ -1316,6 +1338,21 @@ class WearStripLayoutTest {
         }
         assertEquals("asking gutter widened", 60f, out[1].left - out[0].right, 1e-2f)
         assertEquals("silent gutter unchanged", 22f, out[2].left - out[1].right, 1e-2f)
+    }
+
+    // ── wearStripHeightFrac — strip heights read proportional across the page ──
+
+    @Test
+    fun `strip heights scale by true diameter ratio to the page's largest reference`() {
+        // A body strip an inch smaller in OD than the page's big liner must draw shorter by
+        // exactly the true ratio (on-device report: both drew at the same height).
+        assertEquals(1f, wearStripHeightFrac(11.004f, 11.004f), 1e-6f)
+        assertEquals(10.5f / 11.004f, wearStripHeightFrac(10.5f, 11.004f), 1e-6f)
+        // The reference itself always fills its band; ratios above 1 clamp (defensive).
+        assertEquals(1f, wearStripHeightFrac(12f, 11f), 1e-6f)
+        // Degenerate inputs fall back to full height rather than collapsing the strip.
+        assertEquals(1f, wearStripHeightFrac(0f, 11f), 1e-6f)
+        assertEquals(1f, wearStripHeightFrac(11f, 0f), 1e-6f)
     }
 
     // ── wearStripBreakAmplitudePt — the curl flattens before it ever crosses ──

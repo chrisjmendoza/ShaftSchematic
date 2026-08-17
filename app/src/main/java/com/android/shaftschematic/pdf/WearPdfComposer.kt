@@ -241,6 +241,10 @@ fun composeWearPdf(
     val onPageComponentIds = onPage.flatMap { w -> w.components.map { it.id } }.toSet()
     val onPageGroups   = wearGroups.filter { it.liner.id in onPageLinerIds }
     val overflowNoteH  = if (stripSelection.overflow.isNotEmpty()) WEAR_OVERFLOW_NOTE_HEIGHT_PT else 0f
+    // The page's largest reference diameter fills its strip band; every other strip draws at
+    // its true ratio to it (wearStripHeightFrac), so heights read proportional on paper.
+    // Feeds both the strips' drawn radii and the gutter-spread radius bound.
+    val pageMaxRefDiaMm = onPage.maxOfOrNull { it.refDiaMm } ?: 0f
 
     // ── Measured-Ø callouts under the MAIN profile (body/taper readings only — liner
     // readings print on their detail strip at the zoomed scale). Planned here, before the
@@ -342,7 +346,8 @@ fun composeWearPdf(
             val w = onPage[windowIdx]
             val style = wearStripEndStyle(docSpec, if (aftSide) w.startMm else w.endMm, aftSide)
             return if (style == WearStripEndStyle.BREAK)
-                BREAK_EDGE_OUTWARD_REACH_FRAC * (WEAR_STRIP_BREAK_AMP_FRAC * stubRBoundPt)
+                BREAK_EDGE_OUTWARD_REACH_FRAC * (WEAR_STRIP_BREAK_AMP_FRAC * stubRBoundPt) *
+                    wearStripHeightFrac(w.refDiaMm, pageMaxRefDiaMm)
             else 0f
         }
         val spreadCells = spreadWearStripRowGutters(packing.cells, contentLeft, contentRight) { li, ri ->
@@ -481,6 +486,7 @@ fun composeWearPdf(
             stubWidthPt = stripStubWidthPt,
             breakRoomLeftPt = stripBreakRooms[i].first,
             breakRoomRightPt = stripBreakRooms[i].second,
+            heightFrac = wearStripHeightFrac(window.refDiaMm, pageMaxRefDiaMm),
             titles = stripTitles,
             spots = window.liner?.let { spotsByLinerId[it.id] }.orEmpty(),
             pits = effectiveRecord.pits.filter { it.componentId in ids },
@@ -1033,6 +1039,10 @@ private fun drawWearStripWindow(
     // `wearStripBreakAmplitudePt` so facing curls can never cross a gutter.
     breakRoomLeftPt: Float = Float.MAX_VALUE,
     breakRoomRightPt: Float = Float.MAX_VALUE,
+    // This strip's vertical scale relative to the page (`wearStripHeightFrac`): the window
+    // with the page's largest reference diameter fills its band, the rest draw at their
+    // true ratio to it, so heights read proportional on paper across the strips.
+    heightFrac: Float = 1f,
     titles: Map<String, String>,
     spots: List<WearSpot> = emptyList(),
     pits: List<WearPit> = emptyList(),
@@ -1141,12 +1151,16 @@ private fun drawWearStripWindow(
         diaBandPt = diaBandPt,
     )
     val cy = (inner.cylTop + inner.cylBottom) / 2f
-    val rCap = ((inner.cylBottom - inner.cylTop) / 2f).coerceAtLeast(0f)
+    // The band radius, scaled by the strip's page-proportional height fraction: every drawn
+    // radius below derives from this one cap, so the whole strip (components, stubs, gap
+    // outlines, bands, trace) shares the page's single vertical diameter scale.
+    val rCap = ((inner.cylBottom - inner.cylTop) / 2f).coerceAtLeast(0f) *
+        heightFrac.coerceIn(0f, 1f)
 
     // Neighbor diameters resolved up front for the break-out stubs. The window's largest
-    // component fills the strip's vertical budget at the same height in every strip (horizontal
-    // scale never affects height); everything else — other components, the gap outlines, and the
-    // stubs — keeps its true diameter ratio to that reference (computeWearStripRadii).
+    // component fills this strip's height-scaled cap (horizontal scale never affects height);
+    // everything else — other components, the gap outlines, and the stubs — keeps its true
+    // diameter ratio to that reference (computeWearStripRadii).
     val aftDia = neighborDiaMmAtAft(docSpec, window.startMm) ?: comps.first().aftDiaMm
     val fwdDia = neighborDiaMmAtFwd(docSpec, window.endMm) ?: comps.last().fwdDiaMm
     val radii = computeWearStripRadii(refDiaMm, aftDia, fwdDia, rCap)
@@ -1387,8 +1401,11 @@ private fun drawWearStripWindow(
         // all the rail has nothing to dimension, so only its liner-edge witness bars draw (device
         // feedback — a full-length span would just re-state the liner's own length).
         val hasWearBands = clampedBands.any { it.lengthMm > 0f }
-        drawWearStripRail(c, dim, dimText, railLayout, inner.cylTop, inner.railY, inner.railLabelRows,
-            drawLabels = !blankValues, drawSpanLines = hasWearBands)
+        // Witness lines run down to the liner's ACTUAL drawn top — a height-scaled strip's
+        // surface sits below the band top, and bars stopping in the air above it would read
+        // as measuring nothing.
+        drawWearStripRail(c, dim, dimText, railLayout, cy - rOf(linerComp.aftDiaMm), inner.railY,
+            inner.railLabelRows, drawLabels = !blankValues, drawSpanLines = hasWearBands)
     }
 
     // Titles, drawn LAST at the BOTTOM of the strip — one per attachment cluster, all sharing

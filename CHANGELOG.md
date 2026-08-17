@@ -8,6 +8,34 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-16
 
+### feat: wear strip heights read proportional across the page
+
+Every detail strip drew its biggest component at the full height of its band, so a body
+strip printed exactly as tall as a liner strip whose OD is almost an inch larger
+(on-device report) — the drawn heights carried no diameter information at all.
+
+The strips now share one vertical diameter scale, the analogue of the one shared mm→pt
+width scale the sheet has always had: the window with the page's largest reference
+diameter fills its band, and every other strip draws at its true diameter ratio to it.
+Within a window nothing changes — a combined taper + liner strip already kept true ratios.
+The chained rail's witness bars now run down to the liner's actual drawn surface, so a
+height-scaled strip's bars never stop in the air above it.
+
+### fix: wear strips take a deeper row layout when it draws bigger
+
+The packer took the fewest rows the election could fit, full stop — so three liners that
+happened to fit one row were forced into it at a third of the size the page could print,
+cramped side by side over a half-empty band (on-device report), with or without the shaft
+profile.
+
+Merely fitting a row count is no longer a reason to stay there. The packer still starts
+from the fewest rows, but auditions every deeper count up to the budget (two rows with the
+profile shown, three without) and takes one when its solved shared scale is at least 25%
+larger — an extra row has to buy a meaningfully bigger drawing. Three liners now spread
+one-per-row and draw roughly two-and-a-half times larger; a pair of short strips already at
+the scale cap still sits side by side, tall, exactly as before, because stacking it would
+buy nothing. The one shared scale, the AFT→FWD order, and the overflow note are unchanged.
+
 ### fix: facing wear-strip S-breaks spread apart instead of crossing
 
 Two strips side by side both ending in an S-break put their break curls in the same gutter,

@@ -892,6 +892,16 @@ private const val WEAR_PACK_SOLVE_EPS = 1e-4f
 private const val WEAR_PACK_WIDTH_EPS_PT = 1e-3f
 
 /**
+ * How much larger a deeper row count's solved shared scale must be before the packer spends the
+ * extra row(s) on it ([packWearStripWindows] step 1) — 1.25 = at least 25% more pt-per-mm. Keeps
+ * the two poles of the trade honest: an election crammed into one row at a fraction of the page's
+ * possible size takes the deeper layout (on-device report: three liners in one cramped row over a
+ * half-empty page), while strips already at or near the scale cap stay side by side, tall,
+ * because stacking them would buy almost nothing.
+ */
+const val WEAR_PACK_ROW_SCALE_GAIN = 1.25f
+
+/**
  * One window's footprint at [ptPerMm]: its drawn run plus a stub on each side. The run keeps
  * [computeWearStripWindowLayout]'s one-millimetre floor so a packed cell is exactly the width that
  * function then uses — otherwise a sub-millimetre component would draw wider than its own cell.
@@ -950,15 +960,18 @@ private fun packWearStripRows(
  * WHITESPACE before drawn size (on-device request: two short strips each hogging half the page,
  * with no room left for a third).
  *
- * The objective is **lexicographic — fewest rows that fit, then the largest scale within them,
- * then re-expand whitespace**:
+ * The objective is **lexicographic — the row count whose scale earns it, then the largest scale
+ * within it, then re-expand whitespace**:
  *
- * 1. **Fewest rows.** A row is the page's scarce VERTICAL resource: the row count divides the band
- *    in `computeWearVerticalLayout`, so spending a row buys width for every strip and costs every
- *    strip height. Row count is taken at the scale FLOOR, where every footprint is smallest and the
- *    greedy packing therefore reaches the fewest rows any scale can. Maximizing the scale subject
- *    only to `≤ maxRows` would instead re-lay a two-strip sheet as two stacked strips, twice as
- *    long and half as tall — a worse drawing.
+ * 1. **Row count: fewest by default, more when the scale earns them.** The fewest rows any scale
+ *    can reach (taken at the scale floor, where every footprint is smallest) is the baseline —
+ *    but the page's rows are only scarce when the sheet actually uses them, and an election that
+ *    happens to FIT one row can be forced there at a fraction of the size the page could print
+ *    (on-device report: three liners packed into one cramped row over a half-empty page). So
+ *    every deeper row count up to [maxRows] is auditioned, and a deeper one is taken when its
+ *    solved shared scale beats the current choice by at least [WEAR_PACK_ROW_SCALE_GAIN] — a row
+ *    must buy a meaningfully bigger drawing, so a pair of short strips already at (or near) the
+ *    scale cap still sits side by side, tall, rather than stacking for a sliver of width.
  * 2. **Largest scale within exactly that row count** — binary search the largest `ptPerMm` in
  *    `[minPtPerMm, maxPtPerMm]` at which the windows still pack into that many rows AND no row
  *    overruns the content width, tested at **tight** spacing (the most permissive test, so
@@ -1027,9 +1040,11 @@ fun packWearStripWindows(
         }
     }
 
-    // Step 1 — fewest rows. At the scale floor every footprint is at its smallest, so the greedy
-    // packing there uses the fewest rows any scale can reach; that count, not maxRows, is the
-    // budget the scale is then solved against.
+    // Step 1 — row count. The fewest rows any scale can reach (the greedy packing at the scale
+    // floor, where every footprint is smallest) is the baseline; every deeper count up to maxRows
+    // is then auditioned, and a deeper one wins only when its solved scale beats the current
+    // choice by WEAR_PACK_ROW_SCALE_GAIN — the extra row must buy a meaningfully bigger drawing,
+    // never a sliver.
     val floorRows = rowsOf(windows, loScale)
     val floorWithinWidth = rowsWithinWidth(windows, floorRows, loScale)
     val layoutList: List<WearStripWindow>
@@ -1038,8 +1053,17 @@ fun packWearStripWindows(
     when {
         floorRows.size <= maxRows && floorWithinWidth -> {
             layoutList = windows
-            ptPerMm = solveScale(windows, floorRows.size)
-            rows = rowsOf(windows, ptPerMm).take(floorRows.size)
+            var chosenRowCount = floorRows.size
+            var chosenScale = solveScale(windows, chosenRowCount)
+            for (r in chosenRowCount + 1..maxRows) {
+                val s = solveScale(windows, r)
+                if (s >= chosenScale * WEAR_PACK_ROW_SCALE_GAIN) {
+                    chosenRowCount = r
+                    chosenScale = s
+                }
+            }
+            ptPerMm = chosenScale
+            rows = rowsOf(windows, ptPerMm).take(chosenRowCount)
         }
         !floorWithinWidth -> {
             // One window is wider than the whole page even at the scale floor: no scale rescues it,
@@ -1529,12 +1553,14 @@ fun layoutWearStripRail(
 data class WearStripRadii(val linerRPt: Float, val aftRPt: Float, val fwdRPt: Float)
 
 /**
- * Strip-local radii (points): the liner cylinder always fills the strip's vertical budget
- * ([maxRadiusPt]), so every strip on the page draws its liner at the SAME height — the
+ * Strip-local radii (points): the window's reference component fills [maxRadiusPt] — the
  * strip's horizontal scale must never leak into cylinder height (on-device report: liners
  * of different lengths rendered at visibly different heights). Length differences stay
- * horizontal-only; liner OD differences are deliberately not height-encoded either (product
- * decision — a shaft's liners don't differ enough in OD to warrant it).
+ * horizontal-only. ACROSS strips, heights are made proportional by the caller scaling
+ * [maxRadiusPt] itself with [wearStripHeightFrac]: the page's largest reference diameter
+ * fills its band and every other strip draws at its true ratio to it. (This supersedes the
+ * earlier every-strip-fills-its-band rule — a body strip drew at the same height as a liner
+ * almost an inch larger in OD, on-device report.)
  *
  * Neighbor stubs scale by their true diameter ratio to the liner, clamped to the liner's
  * own radius so an oversized neighbor cannot overflow the cylinder band (liners are sleeves
@@ -1543,6 +1569,19 @@ data class WearStripRadii(val linerRPt: Float, val aftRPt: Float, val fwdRPt: Fl
  * Zero/negative [maxRadiusPt] or [linerOdMm] collapses every radius to zero rather than
  * throwing, matching [computeWearStripInnerLayout]'s pathological-input guarantees.
  */
+/**
+ * One strip's vertical scale relative to the page — the fraction of its band the strip's
+ * drawn reference actually uses: the window with the page's LARGEST reference diameter
+ * ([pageMaxRefDiaMm], `max` of every on-page [WearStripWindow.refDiaMm]) fills its band,
+ * and every other strip draws at its true diameter ratio to it, so component heights read
+ * proportional on paper — the vertical analogue of the one shared mm→pt width scale
+ * (on-device report: a body strip drew at the same height as a liner almost an inch larger
+ * in OD). Degenerate inputs fall back to full height rather than collapsing the strip.
+ */
+fun wearStripHeightFrac(refDiaMm: Float, pageMaxRefDiaMm: Float): Float =
+    if (refDiaMm <= 0f || pageMaxRefDiaMm <= 0f) 1f
+    else (refDiaMm / pageMaxRefDiaMm).coerceIn(0f, 1f)
+
 fun computeWearStripRadii(
     linerOdMm: Float,
     aftDiaMm: Float,
