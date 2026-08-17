@@ -62,6 +62,7 @@ import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.RunoutReadings
+import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WornSection
@@ -123,6 +124,7 @@ private data class ConsolidatedRenderInputs(
     val fractionStyle: FractionStyle,
     val tieringMode: PdfTieringMode,
     val readings: RunoutReadings,
+    val stationPlacements: RunoutStationPlacements,
     val wearRecord: WearRecord,
     val blankValues: Boolean,
     /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
@@ -174,6 +176,7 @@ fun OutputRoute(
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfTieringMode     by vm.pdfTieringMode.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
+    val stationPlacements  by vm.runoutStationPlacements.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
     val undercutRecord     by vm.undercutRecord.collectAsState()
     val exportMode         by vm.pdfExportMode.collectAsState()
@@ -270,6 +273,7 @@ fun OutputRoute(
         resolvedSnap: List<ResolvedComponent>,
         thicknessSnap: Float,
         readingsSnap: RunoutReadings,
+        placementsSnap: RunoutStationPlacements,
         wearSnap: WearRecord,
         blankSnap: Boolean,
     ) = composeRunoutPdf(
@@ -279,6 +283,7 @@ fun OutputRoute(
         resolvedComponents = resolvedSnap,
         lineThicknessScale = thicknessSnap,
         runoutReadings = readingsSnap,
+        runoutStationPlacements = placementsSnap,
         wearRecord = wearSnap,
         blankValues = blankSnap,
         consolidated = true,
@@ -298,7 +303,7 @@ fun OutputRoute(
                     ProjectInfo(customer = customer, vessel = vessel,
                         jobNumber = jobNumber, side = shaftPosition),
                     unit, vm.currentPdfPrefs, resolvedComponents,
-                    lineThicknessScale, runoutReadings, wearRecord, blankDraft,
+                    lineThicknessScale, runoutReadings, stationPlacements, wearRecord, blankDraft,
                 )
             }
             if (wrote && openAfterExport) openRunoutPdf(ctx, uri)
@@ -332,7 +337,7 @@ fun OutputRoute(
                         OutputDoc.CONSOLIDATED -> composeConsolidated(
                             page, variant, spec, runoutConfig, project, unit, prefs,
                             resolvedComponents, lineThicknessScale, runoutReadings,
-                            wearRecord, blankDraft,
+                            stationPlacements, wearRecord, blankDraft,
                         )
                         OutputDoc.RUNOUT -> composeRunoutPdf(
                             page = page, spec = spec, config = runoutConfig, project = project,
@@ -340,6 +345,7 @@ fun OutputRoute(
                             resolvedComponents = resolvedComponents,
                             lineThicknessScale = lineThicknessScale,
                             runoutReadings = runoutReadings,
+                            runoutStationPlacements = stationPlacements,
                             blankValues = blankDraft,
                             consolidated = false,
                         )
@@ -414,6 +420,7 @@ fun OutputRoute(
                 fractionStyle = pdfFractionStyle,
                 tieringMode = pdfTieringMode,
                 readings = runoutReadings,
+                stationPlacements = stationPlacements,
                 wearRecord = wearRecord,
                 blankValues = blankDraft,
                 draft = tuning.active,
@@ -441,8 +448,8 @@ fun OutputRoute(
                     composeConsolidated(
                         page, inputs.variant, inputs.spec, inputs.config, inputs.project,
                         inputs.unit, prefsSnapshot, inputs.resolved,
-                        inputs.lineThicknessScale, inputs.readings, inputs.wearRecord,
-                        inputs.blankValues,
+                        inputs.lineThicknessScale, inputs.readings, inputs.stationPlacements,
+                        inputs.wearRecord, inputs.blankValues,
                     )
                 }
                 raster to raster?.takeIf { !inputs.draft }?.inkBand()
@@ -569,13 +576,15 @@ fun OutputRoute(
                     val resolvedSnapshot = resolvedComponents
                     val thicknessSnapshot = lineThicknessScale
                     val readingsSnapshot = runoutReadings
+                    val placementsSnapshot = stationPlacements
                     val wearSnapshot = wearRecord
                     val blankSnapshot = blankDraft
                     printShaftPdfPage(ctx, jobName) { page ->
                         composeConsolidated(
                             page, variantSnapshot, specSnapshot, configSnapshot,
                             projectSnapshot, unitSnapshot, prefsSnapshot, resolvedSnapshot,
-                            thicknessSnapshot, readingsSnapshot, wearSnapshot, blankSnapshot,
+                            thicknessSnapshot, readingsSnapshot, placementsSnapshot,
+                            wearSnapshot, blankSnapshot,
                         )
                     }
                 },
@@ -637,12 +646,17 @@ fun OutputRoute(
                     RunoutStationCountEditor(
                         entries = stationEntries,
                         overrides = runoutConfig.componentOverrides,
-                        onSetCount = { id, count -> vm.setRunoutBubbleCount(id, count) },
+                        placements = stationPlacements,
+                        onIncrement = { entry, count -> vm.addRunoutStation(entry.id, count) },
+                        onDecrement = { entry, count -> vm.removeRunoutStation(entry.id, count) },
+                        onResetPositions = { id -> vm.resetRunoutStationPositions(id) },
+                        onResetAllPositions = { vm.resetAllRunoutStationPositions() },
                         showHeading = false,
                     )
                     Text(
                         "One station per 20\" by default. Tap a bubble on the Runout sheet " +
-                            "to enter its TIR reading and high spot.",
+                            "to enter its TIR reading and high spot, or press and hold one to " +
+                            "drag it along its component.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

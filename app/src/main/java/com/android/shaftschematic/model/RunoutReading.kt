@@ -83,6 +83,44 @@ data class RunoutReadings(
         return RunoutReadings(if (reading.isEmpty) rest else rest + reading)
     }
 
+    /**
+     * Return a copy with [componentId]'s readings at station [atIndex] and above shifted one
+     * index higher — a new station was inserted BEFORE them.
+     *
+     * Adding a station between two authored positions renumbers everything forward of it, and
+     * the readings have to travel with their bubbles: a typed TIR belongs to the physical spot
+     * it was measured at, so leaving the keys alone would slide every value one station aft.
+     * Only inserting needs this — a station is only ever removed from the FWD end, where the
+     * indices below it do not move.
+     */
+    fun withStationInserted(componentId: String, atIndex: Int): RunoutReadings =
+        RunoutReadings(
+            readings.map {
+                if (it.componentId == componentId && it.stationIndex >= atIndex) {
+                    it.copy(stationIndex = it.stationIndex + 1)
+                } else {
+                    it
+                }
+            }
+        )
+
+    /**
+     * Return a copy with [componentId]'s reading at station [atIndex] dropped and everything
+     * above it shifted one index down — the inverse of [withStationInserted], for a station
+     * removed from the middle of an authored component.
+     */
+    fun withStationRemoved(componentId: String, atIndex: Int): RunoutReadings =
+        RunoutReadings(
+            readings.mapNotNull {
+                when {
+                    it.componentId != componentId -> it
+                    it.stationIndex < atIndex -> it
+                    it.stationIndex == atIndex -> null
+                    else -> it.copy(stationIndex = it.stationIndex - 1)
+                }
+            }
+        )
+
     /** Return a copy with any reading for `(componentId, stationIndex)` removed. */
     fun without(componentId: String, stationIndex: Int): RunoutReadings =
         RunoutReadings(

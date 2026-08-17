@@ -321,6 +321,8 @@ data class ShaftDocV1(
     val runoutConfig: RunoutConfig = RunoutConfig(),     // @SerialName("runout_config")
     val wearRecord: WearRecord = WearRecord(),           // @SerialName("wear_record")
     val runoutReadings: RunoutReadings = RunoutReadings(),// @SerialName("runout_readings")
+    val runoutStationPlacements: RunoutStationPlacements  // @SerialName("runout_stations")
+        = RunoutStationPlacements(),
     val undercutRecord: UndercutRecord = UndercutRecord() // @SerialName("undercut_record")
 )
 
@@ -339,6 +341,14 @@ can never affect geometry resolution:
   rule); values ≤ 0 never print.
 - `RunoutReadings` — per-station TIR value + high-spot marker, keyed by
   `(componentId, stationIndex)`.
+- `RunoutStationPlacements` — its own envelope field (`@SerialName("runout_stations")`),
+  one `RunoutStationPlacement` per bubble the user has **dragged** along its component,
+  keyed like a reading by `(componentId, stationIndex)`. `axialMm` is component-local from
+  the AFT edge (the `WearPit` convention) and measured in shaft space across a fragmented
+  body's gaps. Storage is deliberately **partial**: a drag pins only the station it moved,
+  and every station with no entry keeps deriving its position. Pins are stored verbatim
+  (golden rule) — a pin stranded in a gap or beyond a shortened component is repaired at the
+  **render layer**, never rewritten.
 - `UndercutRecord(undercuts, exaggerationFrac)` — its own envelope field
   (`@SerialName("undercut_record")`), sibling of `wear_record`. Each `Undercut` is a
   machined-below-surface span stored in **shaft space** (`startFromAftMm` + `lengthMm`) — a
@@ -351,10 +361,10 @@ can never affect geometry resolution:
   per-sheet **drawn-depth** exaggeration only — printed Ø values stay the stored numbers.
 
 **Orphan policy** differs by key type: wear *spots* (liner-id-keyed, ids the codec knows)
-are pruned at **decode**; pits, measured-Ø readings, and runout readings key on resolved
-ids (incl. auto-bodies) the codec cannot know, so their orphans are skipped at the
-**render layer** and survive decode untouched. Worn sections and undercuts are shaft-space,
-so the question does not arise — they are never pruned.
+are pruned at **decode**; pits, measured-Ø readings, runout readings, and runout station
+placements key on resolved ids (incl. auto-bodies) the codec cannot know, so their orphans
+are skipped at the **render layer** and survive decode untouched. Worn sections and
+undercuts are shaft-space, so the question does not arise — they are never pruned.
 
 Migration:
 

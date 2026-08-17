@@ -115,4 +115,40 @@ class RunoutBubbleSvgPreviewTest {
         }
         render("d-dense", "Dense sheet (21 stations) — doglegs carry the overflow", stations)
     }
+
+    @Test
+    fun `e - dragged stations bunched inside one liner`() {
+        // Dragging is the one way a user can pack a component's stations right up against the
+        // minimum axial separation. The engine's pitch floors and dogleg repair have to absorb
+        // it: derived layouts never produce this, so nothing else in the suite reaches it.
+        //
+        // 12.7mm apart on a liner drawn ~2 pt/mm ≈ 26 pt between stations — well inside the
+        // 51 pt same-row pitch, so every adjacent pair must fall to cross-row spacing.
+        render(
+            "e-dragged-bunched", "Dragged stations at the minimum separation — floors absorb it",
+            listOf(
+                RunoutStationX("taperA", 0f, 90f, 0), RunoutStationX("taperA", 1f, 150f, 1),
+                RunoutStationX("linerA", 2f, 300f, 0), RunoutStationX("linerA", 3f, 326f, 1),
+                RunoutStationX("linerA", 4f, 352f, 2), RunoutStationX("linerA", 5f, 378f, 3),
+                RunoutStationX("linerA", 6f, 404f, 4),
+                RunoutStationX("body2", 7f, 560f, 0),
+                RunoutStationX("taperF", 8f, 680f, 0), RunoutStationX("taperF", 9f, 730f, 1),
+            ),
+        )
+    }
+
+    @Test
+    fun `f - dragged stations pushed to both ends`() {
+        // The other shape dragging makes reachable: a component's stations pulled apart to its
+        // extremes while its neighbours stay put, so one component's span brackets another's.
+        render(
+            "f-dragged-spread", "Dragged stations at a component's extremes",
+            listOf(
+                RunoutStationX("linerA", 0f, 60f, 0), RunoutStationX("linerA", 1f, 740f, 1),
+                RunoutStationX("body1", 2f, 200f, 0), RunoutStationX("body1", 3f, 240f, 1),
+                RunoutStationX("body1", 4f, 280f, 2),
+                RunoutStationX("taperF", 5f, 520f, 0), RunoutStationX("taperF", 6f, 560f, 1),
+            ),
+        )
+    }
 }

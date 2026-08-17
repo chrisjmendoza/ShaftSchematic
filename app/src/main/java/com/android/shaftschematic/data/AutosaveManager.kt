@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.android.shaftschematic.model.RunoutReadings
+import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.UndercutRecord
@@ -63,6 +64,9 @@ object AutosaveManager {
         // Added (undercut drawing Phase 1): recorded undercut sections. Absent in older
         // drafts; default empty record keeps them decodable.
         val undercutRecord: UndercutRecord = UndercutRecord(),
+        // Added (draggable runout bubbles): authored station positions. Absent in older
+        // drafts; default empty set derives every station as before.
+        val runoutStationPlacements: RunoutStationPlacements = RunoutStationPlacements(),
     )
 
     /**

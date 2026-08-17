@@ -8,6 +8,45 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-16
 
+### feat: runout bubbles drag to the spot that was actually measured
+
+Station positions were entirely derived — one per 20", spread by formula — so the only way to
+get a reading onto a different spot on a liner was to change the count and take whatever
+positions that produced.
+
+Press and hold a bubble on the Runout tab's live preview and it now drags along its component.
+The position is stored per station in canonical mm from the component's aft edge, so the same
+spot lands on the runout sheet, the consolidated sheet and the batch export, and it survives a
+save. A dragged bubble keeps its number and its TIR value: a drag is clamped between the
+stations either side of it, so the sheet always reads AFT→FWD and a typed reading can never end
+up on a different bubble. Only the bubble under the finger is pinned — the stations that were
+not touched stay automatic, keeping their even spread over the printed sheet and following
+along when the component's geometry changes. If a pinned bubble and an automatic one would
+ever land out of order on the compressed sheet, the automatic one gives way; the pinned spot
+never moves. The station-editor row grows a **Reset** action to hand a component back to fully
+automatic placement.
+
+The +/− buttons follow the placed positions instead of re-deriving them. On a component with
+two bubbles, "+" puts the new one between them; with one, it goes where a second bubble
+normally would; with several bunched at one end, it takes the empty end. "−" gives up the most
+redundant bubble that carries no reading, which is exactly the one "+" added — so the two
+buttons undo each other and a measurement is only ever discarded when nothing else is left to
+give. Readings are renumbered along with their stations either way, so every value stays on the
+bubble it was taken at.
+
+The drag re-plans the preview live and writes once when the finger lifts, so a document is
+marked unsaved — and takes an undo step — for the move, not for each frame of it. Undo restores
+a mis-drag, and station counts now ride the same undo step as the positions and readings they
+change — undoing a "+" removes the bubble it added instead of leaving it behind at an
+automatic spot. The drawing-tune sliders stay outside undo, exactly as before.
+
+Three escape hatches for accidental moves, scoped smallest to largest: an **Undo move** chip
+appears beside the preview after a drag and puts that bubble straight back (a first drag undoes
+all the way to automatic placement, not to a frozen copy of it); each moved component's
+station-editor row carries a **Reset**; and a **Reset all bubble positions** button under the
+station rows returns the whole document to automatic placement. None of them appear until
+something has actually been moved.
+
 ### feat: wear strip heights read proportional across the page
 
 Every detail strip drew its biggest component at the full height of its band, so a body

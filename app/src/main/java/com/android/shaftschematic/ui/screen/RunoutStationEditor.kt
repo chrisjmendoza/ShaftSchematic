@@ -9,9 +9,14 @@ package com.android.shaftschematic.ui.screen
  * two hosts — the two surfaces cannot drift.
  *
  * The editor is a thin view over `RunoutConfig.componentOverrides`: a row shows the override
- * when there is one and the derived default otherwise, and +/− writes an override. Nothing
- * here computes station positions — that is `geom/RunoutBubbleLayout.kt`, shared by the PDF
- * composer and the canvas preview.
+ * when there is one and the derived default otherwise, and +/− asks the host to add or remove
+ * a station. Nothing here computes station positions — that is `geom/RunoutBubbleLayout.kt`
+ * (derived) and `geom/RunoutStationPlacementMath.kt` (dragged), shared by the PDF composer and
+ * the canvas preview.
+ *
+ * A component with dragged bubbles shows a "Reset" action, and its +/− insert into the widest
+ * gap / remove the most redundant unmeasured station rather than re-deriving every position,
+ * so the bubbles the user placed survive a count change. See `ShaftViewModel.addRunoutStation`.
  */
 
 import androidx.compose.foundation.layout.Arrangement
@@ -22,12 +27,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.RunoutComponentKind
 import com.android.shaftschematic.geom.defaultStationCount
+import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -108,14 +116,26 @@ internal fun buildRunoutStationEntries(
  * The "Measurement stations" block: one +/− row per component. Renders nothing when there
  * are no eligible components.
  *
- * @param onSetCount Called with the component's station key and the requested count; the
- *   ViewModel clamps and stores it in `RunoutConfig.componentOverrides`.
+ * @param placements Authored (dragged) station positions — a row marks itself "Moved" and
+ *   offers a reset when its component appears here.
+ * @param onIncrement / @param onDecrement Called with the component's row and its current
+ *   count. The ViewModel decides whether the change re-derives every position or inserts into
+ *   / drops off the authored set.
+ * @param onResetPositions Called with the component's station key to discard its dragged
+ *   positions and return it to derived placement.
+ * @param onResetAllPositions Discard every component's dragged positions at once — the
+ *   whole-document escape hatch under the rows, shown only while at least one component is
+ *   authored (an always-present button would imply hidden state on every document).
  */
 @Composable
 internal fun RunoutStationCountEditor(
     entries: List<RunoutComponentEntry>,
     overrides: Map<String, Int>,
-    onSetCount: (String, Int) -> Unit,
+    placements: RunoutStationPlacements,
+    onIncrement: (RunoutComponentEntry, Int) -> Unit,
+    onDecrement: (RunoutComponentEntry, Int) -> Unit,
+    onResetPositions: (String) -> Unit,
+    onResetAllPositions: () -> Unit,
     modifier: Modifier = Modifier,
     showHeading: Boolean = true,
 ) {
@@ -129,9 +149,19 @@ internal fun RunoutStationCountEditor(
             RunoutStationRow(
                 label = entry.label,
                 currentCount = currentCount,
-                onDecrement = { onSetCount(entry.id, currentCount - 1) },
-                onIncrement = { onSetCount(entry.id, currentCount + 1) },
+                moved = placements.isAuthored(entry.id),
+                onDecrement = { onDecrement(entry, currentCount) },
+                onIncrement = { onIncrement(entry, currentCount) },
+                onResetPositions = { onResetPositions(entry.id) },
             )
+        }
+        if (entries.any { placements.isAuthored(it.id) }) {
+            TextButton(
+                onClick = onResetAllPositions,
+                modifier = Modifier.testTag("runout_reset_all_positions"),
+            ) {
+                Text("Reset all bubble positions")
+            }
         }
     }
 }
@@ -140,8 +170,10 @@ internal fun RunoutStationCountEditor(
 private fun RunoutStationRow(
     label: String,
     currentCount: Int,
+    moved: Boolean,
     onDecrement: () -> Unit,
     onIncrement: () -> Unit,
+    onResetPositions: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -154,12 +186,23 @@ private fun RunoutStationRow(
             modifier = Modifier.weight(1f),
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Stations:",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(end = 4.dp),
-            )
+            // Only shown once bubbles have been dragged: the reset is meaningless otherwise,
+            // and a permanently-present action would imply every row holds hidden state.
+            if (moved) {
+                TextButton(
+                    onClick = onResetPositions,
+                    modifier = Modifier.testTag("runout_reset_positions"),
+                ) {
+                    Text("Reset", style = MaterialTheme.typography.labelMedium)
+                }
+            } else {
+                Text(
+                    text = "Stations:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 4.dp),
+                )
+            }
             // 0 is a legal floor — a component not being measured carries no bubbles.
             IconButton(onClick = onDecrement, enabled = currentCount > 0) {
                 Text("−", style = MaterialTheme.typography.titleMedium)

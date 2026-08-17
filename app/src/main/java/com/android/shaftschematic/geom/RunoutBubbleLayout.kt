@@ -1,5 +1,6 @@
 package com.android.shaftschematic.geom
 
+import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.settings.RunoutConfig
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -241,12 +242,21 @@ data class RunoutStationX(
  *   into the foreshortened run; drawn-even placement keeps the sheet readable. When the
  *   caller has no inverse ([mmAtX] = null), bodies fall back to physical cell midpoints
  *   (identical under a linear mapping).
+ *
+ * [placements] overrides the derived position of any station the user has dragged. An
+ * authored position wins over every rule above — it is a typed input in the golden-rule sense,
+ * and no derivation may move it. Components with no placements derive exactly as before, and a
+ * placement whose index is beyond the component's current count is simply never read (the
+ * render-layer orphan rule). On a mixed component a derived station that would print out of
+ * index order against a pin (compressed maps, geometry edits) is clamped to the pin's drawn
+ * position — the derived one yields, never the pin, so the sheet always reads AFT→FWD.
  */
 fun collectRunoutStations(
     spans: List<RunoutComponentSpan>,
     overrides: Map<String, Int>,
     xAtMm: (Float) -> Float,
     mmAtX: ((Float) -> Float)? = null,
+    placements: RunoutStationPlacements = RunoutStationPlacements(),
 ): List<RunoutStationX> {
     val out = mutableListOf<RunoutStationX>()
 
@@ -272,6 +282,7 @@ fun collectRunoutStations(
         // stationIndex runs continuously AFT→FWD across every run of the component, so a
         // reading keyed (componentId, stationIndex) identifies exactly one bubble no matter
         // how the body is fragmented.
+        val stations = ArrayList<RunoutStationX>(count)
         var nextIndex = 0
         runs.forEachIndexed { runIdx, span ->
             val runCount = perRun[runIdx]
@@ -282,7 +293,7 @@ fun collectRunoutStations(
                 val x1 = xAtMm(span.startMm + span.lengthMm)
                 repeat(runCount) { i ->
                     val xs = x0 + (i + 0.5f) * (x1 - x0) / runCount
-                    out.add(RunoutStationX(id, mmAtX(xs), xs, stationIndex = nextIndex++))
+                    stations.add(RunoutStationX(id, mmAtX(xs), xs, stationIndex = nextIndex++))
                 }
             } else {
                 runoutStationPositionsMm(
@@ -291,10 +302,57 @@ fun collectRunoutStations(
                     count = runCount,
                     useEdgeInset = kind != RunoutComponentKind.BODY,
                 ).forEach { mm ->
-                    out.add(RunoutStationX(id, mm, xAtMm(mm), stationIndex = nextIndex++))
+                    stations.add(RunoutStationX(id, mm, xAtMm(mm), stationIndex = nextIndex++))
                 }
             }
         }
+
+        // Overlay the user's dragged positions. Applied AFTER the derivation above rather than
+        // instead of it, so a component keeps a full station for every index even when its
+        // placements are partial (the ordinary state — a drag pins only the station it moved),
+        // and so the apportionment across runs stays the one thing that decides how many
+        // stations exist.
+        val authored = placements.positionsFor(id)
+        if (authored.isNotEmpty()) {
+            for (i in stations.indices) {
+                val localMm = authored[stations[i].stationIndex] ?: continue
+                val mm = resolveStationShaftMm(runs, localMm)
+                stations[i] = stations[i].copy(stationMm = mm, stationX = xAtMm(mm))
+            }
+
+            // Order repair for mixed pinned/derived components. A pin holds physical mm while
+            // a derived body sibling holds drawn-even x — under a compressed output map, or
+            // after a geometry edit moved a derived sibling, the two can land out of index
+            // order, printing station i+1 aft of station i. The sheet must read AFT→FWD, and
+            // a pin is a typed input, so the DERIVED station always yields: clamp it to its
+            // neighbour (coincident ticks are legal — the bubble planner keeps the circles
+            // apart regardless). Two passes, forward then backward; pins are ordered among
+            // themselves by the drag clamp, so the passes cannot fight.
+            for (i in 1 until stations.size) {
+                val s = stations[i]
+                if (s.stationIndex in authored) continue
+                val prev = stations[i - 1]
+                if (s.stationX < prev.stationX) {
+                    stations[i] = s.copy(
+                        stationX = prev.stationX,
+                        stationMm = mmAtX?.invoke(prev.stationX) ?: prev.stationMm,
+                    )
+                }
+            }
+            for (i in stations.size - 2 downTo 0) {
+                val s = stations[i]
+                if (s.stationIndex in authored) continue
+                val next = stations[i + 1]
+                if (s.stationX > next.stationX) {
+                    stations[i] = s.copy(
+                        stationX = next.stationX,
+                        stationMm = mmAtX?.invoke(next.stationX) ?: next.stationMm,
+                    )
+                }
+            }
+        }
+
+        out.addAll(stations)
     }
     return out
 }

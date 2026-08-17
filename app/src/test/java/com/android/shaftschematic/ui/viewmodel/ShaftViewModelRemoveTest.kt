@@ -1,6 +1,7 @@
 package com.android.shaftschematic.ui.viewmodel
 
 import com.android.shaftschematic.model.RunoutReadings
+import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Taper
@@ -113,6 +114,8 @@ class ShaftViewModelRemoveTest {
         spec = spec,
         wearRecord = WearRecord(),
         runoutReadings = RunoutReadings(),
+        runoutStationPlacements = RunoutStationPlacements(),
+        stationCountOverrides = emptyMap(),
         undercutRecord = UndercutRecord(),
         overallIsManual = false,
     )

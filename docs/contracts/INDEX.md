@@ -48,7 +48,8 @@ work ships they move to `docs/archive/`; each is listed under the contract it be
   ShaftRenderer geometry, RenderOptions styling. PDF is a separate drawing path.
 - **RunoutSheet.md** — runout + wear tabs **and the Consolidated Output tab** (consolidated
   sheet variants, worn sections, shaft-height slider, Export all), bubble collision engine
-  (`geom/RunoutBubbleLayout.kt`), profile compression, OAL alignment, PDF appearance
+  (`geom/RunoutBubbleLayout.kt`), draggable stations (authored positions, the neighbour
+  clamp, count-edit insertion/removal), profile compression, OAL alignment, PDF appearance
   options. Design plan: `docs/archive/WearDiaMeasurements_PLAN.md`.
 - **UndercutDrawing.md** — Undercut Drawing tab/PDF: shaft-space (not component-keyed)
   undercut sections, cluster-window zoom, notch geometry against the local outer surface,

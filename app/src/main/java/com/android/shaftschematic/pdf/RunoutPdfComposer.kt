@@ -155,6 +155,13 @@ fun composeRunoutPdf(
     lineThicknessScale: Float = 1.0f,
     runoutReadings: RunoutReadings = RunoutReadings(),
     /**
+     * Dragged station positions. Overrides where a bubble's station sits along its component;
+     * the count still comes from [RunoutConfig.componentOverrides]. Must reach BOTH bubble
+     * plans below — the prelim plan sizes the vertical budget, so feeding it different
+     * stations than the drawing uses would reserve the wrong number of rows.
+     */
+    runoutStationPlacements: RunoutStationPlacements = RunoutStationPlacements(),
+    /**
      * Wear record for the consolidated runout/wear sheet: worn sections and point readings
      * print their measured Ø values inside the shaft profile, spots and pits draw as marks
      * on it. Whether any VALUE prints also decides the liner fill —
@@ -372,6 +379,7 @@ fun composeRunoutPdf(
         collectRunoutStations(
             stationSpans, config.componentOverrides, ::xAtLinear,
             mmAtX = { x -> aftSetMm + (x - contentLeft) / widthFitPtPerMm },
+            placements = runoutStationPlacements,
         ),
         bubbleGeom,
     )
@@ -519,7 +527,10 @@ fun composeRunoutPdf(
     // (mmAt inverts them back to physical mm — see collectRunoutStations). Row count can
     // differ from the prelim by a hair; the shaftCy coerce below absorbs it.
     val bubblePlan = planRunoutBubbles(
-        collectRunoutStations(stationSpans, config.componentOverrides, ::xAt, mmAtX = xMap::mmAt),
+        collectRunoutStations(
+            stationSpans, config.componentOverrides, ::xAt, mmAtX = xMap::mmAt,
+            placements = runoutStationPlacements,
+        ),
         bubbleGeom,
     )
     val shaftAreaH  = availableH - bubblePlan.sectionHeight(BUBBLE_GAP_PT)

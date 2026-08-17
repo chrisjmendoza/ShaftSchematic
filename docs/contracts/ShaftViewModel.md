@@ -69,18 +69,28 @@ Responsibilities
   (`ui/viewmodel/SessionHistory.kt`) recording every drawing-editor edit, not just
   deletes:
   - `EditState` (`ui/viewmodel/EditState.kt`) is the undoable slice: `spec`,
-    `wearRecord`, `runoutReadings`, `undercutRecord`, `overallIsManual`. Metadata
+    `wearRecord`, `runoutReadings`, `runoutStationPlacements`, `stationCountOverrides`,
+    `undercutRecord`, `overallIsManual`. Metadata
     (customer/vessel/job number/notes/shaft position/unit) is deliberately **not**
     undoable, and neither is carousel row order — rows are derived from the spec
     (resolved components in physical order), so restoring the spec restores them.
+  - `stationCountOverrides` is the ONE slice of `RunoutConfig` the snapshot covers,
+    mirroring `componentOverrides`. A runout station `+`/`−` writes placements, readings,
+    and the count together, so restoring the first two without the third left a phantom
+    derived bubble behind every undo of a `+`. The rest of `RunoutConfig` (tuning sliders,
+    TIR direction, coupling face) stays out; those commits re-emit through the collector
+    but produce an identical `EditState`, which `SessionHistory.record` no-ops — so the
+    history cannot flood. `applyEditState` restores only the override slice via
+    `_runoutConfig.update { it.copy(componentOverrides = …) }`, never the whole config.
   - A central collector (`combine(spec, wearRecord, runoutReadings, undercutRecord,
-    overallIsManual)` in `init`) records an `EditState` on every emission via
+    overallIsManual, runoutStationPlacements, runoutConfig)` in `init`) records an
+    `EditState` on every emission via
     `editHistory.record(edit, System.currentTimeMillis())`. `SessionHistory` owns the
     policy: edits within 600 ms of the previous record coalesce into one undo step (a
     typing burst = one step), the stack caps at 50 (oldest evicted), redo clears on any
     genuine new state, and an identical-to-head state is a no-op.
   - `undoEdit()` / `redoEdit()` pop/push `SessionHistory` and apply the restored
-    `EditState` back onto the five flows via `applyEditState()`, guarded by
+    `EditState` back onto the undoable flows via `applyEditState()`, guarded by
     `isRestoringHistory` so the collector does not re-record the restore as a new edit
     (belt-and-suspenders — `SessionHistory.record`'s identical-state no-op is the
     authoritative backstop).

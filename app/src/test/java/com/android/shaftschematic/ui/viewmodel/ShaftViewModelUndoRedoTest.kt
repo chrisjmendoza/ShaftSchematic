@@ -2,6 +2,7 @@ package com.android.shaftschematic.ui.viewmodel
 
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.RunoutReadings
+import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
@@ -29,9 +30,27 @@ class ShaftViewModelUndoRedoTest {
         spec = spec,
         wearRecord = WearRecord(),
         runoutReadings = RunoutReadings(),
+        runoutStationPlacements = RunoutStationPlacements(),
+        stationCountOverrides = emptyMap(),
         undercutRecord = UndercutRecord(),
         overallIsManual = false,
     )
+
+    @Test
+    fun `a station count change is its own undo step`() {
+        // The override slice of RunoutConfig is in the snapshot: undoing a "+" must take the
+        // count back with the positions, or the extra bubble survives the undo at a derived
+        // spot. The rest of the config (sliders) is not in EditState, so a slider commit
+        // produces an identical snapshot and records nothing.
+        val before = editState(ShaftSpec()).copy(stationCountOverrides = mapOf("l1" to 2))
+        val after = before.copy(stationCountOverrides = mapOf("l1" to 3))
+
+        val h = SessionHistory<EditState>()
+        h.record(before, 0L)
+        h.record(after, 10_000L)
+
+        assertEquals(before, h.undo(after))
+    }
 
     @Test
     fun `field edit undo restores the prior body diameter`() {

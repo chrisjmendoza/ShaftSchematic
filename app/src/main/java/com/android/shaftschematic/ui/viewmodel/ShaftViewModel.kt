@@ -28,7 +28,16 @@ import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
+import com.android.shaftschematic.geom.RunoutComponentKind
+import com.android.shaftschematic.geom.RunoutComponentSpan
+import com.android.shaftschematic.geom.authoredStationIndexToRemove
 import com.android.shaftschematic.geom.clampPitAcrossFrac
+import com.android.shaftschematic.geom.currentLocalStationPositions
+import com.android.shaftschematic.geom.insertStationPosition
+import com.android.shaftschematic.geom.planStationInsertion
+import com.android.shaftschematic.geom.removeStationPosition
+import com.android.shaftschematic.geom.runoutComponentSpanMm
+import com.android.shaftschematic.ui.resolved.runoutComponentSpans
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.FractionStyle
@@ -119,6 +128,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             wearRecord = _wearRecord.value,
             runoutReadings = _runoutReadings.value,
             undercutRecord = _undercutRecord.value,
+            runoutStationPlacements = _runoutStationPlacements.value,
         )
 
     /**
@@ -516,6 +526,122 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
         }
+    }
+
+    // ── Runout station placement (dragged bubble positions) ───────────────────
+    // Reference-only, same posture as _runoutReadings above. A drag pins exactly the station
+    // it moved; untouched siblings stay derived, keeping their automatic behaviour (geometry
+    // tracking, the sheet's drawn-even body placement). Count edits on a pinned component
+    // freeze the whole current set so an insert/remove renumbers nothing under the user.
+    // See model/RunoutStationPlacement.kt and geom/RunoutStationPlacementMath.kt.
+
+    private val _runoutStationPlacements = MutableStateFlow(RunoutStationPlacements())
+    val runoutStationPlacements: StateFlow<RunoutStationPlacements> =
+        _runoutStationPlacements.asStateFlow()
+
+    /**
+     * Commit a bubble drag: pin ONE station at [localMm] (component-local, from the AFT edge),
+     * already clamped by the caller (the drag needs the clamped value for its own live
+     * feedback, so re-deriving it here could only disagree).
+     *
+     * Called once on finger-up, never per drag frame — a per-frame write would flip the
+     * unsaved-changes asterisk immediately and push one undo step per coalescing window of
+     * continuous dragging.
+     */
+    fun setRunoutStationPosition(componentId: String, stationIndex: Int, localMm: Float) {
+        _runoutStationPlacements.update { it.withPosition(componentId, stationIndex, localMm) }
+    }
+
+    /** Un-pin one station ("Undo move" on a first drag) — it derives its position again. */
+    fun clearRunoutStationPosition(componentId: String, stationIndex: Int) {
+        _runoutStationPlacements.update { it.withoutPosition(componentId, stationIndex) }
+    }
+
+    /** Return a component's stations to derived placement, discarding every dragged position. */
+    fun resetRunoutStationPositions(componentId: String) {
+        _runoutStationPlacements.update { it.withoutComponent(componentId) }
+    }
+
+    /**
+     * Return EVERY component to derived placement — the "Reset all bubble positions" button
+     * under the measurement-station rows. Recoverable: placements are in [EditState], so a
+     * session undo brings the dragged positions back.
+     */
+    fun resetAllRunoutStationPositions() {
+        _runoutStationPlacements.value = RunoutStationPlacements()
+    }
+
+    /** A component's drawn runs, for the station +/− math. Empty when it no longer resolves. */
+    private fun runoutRunsFor(componentId: String): List<RunoutComponentSpan> =
+        runoutComponentSpans(_resolvedComponents.value).filter { it.id == componentId }
+
+    /**
+     * Add one measurement station to a component.
+     *
+     * A fully derived component simply gains a station and re-derives every position, as
+     * before. A component with any pinned station instead has its **complete current set**
+     * (pins verbatim, siblings at their derived spots — [currentLocalStationPositions])
+     * frozen with the new station inserted into the widest gap ([planStationInsertion]) —
+     * which for the ordinary two-station component means between the existing pair. The
+     * freeze is what keeps every bubble planted while the insert renumbers its neighbours;
+     * the readings shift with their stations ([RunoutReadings.withStationInserted]), so every
+     * typed TIR stays on the bubble it was measured at.
+     */
+    fun addRunoutStation(componentId: String, currentCount: Int) {
+        val placements = _runoutStationPlacements.value
+        if (placements.isAuthored(componentId)) {
+            val runs = runoutRunsFor(componentId)
+            if (runs.isNotEmpty()) {
+                val full = currentLocalStationPositions(
+                    runs, currentCount, placements.positionsFor(componentId),
+                )
+                val useEdgeInset = runs.first().kind != RunoutComponentKind.BODY
+                val insertion =
+                    planStationInsertion(full, runoutComponentSpanMm(runs), useEdgeInset)
+                _runoutStationPlacements.value = placements.withComponent(
+                    componentId, insertStationPosition(full, insertion),
+                )
+                _runoutReadings.update { it.withStationInserted(componentId, insertion.index) }
+            }
+        }
+        setRunoutBubbleCount(componentId, currentCount + 1)
+    }
+
+    /**
+     * Remove one measurement station from a component.
+     *
+     * A fully derived component simply loses a station and re-derives every position, as
+     * before — its FWD-most reading is left in place as an orphan (never drawn, restored if
+     * the count goes back up), matching what a count of 0 already does.
+     *
+     * A component with any pinned station drops its most redundant unmeasured station from
+     * the complete current set ([authoredStationIndexToRemove]) and re-keys the readings
+     * above it, so "−" undoes a "+" instead of deleting a bubble the user had dragged into
+     * place; the remaining set freezes, keeping every surviving bubble planted through the
+     * renumber.
+     */
+    fun removeRunoutStation(componentId: String, currentCount: Int) {
+        val placements = _runoutStationPlacements.value
+        if (placements.isAuthored(componentId)) {
+            val runs = runoutRunsFor(componentId)
+            if (runs.isNotEmpty()) {
+                val full = currentLocalStationPositions(
+                    runs, currentCount, placements.positionsFor(componentId),
+                )
+                val useEdgeInset = runs.first().kind != RunoutComponentKind.BODY
+                val readings = _runoutReadings.value
+                val index = authoredStationIndexToRemove(
+                    full, runoutComponentSpanMm(runs), useEdgeInset,
+                ) { i -> readings.find(componentId, i) != null }
+                if (index >= 0) {
+                    _runoutStationPlacements.value = placements.withComponent(
+                        componentId, removeStationPosition(full, index),
+                    )
+                    _runoutReadings.value = readings.withStationRemoved(componentId, index)
+                }
+            }
+        }
+        setRunoutBubbleCount(componentId, (currentCount - 1).coerceAtLeast(0))
     }
 
     // ── Liner wear inspection record ──────────────────────────────────────────
@@ -933,6 +1059,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         spec = _spec.value,
         wearRecord = _wearRecord.value,
         runoutReadings = _runoutReadings.value,
+        runoutStationPlacements = _runoutStationPlacements.value,
+        stationCountOverrides = _runoutConfig.value.componentOverrides,
         undercutRecord = _undercutRecord.value,
         overallIsManual = _overallIsManual.value,
     )
@@ -955,6 +1083,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             _spec.value = e.spec
             _wearRecord.value = e.wearRecord
             _runoutReadings.value = e.runoutReadings
+            _runoutStationPlacements.value = e.runoutStationPlacements
+            // Only the override slice restores — the config's sliders/toggles are not
+            // undoable state and keep whatever the user last set them to.
+            _runoutConfig.update { it.copy(componentOverrides = e.stationCountOverrides) }
             _undercutRecord.value = e.undercutRecord
             _overallIsManual.value = e.overallIsManual
         } finally {
@@ -1013,9 +1145,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Flow.combine overload for >5 flows returns Array<Any?>
         val sessionSnapshotFlow = combine(
             spec, unit, shaftPosition, customer, vessel, jobNumber, notes,
-            runoutConfig, unitLocked, overallIsManual, wearRecord, runoutReadings, undercutRecord
+            runoutConfig, unitLocked, overallIsManual, wearRecord, runoutReadings, undercutRecord,
+            runoutStationPlacements
         ) { values: Array<Any?> ->
-            check(values.size == 13) { "Autosave combine expected 13 values, got ${values.size}" }
+            check(values.size == 14) { "Autosave combine expected 14 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -1030,6 +1163,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val wear = values[10] as WearRecord
             val readings = values[11] as RunoutReadings
             val undercuts = values[12] as UndercutRecord
+            val stationPlacements = values[13] as RunoutStationPlacements
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -1045,6 +1179,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 wearRecord = wear,
                 runoutReadings = readings,
                 undercutRecord = undercuts,
+                runoutStationPlacements = stationPlacements,
             )
         }
 
@@ -1112,16 +1247,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // The first emission seeds the history head; subsequent genuine changes become steps.
         // Restores (undo/redo) re-emit the restored state, but SessionHistory.record no-ops it
         // (equal to head) and isRestoringHistory guards the application block as well.
+        @Suppress("UNCHECKED_CAST")
+        // Flow.combine overload for >5 flows returns Array<Any?>. runoutConfig is observed
+        // but only its override slice reaches the EditState: a slider commit re-emits here,
+        // produces an identical snapshot, and SessionHistory.record no-ops it.
         viewModelScope.launch {
             combine(
-                spec, wearRecord, runoutReadings, undercutRecord, overallIsManual
-            ) { s, wear, runout, undercut, isManual ->
+                spec, wearRecord, runoutReadings, undercutRecord, overallIsManual,
+                runoutStationPlacements, runoutConfig
+            ) { values: Array<Any?> ->
+                check(values.size == 7) { "Undo combine expected 7 values, got ${values.size}" }
                 EditState(
-                    spec = s,
-                    wearRecord = wear,
-                    runoutReadings = runout,
-                    undercutRecord = undercut,
-                    overallIsManual = isManual,
+                    spec = values[0] as ShaftSpec,
+                    wearRecord = values[1] as WearRecord,
+                    runoutReadings = values[2] as RunoutReadings,
+                    runoutStationPlacements = values[5] as RunoutStationPlacements,
+                    stationCountOverrides = (values[6] as RunoutConfig).componentOverrides,
+                    undercutRecord = values[3] as UndercutRecord,
+                    overallIsManual = values[4] as Boolean,
                 )
             }.collect { edit ->
                 if (isRestoringHistory) return@collect
@@ -1501,6 +1644,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutConfig.value = snapshot.runoutConfig
         _wearRecord.value = snapshot.wearRecord
         _runoutReadings.value = snapshot.runoutReadings
+        _runoutStationPlacements.value = snapshot.runoutStationPlacements
         _undercutRecord.value = snapshot.undercutRecord
         // Restore unitLocked before any defaultUnitFlow emission can overwrite the
         // draft's unit, and overallIsManual so a manually-set OAL isn't auto-resized.
@@ -2460,6 +2604,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             runoutConfig = _runoutConfig.value,
             wearRecord = _wearRecord.value,
             runoutReadings = _runoutReadings.value,
+            runoutStationPlacements = _runoutStationPlacements.value,
             undercutRecord = _undercutRecord.value,
             // station_interval_version is stamped by encodeV1 itself — see its KDoc.
         )
@@ -2529,6 +2674,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutConfig.value = RunoutConfig()
         _wearRecord.value = WearRecord()
         _runoutReadings.value = RunoutReadings()
+        _runoutStationPlacements.value = RunoutStationPlacements()
         _undercutRecord.value = UndercutRecord()
 
         _overallIsManual.value =
@@ -2571,6 +2717,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // Already orphan-filtered against decoded.spec.liners inside ShaftDocCodec.decode().
         _wearRecord.value = decoded.wearRecord
         _runoutReadings.value = decoded.runoutReadings
+        _runoutStationPlacements.value = decoded.runoutStationPlacements
         _undercutRecord.value = decoded.undercutRecord
 
         // Derive OAL mode from the document instead of leaking the previous session's
@@ -2617,6 +2764,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutConfig.value = RunoutConfig()
         _wearRecord.value = WearRecord()
         _runoutReadings.value = RunoutReadings()
+        _runoutStationPlacements.value = RunoutStationPlacements()
         _undercutRecord.value = UndercutRecord()
         _notes.value = ""
         _overallIsManual.value = false

@@ -307,6 +307,48 @@ Changing a default count moves stations under readings keyed `(componentId, stat
 `ShaftDocCodec.freezeLegacyStationCounts` freezes the pre-interval count for any component that
 already carries a reading and has no override. A typed TIR is as sacred as a typed diameter.
 
+### Dragged runout stations are authored positions
+A bubble long-pressed and dragged on the Runout tab's canvas stores a
+`RunoutStationPlacement` (`RunoutStationPlacements`, envelope field `runout_stations`) — a
+**reference feature** with the same posture as runout readings (never affects
+`coverageEndMm`/OAL, body resolution, collision, or the Free-to-End badge; keyed
+`(componentId, stationIndex)`; orphans skipped at the **render layer**, never pruned at decode).
+`axialMm` is **component-local from the AFT edge** (the `WearPit.axialMm` convention) and
+measured in shaft space **across** a fragmented body's gaps; a position stranded in a gap is
+pulled onto the nearest run by `resolveStationShaftMm` at render, never rewritten in storage.
+Storing mm — not px, not drawn-x — is what lets one position serve the canvas's linear map and
+the sheet's compressed map. Placements are in `EditState` (a drag is direct manipulation, so
+it undoes), and so is the **station-count override slice** of `RunoutConfig`
+(`EditState.stationCountOverrides` mirrors `componentOverrides`; a +/− writes placements,
+readings, and count together, and restoring the first two without the third left a phantom
+derived bubble behind every undo of a "+"). The REST of `RunoutConfig` (sliders, TIR
+direction, coupling face) stays non-undoable — its commits re-emit through the recorder but
+produce identical `EditState`s, which `SessionHistory.record` no-ops, so the history cannot
+flood.
+
+An authored position is a typed input: **no derivation may move it**. A drag pins **exactly
+one station** — untouched siblings stay derived, keeping their automatic behaviour: they
+track geometry edits, and a body's derived stations keep their **drawn-even placement over
+the compressed sheet** (the on-device readability rule pinning-the-whole-component silently
+discarded; derived positions never depend on pinned ones, so pinning one bubble moves nothing
+else). Where a pin and a re-derived sibling would print out of index order (compressed maps,
+geometry edits), the **derived station yields** — `collectRunoutStations`' order repair clamps
+it to the pin, never the reverse — so the sheet always reads AFT→FWD. A drag is clamped inside
+its component and `RUNOUT_MIN_STATION_GAP_MM` clear of its neighbours and **may never cross
+one**: crossing would renumber stations under their typed TIRs. Count changes on a component
+with any pin work on the **full merged set** (`currentLocalStationPositions` — pins verbatim,
+never coerced) and then freeze it wholesale, the one action that pins everything (an
+insert/remove renumbers neighbours; freezing keeps every bubble planted through it): "+"
+inserts into the widest gap (`planStationInsertion`, so the usual pair gets the new one
+between them), "−" removes the most redundant unmeasured station
+(`authoredStationIndexToRemove`, the geometric inverse, so "−" undoes "+"), and both
+**re-key the readings** with their stations
+(`RunoutReadings.withStationInserted`/`withStationRemoved`) so every value stays on the bubble
+it was measured at. Pure math in `geom/RunoutStationPlacementMath.kt` (no `pdf → ui` dep).
+The gesture commits **once on release** (`PreviewTuning` doctrine — no ViewModel write on a
+drag frame), and `composeRunoutPdf` must thread placements into **both** `collectRunoutStations`
+calls, the prelim budget plan included. See `docs/contracts/RunoutSheet.md` (Draggable stations).
+
 ### Runout readings are reference features
 Per-station runout readings (`RunoutReadings` in the doc envelope — a TIR value + high-spot
 clock marker per bubble) are **reference-only**, same posture as coupler bolt slots and wear

@@ -195,6 +195,9 @@ shared engine — never re-implemented per renderer):
 - `RunoutBubbleLayout.kt` — runout bubble stations/rows/x-solve/leader routing with
   engine-verified collision guarantees (canvas preview ⇔ runout PDF).
 - `RunoutReadingMath.kt` — bubble clock/hit-test math for recorded TIR values.
+- `RunoutStationPlacementMath.kt` — dragged-bubble placement: the neighbour clamp a drag
+  lands under, the merge of pinned over derived positions, and where a `+`/`−` inserts or
+  removes a station (canvas gesture ⇔ station editor, both hosts).
 - `WearPitMath.kt` — pit "X" sizing/hit-test/clamp (overlay canvas ⇔ wear PDF).
 - `WearDiaMath.kt` + `WearDiaCalloutLayout.kt` — measured-Ø witness-tick hit-testing and
   the label-width-aware callout placement engine (single-row fan → two-row stagger with

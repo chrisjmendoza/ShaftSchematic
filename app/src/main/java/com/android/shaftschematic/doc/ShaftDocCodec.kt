@@ -1,6 +1,7 @@
 package com.android.shaftschematic.doc
 
 import com.android.shaftschematic.model.RunoutReadings
+import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.UndercutRecord
@@ -91,6 +92,15 @@ object ShaftDocCodec {
         @SerialName("runout_readings")
         val runoutReadings: RunoutReadings = RunoutReadings(),
         /**
+         * Dragged runout station positions — component-local mm per bubble the user moved.
+         * Absent in older files → default empty set, i.e. every station derives its position
+         * as before. Additive + defaulted: no version bump needed. Orphans (a placement whose
+         * station no longer exists) are ignored at the render layer, not pruned here — the same
+         * rule as [runoutReadings], and for the same reason. See `model/RunoutStationPlacement.kt`.
+         */
+        @SerialName("runout_stations")
+        val runoutStationPlacements: RunoutStationPlacements = RunoutStationPlacements(),
+        /**
          * Undercut drawing record — recorded weld/cleanup undercut sections (distance from a
          * S.E.T., length, measured Ø). Absent in older files → default empty record. Additive
          * + defaulted: no version bump needed. Undercuts have no component key, so there is no
@@ -122,6 +132,7 @@ object ShaftDocCodec {
         val runoutConfig: RunoutConfig,
         val wearRecord: WearRecord,
         val runoutReadings: RunoutReadings,
+        val runoutStationPlacements: RunoutStationPlacements,
         val undercutRecord: UndercutRecord,
     )
 
@@ -241,6 +252,10 @@ object ShaftDocCodec {
                     // which we don't have here). Stale entries are harmless — the bubble lookup
                     // simply misses them. See model/RunoutReading.kt.
                     runoutReadings = doc.runoutReadings,
+                    // Station placements pass through for the same reason as the readings above:
+                    // whether a placement still has a station depends on resolved components and
+                    // count overrides, which the codec cannot see.
+                    runoutStationPlacements = doc.runoutStationPlacements,
                     // Undercuts have no component key at all, so there is nothing to orphan-check
                     // here — pass through untouched. See model/Undercut.kt.
                     undercutRecord = doc.undercutRecord,
@@ -263,6 +278,7 @@ object ShaftDocCodec {
             runoutConfig = RunoutConfig(),
             wearRecord = WearRecord(),
             runoutReadings = RunoutReadings(),
+            runoutStationPlacements = RunoutStationPlacements(),
             undercutRecord = UndercutRecord(),
         )
     }

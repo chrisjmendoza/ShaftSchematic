@@ -158,6 +158,149 @@ tuning sections (bubbles, sliders, worn sections), then Export all.
 
 ---
 
+## Draggable stations (authored positions, 2026-08-16)
+
+A station's position is normally **derived**. Press-and-hold a bubble on the Runout tab's live
+canvas and it can be **dragged along its component** — to mark a spot that actually got
+measured rather than the one the interval math picked (on-device request). A dragged position
+is an authored value in the golden-rule sense: no derivation may move it again.
+
+### Data — `model/RunoutStationPlacement.kt`
+
+`RunoutStationPlacements` rides the envelope as `runout_stations` (additive + defaulted;
+absent → every station derives as before). **Pure reference feature**, same posture as runout
+readings: never touches `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End
+badge.
+
+- **`axialMm` is component-local**, from the AFT edge of the component's aft-most run — the
+  `WearPit.axialMm` convention. Not px, not drawn-x: the canvas maps mm linearly while the sheet
+  maps them through the compressed profile, so a position stored in either output space would
+  print somewhere else. A fragmented body measures local distance **across** its gaps, keeping
+  one scalar addressing every run.
+- **Keyed `(componentId, stationIndex)`**, and **never pruned at decode** — station identity
+  needs resolved components plus count overrides the codec cannot see. Orphans go unread at the
+  render layer, so lowering a count and raising it again restores the positions.
+- **Undoable**: `runoutStationPlacements` is in `EditState` (a drag is direct manipulation, so
+  a mis-drag should cost one undo) — and so is the **count-override slice** of `RunoutConfig`
+  (`EditState.stationCountOverrides`): a +/− writes placements, readings, and count in one
+  step, and restoring the first two without the third left a phantom derived bubble behind
+  every undo of a "+". The rest of `RunoutConfig` (sliders, TIR direction, coupling face)
+  stays out of the snapshot; its commits re-emit through the undo recorder but produce
+  identical `EditState`s, which `SessionHistory.record` no-ops — the history cannot flood.
+
+### A drag pins ONE station
+
+Only the station under the finger is stored. Untouched siblings stay derived — they keep
+tracking geometry edits, and a body's derived stations keep their **drawn-even placement over
+the compressed sheet** (the on-device readability rule; freezing the whole component silently
+traded it for physical-mm placement, bunching untouched ticks under foreshortened runs).
+Derived positions never depend on pinned ones, so pinning one bubble moves nothing else.
+
+Two consequences are engineered rather than hoped for:
+
+- **Order repair** (`collectRunoutStations`): a pin holds physical mm while a derived body
+  sibling holds drawn-even x, so under a compressed map — or after a geometry edit moves a
+  derived sibling — the two can land out of index order. The **derived station yields**
+  (clamped to the pin's drawn position; coincident ticks are legal, the bubble planner keeps
+  the circles apart regardless); the pin never moves. The sheet always reads AFT→FWD.
+- **The clamp fence** a drag works inside is the component's full current set
+  (`currentStationPositions`, `RunoutRoute.kt` — stored pins verbatim, derived stations read
+  off the drawn bubbles), but the fence is never committed; it exists only so the neighbour
+  clamp has something to clamp against.
+
+Count edits are the one action that stores the **whole** current set: `+`/`−` on a component
+with any pin merge pins over derived spots (`currentLocalStationPositions` — pins verbatim,
+never coerced), insert/remove, and freeze the result, so an index renumber never moves a
+bubble the user can see.
+
+### Escape hatches — Reset, Reset all, Undo move
+
+Three ways back, scoped smallest to largest, all existing only while there is something to
+undo (a fully derived document shows none of them — a permanent reset would imply hidden
+position state on every document; pinned by `RunoutStationEditorTest`):
+
+- **"Undo move"** (`runout_undo_move`) — a chip beside the canvas hint, appearing after a
+  committed drag. One tap restores the moved station's pin as it stood **before** that drag;
+  when the drag was that station's first, the pre-drag state is *derived*, so the undo un-pins
+  it back to automatic placement rather than freezing it at its old derived spot
+  (`LastBubbleMove.previousMm == null`). No other bubble is touched either way. Screen state,
+  not persistence: replaced by the next drag, cleared when used or when a reset makes it moot
+  (undoing a drag onto a component just returned to derived would silently re-pin it). The
+  session Undo covers the same edit — this chip is the zero-thought path for "I nudged that by
+  accident".
+- **Per-row "Reset"** (`runout_reset_positions`) — on a pinned component's station-editor
+  row; returns that one component to derived placement.
+- **"Reset all bubble positions"** (`runout_reset_all_positions`) — below the station rows in
+  the shared editor (both hosts), shown while ≥ 1 component is authored; returns the whole
+  document to derived placement. Recoverable — placements are in `EditState`, so a session
+  undo brings the dragged positions back.
+
+### The clamp — order is the invariant
+
+`clampDraggedStationMm` holds a drag inside its component and `RUNOUT_MIN_STATION_GAP_MM`
+(0.5", scaled down on a short component by `effectiveStationGapMm`) clear of the stations either
+side. **A station may never cross its neighbour.** Crossing would either renumber the stations
+under their typed TIR values or print station 3 to the left of station 2 — a typed TIR is as
+sacred as a typed diameter. The gap is not a collision guard (`planRunoutBubbles` already makes
+bubble overlap geometrically impossible); it stops two stations landing on effectively the same
+spot, where the sheet could not say which reading was taken where.
+
+### Count changes on a pinned component
+
+Fully derived components are untouched — "+"/"−" change the count and every position
+re-derives, as before. A component with any pin works on its full merged set and keeps what
+the user placed:
+
+- **"+" inserts into the widest gap** (`planStationInsertion`), gaps running neighbour-to-
+  neighbour plus each end of the usable band to its nearest station. Two default stations →
+  the new one lands between them; one station → it takes the other two-station default
+  position ("the normal location a second bubble would be added"); stations clustered at one
+  end → it takes the empty end rather than squeezing into the cluster. The band is the
+  edge-inset band for tapers/liners and the full span for bodies, matching
+  `runoutStationPositionsMm`.
+- Inserting **renumbers the stations above it, and the readings travel with them**
+  (`RunoutReadings.withStationInserted`). A value belongs to the physical spot it was measured
+  at, so leaving the keys alone would slide every reading forward of the insertion one station
+  aft.
+- **"−" removes the most redundant unmeasured station** (`authoredStationIndexToRemove`): first
+  prefer a station carrying no reading, then among those take the one closest to the midpoint
+  between its neighbours. That is the geometric inverse of the insertion rule, so **"−" undoes
+  "+"** — add a station between two dragged bubbles, change your mind, and the pair come back
+  untouched. `withStationRemoved` re-keys the readings above it.
+
+### Gesture — `RunoutRoute.kt`
+
+`detectDragGesturesAfterLongPress` in its own `pointerInput`, declared **after** the tap
+detector so it takes the main pass first and its consumed changes keep `transformable` from
+panning the canvas out from under the finger. Both handlers map touches through the one
+`toPlanSpace` helper (invert the Canvas `graphicsLayer`), then `pickBubbleAt`, so hit-testing
+and drawing cannot disagree about where a bubble is.
+
+- **A long press and a tap share one press**, so `suppressBubbleTap` (set when the long press
+  fires, cleared by the next `onPress`) stops the finger-up that ends a drag from also opening
+  the reading dialog on the bubble just moved.
+- **Commit on release** — the `PreviewTuning` doctrine. The in-progress set lives in
+  `DraggingRunoutStation` and the canvas re-plans from it every frame; **no ViewModel write may
+  happen on a drag frame**, or the unsaved-changes asterisk flips instantly and the undo history
+  takes a step per coalescing window. A pickup that never moved commits nothing at all
+  (`originalPositionsMm`).
+- The bubble under the finger draws a heavier ring — transient screen affordance, no PDF
+  counterpart, so the draw-both-sites rule is untouched.
+
+### Both plans must be fed
+
+`composeRunoutPdf` takes `runoutStationPlacements` and threads it into **both**
+`collectRunoutStations` calls — the prelim linear-map plan that sizes the vertical budget as
+well as the final plan on the compressed mapping. Feeding the prelim different stations than the
+drawing uses reserves the wrong number of bubble rows.
+
+The Output tab's preview rasterizes the real PDF, so it follows automatically; only the Runout
+tab's native canvas hosts the gesture. Note that the canvas maps mm **linearly** while the sheet
+compresses, so a bubble dragged to look centred in the preview will not look centred on paper in
+a foreshortened region. The mm is the same either way — only the drawn x differs.
+
+---
+
 ## Liner Wear Inspection (UI, Phase 2/3, 2026-07-18)
 
 See `docs/archive/LinerWearAreas_Proposal.md` for the full feature scope; this section covers only

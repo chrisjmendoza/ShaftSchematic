@@ -38,9 +38,16 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   construction (every metric is measured live from the `Paint`), but check the fraction stack
   against a condensed or slab face before shipping one
 - [ ] **Runout bubble leader clarity** — the 2026-08-16 pointer rework (station-fidelity brake,
-  center-aimed leaders, dogleg reroute) answered the reported case; the open half is the
-  requested **tap-to-place bubble with a leader line**. Decide the two together rather than
-  shipping two conventions
+  center-aimed leaders, dogleg reroute) answered the reported case, and long-press-drag now
+  covers *moving* a station to a measured spot. What is still open from the original request is
+  **tap-to-place a NEW bubble** at an arbitrary station rather than adding one with `+` and
+  dragging it. The drag work settled the hard parts (authored positions, the neighbour clamp,
+  reading re-keys), so this is now mostly a gesture + insertion-index question
+- [ ] **Drag on the compressed preview** — the Runout tab's canvas maps mm linearly while the
+  printed sheet foreshortens, so a bubble dragged to look centred in the preview does not look
+  centred on paper in a compressed region (the stored mm is correct either way). Teaching the
+  canvas the sheet's piecewise `xAt` would close the gap; on-device the linear preview has been
+  fine so far, so this is watch-and-see rather than queued
 - [ ] **Drawing preset profiles** — named, **app-wide** sets of drawing prefs plus a
   section-wide "restore Drawing defaults". Per-job `RunoutConfig` (Shaft height, liner
   compression) deliberately stays per-document: a *look* is app-wide, a *fit* is per-job
@@ -54,6 +61,13 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   move, and lower priority
 
 **Delivered in v0.5.x so far** (newest first):
+- Draggable runout bubbles — press and hold a bubble on the Runout tab's live preview to slide
+  it along its component and mark the spot actually measured; the drag pins that one station
+  (its siblings stay automatic) and is clamped between its neighbours, so the sheet still reads
+  AFT→FWD and a typed TIR never lands on a different bubble. `+`/`−` insert into the widest gap
+  and remove the most redundant unmeasured station, so they undo each other, and station counts
+  now ride the same undo step as the positions and readings they change. Undo move / per-row
+  Reset / Reset all bubble positions
 - Wear document round — every liner gets a detail strip and tapers/bodies can be elected onto
   one; strips pack into as many rows as the page can pay for and share one vertical diameter
   scale, so a bigger component draws bigger; facing S-breaks spread apart instead of weaving;
