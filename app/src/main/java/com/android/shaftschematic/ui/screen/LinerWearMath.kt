@@ -137,7 +137,7 @@ private const val WEAR_SPAN_EPS_MM = 1e-3f
  *
  * Called at ENTRY (both the Start field, after converting to canonical via
  * [wearStartToCanonicalMm], and the Length field) to reject an out-of-span commit before it
- * ever reaches the model — see `NumberField.md`'s validator contract. This is deliberately
+ * ever reaches the model — see `docs/contracts/NumberField.md`'s validator contract. This is deliberately
  * separate from [isWearSpotStaleOverrun], which classifies already-stored (possibly stale)
  * data for display rather than blocking new entry.
  */

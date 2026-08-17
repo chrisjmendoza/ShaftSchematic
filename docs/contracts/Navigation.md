@@ -21,9 +21,9 @@ Route graph (AppNav.kt NavHost)
   - Schematic tab → ShaftRoute → ShaftScreen
   - Runout tab → RunoutRoute (runout authoring; exports the classic runout sheet)
   - Wear tab → WearRoute
-  - Undercut Drawing tab → UndercutRoute (`docs/UndercutDrawing.md`) — same "built" gating as
+  - Undercut Drawing tab → UndercutRoute (`docs/contracts/UndercutDrawing.md`) — same "built" gating as
     Runout/Wear
-  - Consolidated Output tab → OutputRoute (`docs/RunoutSheet.md` Consolidation step 5) —
+  - Consolidated Output tab → OutputRoute (`docs/contracts/RunoutSheet.md` Consolidation step 5) —
     consolidated-sheet variants, worn-section editor, "Shaft height" slider, the
     liner-compression pair, blank draft, Export all; same "built" gating, last in the
     sidebar
@@ -51,7 +51,7 @@ Responsibilities
   from `ShaftViewModel.drafts`: name or "Untitled draft", relative age, tap to
   `continueDraft(id)`, X icon → "Discard this draft?" confirm → `discardDraft(id)`),
   entry to editor/settings. AppNav wires `drafts`/`continueDraft`/`discardDraft`
-  from the VM. See `docs/Persistence.md` (Autosave / draft ring).
+  from the VM. See `docs/contracts/Persistence.md` (Autosave / draft ring).
 
 Document title strip (`ui/screen/EditorDocumentTitle.kt`)
 - **Every** editor tab renders `EditorDocumentTitle` directly above its toolbar: the saved
@@ -60,7 +60,7 @@ Document title strip (`ui/screen/EditorDocumentTitle.kt`)
 - Runout station counts / TIR readings, wear spots / pits / Ø readings, undercuts, and the
   Consolidated tab's worn sections and per-job sliders are all part of the same
   full-session snapshot the dirty flag compares
-  (`ShaftViewModel.hasUnsavedChanges`, `docs/ShaftViewModel.md`), so editing on any tab
+  (`ShaftViewModel.hasUnsavedChanges`, `docs/contracts/ShaftViewModel.md`), so editing on any tab
   raises the asterisk exactly like a spec edit. Surfacing it on only one tab is the bug
   this replaced.
 - Each non-Schematic tab also carries a **Save** icon at the trailing edge of its toolbar
@@ -102,7 +102,7 @@ Unsaved-changes guard (`AppNav.kt`)
   (Save-then-close / Don't-save-close / Cancel-stay). Close itself is
   `newDocument()` + navigate home.
 - See `docs/archive/Autosave_Incident_2026-07-25.md` (root cause #4 / fix #4) and
-  `docs/ShaftViewModel.md` (`hasUnsavedWork()`) for the full-snapshot comparison this
+  `docs/contracts/ShaftViewModel.md` (`hasUnsavedWork()`) for the full-snapshot comparison this
   guard relies on.
 
 Do Nots

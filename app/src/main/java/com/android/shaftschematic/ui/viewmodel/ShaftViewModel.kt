@@ -713,7 +713,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ── Worn sections (consolidated runout/wear sheet) ─────────────────────────
     // Reference-only, same posture as pits/diaReadings: plain _wearRecord updates, no
     // geometry side effects. Shaft-space canonical (no component key → no orphans).
-    // See model/WornSection.kt and docs/RunoutSheet.md (Worn Sections).
+    // See model/WornSection.kt and docs/contracts/RunoutSheet.md (Worn Sections).
 
     /**
      * Add a designated worn section. [diaMm] values are the machinist's typed measurements,
@@ -897,7 +897,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     // The carousel renders resolved components in PHYSICAL order (auto-bodies interleaved at
     // their spans), so the ViewModel keeps no cross-type display order of its own. See
-    // `docs/ComponentsOrdering.md`.
+    // `docs/contracts/ComponentsOrdering.md`.
 
     // One-shot UI events (snackbars, etc.)
     private val _uiEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)

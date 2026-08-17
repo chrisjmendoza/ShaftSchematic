@@ -34,7 +34,7 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 | Runout drawing | ✅ RunoutPdfComposer, inline shaft preview, scrollable layout, collision-free alternating bubble layout via shared `geom/RunoutBubbleLayout.kt`; resolved-component geometry (2026-07-18) |
 | Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes; resolved-component geometry (2026-07-18). Reworked 2026-07-28: every liner gets a detail strip (with or without wear), blank write-in template (circle-one AFT/FWD anchors, edge-bar rails), profile-band space reclaim, uniform strip heights, shared positional liner titles. On-device verified through the layout round |
 | Liner wear areas | ✅ Built 2026-07-18 (all 4 phases + input spec: SET/liner-edge references, blocking span validation, PDF detail strips with dimension rails) — awaiting on-device verification. Build record in git history (`LinerWearAreas_BuildLog_2026-07-18.md`, pruned in `35ca87f`); design record in `docs/archive/LinerWearAreas_Proposal.md` |
-| Wear pits (X markers) | ✅ Built 2026-07-21 — small/large pit "X"s on bodies, tapers & liners (tap to open a segment; explicit Add X / Remove X / Clear all tools); drawn on the wear PDF profile + strips. Wear PDF now keeps the shaft profile always on top with a 2-column detail-strip grid. See CHANGELOG + "Wear Pits" in `app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md`. Awaiting on-device verification |
+| Wear pits (X markers) | ✅ Built 2026-07-21 — small/large pit "X"s on bodies, tapers & liners (tap to open a segment; explicit Add X / Remove X / Clear all tools); drawn on the wear PDF profile + strips. Wear PDF now keeps the shaft profile always on top with a 2-column detail-strip grid. See CHANGELOG + "Wear Pits" in `docs/contracts/RunoutSheet.md`. Awaiting on-device verification |
 | Body keyways | ✅ Built 2026-07-20 — taper-style keyway on bodies (open + floating), 180°-apart hidden-line toggle, auto-body promotion via the "Explicit body" checkbox (checkbox-only, reworked 2026-07-25); split/merge carry keeps keyway at absolute position |
 | Runout bubble editor | ✅ Built 2026-07-21 — tap a bubble to record TIR value + high-spot clock marker; open-topped keyway cutout in the bubble; drawn identically on canvas + PDF |
 | Spooned keyways | ✅ Built 2026-07-22 — draw-only enlarged bowl at the closed (LET) end of an open keyway; footer note "KW length to base of spoon" added 2026-07-24 |
@@ -47,7 +47,7 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 | Undercut drawing (tab + PDF) | ✅ Built 2026-07-30→08-03 — `UndercutRecord` in its own envelope field, shaft-space cuts (no orphans), settled open-notch convention (silhouette step + full-height section faces, mouth never lidded), liner-anchored detail strips, cut-depth exaggeration slider, user shading / line-art styles (`UndercutPdfComposer`) |
 | Consolidated Output tab | ✅ Built 2026-08-04→08-05 — `EditorTab.OUTPUT` / `OutputRoute.kt`: `ConsolidatedVariant` election (All three / Schematic + Runout / Schematic + Wear), worn-section editor (values inside the profile over knockout halos), "Shaft height" + liner-compression controls, **Export all** batch-write to a picked folder. The classic standalone runout sheet stays on the Runout tab |
 | Profile sizing (PDF) | ✅ Built 2026-08-04→08-06 — per-job value-based "Shaft height" slider (paper inches, hard cap 1.5"), proportional default sizing curve 4" → 0.5" / 8" → 1" with user-adjustable anchors (Settings → Drawing → "Default drawing size"), liner compression with height precedence, S-break pair minimum gap plus a user-set compression threshold (Settings → Drawing → "Body S-break", default 50%), even-spread runout bubbles |
-| Appearance settings | ✅ Built 2026-08-04 — System/Light/Dark + high contrast for Compose chrome; paper sheets pinned to fixed ink (`SheetInk.kt`), PDF untouched. See `app/src/main/java/com/android/shaftschematic/docs/Appearance.md` |
+| Appearance settings | ✅ Built 2026-08-04 — System/Light/Dark + high contrast for Compose chrome; paper sheets pinned to fixed ink (`SheetInk.kt`), PDF untouched. See `docs/contracts/Appearance.md` |
 | Help + Achievements screens | ✅ Built 2026-08-04 (`HelpRoute.kt`, `AchievementsRoute.kt`) |
 | Export hardening | ✅ Built 2026-08-05 — every SAF write goes through `util/PdfSafExport` (composer throw → valid error page, never a truncated file); the collision gate guards every export surface |
 | Insert-Between workflow | 🔲 Not implemented |
@@ -169,7 +169,7 @@ Waves 1–2 shipped (Wave 1 fixes 2026-07-11; Wave 2 deletion pass 2026-07-26, `
   default Light = historical look). Sheet canvases pinned to fixed ink (`SheetInk.kt`) so
   dark mode can't blank the drawings; PDF untouched (theme-independent per §8). Remaining:
   on-device visual pass of dark/high-contrast chrome — see
-  `app/src/main/java/com/android/shaftschematic/docs/Appearance.md`.
+  `docs/contracts/Appearance.md`.
 - [ ] **Wave 3:** shared PDF profile-drawing helper across the three composers + parity
   controls; ViewModel update-method generics
 - [ ] **Wave 4:** structural splits of the remaining oversized files
@@ -240,7 +240,7 @@ would make that body untappable at the slot. Decide before changing.
 - [ ] Inline "Add here" buttons between components in list
 - [x] Undo/redo architecture — session-scoped `SessionHistory`, done 2026-07-26; covers every
   drawing edit, 600 ms coalescing, 50-step cap. See
-  `app/src/main/java/com/android/shaftschematic/docs/ShaftViewModel.md`
+  `docs/contracts/ShaftViewModel.md`
 - [ ] Undo/redo follow-ups (future scope, not blocking v1.0): cross-session/persisted
   undo history (currently in-memory, cleared on process death and at every
   new/open/import boundary), and metadata (customer/vessel/job number/notes/shaft

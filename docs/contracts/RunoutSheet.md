@@ -53,7 +53,7 @@
   for field damage and dye-pen inspection marking.
 
 Both tabs share the same shell: outer `Column` with `systemBarsPadding()`, the shared
-`EditorDocumentTitle` strip (`docs/Navigation.md`), a toolbar `Row` (hamburger + title +
+`EditorDocumentTitle` strip (`docs/contracts/Navigation.md`), a toolbar `Row` (hamburger + title +
 Save), `HorizontalDivider`, then a vertically-scrollable inner `Column`.
 
 **RunoutRoute additionally pins its preview.** The live canvas + its one-line tap hint sit

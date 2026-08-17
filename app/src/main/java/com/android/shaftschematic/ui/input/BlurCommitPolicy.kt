@@ -5,7 +5,7 @@ package com.android.shaftschematic.ui.input
  * Layer: UI → Input
  *
  * The commit-on-blur decision for [NumericInputField], extracted so it can be unit-tested
- * without a Compose harness. See `docs/NumberField.md`.
+ * without a Compose harness. See `docs/contracts/NumberField.md`.
  */
 
 /**

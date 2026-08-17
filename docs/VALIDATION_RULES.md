@@ -193,7 +193,7 @@ Keyway (body-hosted feature — same rules referenced from the body's AFT/FWD en
 
 ### Taper Rate Behavior
 Superseded by the Auto/Manual rate-mode system — authoritative contract in the
-in-source `TaperRate.md` and `AddComponentDialogs.md`. In brief:
+`docs/contracts/TaperRate.md` and `docs/contracts/AddComponentDialogs.md`. In brief:
 - **Auto mode** (default): rate computed from Length + SET + LET when all are real
   positive values; sentinels (`-1`, `0`) never fabricate a rate.
 - **Manual mode**: required when one diameter is missing (derives the missing end;

@@ -301,7 +301,7 @@ fun composeRunoutPdf(
     val railGap = RUNOUT_RAIL_GAP_PT
     val dimText = Paint(text).apply { textSize = RUNOUT_DIM_TEXT_PT }
     // OAL brackets the SET-to-SET span; the label is ALWAYS the typed OAL (the number is
-    // sacred; see docs/OverallLength.md).
+    // sacred; see docs/contracts/OverallLength.md).
     val oalDimSpan = oalSpan(
         setPositions.aftSETxMm, setPositions.fwdSETxMm, unit,
         labelMm = spec.overallLengthMm.toDouble(),

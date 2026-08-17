@@ -1,5 +1,9 @@
 # Code Review — `feat/auto-taper-rate` (vs `main`)
 
+> **ARCHIVED — historical record, not current behavior.** All 10 findings were fixed
+> on-branch 2026-07-12 (see §Resolution below) and the branch merged. The taper-rate
+> contract lives in `docs/contracts/TaperRate.md`.
+
 **Date:** 2026-07-11
 **Scope:** 11 files, +491/−45 (commits `e910a4e`, `7c2f359`)
 **Method:** 8 independent finder passes (line-by-line, removed-behavior, cross-file, reuse, simplification, efficiency, altitude, CLAUDE.md conventions) followed by adversarial verification of each surviving candidate against the actual code on both sides of the diff.
@@ -25,7 +29,7 @@ All ten findings were fixed on this branch (uncommitted working tree, pending re
 | 9 | PDF `rate1toN` diverges from UI formatter | **Fixed** — delegates to `autoTaperRateText`, falls back to "—" |
 | 10 | mm→inch conversion in util | **Fixed** — `BORE_BREAK_MM = 152.4f`, `MM_PER_IN` import removed |
 
-Docs updated: `CHANGELOG.md` (fix entry), `docs/AddComponentDialogs.md` (v1.3 — Auto rate rules, parity note). Verified: `:app:compileDebugKotlin` and `:app:testDebugUnitTest` pass; `TaperRateAutoTest` 16/16.
+Docs updated: `CHANGELOG.md` (fix entry), `docs/contracts/AddComponentDialogs.md` (v1.3 — Auto rate rules, parity note). Verified: `:app:compileDebugKotlin` and `:app:testDebugUnitTest` pass; `TaperRateAutoTest` 16/16.
 
 ---
 
@@ -43,7 +47,7 @@ The snap branch calls `formatOneToN(n, decimals = 0, trimTrailingZeros = true)`.
 ### 2. Carousel taper card mutates the model just by being displayed
 **`app/src/main/java/com/android/shaftschematic/ui/screen/ComponentCarousel.kt:562`** — verified end-to-end
 
-The new `LaunchedEffect` calls `onUpdateTaper(...)` whenever `autoRate` is true and stored text ≠ computed text. Blank `taperRateText` is the model default (`Taper.kt:37`) and `autoRate` initializes to true on blank, so **every taper from a pre-feature save gets rewritten the moment its card composes** — swiping the carousel dirties the document (`_spec.update` → `hasUnsavedWork` → debounced autosave) with zero user edits. This violates the project's no-spurious-update invariant (CLAUDE.md numeric-commit rule; `docs/ShaftViewModel.md` "do not mutate from inside composables").
+The new `LaunchedEffect` calls `onUpdateTaper(...)` whenever `autoRate` is true and stored text ≠ computed text. Blank `taperRateText` is the model default (`Taper.kt:37`) and `autoRate` initializes to true on blank, so **every taper from a pre-feature save gets rewritten the moment its card composes** — swiping the carousel dirties the document (`_spec.update` → `hasUnsavedWork` → debounced autosave) with zero user edits. This violates the project's no-spurious-update invariant (CLAUDE.md numeric-commit rule; `docs/contracts/ShaftViewModel.md` "do not mutate from inside composables").
 
 Worse, for a legacy derive-pending taper (one diameter = 0), `autoTaperRate` treats 0 as a real diameter (`diaDelta = |0 − D| = D`), fabricates a rate like `1:3.000`, and `updateTaper` → `deriveTaperDiameters` (guard at `ShaftViewModel.kt:1945` doesn't protect the one-zero case) **overwrites the zero diameter with a fabricated value (up to 2×D) just from viewing the card**.
 
@@ -92,7 +96,7 @@ New `parseValid` accepts blank; with both diameters present `manualTaperRateBloc
 ## Medium
 
 ### 8. Dialog/card parity gap on the Auto one-end-missing condition (CLAUDE.md rule)
-The Add dialog blocks Auto mode with one end present and shows "Auto needs Length + SET + LET…" (`AddComponentDialogs.kt:563`); the carousel card has **no equivalent condition** — its Auto mode happily computes from a 0 diameter and commits it (see #2). CLAUDE.md / `docs/AddComponentDialogs.md`: parity is per-condition, both directions. Fixing #2/#3's guards should include surfacing the same message in the card.
+The Add dialog blocks Auto mode with one end present and shows "Auto needs Length + SET + LET…" (`AddComponentDialogs.kt:563`); the carousel card has **no equivalent condition** — its Auto mode happily computes from a 0 diameter and commits it (see #2). CLAUDE.md / `docs/contracts/AddComponentDialogs.md`: parity is per-condition, both directions. Fixing #2/#3's guards should include surfacing the same message in the card.
 
 ### 9. PDF footer re-implements exact-rate formatting and diverges from the UI
 **`app/src/main/java/com/android/shaftschematic/pdf/ShaftPdfComposer.kt:1123`** (`rate1toN`, used at :1043/:1068 when `taperRateText` is blank)

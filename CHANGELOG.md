@@ -491,7 +491,7 @@ valid fraction by every rule a parser can see, so the caller decides rather than
 though the guard alone already leaves dates (`12/25/2026`), decimals (`1.5/2`) and ratios
 (`1:12`) as plain text.
 
-See `docs/FractionTypography.md`.
+See `docs/contracts/FractionTypography.md`.
 
 ### feat: Settings → Drawing → "Fractions" picks the construction
 
@@ -1630,7 +1630,7 @@ their own buttons; Undercut deliberately stays off the picker. Filenames via
 `buildOutputFilename` (consolidated takes `_consolidated`, freeing `_runout` for the
 classic sheet). The schematic's export gate (components + no collisions) now guards this
 whole surface — the consolidated sheet embeds schematic dimensions. See
-`docs/PDF_EXPORT.md` §5.6 and `docs/RunoutSheet.md` (Consolidation step 4).
+`docs/PDF_EXPORT.md` §5.6 and `docs/contracts/RunoutSheet.md` (Consolidation step 4).
 
 ### feat(runout): "Shaft height" slider — exaggerate or shrink the drawn shaft, capped at 1.5"
 
@@ -1696,7 +1696,7 @@ implementation for both documents: taper Rate/L.E.T./S.E.T./Length/KW/Threads co
 work-order center with bold Side and keyway-clocking note, blank write-in rules),
 replacing the sheet's one-line header. TIR line sits directly above the footer. Rail
 count feeds the vertical budget before the diameter-scale solve. Wear marks, worn
-sections, in-profile Ø values, and bubbles are unchanged. See `docs/RunoutSheet.md`
+sections, in-profile Ø values, and bubbles are unchanged. See `docs/contracts/RunoutSheet.md`
 (Consolidation step 3).
 
 ---
@@ -1736,7 +1736,7 @@ canvas); (2) the PDF profile stretches vertically when in-profile values exist
 space above the bubbles; proportionality deliberately sacrificed per on-device decision,
 dia-to-dia ratios kept, value-less sheets stay true-scale); (3) liners draw unfilled on
 this sheet regardless of the `shadedLiners` pref, canvas and PDF, so knockouts blend into
-the paper. See `docs/RunoutSheet.md` (Legibility).
+the paper. See `docs/contracts/RunoutSheet.md` (Legibility).
 
 ---
 
@@ -1760,7 +1760,7 @@ on-device decision): the Wear page **stays as the authoring surface** for
 spots/pits/point-readings — its tab and PDF are unchanged — while the Runout sheet is the
 consolidated output featuring that wear information; `WEAR_TAB_ENABLED` (`EditorTab.kt`)
 remains as the one-line switch for a future full consolidation. See
-`docs/RunoutSheet.md` (Consolidation step 2).
+`docs/contracts/RunoutSheet.md` (Consolidation step 2).
 
 ---
 
@@ -1783,7 +1783,7 @@ in `geom/WornSectionMath.kt` (unit-tested). Editor: "Worn sections" list + add/e
 on the runout screen (S.E.T. chips, Distance/Length, up to 6 Ø fields). Blank drafts keep
 the boundaries (write-in areas) and drop values, same rule as write-in bubbles. Wear-doc
 strips/pits/callouts unchanged — their migration is the open consolidation question
-(`docs/RunoutSheet.md`, Worn Sections).
+(`docs/contracts/RunoutSheet.md`, Worn Sections).
 
 ---
 
@@ -1800,7 +1800,7 @@ driven by persisted `AppThemeMode`/`high_contrast` settings. Default is Light + 
 reproduces the historical bare-`MaterialTheme` look exactly — nothing changes until the
 user opts in. Dynamic (Material You) color dropped deliberately so the preview-color
 presets resolve predictably. Dark/high-contrast chrome still needs an on-device visual
-pass. New contract doc: `docs/Appearance.md`; plan: `docs/SettingsCustomization_PLAN.md`.
+pass. New contract doc: `docs/contracts/Appearance.md`; plan: `docs/SettingsCustomization_PLAN.md`.
 
 ### fix(theme): paper-sheet canvases pinned to fixed ink (`ui/theme/SheetInk.kt`)
 
@@ -1832,7 +1832,7 @@ static expandable topic cards in three sections — Getting Started, How-To Guid
 (~19 topics: units, carousel editing, bodies/auto-bodies, keyways, wear/runout/undercut
 recording, export/print/blank templates, backup, golden-rule and reference-feature
 explanations). No ViewModel; content restates current behavior and must be updated in the
-same change as a behavior change (noted in `docs/Navigation.md`).
+same change as a behavior change (noted in `docs/contracts/Navigation.md`).
 
 ---
 
@@ -1927,7 +1927,7 @@ end stays pinned where it was located, and the cut grows/shrinks AFT-ward. Exact
 under AFT-flavored references. The Length validator now checks the recomputed canonical
 (it previously validated the wrong resulting span under FWD references). Pinned in
 `UndercutMathTest`; "canonical never moves" clarified (reference switching only) in
-`CLAUDE.md` + `docs/UndercutDrawing.md`.
+`CLAUDE.md` + `docs/contracts/UndercutDrawing.md`.
 
 ---
 
@@ -1944,7 +1944,7 @@ SET), and cuts stay located by the strip's chain rail, measured from the liner's
 (11.5" in this example). Bare-shaft strips keep the cut-proximity anchor
 (`undercutAnchorFor`) — there is no liner to reference. A liner strip whose cuts all clamp
 away now also prints its anchor, not just the bare name. SVG preview mirrors the same
-branch; `docs/UndercutDrawing.md` updated.
+branch; `docs/contracts/UndercutDrawing.md` updated.
 
 ---
 
@@ -2098,7 +2098,7 @@ cut in another liner owned the sheet's exaggeration reference.
   on sheets that also carry a much deeper cut; deepest-draws-at-slider and
   deeper-draws-deeper are unchanged.
 
-Docs: `docs/UndercutDrawing.md`, `docs/archive/UndercutDrawing_PLAN.md`.
+Docs: `docs/contracts/UndercutDrawing.md`, `docs/archive/UndercutDrawing_PLAN.md`.
 
 ---
 
@@ -2125,7 +2125,7 @@ the void fill).
 - Fix folded in: a Ø at/above the local surface degenerates to the surface instead of
   drawing outside the shaft.
 
-Docs: `docs/UndercutDrawing.md`, `CLAUDE.md` invariant block, `docs/archive/UndercutDrawing_PLAN.md`.
+Docs: `docs/contracts/UndercutDrawing.md`, `CLAUDE.md` invariant block, `docs/archive/UndercutDrawing_PLAN.md`.
 
 ---
 
@@ -2157,7 +2157,7 @@ off a cut did nothing, and cuts could not be removed without opening the overlay
 - **Recorded undercuts list** on the route: one row per cut (reference-aware distance,
   length, Ø, stale warning), tap to zoom, per-row delete.
 
-Docs: `docs/UndercutDrawing.md` (contract), `docs/archive/UndercutDrawing_PLAN.md` (status),
+Docs: `docs/contracts/UndercutDrawing.md` (contract), `docs/archive/UndercutDrawing_PLAN.md` (status),
 `CLAUDE.md` invariant block.
 
 ---
@@ -2410,7 +2410,7 @@ smaller than the tolerance, which is exactly the "remove the fractional tail" ca
 - Tap-to-add snapping (`SnapUtils.kt`) is unchanged — snapping belongs to coarse
   gestures, not typed numbers. A sub-mm gap left next to a resized component is real,
   visible, and auto-filled; a silent revert is neither.
-- Invariant pinned in `CLAUDE.md` + `docs/ShaftScreen.md` (v0.12): do not reintroduce
+- Invariant pinned in `CLAUDE.md` + `docs/contracts/ShaftScreen.md` (v0.12): do not reintroduce
   snapping into typed-commit update paths — the companion to the 2026-06-19 removal of
   the `snapForwardFrom` cascade from VM updates.
 
@@ -2548,7 +2548,7 @@ had already deleted the entire old delete-undo subsystem). Full JVM suite green.
 - **ViewModel**: deleted dead `newShaft()`, the write-only `didRestoreAutosave`
   flag/getter/consumer, the caller-less `unlockAchievement(Definition)` overload, the
   dead-end `updateCouplerBoltSlotLabel` (its 5-hop UI plumbing chain was never
-  invoked; the slot card has no title editor — noted in `docs/CouplerBoltSlot.md`),
+  invoked; the slot card has no title editor — noted in `docs/contracts/CouplerBoltSlot.md`),
   and `updateTaper`'s no-op self-copies.
 - **Screens**: dead callback plumbing removed end-to-end (`onSetUnit`, `onToggleGrid`,
   `unitLocked` param, `onMoveComponentUp/Down` screen params, `onNavigateHome` in
@@ -2561,7 +2561,7 @@ had already deleted the entire old delete-undo subsystem). Full JVM suite green.
   `computePdfPtPerMmFitAxes`, `fmtLen`, `hasAftTaper`/`hasFwdTaper`, `textSmall`;
   `drawRunoutHeader`'s unused `spec`/`unit`/`oalMm` params + stale "OAL in header" KDoc.
 - **Model/util**: `AddDefaultsConfig` reduced to the inch presets + live `BODY_DIA_MM`
-  (ten unit-aware helpers, `*_MM` twins, `TAPER_RATIO` deleted; `docs/Defaults.md`
+  (ten unit-aware helpers, `*_MM` twins, `TAPER_RATIO` deleted; `docs/contracts/Defaults.md`
   v1.3), `Threads.hasPitch` (test-only; 3 tests removed), `Liner.startMmPhysical`
   getter (serialization unaffected — `@SerialName` carries the JSON key), dead elvis in
   `Threads.normalized()`, `filterDecimalPermissive`, deprecated
@@ -2905,7 +2905,7 @@ validation/derivation — `autoTaperRate`, `manualTaperRateWarning`,
 `manualTaperRateBlockingMessage`'s derive-prompt, and `ShaftViewModel.deriveTaperDiameters`
 — is already inert at `lengthMm <= 0`; pure-syntax checks like the ambiguous bare `"1"`
 correctly still fire regardless of length. New pinning tests in `TaperRateAutoTest.kt` and
-`TaperRateTest.kt`. Docs: `docs/FreeToEndBadge.md` (v1.3), `docs/VALIDATION_RULES.md` §3.3,
+`TaperRateTest.kt`. Docs: `docs/contracts/FreeToEndBadge.md` (v1.3), `docs/VALIDATION_RULES.md` §3.3,
 `TODO.md` §2.1.
 
 ### docs: refresh TODO.md — sync shipped work, bump "Last updated"
@@ -2935,7 +2935,7 @@ kept**, so a TIR reading of `.010` stays `.010` instead of shrinking to `.01`. P
 inches used 4 dp and both units stripped trailing zeros, which made bubble values read at
 inconsistent widths. The leading-zero drop (`0.010 → .010`) and thousandths resolution match
 how a machinist hand-writes a TIR reading. Shared by the bubble dialog, on-screen preview, and
-PDF composer, so every surface renders identically. Docs: `docs/RunoutSheet.md`.
+PDF composer, so every surface renders identically. Docs: `docs/contracts/RunoutSheet.md`.
 
 ### feat: dimension values now seated in a break in the dimension line
 
@@ -3047,7 +3047,7 @@ portrait on dismiss), matching the schematic `PdfPreviewScreen` — turn the dev
 Digitizes the hand-drawn pit / dye-penetrant "X": tap a body, taper, or liner on the Wear tab
 to open it enlarged, then mark pits as small or large X's. The X's print at true position on the
 wear-document PDF. Fourth reference-only feature (like coupler bolt slots / wear spots / runout
-readings). See the "Wear Pits" section of `docs/RunoutSheet.md`.
+readings). See the "Wear Pits" section of `docs/contracts/RunoutSheet.md`.
 
 - **Model/persistence:** `WearPit`/`PitSize` in `WearRecord.pits` (`model/WearSpot.kt`) — stored in
   the **existing** `wear_record` envelope field, so no new autosave/snapshot/import plumbing.
@@ -3102,7 +3102,7 @@ Digitizes the hand-filled runout bubble. Tapping a bubble on the Runout tab open
 editor (`ui/screen/RunoutBubbleDialog.kt`) to record that station's TIR reading and high-spot
 direction; both print on the preview and PDF export. Both are optional — a sheet still exports
 blank. See `docs/archive/RunoutBubbleEditor_PLAN.md` and the "Runout Bubble Editor" section of
-`docs/RunoutSheet.md`.
+`docs/contracts/RunoutSheet.md`.
 
 - **Model/persistence:** `model/RunoutReading.kt` (`RunoutReading`/`RunoutReadings`) — reference-only
   (never affects OAL/coverage/collision/Free-to-End, like coupler bolt slots / wear spots). Additive
@@ -3466,7 +3466,7 @@ Fixes every live bug found by the deep audit (`docs/deep_audit_2026-07.md`, Part
 
 **PDF output**
 - **Long text can't overrun footer columns** — footer lines (all three columns) and the runout/wear headers are now ellipsized to their column width via `ellipsizeToWidth()`. (B8)
-- **One OAL number across all three documents** — the runout sheet and wear document now print the *typed* OAL as the label (arrows still bracket the drawn SET-to-SET span), matching the main schematic's "OAL label never changes" rule from `docs/OverallLength.md`. Previously they printed the SET-to-SET distance labeled "OAL". (B12; `RunoutSheet.md` updated.) **Review note:** this supersedes the older RunoutSheet.md convention — revert `RunoutPdfComposer`/`WearPdfComposer` call sites if SET-to-SET was intended.
+- **One OAL number across all three documents** — the runout sheet and wear document now print the *typed* OAL as the label (arrows still bracket the drawn SET-to-SET span), matching the main schematic's "OAL label never changes" rule from `docs/contracts/OverallLength.md`. Previously they printed the SET-to-SET distance labeled "OAL". (B12; `RunoutSheet.md` updated.) **Review note:** this supersedes the older RunoutSheet.md convention — revert `RunoutPdfComposer`/`WearPdfComposer` call sites if SET-to-SET was intended.
 - **Metric footers print pitch in mm** — thread callouts now show `2 mm pitch` in metric mode instead of TPI (TPI kept for inch mode). (B13; `FooterUnitsTest` strengthened.)
 - **Slot cutouts use the drawn surface radius** — `drawCouplerBoltSlots` now takes the same body list the composer actually drew (resolved bodies incl. auto-bodies), so a slot over an auto-body region no longer falls back to the global max OD. (B9)
 - **Wear OAL line anchors to the true outline top** — uses `maxOuterDiaMm()` (liners/tapers included) instead of body diameters only. (B10)
@@ -3506,9 +3506,9 @@ A coupler bolt slot is a **pure reference feature**: it never affects overall le
 Added project-level documentation to prevent future regressions where controls present in carousel edit cards get accidentally dropped from their corresponding Add dialogs.
 
 - **`CLAUDE.md`** (project root) — Claude Code loads this at the start of every session. Lists critical do-not-remove invariants: dialog/card parity, numeric commit guard, auto-body promotion, Free-to-End badge suppression, and commit policy.
-- **`docs/AddComponentDialogs.md`** — New contract doc. Tables every field per dialog, states the parity rule explicitly, and includes a "Do Nots" section referencing the thread AFT/FWD regression as the canonical failure mode.
-- **`docs/ShaftScreen.md`** — Updated to v0.8 with changelog entries for all 2026-06-23 fixes.
-- **`docs/README.md`** — Added `AddComponentDialogs.md` to the index.
+- **`docs/contracts/AddComponentDialogs.md`** — New contract doc. Tables every field per dialog, states the parity rule explicitly, and includes a "Do Nots" section referencing the thread AFT/FWD regression as the canonical failure mode.
+- **`docs/contracts/ShaftScreen.md`** — Updated to v0.8 with changelog entries for all 2026-06-23 fixes.
+- **`docs/contracts/INDEX.md`** — Added `AddComponentDialogs.md` to the index.
 
 ### fix: thread AFT/FWD end selector missing from Add Thread dialog
 
@@ -3558,7 +3558,7 @@ The Free-to-End badge in Manual OAL mode was showing a large "free" value even w
 **Fix**: `FreeToEndBadge` now returns early (hides) when there are no precision components (tapers, non-excluded threads, liners) **and** the shaft is not oversized. When only bodies exist, auto-bodies always cover the remainder up to OAL, so the badge value would always be misleading. The red/oversized warning still fires regardless, ensuring users are still told when a body exceeds the OAL.
 
 **`ui/screen/ShaftScreen.kt`** — added early-return guard in `FreeToEndBadge`.  
-**`docs/FreeToEndBadge.md`** — invariant documented.
+**`docs/contracts/FreeToEndBadge.md`** — invariant documented.
 
 ### feat: Open page — search, sort by name/date, and date column in list
 
@@ -3827,7 +3827,7 @@ The taper carousel card now shows a "Measure From: AFT / FWD" chip row (matching
 **`ui/screen/ComponentCarousel.kt`** — AFT/FWD toggle + start field adapts label and converts value.  
 **`ui/screen/ShaftRoute.kt`** — wires `onUpdateTaperReference` callback.  
 **`ui/viewmodel/ShaftViewModel.kt`** — `updateTaperAuthoredReference()`.  
-**`docs/Model_Conventions.md`** — updated.
+**`docs/contracts/Model_Conventions.md`** — updated.
 
 ---
 

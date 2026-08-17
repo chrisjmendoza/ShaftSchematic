@@ -1,6 +1,6 @@
 # ShaftSchematic Roadmap
 Version: v0.5.x  
-Last updated: 2026-08-05
+Last updated: 2026-08-16
 
 This roadmap defines the grounded, realistic, and approved feature trajectory for ShaftSchematic.
 
@@ -27,12 +27,52 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 
 **In progress / next up:**
 
-- [ ] **Taper validation wiring** — rate derivation errors shown inline on fields; slope validation when `lengthMm > 0`
-- [ ] **Liner shoulders** — aft/fwd shoulder length fields; stepped shoulder rendering in preview and PDF
-- [ ] **Fiberglass body support** — model flag, dark fill/hatch, label annotation
-- [ ] **Preview panel + event wiring extraction** — remaining ShaftScreen refactor work (lower priority)
+- [ ] **Liner shoulders with a radius selector** — aft/fwd shoulder length fields and stepped
+  shoulder rendering in preview and PDF, plus a fillet radius at each shoulder edge (a real
+  machining instruction, not a drawing nicety). Open: per-end or per-liner, standard-radius
+  list or free entry, and how it prints. Arc math belongs in `geom/` — draw-both-sites
+- [ ] **Fiberglass body support** — per-body flag with the usual dialog/card parity; styling
+  (dark fill vs hatch vs label) is **undecided and blocked on a sketch or photographed sheet**,
+  the same way the "indicated wear" squiggle convention is
+- [ ] **Additional output fonts** — a typeface choice for the printed sheets. Safe by
+  construction (every metric is measured live from the `Paint`), but check the fraction stack
+  against a condensed or slab face before shipping one
+- [ ] **Runout bubble leader clarity** — the 2026-08-16 pointer rework (station-fidelity brake,
+  center-aimed leaders, dogleg reroute) answered the reported case; the open half is the
+  requested **tap-to-place bubble with a leader line**. Decide the two together rather than
+  shipping two conventions
+- [ ] **Drawing preset profiles** — named, **app-wide** sets of drawing prefs plus a
+  section-wide "restore Drawing defaults". Per-job `RunoutConfig` (Shaft height, liner
+  compression) deliberately stays per-document: a *look* is app-wide, a *fit* is per-job
+- [ ] **Multi-shaft per job number** — plan in `docs/MultiShaftJob_Plan_2026-07-26.md`
+  (derived job grouping over single-shaft files; no format change). Awaiting answers to its
+  6 product questions
+- [ ] **Taper validation wiring** — rate derivation errors shown inline on fields; slope
+  validation when `lengthMm > 0`
+- [ ] **Controller owns all VM-side intents** — the remaining ShaftScreen refactor work
+  (carousel, preview panel and event wiring are already extracted); design work, not a pure
+  move, and lower priority
 
-**Delivered in v0.5.x so far:**
+**Delivered in v0.5.x so far** (newest first):
+- Wear document round — every liner gets a detail strip and tapers/bodies can be elected onto
+  one; strips pack into as many rows as the page can pay for and share one vertical diameter
+  scale, so a bigger component draws bigger; facing S-breaks spread apart instead of weaving;
+  worn-profile trace through the measured diameters with a user-set depth exaggeration; end
+  styles, positional titles, and a taper–liner join slider
+- Runout bubble pointers — the even spread is braked by station fidelity, straight leaders aim
+  at the circle center, and a leader that would graze a foreign circle reroutes to a dogleg
+- Fraction typography — one parser + one renderer behind every drawn fraction, set as a real
+  stacked or diagonal fraction (Settings → Drawing → "Fractions"), never a Unicode vulgar glyph
+- Templates + per-component Ø visibility — save-as-template and a browser bucketed by liner
+  size/count (geometry only, metadata scrubbed); "Show Ø on drawing" per body/liner and for the
+  bare shaft; runout stations derived per component at one per 20"; bubble counts editable from
+  the Consolidated tab
+- Coupling face end view — optional outward-keyseat end view on the runout sheets, per-job
+  toggle (default off), with its own pilot runout reading
+- Live preview tuning — Line thickness, Body S-break, Shaft height and Liner compression
+  re-render the open preview under a dragging finger (draft raster, commit on release), with the
+  sheet shown as a fit-width ink-band page strip so the control never covers the page
+- Dimension arrow size (Small/Medium/Large) and wear-depth exaggeration as user settings
 - Undercut Drawing — its own editor tab and PDF (`UndercutPdfComposer`) for
   machined-below-surface cuts: shaft-space spans (a cut may cross a liner edge), the settled
   open-notch convention (silhouette step + full-height section faces, mouth never lidded),

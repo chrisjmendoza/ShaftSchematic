@@ -122,7 +122,7 @@ import kotlin.math.min
  * UndercutDetail
  *
  * A full-screen "zoom in" overlay on ONE undercut **detail strip** — the drawing the shop
- * actually reads (see `docs/UndercutDrawing.md`). Where the wear overlay breaks out one
+ * actually reads (see `docs/contracts/UndercutDrawing.md`). Where the wear overlay breaks out one
  * *component*, this one breaks out an axial *strip*, because undercuts are not bound to
  * components. `geom/UndercutMath.kt`'s [UndercutStrip] supplies the two kinds:
  * - [UndercutStrip.LinerStrip] — the cuts live in a liner (or the machinist zoomed an
@@ -148,7 +148,7 @@ import kotlin.math.min
  *   scrolling between the drawing and the numbers).
  *
  * **Draft editing.** A card edits a LOCAL [UndercutDraft], not the record: field commits (blur,
- * per `docs/NumberField.md`), the "Measure From" chips, and the note all land in the draft, and
+ * per `docs/contracts/NumberField.md`), the "Measure From" chips, and the note all land in the draft, and
  * the canvas previews the SELECTED card's draft in place of its stored notch. Nothing reaches
  * `UndercutRecord` until the draft is **confirmed**, which requires it to differ from stored AND
  * to clear both blocking checks — [undercutSpanIssue] (shaft bounds) and [undercutOverlapIssue]
@@ -1207,7 +1207,7 @@ private fun undercutAddRangeOf(
  * report). [onDelete] is the card's one immediate record action, and is null on the add flow's
  * pending card (nothing recorded to delete).
  *
- * Numeric fields keep the commit-on-blur contract (`docs/NumberField.md`); the commit lands in the
+ * Numeric fields keep the commit-on-blur contract (`docs/contracts/NumberField.md`); the commit lands in the
  * draft rather than the ViewModel. The Distance/Length validators still block a span that leaves
  * the shaft — a value that could never be confirmed has no business reaching the draft — while the
  * adjacency check is confirm-time only, since a cut is legitimately dragged past a neighbour by

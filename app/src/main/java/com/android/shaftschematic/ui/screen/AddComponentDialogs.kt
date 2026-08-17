@@ -504,7 +504,7 @@ fun AddCouplerBoltSlotDialog(
  * Thread — Start, Length, Major Ø, TPI (always TPI; caller converts to pitch mm)
  * ──────────────────────────────────────────────────────────────────────────── */
 
-// CONTRACT (AddComponentDialogs.md): dialog/card parity.
+// CONTRACT (docs/contracts/AddComponentDialogs.md): dialog/card parity.
 // When countInOal=false, show "Thread end: AFT | FWD" chips and hide the Start field —
 // mirroring ComponentCarousel.kt ResolvedThread !includeInOal block.
 // Do not remove the AFT/FWD branch; isAftEnd must be passed through to addThreadAt().

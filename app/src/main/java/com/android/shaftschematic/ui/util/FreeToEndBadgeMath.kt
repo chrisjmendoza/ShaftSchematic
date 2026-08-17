@@ -26,7 +26,7 @@ import com.android.shaftschematic.model.lastOccupiedEndMm
  * Positive → free room remains; `0f` → exactly filled (or the OAL-zero placeholder);
  * negative → oversized.
  *
- * See docs/FreeToEndBadge.md.
+ * See docs/contracts/FreeToEndBadge.md.
  */
 fun freeToEndSignedMm(spec: ShaftSpec): Float {
     val effectiveOalMm =

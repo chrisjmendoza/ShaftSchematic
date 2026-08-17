@@ -386,4 +386,4 @@ This document defines all geometry data structures in the system.
 See also:
 - docs/COMPONENT_CONTRACT.md (normative component vs feature rules)
 - docs/UI_CONTRACT.md (UI, rendering, and responsibility boundaries)
-- app/src/main/java/com/android/shaftschematic/docs/Rendering.md (in-source preview rendering contract)
+- docs/contracts/Rendering.md (preview rendering contract)

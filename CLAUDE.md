@@ -6,7 +6,7 @@ All model values are **canonical millimeters (mm)**. Unit conversion (mm ↔ in)
 only at the UI edge for display and input — never in the model, ViewModel, or renderer.
 
 ## Docs
-Detailed contracts live in `app/src/main/java/com/android/shaftschematic/docs/`.
+Detailed contracts live in `docs/contracts/`.
 Read the relevant doc before editing a subsystem. Key files:
 - `ShaftScreen.md` — overall screen contract, commit-on-blur rule, unit edge rule
 - `AddComponentDialogs.md` — add-dialog parity rules (mirror carousel cards)
@@ -63,7 +63,7 @@ but they **never** affect overall length (`coverageEndMm` ignores them), **never
 bodies, and **never** collide with other components (`collisionGroup() → null`). Do not
 add them to `coverageEndMm`, `ensureOverall`, body-split/merge, or overlap validation.
 They are resolved as `ResolvedCouplerBoltSlot` *after* body resolution so they stay out
-of auto-body/subtraction geometry. See `CouplerBoltSlot.md`.
+of auto-body/subtraction geometry. See `docs/contracts/CouplerBoltSlot.md`.
 
 ### Wear pits are reference features
 Wear pits (`WearRecord.pits` — a `WearPit` "X" marker per pit/dye-failure, small or large) are
@@ -80,7 +80,7 @@ be drawn **identically** (same crossed-line construction, same small:large ratio
 `ComponentWearDetailOverlay`'s `drawPitX` (canvas), `WearPdfComposer`'s `drawWearPitsOnProfile` +
 strip pits (PDF), and the consolidated runout sheet (canvas + PDF), which reuses
 `drawWearPitsOnProfile` itself (per-surface `smallHalf`). Pure sizing/hit-test/clamp math lives in `geom/WearPitMath.kt` (shared, no
-`pdf → ui` dep). See `RunoutSheet.md` (Wear Pits).
+`pdf → ui` dep). See `docs/contracts/RunoutSheet.md` (Wear Pits).
 
 ### Wear diameter readings are reference features
 Measured-Ø readings (`WearRecord.diaReadings` — a `WearDiaReading` per measured station,
@@ -110,7 +110,7 @@ record's deepest liner reading, never shallower than true scale). That exaggerat
 default): per job via `WearRecord.traceDepthFrac` (additive/optional, `null` = follow the
 Settings → Drawing "Wear depth exaggeration" default, `PdfPrefs.wearTraceDepthFrac`), resolved
 ONCE by `effectiveWearTraceDepthFrac` and handed to both draw sites from the same call site.
-See `RunoutSheet.md` (Wear Diameter
+See `docs/contracts/RunoutSheet.md` (Wear Diameter
 Measurements) and `docs/archive/WearDiaMeasurements_PLAN.md`.
 
 ### Worn sections are reference features
@@ -232,7 +232,7 @@ Wear, via `includeBubbles`/`includeWearInfo`), the worn-section editor, the "Sha
 height" slider, and **Export all** (checked documents batch-written to a picked folder).
 Every SAF export goes through the hardened `util/PdfSafExport.writeShaftPdfToUri`
 (composer throw → valid error page, never a truncated file) and the collision export
-gate guards every export surface. See `RunoutSheet.md` (Consolidation step 5) and
+gate guards every export surface. See `docs/contracts/RunoutSheet.md` (Consolidation step 5) and
 `docs/PDF_EXPORT.md` §5.6–5.7.
 
 ### Undercuts are reference features
@@ -281,7 +281,7 @@ fills are additionally user-styled via `util/UndercutStyle.kt` (shade color/inte
 line-art mode; the Standard/Grey default reproduces the historical fixed shades, and the
 section core stays half the liner alpha at every intensity — `UndercutStyleTest`) — still
 fixed inks, never theme roles, and never leaking into the PDF composers. See
-`Appearance.md`.
+`docs/contracts/Appearance.md`.
 
 ### Runout stations are per COMPONENT, never per drawn run
 Station counts are length-driven — one per `RUNOUT_STATION_INTERVAL_MM` (20") via
@@ -319,7 +319,7 @@ and the keyway cutout must be drawn **identically in both bubble draw sites** �
 Pure clock/hit-test math lives in `geom/RunoutReadingMath.kt` (shared, no `pdf → ui` dep);
 value formatting in `util/RunoutValueFormat.kt`. One reserved key, `COUPLING_PILOT_COMPONENT_ID`
 (`"coupling_pilot"`, station 0 — the coupling face's pilot runout), deliberately matches no
-resolved component and must **never** be pruned as an orphan. See `RunoutSheet.md` (Runout Bubble
+resolved component and must **never** be pruned as an orphan. See `docs/contracts/RunoutSheet.md` (Runout Bubble
 Editor, Coupling Face) and `docs/archive/RunoutBubbleEditor_PLAN.md`.
 
 ### Spooned keyways are a draw-only variant
@@ -449,7 +449,7 @@ process-wide `FractionTypography.active` mirror, whose ONLY writer is
 `SettingsStore.updatePdfPrefs` (the `SettingsStore.pdfPrefs` pattern — threading a uniform
 drawing decision through every composer's private draw functions costs more than it buys). That
 mirror is not snapshot state, so every preview's render-inputs record must carry `fractionStyle`
-as a **re-render key** or that tab keeps drawing the old style. See `FractionTypography.md`.
+as a **re-render key** or that tab keeps drawing the old style. See `docs/contracts/FractionTypography.md`.
 
 ### Golden rule: user inputs are SACRED
 A value the user typed into a component field is kept **exactly as entered** — no system
@@ -466,12 +466,12 @@ FWD-referenced taper by less than the tolerance snapped its start back to the ol
 boundary, undoing the edit entirely. Snapping is for coarse gestures only (tap-to-add,
 `ui/viewmodel/SnapUtils.kt`). Same posture as the 2026-06-19 removal of the
 `snapForwardFrom` cascade from ViewModel updates: positions are user-authored; nothing
-mutates them except a direct user action. See `ShaftScreen.md`.
+mutates them except a direct user action. See `docs/contracts/ShaftScreen.md`.
 
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus
 was gained. A tap-and-leave with no edit must be a no-op. This prevents spurious
-auto-body promotion and unnecessary ViewModel updates. See `NumberField.md`.
+auto-body promotion and unnecessary ViewModel updates. See `docs/contracts/NumberField.md`.
 
 A commit also requires a **focus baseline**: `shouldCommitOnBlur`
 (`ui/input/BlurCommitPolicy.kt`) returns false when the captured-on-focus text is null,
@@ -525,7 +525,7 @@ rejoins flanking fragments but **never merges across a component still occupying
 ### Free-to-End badge suppression
 The badge is hidden when there are no precision components (tapers, non-excluded threads,
 liners) and the shaft is not oversized. With only bodies, auto-bodies visually fill the
-remainder, so the badge value would always mislead. See `FreeToEndBadge.md`.
+remainder, so the badge value would always mislead. See `docs/contracts/FreeToEndBadge.md`.
 
 ### OAL field
 The OAL field calls `onSetOverallLengthMm` on **every keystroke** in manual mode (not

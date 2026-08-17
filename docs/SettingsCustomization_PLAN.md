@@ -42,7 +42,7 @@ Defaults preserve today's exact look/behavior; everything is opt-in.
 The shipped line-art mode is screen-only. Extending it to `UndercutPdfComposer` collides
 with a settled product decision: detail strips **always** shade their liner (not gated on
 `shadedLiners`) because the white notch voids need a shade to read against
-(`docs/UndercutDrawing.md`). A printed line-art drawing would rely on the section faces +
+(`docs/contracts/UndercutDrawing.md`). A printed line-art drawing would rely on the section faces +
 floor lines alone. Options:
 - a) PDF toggle "Line art undercut drawing" that overrides the always-shade rule (accepting
   the reduced readability), or

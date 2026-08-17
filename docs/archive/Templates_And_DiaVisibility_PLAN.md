@@ -377,7 +377,7 @@ also a perfectly good answer.
 **New**
 `io/TemplateStorage.kt` · `template/TemplateBuckets.kt` (pure) ·
 `ui/screen/TemplatesRoute.kt` · `ui/drawing/compose/ShaftThumbnail.kt` ·
-`assets/templates/*.shaft` · `docs/Templates.md` (contract, + README index line)
+`assets/templates/*.shaft` · `docs/contracts/Templates.md` (contract, + README index line)
 
 **Modified**
 `ui/screen/StartScreen.kt` (entry button) · `ui/nav/AppNav.kt` (route + guarded load) ·

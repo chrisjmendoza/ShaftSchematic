@@ -8,7 +8,7 @@ Material3, targeting Android 8.0+ (API 28), Target SDK 36.
 
 Authoritative sources, in order:
 1. `CLAUDE.md` (repo root) — project conventions and critical invariants
-2. `app/src/main/java/com/android/shaftschematic/docs/` — per-subsystem contract docs
+2. `docs/contracts/` — per-subsystem contract docs
    (index: `README.md` in that folder). Read the relevant doc before editing a subsystem.
 3. `CONTRIBUTING.md` — architecture overview and coding guidelines
 
@@ -71,7 +71,7 @@ Match package declaration to folder structure exactly.
 - **Commit-on-blur** for numeric inputs: no VM mutation while typing;
   `ui/input/NumericInputField.kt` implements this, and a tap-and-leave with no edit
   must be a no-op (critical invariant — see
-  `app/src/main/java/com/android/shaftschematic/docs/NumberField.md`)
+  `docs/contracts/NumberField.md`)
 - Exception: the OAL field commits on every keystroke in manual mode (intentional)
 
 ## Persistence

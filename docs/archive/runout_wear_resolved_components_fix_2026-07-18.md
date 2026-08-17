@@ -1,5 +1,9 @@
 # Runout / Wear documents drew from raw spec instead of resolved components
 
+> **ARCHIVED — historical record, not current behavior.** Fixed 2026-07-18; both
+> documents draw from resolved components. The contract folded into
+> `docs/contracts/RunoutSheet.md`.
+
 **Date:** 2026-07-18
 **Branch:** `fix/runout-wear-resolved-components` (off `feat/auto-taper-rate`)
 **Reported symptom:** On the NorthSound Marine example shaft, the schematic and part
@@ -88,6 +92,6 @@ OAL window / SET-position math is untouched — it never depended on bodies.
 
 ## Docs
 
-`app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md` — the "Pass 1 —
+`docs/contracts/RunoutSheet.md` — the "Pass 1 —
 Collect" section should eventually note that components are the **resolved** list, not
 raw spec (updated in this change).

@@ -1,4 +1,7 @@
 # ShaftSchematic — Codebase Audit
+
+> **ARCHIVED — historical record, not current behavior.** All 9 findings were fixed by
+> 2026-05-30. Current behavior lives in `docs/contracts/` and `CLAUDE.md`.
 **Date:** 2026-05-27  
 **Auditor:** Claude (external consultant pass)  
 **Branch audited:** `fix/pdf-dimension-measurements`  

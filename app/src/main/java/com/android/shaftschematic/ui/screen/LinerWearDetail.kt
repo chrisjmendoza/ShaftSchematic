@@ -1093,7 +1093,7 @@ private fun WearSpotCard(
             // [WearSpot.minDiaMm] passes through commits verbatim for older files.
 
             // Notes — plain text, same tap-and-leave no-op discipline as the numeric fields
-            // above (NumberField.md): capture on focus, commit on blur only if changed.
+            // above (docs/contracts/NumberField.md): capture on focus, commit on blur only if changed.
             var noteDraft by remember(spot.id, spot.note) { mutableStateOf(spot.note) }
             var noteFocusText by remember(spot.id, spot.note) { mutableStateOf<String?>(null) }
             OutlinedTextField(
@@ -1153,7 +1153,7 @@ internal fun WearChip(
 /**
  * Thin wrapper around [NumericInputField] mirroring `ComponentCarousel`'s private `CommitNum`.
  * Shared with the undercut overlay's cards so every reference-document field carries the same
- * commit-on-blur + blocking-validator contract (`docs/NumberField.md`).
+ * commit-on-blur + blocking-validator contract (`docs/contracts/NumberField.md`).
  */
 @Composable
 internal fun WearNum(

@@ -1348,7 +1348,7 @@ internal fun ComponentPagerCard(
  *
  * Deliberately card-only, with no Add-dialog counterpart: like the coupler slot's
  * "Show dimension rail" it is a post-hoc display choice made after seeing a printed sheet,
- * not a property of the component being added. See `docs/AddComponentDialogs.md`.
+ * not a property of the component being added. See `docs/contracts/AddComponentDialogs.md`.
  */
 @Composable
 private fun ShowDiaToggleRow(

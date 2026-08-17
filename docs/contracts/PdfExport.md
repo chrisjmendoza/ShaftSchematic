@@ -70,7 +70,7 @@ schematic Tune sheet this section otherwise describes.
   millimetres snap to 10 mm. It reaches only `collectWearStripWindows`, where it decides how close
   a taper must be to its nearest liner to SHARE that liner's detail strip — within the setting they
   join and the run between them draws true, past it the taper takes a strip of its own; every other
-  document ignores it. See `docs/RunoutSheet.md` ("Strip windows").
+  document ignores it. See `docs/contracts/RunoutSheet.md` ("Strip windows").
 - **Fractions** (`fractionStyle`): three chips — Stacked / **Diagonal (default)** / Plain — in
   Settings → Drawing → "Fractions" and in both PDF Options sheets (one shared
   `FractionStyleChips`, one app-wide pref). **Ungated in the sheets**, unlike the arrowhead
@@ -80,7 +80,7 @@ schematic Tune sheet this section otherwise describes.
   `util/FractionTextRenderer.kt`. The style reaches the ink through the process-wide
   `FractionTypography.active` mirror rather than a composer argument, so each preview carries
   `fractionStyle` in its render inputs purely as a re-render key. See
-  `docs/FractionTypography.md` §3.1.
+  `docs/contracts/FractionTypography.md` §3.1.
 
 ---
 

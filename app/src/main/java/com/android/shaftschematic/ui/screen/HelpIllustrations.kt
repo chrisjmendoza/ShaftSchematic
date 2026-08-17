@@ -46,7 +46,7 @@ import com.android.shaftschematic.ui.theme.SheetInk
  * **Paper, not chrome.** A figure depicts printed output, so it draws dark ink on a forced
  * white sheet from `SheetInk` — never `MaterialTheme.colorScheme`, whose near-white
  * `onSurface` in dark theme would be invisible ink here. Same rule as the five sheet
- * canvases (see `Appearance.md`). The caption below the sheet is app chrome and stays
+ * canvases (see `docs/contracts/Appearance.md`). The caption below the sheet is app chrome and stays
  * theme-colored.
  *
  * Figures are decorative elaborations of the topic text: the text alone must carry the

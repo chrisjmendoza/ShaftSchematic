@@ -9,7 +9,7 @@ package com.android.shaftschematic.ui.order
  *
  * It is NOT a display order: the carousel renders resolved components in physical position
  * order along the shaft, so there is no stored cross-type order to keep in sync. See
- * `docs/ComponentsOrdering.md`.
+ * `docs/contracts/ComponentsOrdering.md`.
  */
 enum class ComponentKind { BODY, TAPER, THREAD, LINER, COUPLER_BOLT_SLOT }
 

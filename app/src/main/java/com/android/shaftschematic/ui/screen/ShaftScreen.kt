@@ -118,7 +118,7 @@ import kotlinx.coroutines.launch
  * Contract / Invariants
  * • Canonical model units are millimeters (mm) — convert only at UI edge.
  * • Carousel rows follow the resolved components' physical order (auto-bodies interleaved at
- *   their spans); there is no separate cross-type order. See `docs/ComponentsOrdering.md`.
+ *   their spans); there is no separate cross-type order. See `docs/contracts/ComponentsOrdering.md`.
  * • IME safety: imePadding shrinks the scroll viewport (applied before verticalScroll) so
  *   Compose auto-scrolls to keep the focused field in view; FAB uses ime ∪ navigationBars insets.
  * • No file I/O or routing here.

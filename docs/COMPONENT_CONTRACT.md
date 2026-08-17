@@ -69,9 +69,9 @@ Features:
   - Neither has a carousel card or an Add dialog — they are authored only on their own tab
     (Consolidated Output / Undercut Drawing), which keeps them outside the
     add-dialog-parity invariant.
-  - See DATA_MODEL.md §Serialization, `CLAUDE.md`, and the in-source
-    `app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md` /
-    `.../docs/UndercutDrawing.md`.
+  - See DATA_MODEL.md §Serialization, `CLAUDE.md`,
+    `docs/contracts/RunoutSheet.md` /
+    `docs/contracts/UndercutDrawing.md`.
 
 ---
 

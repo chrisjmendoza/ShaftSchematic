@@ -11,7 +11,7 @@
 
 - The **stored** OAL input (`ShaftSpec.overallLengthMm`) is **not** mutated when you add/exclude a thread (in manual mode). That value is safe.
 - The **rendered** OAL — the dimension label on the schematic preview *and* every PDF, *and* the input field while in Auto mode — is **derived** by subtracting excluded end-thread lengths from the input. That derived number is what visibly "changed" to `input − threadLen`.
-- Root cause: `computeOalWindow()` / `computeExcludedThreadLengths()` (`geom/OalComputations.kt`). This was introduced/extended by today's work (commits `44049d8`, `ff6593d`) and codified in `docs/OverallLength.md` v1.1 ("OAL spans SET-to-SET when excluded"). That model directly conflicts with the new directive that the OAL number is immutable.
+- Root cause: `computeOalWindow()` / `computeExcludedThreadLengths()` (`geom/OalComputations.kt`). This was introduced/extended by today's work (commits `44049d8`, `ff6593d`) and codified in `docs/contracts/OverallLength.md` v1.1 ("OAL spans SET-to-SET when excluded"). That model directly conflicts with the new directive that the OAL number is immutable.
 
 ---
 
@@ -125,7 +125,7 @@ Effect: `win.oalMm == spec.overallLengthMm` everywhere, so the schematic, all th
 
 This is a near-revert of the measure-space compression added today; the `excludeFromOAL` flag then only drives the arrow-extent toggle already present in `ShaftPdfComposer.kt:276–282`.
 
-**Docs to update:** `docs/OverallLength.md` §"PDF OAL Dimension Span" (v1.1) currently specifies the SET-to-SET shrink behavior — it must be rewritten to the immutable-OAL rule.
+**Docs to update:** `docs/contracts/OverallLength.md` §"PDF OAL Dimension Span" (v1.1) currently specifies the SET-to-SET shrink behavior — it must be rewritten to the immutable-OAL rule.
 
 ### Resolution — option (C) confirmed by domain owner
 

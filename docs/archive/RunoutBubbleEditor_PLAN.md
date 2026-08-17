@@ -1,5 +1,10 @@
 # Runout Bubble Editor — Build Plan & Progress Log
 
+> **ARCHIVED — historical record, not current behavior.** Every task below shipped
+> 2026-07-21 and the branch merged; the "resume anchor" instruction is spent. Current
+> behavior lives in `docs/contracts/RunoutSheet.md` (Runout Bubble Editor) and the
+> reference-feature invariant in `CLAUDE.md`.
+
 **Branch:** `feat/runout-bubble-editor` (cut off `main` @ `24169a5`)
 **Started:** 2026-07-21 (overnight autonomous run via `/loop`)
 **Status legend:** ⬜ not started · 🟡 in progress · ✅ done · ⚠️ blocked/needs-user
@@ -107,7 +112,7 @@ Make the runout **bubbles interactive**:
 
 **⚠️ Two draw sites must stay in lockstep** — any bubble visual change (value text, high-spot radial
 line, keyway cutout) goes into BOTH `drawRunoutMarkers` (Compose) and `drawPlacedBubbles` (PDF).
-`docs/RunoutSheet.md` mandates they render identically.
+`docs/contracts/RunoutSheet.md` mandates they render identically.
 
 **Screen / ViewModel**
 - `EditorTab.RUNOUT` → `ShaftEditorRoute.kt` ~87–91 → `RunoutRoute(vm, onExportRunout, onOpenSidebar)`.
@@ -121,7 +126,7 @@ line, keyway cutout) goes into BOTH `drawRunoutMarkers` (Compose) and `drawPlace
 open detail overlay → `NumericInputField` (commit-on-blur) → `vm.addWearSpot/updateWearSpot/removeWearSpot`.
 
 **Docs**
-- `docs/RunoutSheet.md` — authoritative subsystem doc (must be updated). Notes future options:
+- `docs/contracts/RunoutSheet.md` — authoritative subsystem doc (must be updated). Notes future options:
   "User-selectable keyway reference angle", per-bubble measurement table rows.
 - `docs/archive/runout_bubble_collision_system_2026-07-18.md` — placement engine deep dive.
 
@@ -198,7 +203,7 @@ open detail overlay → `NumericInputField` (commit-on-blur) → `vm.addWearSpot
 > `util/RunoutValueFormat.kt`.
 
 ### Phase 8 — Docs + changelog + memory ✅
-- [x] `docs/RunoutSheet.md`: new "Runout Bubble Editor" section + responsibilities bullet + updated
+- [x] `docs/contracts/RunoutSheet.md`: new "Runout Bubble Editor" section + responsibilities bullet + updated
       Contracts (keyway cutout, reference-only readings, two-draw-site lockstep); retired the
       "user-selectable keyway angle / table rows" future options that this covers.
 - [x] `CHANGELOG.md` — 2026-07-21 entry.
@@ -276,7 +281,7 @@ keyway square is replaced by a proper open-topped cutout into the circle. All de
 **Files:** new — `model/RunoutReading.kt`, `geom/RunoutReadingMath.kt`, `util/RunoutValueFormat.kt`,
 `ui/screen/RunoutBubbleDialog.kt`, 2 test files, this plan. Modified — `RunoutBubbleLayout.kt`,
 `ShaftDocCodec.kt`, `AutosaveManager.kt`, `ShaftViewModel.kt`, `RunoutRoute.kt`,
-`RunoutPdfComposer.kt`, `docs/RunoutSheet.md`, `CHANGELOG.md`, `CLAUDE.md`.
+`RunoutPdfComposer.kt`, `docs/contracts/RunoutSheet.md`, `CHANGELOG.md`, `CLAUDE.md`.
 
 **Everything is UNCOMMITTED** on `feat/runout-bubble-editor` (no-GPG-when-away) — review before commit.
 

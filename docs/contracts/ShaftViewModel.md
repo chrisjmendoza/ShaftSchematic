@@ -19,7 +19,7 @@ Responsibilities
   delete/rename) and `io/ShaftBackup.kt` (zip backup/restore). There is no repository class.
 - Hold persisted display settings: `lineThicknessScale` (0.5–2.0, applied to preview and PDF stroke widths; 1.0 = default thin weight, 2.0 = original thick weight).
 - Own autosave/draft-history state (`data/AutosaveManager.kt`, `data/DraftRing.kt`;
-  full contract in `docs/Persistence.md`, incident background in
+  full contract in `docs/contracts/Persistence.md`, incident background in
   `docs/archive/Autosave_Incident_2026-07-25.md`):
   - `currentDraftId` — a UUID identifying this editing session's ring slot. Minted at
     construction; re-minted in `newDocument()` and `importJson()` so switching
@@ -53,7 +53,7 @@ Responsibilities
     readings/config all count as unsaved work. The legacy per-field
     `_savedSpec`/`_savedJobNumber`/`_savedCustomer`/`_savedVessel`/`_savedNotes`
     fields are gone; `markDocumentSaved()` now sets only `savedSnapshot`. Backs the
-    universal unsaved-changes guard in `AppNav.kt` (`docs/Navigation.md`). See
+    universal unsaved-changes guard in `AppNav.kt` (`docs/contracts/Navigation.md`). See
     `docs/archive/Autosave_Incident_2026-07-25.md` (root cause #4) for why the old
     partial comparison mattered.
   - `drafts: StateFlow<List<AutosaveManager.DraftEntry>>` — replaces the old

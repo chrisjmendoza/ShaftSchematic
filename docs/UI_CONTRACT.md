@@ -148,7 +148,7 @@ The border (not fill) is the selection indicator. An outlined unselected chip wo
 ### 3.2–3.6 Per-Dialog Contracts
 
 The authoritative, current per-dialog field contract lives in
-`app/src/main/java/com/android/shaftschematic/docs/AddComponentDialogs.md` (covers
+`docs/contracts/AddComponentDialogs.md` (covers
 `AddBodyDialog`, `AddLinerDialog`, `AddThreadDialog`, `AddTaperDialog`,
 `AddCouplerBoltSlotDialog`) — it is kept up to date with feature work (e.g. the taper
 Auto/Manual rate-mode system) faster than this document. Consult it first; the notes below
@@ -166,7 +166,7 @@ ViewModel handles it (`Threads.normalized()`).
 **3.4 Liner Dialog** — See `AddLinerDialog` there for fields. Not covered there: the dialog
 displays `freeToEndMm`, which is always ViewModel-computed; UI cannot calculate mm values itself.
 
-**3.5 Liner Authored Reference (AFT/FWD)** — not restated in the in-source doc; kept here as
+**3.5 Liner Authored Reference (AFT/FWD)** — not restated in the contracts pack; kept here as
 the canonical statement:
 - Liners separate authored reference from physical geometry.
 - UI must project authored “Start” based on selected reference.
@@ -189,7 +189,7 @@ Insertion order must never determine display ordering.
 
 ### 4.2 Reordering
 There is no stored display order to reorder: the ViewModel keeps none, and rows are derived
-from the resolved components (`docs/ComponentsOrdering.md` v1.3). A reordering UI would have
+from the resolved components (`docs/contracts/ComponentsOrdering.md` v1.3). A reordering UI would have
 to introduce that state deliberately — UI emits an intent, the VM owns the list, and NO
 geometry recalculation happens in the UI layer. Spatial order stays authoritative.
 
@@ -232,7 +232,7 @@ sheets' fills are additionally user-styled via `util/UndercutStyle.kt` (still fi
 never theme roles, and never leaking into the PDF composers).
 
 Authoritative contract:
-`app/src/main/java/com/android/shaftschematic/docs/Appearance.md`.
+`docs/contracts/Appearance.md`.
 
 ---
 
@@ -275,7 +275,7 @@ No other responsibilities.
 
 This contract predates the sidebar's document tabs (`EditorTab` — Schematic, Runout Sheet,
 Wear Document, Undercut Drawing, Consolidated Output); their UI behavior is owned by the
-in-source `app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md` (authoritative)
+`docs/contracts/RunoutSheet.md` (authoritative)
 rather than duplicated here. Summary of the boundaries, which follow the same rules as above:
 
 - **RunoutRoute** — station-count overrides, TIR orientation, tap-a-bubble editor
@@ -300,7 +300,7 @@ rather than duplicated here. Summary of the boundaries, which follow the same ru
 
 `EditorTab.UNDERCUT` / `ui/screen/UndercutRoute.kt`. Authoring surface for undercut
 sections; behavior owned by
-`app/src/main/java/com/android/shaftschematic/docs/UndercutDrawing.md` (authoritative).
+`docs/contracts/UndercutDrawing.md` (authoritative).
 Boundary summary:
 
 - Undercuts are authored **only here** — no carousel card and no Add dialog, so they sit
@@ -321,7 +321,7 @@ Boundary summary:
 
 `EditorTab.OUTPUT` / `ui/screen/OutputRoute.kt`. The one-stop surface for the consolidated
 sheet; behavior owned by
-`app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md` (Consolidation step 5),
+`docs/contracts/RunoutSheet.md` (Consolidation step 5),
 with the export/paper rules in `docs/PDF_EXPORT.md` §5.6–5.7. Boundary summary:
 
 - **Content election** (`ConsolidatedVariant`): All three (default) | Schematic + Runout |

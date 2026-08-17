@@ -72,7 +72,7 @@ never touches geometry resolution, so it lives beside the spec in the document e
 All are additive/defaulted (no envelope version bumps) and share one contract: they never
 affect `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End badge. The
 authoritative invariants live in `CLAUDE.md` and
-`app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md`.
+`docs/contracts/RunoutSheet.md`.
 
 Key constraints:
 - All geometry is millimeters.
@@ -168,7 +168,7 @@ Responsibilities:
 - Draw dimension-style elements (ticks, hatch)
 
 Note: the renderer draws no text/labels at all (no "Overall" label or otherwise). See
-`app/src/main/java/com/android/shaftschematic/docs/Rendering.md` for the current contract.
+`docs/contracts/Rendering.md` for the current contract.
 
 Renderer rules:
 - Consumes pixel coordinates ONLY from ShaftLayout.Result
@@ -275,8 +275,8 @@ its consolidated mode (`composeRunoutPdf(consolidated = true)`), which adds the 
 dimension rails and footer plus the elected wear/runout content — five documents in all from
 four composers. All in-app PDF previews **rasterize the real composed PDF**
 (there is no separate preview draw path for these documents). Contracts:
-`docs/PDF_EXPORT.md` and the in-source
-`app/src/main/java/com/android/shaftschematic/docs/RunoutSheet.md`.
+`docs/PDF_EXPORT.md` and
+`docs/contracts/RunoutSheet.md`.
 
 PDF export does NOT:
 - Create multiple pages
@@ -296,7 +296,7 @@ There is none to maintain: carousel rows are a pure function of the spec.
 - The carousel renders the **resolved** component list in physical position order along the
   shaft, auto-bodies interleaved at their spans.
 - The ViewModel keeps no cross-type display order (the newest-first `_componentOrder` was
-  removed once the resolved pipeline made it dead — see `docs/ComponentsOrdering.md` v1.3).
+  removed once the resolved pipeline made it dead — see `docs/contracts/ComponentsOrdering.md` v1.3).
 - Order is never persisted: the document envelope has no field for it.
 - `ComponentKey`/`ComponentKind` remain for component identity and the model-layer physical
   ordering helpers (`ShaftSpec.buildPhysicalKeyOrder`, `snapForwardFrom`).

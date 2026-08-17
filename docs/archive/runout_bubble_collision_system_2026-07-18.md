@@ -1,5 +1,9 @@
 # Runout Bubble Collision System — Review & Implementation (2026-07-18)
 
+> **ARCHIVED — historical record, not current behavior.** Shipped as
+> `geom/RunoutBubbleLayout.kt`; the contract folded into
+> `docs/contracts/RunoutSheet.md`.
+
 Branch: `feat/runout-bubble-collision` (off `fix/runout-wear-resolved-components`)
 
 **Request:** review the runout drawings and bubble implementations; add a system that

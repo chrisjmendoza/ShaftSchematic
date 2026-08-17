@@ -55,7 +55,7 @@ import kotlin.math.roundToInt
  * dye-penetrant inspection results on a simplified shaft outline. The interior is
  * left largely blank for hand annotation, but any wear recorded in-app is printed at
  * its true position: liner wear bands (marked) and pit "X" markers (small/large) on
- * bodies, tapers, and liners — see "Wear Pits" in `docs/RunoutSheet.md`.
+ * bodies, tapers, and liners — see "Wear Pits" in `docs/contracts/RunoutSheet.md`.
  *
  * ## Page layout (landscape US Letter, 792 × 612 pt)
  * ```
@@ -1385,7 +1385,7 @@ private fun drawWearStripWindow(
     }
 
     // Chained dimension rail ABOVE the cylinder (matches the hand-marked sheet convention;
-    // see "Wear Detail Strips" in docs/RunoutSheet.md): liner AFT edge → first
+    // see "Wear Detail Strips" in docs/contracts/RunoutSheet.md): liner AFT edge → first
     // band start, each band's own length, inter-band gaps, and the trailing remainder to the liner
     // FWD edge — standard witness-line/arrowed-span/centered-label rail convention. The rail
     // measures WEAR, so it belongs to the window's liner; a taper/body-only window has none.

@@ -1,17 +1,22 @@
-# ShaftSchematic – Contracts Pack (v1.1, 2026-08-05)
+# ShaftSchematic – Contracts Pack (v1.2, 2026-08-16)
 
 **Purpose:** The authoritative per-subsystem contracts — invariants, behaviors, and
 product decisions that the code alone can't express. Read the relevant doc before
 editing a subsystem, and update it in the same change if behavior changes.
 Project-wide invariants live in `CLAUDE.md`; repo-level references (architecture,
-data model, validation, glossary, roadmap) live in `docs/` at the repo root.
+data model, validation, glossary, roadmap) sit one level up in `docs/`.
+
+**v1.2 relocation:** the pack moved out of the source tree
+(`app/src/main/java/com/android/shaftschematic/docs/`) to `docs/contracts/`, so the repo
+has ONE documentation root. Code comments cited it as `docs/X.md`, which read as the
+repo-root folder and made the files hard to find; every reference now spells
+`docs/contracts/X.md` and resolves from anywhere.
 
 **v1.0 consolidation:** the pack was reorganized from 31 micro-docs down to the
-per-subsystem contracts below (16 at the time, **19** today) — per-file API restatements
+per-subsystem contracts below (16 at the time, **20** today) — per-file API restatements
 were merged into subsystem contracts or deleted where they merely mirrored code.
 (Sweep record in git history.) Design plans (`*_PLAN.md`) are not contracts — once their
-work ships they move to `docs/archive/` (indexed there); each is listed under the contract
-it belongs to.
+work ships they move to `docs/archive/`; each is listed under the contract it belongs to.
 
 ## Screen & editing
 

@@ -163,7 +163,7 @@ fun nearestSetReference(
  * acceptable (boundary-exact spans accepted — epsilon [UNDERCUT_SPAN_EPS_MM]).
  *
  * Called at ENTRY (Distance field after conversion to canonical, and the Length field)
- * to reject an out-of-span commit before it ever reaches the model — `NumberField.md`'s
+ * to reject an out-of-span commit before it ever reaches the model — `docs/contracts/NumberField.md`'s
  * validator contract. Deliberately separate from [isUndercutStaleOverrun], which
  * classifies already-stored data for display rather than blocking new entry. The Ø field
  * is NOT validated against the local surface — a measurement is sacred; an implausible Ø

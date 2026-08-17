@@ -1,5 +1,11 @@
 # Autosave Data-Loss Incident — 2026-07-25
 
+> **ARCHIVED — historical record, not current behavior.** Resolved 2026-07-25: the
+> single always-overwriting slot was replaced by a dirty-gated 3-entry draft ring keyed
+> per document. Current behavior lives in `docs/contracts/Persistence.md` and
+> `docs/contracts/ShaftViewModel.md`; this file is why the ring exists, and Kotlin
+> comments in `data/DraftRing.kt` and `data/AutosaveManager.kt` point here.
+
 ## What was reported
 Chris edited the bundled **Aleutian Spray** sample heavily, closed out, went back into the
 shaft, and found none of the edits — the shaft was back to its pristine state.

@@ -1,7 +1,7 @@
 # Wear Diameter Measurements — Implementation Plan
 
 **Status: IMPLEMENTED as designed (2026-07-28, branch `feat/wear-dia-readings`) — this doc
-is the as-built design record. See `docs/RunoutSheet.md` § "Wear Diameter Measurements" for
+is the as-built design record. See `docs/contracts/RunoutSheet.md` § "Wear Diameter Measurements" for
 the maintained contract.** Deviations from the plan: the strip's leader region reuses the
 existing label headroom instead of a separate leader band (zero cost for reading-free
 strips); the callout engine is two-phase (plan → finish) like `RunoutBubbleLayout` so both
@@ -195,7 +195,7 @@ Two surfaces, one layout engine:
 
 ## Docs & memory
 
-- `docs/RunoutSheet.md`: new "Wear Diameter Measurements" section (posture table entry,
+- `docs/contracts/RunoutSheet.md`: new "Wear Diameter Measurements" section (posture table entry,
   draw-both-sites rule, layout engine pointer).
 - `CLAUDE.md`: add to the reference-features invariant block (short — point at the doc).
 - No dates / no prior-code narrative in `.kt` comments.

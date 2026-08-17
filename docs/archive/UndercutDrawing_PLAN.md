@@ -1,7 +1,7 @@
 # Undercut Drawing — Design Plan
 
 Status: **implemented** on `feat/undercut-drawing` (2026-07-30). Shipped contract doc:
-`docs/UndercutDrawing.md`. This file remains the design/rationale record; read the contract
+`docs/contracts/UndercutDrawing.md`. This file remains the design/rationale record; read the contract
 doc for current behavior. Reference photo: hand sketch "Wilderness Explorer STBD Int. Shaft —
 weld undercuts" (three reduced-diameter sections drawn zoomed, chained length dims above,
 measured Ø values with leaders below, a total-span dim, and a long anchor dim to the SET).
@@ -9,7 +9,7 @@ measured Ø values with leaders below, a total-span dim, and a long anchor dim t
 §11's five defaults all shipped as chosen (no changes requested): "UNDERCUT RECORD" title,
 `UNDERCUT_CLUSTER_GAP_MM` = 6 in / `UNDERCUT_WINDOW_PAD_MM` = 1 in, pad-span rail labels kept,
 no dye-pen checkbox row, AFT_SET/FWD_SET-only references. Known as-built deviations from this
-plan's §6/§8 narrative (see `docs/UndercutDrawing.md` for the full current-behavior contract):
+plan's §6/§8 narrative (see `docs/contracts/UndercutDrawing.md` for the full current-behavior contract):
 - The overlay is anchored by undercut id (`anchorUndercutId`), not by window index/reference;
   windows are recomputed from the record on every composition. Undercut cards live **only**
   inside `UndercutWindowDetailOverlay` — `UndercutRoute` itself has no card list.
@@ -29,7 +29,7 @@ visible liner edges, reading as an anonymous grey slab, and a liner with no reco
 had no way to open a strip to author one — a cut could only be added blind, from the global
 "Add undercut" button, then hunted down.
 
-Shipped shape (detail in `docs/UndercutDrawing.md`, current-behavior contract):
+Shipped shape (detail in `docs/contracts/UndercutDrawing.md`, current-behavior contract):
 - `UndercutReference` gained `LINER_AFT`/`LINER_FWD`; `Undercut.referenceLinerId` names the
   reference liner (display-only, verbatim round-trip, no decode pruning — additive enum values,
   so a file using them won't decode pre-iteration).
@@ -55,7 +55,7 @@ the fields, and every keystroke landed in the record. The cards became a swipeab
 **local draft** that previews on the canvas and reaches `UndercutRecord` only on **Confirm**
 (Cancel reverts; Add is a draft-only page, so a cancelled add leaves no ghost cut). Confirm is
 additionally gated on `undercutOverlapIssue` — a draft may not intrude into an adjacent cut's
-bounds. See `docs/UndercutDrawing.md` §"Undercut cards — the overlay carousel".
+bounds. See `docs/contracts/UndercutDrawing.md` §"Undercut cards — the overlay carousel".
 
 ### Iteration 4 (auto-save on leave + floating status pill) — 2026-08-01
 
@@ -66,7 +66,7 @@ the overlay) through the identical `confirmDraft` path; a **blocked** draft rais
 editing / Discard dialog instead, so nothing is committed or dropped silently
 (`undercutLeaveAction`, unit-pinned). Saving state is stated by a **floating pill** at the
 canvas ↔ carousel boundary — Saved / "Confirm change" / the blocking reason, each of the last two
-with a ✕ discard. See `docs/UndercutDrawing.md` §"Saving: the status pill + leaving a card".
+with a ✕ discard. See `docs/contracts/UndercutDrawing.md` §"Saving: the status pill + leaving a card".
 
 ### Iteration 5 (strips own the PDF page) — 2026-08-01
 
@@ -78,7 +78,7 @@ whole band, spending the reclaimed height on rail separation and label air (cyli
 cannot become a slab). A page with **no recorded cuts** — blank template or empty record — now
 draws one *started* strip per drawable liner (liner to scale, dimensioned nowhere, write-in title)
 instead of the profile form, which survives only for a shaft with no drawable liners at all. See
-`docs/UndercutDrawing.md` §"PDF layout".
+`docs/contracts/UndercutDrawing.md` §"PDF layout".
 
 ---
 
@@ -337,11 +337,11 @@ New:
 | `pdf/UndercutPdfComposer.kt` | the document composer |
 | `ui/screen/UndercutRoute.kt` | tab route: overview canvas, cards, export/print/preview |
 | `ui/screen/UndercutDetail.kt` | `UndercutWindowDetailOverlay` |
-| `docs/UndercutDrawing.md` | shipped contract doc (Phase 5) |
+| `docs/contracts/UndercutDrawing.md` | shipped contract doc (Phase 5) |
 
 Touched: `ShaftDocCodec.kt`, `AutosaveManager.kt`, `EditState.kt`, `ShaftViewModel.kt`,
-`EditorTab.kt`, `ShaftEditorRoute.kt`, `EditorSidebar.kt`, `docs/README.md`,
-`docs/Navigation.md`, `docs/RunoutSheet.md` (cross-ref), `CLAUDE.md` (invariant block).
+`EditorTab.kt`, `ShaftEditorRoute.kt`, `EditorSidebar.kt`, `docs/contracts/INDEX.md`,
+`docs/contracts/Navigation.md`, `docs/contracts/RunoutSheet.md` (cross-ref), `CLAUDE.md` (invariant block).
 
 Tests: `geom/UndercutMathTest`, `geom/SurfaceProfileMathTest`,
 `pdf/UndercutStripLayoutTest`, `persistence/UndercutRecordPersistenceTest`,

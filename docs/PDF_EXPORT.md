@@ -246,7 +246,7 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
     narrower than its characters inline, so the fraction typography widened eligibility as
     a side effect. Diagonal fractions cost ~3.6 pt more than stacked and seat slightly less
     often; a Small arrowhead returns 2 pt of that. See
-    `app/.../docs/FractionTypography.md`.
+    `app/.../docs/contracts/FractionTypography.md`.
 - **Fallback path.** A span too short for that reverts to the original behavior: one
   continuous line `xa → xb`, with the value floating above it at baseline
   `y - textAboveDy`. It keeps its inward arrows — see below.

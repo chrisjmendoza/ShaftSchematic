@@ -1,4 +1,8 @@
 # ShaftSchematic App — Engineering Analysis
+
+> **ARCHIVED — historical record, not current behavior.** 20 of 22 findings were fixed;
+> the other 2 were deferred or removed by product decision. Current behavior lives in
+> `docs/contracts/` and `CLAUDE.md`.
 *Date: 2026-06-19 | Branch: feat/runout-screen-v2 | Version: 1.1.1*
 
 ---

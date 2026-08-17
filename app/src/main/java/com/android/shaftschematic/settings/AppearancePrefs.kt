@@ -10,7 +10,7 @@ package com.android.shaftschematic.settings
  * The theme governs Compose UI chrome only. Paper-sheet canvases (the undercut / wear /
  * runout drawing surfaces) and PDF output are theme-independent by contract — white sheet,
  * fixed black ink — so a dark theme can never put near-white ink on the white sheet or
- * darken a printed page. See `docs/Appearance.md`.
+ * darken a printed page. See `docs/contracts/Appearance.md`.
  */
 enum class AppThemeMode {
     SYSTEM,

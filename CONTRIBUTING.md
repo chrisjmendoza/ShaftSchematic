@@ -2,7 +2,7 @@
 
 ## Before you edit anything
 
-Per-subsystem contract docs live in `app/src/main/java/com/android/shaftschematic/docs/`
+Per-subsystem contract docs live in `docs/contracts/`
 (index: `README.md` in that folder). **Read the relevant contract doc before editing a
 subsystem**, and update it in the same change if you alter behavior. Project-wide
 conventions and critical invariants are in `CLAUDE.md` at the repo root.
@@ -37,7 +37,7 @@ versa) automatically. When you change how a component draws, check both paths.
 ## Data flow
 
 1. User edits fields → `ShaftScreen` calls VM setters (commit-on-blur; see
-   `app/src/main/java/com/android/shaftschematic/docs/NumberField.md` — a tap-and-leave
+   `docs/contracts/NumberField.md` — a tap-and-leave
    with no edit must be a no-op).
 2. VM updates StateFlow → routes/screens recompose.
 3. Preview and documents render from the **resolved** component list
@@ -72,10 +72,10 @@ versa) automatically. When you change how a component draws, check both paths.
    will not pick up the preview code.
 6. **UI:** add the carousel card and the Add dialog. They must mirror each other
    control-for-control (see `CLAUDE.md` invariants and
-   `app/src/main/java/com/android/shaftschematic/docs/AddComponentDialogs.md`).
+   `docs/contracts/AddComponentDialogs.md`).
 7. **Validation:** update validation/warning rules if the component affects coverage
    or collisions.
-8. **Docs:** add or update the contract doc in the in-source `docs/` folder.
+8. **Docs:** add or update the contract doc in `docs/contracts/`.
 
 ## Commits
 

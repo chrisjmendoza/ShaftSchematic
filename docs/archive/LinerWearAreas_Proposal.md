@@ -78,7 +78,7 @@ nav destination, with `BackHandler` to dismiss):
   gets a small dimension rail below: offset-from-AFT-edge and band length. Live update
   as fields commit.
 - Fields use `NumericInputField` and obey its contract (commit on blur only if changed —
-  `docs/NumberField.md`). Unit conversion at the UI edge only; model is mm.
+  `docs/contracts/NumberField.md`). Unit conversion at the UI edge only; model is mm.
 - Add spot → appends with sensible defaults (start = 0, length = 25.4 mm, no reading);
   Delete → confirm-free removal (single undo via snackbar is a nice-to-have, not
   required).
@@ -161,7 +161,7 @@ val wearRecord: WearRecord = WearRecord(),
 
 ## 5. ViewModel
 
-`ShaftViewModel` (follow `docs/ShaftViewModel.md` ownership rules):
+`ShaftViewModel` (follow `docs/contracts/ShaftViewModel.md` ownership rules):
 
 ```kotlin
 private val _wearRecord = MutableStateFlow(WearRecord())
@@ -228,7 +228,7 @@ Phase-2 of this feature (see §8). Target layout mirrors the shop sketch:
 | **1 — Model + persistence** | `WearSpot`/`WearRecord`, envelope field, VM state + setters, autosave, round-trip tests | `model/WearSpot.kt` (new), `doc/ShaftDocCodec.kt`, `ui/viewmodel/ShaftViewModel.kt`, `data/AutosaveManager.kt`, tests |
 | **2 — Wear tab canvas + tap** | Interactive overview canvas on WearRoute, liner hit-testing, wear badges | `ui/screen/WearRoute.kt` |
 | **3 — Detail overlay** | Break-out liner view, wear band rendering, add/edit/delete spot cards | `ui/screen/LinerWearDetail.kt` (new) |
-| **4 — PDF detail strips** | Bands on main profile + per-liner detail strips in the wear PDF | `pdf/WearPdfComposer.kt`, `docs/RunoutSheet.md` update |
+| **4 — PDF detail strips** | Bands on main profile + per-liner detail strips in the wear PDF | `pdf/WearPdfComposer.kt`, `docs/contracts/RunoutSheet.md` update |
 
 Phases 1–3 are one reviewable unit if preferred; 4 is genuinely separable.
 

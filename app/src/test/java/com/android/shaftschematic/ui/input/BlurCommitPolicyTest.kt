@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pins the commit-on-blur contract from `docs/NumberField.md`.
+ * Pins the commit-on-blur contract from `docs/contracts/NumberField.md`.
  *
  * The invariant that matters: a tap-and-leave with no edit is a no-op. `onCommit` has
  * side effects downstream (auto-body promotion, ViewModel writes), so a spurious commit

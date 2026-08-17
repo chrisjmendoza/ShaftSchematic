@@ -82,7 +82,7 @@ private val HighContrastDarkColorScheme = darkColorScheme(
  *   update changes nothing until the user opts in.
  * - Paper-sheet canvases (undercut / wear / runout drawing surfaces) and PDF output are
  *   theme-independent: white sheet, fixed black ink. The theme must never be consulted for
- *   sheet ink — see `docs/Appearance.md`.
+ *   sheet ink — see `docs/contracts/Appearance.md`.
  * - No dynamic (Material You) color: schemes are fixed so the preview-color presets
  *   (Stainless/Steel/Bronze) resolve predictably. Revisit deliberately if wallpaper-driven
  *   color is ever wanted.

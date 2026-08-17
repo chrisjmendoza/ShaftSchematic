@@ -1289,7 +1289,7 @@ const val WEAR_STRIP_LABEL_HEADROOM_PT = 11f
 /**
  * Stacked label positions reserved above a strip's chained dimension rail
  * (dimension-rail — see "Wear Detail Strips" in
- * `docs/RunoutSheet.md`) for the crowding fallback in [layoutWearStripRail]: row 0
+ * `docs/contracts/RunoutSheet.md`) for the crowding fallback in [layoutWearStripRail]: row 0
  * is the base label position directly above the rail line, and this many rows
  * total are budgeted regardless of how many wear spots the liner has — the chain is
  * always ONE rail line, so the reserved height does not scale with spot count. A
