@@ -25,6 +25,7 @@ import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MIN_MM
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.FractionTypography
 import com.android.shaftschematic.util.PreviewColorPreset
@@ -97,6 +98,7 @@ object SettingsStore {
     private val KEY_PDF_SBREAK_THRESHOLD_FRAC = floatPreferencesKey("pdf_sbreak_threshold_frac")
     private val KEY_PDF_ARROW_SIZE_PT = floatPreferencesKey("pdf_arrow_size_pt")
     private val KEY_PDF_FRACTION_STYLE = stringPreferencesKey("pdf_fraction_style")
+    private val KEY_PDF_DUAL_UNIT_LAYOUT = stringPreferencesKey("pdf_dual_unit_layout")
     private val KEY_PDF_WEAR_TRACE_DEPTH_FRAC = floatPreferencesKey("pdf_wear_trace_depth_frac")
     private val KEY_PDF_WEAR_BAND_SHADE_FRAC = floatPreferencesKey("pdf_wear_band_shade_frac")
     private val KEY_PDF_WEAR_JOIN_GAP_MAX_MM = floatPreferencesKey("pdf_wear_join_gap_max_mm")
@@ -222,6 +224,14 @@ object SettingsStore {
         ctx.settingsDataStore.data.map { p -> FractionStyle.fromName(p[KEY_PDF_FRACTION_STYLE]) }
     suspend fun setPdfFractionStyle(ctx: Context, style: FractionStyle) {
         ctx.settingsDataStore.edit { it[KEY_PDF_FRACTION_STYLE] = style.name }
+    }
+
+    // How a dual value is SET on the drawing: an inline one-liner or a two-line stack. Only ever
+    // visible on a document with dual units switched on.
+    fun pdfDualUnitLayoutFlow(ctx: Context): Flow<DualUnitLayout> =
+        ctx.settingsDataStore.data.map { p -> DualUnitLayout.fromName(p[KEY_PDF_DUAL_UNIT_LAYOUT]) }
+    suspend fun setPdfDualUnitLayout(ctx: Context, layout: DualUnitLayout) {
+        ctx.settingsDataStore.edit { it[KEY_PDF_DUAL_UNIT_LAYOUT] = layout.name }
     }
 
     fun pdfArrowSizePtFlow(ctx: Context): Flow<Float> =

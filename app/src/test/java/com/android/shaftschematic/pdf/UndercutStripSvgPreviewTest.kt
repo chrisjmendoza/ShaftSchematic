@@ -35,6 +35,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import com.android.shaftschematic.util.DualLabel
 import org.junit.Test
 import java.io.File
 
@@ -187,12 +188,12 @@ class UndercutStripSvgPreviewTest {
         val labelGap = 5f
         line(s.x0Pt, witnessBottomY, s.x0Pt, railY - 3f, w = 0.6f)
         line(s.x1Pt, witnessBottomY, s.x1Pt, railY - 3f, w = 0.6f)
-        val lw = labelW(s.label)
+        val lw = labelW(s.label.inline())
         if (s.seatsInBreak) {
             val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
             line(s.x0Pt, railY, s.labelCxPt - gapHalf, railY, w = 0.7f)
             line(s.labelCxPt + gapHalf, railY, s.x1Pt, railY, w = 0.7f)
-            text(s.labelCxPt, railY + textH * 0.35f, s.label)
+            text(s.labelCxPt, railY + textH * 0.35f, s.label.inline())
         } else {
             line(s.x0Pt, railY, s.x1Pt, railY, w = 0.7f)
             val row = s.labelRow.coerceIn(0, WEAR_RAIL_MAX_LABEL_ROWS - 1)
@@ -200,10 +201,10 @@ class UndercutStripSvgPreviewTest {
                 text(
                     s.labelCxPt,
                     railY - arrow * 0.5f - labelGap - textH * 0.25f - row * UNDERCUT_RAIL_ROW_HEIGHT_PT,
-                    s.label,
+                    s.label.inline(),
                 )
             } else {
-                text(s.labelCxPt, railY + arrow + labelGap + textH + row * UNDERCUT_RAIL_ROW_HEIGHT_PT, s.label)
+                text(s.labelCxPt, railY + arrow + labelGap + textH + row * UNDERCUT_RAIL_ROW_HEIGHT_PT, s.label.inline())
             }
         }
         val dl = if (s.arrowInward) 1f else -1f
@@ -298,7 +299,7 @@ class UndercutStripSvgPreviewTest {
         )
         fun xAt(mm: Float) = h.linerLeftPt + (mm - drawStartMm) * h.ptPerMm
 
-        val stations = buildUndercutDiaStations(undercuts, clampedById, ::xAt, unit, ::labelW)
+        val stations = buildUndercutDiaStations(undercuts, clampedById, ::xAt, unit, { labelW(it.inline()) })
         val plan = if (stations.isEmpty()) null else planDiaCallouts(stations, stripLeft + 2f, stripRight - 2f, minGap)
         val diaBand = plan?.let { it.labelsHeightPt(textH, rowGap) + 2f } ?: 0f
 
@@ -307,7 +308,7 @@ class UndercutStripSvgPreviewTest {
         val totalSpan = if (started) null else buildUndercutTotalSpan(spans, unit)
         // Chain before the vertical split, composer order: the split reserves the rows used,
         // on the side of the line the plan puts them.
-        val chain = layoutWearStripRail(railSpans, xAtStripMm = ::xAt, labelWidthPt = ::labelW)
+        val chain = layoutWearStripRail(railSpans, xAtStripMm = ::xAt, labelWidthPt = { labelW(it.inline()) })
         val railPlan = planUndercutRailRows(chain, started, hasTotalRail = totalSpan != null)
         val inner = computeUndercutStripInnerLayout(
             stripTop, stripBottom, titleHeightPt = titleH, hasTotalRail = totalSpan != null, diaBandPt = diaBand,
@@ -450,7 +451,7 @@ class UndercutStripSvgPreviewTest {
                 for (i in 0 until p.leader.size - 1) {
                     svg.line(p.leader[i].x, p.leader[i].y, p.leader[i + 1].x, p.leader[i + 1].y, w = 0.7f)
                 }
-                svg.text(p.labelCx, p.labelTopY + textH * 0.8f, p.label)
+                svg.text(p.labelCx, p.labelTopY + textH * 0.8f, p.label.inline())
             }
         }
 
@@ -464,7 +465,7 @@ class UndercutStripSvgPreviewTest {
         }
         chain.forEach { svg.railSpan(it, inner.cylTop - 3f, inner.chainRailY, labelAbove = railPlan.aboveRows > 0) }
         totalSpan?.let { ts ->
-            layoutWearStripRail(listOf(ts), xAtStripMm = ::xAt, labelWidthPt = ::labelW)
+            layoutWearStripRail(listOf(ts), xAtStripMm = ::xAt, labelWidthPt = { labelW(it.inline()) })
                 .forEach { svg.railSpan(it, inner.chainRailY, inner.totalRailY, labelAbove = true) }
         }
 

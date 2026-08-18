@@ -12,6 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import com.android.shaftschematic.util.DualLabel
 import org.junit.Test
 
 /**
@@ -672,7 +673,7 @@ class WearStripLayoutTest {
         assertEquals(1, spans.size)
         assertEquals(0f, spans[0].startMm, 1e-6f)
         assertEquals(250f, spans[0].endMm, 1e-6f)
-        assertEquals(formatLenDim(250.0, UnitSystem.MILLIMETERS), spans[0].label)
+        assertEquals(formatLenDim(250.0, UnitSystem.MILLIMETERS), spans[0].label.inline())
     }
 
     @Test
@@ -704,9 +705,9 @@ class WearStripLayoutTest {
     fun `labels use formatLenDim in the active unit`() {
         val spans = buildWearStripRailSpans(200f, bands(50f to 30f), UnitSystem.MILLIMETERS)
         assertEquals(3, spans.size)
-        assertEquals(formatLenDim(50.0, UnitSystem.MILLIMETERS), spans[0].label)
-        assertEquals(formatLenDim(30.0, UnitSystem.MILLIMETERS), spans[1].label)
-        assertEquals(formatLenDim(120.0, UnitSystem.MILLIMETERS), spans[2].label)
+        assertEquals(formatLenDim(50.0, UnitSystem.MILLIMETERS), spans[0].label.inline())
+        assertEquals(formatLenDim(30.0, UnitSystem.MILLIMETERS), spans[1].label.inline())
+        assertEquals(formatLenDim(120.0, UnitSystem.MILLIMETERS), spans[2].label.inline())
     }
 
     // ── layoutWearStripRail (dimension-rail rework) ─────────────────────────────
@@ -717,11 +718,11 @@ class WearStripLayoutTest {
     @Test
     fun `ordinary well-spaced spans all land on row 0 with inward arrows`() {
         val spans = listOf(
-            WearRailSpan(0f, 60f, "60mm"),
-            WearRailSpan(60f, 190f, "130mm"),
-            WearRailSpan(190f, 400f, "210mm"),
+            WearRailSpan(0f, 60f, DualLabel.single("60mm")),
+            WearRailSpan(60f, 190f, DualLabel.single("130mm")),
+            WearRailSpan(190f, 400f, DualLabel.single("210mm")),
         )
-        val layout = layoutWearStripRail(spans, xAtStripMm = { it }, labelWidthPt = { charWidth(it) })
+        val layout = layoutWearStripRail(spans, xAtStripMm = { it }, labelWidthPt = { charWidth(it.inline()) })
         assertEquals(3, layout.size)
         layout.forEach {
             assertEquals(0, it.labelRow)
@@ -735,10 +736,10 @@ class WearStripLayoutTest {
         // labels overlap horizontally (this is the crowding case a short wear band + a tight
         // inter-band gap produces on a real liner).
         val spans = listOf(
-            WearRailSpan(0f, 10f, "12.345mm"),
-            WearRailSpan(10f, 20f, "67.890mm"),
+            WearRailSpan(0f, 10f, DualLabel.single("12.345mm")),
+            WearRailSpan(10f, 20f, DualLabel.single("67.890mm")),
         )
-        val layout = layoutWearStripRail(spans, xAtStripMm = { it }, labelWidthPt = { charWidth(it) })
+        val layout = layoutWearStripRail(spans, xAtStripMm = { it }, labelWidthPt = { charWidth(it.inline()) })
         assertEquals(2, layout.size)
         assertEquals(0, layout[0].labelRow)
         assertTrue("the second, colliding label must move off row 0", layout[1].labelRow > 0)
@@ -746,8 +747,8 @@ class WearStripLayoutTest {
 
     @Test
     fun `a label wider than its span is centered on the span midpoint, never dropped`() {
-        val spans = listOf(WearRailSpan(0f, 5f, "999.999mm"))
-        val layout = layoutWearStripRail(spans, xAtStripMm = { it * 10f }, labelWidthPt = { charWidth(it) })
+        val spans = listOf(WearRailSpan(0f, 5f, DualLabel.single("999.999mm")))
+        val layout = layoutWearStripRail(spans, xAtStripMm = { it * 10f }, labelWidthPt = { charWidth(it.inline()) })
         assertEquals(1, layout.size)
         val expectedMid = (layout[0].x0Pt + layout[0].x1Pt) / 2f
         assertEquals(expectedMid, layout[0].labelCxPt, 1e-3f)
@@ -761,9 +762,9 @@ class WearStripLayoutTest {
     fun `only a span too narrow for both arrowheads prints them outward`() {
         // 4 pt of rail between the witness lines — two 4 pt heads cannot live inside it.
         val layout = layoutWearStripRail(
-            listOf(WearRailSpan(0f, 4f, "1mm")),
+            listOf(WearRailSpan(0f, 4f, DualLabel.single("1mm"))),
             xAtStripMm = { it },
-            labelWidthPt = { charWidth(it) },
+            labelWidthPt = { charWidth(it.inline()) },
         )
         assertFalse("cramped span flips its arrows outward", layout[0].arrowInward)
     }
@@ -779,7 +780,7 @@ class WearStripLayoutTest {
         val layout = layoutWearStripRail(
             railSpans,
             xAtStripMm = { mm -> stripLeft + mm * ptPerMm },
-            labelWidthPt = { charWidth(it) },
+            labelWidthPt = { charWidth(it.inline()) },
         )
         assertTrue(layout.isNotEmpty())
         assertEquals(stripLeft, layout.first().x0Pt, 1e-3f)

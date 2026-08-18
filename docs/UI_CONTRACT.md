@@ -255,8 +255,16 @@ prints exactly as it did before they existed.
   `docs/contracts/AddComponentDialogs.md`.
 - **Dual-unit display** — the global **default** for new documents. Each document persists
   its own `dual_units` value, and the sheet-wide toggle on the document writes this default
-  back so the two stay in step. On, every printed dimension reads `1 1/2" [38.1 mm]`,
-  single-line.
+  back so the two stay in step.
+- **Dual units** — the DOCUMENT's own flag, so it also appears on every PDF options sheet
+  (schematic, runout, consolidated, wear, undercut), not only here. The Settings switch is the
+  DEFAULT for new documents; the sheet switch changes the document in hand. The layout chips below
+  it are disabled while it is off — display-only, and never rewriting the stored layout.
+- **Dual-unit layout** (`PdfPrefs.dualUnitLayout`; also on every PDF options sheet) — how the two
+  terms are SET once a document has them: **Inline** (`1 1/2" [38.1 mm]`, the default) or
+  **Stacked** (primary over secondary). A stack is about 55% narrower, so more values sit inside
+  the dimension line instead of above it; it is one line taller, and a sheet whose vertical budget
+  cannot absorb that reverts to Inline for the WHOLE sheet. Inert on a single-unit document.
 
 Both are display-axis controls: geometry stays canonical mm, and neither ever rewrites a
 value the user typed (golden rule). Numeric **entry** fields keep taking the document unit

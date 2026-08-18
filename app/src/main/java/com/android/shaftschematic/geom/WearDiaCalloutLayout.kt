@@ -1,5 +1,6 @@
 // file: app/src/main/java/com/android/shaftschematic/geom/WearDiaCalloutLayout.kt
 package com.android.shaftschematic.geom
+import com.android.shaftschematic.util.DualLabel
 
 import kotlin.math.max
 import kotlin.math.min
@@ -39,11 +40,17 @@ import kotlin.math.min
  *    guarantees are void in that case only.
  */
 
-/** One measured-diameter station: stable key, output-space x, and its printed label. */
+/**
+ * One measured-diameter station: stable key, output-space x, and its printed label.
+ *
+ * [label] carries a dual value's two terms apart so a stacked layout can set them on two lines;
+ * [labelWidth] is always measured by the caller in whichever form it will DRAW (the measure/draw
+ * pairing rule, `util/DualLabelRenderer.kt`), so this engine needs to know nothing about it.
+ */
 data class DiaCalloutStation(
     val key: String,
     val stationX: Float,
-    val label: String,
+    val label: DualLabel,
     val labelWidth: Float,
 )
 
@@ -54,7 +61,7 @@ data class PlacedDiaCallout(
     val labelCx: Float,
     val row: Int,
     val labelTopY: Float,
-    val label: String,
+    val label: DualLabel,
     val labelWidth: Float,
     val leader: List<LeaderVertex>,
 )

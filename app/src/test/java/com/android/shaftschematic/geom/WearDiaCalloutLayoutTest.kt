@@ -3,6 +3,7 @@ package com.android.shaftschematic.geom
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import com.android.shaftschematic.util.DualLabel
 import org.junit.Test
 import kotlin.math.abs
 import kotlin.math.max
@@ -20,7 +21,7 @@ class WearDiaCalloutLayoutTest {
     private val textH = 8f
     private val rowGap = 3f
 
-    private fun station(key: String, x: Float, w: Float) = DiaCalloutStation(key, x, key, w)
+    private fun station(key: String, x: Float, w: Float) = DiaCalloutStation(key, x, DualLabel.single(key), w)
 
     // ── Basic shapes ─────────────────────────────────────────────────────────
 

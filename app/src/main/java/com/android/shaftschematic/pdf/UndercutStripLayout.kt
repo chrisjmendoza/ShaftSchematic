@@ -1,6 +1,8 @@
 // app/src/main/java/com/android/shaftschematic/pdf/UndercutStripLayout.kt
 package com.android.shaftschematic.pdf
 
+import android.graphics.Paint
+
 import com.android.shaftschematic.geom.ClampedUndercutSpanMm
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.UndercutSpanMm
@@ -9,6 +11,8 @@ import com.android.shaftschematic.model.LinerAnchor
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.DualLabel
+import com.android.shaftschematic.util.dualStackMetrics
 import kotlin.math.abs
 
 /**
@@ -149,6 +153,18 @@ const val UNDERCUT_TOTAL_RAIL_BAND_PT = 38f
  * ([UndercutStripInnerLayout.railLabelRows]) and the drawn rows cannot drift apart.
  */
 const val UNDERCUT_RAIL_ROW_HEIGHT_PT = 17f
+
+/**
+ * One rail label row's height: the shipped [UNDERCUT_RAIL_ROW_HEIGHT_PT], or the whole two-line
+ * stack plus the same air when dual values are set stacked.
+ *
+ * ONE definition, read by the reserved band ([computeUndercutStripInnerLayout] via its
+ * `rowHeightPt`, and the composer's `chainAboveBandPt`) and by `drawUndercutRail`'s stepping — the
+ * budgeted row and the drawn row must never drift apart.
+ */
+fun undercutRailRowHeightPt(dimText: Paint, dualStacked: Boolean): Float =
+    if (!dualStacked) UNDERCUT_RAIL_ROW_HEIGHT_PT
+    else maxOf(UNDERCUT_RAIL_ROW_HEIGHT_PT, dimText.dualStackMetrics().height + 3f)
 
 /**
  * Ceiling on the drawn cylinder's height, as a fraction of the strip's own band. Without the
@@ -477,16 +493,16 @@ fun buildUndercutRailSpans(
         if (s.endMm - s.startMm <= UNDERCUT_RAIL_SPAN_EPS_MM) return@forEach
         val effStart = maxOf(s.startMm, cursor)
         if (effStart - cursor > UNDERCUT_RAIL_SPAN_EPS_MM) {
-            out += WearRailSpan(cursor, effStart, formatLenDimDual((effStart - cursor).toDouble(), unit, dual))
+            out += WearRailSpan(cursor, effStart, formatLenDimDualLabel((effStart - cursor).toDouble(), unit, dual))
         }
         val end = maxOf(s.endMm, effStart)
         if (end - effStart > UNDERCUT_RAIL_SPAN_EPS_MM) {
-            out += WearRailSpan(effStart, end, formatLenDimDual((end - effStart).toDouble(), unit, dual))
+            out += WearRailSpan(effStart, end, formatLenDimDualLabel((end - effStart).toDouble(), unit, dual))
         }
         cursor = maxOf(cursor, end)
     }
     if (chainEndMm - cursor > UNDERCUT_RAIL_SPAN_EPS_MM) {
-        out += WearRailSpan(cursor, chainEndMm, formatLenDimDual((chainEndMm - cursor).toDouble(), unit, dual))
+        out += WearRailSpan(cursor, chainEndMm, formatLenDimDualLabel((chainEndMm - cursor).toDouble(), unit, dual))
     }
     return out
 }
@@ -506,7 +522,7 @@ fun buildUndercutTotalSpan(spans: List<UndercutSpanMm>, unit: UnitSystem, dual: 
     val first = live.minOf { it.startMm }
     val last = live.maxOf { it.endMm }
     if (last - first <= UNDERCUT_RAIL_SPAN_EPS_MM) return null
-    return WearRailSpan(first, last, formatLenDimDual((last - first).toDouble(), unit, dual))
+    return WearRailSpan(first, last, formatLenDimDualLabel((last - first).toDouble(), unit, dual))
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -534,13 +550,13 @@ fun buildUndercutDiaStations(
     clampedById: Map<String, ClampedUndercutSpanMm>,
     xAtMm: (Float) -> Float,
     unit: UnitSystem,
-    labelWidthPt: (String) -> Float,
+    labelWidthPt: (DualLabel) -> Float,
     dual: Boolean = false,
 ): List<DiaCalloutStation> = undercuts.mapNotNull { u ->
     if (u.diaMm <= 0f) return@mapNotNull null
     val span = clampedById[u.id] ?: return@mapNotNull null
     if (span.isEmpty) return@mapNotNull null
-    val label = formatDiaWithUnitDual(u.diaMm.toDouble(), unit, dual)
+    val label = formatDiaWithUnitDualLabel(u.diaMm.toDouble(), unit, dual)
     DiaCalloutStation(
         key = u.id,
         stationX = xAtMm((span.startMm + span.endMm) * 0.5f),

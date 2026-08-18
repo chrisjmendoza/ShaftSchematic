@@ -41,6 +41,8 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.wrapRichLines
+import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.autoTaperRateText
@@ -353,13 +355,12 @@ fun composeShaftPdf(
 
         // Fit-to-band safety for dimensional rails (OAL always visible)
         val topSafePad = 6f
-        var railGap = LANE_GAP_PT + 6f
-        val minRailGap = 10f
-        var dimTextSize = TEXT_PT - 2f
+        val startRailGap = LANE_GAP_PT + 6f
+        val startDimTextSize = TEXT_PT - 2f
         val minDimTextSize = 7f
         val dimText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
-            textSize = dimTextSize
+            textSize = startDimTextSize
             color = 0xFF000000.toInt()
         }
 
@@ -384,7 +385,11 @@ fun composeShaftPdf(
 
         val maxRail = assignments.maxOfOrNull { it.rail } ?: 0
 
-        val renderer = PdfDimensionRenderer(
+        // Stacked dual values are a whole-SHEET choice, taken here and either honoured below or
+        // given up on entirely (`docs/DualUnitStacking_PLAN.md` §7): a sheet with some two-line and
+        // some one-line values reads as a mistake, so the fallback is per sheet, never per label.
+        val wantStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED
+        fun railRenderer(stacked: Boolean) = PdfDimensionRenderer(
             pageX = pageX,
             linePaint = dim,
             textPaint = dimText,
@@ -394,6 +399,7 @@ fun composeShaftPdf(
             blankLabels = blank,
             blankLabelWidthPx = BLANK_DIM_GAP_PT,
             blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
+            dualStacked = stacked,
         )
 
         val oalAft = if (spec.threads.any { t ->
@@ -409,16 +415,10 @@ fun composeShaftPdf(
 
         // Planner rows, OAL topmost. Rail y values here are UNLIFTED; the plan returns the
         // lifted line positions.
-        fun rows(gap: Float, unliftedTopY: Float) =
-            assignments.map { renderer.spanInput(it.rail, baseY - gap * it.rail, it.span) } +
-                renderer.spanInput(DimensionRailLayout.TOP_RAIL, unliftedTopY, oalDimSpan)
+        fun rows(r: PdfDimensionRenderer, gap: Float, unliftedTopY: Float) =
+            assignments.map { r.spanInput(it.rail, baseY - gap * it.rail, it.span) } +
+                r.spanInput(DimensionRailLayout.TOP_RAIL, unliftedTopY, oalDimSpan)
 
-        // A span too short to seat its value in the line prints it ABOVE the line, in the next
-        // rail's band — so every rail above lifts by one label band. Inline-vs-above is decided
-        // from x-geometry alone, so the lift is known before the lane budget is fixed and the
-        // fit loop can shrink the gap (then the text) until the lifted block still clears the
-        // content top.
-        fun liftFor(gap: Float): Float = renderer.topLift(rows(gap, 0f))
         // The OAL lane is the topmost measurement but rides exactly ONE regular tier
         // pitch above the highest component tier (on-device report: a wider gap wastes
         // whitespace); the planner's lift adds a label band only when the tier below
@@ -426,22 +426,68 @@ fun composeShaftPdf(
         fun computeTopY(gap: Float): Float =
             baseY - gap * (maxRail + 1f)
 
-        var topY = computeTopY(railGap) - liftFor(railGap)
-        repeat(10) {
-            if (topY >= geomRect.top + topSafePad) return@repeat
-            if (railGap > minRailGap) {
-                railGap = maxOf(railGap - 2f, minRailGap)
-            } else if (dimTextSize > minDimTextSize) {
-                dimTextSize = maxOf(dimTextSize - 1f, minDimTextSize)
-                dimText.textSize = dimTextSize
-            }
-            topY = computeTopY(railGap) - liftFor(railGap)
-        }
-        // Final clamp after loop — the OAL rail lands at topY once the lift is applied.
-        val topLift = liftFor(railGap)
-        topY = max(computeTopY(railGap) - topLift, geomRect.top + topSafePad)
+        val contentTopY = geomRect.top + topSafePad
 
-        val plan = renderer.plan(rows(railGap, topY + topLift), safeTopY = geomRect.top + topSafePad)
+        // Shrinks the lane pitch, then the text, until the lifted rail block clears the content
+        // top — and reports whether it got there. A span too short to seat its value in the line
+        // prints it ABOVE the line, in the next rail's band, so every rail above lifts by one
+        // label band; inline-vs-above is decided from x-geometry alone, so the lift is known
+        // before the lane budget is fixed.
+        //
+        // The lane floor is METRICS-DERIVED when values are stacked: a lane narrower than the
+        // value box lets the neighbouring rail's line print through the stack, and no amount of
+        // horizontal sliding can fix that. Single-line sheets keep the historical flat 10 pt
+        // floor, so nothing about a non-dual sheet moves.
+        fun fitRails(stacked: Boolean): RailFit {
+            dimText.textSize = startDimTextSize
+            val r = railRenderer(stacked)
+            var gap = startRailGap
+            var textSize = startDimTextSize
+            fun minGap(): Float =
+                if (!stacked) 10f
+                else max(10f, r.labelHeight() + 2f * DimensionRailLayout.LINE_HALF_CLEAR + 2f)
+            fun topYFor(g: Float): Float = computeTopY(g) - r.topLift(rows(r, g, 0f))
+            var topY = topYFor(gap)
+            repeat(12) {
+                if (topY >= contentTopY) return@repeat
+                if (gap > minGap()) {
+                    gap = maxOf(gap - 2f, minGap())
+                } else if (textSize > minDimTextSize) {
+                    textSize = maxOf(textSize - 1f, minDimTextSize)
+                    dimText.textSize = textSize
+                } else {
+                    return@repeat
+                }
+                topY = topYFor(gap)
+            }
+            return RailFit(gap, textSize, topY, fits = topY >= contentTopY)
+        }
+
+        var fit = fitRails(wantStacked)
+        var stacked = wantStacked
+        if (wantStacked && !fit.fits) {
+            // §7 degradation: the taller stack cannot be made to fit even at the smallest lane and
+            // the 7 pt text floor, so the WHOLE sheet reverts to the inline rendering rather than
+            // print a rail block that runs down into the drawing.
+            val inlineFit = fitRails(false)
+            if (inlineFit.fits || inlineFit.topY > fit.topY) {
+                fit = inlineFit
+                stacked = false
+                VerboseLog.i(VerboseLog.Category.PDF, "ShaftPdf") {
+                    "dual stacking: schematic rails fell back to INLINE — the stacked block " +
+                        "did not fit even at the smallest lane and text"
+                }
+            }
+        }
+        val renderer = railRenderer(stacked)
+        dimText.textSize = fit.textSize
+        val railGap = fit.railGap
+
+        // Final clamp after the fit — the OAL rail lands at topY once the lift is applied.
+        val topLift = renderer.topLift(rows(renderer, railGap, 0f))
+        val topY = max(computeTopY(railGap) - topLift, contentTopY)
+
+        val plan = renderer.plan(rows(renderer, railGap, topY + topLift), safeTopY = contentTopY)
         assignments.forEachIndexed { i, rs ->
             renderer.drawPlanned(c, rs.span, plan.placements[i], true)
         }
@@ -465,7 +511,8 @@ fun composeShaftPdf(
                 shaftBottomY = cy + halfHeightPx,
                 linePaint = dim,
                 textPaint = leaderText,
-                blankValues = blank
+                blankValues = blank,
+                dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
             )
             leader.draw(c, calls)
         }
@@ -535,6 +582,21 @@ private const val PAGE_MARGIN_PT = 36f       // 0.5 in
 private const val TOP_TEXT_PAD_PT = 12f
 private const val SHAFT_DOWN_PT = 36f        // 0.5 in downward shift (moves footer down too)
 private const val BAND_CLEAR_PT = 12f        // breathing room above shaft before first dim line
+/**
+ * Outcome of one rail-block fit attempt: the lane pitch and text size it settled on, the resulting
+ * unlifted top-rail y, and whether that actually cleared the content top.
+ *
+ * [fits] is what makes the stacked-vs-inline decision possible: the fit loop can exhaust its lane
+ * and text shrinks and still not make room, and on a stacked sheet that is the signal to give the
+ * stacking up for the whole sheet rather than print into the drawing.
+ */
+private class RailFit(
+    val railGap: Float,
+    val textSize: Float,
+    val topY: Float,
+    val fits: Boolean,
+)
+
 private const val BASE_DIM_OFFSET_PT = 24f   // distance from shaft top to first component dim
 private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
 
@@ -548,6 +610,18 @@ internal const val FOOTER_BLOCK_PT = 96f
 // the band, so an overloaded column tightens up instead of running off the page.
 internal const val FOOTER_BLOCK_BLANK_PT = 200f
 private const val FOOTER_LINE_FACTOR = 1.35f
+/**
+ * Tightest footer line pitch. The fit-clamp may squeeze toward it when wrapped lines make a column
+ * tall, but never past it — below this the lines touch and the block stops being readable.
+ */
+private const val FOOTER_LINE_FACTOR_MIN = 1.12f
+/**
+ * How far the footer band may grow UPWARD to fit wrapped content, in points.
+ *
+ * Comfortably inside `INFO_GAP_PT` (72 pt of air between the geometry and the footer), so a footer
+ * that grows can never climb into the drawing.
+ */
+private const val FOOTER_GROWTH_MAX_PT = 48f
 // Handwriting pitch: ~2.2 lines of the footer text size (≈ 26 pt on the schematic, ≈ 22 pt
 // on the consolidated sheet) — a printed-density 1.35 factor leaves no room to write a value
 // between the rules (on-device report).
@@ -787,7 +861,7 @@ internal fun buildTaperLengthSpans(
             DimSpan(
                 x0,
                 x1,
-                labelTop = formatLenDimDual(abs(x1 - x0), displayUnits.unitFor(tp.id), displayUnits.dual),
+                label = formatLenDimDualLabel(abs(x1 - x0), displayUnits.unitFor(tp.id), displayUnits.dual),
                 kind = SpanKind.LOCAL
             )
         )
@@ -800,7 +874,7 @@ internal fun buildTaperLengthSpans(
             DimSpan(
                 x0,
                 x1,
-                labelTop = formatLenDimDual(abs(x1 - x0), displayUnits.unitFor(tp.id), displayUnits.dual),
+                label = formatLenDimDualLabel(abs(x1 - x0), displayUnits.unitFor(tp.id), displayUnits.dual),
                 kind = SpanKind.LOCAL
             )
         )
@@ -1224,8 +1298,6 @@ internal fun drawFooter(
     blankValues: Boolean = false,
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
 ) {
-    val top = rect.top + 6f
-
     val cols = buildFooterEndColumns(spec, unit, cfg, blankValues, displayUnits)
 
     // The end columns lead with a taper heading; the middle job-info block has no heading of its
@@ -1240,35 +1312,6 @@ internal fun drawFooter(
             )
     ) 1 else 0
 
-    // Blank drafts open the line pitch up for handwriting, fit-clamped to the reserved band
-    // so the fullest column (taper + spooned note + thread) tightens toward printed density
-    // instead of running past the page margin. Printed footers keep the print pitch.
-    val lh = if (blankValues) {
-        val midLineCount = midLeadLines +
-            4 + // Customer / Vessel / Job # / Date
-            (if (cfg.bodyDiasMm.isNotEmpty()) 1 else 0) +
-            (if (keywayClockingFooterNote(spec) != null) 1 else 0) +
-            1 // Side:
-        val maxLines = maxOf(cols.aftLines.size, cols.fwdLines.size, midLineCount, 1)
-        min(text.textSize * FOOTER_LINE_FACTOR_BLANK, (rect.height() - 10f) / maxLines)
-            .coerceAtLeast(text.textSize * FOOTER_LINE_FACTOR)
-    } else {
-        text.textSize * FOOTER_LINE_FACTOR
-    }
-
-    // Blank drafts: any line that ends with ":" (or a bare "Ø") is a label whose value gets
-    // hand-written — draw a writing rule after it instead of a printed value. The rule runs
-    // to the COLUMN edge, not a fixed width: a ~1" rule is too short to hand-write a customer
-    // name or a diameter on a clipboard (on-device report).
-    fun drawFooterLine(line: String, x: Float, y: Float, maxW: Float) {
-        if (blankValues && (line.endsWith(":") || line.endsWith("Ø"))) {
-            drawLabelWithRule(c, line, x, y, text, ruleWidth = maxW, maxRight = x + maxW)
-        } else {
-            // Rich: footer spec lines carry the shop fractions ("Length: 12 5/8\"",
-            // "KW: 1/4 × 1/8 × 2\"") and must set them the way the rails do.
-            c.drawRichText(ellipsizeToWidth(line, text, maxW, rich = true), x, y, text)
-        }
-    }
 
     // Column starts. A printed footer weights the band toward the left and middle columns,
     // where the long free text lives (taper specs, customer and vessel names) — the FWD column
@@ -1283,7 +1326,7 @@ internal fun drawFooter(
     val rightX = rect.left + rect.width() * rightFrac
 
     // Column budgets: long free text (customer/vessel names) must never overrun the
-    // neighbouring column — ellipsize to the available width.
+    // neighbouring column.
     val colPad = 6f
     val leftMaxW  = midX - leftX - colPad
     val midMaxW   = rightX - midX - colPad
@@ -1291,53 +1334,102 @@ internal fun drawFooter(
     // blank draft pads it like the others so all three rules come out the same length.
     val rightMaxW = rect.right - rightX - (if (blankValues) colPad else 0f)
 
+    // The middle column's content, built as a list so its line count is known BEFORE the pitch is
+    // chosen — the end columns already arrive as lists. A `null` value means "label only": on a
+    // blank draft it draws a writing rule, on a printed sheet it is simply skipped.
+    val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    val midLines: List<String> = if (blankValues) {
+        buildList {
+            add("Customer:"); add("Vessel:"); add("Job #:"); add("Date:")
+            if (cfg.bodyDiasMm.isNotEmpty()) add("Body: Ø")
+            keywayClockingFooterNote(spec)?.let { add(it) }
+            add("Side:")
+        }
+    } else {
+        buildList {
+            add("Customer: ${project.customer}")
+            add("Vessel: ${project.vessel}")
+            add("Job #: ${project.jobNumber}")
+            add("Date: $date")
+            if (cfg.bodyDiasMm.isNotEmpty()) {
+                // No single component backs this line (it's the distinct set across every body),
+                // so it prints in the document unit — the same posture as the OAL rail.
+                val label = cfg.bodyDiasMm.joinToString(", ") {
+                    "Ø ${formatDiaWithUnitDual(it.toDouble(), displayUnits.documentUnit, displayUnits.dual)}"
+                }
+                add("Body: $label")
+            }
+            keywayClockingFooterNote(spec)?.let { add(it) }
+        }
+    }
+
+    // WRAPPING, not ellipsizing. A dual-unit spec line is roughly twice as wide as a single-unit
+    // one, and the old `…` truncation dropped the very figure the sheet exists to carry
+    // (on-device sheet, `docs/DualUnitStacking_PLAN.md` §1d). Wrapped rows cost line count, which
+    // the pitch below absorbs — and the band grows a little if it must.
+    fun wrapCount(lines: List<String>, maxW: Float): Int =
+        lines.sumOf { wrapRichLines(it, text, maxW, rich = true).size }
+    val wrappedMaxLines = maxOf(
+        wrapCount(cols.aftLines, leftMaxW),
+        wrapCount(cols.fwdLines, rightMaxW),
+        midLeadLines + wrapCount(midLines, midMaxW) + (if (blankValues) 0 else 1),  // +1: Side badge
+        1,
+    )
+
+    // The band grows UPWARD into the info gap when the wrapped content cannot fit it at the
+    // printed pitch — never past [FOOTER_GROWTH_MAX_PT], which is well inside `INFO_GAP_PT`, so
+    // the footer can never climb into the drawing.
+    val printedPitch = text.textSize * FOOTER_LINE_FACTOR
+    val neededH = wrappedMaxLines * printedPitch + 10f
+    val bandH = maxOf(rect.height(), minOf(neededH, rect.height() + FOOTER_GROWTH_MAX_PT))
+    val top = rect.bottom - bandH + 6f
+
+    // Blank drafts open the line pitch up for handwriting; both modes then fit-clamp to the band
+    // so the fullest column tightens instead of running off the page.
+    val lh = min(
+        text.textSize * (if (blankValues) FOOTER_LINE_FACTOR_BLANK else FOOTER_LINE_FACTOR),
+        (bandH - 10f) / wrappedMaxLines,
+    ).coerceAtLeast(text.textSize * FOOTER_LINE_FACTOR_MIN)
+
+    // Blank drafts: any line that ends with ":" (or a bare "Ø") is a label whose value gets
+    // hand-written — draw a writing rule after it instead of a printed value. The rule runs
+    // to the COLUMN edge, not a fixed width: a ~1" rule is too short to hand-write a customer
+    // name or a diameter on a clipboard (on-device report).
+    //
+    // Returns the y AFTER this line, one pitch per WRAPPED row.
+    fun drawFooterLine(line: String, x: Float, y: Float, maxW: Float): Float {
+        if (blankValues && (line.endsWith(":") || line.endsWith("Ø"))) {
+            drawLabelWithRule(c, line, x, y, text, ruleWidth = maxW, maxRight = x + maxW)
+            return y + lh
+        }
+        // Rich: footer spec lines carry the shop fractions ("Length: 12 5/8\"",
+        // "KW: 1/4 × 1/8 × 2\"") and must set them the way the rails do.
+        var yy = y
+        wrapRichLines(line, text, maxW, rich = true).forEach { row ->
+            c.drawRichText(row, x, yy, text)
+            yy += lh
+        }
+        return yy
+    }
+
     // AFT (left) — left-aligned at left margin
     run {
         var y = top
-        cols.aftLines.forEach { line ->
-            drawFooterLine(line, leftX, y, leftMaxW)
-            y += lh
-        }
+        cols.aftLines.forEach { line -> y = drawFooterLine(line, leftX, y, leftMaxW) }
     }
 
     // Middle (Work order) — left-aligned at 1/3 mark, one line down on a blank draft so its
     // rules line up with the end columns' (see midLeadLines).
     run {
         var y = top + midLeadLines * lh
-        if (blankValues) {
-            // Job info is hand-written on a blank draft — a fresh date, a different vessel.
-            drawFooterLine("Customer:", midX, y, midMaxW); y += lh
-            drawFooterLine("Vessel:",   midX, y, midMaxW); y += lh
-            drawFooterLine("Job #:",    midX, y, midMaxW); y += lh
-            drawFooterLine("Date:",     midX, y, midMaxW); y += lh
-            if (cfg.bodyDiasMm.isNotEmpty()) {
-                drawFooterLine("Body: Ø", midX, y, midMaxW); y += lh
-            }
-            keywayClockingFooterNote(spec)?.let { note ->
-                c.drawText(ellipsizeToWidth(note, text, midMaxW), midX, y, text); y += lh
-            }
-            drawFooterLine("Side:", midX, y, midMaxW)
-        } else {
-            val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            c.drawText(ellipsizeToWidth("Customer: ${project.customer}", text, midMaxW), midX, y, text); y += lh
-            c.drawText(ellipsizeToWidth("Vessel: ${project.vessel}", text, midMaxW),     midX, y, text); y += lh
-            c.drawText(ellipsizeToWidth("Job #: ${project.jobNumber}", text, midMaxW),   midX, y, text); y += lh
-            c.drawText("Date: $date",                   midX, y, text); y += lh
+        // One list, one draw loop, for both modes — the same lines the pitch was measured from
+        // above, so what was counted is exactly what prints. Free-text job fields (customer,
+        // vessel, job #) WRAP like every other footer line rather than losing their tail.
+        midLines.forEach { line -> y = drawFooterLine(line, midX, y, midMaxW) }
 
-            if (cfg.bodyDiasMm.isNotEmpty()) {
-                // No single component backs this line (it's the distinct set across every
-                // body), so it prints in the document unit — the same posture as the OAL rail.
-                val label = cfg.bodyDiasMm.joinToString(", ") {
-                    "Ø ${formatDiaWithUnitDual(it.toDouble(), displayUnits.documentUnit, displayUnits.dual)}"
-                }
-                c.drawText(ellipsizeToWidth("Body: $label", text, midMaxW), midX, y, text); y += lh
-            }
-
-            // Keyway clocking note — only meaningful with ≥ 2 keyways on the shaft.
-            keywayClockingFooterNote(spec)?.let { note ->
-                c.drawText(ellipsizeToWidth(note, text, midMaxW), midX, y, text); y += lh
-            }
-
+        // The Side badge sits below the job block, set larger — a blank draft writes it in on a
+        // rule instead, which `midLines` already carries as its own label line.
+        if (!blankValues) {
             project.side.printableLabelOrNull()?.let { pos ->
                 y += lh * 0.35f
                 val posPaint = Paint(text).apply {
@@ -1352,10 +1444,7 @@ internal fun drawFooter(
     // FWD (right) — left-aligned at 2/3 mark
     run {
         var y = top
-        cols.fwdLines.forEach { line ->
-            drawFooterLine(line, rightX, y, rightMaxW)
-            y += lh
-        }
+        cols.fwdLines.forEach { line -> y = drawFooterLine(line, rightX, y, rightMaxW) }
     }
 }
 
@@ -1427,11 +1516,14 @@ internal fun buildFooterEndColumns(
         add(line("Length:") { formatLenWithUnitDual(tp.lengthMm.toDouble(), tpUnit, dual) })
         if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
             val spoon = if (tp.keywaySpooned) " (spooned)" else ""
+            // The keyway resolves its OWN unit, falling back to the taper's: a metric keyway on an
+            // imperial taper is the common European case, and the rest of this column stays inches.
+            val kwUnit = displayUnits.keywayUnitFor(tp.id)
             add(line("KW:") {
                 if (tp.keywayLengthMm > 0f) {
-                    "${formatLenWithUnitDual(tp.keywayWidthMm.toDouble(), tpUnit, dual)} × ${formatLenWithUnitDual(tp.keywayDepthMm.toDouble(), tpUnit, dual)} × ${formatLenWithUnitDual(tp.keywayLengthMm.toDouble(), tpUnit, dual)}$spoon"
+                    "${formatLenWithUnitDual(tp.keywayWidthMm.toDouble(), kwUnit, dual)} × ${formatLenWithUnitDual(tp.keywayDepthMm.toDouble(), kwUnit, dual)} × ${formatLenWithUnitDual(tp.keywayLengthMm.toDouble(), kwUnit, dual)}$spoon"
                 } else {
-                    "${formatLenWithUnitDual(tp.keywayWidthMm.toDouble(), tpUnit, dual)} × ${formatLenWithUnitDual(tp.keywayDepthMm.toDouble(), tpUnit, dual)}$spoon"
+                    "${formatLenWithUnitDual(tp.keywayWidthMm.toDouble(), kwUnit, dual)} × ${formatLenWithUnitDual(tp.keywayDepthMm.toDouble(), kwUnit, dual)}$spoon"
                 }
             })
             if (tp.keywaySpooned) add(SPOONED_KW_NOTE)
@@ -1483,11 +1575,11 @@ internal fun buildFooterEndColumns(
     // matching the keyway's physical half of the shaft.
     fun bodyKwLine(b: Body): String {
         val spoon = if (b.keywaySpooned) " (spooned)" else ""
-        val bUnit = displayUnits.unitFor(b.id)
+        val kwUnit = displayUnits.keywayUnitFor(b.id)
         return line("Body KW:") {
-            "${formatLenWithUnitDual(b.keywayWidthMm.toDouble(), bUnit, dual)} × " +
-                "${formatLenWithUnitDual(b.keywayDepthMm.toDouble(), bUnit, dual)} × " +
-                "${formatLenWithUnitDual(b.keywayLengthMm.toDouble(), bUnit, dual)}$spoon"
+            "${formatLenWithUnitDual(b.keywayWidthMm.toDouble(), kwUnit, dual)} × " +
+                "${formatLenWithUnitDual(b.keywayDepthMm.toDouble(), kwUnit, dual)} × " +
+                "${formatLenWithUnitDual(b.keywayLengthMm.toDouble(), kwUnit, dual)}$spoon"
         }
     }
     spec.bodies.filter { it.hasKeyway }.forEach { b ->

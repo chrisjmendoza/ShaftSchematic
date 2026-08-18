@@ -5,6 +5,7 @@ import com.android.shaftschematic.geom.PlacedDiaCallout
 import com.android.shaftschematic.geom.planDiaCallouts
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import com.android.shaftschematic.util.DualLabel
 import org.junit.Test
 import java.io.File
 import java.util.Locale
@@ -56,7 +57,7 @@ class WearDiaCalloutSvgPreviewTest {
                 line(p.leader[s].x, p.leader[s].y, p.leader[s + 1].x, p.leader[s + 1].y, w = 0.7f)
             }
             // Baseline ≈ top + 0.8·textH (SVG has no fontMetrics; visually equivalent).
-            text(p.labelCx, p.labelTopY + textH * 0.8f, p.label)
+            text(p.labelCx, p.labelTopY + textH * 0.8f, p.label.inline())
         }
     }
 
@@ -79,7 +80,7 @@ class WearDiaCalloutSvgPreviewTest {
         val titleH = 9f
         val stations = readingsAxialToDiaMm.map { (ax, dia) ->
             val label = formatDiaWithUnit(dia.toDouble(), "INCHES")
-            DiaCalloutStation("r$ax", xAt(ax.coerceIn(0f, linerLenMm)), label, labelW(label))
+            DiaCalloutStation("r$ax", xAt(ax.coerceIn(0f, linerLenMm)), DualLabel.single(label), labelW(label))
         }
         val plan = planDiaCallouts(stations, stripLeft + 2f, stripRight - 2f, minGap)
         val diaBandPt = plan.labelsHeightPt(textH, rowGap) + 2f
@@ -191,7 +192,7 @@ class WearDiaCalloutSvgPreviewTest {
             )
             val stations = readings.map { r ->
                 val label = formatDiaWithUnit(r.dia.toDouble(), "INCHES")
-                DiaCalloutStation("p${r.x}", r.x, label, labelW(label))
+                DiaCalloutStation("p${r.x}", r.x, DualLabel.single(label), labelW(label))
             }
             val plan = planDiaCallouts(stations, left, right, minGap)
             val placed = plan.finish(

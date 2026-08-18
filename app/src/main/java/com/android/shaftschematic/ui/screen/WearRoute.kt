@@ -550,6 +550,8 @@ fun WearRoute(
                 // blank-draft switch as the tab body (ONE state, so the two always agree) and
                 // the wear block — contents, trace depth, wear-area shade, taper–liner join.
                 RunoutWearOptionsSheet(
+                    dualUnits = dualUnits,
+                    onDualUnitsChange = { vm.setDualUnits(it) },
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,

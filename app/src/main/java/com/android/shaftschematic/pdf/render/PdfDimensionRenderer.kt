@@ -5,8 +5,10 @@ import android.graphics.Paint
 import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.pdf.DIM_BREAK_TEXT_PAD_PT
 import com.android.shaftschematic.pdf.dim.DimSpan
-import com.android.shaftschematic.util.drawRichText
-import com.android.shaftschematic.util.measureRichText
+import com.android.shaftschematic.util.DualLabel
+import com.android.shaftschematic.util.drawDualLabel
+import com.android.shaftschematic.util.dualStackMetrics
+import com.android.shaftschematic.util.measureDualLabel
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -58,6 +60,15 @@ class PdfDimensionRenderer(
     private val blankLabels: Boolean = false, // blank-draft: cut the break, draw no value text
     private val blankLabelWidthPx: Float = 46f,
     private val blankLabelMinWidthPx: Float = 28f, // smallest write-in gap still worth cutting
+    /**
+     * Set every dual value as a two-line stack instead of one `primary [secondary]` line.
+     *
+     * Sheet-wide, never per label: `dual_units` is a document flag, so either every value here has
+     * a second term or none does, and the planner needs exactly ONE text height per plan. A stack
+     * is ~55% narrower, so it seats in the line break far more often — which is what pays for the
+     * taller band ([metrics]). See `docs/DualUnitStacking_PLAN.md`.
+     */
+    private val dualStacked: Boolean = false,
 ) {
     /**
      * The width this renderer occupies for a value — blank drafts reserve the write-in gap,
@@ -77,19 +88,40 @@ class PdfDimensionRenderer(
         } else {
             // Rich measure: a value carrying a fraction is set as a built-up stack, which is
             // NARROWER than the same characters inline. Measuring plain here would over-reserve
-            // the break and leave the value floating off-centre in it.
-            textPaint.measureRichText(span.labelTop)
+            // the break and leave the value floating off-centre in it. A stacked dual value
+            // measures as its WIDER line, which is the whole point of stacking.
+            textPaint.measureDualLabel(span.label, dualStacked)
         }
 
-    /** Text box metrics the planner needs, read live from this renderer's text paint. */
+    /**
+     * Text box metrics the planner needs, read live from this renderer's text paint.
+     *
+     * A stacked dual value is expressed by INFLATING the ascent by one line advance, and that is
+     * the only vertical change the whole rail path needs: `height`, `band`, the per-rail lifts and
+     * every collision box grow from it, and [drawLabel] still computes its baseline off the REAL
+     * paint ascent — so the primary line lands exactly where the single line used to and the
+     * secondary fills the room the inflation reserved. One definition of the advance
+     * (`Paint.dualStackMetrics`) serves both sides, so they cannot drift.
+     */
     fun metrics(): DimensionRailLayout.TextMetrics {
         val fm = textPaint.fontMetrics
+        val extra = if (dualStacked) textPaint.dualStackMetrics().advance else 0f
         return DimensionRailLayout.TextMetrics(
-            ascent = fm.ascent,
+            ascent = fm.ascent - extra,
             descent = fm.descent,
             aboveDy = textAboveDy,
         )
     }
+
+    /**
+     * The vertical room one value needs, gap included — the label band. A composer reads this to
+     * derive its lane pitch: a lane narrower than this prints the neighbouring rail's line through
+     * the value (`minRailGap`, `docs/DualUnitStacking_PLAN.md` §6).
+     */
+    fun labelBand(): Float = metrics().band
+
+    /** The value box height alone (no gap) — a stack is one line taller than a single value. */
+    fun labelHeight(): Float = metrics().height
 
     /**
      * Planner input for one (rail, span) row. [railY] is the caller's UNLIFTED rail position;
@@ -152,19 +184,22 @@ class PdfDimensionRenderer(
             canvas.drawLine(xa, y, xb, y, linePaint)
         }
 
-        drawLabel(canvas, span.labelTop, placement.label)
+        drawLabel(canvas, span.label, placement.label)
 
         // ---- arrowheads: outward only on a span too narrow to hold both (planner's call) ----
         drawArrow(canvas, xAt = xa, y = y, inward = placement.arrowsInward, isLeftEnd = true)
         drawArrow(canvas, xAt = xb, y = y, inward = placement.arrowsInward, isLeftEnd = false)
     }
 
-    private fun drawLabel(canvas: Canvas, label: String, bounds: DimensionRailLayout.Box) {
+    private fun drawLabel(canvas: Canvas, label: DualLabel, bounds: DimensionRailLayout.Box) {
         if (blankLabels) return  // the gap itself is the write-in spot; the plan still reserved it
+        // The REAL paint ascent, deliberately — see [metrics]. On a stacked sheet the box top is
+        // one advance higher than a single line's would be, so this baseline is the PRIMARY line's
+        // and `drawDualLabel` steps down to the secondary from there.
         val baseline = bounds.top - textPaint.fontMetrics.ascent
         val prevAlign = textPaint.textAlign
         textPaint.textAlign = Paint.Align.CENTER
-        canvas.drawRichText(label, bounds.centerX, baseline, textPaint)
+        canvas.drawDualLabel(label, bounds.centerX, baseline, textPaint, dualStacked)
         textPaint.textAlign = prevAlign
     }
 

@@ -106,17 +106,48 @@ private fun toDisplayString(mm: Float, unit: UnitSystem, d: Int = 3): String {
  * Body — Start, Length, Diameter (unit-aware)
  * ──────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * The keyway's unit, as an ENTRY control: it decides what the KW numbers typed under it mean.
+ *
+ * Distinct from the carousel's card-foot "Prints in" chip, which is display-only and card-only;
+ * this one changes a value, so it appears in the Add dialogs as well as on the cards (the
+ * dialog/card parity rule). Choosing the document unit clears the override.
+ */
+@Composable
+internal fun KeywayUnitEntryChips(
+    selected: UnitSystem,
+    documentUnit: UnitSystem,
+    onChoose: (UnitSystem?) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Keyway in:", style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        DirectionChip("in", selected = selected == UnitSystem.INCHES) {
+            onChoose(if (documentUnit == UnitSystem.INCHES) null else UnitSystem.INCHES)
+        }
+        DirectionChip("mm", selected = selected == UnitSystem.MILLIMETERS) {
+            onChoose(if (documentUnit == UnitSystem.MILLIMETERS) null else UnitSystem.MILLIMETERS)
+        }
+    }
+}
+
 @Composable
 fun AddBodyDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
     initialStartMm: Float? = null,
     initialLengthMm: Float? = null,
+    /** Settings → Drawing → "Per-component units": gates the keyway's own unit chip. */
+    perComponentUnitsEnabled: Boolean = false,
     onSubmit: (startMm: Float, lengthMm: Float, diaMm: Float,
                keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
                keywaySpooned: Boolean, keyways180Apart: Boolean, keyways90Apart: Boolean,
-               keyways90Cw: Boolean) -> Unit,
+               keyways90Cw: Boolean, keywayUnit: UnitSystem?) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -147,10 +178,13 @@ fun AddBodyDialog(
     val diaMm = toMmOrNull(dia, unit) ?: -1f
 
     // Keyway values only count when the Keyway checkbox is on.
-    val kwW = if (kwEnabled) toMmOrNull(kwWidth,  unit) ?: 0f else 0f
-    val kwD = if (kwEnabled) toMmOrNull(kwDepth,  unit) ?: 0f else 0f
-    val kwL = if (kwEnabled) toMmOrNull(kwLength, unit) ?: 0f else 0f
-    val kwO = if (kwEnabled) toMmOrNull(kwOffset, unit) ?: 0f else 0f
+    // Null = the keyway follows the document unit, the default and the common case.
+    var kwUnitOverride by remember { mutableStateOf<UnitSystem?>(null) }
+    val kwUnit = kwUnitOverride ?: unit
+    val kwW = if (kwEnabled) toMmOrNull(kwWidth,  kwUnit) ?: 0f else 0f
+    val kwD = if (kwEnabled) toMmOrNull(kwDepth,  kwUnit) ?: 0f else 0f
+    val kwL = if (kwEnabled) toMmOrNull(kwLength, kwUnit) ?: 0f else 0f
+    val kwO = if (kwEnabled) toMmOrNull(kwOffset, kwUnit) ?: 0f else 0f
     val isFloating = kwO > 0f
     // Same condition as the carousel card's switch: it appears once the shaft will
     // have ≥ 2 keyways (≥ 1 existing plus the one being defined here).
@@ -191,18 +225,26 @@ fun AddBodyDialog(
                         DirectionChip("AFT", selected = !kwFwd) { kwFwd = false }
                         DirectionChip("FWD", selected =  kwFwd) { kwFwd = true  }
                     }
+                    // The keyway's own unit, offered here as well as on the card: it changes what
+                    // the numbers below MEAN, so it is value entry and lives under the parity rule
+                    // (unlike the card-only "Prints in" chip, which is display-only). A European
+                    // keyway is whole millimetres on an otherwise imperial shaft.
+                    if (perComponentUnitsEnabled) {
+                        KeywayUnitEntryChips(kwUnit, unit) { kwUnitOverride = it }
+                        Spacer(Modifier.height(4.dp))
+                    }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        CommitNumField("KW W (${abbr(unit)})", kwWidth,
+                        CommitNumField("KW W (${abbr(kwUnit)})", kwWidth,
                             modifier = Modifier.weight(1f)) { kwWidth = it }
                         Text("×", style = MaterialTheme.typography.titleMedium)
-                        CommitNumField("KW D (${abbr(unit)})", kwDepth,
+                        CommitNumField("KW D (${abbr(kwUnit)})", kwDepth,
                             modifier = Modifier.weight(1f)) { kwDepth = it }
                     }
                     Spacer(Modifier.height(8.dp))
-                    CommitNumField("KW L (${abbr(unit)})", kwLength) { kwLength = it }
+                    CommitNumField("KW L (${abbr(kwUnit)})", kwLength) { kwLength = it }
                     Spacer(Modifier.height(8.dp))
-                    CommitNumField("KW Offset from ${if (kwFwd) "FWD" else "AFT"} (${abbr(unit)})", kwOffset) { kwOffset = it }
+                    CommitNumField("KW Offset from ${if (kwFwd) "FWD" else "AFT"} (${abbr(kwUnit)})", kwOffset) { kwOffset = it }
                     Spacer(Modifier.height(4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
@@ -268,6 +310,7 @@ fun AddBodyDialog(
                     if (showClockingToggle) clock180 else spec.keyways180Apart,
                     if (showClockingToggle) clock90 else spec.keyways90Apart,
                     if (showClockingToggle) cw90 else spec.keyways90Cw,
+                    if (kwEnabled) kwUnitOverride else null,
                 )
             }) { Text("Add") }
         },
@@ -671,11 +714,13 @@ fun AddTaperDialog(
     overallIsManual: Boolean = false,
     initialStartMm: Float? = null,
     initialLengthMm: Float? = null,
+    /** Settings → Drawing → "Per-component units": gates the keyway's own unit chip. */
+    perComponentUnitsEnabled: Boolean = false,
     onSubmit: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float, rateText: String,
                reference: LinerAuthoredReference,
                keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                keywayOffsetFromSetMm: Float, keywaySpooned: Boolean, keyways180Apart: Boolean,
-               keyways90Apart: Boolean, keyways90Cw: Boolean) -> Unit,
+               keyways90Apart: Boolean, keyways90Cw: Boolean, keywayUnit: UnitSystem?) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -778,13 +823,16 @@ fun AddTaperDialog(
         )
     }
 
-    val keywayOffsetMm = toMmOrNull(kwOffset, unit) ?: 0f
+    // Null = the keyway follows the document unit, the default and the common case.
+    var kwUnitOverride by remember { mutableStateOf<UnitSystem?>(null) }
+    val kwUnit = kwUnitOverride ?: unit
+    val keywayOffsetMm = toMmOrNull(kwOffset, kwUnit) ?: 0f
     val isFloating = keywayOffsetMm > 0f
     // Same condition as the carousel card's switch: it appears once the shaft will
     // have ≥ 2 keyways (≥ 1 existing plus the one being defined here).
-    val kwDefined = (toMmOrNull(kwWidth, unit) ?: 0f) > 0f &&
-        (toMmOrNull(kwDepth, unit) ?: 0f) > 0f &&
-        (toMmOrNull(kwLength, unit) ?: 0f) > 0f
+    val kwDefined = (toMmOrNull(kwWidth, kwUnit) ?: 0f) > 0f &&
+        (toMmOrNull(kwDepth, kwUnit) ?: 0f) > 0f &&
+        (toMmOrNull(kwLength, kwUnit) ?: 0f) > 0f
     val showClockingToggle = spec.keywayCount() >= 1 && kwDefined
 
     val scroll = rememberScrollState()
@@ -842,18 +890,24 @@ fun AddTaperDialog(
                 Text("Keyway (optional)", style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(4.dp))
+                // The keyway's own unit — value entry, so it appears here as well as on the card
+                // (the parity rule); a European keyway is whole millimetres on an imperial shaft.
+                if (perComponentUnitsEnabled) {
+                    KeywayUnitEntryChips(kwUnit, unit) { kwUnitOverride = it }
+                    Spacer(Modifier.height(4.dp))
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    CommitNumField("KW W (${abbr(unit)})", kwWidth,
+                    CommitNumField("KW W (${abbr(kwUnit)})", kwWidth,
                         modifier = Modifier.weight(1f)) { kwWidth = it }
                     Text("×", style = MaterialTheme.typography.titleMedium)
-                    CommitNumField("KW D (${abbr(unit)})", kwDepth,
+                    CommitNumField("KW D (${abbr(kwUnit)})", kwDepth,
                         modifier = Modifier.weight(1f)) { kwDepth = it }
                 }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("KW L (${abbr(unit)})", kwLength) { kwLength = it }
+                CommitNumField("KW L (${abbr(kwUnit)})", kwLength) { kwLength = it }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("KW Offset from SET (${abbr(unit)})", kwOffset) { kwOffset = it }
+                CommitNumField("KW Offset from SET (${abbr(kwUnit)})", kwOffset) { kwOffset = it }
                 Spacer(Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
@@ -946,7 +1000,7 @@ fun AddTaperDialog(
                     val kwW = toMmOrNull(kwWidth,  unit) ?: 0f
                     val kwD = toMmOrNull(kwDepth,  unit) ?: 0f
                     val kwL = toMmOrNull(kwLength, unit) ?: 0f
-                    val kwO = toMmOrNull(kwOffset, unit) ?: 0f
+                    val kwO = toMmOrNull(kwOffset, kwUnit) ?: 0f
                     val submitRateText = if (autoRate) computedRateText.orEmpty() else rateText
                     val action = {
                         onSubmit(physStartMm, lengthMm, startDia, endDia, submitRateText,
@@ -954,7 +1008,8 @@ fun AddTaperDialog(
                                  kwW, kwD, kwL, kwO, kwSpooned && !isFloating,
                                  if (showClockingToggle) clock180 else spec.keyways180Apart,
                                  if (showClockingToggle) clock90 else spec.keyways90Apart,
-                                 if (showClockingToggle) cw90 else spec.keyways90Cw)
+                                 if (showClockingToggle) cw90 else spec.keyways90Cw,
+                                 if (kwDefined) kwUnitOverride else null)
                     }
                     val warnings = collectAddWarnings(spec, physStartMm, lengthMm, overallIsManual)
                     if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }

@@ -51,6 +51,7 @@ import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MIN_MM
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.setPdfWearTraceDepthFrac
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
@@ -483,6 +484,58 @@ internal fun FractionStyleChips(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * How a dual value is SET — the same picker in Settings → Drawing and both PDF options sheets.
+ *
+ * Only bites on a document with dual units switched on; on a single-unit sheet neither layout
+ * changes a thing, which is why this sits beside the other drawing prefs rather than in the
+ * document's own controls.
+ */
+@Composable
+internal fun DualUnitLayoutChips(
+    layout: DualUnitLayout,
+    onCommit: (DualUnitLayout) -> Unit,
+    /**
+     * False on a document with dual units switched OFF: the choice still SHOWS (so the setting is
+     * discoverable, and its stored value visible) but cannot be tapped, because it styles something
+     * the sheet is not printing. The same display-only lock the consolidated sheet's "Liners" shade
+     * checkbox uses — graying out never rewrites the stored preference.
+     */
+    enabled: Boolean = true,
+) {
+    Column {
+        Text("Dual-unit layout", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            DualUnitLayout.entries.forEach { option ->
+                FilterChip(
+                    selected = layout == option,
+                    enabled = enabled,
+                    onClick = { onCommit(option) },
+                    label = { Text(option.uiLabel()) },
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .testTag("dual_unit_layout_${option.name.lowercase()}"),
+                )
+            }
+        }
+        Text(
+            dualUnitLayoutHint(layout),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** One-line description of what the selected dual layout draws. */
+private fun dualUnitLayoutHint(layout: DualUnitLayout): String = when (layout) {
+    DualUnitLayout.INLINE ->
+        "Both units on one line: 1 1/2\" [38.1 mm]. Never changes a sheet's spacing."
+    DualUnitLayout.STACKED ->
+        "Second unit under the first. About half as wide, so more values sit in the dimension " +
+            "line instead of above it — a sheet too tight for the taller value falls back to inline."
 }
 
 /** One-line description of what the selected style draws. */

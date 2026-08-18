@@ -1,7 +1,11 @@
 // app/src/main/java/com/android/shaftschematic/pdf/WearStripLayout.kt
 package com.android.shaftschematic.pdf
 
+import android.graphics.Paint
+
 import com.android.shaftschematic.geom.DimensionRailLayout
+import com.android.shaftschematic.util.DualLabel
+import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.geom.SetPositions
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -1308,6 +1312,42 @@ const val WEAR_RAIL_MAX_LABEL_ROWS = 2
  */
 const val WEAR_RAIL_WITNESS_RUN_PT = 9f
 
+/** Least drawn cylinder height (pt) a strip must keep for its liner to read as a drawing. */
+const val WEAR_STRIP_MIN_CYL_PT = 26f
+
+/**
+ * One rail label row's height for a strip: the shipped [WEAR_STRIP_ROW_HEIGHT_PT], or the whole
+ * two-line stack plus the same air when dual values are set stacked.
+ *
+ * ONE definition, read by the reserved band ([computeWearStripInnerLayout]) and by the drawn
+ * stepping (`WearPdfComposer.drawWearStripRail`) alike — the two used to be independent numbers
+ * (13 pt budgeted, `textSize + 3` drawn) that only nested by luck.
+ */
+fun wearRailRowHeightPt(dimText: Paint, dualStacked: Boolean): Float =
+    if (!dualStacked) WEAR_STRIP_ROW_HEIGHT_PT
+    else maxOf(WEAR_STRIP_ROW_HEIGHT_PT, dimText.dualStackMetrics().height + 3f)
+
+/**
+ * Whether a strip band of [stripHeightPt] can carry stacked rail rows and still draw a liner.
+ *
+ * The stacked decision is per SHEET (`docs/DualUnitStacking_PLAN.md` §7) — a page with some
+ * two-line and some one-line values reads as a mistake — so the caller asks this of its TIGHTEST
+ * strip and applies the answer to all of them. Pure arithmetic over the same terms
+ * [computeWearStripInnerLayout] splits, so the two cannot disagree about what fits.
+ */
+fun wearStripAffordsStackedRail(
+    stripHeightPt: Float,
+    titleHeightPt: Float,
+    rowHeightPt: Float,
+    maxLabelRows: Int = WEAR_RAIL_MAX_LABEL_ROWS,
+    witnessRunPt: Float = WEAR_RAIL_WITNESS_RUN_PT,
+    labelHeadroomPt: Float = WEAR_STRIP_LABEL_HEADROOM_PT,
+    minCylHeightPt: Float = WEAR_STRIP_MIN_CYL_PT,
+): Boolean {
+    val railBudget = maxLabelRows.coerceAtLeast(0) * rowHeightPt + witnessRunPt.coerceAtLeast(0f)
+    return stripHeightPt - titleHeightPt - labelHeadroomPt - railBudget >= minCylHeightPt
+}
+
 data class WearStripInnerLayout(
     val cylTop: Float,
     val cylBottom: Float,
@@ -1408,8 +1448,13 @@ fun computeWearStripInnerLayout(
 
 private const val WEAR_RAIL_SPAN_EPS_MM = 1e-3f
 
-/** One span in a wear-strip's chained dimension rail — liner-local mm, aft edge = 0. */
-data class WearRailSpan(val startMm: Float, val endMm: Float, val label: String)
+/**
+ * One span in a wear-strip's chained dimension rail — liner-local mm, aft edge = 0.
+ *
+ * [label] keeps a dual value's two terms apart so the rail can set them stacked; a single-unit
+ * sheet is a [DualLabel] with no secondary and draws byte-identically to the string it replaced.
+ */
+data class WearRailSpan(val startMm: Float, val endMm: Float, val label: DualLabel)
 
 /**
  * Builds the ordered chain of dimension spans for one liner's detail-strip rail: liner AFT
@@ -1448,17 +1493,17 @@ fun buildWearStripRailSpans(
         val effStart = maxOf(band.startMm, cursor)
         val gapLen = effStart - cursor
         if (gapLen > WEAR_RAIL_SPAN_EPS_MM) {
-            spans += WearRailSpan(cursor, effStart, formatLenDimDual(gapLen.toDouble(), unit, dual))
+            spans += WearRailSpan(cursor, effStart, formatLenDimDualLabel(gapLen.toDouble(), unit, dual))
         }
         val bandEnd = maxOf(band.startMm + band.lengthMm, effStart)
         if (bandEnd - effStart > WEAR_RAIL_SPAN_EPS_MM) {
-            spans += WearRailSpan(effStart, bandEnd, formatLenDimDual((bandEnd - effStart).toDouble(), unit, dual))
+            spans += WearRailSpan(effStart, bandEnd, formatLenDimDualLabel((bandEnd - effStart).toDouble(), unit, dual))
         }
         cursor = maxOf(cursor, bandEnd)
     }
     val trailing = linerLengthMm - cursor
     if (trailing > WEAR_RAIL_SPAN_EPS_MM) {
-        spans += WearRailSpan(cursor, linerLengthMm, formatLenDimDual(trailing.toDouble(), unit, dual))
+        spans += WearRailSpan(cursor, linerLengthMm, formatLenDimDualLabel(trailing.toDouble(), unit, dual))
     }
     return spans
 }
@@ -1476,7 +1521,7 @@ fun buildWearStripRailSpans(
 data class WearRailSpanLayout(
     val x0Pt: Float,
     val x1Pt: Float,
-    val label: String,
+    val label: DualLabel,
     val labelCxPt: Float,
     val labelRow: Int,
     val seatsInBreak: Boolean,
@@ -1506,7 +1551,7 @@ data class WearRailSpanLayout(
 fun layoutWearStripRail(
     spans: List<WearRailSpan>,
     xAtStripMm: (Float) -> Float,
-    labelWidthPt: (String) -> Float,
+    labelWidthPt: (DualLabel) -> Float,
     textPadPt: Float = 4f,
     arrowSizePt: Float = 4f,
     minLabelGapPt: Float = 4f,

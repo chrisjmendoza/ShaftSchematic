@@ -3,7 +3,7 @@ package com.android.shaftschematic.pdf.dim
 import com.android.shaftschematic.geom.SetPositions
 import com.android.shaftschematic.model.LinerAnchor
 import com.android.shaftschematic.model.LinerDim
-import com.android.shaftschematic.pdf.formatLenDimDual
+import com.android.shaftschematic.pdf.formatLenDimDualLabel
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
@@ -42,22 +42,22 @@ fun buildLinerSpans(
             LinerAnchor.AFT_SET -> {
                 val start = sets.aftSETxMm + ln.offsetFromSetMm
                 val end = start + ln.lengthMm
-                val datumLabel = forcedRefMm?.let { formatLenDimDual(abs(start - it), lnUnit, dual) }
-                    ?: formatLenDimDual(ln.offsetFromSetMm, lnUnit, dual)
-                val localLabel = forcedRefMm?.let { formatLenDimDual(abs(end - it), lnUnit, dual) }
-                    ?: formatLenDimDual(ln.lengthMm, lnUnit, dual)
-                add(DimSpan(sets.aftSETxMm, start, labelTop = datumLabel, kind = SpanKind.DATUM))
-                add(DimSpan(start, end, labelTop = localLabel, kind = SpanKind.LOCAL))
+                val datumLabel = forcedRefMm?.let { formatLenDimDualLabel(abs(start - it), lnUnit, dual) }
+                    ?: formatLenDimDualLabel(ln.offsetFromSetMm, lnUnit, dual)
+                val localLabel = forcedRefMm?.let { formatLenDimDualLabel(abs(end - it), lnUnit, dual) }
+                    ?: formatLenDimDualLabel(ln.lengthMm, lnUnit, dual)
+                add(DimSpan(sets.aftSETxMm, start, label = datumLabel, kind = SpanKind.DATUM))
+                add(DimSpan(start, end, label = localLabel, kind = SpanKind.LOCAL))
             }
             LinerAnchor.FWD_SET -> {
                 val fwdEdge = sets.fwdSETxMm - ln.offsetFromSetMm
                 val aftEdge = fwdEdge - ln.lengthMm
-                val datumLabel = forcedRefMm?.let { formatLenDimDual(abs(fwdEdge - it), lnUnit, dual) }
-                    ?: formatLenDimDual(ln.offsetFromSetMm, lnUnit, dual)
-                val localLabel = forcedRefMm?.let { formatLenDimDual(abs(aftEdge - it), lnUnit, dual) }
-                    ?: formatLenDimDual(ln.lengthMm, lnUnit, dual)
-                add(DimSpan(sets.fwdSETxMm, fwdEdge, labelTop = datumLabel, kind = SpanKind.DATUM))
-                add(DimSpan(fwdEdge, aftEdge, labelTop = localLabel, kind = SpanKind.LOCAL))
+                val datumLabel = forcedRefMm?.let { formatLenDimDualLabel(abs(fwdEdge - it), lnUnit, dual) }
+                    ?: formatLenDimDualLabel(ln.offsetFromSetMm, lnUnit, dual)
+                val localLabel = forcedRefMm?.let { formatLenDimDualLabel(abs(aftEdge - it), lnUnit, dual) }
+                    ?: formatLenDimDualLabel(ln.lengthMm, lnUnit, dual)
+                add(DimSpan(sets.fwdSETxMm, fwdEdge, label = datumLabel, kind = SpanKind.DATUM))
+                add(DimSpan(fwdEdge, aftEdge, label = localLabel, kind = SpanKind.LOCAL))
             }
         }
     }
@@ -77,5 +77,12 @@ fun buildLinerSpans(
 fun oalSpan(x1Mm: Double, x2Mm: Double, unit: UnitSystem, labelMm: Double = x2Mm - x1Mm, dual: Boolean = false): DimSpan {
     // Printed spans keep the small "OAL" prefix as a visual identifier (product decision);
     // blank drafts never see it — the renderer cuts an empty break and drops label text.
-    return DimSpan(x1Mm, x2Mm, labelTop = "OAL ${formatLenDimDual(labelMm, unit, dual)}", kind = SpanKind.OAL)
+    val value = formatLenDimDualLabel(labelMm, unit, dual)
+    return DimSpan(
+        x1Mm, x2Mm,
+        // The "OAL" identifier rides the PRIMARY term, so a stacked label reads
+        // `OAL 133"` over `3378.2 mm` rather than repeating the prefix.
+        label = value.copy(primary = "OAL ${value.primary}"),
+        kind = SpanKind.OAL,
+    )
 }

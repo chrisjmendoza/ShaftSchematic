@@ -46,6 +46,8 @@ import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.UndercutStyle
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.keywayUnitKey
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.parseToMm
@@ -329,6 +331,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // which is not snapshot state.
     internal val _pdfFractionStyle = MutableStateFlow(PdfPrefs().fractionStyle)
     val pdfFractionStyle: StateFlow<FractionStyle> = _pdfFractionStyle.asStateFlow()
+
+    // How a dual value is SET (inline one-liner vs two-line stack). Unlike the fraction style this
+    // one moves LAYOUT, so the composers take it as a parameter; the StateFlow is what lets each
+    // preview name it as a re-render key.
+    internal val _pdfDualUnitLayout = MutableStateFlow(PdfPrefs().dualUnitLayout)
+    val pdfDualUnitLayout: StateFlow<DualUnitLayout> = _pdfDualUnitLayout.asStateFlow()
 
     internal val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
@@ -1468,6 +1476,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
+            SettingsStore.pdfDualUnitLayoutFlow(getApplication()).collectLatest { persisted ->
+                _pdfDualUnitLayout.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(dualUnitLayout = persisted) }
+            }
+        }
+        viewModelScope.launch {
             SettingsStore.pdfExportModeFlow(getApplication()).collectLatest { persisted ->
                 _pdfExportMode.value = persisted
             }
@@ -1755,6 +1769,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         keywayOffsetFromEndMm: Float = 0f,
         keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,
         keywaySpooned: Boolean = false,
+        /**
+         * The unit this keyway is authored and printed in, when it differs from the component's.
+         * `null` = follows the component (the overwhelmingly common case). Registered as a
+         * derived-key override exactly like a metric thread's, so it rides `unit_overrides` with
+         * no new field.
+         */
+        keywayUnit: UnitSystem? = null,
     ) {
         val id = newId()
         _spec.update { s ->
@@ -1775,6 +1796,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 ) + s.bodies
             )
         }
+        applyKeywayUnit(id, keywayUnit)
         rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
         ensureOverall()
         _selectedComponentId.value = id
@@ -1883,6 +1905,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         keywayLengthMm: Float = 0f,
         keywayOffsetFromSetMm: Float = 0f,
         keywaySpooned: Boolean = false,
+        /**
+         * The unit this keyway is authored and printed in, when it differs from the component's.
+         * `null` = follows the component (the overwhelmingly common case). Registered as a
+         * derived-key override exactly like a metric thread's, so it rides `unit_overrides` with
+         * no new field.
+         */
+        keywayUnit: UnitSystem? = null,
     ) {
         val id = newId()
         // Which end is the Small End follows the taper's physical half, judged against the OAL
@@ -1927,6 +1956,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
         // Read the typed SET/LET back out of the x-ordered pair the same way it was put in, so
         // a FWD-half add seeds the next dialog's SET default from a SET and not from a LET.
+        applyKeywayUnit(id, keywayUnit)
         rememberTaperDefaults(
             lengthMm = lengthMm,
             setDiaMm = if (smallEndAtStart) startDiaMm else endDiaMm,
@@ -2162,6 +2192,23 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * a metric thread pins to mm; clearing the designation drops the pin (back to document
      * unit), unless the user has since set an explicit override for that id.
      */
+    /**
+     * Sets (or clears, with null) the unit a component's KEYWAY is authored and printed in.
+     *
+     * Public counterpart of [applyMetricThreadUnit]: both register a display-unit override under a
+     * derived key rather than adding storage, so a metric keyway on an imperial taper travels in
+     * the same `unit_overrides` map as everything else.
+     */
+    fun setKeywayUnit(componentId: String, unit: UnitSystem?) {
+        if (componentId.isBlank()) return
+        applyKeywayUnit(componentId, unit)
+    }
+
+    private fun applyKeywayUnit(componentId: String, unit: UnitSystem?) {
+        val key = keywayUnitKey(componentId)
+        _unitOverrides.update { if (unit == null) it - key else it + (key to unit) }
+    }
+
     private fun applyMetricThreadUnit(threadId: String, metricDesignation: String?) {
         if (!metricDesignation.isNullOrBlank()) {
             _unitOverrides.update { it + (threadId to UnitSystem.MILLIMETERS) }

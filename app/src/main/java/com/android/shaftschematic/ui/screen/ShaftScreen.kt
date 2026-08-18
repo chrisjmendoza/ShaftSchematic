@@ -171,6 +171,8 @@ fun ShaftScreen(
     perComponentUnitsEnabled: Boolean = false,
     unitOverrides: Map<String, UnitSystem> = emptyMap(),
     onSetComponentUnit: (String, UnitSystem?) -> Unit = { _, _ -> },
+    /** Sets (null clears) the unit a component's KEYWAY is authored and printed in. */
+    onSetKeywayUnit: (String, UnitSystem?) -> Unit = { _, _ -> },
 
     // Setters
     onSetCustomer: (String) -> Unit,
@@ -187,13 +189,14 @@ fun ShaftScreen(
     onAddBody: (startMm: Float, lengthMm: Float, diaMm: Float,
                 keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                 keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
-                keywaySpooned: Boolean) -> Unit,
+                keywaySpooned: Boolean, keywayUnit: UnitSystem?) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onAddTaper: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float,
                  rateText: String, reference: LinerAuthoredReference,
                  keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
-                 keywayOffsetFromSetMm: Float, keywaySpooned: Boolean) -> Unit,
+                 keywayOffsetFromSetMm: Float, keywaySpooned: Boolean,
+                 keywayUnit: UnitSystem?) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean,
                   isAftEnd: Boolean, metricDesignation: String?) -> Unit,
     onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
@@ -667,7 +670,7 @@ fun ShaftScreen(
                     // Auto-body promotion adds a plain body; keyways are added later
                     // via the promoted card's keyway fields.
                     onAddBody = { s, l, d ->
-                        onAddBody(s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false)
+                        onAddBody(s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null)
                     },
                     onSetAutoSectionDia = onSetAutoSectionDia,
                     onSetShowAutoBodyDia = onSetShowAutoBodyDia,
@@ -705,6 +708,7 @@ fun ShaftScreen(
                     perComponentUnitsEnabled = perComponentUnitsEnabled,
                     unitOverrides = unitOverrides,
                     onSetComponentUnit = onSetComponentUnit,
+                    onSetKeywayUnit = onSetKeywayUnit,
                 )
 
                 if (chooserOpen) {
@@ -799,9 +803,10 @@ fun ShaftScreen(
                         spec = spec,
                         initialStartMm = addStartMm,
                         initialLengthMm = addLengthMm,
-                        onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90 ->
+                        perComponentUnitsEnabled = perComponentUnitsEnabled,
+                        onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit ->
                             addBodyOpen = false
-                            onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned)
+                            onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit)
                             onSetKeyways180Apart(k180)
                             onSetKeyways90Apart(k90)
                             if (k90) onSetKeyways90Cw(cw90)
@@ -832,9 +837,10 @@ fun ShaftScreen(
                         overallIsManual = overallIsManual,
                         initialStartMm = addStartMm,
                         initialLengthMm = addLengthMm,
-                        onSubmit = { s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90 ->
+                        perComponentUnitsEnabled = perComponentUnitsEnabled,
+                        onSubmit = { s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90, kwUnit ->
                             addTaperOpen = false
-                            onAddTaper(s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned)
+                            onAddTaper(s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, kwUnit)
                             onSetKeyways180Apart(k180)
                             onSetKeyways90Apart(k90)
                             if (k90) onSetKeyways90Cw(cw90)

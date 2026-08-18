@@ -87,6 +87,7 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
@@ -162,6 +163,7 @@ fun PdfPreviewScreen(
     // Fraction style: same posture — a chip tap changes the renderer's active style, which the
     // loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
+    val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
     // Sizing-curve anchors: the composer sizes the drawn shaft off them, so a Settings
     // change to "Default drawing size" has to re-render an open preview. Collected here,
     // not only inside the Tune sheet, or the page would keep its old height until some
@@ -227,6 +229,7 @@ fun PdfPreviewScreen(
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
                 arrowSizePt = pdfArrowSizePt,
                 fractionStyle = pdfFractionStyle,
+                dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
                 heightScale = config.heightScale,
@@ -547,6 +550,8 @@ fun PdfPreviewScreen(
                 sBreakThresholdFrac = pdfSBreakThresholdFrac,
                 arrowSizePt = pdfArrowSizePt,
                 fractionStyle = pdfFractionStyle,
+                dualUnitLayout = pdfDualUnitLayout,
+                dualUnits = dualUnits,
                 heightScale = runoutConfig.heightScale,
                 linersProportional = runoutConfig.linersProportional,
                 linerCompression = runoutConfig.linerCompression,
@@ -589,6 +594,11 @@ private data class SchematicRenderInputs(
     val sBreakThresholdFrac: Float,
     val arrowSizePt: Float,
     val fractionStyle: FractionStyle,
+    /**
+     * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
+     * budget cannot absorb the taller stacked value falls back to inline on its own.
+     */
+    val dualUnitLayout: DualUnitLayout,
     val curveLoHeightIn: Float,
     val curveHiHeightIn: Float,
     val heightScale: Float,
@@ -621,6 +631,8 @@ private fun PdfOptionsSheet(
     sBreakThresholdFrac: Float,
     arrowSizePt: Float,
     fractionStyle: FractionStyle,
+    dualUnitLayout: DualUnitLayout,
+    dualUnits: Boolean,
     heightScale: Float,
     linersProportional: Boolean,
     linerCompression: Float,
@@ -755,6 +767,36 @@ private fun PdfOptionsSheet(
         FractionStyleChips(
             fractionStyle = fractionStyle,
             onCommit = { vm.setPdfFractionStyle(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // ── Dual units (this document) ───────────────────────────────────────
+        // The document's own flag, not a preference: `dual_units` travels with the job. The
+        // layout chips under it style what this switch turns on, so they read as disabled
+        // until it is — a control for something invisible is worse than no control.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(
+                checked = dualUnits,
+                onCheckedChange = { vm.setDualUnits(it) },
+            )
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("Dual units", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Print every dimension in both inches and millimetres. Saved with the document.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        DualUnitLayoutChips(
+            layout = dualUnitLayout,
+            enabled = dualUnits,
+            onCommit = { vm.setPdfDualUnitLayout(it) },
         )
 
         Spacer(Modifier.height(12.dp))

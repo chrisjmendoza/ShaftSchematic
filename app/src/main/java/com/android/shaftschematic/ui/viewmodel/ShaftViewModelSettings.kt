@@ -15,6 +15,7 @@ import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfTieringMode
+import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UndercutShadeColor
@@ -164,6 +165,17 @@ fun ShaftViewModel.setPdfFractionStyle(style: FractionStyle, persist: Boolean = 
     _pdfFractionStyle.value = style
     SettingsStore.updatePdfPrefs { it.copy(fractionStyle = style) }
     if (persist) viewModelScope.launch { SettingsStore.setPdfFractionStyle(getApplication(), style) }
+}
+
+/**
+ * How a dual value is SET on the drawing. A stack is NARROWER but two lines tall, so a sheet whose
+ * vertical budget cannot absorb it reverts to inline for that whole sheet — the composers make that
+ * call, not this setter.
+ */
+fun ShaftViewModel.setPdfDualUnitLayout(layout: DualUnitLayout, persist: Boolean = true) {
+    _pdfDualUnitLayout.value = layout
+    SettingsStore.updatePdfPrefs { it.copy(dualUnitLayout = layout) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfDualUnitLayout(getApplication(), layout) }
 }
 
 fun ShaftViewModel.setPdfExportMode(mode: PdfExportMode, persist: Boolean = true) {

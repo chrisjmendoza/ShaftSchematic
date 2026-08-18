@@ -3,7 +3,11 @@ package com.android.shaftschematic.pdf.notes
 import android.graphics.Canvas
 import android.graphics.Paint
 import com.android.shaftschematic.geom.DiameterCalloutLayout
-import com.android.shaftschematic.pdf.formatDiaWithUnitDual
+import com.android.shaftschematic.pdf.formatDiaWithUnitDualLabel
+import com.android.shaftschematic.util.DualLabel
+import com.android.shaftschematic.util.drawDualLabel
+import com.android.shaftschematic.util.dualStackMetrics
+import com.android.shaftschematic.util.measureDualLabel
 
 /**
  * Renders simple diameter leaders with a dog-leg and "Ø" label.
@@ -28,10 +32,20 @@ class DiameterLeaderRenderer(
     private val textPaint: Paint,
     /** Blank-draft mode: print "Ø" + a writable rule instead of the value. */
     private val blankValues: Boolean = false,
-    private val blankRuleWidth: Float = 40f
+    private val blankRuleWidth: Float = 40f,
+    /** Set dual values as a two-line stack — see `util/DualLabelRenderer.kt`. */
+    private val dualStacked: Boolean = false,
 ) {
-    /** Vertical distance between stacked BELOW-side rows. */
-    private val tierStep: Float get() = textPaint.textSize * 1.4f
+    /**
+     * Vertical distance between stacked BELOW-side rows.
+     *
+     * A stacked dual value is two lines tall, so the tier pitch has to clear the whole stack plus
+     * the same air a single row got — otherwise the second tier's first line prints into the first
+     * tier's second one.
+     */
+    private val tierStep: Float
+        get() = if (dualStacked) textPaint.dualStackMetrics().height + textPaint.textSize * 0.4f
+                else textPaint.textSize * 1.4f
 
     fun draw(canvas: Canvas, calls: List<DiaCallout>) {
         // BELOW callouts share a tiering pass so body and liner labels never overlap.
@@ -48,11 +62,19 @@ class DiameterLeaderRenderer(
         calls.filter { it.side == LeaderSide.ABOVE }.forEach { drawOne(canvas, it, tier = 0) }
     }
 
-    private fun label(call: DiaCallout): String =
-        if (blankValues) "Ø" else "Ø " + formatDiaWithUnitDual(call.valueMm, call.unit, call.dual)
+    /**
+     * The callout's value as its two terms. The "Ø" identifier rides the PRIMARY, so a stacked
+     * callout reads `Ø 11"` over `279.4 mm` instead of repeating the symbol.
+     */
+    private fun label(call: DiaCallout): DualLabel {
+        if (blankValues) return DualLabel.single("Ø")
+        val value = formatDiaWithUnitDualLabel(call.valueMm, call.unit, call.dual)
+        return value.copy(primary = "Ø " + value.primary)
+    }
 
     private fun labelWidth(call: DiaCallout): Float =
-        textPaint.measureText(label(call)) + if (blankValues) 4f + blankRuleWidth else 0f
+        textPaint.measureDualLabel(label(call), dualStacked) +
+            if (blankValues) 4f + blankRuleWidth else 0f
 
     private fun drawOne(canvas: Canvas, call: DiaCallout, tier: Int) {
         val x = pageX(call.xMm)
@@ -73,10 +95,10 @@ class DiameterLeaderRenderer(
         canvas.drawLine(x, kinkY, textX, kinkY, linePaint)
 
         val lbl = label(call)
-        canvas.drawText(lbl, textX, textY, textPaint)
+        canvas.drawDualLabel(lbl, textX, textY, textPaint, dualStacked)
         if (blankValues) {
             // Writable rule after the "Ø" so the machinist can pencil the measured OD in.
-            val ruleStart = textX + textPaint.measureText(lbl) + 4f
+            val ruleStart = textX + textPaint.measureDualLabel(lbl, dualStacked) + 4f
             val rule = Paint(textPaint).apply { style = Paint.Style.STROKE; strokeWidth = 0.7f }
             canvas.drawLine(ruleStart, textY + 2f, ruleStart + blankRuleWidth, textY + 2f, rule)
         }

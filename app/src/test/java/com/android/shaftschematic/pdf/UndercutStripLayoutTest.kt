@@ -14,6 +14,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import com.android.shaftschematic.util.DualLabel
 import org.junit.Test
 
 /**
@@ -497,7 +498,7 @@ class UndercutStripLayoutTest {
         // Arrow direction is irrelevant here — only whether the value seats in the break, which
         // is what decides if the span claims a fallback row.
         fun span(row: Int, seated: Boolean) =
-            WearRailSpanLayout(0f, 10f, "x", 5f, row, seatsInBreak = seated, arrowInward = true)
+            WearRailSpanLayout(0f, 10f, DualLabel.single("x"), 5f, row, seatsInBreak = seated, arrowInward = true)
         // Break-seated labels sit on the rail line itself — one clear row below keeps the rail
         // (and its arrowheads) off the shaft, nothing more, wherever fallbacks would go.
         assertEquals(
@@ -640,12 +641,12 @@ class UndercutStripLayoutTest {
             "b" to ClampedUndercutSpanMm(200f, 240f),
         )
         val stations = buildUndercutDiaStations(
-            listOf(measured, empty), clamped, xAtMm = { it }, unit = mm, labelWidthPt = { it.length * 5f },
+            listOf(measured, empty), clamped, xAtMm = { it }, unit = mm, labelWidthPt = { it.inline().length * 5f },
         )
         assertEquals(1, stations.size)
         assertEquals("a", stations[0].key)
         assertEquals(120f, stations[0].stationX, 1e-3f)
-        assertEquals(formatDiaWithUnit(200.0, mm), stations[0].label)
+        assertEquals(formatDiaWithUnit(200.0, mm), stations[0].label.inline())
     }
 
     @Test

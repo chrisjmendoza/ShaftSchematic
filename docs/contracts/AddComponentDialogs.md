@@ -44,8 +44,17 @@ one shows the pair. The card carries no mode *switch* — the stored mode select
 Re-designating an existing thread is deliberately not offered: a different designation is a
 different thread, added as one.
 
+**Also under the parity rule:** the **"Keyway in: in | mm"** chip in the keyway section of
+`AddBodyDialog` / `AddTaperDialog` and of the Body / Taper cards, shown when Settings → Drawing →
+*Per-component units* is on. It sets the unit the keyway's four fields (W, D, L, offset) are
+**typed** in as well as the unit its footer line prints in, so it is value entry, not display — a
+European keyway is whole millimetres on an otherwise imperial shaft, and typing 20 × 12 mm as
+0.7874 × 0.4724 in loses the number the shop was given. Stored as a derived-key override
+(`"<componentId>#kw"` in `unit_overrides`), resolved keyway → component → document, so a keyway
+with no choice behaves exactly as it always did.
+
 **Card-only (a carve-out from the parity rule):** the per-component **"Prints in: in | mm"**
-chip, shown on the explicit-**Body**, **Taper**, **Thread**, and **Liner** cards when
+chip, at the FOOT of the card, shown on the explicit-**Body**, **Taper**, **Thread**, and **Liner** cards when
 Settings → Drawing → *Per-component units* is on. It is the **third** post-hoc display
 toggle to qualify for the carve-out recorded in `CLAUDE.md`, on the same grounds as the other
 two: it changes only how an already-drawn component *prints*, its default is stable

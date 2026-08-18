@@ -90,10 +90,22 @@ fun layoutWornSectionValues(
     cy: Float,
     labelLengths: List<Float>,
     lineHeight: Float,
+    /**
+     * How thick one column is ACROSS the shaft axis — one line by default.
+     *
+     * Rotating the text swaps the axes, so a two-line stacked dual value is two lines thick along
+     * the shaft and only as LONG as its longer line. That is why stacking helps here where it costs
+     * elsewhere: the band height a value demands (which competes with the drawn shaft diameter,
+     * `fittedValueTextSize`) falls to the longer term, and the extra bulk goes into the axial
+     * direction, where a worn section usually has room. Pass the stack height for a stacked value;
+     * [lineHeight] still sets the halo padding, so the knockout does not bloat with it.
+     */
+    columnThickness: Float = lineHeight,
 ): WornSectionValueLayout {
     if (labelLengths.isEmpty()) return WornSectionValueLayout(emptyList(), overflows = false)
 
-    val pitch = lineHeight * WORN_VALUE_COLUMN_PITCH_FACTOR
+    val thickness = columnThickness.coerceAtLeast(lineHeight)
+    val pitch = thickness * WORN_VALUE_COLUMN_PITCH_FACTOR
     val pad = lineHeight * WORN_VALUE_HALO_PAD_FACTOR
     val groupWidth = pitch * (labelLengths.size - 1)
     val centerX = (x0 + x1) / 2f
@@ -104,14 +116,14 @@ fun layoutWornSectionValues(
         WornValueColumn(
             cx = cx,
             cy = cy,
-            haloLeft = cx - lineHeight / 2f - pad,
+            haloLeft = cx - thickness / 2f - pad,
             haloTop = cy - len / 2f - pad,
-            haloRight = cx + lineHeight / 2f + pad,
+            haloRight = cx + thickness / 2f + pad,
             haloBottom = cy + len / 2f + pad,
         )
     }
     return WornSectionValueLayout(
         columns = columns,
-        overflows = groupWidth + lineHeight > (x1 - x0),
+        overflows = groupWidth + thickness > (x1 - x0),
     )
 }

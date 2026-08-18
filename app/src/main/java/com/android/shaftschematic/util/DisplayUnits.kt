@@ -19,6 +19,19 @@ package com.android.shaftschematic.util
  *   An id that no longer resolves is harmless — [unitFor] just falls back to [documentUnit].
  * @property dual When true, dimensions print both units inline; see `pdf/UnitFormat.kt`.
  */
+/**
+ * Override key for [componentId]'s keyway — a sub-feature with a unit of its own.
+ *
+ * Derived ids are suffixed with `#` in this codebase (a split body's runs are `<id>#2`), and this
+ * follows that convention. A keyway-bearing body is never fragmented, so a keyway key is always
+ * built from a base id and the two suffix spaces cannot collide.
+ *
+ * Storing it in the same `unit_overrides` map is what keeps this additive: no new envelope field,
+ * no codec change, and a key whose component is gone is inert (never pruned — the render-layer
+ * orphan posture every reference feature takes).
+ */
+fun keywayUnitKey(componentId: String): String = "$componentId#kw"
+
 data class DisplayUnits(
     val documentUnit: UnitSystem,
     val overrides: Map<String, UnitSystem> = emptyMap(),
@@ -27,6 +40,21 @@ data class DisplayUnits(
     /** The effective display unit for [componentId] — its override, else [documentUnit]. */
     fun unitFor(componentId: String?): UnitSystem =
         componentId?.let { overrides[it] } ?: documentUnit
+
+    /**
+     * The unit a component's KEYWAY is authored and printed in.
+     *
+     * Falls back through the whole chain — the keyway's own override, else the component's, else
+     * the document unit — so a keyway with no choice of its own behaves exactly as it always did.
+     *
+     * A keyway is not a component, but it is the other feature (with threads) that arrives metric
+     * on an otherwise imperial shaft: European stock comes in whole millimetres, and re-typing a
+     * 20 x 12 mm keyway as 0.7874 x 0.4724 in is both tedious and a rounding hazard. So it gets its
+     * own override under a derived key, and unlike the component chip it governs ENTRY as well as
+     * print — the same posture as a metric thread's designation.
+     */
+    fun keywayUnitFor(componentId: String?): UnitSystem =
+        componentId?.let { overrides[keywayUnitKey(it)] } ?: unitFor(componentId)
 
     companion object {
         /** A resolver with no overrides and no dual — reproduces single-unit behavior exactly. */

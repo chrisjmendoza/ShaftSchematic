@@ -84,6 +84,7 @@ import com.android.shaftschematic.ui.util.taperWarningMessages
 import com.android.shaftschematic.ui.util.threadWarningMessage
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.ThreadDesignation
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.autoTaperRateText
 import com.android.shaftschematic.util.manualTaperRateBlockingMessage
@@ -192,6 +193,8 @@ internal fun ComponentCarouselPager(
     perComponentUnitsEnabled: Boolean = false,
     unitOverrides: Map<String, UnitSystem> = emptyMap(),
     onSetComponentUnit: (String, UnitSystem?) -> Unit = { _, _ -> },
+    /** Sets (null clears) the unit a component's KEYWAY is authored and printed in. */
+    onSetKeywayUnit: (String, UnitSystem?) -> Unit = { _, _ -> },
 ) {
     val bodyTitleById   = remember(spec.bodies)                    { buildBodyTitleById(spec) }
     val taperTitleById  = remember(spec.tapers)                    { buildTaperTitleById(spec) }
@@ -329,6 +332,7 @@ internal fun ComponentCarouselPager(
                     perComponentUnitsEnabled = perComponentUnitsEnabled,
                     unitOverrides = unitOverrides,
                     onSetComponentUnit = onSetComponentUnit,
+                    onSetKeywayUnit = onSetKeywayUnit,
                 )
             }
         }
@@ -430,29 +434,35 @@ internal fun KeywayClockingSection(
 // `unitOverrides` reads as "follows the document unit"; tapping the already-selected
 // chip is a no-op (there is nothing to clear), and choosing the unit that already
 // equals the document unit clears the override instead of storing a redundant one.
+//
+// It sits at the BOTTOM of every card that has it, under the values it governs: it is a
+// post-hoc display choice reached for after looking at a printed sheet, not something to
+// decide before typing a dimension, and giving it the top of the card read as a priority
+// it does not have (on-device report). The "Explicit body" checkbox is the opposite case
+// and keeps the top — it changes what the card IS, and moving it would make it jump when
+// checking it swaps an auto card for an explicit one.
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ComponentUnitChip(
-    componentId: String,
-    documentUnit: UnitSystem,
-    unitOverrides: Map<String, UnitSystem>,
-    onSetComponentUnit: (String, UnitSystem?) -> Unit,
+private fun UnitChoiceChips(
+    label: String,
+    effective: UnitSystem,
+    /** Choosing this unit CLEARS the override instead of storing a redundant one. */
+    inheritedUnit: UnitSystem,
+    onChoose: (UnitSystem?) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val effective = unitOverrides[componentId] ?: documentUnit
     val chipColors = FilterChipDefaults.filterChipColors(
         selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
         containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
     )
-    fun choose(u: UnitSystem) {
-        onSetComponentUnit(componentId, if (u == documentUnit) null else u)
-    }
+    fun choose(u: UnitSystem) = onChoose(if (u == inheritedUnit) null else u)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(top = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("Prints in:", style = MaterialTheme.typography.bodyMedium,
+        Text(label, style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         FilterChip(selected = effective == UnitSystem.INCHES,
             onClick = { choose(UnitSystem.INCHES) },
@@ -463,6 +473,46 @@ private fun ComponentUnitChip(
             label = { Text("mm") }, colors = chipColors,
             border = if (effective == UnitSystem.MILLIMETERS) BorderStroke(1.dp, Color.Black) else null)
     }
+}
+
+@Composable
+private fun ComponentUnitChip(
+    componentId: String,
+    documentUnit: UnitSystem,
+    unitOverrides: Map<String, UnitSystem>,
+    onSetComponentUnit: (String, UnitSystem?) -> Unit,
+) {
+    UnitChoiceChips(
+        label = "Prints in:",
+        effective = unitOverrides[componentId] ?: documentUnit,
+        inheritedUnit = documentUnit,
+        onChoose = { onSetComponentUnit(componentId, it) },
+    )
+}
+
+/**
+ * The unit a KEYWAY is authored and printed in — the keyway analogue of the Add Thread dialog's
+ * Imperial/Metric mode, and the other half of the mixed-unit case a European shaft brings.
+ *
+ * Unlike [ComponentUnitChip] this governs the KW fields' own entry too, so it sits WITH those
+ * fields rather than at the foot of the card: it changes what the number you are about to type
+ * means. Choosing the component's own unit clears the override, so the keyway goes back to
+ * following its parent.
+ */
+@Composable
+private fun KeywayUnitChip(
+    componentId: String,
+    documentUnit: UnitSystem,
+    unitOverrides: Map<String, UnitSystem>,
+    onSetKeywayUnit: (String, UnitSystem?) -> Unit,
+) {
+    val units = DisplayUnits(documentUnit, unitOverrides)
+    UnitChoiceChips(
+        label = "Keyway in:",
+        effective = units.keywayUnitFor(componentId),
+        inheritedUnit = units.unitFor(componentId),
+        onChoose = { onSetKeywayUnit(componentId, it) },
+    )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -539,6 +589,8 @@ internal fun ComponentPagerCard(
     perComponentUnitsEnabled: Boolean = false,
     unitOverrides: Map<String, UnitSystem> = emptyMap(),
     onSetComponentUnit: (String, UnitSystem?) -> Unit = { _, _ -> },
+    /** Sets (null clears) the unit a component's KEYWAY is authored and printed in. */
+    onSetKeywayUnit: (String, UnitSystem?) -> Unit = { _, _ -> },
 ) {
     fun f1(mm: Float): String = "%.1f".format(mm)
 
@@ -677,9 +729,6 @@ internal fun ComponentPagerCard(
                     onRemoveBody(b.id)
                 }
             ) {
-                if (perComponentUnitsEnabled) {
-                    ComponentUnitChip(b.id, unit, unitOverrides, onSetComponentUnit)
-                }
                 // Explicit-body toggle (checked). Unchecking demotes this body back to an
                 // auto-fill span, but only after confirmation — the same trash/delete
                 // pipeline (onRemoveBody) does the removal, and the resolve layer regenerates
@@ -784,22 +833,29 @@ internal fun ComponentPagerCard(
                             label = { Text("FWD") }, colors = kwSelectedColors,
                             border = if (isKwFwd) BorderStroke(1.dp, Color.Black) else null)
                     }
+                    // The keyway's own unit: European stock is metric on an otherwise imperial
+                    // shaft, so these four fields are entered AND printed in `kwUnit`, which falls
+                    // back to the body's unit and then the document's when there is no override.
+                    val kwUnit = DisplayUnits(unit, unitOverrides).keywayUnitFor(b.id)
+                    if (perComponentUnitsEnabled) {
+                        KeywayUnitChip(b.id, unit, unitOverrides, onSetKeywayUnit)
+                    }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CommitNum("KW W (${abbr(unit)})", dispKw(b.keywayWidthMm, unit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
-                            val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                        CommitNum("KW W (${abbr(kwUnit)})", dispKw(b.keywayWidthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
+                            val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                             onUpdateBodyKeyway(idx, v, b.keywayDepthMm, b.keywayLengthMm, b.keywayOffsetFromEndMm, b.keywayEnd, b.keywaySpooned)
                         }
                         Text("×", style = MaterialTheme.typography.titleMedium)
-                        CommitNum("KW D (${abbr(unit)})", dispKw(b.keywayDepthMm, unit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
-                            val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                        CommitNum("KW D (${abbr(kwUnit)})", dispKw(b.keywayDepthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
+                            val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                             onUpdateBodyKeyway(idx, b.keywayWidthMm, v, b.keywayLengthMm, b.keywayOffsetFromEndMm, b.keywayEnd, b.keywaySpooned)
                         }
                     }
-                    CommitNum("KW L (${abbr(unit)})", dispKw(b.keywayLengthMm, unit)) { s ->
+                    CommitNum("KW L (${abbr(kwUnit)})", dispKw(b.keywayLengthMm, kwUnit)) { s ->
                         val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
                         onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, v, b.keywayOffsetFromEndMm, b.keywayEnd, b.keywaySpooned)
                     }
-                    CommitNum("KW Offset from ${if (isKwFwd) "FWD" else "AFT"} (${abbr(unit)})", dispKw(b.keywayOffsetFromEndMm, unit)) { s ->
+                    CommitNum("KW Offset from ${if (isKwFwd) "FWD" else "AFT"} (${abbr(kwUnit)})", dispKw(b.keywayOffsetFromEndMm, kwUnit)) { s ->
                         val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
                         onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, b.keywayLengthMm, v, b.keywayEnd, b.keywaySpooned)
                     }
@@ -830,6 +886,10 @@ internal fun ComponentPagerCard(
                 }
 
                 KeywayClockingSection(spec, onSetKeyways180Apart, onSetKeyways90Apart, onSetKeyways90Cw)
+
+                if (perComponentUnitsEnabled) {
+                    ComponentUnitChip(b.id, unit, unitOverrides, onSetComponentUnit)
+                }
             }
         }
 
@@ -892,9 +952,6 @@ internal fun ComponentPagerCard(
                     onRemoveTaper(t.id)
                 }
             ) {
-                if (perComponentUnitsEnabled) {
-                    ComponentUnitChip(t.id, unit, unitOverrides, onSetComponentUnit)
-                }
                 val computedRateText = remember(t.lengthMm, t.startDiaMm, t.endDiaMm) {
                     autoTaperRateText(
                         lengthMm = t.lengthMm,
@@ -1028,23 +1085,27 @@ internal fun ComponentPagerCard(
                     onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, s.trim())
                 }
 
-                // Keyway fields
+                // Keyway fields, in the KEYWAY's own unit (see the body card's note).
+                val kwUnit = DisplayUnits(unit, unitOverrides).keywayUnitFor(t.id)
+                if (perComponentUnitsEnabled) {
+                    KeywayUnitChip(t.id, unit, unitOverrides, onSetKeywayUnit)
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CommitNum("KW W (${abbr(unit)})", dispKw(t.keywayWidthMm, unit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
-                        val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                    CommitNum("KW W (${abbr(kwUnit)})", dispKw(t.keywayWidthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
+                        val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                         onUpdateTaperKeyway(idx, v, t.keywayDepthMm, t.keywayLengthMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
                     }
                     Text("×", style = MaterialTheme.typography.titleMedium)
-                    CommitNum("KW D (${abbr(unit)})", dispKw(t.keywayDepthMm, unit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
-                        val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
+                    CommitNum("KW D (${abbr(kwUnit)})", dispKw(t.keywayDepthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
+                        val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                         onUpdateTaperKeyway(idx, t.keywayWidthMm, v, t.keywayLengthMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
                     }
                 }
-                CommitNum("KW L (${abbr(unit)})", dispKw(t.keywayLengthMm, unit)) { s ->
+                CommitNum("KW L (${abbr(kwUnit)})", dispKw(t.keywayLengthMm, kwUnit)) { s ->
                     val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
                     onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, v, t.keywayOffsetFromSetMm, t.keywaySpooned)
                 }
-                CommitNum("KW Offset from SET (${abbr(unit)})", dispKw(t.keywayOffsetFromSetMm, unit)) { s ->
+                CommitNum("KW Offset from SET (${abbr(kwUnit)})", dispKw(t.keywayOffsetFromSetMm, kwUnit)) { s ->
                     val v = if (s.isBlank()) 0f else (toMmOrNull(s, unit) ?: return@CommitNum)
                     onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, v, t.keywaySpooned)
                 }
@@ -1074,6 +1135,10 @@ internal fun ComponentPagerCard(
                 }
 
                 KeywayClockingSection(spec, onSetKeyways180Apart, onSetKeyways90Apart, onSetKeyways90Cw)
+
+                if (perComponentUnitsEnabled) {
+                    ComponentUnitChip(t.id, unit, unitOverrides, onSetComponentUnit)
+                }
             }
         }
 
@@ -1133,9 +1198,6 @@ internal fun ComponentPagerCard(
                     onRemoveThread(th.id)
                 }
             ) {
-                if (perComponentUnitsEnabled) {
-                    ComponentUnitChip(th.id, unit, unitOverrides, onSetComponentUnit)
-                }
                 val includeInOal = !th.excludeFromOAL
                 Row(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -1202,6 +1264,10 @@ internal fun ComponentPagerCard(
                 CommitNum("Length (${abbr(unit)})", disp(th.lengthMm, unit)) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm, th.metricDesignation) }
                 }
+
+                if (perComponentUnitsEnabled) {
+                    ComponentUnitChip(th.id, unit, unitOverrides, onSetComponentUnit)
+                }
             }
         }
 
@@ -1265,9 +1331,6 @@ internal fun ComponentPagerCard(
                     onRemoveLiner(ln.id)
                 }
             ) {
-                if (perComponentUnitsEnabled) {
-                    ComponentUnitChip(ln.id, unit, unitOverrides, onSetComponentUnit)
-                }
                 // AFT / FWD reference toggle
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1319,6 +1382,10 @@ internal fun ComponentPagerCard(
                     testTag = "liner_show_dia_toggle",
                     onCheckedChange = { onUpdateLinerShowDia(idx, it) },
                 )
+
+                if (perComponentUnitsEnabled) {
+                    ComponentUnitChip(ln.id, unit, unitOverrides, onSetComponentUnit)
+                }
             }
         }
 

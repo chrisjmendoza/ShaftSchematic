@@ -2,6 +2,7 @@ package com.android.shaftschematic.settings
 
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
+import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 
 /**
@@ -121,6 +122,17 @@ data class PdfPrefs(
      * the draw sites actually read.
      */
     val fractionStyle: FractionStyle = FractionStyle.Default,
+    /**
+     * How a DUAL value is set on the drawing — Settings → Drawing → "Dual-unit layout" and both
+     * PDF options sheets. Only ever visible on a sheet whose document has `dual_units` on.
+     *
+     * [DualUnitLayout.STACKED] sets the two terms on two lines. That is the app's only label form
+     * which moves HEIGHT, so unlike the other drawing prefs it is threaded explicitly into the
+     * composers rather than through a process-wide mirror: the vertical budgets have to see it, and
+     * a sheet whose budget cannot absorb it reverts to [DualUnitLayout.INLINE] for the whole sheet.
+     * See `docs/DualUnitStacking_PLAN.md`.
+     */
+    val dualUnitLayout: DualUnitLayout = DualUnitLayout.Default,
     /**
      * Default worn-profile trace exaggeration (`geom/WearTraceMath.kt`): how deep a record's
      * deepest liner reading draws, as a fraction of the drawn radius. Settings → Drawing →

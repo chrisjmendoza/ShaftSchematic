@@ -113,6 +113,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.UndercutStyle
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.buildLinerTitleById
 import kotlin.math.max
@@ -748,12 +749,16 @@ fun UndercutWindowDetailOverlay(
                             val stations = notches.mapNotNull { n ->
                                 val u = drawUndercuts.firstOrNull { it.id == n.id }
                                     ?: return@mapNotNull null
-                                val label = if (u.diaMm > 0f) formatDiaWithUnit(u.diaMm.toDouble(), unit) else "—"
+                                // The authoring overlay stays single-unit (`docs/DualUnitStacking_PLAN.md`
+                                // §8), so its label has no second term and never stacks.
+                                val label = DualLabel.single(
+                                    if (u.diaMm > 0f) formatDiaWithUnit(u.diaMm.toDouble(), unit) else "—"
+                                )
                                 DiaCalloutStation(
                                     key = n.id,
                                     stationX = xPx((n.startMm + n.endMm) / 2f),
                                     label = label,
-                                    labelWidth = textPaint.measureText(label),
+                                    labelWidth = textPaint.measureText(label.primary),
                                 )
                             }
                             val plan = planDiaCallouts(stations, 4f, size.width - 4f, minGap = 6.dp.toPx())
@@ -779,7 +784,7 @@ fun UndercutWindowDetailOverlay(
                                 val fm = textPaint.fontMetrics
                                 // textPaint is CENTER-aligned, so x is the label centre.
                                 drawContext.canvas.nativeCanvas.drawText(
-                                    p.label, p.labelCx, p.labelTopY - fm.ascent, textPaint,
+                                    p.label.inline(), p.labelCx, p.labelTopY - fm.ascent, textPaint,
                                 )
                             }
                         }

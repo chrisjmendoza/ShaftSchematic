@@ -82,6 +82,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
@@ -123,6 +124,11 @@ private data class ConsolidatedRenderInputs(
     val arrowSizePt: Float,
     /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
     val fractionStyle: FractionStyle,
+    /**
+     * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
+     * budget cannot absorb the taller stacked value falls back to inline on its own.
+     */
+    val dualUnitLayout: DualUnitLayout,
     val tieringMode: PdfTieringMode,
     val readings: RunoutReadings,
     val stationPlacements: RunoutStationPlacements,
@@ -176,6 +182,7 @@ fun OutputRoute(
     // Fraction style: same posture — it reaches the ink through the renderer's active style,
     // which the loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
+    val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     val pdfTieringMode     by vm.pdfTieringMode.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
     val stationPlacements  by vm.runoutStationPlacements.collectAsState()
@@ -432,6 +439,7 @@ fun OutputRoute(
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
                 arrowSizePt = pdfArrowSizePt,
                 fractionStyle = pdfFractionStyle,
+                dualUnitLayout = pdfDualUnitLayout,
                 tieringMode = pdfTieringMode,
                 readings = runoutReadings,
                 stationPlacements = stationPlacements,
@@ -828,6 +836,9 @@ fun OutputRoute(
                     showDimensionArrows = true,
                     arrowSizePt = pdfArrowSizePt,
                     fractionStyle = pdfFractionStyle,
+                    dualUnitLayout = pdfDualUnitLayout,
+                    dualUnits = dualUnits,
+                    onDualUnitsChange = { vm.setDualUnits(it) },
                     tuning = tuning,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },

@@ -1,5 +1,6 @@
 package com.android.shaftschematic.pdf
 
+import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
 import java.util.Locale
@@ -57,34 +58,67 @@ fun formatDiaWithUnit(mm: Double, unit: Any?): String {
 }
 
 /**
- * Inline dual-unit rendering: `<primary> [<secondary>]` — e.g. `1 1/2" [38.1 mm]`.
- *
- * Rendered as a SINGLE line (never a two-line stack). Dual growth is width-only, so it flows
- * through the same rich-text measurement path the fraction stacks already use — no height
- * constant or strip row/tier cap changes are required. A stacked two-line rendering is the
- * configuration that overflowed those fixed budgets before; do not reintroduce it here.
- *
- * The secondary reuses the SAME formatter as the primary, so it prints identically to how it
- * would as a primary value (inch fractions included), and BOTH terms keep their unit suffix —
- * the "every dimension carries its own unit" safety rule on a mixed sheet.
- *
- * When [dual] is false these collapse to the plain single-unit formatters above.
+ * The unit a dual value's SECONDARY term prints in — simply the other one.
  */
-private inline fun composeDual(primary: UnitSystem, dual: Boolean, fmt: (UnitSystem) -> String): String {
+fun dualSecondaryUnit(primary: UnitSystem): UnitSystem =
+    if (primary == UnitSystem.INCHES) UnitSystem.MILLIMETERS else UnitSystem.INCHES
+
+/**
+ * Dual-unit rendering: a [primary] value plus the converted [secondary] one.
+ *
+ * BOTH terms always keep their unit suffix — the "every dimension carries its own unit" safety
+ * rule: on a sheet that mixes units a bare number is how a shaft gets machined wrong.
+ *
+ * **The secondary is formatted COMPACTLY, not with the primary's formatter.** A converted value is
+ * a courtesy, not a measurement, so it prints at the precision the unit deserves (mm to 1 decimal,
+ * trailing zeros trimmed) rather than inheriting a dimension formatter's 3 decimals. Reusing the
+ * primary's formatter put `[3378.200 mm]` and `[649.287 mm]` on the rails while the Ø callouts on
+ * the same sheet read `[279.4 mm]` — two precision conventions per sheet, and roughly 17 pt of
+ * label width per rail spent on conversion noise (on-device sheet, `docs/DualUnitStacking_PLAN.md`
+ * §1c).
+ *
+ * Two renderings exist and both come from here: the inline one-liner (`*Dual`, returning a
+ * `String`) and the two-term [DualLabel] (`*DualLabel`) that a stacked layout needs. Whether a
+ * dual label is SET stacked is a layout decision made at the draw site
+ * (`util/DualLabelRenderer.kt`), never here.
+ *
+ * When [dual] is false all of these collapse to the plain single-unit formatters above.
+ */
+private fun composeDual(
+    primary: UnitSystem,
+    dual: Boolean,
+    fmt: (UnitSystem) -> String,
+    fmtSecondary: (UnitSystem) -> String = fmt,
+): DualLabel {
     val p = fmt(primary)
-    if (!dual) return p
-    val secondary = if (primary == UnitSystem.INCHES) UnitSystem.MILLIMETERS else UnitSystem.INCHES
-    return "$p [${fmt(secondary)}]"
+    if (!dual) return DualLabel.single(p)
+    return DualLabel(p, fmtSecondary(dualSecondaryUnit(primary)))
 }
 
-/** Dual-aware [formatLenDim]. */
+/** Dual-aware [formatLenDim], inline. The secondary takes the compact length format. */
 fun formatLenDimDual(mm: Double, primary: UnitSystem, dual: Boolean): String =
-    composeDual(primary, dual) { formatLenDim(mm, it) }
+    formatLenDimDualLabel(mm, primary, dual).inline()
 
-/** Dual-aware [formatLenWithUnit]. */
+/** Dual-aware [formatLenWithUnit], inline. */
 fun formatLenWithUnitDual(mm: Double, primary: UnitSystem, dual: Boolean): String =
-    composeDual(primary, dual) { formatLenWithUnit(mm, it) }
+    formatLenWithUnitDualLabel(mm, primary, dual).inline()
 
-/** Dual-aware [formatDiaWithUnit]. */
+/** Dual-aware [formatDiaWithUnit], inline. */
 fun formatDiaWithUnitDual(mm: Double, primary: UnitSystem, dual: Boolean): String =
-    composeDual(primary, dual) { formatDiaWithUnit(mm, it) }
+    formatDiaWithUnitDualLabel(mm, primary, dual).inline()
+
+/**
+ * [formatLenDim] as a two-term label. The primary keeps the dimension formatter (a mm PRIMARY
+ * still prints 3 decimals — unchanged single-unit output); the secondary takes the compact
+ * [formatLenWithUnit] form.
+ */
+fun formatLenDimDualLabel(mm: Double, primary: UnitSystem, dual: Boolean): DualLabel =
+    composeDual(primary, dual, fmt = { formatLenDim(mm, it) }, fmtSecondary = { formatLenWithUnit(mm, it) })
+
+/** [formatLenWithUnit] as a two-term label — already the compact form on both sides. */
+fun formatLenWithUnitDualLabel(mm: Double, primary: UnitSystem, dual: Boolean): DualLabel =
+    composeDual(primary, dual, fmt = { formatLenWithUnit(mm, it) })
+
+/** [formatDiaWithUnit] as a two-term label — compact mm, shop 3-decimal inches. */
+fun formatDiaWithUnitDualLabel(mm: Double, primary: UnitSystem, dual: Boolean): DualLabel =
+    composeDual(primary, dual, fmt = { formatDiaWithUnit(mm, it) })

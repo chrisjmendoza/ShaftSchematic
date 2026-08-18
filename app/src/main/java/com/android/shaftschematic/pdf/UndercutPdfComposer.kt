@@ -32,6 +32,12 @@ import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.VerboseLog
+import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.drawDualLabelCentered
+import com.android.shaftschematic.util.dualStackMetrics
+import com.android.shaftschematic.util.measureDualLabel
+import com.android.shaftschematic.util.setsStacked
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
@@ -180,6 +186,9 @@ fun composeUndercutPdf(
     fun shadeFill() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; color = Color.argb(40, 0, 0, 0)
     }
+    // §7 degradation: stacked dual values only if the tightest strip on the page can carry the
+    // taller rail rows AND still draw its cut — decided once, for the whole sheet.
+    val wantDualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED
     val bodyFill: Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
     val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
     val linerFill: Paint? = if (pdfPrefs.shadedLiners) shadeFill() else null
@@ -360,6 +369,24 @@ fun composeUndercutPdf(
         )
     }
 
+    // The stacked decision for the whole sheet: the tightest strip must still afford the taller
+    // rail rows. Undercut rows are the app's most generous already (17 pt), so this rarely bites.
+    val dualStacked = wantDualStacked && run {
+        val probe = Paint(text).apply { textSize = (text.textSize - 2f).coerceAtLeast(7f) }
+        val tightest = stripCells.minOfOrNull { it.bottom - it.top } ?: Float.MAX_VALUE
+        wearStripAffordsStackedRail(
+            stripHeightPt = tightest,
+            titleHeightPt = (text.textSize - 1f).coerceAtLeast(7f),
+            rowHeightPt = undercutRailRowHeightPt(probe, dualStacked = true),
+        )
+    }
+    if (wantDualStacked && !dualStacked) {
+        VerboseLog.i(VerboseLog.Category.PDF, "UndercutPdf") {
+            "dual stacking: undercut sheet fell back to INLINE — the tightest strip cannot " +
+                "carry stacked rail rows and still draw its cut"
+        }
+    }
+
     // ── Detail strips, one per liner / bare-shaft cluster ────────────────────
     onPage.forEachIndexed { i, strip ->
         val cell = stripCells[i]
@@ -398,6 +425,7 @@ fun composeUndercutPdf(
             deepestDepthMm = deepestDepthMm,
             exaggerationFrac = exaggerationFrac,
             dual = displayUnits.dual,
+            dualStacked = dualStacked,
         )
     }
     if (overflow.isNotEmpty()) {
@@ -851,6 +879,11 @@ private fun drawUndercutDetailStrip(
     /** [unit] is already this strip's resolved unit (liner override, else the document unit);
      *  this only carries the sheet-wide dual (inline "primary [secondary]") flag through. */
     dual: Boolean = false,
+    /**
+     * Set this strip's dual values as two-line stacks. Decided once for the whole SHEET by the
+     * composer (the tightest strip must still afford the taller rail rows), never re-derived here.
+     */
+    dualStacked: Boolean = false,
 ) {
     // Draw range, widened at layout time so the undimensioned pad outside each chain datum
     // prints with real air whatever the strip's scale is — the mm pad alone reads as cramped in
@@ -881,7 +914,8 @@ private fun drawUndercutDetailStrip(
 
     // Measured-Ø plan first, so the strip reserves exactly the label rows its cuts need.
     val diaStations = buildUndercutDiaStations(
-        undercuts, clampedById, ::xAtStrip, unit, { s -> diaText.measureText(s) }, dual,
+        undercuts, clampedById, ::xAtStrip, unit,
+        { s -> diaText.measureDualLabel(s, dualStacked) }, dual,
     )
     val diaPlan = if (diaStations.isEmpty()) null else
         planDiaCallouts(diaStations, stripLeft + 2f, stripRight - 2f, UC_DIA_MIN_GAP_PT)
@@ -899,7 +933,7 @@ private fun drawUndercutDetailStrip(
     val railLayout = layoutWearStripRail(
         railSpans,
         xAtStripMm = { mm -> xAtStrip(mm) },
-        labelWidthPt = { s -> dimText.measureRichText(s) },
+        labelWidthPt = { s -> dimText.measureDualLabel(s, dualStacked) },
     )
     val railPlan = planUndercutRailRows(railLayout, startedStrip, hasTotalRail = totalSpan != null)
     val inner = computeUndercutStripInnerLayout(
@@ -908,7 +942,7 @@ private fun drawUndercutDetailStrip(
         hasTotalRail = totalSpan != null,
         diaBandPt = diaBandPt,
         maxLabelRows = railPlan.belowRows,
-        chainAboveBandPt = railPlan.aboveRows * UNDERCUT_RAIL_ROW_HEIGHT_PT,
+        chainAboveBandPt = railPlan.aboveRows * undercutRailRowHeightPt(dimText, dualStacked),
     )
     val cy = (inner.cylTop + inner.cylBottom) / 2f
     val rCap = ((inner.cylBottom - inner.cylTop) / 2f).coerceAtLeast(0f)
@@ -986,7 +1020,7 @@ private fun drawUndercutDetailStrip(
                 c.drawLine(p.leader[s].x, p.leader[s].y, p.leader[s + 1].x, p.leader[s + 1].y, dim)
             }
             val fm = diaText.fontMetrics
-            c.drawText(p.label, p.labelCx - p.labelWidth * 0.5f, p.labelTopY - fm.ascent, diaText)
+            c.drawDualLabelCentered(p.label, p.labelCx, p.labelTopY - fm.ascent, diaText, dualStacked)
         }
     }
 
@@ -1007,12 +1041,13 @@ private fun drawUndercutDetailStrip(
         maxLabelRows = if (railPlan.aboveRows > 0) railPlan.aboveRows else inner.railLabelRows,
         drawLabels = !blankValues,
         fallbackLabelAbove = railPlan.aboveRows > 0,
+        dualStacked = dualStacked,
     )
     if (totalSpan != null) {
         val totalLayout = layoutWearStripRail(
             listOf(totalSpan),
             xAtStripMm = { mm -> xAtStrip(mm) },
-            labelWidthPt = { s -> dimText.measureRichText(s) },
+            labelWidthPt = { s -> dimText.measureDualLabel(s, dualStacked) },
         )
         drawUndercutRail(
             c, dim, dimText, totalLayout,
@@ -1021,6 +1056,7 @@ private fun drawUndercutDetailStrip(
             maxLabelRows = 1,
             drawLabels = !blankValues,
             fallbackLabelAbove = true,
+            dualStacked = dualStacked,
         )
     }
 
@@ -1227,13 +1263,15 @@ private fun drawUndercutRail(
     maxLabelRows: Int,
     drawLabels: Boolean,
     fallbackLabelAbove: Boolean = false,
+    /** Set dual values as two-line stacks — decided once for the sheet by the composer. */
+    dualStacked: Boolean = false,
 ) {
     if (layout.isEmpty()) return
     val arrow = 4f
     val labelGapPt = UC_RAIL_LABEL_GAP_PT
     // Row pitch comes from the LAYOUT constant, not the text size, so the rows drawn here and
     // the rows `computeUndercutStripInnerLayout` budgeted cannot drift apart.
-    val rowStepPt = UNDERCUT_RAIL_ROW_HEIGHT_PT
+    val rowStepPt = undercutRailRowHeightPt(dimText, dualStacked)
     val witnessExt = 3f
 
     // Two passes: every line first, every label second. A fallback label for a span too
@@ -1245,7 +1283,7 @@ private fun drawUndercutRail(
         c.drawLine(s.x0Pt, witnessBottomY, s.x0Pt, railY - witnessExt, dim)
         c.drawLine(s.x1Pt, witnessBottomY, s.x1Pt, railY - witnessExt, dim)
 
-        val lw = dimText.measureRichText(s.label)
+        val lw = dimText.measureDualLabel(s.label, dualStacked)
         val seatsInBreak = drawLabels && s.seatsInBreak
         if (seatsInBreak) {
             val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
@@ -1266,10 +1304,15 @@ private fun drawUndercutRail(
     val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = Color.WHITE }
     val fm = dimText.fontMetrics
     layout.forEach { s ->
-        val lw = dimText.measureRichText(s.label)
+        val lw = dimText.measureDualLabel(s.label, dualStacked)
         if (s.seatsInBreak) {
-            // Break-seated: the gap already isolates the value from every line.
-            c.drawRichText(s.label, s.labelCxPt - lw * 0.5f, railY - (fm.ascent + fm.descent) * 0.5f, dimText)
+            // Break-seated: the gap already isolates the value from every line. A stack straddles
+            // the rail — primary above it, secondary below — so the stubs point into the seam.
+            val seatBaseline =
+                if (s.label.setsStacked(dualStacked))
+                    railY - dimText.dualStackMetrics().height * 0.5f - fm.ascent
+                else railY - (fm.ascent + fm.descent) * 0.5f
+            c.drawDualLabelCentered(s.label, s.labelCxPt, seatBaseline, dimText, dualStacked)
             return@forEach
         }
         val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
@@ -1284,12 +1327,15 @@ private fun drawUndercutRail(
             // First row starts clear of the outward arrowheads straddling the rail line.
             railY + arrow + labelGapPt + dimText.textSize + row * rowStepPt
         }
+        // The halo covers the WHOLE value, both lines of a stack included, or a line would run
+        // through the term it did not cover.
+        val stackH = if (s.label.setsStacked(dualStacked)) dimText.dualStackMetrics().advance else 0f
         c.drawRect(
             s.labelCxPt - lw * 0.5f - 1.5f, baselineY + fm.ascent - 0.5f,
-            s.labelCxPt + lw * 0.5f + 1.5f, baselineY + fm.descent + 0.5f,
+            s.labelCxPt + lw * 0.5f + 1.5f, baselineY + fm.descent + stackH + 0.5f,
             halo,
         )
-        c.drawRichText(s.label, s.labelCxPt - lw * 0.5f, baselineY, dimText)
+        c.drawDualLabelCentered(s.label, s.labelCxPt, baselineY, dimText, dualStacked)
     }
 }
 

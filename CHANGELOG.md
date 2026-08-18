@@ -8,6 +8,114 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-18
 
+### feat: a keyway carries its own unit, and the sheets can turn dual units on
+
+The shop works in inches. A European shaft turns up now and then with its **thread and keyway** in
+millimetres and nothing else — those two are the differentiators, because both come from metric
+standards. Threads already handled it (an `M20×2.5` designation pins that thread to mm on its own).
+The keyway did not: it printed in its parent taper's or body's unit, so the only way to print a
+metric keyway was to flip the whole taper and drag its L.E.T., S.E.T. and Length into millimetres
+with it.
+
+**A keyway now has a unit of its own.** The keyway section of a Body or Taper card — and of the
+matching Add dialog — gains a `Keyway in: in | mm` chip when Settings → Drawing → *Per-component
+units* is on. Set it to mm and the footer's `KW:` / `Body KW:` line prints millimetres while
+everything else on that component stays inches. No dual units required.
+
+Unlike the card's "Prints in" chip this one governs **entry** as well as print: the KW width, depth,
+length and offset fields are typed in the keyway's unit. That is the whole point — a 20 × 12 mm
+keyway typed as 0.7874 × 0.4724 in is a rounding hazard, and the value the shop was given is the
+one that should be stored. Because it changes a value it lives under the dialog/card parity rule
+(the "Prints in" chip's card-only carve-out does not apply), and it sits WITH the keyway fields
+rather than at the foot of the card, since it decides what the numbers under it mean.
+
+Storage is additive with no new field: the override rides the existing `unit_overrides` map under a
+derived key, `"<componentId>#kw"` — the same `#` convention a split body's runs use. A key whose
+component is gone is inert and never pruned, the render-layer orphan posture. The fallback chain is
+keyway → component → document, so a keyway that was never given a unit behaves exactly as it always
+did.
+
+**The PDF options sheets can now turn dual units ON.** Every options sheet offered a *Dual-unit
+layout* picker but no way to switch dual units on from the same place — the flag lived only in
+Settings, as the default for new documents. All five sheets (schematic, runout, consolidated, wear,
+undercut) now carry the document's own **Dual units** switch, with the layout chips disabled until
+it is on: a control that styles something invisible is worse than no control. The gray-out is
+display-only and never rewrites the stored layout preference.
+
+Also in this pass: the carousel's "Prints in" chip moved to the **bottom** of every card that has
+it (Body, Taper, Thread, Liner). It is a post-hoc display choice, not something to settle before
+typing a dimension, and the top of the card read as a priority it does not have (on-device report).
+The "Explicit body" checkbox keeps the top for the opposite reason — it changes what the card is,
+and moving it would make it jump when checking it swaps an auto card for an explicit one.
+
+1619 unit tests green.
+
+---
+
+## 2026-08-18
+
+### feat: stacked dual units, and three fixes the printed sheet asked for
+
+A dual-unit schematic came off the device with four things wrong with it. All four are fixed
+here; three of them were never about stacking at all.
+
+**The secondary prints at a sane precision.** The rails printed `[3378.200 mm]` and
+`[649.287 mm]` while the Ø callouts on the same sheet printed `[279.4 mm]` — two conventions per
+sheet, because the rails reused the dimension formatter for the converted term. A converted
+value is a courtesy, not a measurement: it now takes the compact form everywhere (mm to one
+decimal, trailing zeros trimmed), which is also about 17 pt narrower per rail label.
+
+**Extension lines stopped printing through values.** A rail's extension lines run from the shaft
+up to that rail, so they cross the band of every rail below it — exactly where those rails park a
+value too wide to seat in its line. One printed straight through the tail of `25 3/16"
+[639.763 mm]`. The rail planner now treats them as obstacles alongside labels and rail lines, so a
+value slides or lifts clear of them. **This was a single-unit bug too**; dual labels are just wide
+enough to hit one every time. Chained spans share a boundary line, so a shared extension counts as
+"own" to both spans — and a label wider than its own span still overhangs its own extensions
+rather than being evicted by them.
+
+**The footer wraps instead of truncating.** `KW: 1 3/4" [44.5 mm] × 3/4" [19 mm] × 21 1/2"
+[546.1…` — the figure the sheet exists to carry, replaced by an ellipsis. Footer lines now wrap
+(at spaces and after the `×` separators, with a hanging indent), the line pitch is fit-clamped to
+the wrapped line count in both printed and blank modes, and the band may grow up to 48 pt upward
+into the info gap when it must. Free-text job fields wrap like everything else.
+
+**Dual values can be SET as a two-line stack.** Settings → Drawing → *Dual-unit layout*, and both
+PDF options sheets: **Inline** (`1 1/2" [38.1 mm]`, the default and what shipped before) or
+**Stacked** (the primary over the secondary). Stacking is roughly **55% narrower**, because a
+stack measures as its WIDER LINE rather than the sum of both terms plus brackets — so values that
+inline dual pushed above the dimension line seat back inside it, and every value restored to a
+break removes a fallback rail, which in turn removes a label band of lift from every rail above
+it. That refund is what pays for the second line; `DualStackLedgerTest` pins it on the sheet from
+the report, and fails if a change ever makes stacking cost more paper than it saves.
+
+Stacking is the app's first label that moves HEIGHT, so every budget it touches derives from one
+number (`Paint.dualStackMetrics()`): the rail planner takes it as an inflated ascent and needs no
+other change; the wear and undercut strips thread ONE row height into both the reserved band and
+the drawn rows (they were two independent numbers that only nested by luck); the below-shaft Ø
+tier step, the wear Ø callout rows, and the consolidated sheet's in-profile rotated values all
+read it too. Rotated values are the one site where stacking *helps* on both axes — the axes swap,
+so a stack costs room along the shaft and needs LESS drawn diameter.
+
+**A sheet that cannot afford it gives it up whole.** Per sheet, never per label: a page with some
+two-line and some one-line values reads as a mistake. The schematic falls back when the rail block
+will not fit even at the smallest lane and the 7 pt text floor; the wear and undercut sheets fall
+back when their tightest strip could not carry stacked rail rows and still draw a readable liner;
+the consolidated sheet falls back when the taller rail block would leave under 120 pt for the
+shaft. Each fallback logs why.
+
+Also fixed on the way through: the **consolidated sheet's dimension rails now honor per-component
+unit overrides and the dual flag** — they were still printing in the document unit alone, unlike
+every other surface.
+
+Contracts updated: `CLAUDE.md`, `docs/PDF_EXPORT.md` §4, `docs/UI_CONTRACT.md` §5.3,
+`docs/contracts/ShaftScreen.md`, `docs/ROADMAP.md`, and `docs/DualUnitStacking_PLAN.md` (the plan
+this was built from, now marked as built). 1610 unit tests green.
+
+---
+
+## 2026-08-18
+
 ### feat: mixed units per component + inline dual-unit display
 
 A real shaft drawing turned up with the threads and keyway dimensioned in mm and everything

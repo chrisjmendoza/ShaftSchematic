@@ -1,6 +1,7 @@
 package com.android.shaftschematic.pdf.dim
 
 import com.android.shaftschematic.geom.DeterministicTierAssigner
+import com.android.shaftschematic.util.DualLabel
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
@@ -10,13 +11,17 @@ private const val DEDUPE_EPS_MM: Double = 1e-3
 enum class SpanKind { DATUM, LOCAL, OAL }
 
 /**
- * A single dimension line from x1→x2 with labels.
+ * A single dimension line from x1→x2 with its value.
  * x values are in measurement-space millimeters.
+ *
+ * [label] carries the two terms of a dual value separately rather than pre-joined, because a
+ * stacked layout has to set them on two lines (`util/DualLabel.kt`). A single-unit sheet is a
+ * [DualLabel] with no secondary and renders byte-identically to the plain string it replaced.
  */
 data class DimSpan(
     val x1Mm: Double,
     val x2Mm: Double,
-    val labelTop: String,
+    val label: DualLabel,
     val kind: SpanKind = SpanKind.LOCAL,
 )
 
@@ -68,7 +73,7 @@ private fun dedupeExactSpans(spans: List<DimSpan>): List<DimSpan> {
     data class Key(
         val a: Long,
         val b: Long,
-        val labelTop: String,
+        val label: DualLabel,
     )
 
     fun prefer(a: SpanKind, b: SpanKind): SpanKind {
@@ -87,7 +92,7 @@ private fun dedupeExactSpans(spans: List<DimSpan>): List<DimSpan> {
     for (s in spans) {
         val lo = minOf(s.x1Mm, s.x2Mm)
         val hi = maxOf(s.x1Mm, s.x2Mm)
-        val key = Key(q(lo), q(hi), s.labelTop)
+        val key = Key(q(lo), q(hi), s.label)
 
         val existing = byKey[key]
         if (existing == null) {

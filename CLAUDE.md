@@ -55,10 +55,12 @@ looking at a printed sheet is not a property of the component being added; in an
 it would be a permanently-preset box adding noise to every add. Exactly three qualify: the
 coupler slot's "show dimension rail", **"Show Ø on drawing"** (`Body`/`Liner`/auto-body
 cards), and the per-component **"Prints in: in | mm"** unit chip (explicit `Body`/`Taper`/
-`Thread`/`Liner` cards — an override also has nothing to key to before the component has a
-resolved id). Anything that changes geometry, position, or a value stays under the parity rule
-above — including the Add Thread dialog's Imperial/Metric mode, which is value entry, not
-display, and is mirrored on the thread card by the field the stored mode selects.
+`Thread`/`Liner` cards, at the FOOT of the card — an override also has nothing to key to before the
+component has a resolved id). Anything that changes geometry, position, or a value stays under the
+parity rule above — including the Add Thread dialog's Imperial/Metric mode (value entry, mirrored on
+the thread card by the field the stored mode selects) and the **"Keyway in: in | mm"** chip, which
+sets the unit the keyway's own fields are TYPED in as well as printed in, and therefore appears in
+`AddBodyDialog`/`AddTaperDialog` as well as on the cards.
 
 ### Coupler bolt slots are reference features
 Coupler bolt slots (`ShaftSpec.couplerBoltSlots`) are radial cutouts drawn on the shaft
@@ -508,16 +510,41 @@ unit); sites with no component in hand (OAL rail, bare shaft) use the document u
 directly. An override whose id no longer resolves is **skipped at the render layer, never
 pruned** — the runout-reading/wear-pit posture.
 
-Dual rendering is `<primary> [<secondary>]` on **ONE line**
-(`pdf/UnitFormat.kt`'s `formatLenDimDual`/`formatLenWithUnitDual`/`formatDiaWithUnitDual`,
-which collapse to the plain formatters when the flag is off), and **both terms always carry
-their unit suffix** — the moment a sheet mixes units, a bare number is how a shaft gets
-machined wrong. Single-line is load-bearing, not cosmetic: dual growth is **width-only**, so
-it flows through the same label-measurement path stacked fractions already use
-(`labelWidth(span)` → the cut gap) with **no** change to any height budget, strip row cap,
-or rail tier count. A stacked two-line rendering is the configuration that overflowed those
-fixed budgets before, and it cannot be reintroduced without a costed change to every
-vertical budget it touches (rail bands, strip rows, footer) — never ad hoc. A metric thread
+Dual values are SET in one of two layouts — `PdfPrefs.dualUnitLayout`, Settings → Drawing →
+"Dual-unit layout" and both PDF options sheets. **INLINE** (the default) is
+`<primary> [<secondary>]` on one line; **STACKED** is the primary over the secondary. Either way
+**both terms always carry their unit suffix** — the moment a sheet mixes units, a bare number is
+how a shaft gets machined wrong — and the SECONDARY always takes the compact format (mm to one
+decimal), never the dimension formatter's 3 decimals: a converted value is a courtesy, not a
+measurement.
+
+A stack is **~55% NARROWER** (it measures as its wider LINE, not the sum plus brackets), which is
+the whole economic case: values that inline dual pushed above the dimension line seat back in the
+break, and every value restored to a break removes a fallback rail — and with it one label band of
+lift from every rail above. `DualStackLedgerTest` pins that ledger and fails if stacking ever costs
+more paper than it saves.
+
+Stacking is the app's **first label that moves HEIGHT**, so it carries a discipline the
+width-only fraction work never needed: **every vertical budget it touches derives from ONE number**,
+`Paint.dualStackMetrics()` (`util/DualLabelRenderer.kt`), and the two terms survive as separate
+strings all the way to the draw site (`util/DualLabel.kt` — a pre-joined `String` cannot be
+stacked). The rail planner takes it as an INFLATED ASCENT (`geom/DimensionRailLayout.TextMetrics`)
+and needs no other change; the wear/undercut strips thread ONE row height into both the reserved
+band and the drawn rows (`wearRailRowHeightPt`/`undercutRailRowHeightPt` — they were two
+independent numbers before, nesting only by luck); the Ø tier step, the wear Ø callout rows, and
+the consolidated sheet's rotated in-profile values read it too. Measure and draw convert together
+at every site (`measureDualLabel`/`drawDualLabel`), the fraction pair's rule.
+
+**A sheet that cannot afford the stack gives it up WHOLE** — per sheet, never per label, because a
+page with some two-line and some one-line values reads as a mistake. Each composer decides once,
+before drawing, and logs the fallback. A **keyway** carries its own unit the same way, under a derived key
+(`keywayUnitKey(id)` = `"<id>#kw"`, resolved by `DisplayUnits.keywayUnitFor` with the chain
+keyway → component → document): a European shaft arrives with its keyway and thread metric and
+nothing else, and flipping the parent taper to print one metric keyway would drag its L.E.T. /
+S.E.T. / Length along. Unlike the component chip it governs **entry** as well as print — typing a
+20 × 12 mm keyway as 0.7874 × 0.4724 in is a rounding hazard — so it is value entry, lives under the
+add-dialog-parity rule (NOT the card-only carve-out), and sits with the keyway fields rather than at
+the card's foot. A metric thread
 (`Threads.metricDesignation`, e.g. `M20×2.5`, parsed by `util/ThreadDesignation.kt`) prints
 its designation verbatim and carries an implicit mm override; a designation converted to
 decimal inches stops meaning anything. Numeric **entry** fields always take the document

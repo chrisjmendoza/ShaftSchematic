@@ -150,6 +150,7 @@ fun SettingsRoute(
     val pdfWearJoinGapMaxMm by vm.pdfWearJoinGapMaxMm.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
+    val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
 
     // App-wide defaults for mixed per-component units + inline dual-unit display. Not
     // document state (no ViewModel StateFlow), so this route reads/writes SettingsStore
@@ -366,6 +367,13 @@ fun SettingsRoute(
                     FractionStyleChips(
                         fractionStyle = pdfFractionStyle,
                         onCommit = { vm.setPdfFractionStyle(it) },
+                    )
+
+                    // Only visible in effect on a document with dual units on — the layout of the
+                    // second unit, not whether there is one (that is the document's own toggle).
+                    DualUnitLayoutChips(
+                        layout = pdfDualUnitLayout,
+                        onCommit = { vm.setPdfDualUnitLayout(it) },
                     )
 
                     Row(verticalAlignment = Alignment.CenterVertically) {

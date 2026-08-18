@@ -374,7 +374,11 @@ resolved component id → its display `UnitSystem`; a component with no entry fo
 `preferredUnit`. An override whose id no longer resolves is harmless (the resolver falls back
 to `preferredUnit`) and is **not** pruned — the same render-layer posture as the readings
 above. A metric-designation thread (`Threads.metricDesignation`, e.g. `M20×2.5`) carries an
-implicit mm override registered by the ViewModel. `dualUnits` is the sheet-wide flag: when
+implicit mm override registered by the ViewModel. A component's **keyway** may carry one of its own
+under a derived key — `keywayUnitKey(id)` = `"<id>#kw"`, the same `#` convention a split body's runs
+use — resolved by `DisplayUnits.keywayUnitFor` through the chain keyway → component → document.
+It needs no new envelope field, and a key whose component no longer resolves is inert (never pruned,
+the same posture as the readings above). `dualUnits` is the sheet-wide flag: when
 true every dimension prints `<primary> [<secondary>]` inline (`pdf/UnitFormat.kt` `*Dual`),
 seeded for new documents from a global default (`SettingsStore.dualUnitsDefaultFlow`) but
 persisted per document. Overrides travel with a template (they describe authoring); the

@@ -4,6 +4,7 @@ import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import com.android.shaftschematic.util.DualLabel
 import org.junit.Test
 
 class OalSpanLabelTest {
@@ -17,9 +18,9 @@ class OalSpanLabelTest {
 
         // The small printed "OAL" prefix is a deliberate visual identifier (product
         // decision); blank drafts drop label text at the renderer, not here.
-        assertTrue(span.labelTop.startsWith("OAL "))
-        assertFalse(span.labelTop.contains("(less", ignoreCase = true))
-        assertFalse(span.labelTop.contains("SET-SET", ignoreCase = true))
+        assertTrue(span.label.inline().startsWith("OAL "))
+        assertFalse(span.label.inline().contains("(less", ignoreCase = true))
+        assertFalse(span.label.inline().contains("SET-SET", ignoreCase = true))
     }
 
     @Test
@@ -29,9 +30,9 @@ class OalSpanLabelTest {
 
         assertEquals(25.4, span.x1Mm, 1e-9)
         assertEquals(1234.0, span.x2Mm, 1e-9)
-        assertTrue(span.labelTop.startsWith("OAL "))
+        assertTrue(span.label.inline().startsWith("OAL "))
         // Label distance must match the span width, not some other value
         val dist = 1234.0 - 25.4
-        assertTrue(span.labelTop.contains(dist.toLong().toString()) || span.labelTop.length > 4)
+        assertTrue(span.label.inline().contains(dist.toLong().toString()) || span.label.inline().length > 4)
     }
 }

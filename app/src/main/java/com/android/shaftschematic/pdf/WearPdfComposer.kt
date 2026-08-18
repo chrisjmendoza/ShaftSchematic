@@ -31,6 +31,12 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.VerboseLog
+import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.drawDualLabelCentered
+import com.android.shaftschematic.util.dualStackMetrics
+import com.android.shaftschematic.util.measureDualLabel
+import com.android.shaftschematic.util.setsStacked
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
@@ -165,6 +171,9 @@ fun composeWearPdf(
         style = Paint.Style.FILL
         color = Color.argb(40, 0, 0, 0)
     }
+    // Stacked dual values, WANTED (the pref) — whether the sheet actually gets them is decided once
+    // the strip bands are known (§7 degradation, `docs/DualUnitStacking_PLAN.md`).
+    val wantDualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED
     val bodyFill : Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
     val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
     val linerFill: Paint? = if (pdfPrefs.shadedLiners) shadeFill() else null
@@ -263,6 +272,11 @@ fun composeWearPdf(
     // A body/taper reading whose component HAS a strip on this page draws in that strip instead,
     // at the zoomed scale — the placement rule liners have always followed.
     val profileDia = if (showProfile && resolvedComponents != null) {
+        // Measured INLINE deliberately, even when the sheet may stack: the horizontal solve runs
+        // before the strips are laid out, so it cannot yet know whether stacking survives §7's
+        // fallback. Inline is the WIDER form, so a stacked label always fits the slot a plan solved
+        // for an inline one. Stacking simply does not earn fewer rows here, which is the cheap side
+        // of the trade — the reserved band below is sized for the taller row either way.
         buildProfileDiaCalloutInput(
             effectiveRecord.diaReadings, resolvedComponents, ::xAt, diaText, displayUnits,
             skipComponentIds = onPageComponentIds,
@@ -270,8 +284,13 @@ fun composeWearPdf(
     } else ProfileDiaCalloutInput(emptyList(), emptyMap())
     val profileDiaPlan = if (profileDia.stations.isEmpty()) null else
         planDiaCallouts(profileDia.stations, contentLeft, contentRight, WEAR_DIA_MIN_GAP_PT)
+    // Reserved at the STACK height whenever stacking is wanted, before §7's per-sheet fallback is
+    // known: reserving the taller row costs a few points of white if the sheet ends up inline, while
+    // reserving the shorter one would overlap the rows if it ends up stacked.
+    val profileDiaRowHeightPt =
+        if (wantDualStacked) diaText.dualStackMetrics().height else diaText.textSize
     val profileDiaBandPt = profileDiaPlan?.bandHeightPt(
-        diaText.textSize, WEAR_DIA_ROW_GAP_PT, WEAR_DIA_PROFILE_LEADER_PT) ?: 0f
+        profileDiaRowHeightPt, WEAR_DIA_ROW_GAP_PT, WEAR_DIA_PROFILE_LEADER_PT) ?: 0f
 
     // ── Header (always drawn) ───────────────────────────────────────────────
     drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, blankValues)
@@ -406,6 +425,26 @@ fun composeWearPdf(
         overflowBandTop = v.stripBottoms.lastOrNull() ?: profileBottom
     }
 
+    // §7 degradation, wear sheet: the strips are the tightest vertical budget in the app, so the
+    // stacked decision is taken ONCE here against the tightest strip on the page and applied to all
+    // of them — a page with some two-line and some one-line values reads as a mistake. A strip that
+    // cannot carry stacked rail rows and still draw a readable liner sends the whole sheet inline.
+    val dualStacked = wantDualStacked && run {
+        val probe = Paint(text).apply { textSize = stripDimTextSize(text) }
+        val tightest = stripCells.minOfOrNull { it.bottom - it.top } ?: Float.MAX_VALUE
+        wearStripAffordsStackedRail(
+            stripHeightPt = tightest,
+            titleHeightPt = stripTitleTextSize(text),
+            rowHeightPt = wearRailRowHeightPt(probe, dualStacked = true),
+        )
+    }
+    if (wantDualStacked && !dualStacked) {
+        VerboseLog.i(VerboseLog.Category.PDF, "WearPdf") {
+            "dual stacking: wear strips fell back to INLINE — the tightest strip cannot carry " +
+                "stacked rail rows and still draw its liner"
+        }
+    }
+
     // ── Shaft profile + OAL line ──────────────────────────────────────────────
     // Elected out (showShaftProfile = false) the whole band is skipped — profile, OAL rail,
     // on-profile bands/pits, liner names, and the direction reference — and the strips already
@@ -455,14 +494,14 @@ fun composeWearPdf(
         if (profileDiaPlan != null) {
             val placed = profileDiaPlan.finish(
                 row0Top = shaftCy + rPx(maxDiaMm) + WEAR_PROFILE_NAMES_ROW_PT + 2f,
-                labelTextHeight = diaText.textSize,
+                labelTextHeight = profileDiaRowHeightPt,
                 rowGap = WEAR_DIA_ROW_GAP_PT,
                 surfaceYAt = { i ->
                     shaftCy + rPx(profileDia.surfaceDiaByKey[profileDiaPlan.stations[i].key] ?: maxDiaMm)
                 },
                 leaderStartGap = 2f,
             )
-            drawDiaCallouts(c, placed, dim, diaText)
+            drawDiaCallouts(c, placed, dim, diaText, dualStacked)
         }
     }
 
@@ -507,6 +546,7 @@ fun composeWearPdf(
             traceDepthFrac = traceDepthFrac,
             bandShadeAlpha = wearBandShadeAlpha(pdfPrefs.wearBandShadeFrac),
             blankValues = blankValues,
+            dualStacked = dualStacked,
         )
     }
     if (stripSelection.overflow.isNotEmpty()) {
@@ -926,6 +966,7 @@ private fun buildProfileDiaCalloutInput(
     diaText: Paint,
     displayUnits: DisplayUnits,
     skipComponentIds: Set<String> = emptySet(),
+    dualStacked: Boolean = false,
 ): ProfileDiaCalloutInput {
     if (readings.isEmpty()) return ProfileDiaCalloutInput(emptyList(), emptyMap())
     val byId = components.associateBy { it.id }
@@ -946,12 +987,14 @@ private fun buildProfileDiaCalloutInput(
             else -> return@forEach   // liners → detail strip; threads/slots ineligible
         }
         if (drawnDiaMm <= 0f) return@forEach
-        val label = formatDiaWithUnitDual(r.diaMm.toDouble(), displayUnits.unitFor(r.componentId), displayUnits.dual)
+        val label = formatDiaWithUnitDualLabel(
+            r.diaMm.toDouble(), displayUnits.unitFor(r.componentId), displayUnits.dual,
+        )
         stations += DiaCalloutStation(
             key = r.id,
             stationX = xAt(rc.startMmPhysical + local),
             label = label,
-            labelWidth = diaText.measureText(label),
+            labelWidth = diaText.measureDualLabel(label, dualStacked),
         )
         surface[r.id] = drawnDiaMm
     }
@@ -963,13 +1006,19 @@ private fun buildProfileDiaCalloutInput(
  * `geom/WearDiaCalloutLayout.kt`) plus its value label at the planned row position. Shared
  * by the main-profile and detail-strip draw paths so both surfaces render identically.
  */
-private fun drawDiaCallouts(c: Canvas, placed: List<PlacedDiaCallout>, dim: Paint, diaText: Paint) {
+private fun drawDiaCallouts(
+    c: Canvas,
+    placed: List<PlacedDiaCallout>,
+    dim: Paint,
+    diaText: Paint,
+    dualStacked: Boolean = false,
+) {
     placed.forEach { p ->
         for (s in 0 until p.leader.size - 1) {
             c.drawLine(p.leader[s].x, p.leader[s].y, p.leader[s + 1].x, p.leader[s + 1].y, dim)
         }
         val fm = diaText.fontMetrics
-        c.drawText(p.label, p.labelCx - p.labelWidth * 0.5f, p.labelTopY - fm.ascent, diaText)
+        c.drawDualLabelCentered(p.label, p.labelCx, p.labelTopY - fm.ascent, diaText, dualStacked)
     }
 }
 
@@ -1033,6 +1082,15 @@ private fun drawDiaCallouts(c: Canvas, placed: List<PlacedDiaCallout>, dim: Pain
  * measures off it through `hLayout.stubWidthPt`, so a packed page's squeezed stub can never
  * overrun the cell it was sized for.
  */
+/**
+ * The strip title / dimension text sizes, derived from the sheet's base text once.
+ *
+ * The composer needs them BEFORE the strip loop (to ask whether a stacked rail fits) and the window
+ * needs them to build its paints; two copies of the expression would drift.
+ */
+internal fun stripTitleTextSize(text: Paint): Float = (text.textSize - 1f).coerceAtLeast(7f)
+internal fun stripDimTextSize(text: Paint): Float = (text.textSize - 2f).coerceAtLeast(7f)
+
 private fun drawWearStripWindow(
     c: Canvas,
     docSpec: ShaftSpec,
@@ -1059,6 +1117,11 @@ private fun drawWearStripWindow(
     // with the page's largest reference diameter fills its band, the rest draw at their
     // true ratio to it, so heights read proportional on paper across the strips.
     heightFrac: Float = 1f,
+    /**
+     * Set dual values as two-line stacks in this strip's rail and Ø callouts. Decided once for the
+     * whole SHEET by the composer (§7 degradation) and handed down, never re-derived here.
+     */
+    dualStacked: Boolean = false,
     titles: Map<String, String>,
     spots: List<WearSpot> = emptyList(),
     pits: List<WearPit> = emptyList(),
@@ -1079,8 +1142,8 @@ private fun drawWearStripWindow(
     )
     fun xAtStrip(mm: Float): Float = window.xAt(mm, hLayout.linerLeftPt, stripPtPerMm)
 
-    val titleText = Paint(text).apply { textSize = (text.textSize - 1f).coerceAtLeast(7f) }
-    val dimText = Paint(text).apply { textSize = (text.textSize - 2f).coerceAtLeast(7f) }
+    val titleText = Paint(text).apply { textSize = stripTitleTextSize(text) }
+    val dimText = Paint(text).apply { textSize = stripDimTextSize(text) }
     val linerComp = window.liner
     // Titles are per attachment CLUSTER, not per window (wearStripClusters): a compressed gap
     // means the components either side of it are NOT adjacent, so one joined
@@ -1122,8 +1185,13 @@ private fun drawWearStripWindow(
     val diaStations = valuedReadings.map { r ->
         val comp = compById.getValue(r.componentId)
         val local = r.axialMm.coerceIn(0f, comp.lengthMm)
-        val label = formatDiaWithUnitDual(r.diaMm.toDouble(), displayUnits.unitFor(r.componentId), displayUnits.dual)
-        DiaCalloutStation(r.id, xAtStrip(comp.startMm + local), label, dimText.measureText(label))
+        val label = formatDiaWithUnitDualLabel(
+            r.diaMm.toDouble(), displayUnits.unitFor(r.componentId), displayUnits.dual,
+        )
+        DiaCalloutStation(
+            r.id, xAtStrip(comp.startMm + local), label,
+            dimText.measureDualLabel(label, dualStacked),
+        )
     }
     // Drawn diameter under each station, so a leader and its witness tick meet the actual
     // surface — a taper's is interpolated at the reading's own position.
@@ -1133,7 +1201,10 @@ private fun drawWearStripWindow(
     }
     val diaPlan = if (diaStations.isEmpty()) null else
         planDiaCallouts(diaStations, contentLeft + 2f, contentRight - 2f, WEAR_DIA_MIN_GAP_PT)
-    val diaBandPt = diaPlan?.let { it.labelsHeightPt(dimText.textSize, WEAR_DIA_ROW_GAP_PT) + 2f } ?: 0f
+    // A stacked value is two lines tall, so a callout ROW is the whole stack — the reserved band
+    // and `finish`'s row pitch below must read the same number or the rows overprint.
+    val diaRowHeightPt = if (dualStacked) dimText.dualStackMetrics().height else dimText.textSize
+    val diaBandPt = diaPlan?.let { it.labelsHeightPt(diaRowHeightPt, WEAR_DIA_ROW_GAP_PT) + 2f } ?: 0f
 
     val sortedSpots = spots.sortedBy { it.startMm }
     // Bands clamp to the liner's own span for rendering; the stored spots are never touched.
@@ -1165,9 +1236,15 @@ private fun drawWearStripWindow(
     }
     val traceVerts = sequenceWearTraces(bandTraces)
 
+    // ONE rail row height for this strip: the budget below and `drawWearStripRail`'s own stepping
+    // both read it. They used to be separate numbers (13 pt budgeted, `textSize + 3` drawn) that
+    // only happened to nest; a stacked row is taller than either, so a single value is the only way
+    // the reserved band and the drawn rows can agree.
+    val railRowHeightPt = wearRailRowHeightPt(dimText, dualStacked)
     val inner = computeWearStripInnerLayout(
         stripTop, stripBottom,
         titleHeightPt = titleText.textSize,
+        rowHeightPt = railRowHeightPt,
         diaBandPt = diaBandPt,
     )
     val cy = (inner.cylTop + inner.cylBottom) / 2f
@@ -1416,7 +1493,7 @@ private fun drawWearStripWindow(
         val railLayout = layoutWearStripRail(
             railSpans,
             xAtStripMm = { mm -> xAtStrip(linerComp.startMm + mm) },
-            labelWidthPt = { s -> dimText.measureRichText(s) },
+            labelWidthPt = { s -> dimText.measureDualLabel(s, dualStacked) },
         )
         // Blank draft: the rail's dimension lines still draw, the value labels do not — the
         // machinist writes the measured figures under the rail by hand. And with no wear bands at
@@ -1427,7 +1504,8 @@ private fun drawWearStripWindow(
         // surface sits below the band top, and bars stopping in the air above it would read
         // as measuring nothing.
         drawWearStripRail(c, dim, dimText, railLayout, cy - rOf(linerComp.aftDiaMm), inner.railY,
-            inner.railLabelRows, drawLabels = !blankValues, drawSpanLines = hasWearBands)
+            inner.railLabelRows, drawLabels = !blankValues, drawSpanLines = hasWearBands,
+            rowHeightPt = railRowHeightPt, dualStacked = dualStacked)
     }
 
     // Titles, drawn LAST at the BOTTOM of the strip — one per attachment cluster, all sharing
@@ -1617,10 +1695,18 @@ private fun drawWearStripRail(
     maxLabelRows: Int,
     drawLabels: Boolean = true,
     drawSpanLines: Boolean = true,
+    /**
+     * Row pitch — the SAME value the strip reserved its rail band with
+     * ([computeWearStripInnerLayout]'s `rowHeightPt`, via [wearRailRowHeightPt]). Never derive a
+     * second one here: a drawn step wider than the budgeted row overflows the band it was sized
+     * for, and a narrower one wastes it.
+     */
+    rowHeightPt: Float = WEAR_STRIP_ROW_HEIGHT_PT,
+    dualStacked: Boolean = false,
 ) {
     if (layout.isEmpty()) return
     val arrow = 4f
-    val rowStepPt = dimText.textSize + 3f
+    val rowStepPt = rowHeightPt
     val witnessExt = 3f
     val witnessGap = 3f   // gap between the liner's top edge and the witness line start — same
                           // convention as the main profile's OAL witness lines (device feedback)
@@ -1641,14 +1727,20 @@ private fun drawWearStripRail(
         // Value-in-a-break when the label fits its span (the layout's seatsInBreak guarantees
         // the break's stubs still have arrow room); otherwise a continuous line with the
         // above-line fallback row — the schematic's value-in-a-break rule, mirrored.
-        val lw = dimText.measureRichText(s.label)
+        val lw = dimText.measureDualLabel(s.label, dualStacked)
         val seatsInBreak = drawLabels && s.seatsInBreak
         if (seatsInBreak) {
             val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
             c.drawLine(s.x0Pt, railY, s.labelCxPt - gapHalf, railY, dim)
             c.drawLine(s.labelCxPt + gapHalf, railY, s.x1Pt, railY, dim)
             val fm = dimText.fontMetrics
-            c.drawRichText(s.label, s.labelCxPt - lw * 0.5f, railY - (fm.ascent + fm.descent) * 0.5f, dimText)
+            // A stack straddles the rail line: primary above it, secondary below, with the line's
+            // two stubs pointing into the seam between them.
+            val seatBaseline =
+                if (s.label.setsStacked(dualStacked))
+                    railY - dimText.dualStackMetrics().height * 0.5f - fm.ascent
+                else railY - (fm.ascent + fm.descent) * 0.5f
+            c.drawDualLabelCentered(s.label, s.labelCxPt, seatBaseline, dimText, dualStacked)
         } else {
             c.drawLine(s.x0Pt, railY, s.x1Pt, railY, dim)
         }
@@ -1666,8 +1758,12 @@ private fun drawWearStripRail(
                 // Row 0 sits just above the rail (clear of the witness overshoot), the rest
                 // stack upward into the band computeWearStripInnerLayout reserved there.
                 val fm = dimText.fontMetrics
-                val ly = railY - labelGapPt - fm.descent - row * rowStepPt
-                c.drawRichText(s.label, s.labelCxPt - lw * 0.5f, ly, dimText)
+                // The BOTTOM line keeps the historical clearance above the rail; a stack grows
+                // upward from there into the row the budget reserved.
+                val stackLift = if (s.label.setsStacked(dualStacked))
+                    dimText.dualStackMetrics().advance else 0f
+                val ly = railY - labelGapPt - fm.descent - row * rowStepPt - stackLift
+                c.drawDualLabelCentered(s.label, s.labelCxPt, ly, dimText, dualStacked)
             }
         }
     }

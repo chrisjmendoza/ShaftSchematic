@@ -1,6 +1,7 @@
 package com.android.shaftschematic.pdf.dim
 
 import org.junit.Assert.assertEquals
+import com.android.shaftschematic.util.DualLabel
 import org.junit.Test
 
 class SpanDedupingTest {
@@ -10,13 +11,13 @@ class SpanDedupingTest {
         val a = DimSpan(
             x1Mm = 0.0,
             x2Mm = 406.4,
-            labelTop = "16 in",
+            label = DualLabel.single("16 in"),
             kind = SpanKind.LOCAL
         )
         val b = DimSpan(
             x1Mm = 0.0,
             x2Mm = 406.4,
-            labelTop = "16 in",
+            label = DualLabel.single("16 in"),
             kind = SpanKind.LOCAL
         )
 
@@ -30,13 +31,13 @@ class SpanDedupingTest {
         val a = DimSpan(
             x1Mm = 0.0,
             x2Mm = 406.4,
-            labelTop = "16 in",
+            label = DualLabel.single("16 in"),
             kind = SpanKind.LOCAL
         )
         val b = DimSpan(
             x1Mm = 0.0,
             x2Mm = 406.4,
-            labelTop = "16.0 in",
+            label = DualLabel.single("16.0 in"),
             kind = SpanKind.LOCAL
         )
 
@@ -49,13 +50,13 @@ class SpanDedupingTest {
         val datum = DimSpan(
             x1Mm = 0.0,
             x2Mm = 406.4,
-            labelTop = "16 in",
+            label = DualLabel.single("16 in"),
             kind = SpanKind.DATUM
         )
         val local = DimSpan(
             x1Mm = 0.0,
             x2Mm = 406.4,
-            labelTop = "16 in",
+            label = DualLabel.single("16 in"),
             kind = SpanKind.LOCAL
         )
 

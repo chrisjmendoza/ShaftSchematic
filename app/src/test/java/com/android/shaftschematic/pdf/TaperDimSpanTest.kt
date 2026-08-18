@@ -8,6 +8,7 @@ import com.android.shaftschematic.pdf.dim.SpanKind
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import com.android.shaftschematic.util.DualLabel
 import org.junit.Test
 
 class TaperDimSpanTest {
@@ -43,7 +44,7 @@ class TaperDimSpanTest {
         assertTrue(xs.contains(800.0 to 1000.0))
 
         val expectedLabel = formatLenDim(200.0, UnitSystem.MILLIMETERS)
-        spans.forEach { assertEquals(expectedLabel, it.labelTop) }
+        spans.forEach { assertEquals(expectedLabel, it.label.inline()) }
     }
 
     @Test

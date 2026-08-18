@@ -194,10 +194,14 @@ fun ShaftRoute(
         onSetOverallIsManual = vm::setOverallIsManual,
         onSelectComponentById = vm::selectComponentById,
 
-        onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp -> vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp) },
+        onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit ->
+            vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit)
+        },
         onSetAutoSectionDia = vm::setAutoSectionDiaMm,
         onSetShowAutoBodyDia = vm::setShowAutoBodyDia,
-        onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS -> vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS) },
+        onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit ->
+            vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit)
+        },
         onAddThread = { s, l, maj, p, ex, aft, desig -> vm.addThreadAt(s, l, maj, p, ex, aft, desig) },
         onAddLiner  = { s, l, od, ref -> vm.addLinerAt(s, l, od, ref) },
         onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref) },
@@ -257,5 +261,6 @@ fun ShaftRoute(
         perComponentUnitsEnabled = perComponentUnitsEnabled,
         unitOverrides = unitOverrides,
         onSetComponentUnit = vm::setComponentUnit,
+        onSetKeywayUnit = vm::setKeywayUnit,
     )
 }

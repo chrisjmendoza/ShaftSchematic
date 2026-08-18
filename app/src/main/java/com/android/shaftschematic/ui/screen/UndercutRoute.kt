@@ -660,6 +660,8 @@ fun UndercutRoute(
                 // Same blank-draft state as the tab body's switch — ONE state behind both, so
                 // the tab and the sheet can never disagree about what the preview is showing.
                 RunoutWearOptionsSheet(
+                    dualUnits = dualUnits,
+                    onDualUnitsChange = { vm.setDualUnits(it) },
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,

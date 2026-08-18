@@ -40,6 +40,13 @@ object DimensionRailLayout {
     /** Vertical half-thickness a rail line occupies as a label obstacle. */
     const val LINE_HALF_CLEAR: Float = 1f
 
+    /**
+     * How far apart two extension lines' page-x must be to count as different lines. Chained
+     * spans SHARE a boundary, so the same drawn line belongs to both of them; anything inside
+     * this tolerance is treated as one line and as "own" to either span that ends there.
+     */
+    const val EXT_SAME_X_EPS: Float = 0.5f
+
     /** Bounded vertical escape for an above-line label that cannot slide clear. */
     const val MAX_BUMPS: Int = 3
 
@@ -198,6 +205,19 @@ object DimensionRailLayout {
         // break that line leaves for it.
         val lineBoxes = rows.map { Box(it.xa, it.y - LINE_HALF_CLEAR, it.xb, it.y + LINE_HALF_CLEAR) }
 
+        // EXTENSION lines are obstacles too. Each runs from the object up to its OWN rail, so it
+        // crosses the band of every rail below it — which is exactly where those rails park a
+        // floating value. Leaving them out is what let an extension line print straight through
+        // the tail of a fallback label (on-device sheet, `docs/DualUnitStacking_PLAN.md` §1b);
+        // dual labels are simply wide enough to be hit every time.
+        //
+        // Collinear lines at one x (the same boundary dimensioned on several rails) are ONE
+        // obstacle spanning from the topmost of them downward, and a span's own boundaries are
+        // excluded: a chained neighbour shares that line, and a label wider than its own span
+        // legitimately overhangs its own extensions — counting them would make that case
+        // unsolvable and bump every such label to [MAX_BUMPS].
+        val extLines = buildExtensionLines(rows)
+
         val order = rows.indices.sortedWith(
             compareBy({ rows[it].hi - rows[it].lo }, { rows[it].xa }, { it })
         )
@@ -207,7 +227,9 @@ object DimensionRailLayout {
 
         for (i in order) {
             val r = rows[i]
-            val obstacles = placedLabels + lineBoxes.filterIndexed { j, _ -> j != i }
+            val obstacles = placedLabels +
+                lineBoxes.filterIndexed { j, _ -> j != i } +
+                extLines.filterNot { it.belongsTo(r) }.map { it.box() }
 
             var top = if (r.inline) r.y - metrics.height * 0.5f else r.y - metrics.aboveDy + metrics.ascent
             var bottom = top + metrics.height
@@ -325,6 +347,32 @@ object DimensionRailLayout {
         val xa: Float,
         val xb: Float,
     )
+
+    /**
+     * One drawn extension line as an obstacle: a vertical segment at [x] running from [topY] (its
+     * highest owning rail) DOWN to the object. Modelled as unbounded below — every label sits
+     * above the object, so nothing is lost and no caller has to pass the object's y in.
+     */
+    private class ExtLine(val x: Float, val topY: Float) {
+        fun box(): Box = Box(x - LINE_HALF_CLEAR, topY, x + LINE_HALF_CLEAR, Float.MAX_VALUE)
+
+        /** True when this line is one of [r]'s own boundaries — shared lines count as own. */
+        fun belongsTo(r: Row): Boolean =
+            abs(x - r.xa) <= EXT_SAME_X_EPS || abs(x - r.xb) <= EXT_SAME_X_EPS
+    }
+
+    /** Extension lines, collinear ones merged: one obstacle per x, topped by its highest rail. */
+    private fun buildExtensionLines(rows: List<Row>): List<ExtLine> {
+        val topByX = LinkedHashMap<Long, Pair<Float, Float>>(rows.size * 2)
+        rows.forEach { r ->
+            listOf(r.xa, r.xb).forEach { x ->
+                val key = (x / EXT_SAME_X_EPS).toLong()
+                val prev = topByX[key]
+                topByX[key] = if (prev == null) x to r.y else prev.first to min(prev.second, r.y)
+            }
+        }
+        return topByX.values.map { (x, topY) -> ExtLine(x, topY) }
+    }
 
     /** Rails stack upward; the OAL rail is above every numbered one. */
     private fun order(railIndex: Int): Int = if (railIndex == TOP_RAIL) Int.MAX_VALUE else railIndex

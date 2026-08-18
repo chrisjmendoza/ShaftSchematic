@@ -46,6 +46,12 @@ import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.VerboseLog
+import com.android.shaftschematic.util.DualLabel
+import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.dualStackMetrics
+import com.android.shaftschematic.util.measureDualLabel
+import com.android.shaftschematic.util.setsStacked
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.formatRunoutValue
@@ -310,18 +316,30 @@ fun composeRunoutPdf(
             sets = setPositions,
             unit = unit,
             measureFrom = measureFromMode,
-        ) + buildTaperLengthSpans(spec, oalWindow, unit)
+            displayUnits = displayUnits,
+        ) + buildTaperLengthSpans(spec, oalWindow, unit, displayUnits)
         RailPlanner().assignAll(dimSpans, tierOriginMmFor(measureFromMode, oalWindow.oalMm))
     } else emptyList()
     val maxRail = railAssignments.maxOfOrNull { it.rail } ?: -1
-    val railGap = RUNOUT_RAIL_GAP_PT
     val dimText = Paint(text).apply { textSize = RUNOUT_DIM_TEXT_PT }
     // OAL brackets the SET-to-SET span; the label is ALWAYS the typed OAL (the number is
     // sacred; see docs/contracts/OverallLength.md).
     val oalDimSpan = oalSpan(
-        setPositions.aftSETxMm, setPositions.fwdSETxMm, unit,
-        labelMm = spec.overallLengthMm.toDouble(),
+        setPositions.aftSETxMm, setPositions.fwdSETxMm, displayUnits.documentUnit,
+        labelMm = spec.overallLengthMm.toDouble(), dual = displayUnits.dual,
     )
+
+    // Stacked dual values are two lines tall, so the lane pitch has to clear the whole value box —
+    // a tighter lane prints the neighbouring rail's line through the stack, which no amount of
+    // horizontal sliding fixes. Single-line sheets keep the shipped flat pitch exactly.
+    val wantDualStacked = consolidated && displayUnits.dual &&
+        pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED
+    fun railGapFor(stacked: Boolean): Float =
+        if (!stacked) RUNOUT_RAIL_GAP_PT
+        else maxOf(
+            RUNOUT_RAIL_GAP_PT,
+            dimText.dualStackMetrics().height + 2f * DimensionRailLayout.LINE_HALF_CLEAR + 2f,
+        )
 
     /** Planner rows for the rail block under a given mm→page mapping; OAL topmost. */
     fun dimRows(renderer: PdfDimensionRenderer, railY: (Int) -> Float) =
@@ -333,7 +351,7 @@ fun composeRunoutPdf(
     // grow by the same amount. Inline-vs-above depends only on a span's drawn WIDTH, so the
     // prelim linear map answers it before the shaft scale is solved (the same prelim-then-
     // resolve posture the bubble budget uses); the drawn plan below re-solves on the real map.
-    val prelimRailLift = if (!consolidated) 0f else {
+    fun prelimRailLiftFor(stacked: Boolean): Float = if (!consolidated) 0f else {
         val prelim = PdfDimensionRenderer(
             pageX = { dimMm -> xAtLinear((dimMm + oalWindow.measureStartMm).toFloat()) },
             linePaint = dim,
@@ -343,14 +361,17 @@ fun composeRunoutPdf(
             blankLabels = blankValues,
             blankLabelWidthPx = BLANK_DIM_GAP_PT,
             blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
+            dualStacked = stacked,
         )
         prelim.topLift(dimRows(prelim) { 0f })
     }
 
     // Height reserved above the shaft: first-rail offset + tier rows + above-line label lifts
     // + the OAL lane (consolidated), or header strip + gap + raised OAL span line (classic).
-    val railsBlockH =
-        if (consolidated) RUNOUT_BASE_DIM_OFFSET_PT + railGap * (maxRail + 1) + 8f + prelimRailLift
+    fun railsBlockHFor(stacked: Boolean): Float =
+        if (consolidated)
+            RUNOUT_BASE_DIM_OFFSET_PT + railGapFor(stacked) * (maxRail + 1) + 8f +
+                prelimRailLiftFor(stacked)
         else HEADER_HEIGHT_PT + OAL_GAP_PT + OAL_LINE_SPACE_PT
 
     // Footer block pinned to the page bottom (consolidated only); the TIR line sits
@@ -381,6 +402,21 @@ fun composeRunoutPdf(
     // count, and the final bubble x positions need the (scale-dependent) compressed
     // mapping — a cycle. Break it with a prelim linear-map plan for the BUDGET only; the
     // plan used for drawing is re-solved on the real mapping below.
+    // §7 degradation, consolidated sheet: the taller rail block is paid for out of the shaft's own
+    // height budget, so give the stacking up for the WHOLE sheet when it would squeeze the drawn
+    // shaft (plus its bubble rows) below what is readable. Decided here, once the bottom lane is
+    // known, so the choice is made on the real remaining height rather than a guess.
+    val dualStacked = wantDualStacked &&
+        (bottomLaneTopY - (margin + railsBlockHFor(true)) >= RUNOUT_MIN_SHAFT_AREA_PT)
+    if (wantDualStacked && !dualStacked) {
+        VerboseLog.i(VerboseLog.Category.PDF, "RunoutPdf") {
+            "dual stacking: consolidated rails fell back to INLINE — the stacked block would " +
+                "leave under ${RUNOUT_MIN_SHAFT_AREA_PT.toInt()} pt for the shaft"
+        }
+    }
+    val railGap = railGapFor(dualStacked)
+    val railsBlockH = railsBlockHFor(dualStacked)
+
     val maxOuterDiaMm  = docSpec.maxOuterDiaMm().coerceAtLeast(10f)
     val shaftTopBudgetY = margin + railsBlockH
     val availableH     = bottomLaneTopY - shaftTopBudgetY
@@ -470,9 +506,11 @@ fun composeRunoutPdf(
         val fm = text.fontMetrics
         val baseLine = fm.descent - fm.ascent
         var need = 0f
-        fun consider(labels: List<String>, stationDiaMm: Float) {
+        fun consider(labels: List<DualLabel>, stationDiaMm: Float) {
             if (labels.isEmpty() || stationDiaMm <= 0f) return
-            val neededPt = labels.maxOf { wornValueBandHeightNeeded(text.measureText(it), baseLine) }
+            val neededPt = labels.maxOf {
+                wornValueBandHeightNeeded(text.measureDualLabel(it, dualStacked), baseLine)
+            }
             need = maxOf(need, neededPt / (stationDiaMm * WORN_VALUE_BAND_FIT_FRAC))
         }
         wearRecord.wornSections.forEach { s ->
@@ -482,7 +520,7 @@ fun composeRunoutPdf(
             val endMm = minOf(clamped.endMm, fwdSetMm)
             if (endMm - startMm <= 1e-3f) return@forEach
             consider(
-                wornSectionValueLabels(s.diaMm, displayUnits.documentUnit, displayUnits.dual),
+                wornSectionValueDualLabels(s.diaMm, displayUnits.documentUnit, displayUnits.dual),
                 outerDiaMmAt((startMm + endMm) / 2f),
             )
         }
@@ -494,7 +532,7 @@ fun composeRunoutPdf(
                 val stationMm = rc.startMmPhysical + r.axialMm.coerceIn(0f, lenMm)
                 val readingUnit = displayUnits.unitFor(r.componentId)
                 consider(
-                    listOf(diaReadingValueLabel(r.diaMm, readingUnit, displayUnits.dual)),
+                    listOf(diaReadingValueDualLabel(r.diaMm, readingUnit, displayUnits.dual)),
                     outerDiaMmAt(stationMm),
                 )
             }
@@ -593,6 +631,7 @@ fun composeRunoutPdf(
             blankLabels = blankValues,
             blankLabelWidthPx = BLANK_DIM_GAP_PT,
             blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
+            dualStacked = dualStacked,
         )
         // Lift on the REAL mapping — it can differ from the prelim by a band when a span
         // foreshortens across the inline threshold; the clamp below absorbs the difference.
@@ -640,6 +679,7 @@ fun composeRunoutPdf(
             outline = outline, text = text,
             includeValues = !blankValues,
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
+            dualStacked = dualStacked,
         )
     }
     if (drawWear && !blankValues) {
@@ -648,6 +688,7 @@ fun composeRunoutPdf(
             cy = shaftCy, xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt,
             displayUnits = displayUnits, text = text,
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
+            dualStacked = dualStacked,
         )
     }
 
@@ -792,13 +833,32 @@ internal fun consolidatedSheetHasInProfileValues(
 /** Smallest legible in-profile value text on the printed page (pt). */
 internal const val WORN_VALUE_MIN_TEXT_PT = 6f
 
-/** Printable value labels for a worn section — the shared solve/draw source of truth. */
+/**
+ * Printable value labels for a worn section — the shared solve/draw source of truth.
+ *
+ * Two terms, kept apart, because a stacked dual value sets on two lines; the "Ø" identifier rides
+ * the PRIMARY so a stack reads `Ø11"` over `279.4 mm` rather than repeating the symbol.
+ */
+internal fun wornSectionValueDualLabels(
+    diaMm: List<Float>,
+    unit: UnitSystem,
+    dual: Boolean = false,
+): List<DualLabel> =
+    diaMm.filter { it > 0f }.map { withDiaSymbol(formatDiaWithUnitDualLabel(it.toDouble(), unit, dual)) }
+
+/** [wornSectionValueDualLabels] as one-liners, for callers with no stacking to do. */
 internal fun wornSectionValueLabels(diaMm: List<Float>, unit: UnitSystem, dual: Boolean = false): List<String> =
-    diaMm.filter { it > 0f }.map { "Ø" + formatDiaWithUnitDual(it.toDouble(), unit, dual) }
+    wornSectionValueDualLabels(diaMm, unit, dual).map { it.inline() }
+
+/** Printable label for one measured-Ø point reading, as its two terms. */
+internal fun diaReadingValueDualLabel(diaMm: Float, unit: UnitSystem, dual: Boolean = false): DualLabel =
+    withDiaSymbol(formatDiaWithUnitDualLabel(diaMm.toDouble(), unit, dual))
 
 /** Printable label for one measured-Ø point reading. */
 internal fun diaReadingValueLabel(diaMm: Float, unit: UnitSystem, dual: Boolean = false): String =
-    "Ø" + formatDiaWithUnitDual(diaMm.toDouble(), unit, dual)
+    diaReadingValueDualLabel(diaMm, unit, dual).inline()
+
+private fun withDiaSymbol(value: DualLabel): DualLabel = value.copy(primary = "Ø" + value.primary)
 
 internal fun drawWornSections(
     c: Canvas,
@@ -822,6 +882,13 @@ internal fun drawWornSections(
     minTextSize: Float,
     /** Worn sections are shaft-space, not component-keyed — one dual flag for the whole sheet. */
     dual: Boolean = false,
+    /**
+     * Set dual values as a two-line stack. Under rotation the stack lies ACROSS the shaft, so it
+     * costs axial room and SAVES band height — the opposite of every other site
+     * (`docs/DualUnitStacking_PLAN.md` §6). Threaded from both draw sites so the printed sheet and
+     * the preview canvas can never disagree.
+     */
+    dualStacked: Boolean = false,
 ) {
     if (sections.isEmpty()) return
     val eps = 1e-3f
@@ -850,15 +917,17 @@ internal fun drawWornSections(
         c.drawLine(x1, cy - r1, x1, cy + r1, outline)
 
         if (!includeValues) return@forEach
-        val labels = wornSectionValueLabels(section.diaMm, unit, dual)
+        val labels = wornSectionValueDualLabels(section.diaMm, unit, dual)
         if (labels.isEmpty()) return@forEach
 
-        // Auto-fit: one size per section, from its longest value against the local band.
+        // Auto-fit: one size per section, from its longest value against the local band. A stacked
+        // value is only as LONG as its longer term (the axes swap under rotation), so stacking
+        // lowers this demand instead of raising it.
         val bandPx = 2f * surfaceRAt((startMm + endMm) / 2f) * WORN_VALUE_BAND_FIT_FRAC
         val fitted = fittedValueTextSize(
             baseTextSize = baseText.textSize,
             minTextSize = minTextSize,
-            labelLengthAtBase = labels.maxOf(baseText::measureText),
+            labelLengthAtBase = labels.maxOf { baseText.measureDualLabel(it, dualStacked) },
             lineHeightAtBase = baseLine,
             bandHeight = bandPx,
         )
@@ -868,11 +937,13 @@ internal fun drawWornSections(
 
         val layout = layoutWornSectionValues(
             x0 = x0, x1 = x1, cy = cy,
-            labelLengths = labels.map(valueText::measureText),
+            labelLengths = labels.map { valueText.measureDualLabel(it, dualStacked) },
             lineHeight = fm.descent - fm.ascent,
+            columnThickness = if (dualStacked) valueText.dualStackMetrics().height
+                              else fm.descent - fm.ascent,
         )
         layout.columns.forEachIndexed { i, col ->
-            drawRotatedValueColumn(c, col, labels[i], valueText, halo)
+            drawRotatedValueColumn(c, col, labels[i], valueText, halo, dualStacked)
         }
     }
 }
@@ -885,15 +956,29 @@ internal fun drawWornSections(
 private fun drawRotatedValueColumn(
     c: Canvas,
     col: WornValueColumn,
-    label: String,
+    label: DualLabel,
     valueText: Paint,
     halo: Paint,
+    stacked: Boolean = false,
 ) {
     c.drawRect(col.haloLeft, col.haloTop, col.haloRight, col.haloBottom, halo)
     val fm = valueText.fontMetrics
+    val centerBaseline = col.cy - (fm.ascent + fm.descent) / 2f
     c.save()
     c.rotate(-90f, col.cx, col.cy)
-    c.drawText(label, col.cx, col.cy - (fm.ascent + fm.descent) / 2f, valueText)
+    if (label.setsStacked(stacked)) {
+        // Rotated, the stack lies ACROSS the shaft: the rotation maps a baseline step (local +y)
+        // onto page +x, so the primary sits aft of the secondary and the pair straddles the
+        // column centre. Both terms therefore read bottom-to-top like every other in-profile
+        // value, and the halo (sized off the same stack height) covers both.
+        val advance = valueText.dualStackMetrics().advance
+        label.lines().forEachIndexed { i, line ->
+            val dy = (i - (label.lines().size - 1) / 2f) * advance
+            c.drawText(line, col.cx, centerBaseline + dy, valueText)
+        }
+    } else {
+        c.drawText(label.inline(), col.cx, centerBaseline, valueText)
+    }
     c.restore()
 }
 
@@ -968,6 +1053,13 @@ internal fun drawDiaReadingsInProfile(
     text: Paint,
     /** Auto-fit floor, same rule as [drawWornSections] — fitted per reading. */
     minTextSize: Float,
+    /**
+     * Set dual values as a two-line stack. Under rotation the stack lies ACROSS the shaft, so it
+     * costs axial room and SAVES band height — the opposite of every other site
+     * (`docs/DualUnitStacking_PLAN.md` §6). Threaded from both draw sites so the printed sheet and
+     * the preview canvas can never disagree.
+     */
+    dualStacked: Boolean = false,
 ) {
     if (readings.isEmpty() || components == null) return
     val byId = components.associateBy { it.id }
@@ -986,13 +1078,15 @@ internal fun drawDiaReadingsInProfile(
         val local = r.axialMm.coerceIn(0f, lenMm)
         val stationMm = rc.startMmPhysical + local
         val stationX = xAt(stationMm)
-        val label = diaReadingValueLabel(r.diaMm, displayUnits.unitFor(r.componentId), displayUnits.dual)
+        val label = diaReadingValueDualLabel(
+            r.diaMm, displayUnits.unitFor(r.componentId), displayUnits.dual,
+        )
 
         val bandPx = 2f * surfaceRAt(stationMm) * WORN_VALUE_BAND_FIT_FRAC
         val fitted = fittedValueTextSize(
             baseTextSize = baseText.textSize,
             minTextSize = minTextSize,
-            labelLengthAtBase = baseText.measureText(label),
+            labelLengthAtBase = baseText.measureDualLabel(label, dualStacked),
             lineHeightAtBase = baseLine,
             bandHeight = bandPx,
         )
@@ -1003,10 +1097,12 @@ internal fun drawDiaReadingsInProfile(
         // Degenerate span → the single column centers exactly on the station.
         val layout = layoutWornSectionValues(
             x0 = stationX, x1 = stationX, cy = cy,
-            labelLengths = listOf(valueText.measureText(label)),
+            labelLengths = listOf(valueText.measureDualLabel(label, dualStacked)),
             lineHeight = fm.descent - fm.ascent,
+            columnThickness = if (dualStacked) valueText.dualStackMetrics().height
+                              else fm.descent - fm.ascent,
         )
-        drawRotatedValueColumn(c, layout.columns.single(), label, valueText, halo)
+        drawRotatedValueColumn(c, layout.columns.single(), label, valueText, halo, dualStacked)
     }
 }
 
@@ -1614,6 +1710,14 @@ private const val COMPRESS_TRIGGER_PT = 220f
 // schematic's lane constants so the rails, bubbles, and footer share one page).
 private const val RUNOUT_BASE_DIM_OFFSET_PT = 22f
 private const val RUNOUT_RAIL_GAP_PT = 18f
+/**
+ * Least shaft area (drawn shaft + its bubble rows, pt) worth keeping on a consolidated sheet.
+ *
+ * Only the stacked-dual decision consults it: the taller rail block is paid for out of this budget,
+ * so a sheet with enough rails to eat the drawing gives the stacking up instead of printing a
+ * hairline shaft under a tall rail stack (`docs/DualUnitStacking_PLAN.md` §7).
+ */
+private const val RUNOUT_MIN_SHAFT_AREA_PT = 120f
 private const val RUNOUT_DIM_TEXT_PT = 8.5f
 
 // Classic central gap; breakPairLayout may widen it to keep the pair clear.

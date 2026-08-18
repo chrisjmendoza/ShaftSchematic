@@ -18,14 +18,18 @@ Invariants
   every sheet. Overrides are a display axis only — the model stays canonical mm, and an
   override never rewrites a stored value. The carousel's `ComponentUnitChip` sets it; a
   component with no override follows the document unit.
-- **Entry fields always take the document unit**, on the cards and in the Add dialogs, even
-  for a component whose override prints it in the other unit. `formatDisplay`/`disp` and
+- **Entry fields take the document unit**, on the cards and in the Add dialogs, even for a
+  component whose override prints it in the other unit. **One exception:** a component's KEYWAY
+  fields (W, D, L, offset) take the keyway's own unit when it has one — that chip is value entry,
+  not display, precisely so a metric keyway can be typed as the whole millimetres it was specified
+  in rather than round-tripped through inches. `formatDisplay`/`disp` and
   `toMmOrNull` on a card are deliberately keyed to `unit`, not to the override — mixing entry
   units per field is a follow-up (`TODO.md`), and until it lands the chip's label reads
   "Prints in:" for exactly that reason.
-- **Dual-unit display** (`dual_units`) prints both units inline — `1 1/2" [38.1 mm]` — on
-  sheets. Both terms always carry a unit suffix: on a mixed-unit drawing a bare number is
-  how a shaft gets machined wrong.
+- **Dual-unit display** (`dual_units`) prints both units on sheets, either inline
+  (`1 1/2" [38.1 mm]`) or as a two-line stack — a drawing preference, Settings → Drawing →
+  "Dual-unit layout". Both terms always carry a unit suffix, in either layout: on a mixed-unit
+  drawing a bare number is how a shaft gets machined wrong.
 - Component carousel shows the **resolved** component list (auto-bodies included) in
   **physical position order** along the shaft. See `ComponentsOrdering.md` (v1.2).  
 - Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.

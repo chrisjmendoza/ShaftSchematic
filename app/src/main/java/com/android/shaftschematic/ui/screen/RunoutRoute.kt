@@ -142,6 +142,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.runoutComponentSpans
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
@@ -187,6 +188,7 @@ fun RunoutRoute(
     // Fraction style: a chip tap changes the renderer's active style, which the render loop
     // cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
+    val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
     val stationPlacements  by vm.runoutStationPlacements.collectAsState()
     // Per-component display units + inline-dual flag: same posture as `pdfFractionStyle` —
@@ -318,6 +320,7 @@ fun RunoutRoute(
                 shadedLiners = pdfShadedLiners,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
                 fractionStyle = pdfFractionStyle,
+                dualUnitLayout = pdfDualUnitLayout,
                 readings = runoutReadings,
                 stationPlacements = stationPlacements,
                 blankValues = blankDraft,
@@ -866,6 +869,9 @@ fun RunoutRoute(
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     fractionStyle = pdfFractionStyle,
+                    dualUnitLayout = pdfDualUnitLayout,
+                    dualUnits = dualUnits,
+                    onDualUnitsChange = { vm.setDualUnits(it) },
                     tuning = tuning,
                 )
             },
@@ -914,6 +920,11 @@ private data class RunoutRenderInputs(
     val sBreakThresholdFrac: Float,
     /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
     val fractionStyle: FractionStyle,
+    /**
+     * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
+     * budget cannot absorb the taller stacked value falls back to inline on its own.
+     */
+    val dualUnitLayout: DualUnitLayout,
     val readings: RunoutReadings,
     val stationPlacements: RunoutStationPlacements,
     val blankValues: Boolean,
@@ -1552,6 +1563,15 @@ internal fun RunoutWearOptionsSheet(
      * this sheet serves prints lengths, so every one of them draws fractions.
      */
     fractionStyle: FractionStyle = FractionStyle.STACKED,
+    /** The app-wide `PdfPrefs.dualUnitLayout`; ungated for the same reason as the fraction style. */
+    dualUnitLayout: DualUnitLayout = DualUnitLayout.Default,
+    /**
+     * The DOCUMENT's dual-units flag and its setter. `dual_units` travels with the job, not with
+     * the app, so it belongs on every sheet that offers a dual LAYOUT — offering the layout with no
+     * way to turn the mode on from the same place is what sent this back for a second pass.
+     */
+    dualUnits: Boolean = false,
+    onDualUnitsChange: ((Boolean) -> Unit)? = null,
     /**
      * Live-tuning sink for a preview that reshapes under the finger: each slider reports
      * its in-progress value here. Visual only — the commit path is unchanged and nothing
@@ -1736,6 +1756,30 @@ internal fun RunoutWearOptionsSheet(
 
         // ── Fractions ────────────────────────────────────────────────────────
         // Ungated: every document this sheet serves prints lengths.
+        if (onDualUnitsChange != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = dualUnits, onCheckedChange = onDualUnitsChange)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Dual units", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Print every dimension in both inches and millimetres. Saved with the document.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        DualUnitLayoutChips(
+            layout = dualUnitLayout,
+            enabled = dualUnits,
+            onCommit = { vm.setPdfDualUnitLayout(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+
         FractionStyleChips(
             fractionStyle = fractionStyle,
             onCommit = { vm.setPdfFractionStyle(it) },

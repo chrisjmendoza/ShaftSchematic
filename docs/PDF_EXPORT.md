@@ -99,16 +99,30 @@ Top of page, full width.
   `util/DisplayUnits.kt` (`unitFor(componentId)`); dimensions with no component in hand
   (the OAL rail, bare-shaft spans) use the document unit. A metric-designation thread
   carries an implicit mm override and prints its designation (`M20×2.5`) verbatim.
-- Dual units — with `dual_units` on, every printed dimension is
-  `<primary> [<secondary>]` on ONE line (`formatLenDimDual` / `formatLenWithUnitDual` /
-  `formatDiaWithUnitDual` in `pdf/UnitFormat.kt`, which collapse to the plain formatters
-  when it is off). **Both terms keep their unit suffix** — on a mixed-unit sheet a bare
-  number is how a shaft gets machined wrong. Dual growth is **width-only** by design: a
-  wider label flows through the same measurement path the fraction stacks already use
-  (`labelWidth(span)` → the cut gap, §5.4), so no height budget, strip row cap, or tier
-  count changes. A two-line stack is the configuration that overflowed those fixed budgets
-  on the earlier attempt — a stacked rendering needs a costed change to every vertical
-  budget it touches (rail bands, strip rows, footer), not an ad-hoc taller label.
+- Dual units — with `dual_units` on, every printed dimension carries both units, in the layout
+  `PdfPrefs.dualUnitLayout` selects (Settings → Drawing → "Dual-unit layout", and both PDF
+  options sheets):
+  - **INLINE** (default) — `<primary> [<secondary>]` on one line. Width-only growth.
+  - **STACKED** — primary over secondary. About 55% narrower (a stack measures as its wider
+    LINE), and one line taller.
+
+  Both terms always keep their unit suffix — on a mixed-unit sheet a bare number is how a shaft
+  gets machined wrong — and the SECONDARY always uses the compact format (mm to one decimal),
+  never the dimension formatter's 3 decimals.
+
+  Builders are `formatLenDimDual*` / `formatLenWithUnitDual*` / `formatDiaWithUnitDual*` in
+  `pdf/UnitFormat.kt`: the `*Dual` forms return the joined one-liner, the `*DualLabel` forms
+  return the two terms as a `DualLabel` (`util/DualLabel.kt`) — a stack needs them apart, so any
+  site that can stack carries the label, not a string. Measuring and drawing go through the one
+  pair `Paint.measureDualLabel` / `Canvas.drawDualLabel` (`util/DualLabelRenderer.kt`), the same
+  discipline as the fraction pair.
+
+  **Every vertical budget a stack touches derives from `Paint.dualStackMetrics()`** — the rail
+  planner (as an inflated ascent, §5.4), the wear/undercut strip rail rows, the below-shaft Ø
+  tier step, the wear Ø callout rows, and the consolidated sheet's rotated in-profile values
+  (where the axes swap: a stack costs room ALONG the shaft and needs LESS drawn diameter). A
+  sheet whose budget cannot absorb it reverts to INLINE for the whole sheet and logs why —
+  per sheet, never per label. See `docs/DualUnitStacking_PLAN.md`.
 - Overall Length
 - Scale (“1:1”, “2:1”, or “Scale to Fit”)
 - Drawn By (optional)

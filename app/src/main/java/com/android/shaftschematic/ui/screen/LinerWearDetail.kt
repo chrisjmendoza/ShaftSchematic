@@ -107,6 +107,7 @@ import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.drawRichText
 
 /**
@@ -587,8 +588,12 @@ fun ComponentWearDetailOverlay(
                                 val cx = lay.startPx + local * lay.pxPerMm
                                 val rr = radiusLocalPx(lay, startDiaMm, endDiaMm, lenMm, local)
                                 drawLine(tickColor, Offset(cx, cy - rr - 3f), Offset(cx, cy + rr + 3f), 1.dp.toPx())
-                                val label = if (r.diaMm > 0f) formatDiaWithUnit(r.diaMm.toDouble(), unit) else "—"
-                                DiaCalloutStation(r.id, cx, label, textPaint.measureText(label))
+                                // The authoring overlay stays single-unit (`docs/DualUnitStacking_PLAN.md`
+                                // §8), so its label has no second term and never stacks.
+                                val label = DualLabel.single(
+                                    if (r.diaMm > 0f) formatDiaWithUnit(r.diaMm.toDouble(), unit) else "—"
+                                )
+                                DiaCalloutStation(r.id, cx, label, textPaint.measureText(label.primary))
                             }
                             val plan = planDiaCallouts(stations, 4f, size.width - 4f, minGap = 6.dp.toPx())
                             val placed = plan.finish(
@@ -614,7 +619,7 @@ fun ComponentWearDetailOverlay(
                                 }
                                 val fm = textPaint.fontMetrics
                                 // textPaint is CENTER-aligned, so x is the label centre.
-                                drawContext.canvas.nativeCanvas.drawText(p.label, p.labelCx, p.labelTopY - fm.ascent, textPaint)
+                                drawContext.canvas.nativeCanvas.drawText(p.label.inline(), p.labelCx, p.labelTopY - fm.ascent, textPaint)
                             }
                         }
                     }

@@ -177,10 +177,11 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Machining heuristic warnings: steep taper (diameter discontinuity and liner-OD-vs-shaft
   shipped in v0.5.x; the taper-vs-body Ø-mismatch advisory was removed by product decision
   and is not planned)
-- Dual-unit display — **shipped** in v0.5.x (2026-08-18), as an inline single-line rendering:
-  `1 1/2" [38.1 mm]`, alongside per-component mixed units. The original "secondary mm in
-  smaller text" stacked form is not built — it needs a costed change to every vertical
-  budget a dimension label sits in (rail bands, strip rows, footer).
+- Dual-unit display — **shipped** in v0.5.x (2026-08-18): inline `1 1/2" [38.1 mm]` alongside
+  per-component mixed units, and a **stacked** two-line layout (Settings → Drawing →
+  "Dual-unit layout"). The stack turned out to be NARROWER than the inline pair, so it seats
+  values back inside the dimension line and largely pays for its own height; see
+  `docs/DualUnitStacking_PLAN.md`.
 
 ---
 
