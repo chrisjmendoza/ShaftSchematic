@@ -376,6 +376,11 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   `pdf_blank_toggle` — added because the options-sheet switch alone was too hard to find,
   on-device report) and the original switch in the Tune options sheet. Both drive
   `setPdfBlankDraft`, so they can never disagree; toggling re-renders the preview live.
+  The overlaid chip carries an **opaque container plus a drop shadow** — an M3 filter chip's
+  unselected container is transparent, and the drawing's rails and values read straight
+  through the label as the page panned under it (on-device report). Its colors stay
+  **theme-driven**, not `SheetInk`: it is an interactive affordance over the paper, not ink
+  printed on it, and a forced-white box would carry dark theme's near-white label onto white.
 
 **The Tune options sheet** (`PdfPreviewScreen.kt`) hosts, in order: Blank draft (write-in),
 Component labels, Line thickness, the **"Shaft height" slider** and the **liner compression**

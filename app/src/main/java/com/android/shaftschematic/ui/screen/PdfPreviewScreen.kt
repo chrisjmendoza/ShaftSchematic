@@ -66,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -496,6 +497,14 @@ fun PdfPreviewScreen(
             // options sheet is open: it would sit on the page strip, and the sheet's own
             // first row is this same switch.
             if (!showOptions) {
+                // The chip floats over the page, so its container is OPAQUE and it casts a
+                // shadow: an M3 filter chip's unselected container is transparent by default,
+                // which let the drawing's dimension rails and OAL value read straight through
+                // the label as the page was panned under it (on-device report). Theme-driven,
+                // not sheet ink — this is an interactive affordance over the paper, not
+                // something printed on it, and a forced-white box would take dark theme's
+                // near-white label with it.
+                val chipShape = MaterialTheme.shapes.small
                 FilterChip(
                     selected = pdfBlankDraft,
                     onClick = { vm.setPdfBlankDraft(!pdfBlankDraft) },
@@ -509,9 +518,14 @@ fun PdfPreviewScreen(
                             )
                         }
                     } else null,
+                    shape = chipShape,
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = 4.dp)
+                        .shadow(2.dp, chipShape)
                         .testTag("pdf_blank_toggle"),
                 )
             }
