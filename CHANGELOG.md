@@ -8,6 +8,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-18
 
+### fix(ui): the preview's blank-draft chip gets its own box
+
+The always-visible **Blank draft (write-in)** chip overlaid on the schematic PDF preview was a
+plain M3 `FilterChip`, whose unselected container is **transparent**. Pan the page under it and
+the drawing came through the label — on the reported sheet the top OAL rail and its `368 ½"`
+value ran straight across the words.
+
+The chip now paints an opaque container and casts a small drop shadow, so it reads as chrome
+floating above the page and hides whatever it covers. Its colors stay theme-driven rather than
+`SheetInk`: the chip is an interactive affordance over the paper, not ink printed on it, and a
+hard-coded white box would put dark theme's near-white label on white. Nothing about what the
+sheet prints changed.
+
 ### feat: a keyway carries its own unit, and the sheets can turn dual units on
 
 The shop works in inches. A European shaft turns up now and then with its **thread and keyway** in
