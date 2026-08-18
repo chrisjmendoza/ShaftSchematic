@@ -6,6 +6,56 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-18
+
+### feat: mixed units per component + inline dual-unit display
+
+A real shaft drawing turned up with the threads and keyway dimensioned in mm and everything
+else in inches — features defined by a metric standard keep their native units, measured
+geometry follows the shop's working unit. Two new, independent controls make that possible,
+both **off by default** so existing documents print exactly as before.
+
+**Per-component units.** Turn on *Settings → Drawing → Per-component units* and each explicit
+Body / Taper / Thread / Liner card in the carousel gains a `Prints in: in | mm` chip. A
+component with no choice follows the document unit; a component set otherwise prints in its
+own unit on every sheet (schematic, runout, wear, undercut, consolidated). It is a **display
+axis only** — the model stays canonical millimeters, so nothing a user typed is rewritten.
+The chip is deliberately **card-only**, a third carve-out from the add-dialog-parity
+invariant on the same grounds as "Show Ø on drawing": it changes how an *already-drawn*
+component prints, and an override has nothing to key to until the component has a resolved
+id. Numeric *entry* fields still take the document unit everywhere — the chip governs how a
+component prints, not how it is typed (follow-up in `TODO.md`).
+
+**Metric threads.** The Add Thread dialog now offers an Imperial (TPI) or Metric
+(M-designation) mode. A metric thread is entered as its designation — `M20×2.5` — whose major
+Ø and pitch are parsed from it, which prints verbatim in the footer and pins that thread to mm
+everywhere; a metric designation stops meaning anything once converted to decimal inches, so
+it never is. The thread card is the counterpart: it shows a Thread designation field for a
+metric thread and the Major Ø / TPI pair for an imperial one — the stored mode selects the
+field, and re-designating an existing thread is not offered (a different designation is a
+different thread).
+
+**Dual-unit display.** *Settings → Drawing → Dual-unit display* prints both units inline on
+every dimension — `1 1/2" [38.1 mm]`. It is rendered as a single line, deliberately: the
+dimension-rail layout tolerates a wider label (it already does for stacked fractions) but not
+a taller one, so both units share one line and flow through the existing width path with no
+change to any height budget or row cap. Both terms carry their unit suffix, because the moment
+a drawing mixes units a bare number is how a shaft gets machined wrong.
+
+Persistence is additive — `unit_overrides` and `dual_units` join the document envelope with
+defaults that reproduce single-unit output, so older files open unchanged and files written
+now still open in older builds. Per-component overrides travel with a template (they describe
+how the shaft is authored); the per-job dual flag does not.
+
+Contracts updated with the shipped behavior: `CLAUDE.md` (new "Mixed units and dual display
+are a DISPLAY AXIS" invariant; the card-only carve-out now names three controls),
+`docs/DATA_MODEL.md`, `docs/contracts/AddComponentDialogs.md`,
+`docs/contracts/ShaftScreen.md`, `docs/contracts/Model_Conventions.md`,
+`docs/contracts/Persistence.md`, `docs/PDF_EXPORT.md` §4, `docs/UI_CONTRACT.md` §5.3,
+`docs/ROADMAP.md`. 1587 unit tests green.
+
+---
+
 ## 2026-08-17
 
 ### remove: tap-to-add on the shaft builder preview

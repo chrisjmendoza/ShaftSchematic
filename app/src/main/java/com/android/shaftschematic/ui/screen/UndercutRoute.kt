@@ -92,6 +92,7 @@ import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.buildOpenPdfIntent
@@ -157,6 +158,11 @@ fun UndercutRoute(
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val undercutRecord     by vm.undercutRecord.collectAsState()
     val undercutStyle      by vm.undercutStyle.collectAsState()
+    // Per-component display units + inline-dual flag: same posture as `pdfFractionStyle` —
+    // neither reaches the composer through a field already collected above, so both ride
+    // along as explicit LaunchedEffect keys below.
+    val unitOverrides      by vm.unitOverrides.collectAsState()
+    val dualUnits          by vm.dualUnits.collectAsState()
 
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
@@ -243,6 +249,7 @@ fun UndercutRoute(
                     project = ProjectInfo(customer = customer, vessel = vessel,
                         jobNumber = jobNumber, side = shaftPosition),
                     unit = unit,
+                    displayUnits = vm.currentDisplayUnits(),
                     pdfPrefs = vm.currentPdfPrefs,
                     resolvedComponents = resolvedComponents,
                     undercutRecord = undercutRecord,
@@ -256,20 +263,24 @@ fun UndercutRoute(
 
     // pdfFractionStyle is a key only: the style reaches the ink through
     // FractionTypography.active, which is not snapshot state — without the key a style
-    // change would leave the rasterized preview drawing the old construction.
+    // change would leave the rasterized preview drawing the old construction. unitOverrides
+    // and dualUnits are keys for the same reason: they reach the composer only through the
+    // displayUnits snapshot built below, not through any field already keyed above.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   undercutRecord, blankDraft, pdfFractionStyle) {
+                   undercutRecord, blankDraft, pdfFractionStyle, unitOverrides, dualUnits) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
         val thicknessSnapshot = lineThicknessScale
+        val displayUnitsSnapshot = DisplayUnits(unit, unitOverrides, dualUnits)
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
             jobNumber = jobNumber, side = shaftPosition)
         val bmp = withContext(Dispatchers.IO) {
             renderPdfPageBitmap(ctx) { page ->
                 composeUndercutPdf(
                     page = page, spec = spec, project = projectSnapshot, unit = unit,
+                    displayUnits = displayUnitsSnapshot,
                     pdfPrefs = prefsSnapshot, resolvedComponents = resolvedComponents,
                     undercutRecord = undercutRecord, lineThicknessScale = thicknessSnapshot,
                     blankValues = blankDraft,
@@ -600,10 +611,12 @@ fun UndercutRoute(
                     val thicknessSnapshot = lineThicknessScale
                     val recordSnapshot = undercutRecord
                     val blankSnapshot = blankDraft
+                    val displayUnitsSnapshot = vm.currentDisplayUnits()
                     printShaftPdfPage(ctx, jobName) { page ->
                         composeUndercutPdf(
                             page = page, spec = specSnapshot,
                             project = projectSnapshot, unit = unitSnapshot,
+                            displayUnits = displayUnitsSnapshot,
                             pdfPrefs = prefsSnapshot,
                             resolvedComponents = resolvedSnapshot,
                             undercutRecord = recordSnapshot,

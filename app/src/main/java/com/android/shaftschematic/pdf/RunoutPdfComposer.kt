@@ -45,6 +45,7 @@ import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.formatRunoutValue
@@ -150,6 +151,14 @@ fun composeRunoutPdf(
     config: RunoutConfig,
     project: ProjectInfo,
     unit: UnitSystem,
+    /**
+     * Per-component display-unit overrides + the sheet-wide dual (inline "primary [secondary]")
+     * flag. Defaults to a single-unit resolver equivalent to [unit] everywhere, reproducing
+     * today's output exactly. A value keyed to a resolved component (a worn-Ø point reading)
+     * looks up its own unit via [DisplayUnits.unitFor]; a value with no component (OAL, worn
+     * sections — shaft-space, not component-keyed) uses [DisplayUnits.documentUnit] instead.
+     */
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
     pdfPrefs: PdfPrefs = PdfPrefs(),
     resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
@@ -472,7 +481,10 @@ fun composeRunoutPdf(
             val startMm = maxOf(clamped.startMm, aftSetMm)
             val endMm = minOf(clamped.endMm, fwdSetMm)
             if (endMm - startMm <= 1e-3f) return@forEach
-            consider(wornSectionValueLabels(s.diaMm, unit), outerDiaMmAt((startMm + endMm) / 2f))
+            consider(
+                wornSectionValueLabels(s.diaMm, displayUnits.documentUnit, displayUnits.dual),
+                outerDiaMmAt((startMm + endMm) / 2f),
+            )
         }
         resolvedComponents?.associateBy { it.id }?.let { byId ->
             wearRecord.diaReadings.forEach { r ->
@@ -480,7 +492,11 @@ fun composeRunoutPdf(
                 val rc = byId[r.componentId] ?: return@forEach
                 val lenMm = (rc.endMmPhysical - rc.startMmPhysical).coerceAtLeast(0.001f)
                 val stationMm = rc.startMmPhysical + r.axialMm.coerceIn(0f, lenMm)
-                consider(listOf(diaReadingValueLabel(r.diaMm, unit)), outerDiaMmAt(stationMm))
+                val readingUnit = displayUnits.unitFor(r.componentId)
+                consider(
+                    listOf(diaReadingValueLabel(r.diaMm, readingUnit, displayUnits.dual)),
+                    outerDiaMmAt(stationMm),
+                )
             }
         }
         need
@@ -554,7 +570,7 @@ fun composeRunoutPdf(
             c, dim, text, xMap.x0, xMap.x1, oalLineY,
             aftShaftTopY = shaftCy - shaftOuterRPxAt(aftSetMm),
             fwdShaftTopY = shaftCy - shaftOuterRPxAt(fwdSetMm),
-            unit = unit, oalMm = spec.overallLengthMm,
+            unit = displayUnits.documentUnit, dual = displayUnits.dual, oalMm = spec.overallLengthMm,
             blankValues = blankValues,
         )
     }
@@ -619,7 +635,7 @@ fun composeRunoutPdf(
             c, wearRecord.wornSections,
             oalMm = spec.overallLengthMm,
             windowStartMm = aftSetMm, windowEndMm = fwdSetMm,
-            unit = unit,
+            unit = displayUnits.documentUnit, dual = displayUnits.dual,
             xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt, cy = shaftCy,
             outline = outline, text = text,
             includeValues = !blankValues,
@@ -630,7 +646,7 @@ fun composeRunoutPdf(
         drawDiaReadingsInProfile(
             c, wearRecord.diaReadings, resolvedComponents,
             cy = shaftCy, xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt,
-            unit = unit, text = text,
+            displayUnits = displayUnits, text = text,
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
         )
     }
@@ -777,12 +793,12 @@ internal fun consolidatedSheetHasInProfileValues(
 internal const val WORN_VALUE_MIN_TEXT_PT = 6f
 
 /** Printable value labels for a worn section — the shared solve/draw source of truth. */
-internal fun wornSectionValueLabels(diaMm: List<Float>, unit: UnitSystem): List<String> =
-    diaMm.filter { it > 0f }.map { "Ø" + formatDiaWithUnit(it.toDouble(), unit) }
+internal fun wornSectionValueLabels(diaMm: List<Float>, unit: UnitSystem, dual: Boolean = false): List<String> =
+    diaMm.filter { it > 0f }.map { "Ø" + formatDiaWithUnitDual(it.toDouble(), unit, dual) }
 
 /** Printable label for one measured-Ø point reading. */
-internal fun diaReadingValueLabel(diaMm: Float, unit: UnitSystem): String =
-    "Ø" + formatDiaWithUnit(diaMm.toDouble(), unit)
+internal fun diaReadingValueLabel(diaMm: Float, unit: UnitSystem, dual: Boolean = false): String =
+    "Ø" + formatDiaWithUnitDual(diaMm.toDouble(), unit, dual)
 
 internal fun drawWornSections(
     c: Canvas,
@@ -804,6 +820,8 @@ internal fun drawWornSections(
      * below this size — the numbers must stay legible even if the halo then overhangs.
      */
     minTextSize: Float,
+    /** Worn sections are shaft-space, not component-keyed — one dual flag for the whole sheet. */
+    dual: Boolean = false,
 ) {
     if (sections.isEmpty()) return
     val eps = 1e-3f
@@ -832,7 +850,7 @@ internal fun drawWornSections(
         c.drawLine(x1, cy - r1, x1, cy + r1, outline)
 
         if (!includeValues) return@forEach
-        val labels = wornSectionValueLabels(section.diaMm, unit)
+        val labels = wornSectionValueLabels(section.diaMm, unit, dual)
         if (labels.isEmpty()) return@forEach
 
         // Auto-fit: one size per section, from its longest value against the local band.
@@ -944,7 +962,9 @@ internal fun drawDiaReadingsInProfile(
     cy: Float,
     xAt: (Float) -> Float,
     surfaceRAt: (Float) -> Float,
-    unit: UnitSystem,
+    /** Resolved per [WearDiaReading.componentId] — a reading in an overridden component
+     *  prints in that component's unit, not the document default. */
+    displayUnits: DisplayUnits,
     text: Paint,
     /** Auto-fit floor, same rule as [drawWornSections] — fitted per reading. */
     minTextSize: Float,
@@ -966,7 +986,7 @@ internal fun drawDiaReadingsInProfile(
         val local = r.axialMm.coerceIn(0f, lenMm)
         val stationMm = rc.startMmPhysical + local
         val stationX = xAt(stationMm)
-        val label = diaReadingValueLabel(r.diaMm, unit)
+        val label = diaReadingValueLabel(r.diaMm, displayUnits.unitFor(r.componentId), displayUnits.dual)
 
         val bandPx = 2f * surfaceRAt(stationMm) * WORN_VALUE_BAND_FIT_FRAC
         val fitted = fittedValueTextSize(
@@ -1062,6 +1082,8 @@ private fun drawOalSpanLine(
     unit: UnitSystem,
     oalMm: Float,
     blankValues: Boolean = false,
+    /** OAL is a whole-shaft dimension, not component-keyed — one dual flag for the sheet. */
+    dual: Boolean = false,
 ) {
     val arrowLen = 8f
     val witnessGap = 3f   // gap between shaft edge and witness line start
@@ -1083,7 +1105,7 @@ private fun drawOalSpanLine(
     } else {
         // Same formatter as the schematic's OAL rail — inches print as mixed fractions
         // (falling back to 3 decimals), never raw 4-decimal.
-        val label = "OAL: ${formatLenDim(oalMm.toDouble(), unit)}"
+        val label = "OAL: ${formatLenDimDual(oalMm.toDouble(), unit, dual)}"
         val lw = text.measureRichText(label)
         val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
         if ((mid - gapHalf) - x0 >= arrowLen + 2f) {

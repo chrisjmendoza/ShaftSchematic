@@ -50,18 +50,22 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import kotlin.math.roundToInt
 import com.android.shaftschematic.BuildConfig
+import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
@@ -146,6 +150,14 @@ fun SettingsRoute(
     val pdfWearJoinGapMaxMm by vm.pdfWearJoinGapMaxMm.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
+
+    // App-wide defaults for mixed per-component units + inline dual-unit display. Not
+    // document state (no ViewModel StateFlow), so this route reads/writes SettingsStore
+    // directly, same as the ViewModel's own preference setters do internally.
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val perComponentUnits by SettingsStore.perComponentUnitsFlow(ctx).collectAsState(initial = false)
+    val dualUnitsDefault by SettingsStore.dualUnitsDefaultFlow(ctx).collectAsState(initial = false)
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -355,6 +367,41 @@ fun SettingsRoute(
                         fractionStyle = pdfFractionStyle,
                         onCommit = { vm.setPdfFractionStyle(it) },
                     )
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = perComponentUnits,
+                            onCheckedChange = { checked ->
+                                scope.launch { SettingsStore.setPerComponentUnits(ctx, checked) }
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Per-component units")
+                            Text(
+                                "Choose in/mm per component (threads, keyways, …)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = dualUnitsDefault,
+                            onCheckedChange = { checked ->
+                                scope.launch { SettingsStore.setDualUnitsDefault(ctx, checked) }
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Dual-unit display")
+                            Text(
+                                "Print both units, e.g. 1 1/2\" [38.1 mm]",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
 
                     HorizontalDivider()
                     Text("Editor Screen", style = MaterialTheme.typography.titleMedium)

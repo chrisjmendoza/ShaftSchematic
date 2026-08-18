@@ -113,6 +113,7 @@ fun PdfExportRoute(
                     lineThicknessScale = vm.lineThicknessScale.value,
                     heightScale = vm.runoutConfig.value.heightScale,
                     linerMinFracOfTrue = vm.runoutConfig.value.linerMinFracOfTrue,
+                    displayUnits = vm.currentDisplayUnits(),
                 )
             }
 

@@ -40,6 +40,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
 import com.android.shaftschematic.settings.PdfTieringMode
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.autoTaperRateText
@@ -104,6 +105,13 @@ fun composeShaftPdf(
      * λ-fits the room the page has (`fracFitFactor`).
      */
     linerMinFracOfTrue: Float = 0f,
+    /**
+     * Per-component display-unit resolution plus the sheet-wide inline-dual flag. Defaults
+     * to a single-unit resolver with no overrides, which reproduces today's output exactly:
+     * [DisplayUnits.unitFor] returns [unit] for every component and every `*Dual` formatter
+     * collapses to its single-unit form.
+     */
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
 ) {
     val effectiveOptions = when (options.mode) {
         PdfExportMode.Template -> options.copy(
@@ -367,8 +375,9 @@ fun composeShaftPdf(
             liners = linerDims,
             sets = sets,
             unit = unit,
-            measureFrom = measureFromMode
-        ) + buildTaperLengthSpans(spec, win, unit)
+            measureFrom = measureFromMode,
+            displayUnits = displayUnits,
+        ) + buildTaperLengthSpans(spec, win, unit, displayUnits)
         val planner = RailPlanner()
         val tierOriginMm = tierOriginMmFor(pdfPrefs.tieringMode, win.oalMm)
         val assignments = planner.assignAll(spans, tierOriginMm)
@@ -393,7 +402,10 @@ fun composeShaftPdf(
         val oalFwd = if (spec.threads.any { t ->
             abs((t.startFromAftMm + t.lengthMm).toDouble() - spec.overallLengthMm.toDouble()) <= END_EPS_MM && !t.excludeFromOAL
         }) win.oalMm else sets.fwdSETxMm
-        val oalDimSpan = oalSpan(oalAft, oalFwd, unit, labelMm = spec.overallLengthMm.toDouble())
+        val oalDimSpan = oalSpan(
+            oalAft, oalFwd, displayUnits.documentUnit,
+            labelMm = spec.overallLengthMm.toDouble(), dual = displayUnits.dual,
+        )
 
         // Planner rows, OAL topmost. Rail y values here are UNLIFTED; the plan returns the
         // lifted line positions.
@@ -440,7 +452,7 @@ fun composeShaftPdf(
     // A blank draft may elect the whole pass out (`blankDiaCallouts`) so the shaft prints
     // clear for freehand annotation instead of carrying write-in rules.
     if (effectiveOptions.showDiaCallouts) {
-        val calls = buildBodyOdCallouts(bodiesForPdf) + buildLinerOdCallouts(spec.liners)
+        val calls = buildBodyOdCallouts(bodiesForPdf, displayUnits) + buildLinerOdCallouts(spec.liners, displayUnits)
         if (calls.isNotEmpty()) {
             val leaderText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
@@ -455,7 +467,7 @@ fun composeShaftPdf(
                 textPaint = leaderText,
                 blankValues = blank
             )
-            leader.draw(c, calls, unit)
+            leader.draw(c, calls)
         }
     }
 
@@ -499,7 +511,7 @@ fun composeShaftPdf(
         val infoBottom = min(infoTop + footerBlockPt, pageH - PAGE_MARGIN_PT)
         val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
 
-        drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg, blankValues = blank)
+        drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg, blankValues = blank, displayUnits = displayUnits)
     }
 }
 
@@ -760,8 +772,14 @@ private fun drawBodiesCompressedCenterBreak(
  *
  * Span endpoints are expressed in measurement-space (rebased by [win.measureStartMm]).
  * Do not classify these as DATUM even if they touch a SET; these are feature↔feature lengths.
+ * Each taper's label resolves its own display unit via [displayUnits] (keyed by [Taper.id]).
  */
-internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschematic.geom.OalWindow, unit: UnitSystem): List<DimSpan> = buildList {
+internal fun buildTaperLengthSpans(
+    spec: ShaftSpec,
+    win: com.android.shaftschematic.geom.OalWindow,
+    unit: UnitSystem,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
+): List<DimSpan> = buildList {
     getAftEndTaper(spec)?.let { tp ->
         val x0 = win.toMeasureX(tp.startFromAftMm.toDouble())
         val x1 = win.toMeasureX((tp.startFromAftMm + tp.lengthMm).toDouble())
@@ -769,7 +787,7 @@ internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschema
             DimSpan(
                 x0,
                 x1,
-                labelTop = formatLenDim(abs(x1 - x0), unit),
+                labelTop = formatLenDimDual(abs(x1 - x0), displayUnits.unitFor(tp.id), displayUnits.dual),
                 kind = SpanKind.LOCAL
             )
         )
@@ -782,7 +800,7 @@ internal fun buildTaperLengthSpans(spec: ShaftSpec, win: com.android.shaftschema
             DimSpan(
                 x0,
                 x1,
-                labelTop = formatLenDim(abs(x1 - x0), unit),
+                labelTop = formatLenDimDual(abs(x1 - x0), displayUnits.unitFor(tp.id), displayUnits.dual),
                 kind = SpanKind.LOCAL
             )
         )
@@ -1203,11 +1221,12 @@ internal fun drawFooter(
     appVersion: String,
     text: Paint,
     cfg: FooterConfig,
-    blankValues: Boolean = false
+    blankValues: Boolean = false,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
 ) {
     val top = rect.top + 6f
 
-    val cols = buildFooterEndColumns(spec, unit, cfg, blankValues)
+    val cols = buildFooterEndColumns(spec, unit, cfg, blankValues, displayUnits)
 
     // The end columns lead with a taper heading; the middle job-info block has no heading of its
     // own, so its writing rules would sit one line proud of the end columns' rules. On a blank
@@ -1306,7 +1325,11 @@ internal fun drawFooter(
             c.drawText("Date: $date",                   midX, y, text); y += lh
 
             if (cfg.bodyDiasMm.isNotEmpty()) {
-                val label = cfg.bodyDiasMm.joinToString(", ") { "Ø ${formatDiaWithUnit(it.toDouble(), unit)}" }
+                // No single component backs this line (it's the distinct set across every
+                // body), so it prints in the document unit — the same posture as the OAL rail.
+                val label = cfg.bodyDiasMm.joinToString(", ") {
+                    "Ø ${formatDiaWithUnitDual(it.toDouble(), displayUnits.documentUnit, displayUnits.dual)}"
+                }
                 c.drawText(ellipsizeToWidth("Body: $label", text, midMaxW), midX, y, text); y += lh
             }
 
@@ -1380,10 +1403,12 @@ internal fun buildFooterEndColumns(
     spec: ShaftSpec,
     unit: UnitSystem,
     cfg: FooterConfig,
-    blankValues: Boolean = false
+    blankValues: Boolean = false,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
 ): FooterColumns {
     val ends = detectEndFeatures(spec)
     val taperSides = selectFooterTapers(spec)
+    val dual = displayUnits.dual
 
     // Blank drafts keep every LABEL (so the writer knows what goes where) and drop the value;
     // drawFooter turns the trailing ":" into a writing rule.
@@ -1392,23 +1417,43 @@ internal fun buildFooterEndColumns(
 
     fun taperLines(tp: Taper): List<String> = buildList {
         val ls = letSet(tp)
+        val tpUnit = displayUnits.unitFor(tp.id)
         add(line("Rate:") { printedTaperRate(tp.taperRateText.trim().ifEmpty { rate1toN(tp) }, unit) })
         // No face suffix on L.E.T./S.E.T. — the footer column already says which end of the
         // shaft this taper is, and "(FWD)" beside an AFT taper's L.E.T. read as if it were
         // asking about the FWD taper (on-device report).
-        add(line("L.E.T.:") { formatDiaWithUnit(ls.let.toDouble(), unit) })
-        add(line("S.E.T.:") { formatDiaWithUnit(ls.set.toDouble(), unit) })
-        add(line("Length:") { formatLenWithUnit(tp.lengthMm.toDouble(), unit) })
+        add(line("L.E.T.:") { formatDiaWithUnitDual(ls.let.toDouble(), tpUnit, dual) })
+        add(line("S.E.T.:") { formatDiaWithUnitDual(ls.set.toDouble(), tpUnit, dual) })
+        add(line("Length:") { formatLenWithUnitDual(tp.lengthMm.toDouble(), tpUnit, dual) })
         if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
             val spoon = if (tp.keywaySpooned) " (spooned)" else ""
             add(line("KW:") {
                 if (tp.keywayLengthMm > 0f) {
-                    "${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayLengthMm.toDouble(), unit)}$spoon"
+                    "${formatLenWithUnitDual(tp.keywayWidthMm.toDouble(), tpUnit, dual)} × ${formatLenWithUnitDual(tp.keywayDepthMm.toDouble(), tpUnit, dual)} × ${formatLenWithUnitDual(tp.keywayLengthMm.toDouble(), tpUnit, dual)}$spoon"
                 } else {
-                    "${formatLenWithUnit(tp.keywayWidthMm.toDouble(), unit)} × ${formatLenWithUnit(tp.keywayDepthMm.toDouble(), unit)}$spoon"
+                    "${formatLenWithUnitDual(tp.keywayWidthMm.toDouble(), tpUnit, dual)} × ${formatLenWithUnitDual(tp.keywayDepthMm.toDouble(), tpUnit, dual)}$spoon"
                 }
             })
             if (tp.keywaySpooned) add(SPOONED_KW_NOTE)
+        }
+    }
+
+    // Thread spec line: a metric-designated thread (`Threads.metricDesignation`) prints its
+    // designation verbatim in place of the dia × pitch term — a metric thread names both in
+    // one token, and re-deriving them from majorDiaMm/pitchMm would be redundant and could
+    // drift from the authored designation (golden rule: authored text is never re-derived).
+    // The length term still resolves the thread's own display unit (its id already carries
+    // an mm override when metric — see DisplayUnits/ShaftViewModel). Non-metric threads keep
+    // today's dia × TPI-or-mm-pitch × length line, unchanged apart from dual-awareness.
+    fun threadLine(th: Threads): String {
+        val thUnit = displayUnits.unitFor(th.id)
+        return line("Thread:") {
+            val designation = th.metricDesignation
+            if (designation != null) {
+                "$designation × ${formatLenWithUnitDual(th.lengthMm.toDouble(), thUnit, dual)}"
+            } else {
+                "${formatDiaWithUnitDual(th.majorDiaMm.toDouble(), thUnit, dual)} × ${fmtPitch(th.pitchMm, thUnit)} × ${formatLenWithUnitDual(th.lengthMm.toDouble(), thUnit, dual)}"
+            }
         }
     }
 
@@ -1420,9 +1465,7 @@ internal fun buildFooterEndColumns(
         }
     }
     if (cfg.showAftThread && ends.aftThread) {
-        getAftEndThread(spec)?.let { th ->
-            aft += line("Thread:") { "${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtPitch(th.pitchMm, unit)} × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}" }
-        }
+        getAftEndThread(spec)?.let { th -> aft += threadLine(th) }
     }
 
     val fwd = mutableListOf<String>()
@@ -1433,19 +1476,18 @@ internal fun buildFooterEndColumns(
         }
     }
     if (cfg.showFwdThread && ends.fwdThread) {
-        getFwdEndThread(spec)?.let { th ->
-            fwd += line("Thread:") { "${formatDiaWithUnit(th.majorDiaMm.toDouble(), unit)} × ${fmtPitch(th.pitchMm, unit)} × ${formatLenWithUnit(th.lengthMm.toDouble(), unit)}" }
-        }
+        getFwdEndThread(spec)?.let { th -> fwd += threadLine(th) }
     }
 
     // Body-hosted keyways (fitted couplings on intermediate shafts): list in the column
     // matching the keyway's physical half of the shaft.
     fun bodyKwLine(b: Body): String {
         val spoon = if (b.keywaySpooned) " (spooned)" else ""
+        val bUnit = displayUnits.unitFor(b.id)
         return line("Body KW:") {
-            "${formatLenWithUnit(b.keywayWidthMm.toDouble(), unit)} × " +
-                "${formatLenWithUnit(b.keywayDepthMm.toDouble(), unit)} × " +
-                "${formatLenWithUnit(b.keywayLengthMm.toDouble(), unit)}$spoon"
+            "${formatLenWithUnitDual(b.keywayWidthMm.toDouble(), bUnit, dual)} × " +
+                "${formatLenWithUnitDual(b.keywayDepthMm.toDouble(), bUnit, dual)} × " +
+                "${formatLenWithUnitDual(b.keywayLengthMm.toDouble(), bUnit, dual)}$spoon"
         }
     }
     spec.bodies.filter { it.hasKeyway }.forEach { b ->
@@ -1473,8 +1515,16 @@ internal fun buildFooterEndColumns(
  * useful: hiding one body of a shared-Ø group does not delete the value from the sheet, it
  * moves the anchor to the longest body of that Ø the user can still point at. Hiding every
  * body carrying a Ø is what drops it.
+ *
+ * The callout's display unit resolves off the anchor body's id via [displayUnits]. A body
+ * from [bodiesForPdf]/`bodyForPdf` may carry a resolved fragment id (`"<id>#2"`, a body split
+ * by a liner or taper); [resolvedBodyBaseId] strips that before the lookup, matching the
+ * pattern `ShaftSpec.bodyForPdf` already uses for the Ø-visibility flag.
  */
-internal fun buildBodyOdCallouts(bodies: List<Body>): List<DiaCallout> =
+internal fun buildBodyOdCallouts(
+    bodies: List<Body>,
+    displayUnits: DisplayUnits = DisplayUnits.single(UnitSystem.INCHES),
+): List<DiaCallout> =
     bodies
         .filter { it.diaMm > 0f && it.showDiaOnDrawing }
         .groupBy { it.diaMm }
@@ -1483,7 +1533,10 @@ internal fun buildBodyOdCallouts(bodies: List<Body>): List<DiaCallout> =
         .mapNotNull { (diaMm, group) ->
             val anchor = group.maxByOrNull { it.lengthMm } ?: return@mapNotNull null
             val centerMm = (anchor.startFromAftMm + anchor.lengthMm * 0.5).toDouble()
-            DiaCallout(xMm = centerMm, valueMm = diaMm.toDouble(), side = LeaderSide.BELOW)
+            DiaCallout(
+                xMm = centerMm, valueMm = diaMm.toDouble(), side = LeaderSide.BELOW,
+                unit = displayUnits.unitFor(resolvedBodyBaseId(anchor.id)), dual = displayUnits.dual,
+            )
         }
 
 /**
@@ -1492,8 +1545,12 @@ internal fun buildBodyOdCallouts(bodies: List<Body>): List<DiaCallout> =
  * separate groups — a liner OD is never deduped against a body OD.
  *
  * [Liner.showDiaOnDrawing] is applied before the grouping, same rule as the body builder.
+ * Liners are never fragmented, so the anchor's id resolves directly (no base-id stripping).
  */
-internal fun buildLinerOdCallouts(liners: List<Liner>): List<DiaCallout> =
+internal fun buildLinerOdCallouts(
+    liners: List<Liner>,
+    displayUnits: DisplayUnits = DisplayUnits.single(UnitSystem.INCHES),
+): List<DiaCallout> =
     liners
         .filter { it.odMm > 0f && it.showDiaOnDrawing }
         .groupBy { it.odMm }
@@ -1502,7 +1559,10 @@ internal fun buildLinerOdCallouts(liners: List<Liner>): List<DiaCallout> =
         .mapNotNull { (odMm, group) ->
             val anchor = group.maxByOrNull { it.lengthMm } ?: return@mapNotNull null
             val centerMm = (anchor.startFromAftMm + anchor.lengthMm * 0.5).toDouble()
-            DiaCallout(xMm = centerMm, valueMm = odMm.toDouble(), side = LeaderSide.BELOW)
+            DiaCallout(
+                xMm = centerMm, valueMm = odMm.toDouble(), side = LeaderSide.BELOW,
+                unit = displayUnits.unitFor(anchor.id), dual = displayUnits.dual,
+            )
         }
 
 private data class LetSetResult(val let: Float, val set: Float)

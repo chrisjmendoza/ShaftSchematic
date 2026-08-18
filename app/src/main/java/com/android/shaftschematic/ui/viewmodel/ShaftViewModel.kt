@@ -45,6 +45,7 @@ import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.UndercutStyle
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.parseToMm
@@ -129,6 +130,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             runoutReadings = _runoutReadings.value,
             undercutRecord = _undercutRecord.value,
             runoutStationPlacements = _runoutStationPlacements.value,
+            unitOverrides = _unitOverrides.value,
+            dualUnits = _dualUnits.value,
         )
 
     /**
@@ -237,6 +240,35 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _unitLocked = MutableStateFlow(false)
     val unitLocked: StateFlow<Boolean> = _unitLocked.asStateFlow()
+
+    // Mixed units + dual display (document state, non-undoable — mirrors _runoutConfig's posture,
+    // so dirtiness is derived from buildCurrentSnapshot). Display axis only; geometry stays mm.
+    private val _unitOverrides = MutableStateFlow<Map<String, UnitSystem>>(emptyMap())
+    val unitOverrides: StateFlow<Map<String, UnitSystem>> = _unitOverrides.asStateFlow()
+    private val _dualUnits = MutableStateFlow(false)
+    val dualUnits: StateFlow<Boolean> = _dualUnits.asStateFlow()
+
+    /** The resolver every composer/route reads to format unit-aware strings. */
+    fun currentDisplayUnits(): DisplayUnits =
+        DisplayUnits(_unit.value, _unitOverrides.value, _dualUnits.value)
+
+    /** Sets (or, with null, clears) a component's display-unit override. */
+    fun setComponentUnit(componentId: String, unit: UnitSystem?) {
+        if (componentId.isBlank()) return
+        _unitOverrides.update { m -> if (unit == null) m - componentId else m + (componentId to unit) }
+    }
+
+    /**
+     * Toggles sheet-wide inline dual-unit display. Persists to the global default so the choice
+     * survives to new documents and stays in step with the Settings switch (the observer in
+     * [init] mirrors it back to the session).
+     */
+    fun setDualUnits(on: Boolean, persist: Boolean = true) {
+        _dualUnits.value = on
+        if (persist) {
+            viewModelScope.launch { SettingsStore.setDualUnitsDefault(getApplication(), on) }
+        }
+    }
 
     private val _showGrid = MutableStateFlow(false)
     val showGrid: StateFlow<Boolean> = _showGrid.asStateFlow()
@@ -1344,6 +1376,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 setShowGrid(persisted, persist = false)
             }
         }
+        viewModelScope.launch {
+            // Global default drives the live session; a later document open (importJson) overrides
+            // with the document's own stored value. persist = false avoids writing back the mirror.
+            SettingsStore.dualUnitsDefaultFlow(getApplication()).collectLatest { persisted ->
+                setDualUnits(persisted, persist = false)
+            }
+        }
 
         viewModelScope.launch {
             SettingsStore.openPdfAfterExportFlow(getApplication()).collectLatest { persisted ->
@@ -1624,6 +1663,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutReadings.value = snapshot.runoutReadings
         _runoutStationPlacements.value = snapshot.runoutStationPlacements
         _undercutRecord.value = snapshot.undercutRecord
+        _unitOverrides.value = snapshot.unitOverrides
+        _dualUnits.value = snapshot.dualUnits
         // Restore unitLocked before any defaultUnitFlow emission can overwrite the
         // draft's unit, and overallIsManual so a manually-set OAL isn't auto-resized.
         _unitLocked.value = snapshot.unitLocked
@@ -2045,7 +2086,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         majorDiaMm: Float,
         pitchMm: Float,
         excludeFromOAL: Boolean = false,
-        isAftEnd: Boolean = true
+        isAftEnd: Boolean = true,
+        metricDesignation: String? = null,
     ) {
         val id = newId()
         _spec.update { s ->
@@ -2061,17 +2103,28 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         pitchMm = max(0f, pitchMm),
                         lengthMm = max(0f, lengthMm),
                         excludeFromOAL = excludeFromOAL,
-                        isAftEnd = isAftEnd
+                        isAftEnd = isAftEnd,
+                        metricDesignation = metricDesignation?.ifBlank { null },
                     )
                 ) + split.spec.threads
             )
         }
+        // A metric-designation thread keeps its native units — register an implicit mm override
+        // so every formatting site resolves it to mm uniformly (see DisplayUnits).
+        applyMetricThreadUnit(id, metricDesignation)
         rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
         ensureOverall()
         _selectedComponentId.value = id
     }
 
-    fun updateThread(index: Int, startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float) = _spec.update { s ->
+    fun updateThread(
+        index: Int,
+        startMm: Float,
+        lengthMm: Float,
+        majorDiaMm: Float,
+        pitchMm: Float,
+        metricDesignation: String? = null,
+    ) = _spec.update { s ->
         if (index !in s.threads.indices) s else {
             val old = s.threads[index]
             val newLength = max(0f, lengthMm)
@@ -2090,16 +2143,31 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         startFromAftMm = effectiveStart,
                         lengthMm = newLength,
                         majorDiaMm = max(0f, majorDiaMm),
-                        pitchMm = max(0f, pitchMm)
+                        pitchMm = max(0f, pitchMm),
+                        metricDesignation = metricDesignation?.ifBlank { null },
                     )
                 }
             )
         }
     }.also {
         if (index in _spec.value.threads.indices) {
+            applyMetricThreadUnit(_spec.value.threads[index].id, metricDesignation)
             rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
         }
         ensureOverall()
+    }
+
+    /**
+     * Keeps a thread's implicit display-unit override in step with its metric designation:
+     * a metric thread pins to mm; clearing the designation drops the pin (back to document
+     * unit), unless the user has since set an explicit override for that id.
+     */
+    private fun applyMetricThreadUnit(threadId: String, metricDesignation: String?) {
+        if (!metricDesignation.isNullOrBlank()) {
+            _unitOverrides.update { it + (threadId to UnitSystem.MILLIMETERS) }
+        } else {
+            _unitOverrides.update { it - threadId }
+        }
     }
 
     fun setThreadExcludeFromOal(id: String, excludeFromOAL: Boolean) = _spec.update { s ->
@@ -2584,6 +2652,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             runoutReadings = _runoutReadings.value,
             runoutStationPlacements = _runoutStationPlacements.value,
             undercutRecord = _undercutRecord.value,
+            unitOverrides = _unitOverrides.value,
+            dualUnits = _dualUnits.value,
             // station_interval_version is stamped by encodeV1 itself — see its KDoc.
         )
     )
@@ -2600,13 +2670,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * family.
      *
      * The unit and unit-lock DO travel: they describe how the geometry is authored, not whose
-     * job it is.
+     * job it is. Per-component unit overrides travel for the same reason (which features are
+     * metric is an authoring fact); the per-job dual-display flag does not.
      */
     fun exportTemplateJson(): String = ShaftDocCodec.encodeV1(
         ShaftDocCodec.ShaftDocV1(
             preferredUnit = _unit.value,
             unitLocked = _unitLocked.value,
             spec = _spec.value,
+            unitOverrides = _unitOverrides.value,
         )
     )
 
@@ -2654,6 +2726,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutReadings.value = RunoutReadings()
         _runoutStationPlacements.value = RunoutStationPlacements()
         _undercutRecord.value = UndercutRecord()
+        // Overrides describe authoring and travel with the template; dual is per-job.
+        _unitOverrides.value = decoded.unitOverrides
+        _dualUnits.value = false
 
         _overallIsManual.value =
             decoded.spec.overallLengthMm > coverageEndMm(decoded.spec) + 1e-3f
@@ -2697,6 +2772,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutReadings.value = decoded.runoutReadings
         _runoutStationPlacements.value = decoded.runoutStationPlacements
         _undercutRecord.value = decoded.undercutRecord
+        _unitOverrides.value = decoded.unitOverrides
+        _dualUnits.value = decoded.dualUnits
 
         // Derive OAL mode from the document instead of leaking the previous session's
         // flag: an authored OAL beyond the content end must be treated as manual, or
@@ -2744,6 +2821,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutReadings.value = RunoutReadings()
         _runoutStationPlacements.value = RunoutStationPlacements()
         _undercutRecord.value = UndercutRecord()
+        _unitOverrides.value = emptyMap()
+        _dualUnits.value = false
         _notes.value = ""
         _overallIsManual.value = false
 

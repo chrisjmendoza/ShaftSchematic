@@ -242,6 +242,31 @@ Authoritative contract:
 
 ---
 
+# 5.3 Units (Settings → Drawing)
+
+Two independent switches, both **off by default** so a document that never touches them
+prints exactly as it did before they existed.
+
+- **Per-component units** — a capability gate. On, every explicit Body / Taper / Thread /
+  Liner card in the carousel grows a `Prints in: in | mm` chip; off, no chip appears
+  anywhere and existing overrides simply lie dormant in the document (they are never
+  pruned). The auto-body and coupler-bolt-slot cards carry no chip. The chip is **card-only**
+  — a deliberate carve-out from the Add-dialog-parity invariant, reasoned in
+  `docs/contracts/AddComponentDialogs.md`.
+- **Dual-unit display** — the global **default** for new documents. Each document persists
+  its own `dual_units` value, and the sheet-wide toggle on the document writes this default
+  back so the two stay in step. On, every printed dimension reads `1 1/2" [38.1 mm]`,
+  single-line.
+
+Both are display-axis controls: geometry stays canonical mm, and neither ever rewrites a
+value the user typed (golden rule). Numeric **entry** fields keep taking the document unit
+regardless of a component's print override — see `docs/contracts/ShaftScreen.md`.
+
+Authoritative contracts: `docs/DATA_MODEL.md` (storage),
+`docs/contracts/AddComponentDialogs.md` (surface parity), `docs/PDF_EXPORT.md` §4 (printing).
+
+---
+
 # 6. Validation Feedback
 
 ### 6.1 Blocking Errors

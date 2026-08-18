@@ -1,6 +1,7 @@
 package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.util.LengthFormat
+import com.android.shaftschematic.util.UnitSystem
 import java.util.Locale
 
 /**
@@ -54,3 +55,36 @@ fun formatDiaWithUnit(mm: Double, unit: Any?): String {
         }
     }
 }
+
+/**
+ * Inline dual-unit rendering: `<primary> [<secondary>]` — e.g. `1 1/2" [38.1 mm]`.
+ *
+ * Rendered as a SINGLE line (never a two-line stack). Dual growth is width-only, so it flows
+ * through the same rich-text measurement path the fraction stacks already use — no height
+ * constant or strip row/tier cap changes are required. A stacked two-line rendering is the
+ * configuration that overflowed those fixed budgets before; do not reintroduce it here.
+ *
+ * The secondary reuses the SAME formatter as the primary, so it prints identically to how it
+ * would as a primary value (inch fractions included), and BOTH terms keep their unit suffix —
+ * the "every dimension carries its own unit" safety rule on a mixed sheet.
+ *
+ * When [dual] is false these collapse to the plain single-unit formatters above.
+ */
+private inline fun composeDual(primary: UnitSystem, dual: Boolean, fmt: (UnitSystem) -> String): String {
+    val p = fmt(primary)
+    if (!dual) return p
+    val secondary = if (primary == UnitSystem.INCHES) UnitSystem.MILLIMETERS else UnitSystem.INCHES
+    return "$p [${fmt(secondary)}]"
+}
+
+/** Dual-aware [formatLenDim]. */
+fun formatLenDimDual(mm: Double, primary: UnitSystem, dual: Boolean): String =
+    composeDual(primary, dual) { formatLenDim(mm, it) }
+
+/** Dual-aware [formatLenWithUnit]. */
+fun formatLenWithUnitDual(mm: Double, primary: UnitSystem, dual: Boolean): String =
+    composeDual(primary, dual) { formatLenWithUnit(mm, it) }
+
+/** Dual-aware [formatDiaWithUnit]. */
+fun formatDiaWithUnitDual(mm: Double, primary: UnitSystem, dual: Boolean): String =
+    composeDual(primary, dual) { formatDiaWithUnit(mm, it) }

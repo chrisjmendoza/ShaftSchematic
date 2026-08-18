@@ -1437,6 +1437,9 @@ fun buildWearStripRailSpans(
     linerLengthMm: Float,
     clampedBands: List<WearBandClamp>,
     unit: UnitSystem,
+    /** The strip's owning component already resolved [unit] via `DisplayUnits.unitFor`; this
+     *  only carries the sheet-wide dual (inline "primary [secondary]") flag through. */
+    dual: Boolean = false,
 ): List<WearRailSpan> {
     val spans = mutableListOf<WearRailSpan>()
     var cursor = 0f
@@ -1445,17 +1448,17 @@ fun buildWearStripRailSpans(
         val effStart = maxOf(band.startMm, cursor)
         val gapLen = effStart - cursor
         if (gapLen > WEAR_RAIL_SPAN_EPS_MM) {
-            spans += WearRailSpan(cursor, effStart, formatLenDim(gapLen.toDouble(), unit))
+            spans += WearRailSpan(cursor, effStart, formatLenDimDual(gapLen.toDouble(), unit, dual))
         }
         val bandEnd = maxOf(band.startMm + band.lengthMm, effStart)
         if (bandEnd - effStart > WEAR_RAIL_SPAN_EPS_MM) {
-            spans += WearRailSpan(effStart, bandEnd, formatLenDim((bandEnd - effStart).toDouble(), unit))
+            spans += WearRailSpan(effStart, bandEnd, formatLenDimDual((bandEnd - effStart).toDouble(), unit, dual))
         }
         cursor = maxOf(cursor, bandEnd)
     }
     val trailing = linerLengthMm - cursor
     if (trailing > WEAR_RAIL_SPAN_EPS_MM) {
-        spans += WearRailSpan(cursor, linerLengthMm, formatLenDim(trailing.toDouble(), unit))
+        spans += WearRailSpan(cursor, linerLengthMm, formatLenDimDual(trailing.toDouble(), unit, dual))
     }
     return spans
 }
@@ -1739,9 +1742,10 @@ fun buildSpanAnchorLabel(
     endMm: Float,
     sets: SetPositions,
     unit: UnitSystem,
+    dual: Boolean = false,
 ): String {
     val dim = wearStripAnchorForSpan(spec, startMm, endMm, sets)
-    return "${formatLenDim(dim.distanceMm, unit)} ${linerAnchorSuffix(dim.anchor)}"
+    return "${formatLenDimDual(dim.distanceMm, unit, dual)} ${linerAnchorSuffix(dim.anchor)}"
 }
 
 /**
@@ -1750,9 +1754,15 @@ fun buildSpanAnchorLabel(
  * schematic PDF prints, so the number here is always identical to the one on the schematic page.
  * Returns "" if [liner] isn't found (should not happen — defensive only).
  */
-fun buildLinerAnchorLabel(spec: ShaftSpec, liner: Liner, sets: SetPositions, unit: UnitSystem): String {
+fun buildLinerAnchorLabel(
+    spec: ShaftSpec,
+    liner: Liner,
+    sets: SetPositions,
+    unit: UnitSystem,
+    dual: Boolean = false,
+): String {
     val ln = spec.liners.firstOrNull { it.id == liner.id } ?: return ""
-    return buildSpanAnchorLabel(spec, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm, sets, unit)
+    return buildSpanAnchorLabel(spec, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm, sets, unit, dual)
 }
 
 /**

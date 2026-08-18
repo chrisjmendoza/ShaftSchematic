@@ -52,10 +52,13 @@ Specifically:
 **Carve-out — post-hoc display toggles are card-only.** A control that only exists to change
 how an *already-drawn* component prints, has a stable default, and is reached for after
 looking at a printed sheet is not a property of the component being added; in an Add dialog
-it would be a permanently-preset box adding noise to every add. Exactly two qualify: the
-coupler slot's "show dimension rail" and **"Show Ø on drawing"** (`Body`/`Liner`/auto-body
-cards). Anything that changes geometry, position, or a value stays under the parity rule
-above.
+it would be a permanently-preset box adding noise to every add. Exactly three qualify: the
+coupler slot's "show dimension rail", **"Show Ø on drawing"** (`Body`/`Liner`/auto-body
+cards), and the per-component **"Prints in: in | mm"** unit chip (explicit `Body`/`Taper`/
+`Thread`/`Liner` cards — an override also has nothing to key to before the component has a
+resolved id). Anything that changes geometry, position, or a value stays under the parity rule
+above — including the Add Thread dialog's Imperial/Metric mode, which is value entry, not
+display, and is mirrored on the thread card by the field the stored mode selects.
 
 ### Coupler bolt slots are reference features
 Coupler bolt slots (`ShaftSpec.couplerBoltSlots`) are radial cutouts drawn on the shaft
@@ -492,6 +495,36 @@ process-wide `FractionTypography.active` mirror, whose ONLY writer is
 drawing decision through every composer's private draw functions costs more than it buys). That
 mirror is not snapshot state, so every preview's render-inputs record must carry `fractionStyle`
 as a **re-render key** or that tab keeps drawing the old style. See `docs/contracts/FractionTypography.md`.
+
+### Mixed units and dual display are a DISPLAY AXIS
+Per-component display units (`unit_overrides` — resolved component id → `UnitSystem`) and
+inline dual display (`dual_units`) live in the doc envelope and change **only how a value
+prints**. Canonical geometry stays millimeters everywhere (golden rule): no override may
+rewrite a stored value, enter geometry, resolve, OAL, collision, or any layout solve. Both
+default OFF (`emptyMap()`, `false`), so a document that never touches them prints
+byte-identically to before they existed. One resolver answers "which unit for this
+component?" — `util/DisplayUnits.kt` (`unitFor(componentId)`, falling back to the document
+unit); sites with no component in hand (OAL rail, bare shaft) use the document unit
+directly. An override whose id no longer resolves is **skipped at the render layer, never
+pruned** — the runout-reading/wear-pit posture.
+
+Dual rendering is `<primary> [<secondary>]` on **ONE line**
+(`pdf/UnitFormat.kt`'s `formatLenDimDual`/`formatLenWithUnitDual`/`formatDiaWithUnitDual`,
+which collapse to the plain formatters when the flag is off), and **both terms always carry
+their unit suffix** — the moment a sheet mixes units, a bare number is how a shaft gets
+machined wrong. Single-line is load-bearing, not cosmetic: dual growth is **width-only**, so
+it flows through the same label-measurement path stacked fractions already use
+(`labelWidth(span)` → the cut gap) with **no** change to any height budget, strip row cap,
+or rail tier count. A stacked two-line rendering is the configuration that overflowed those
+fixed budgets before, and it cannot be reintroduced without a costed change to every
+vertical budget it touches (rail bands, strip rows, footer) — never ad hoc. A metric thread
+(`Threads.metricDesignation`, e.g. `M20×2.5`, parsed by `util/ThreadDesignation.kt`) prints
+its designation verbatim and carries an implicit mm override; a designation converted to
+decimal inches stops meaning anything. Numeric **entry** fields always take the document
+unit, on cards and in Add dialogs alike — the chip governs how a component PRINTS, not how
+it is typed. The `Prints in: in | mm` chip is card-only, the third documented carve-out from
+the add-dialog-parity invariant. See `docs/DATA_MODEL.md`, `docs/PDF_EXPORT.md` §4, and
+`docs/contracts/AddComponentDialogs.md`.
 
 ### Golden rule: user inputs are SACRED
 A value the user typed into a component field is kept **exactly as entered** — no system

@@ -93,6 +93,22 @@ Top of page, full width.
 - Units — printed values follow the document's **active unit** (inches or mm), not always
   mm. Every printed length/diameter goes through `formatLenWithUnit` / `formatDiaWithUnit`
   with the document's `UnitSystem`; only the model layer is unconditionally mm.
+- Mixed units — a component may override the document unit for its own printed values
+  (`unit_overrides`, keyed by resolved component id; Settings → Drawing →
+  *Per-component units*). Composers resolve the unit per component through
+  `util/DisplayUnits.kt` (`unitFor(componentId)`); dimensions with no component in hand
+  (the OAL rail, bare-shaft spans) use the document unit. A metric-designation thread
+  carries an implicit mm override and prints its designation (`M20×2.5`) verbatim.
+- Dual units — with `dual_units` on, every printed dimension is
+  `<primary> [<secondary>]` on ONE line (`formatLenDimDual` / `formatLenWithUnitDual` /
+  `formatDiaWithUnitDual` in `pdf/UnitFormat.kt`, which collapse to the plain formatters
+  when it is off). **Both terms keep their unit suffix** — on a mixed-unit sheet a bare
+  number is how a shaft gets machined wrong. Dual growth is **width-only** by design: a
+  wider label flows through the same measurement path the fraction stacks already use
+  (`labelWidth(span)` → the cut gap, §5.4), so no height budget, strip row cap, or tier
+  count changes. A two-line stack is the configuration that overflowed those fixed budgets
+  on the earlier attempt — a stacked rendering needs a costed change to every vertical
+  budget it touches (rail bands, strip rows, footer), not an ad-hoc taller label.
 - Overall Length
 - Scale (“1:1”, “2:1”, or “Scale to Fit”)
 - Drawn By (optional)

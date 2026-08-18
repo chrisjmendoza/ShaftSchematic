@@ -62,6 +62,7 @@ import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.hasKeyway
 import com.android.shaftschematic.model.keywayCount
 import com.android.shaftschematic.ui.input.NumericInputField
+import com.android.shaftschematic.ui.input.shouldCommitOnBlur
 import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedBody
@@ -82,6 +83,7 @@ import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.taperWarningMessages
 import com.android.shaftschematic.ui.util.threadWarningMessage
 import com.android.shaftschematic.util.LengthFormat
+import com.android.shaftschematic.util.ThreadDesignation
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.autoTaperRateText
 import com.android.shaftschematic.util.manualTaperRateBlockingMessage
@@ -162,7 +164,7 @@ internal fun ComponentCarouselPager(
     onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
-    onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
@@ -183,6 +185,13 @@ internal fun ComponentCarouselPager(
     onRemoveCouplerBoltSlot: (String) -> Unit,
     onSelectComponentById: (String?) -> Unit,
     collidingComponentIds: Set<String> = emptySet(),
+    // Mixed per-component units (Settings → Drawing → "Per-component units"). Off by
+    // default so a document with the capability disabled draws every card identically
+    // to before it existed. `unitOverrides` absent for an id means "follows the
+    // document unit"; `onSetComponentUnit(id, null)` clears back to that default.
+    perComponentUnitsEnabled: Boolean = false,
+    unitOverrides: Map<String, UnitSystem> = emptyMap(),
+    onSetComponentUnit: (String, UnitSystem?) -> Unit = { _, _ -> },
 ) {
     val bodyTitleById   = remember(spec.bodies)                    { buildBodyTitleById(spec) }
     val taperTitleById  = remember(spec.tapers)                    { buildTaperTitleById(spec) }
@@ -317,6 +326,9 @@ internal fun ComponentCarouselPager(
                     onRemoveThread = onRemoveThread, onRemoveLiner = onRemoveLiner,
                     onRemoveCouplerBoltSlot = onRemoveCouplerBoltSlot,
                     collidingComponentIds = collidingComponentIds,
+                    perComponentUnitsEnabled = perComponentUnitsEnabled,
+                    unitOverrides = unitOverrides,
+                    onSetComponentUnit = onSetComponentUnit,
                 )
             }
         }
@@ -412,6 +424,48 @@ internal fun KeywayClockingSection(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Per-component unit chip — Settings → Drawing → "Per-component units". Governs how
+// THIS component prints (below-shaft callouts, footer, etc.), never the units its own
+// fields are entered in above: those always stay in the document unit. Absent from
+// `unitOverrides` reads as "follows the document unit"; tapping the already-selected
+// chip is a no-op (there is nothing to clear), and choosing the unit that already
+// equals the document unit clears the override instead of storing a redundant one.
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ComponentUnitChip(
+    componentId: String,
+    documentUnit: UnitSystem,
+    unitOverrides: Map<String, UnitSystem>,
+    onSetComponentUnit: (String, UnitSystem?) -> Unit,
+) {
+    val effective = unitOverrides[componentId] ?: documentUnit
+    val chipColors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+        containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
+    )
+    fun choose(u: UnitSystem) {
+        onSetComponentUnit(componentId, if (u == documentUnit) null else u)
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Prints in:", style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FilterChip(selected = effective == UnitSystem.INCHES,
+            onClick = { choose(UnitSystem.INCHES) },
+            label = { Text("in") }, colors = chipColors,
+            border = if (effective == UnitSystem.INCHES) BorderStroke(1.dp, Color.Black) else null)
+        FilterChip(selected = effective == UnitSystem.MILLIMETERS,
+            onClick = { choose(UnitSystem.MILLIMETERS) },
+            label = { Text("mm") }, colors = chipColors,
+            border = if (effective == UnitSystem.MILLIMETERS) BorderStroke(1.dp, Color.Black) else null)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // EdgeNavButton — left/right arrow for the pager
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -458,7 +512,7 @@ internal fun ComponentPagerCard(
     onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
-    onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
@@ -482,6 +536,9 @@ internal fun ComponentPagerCard(
     onRemoveLiner: (String) -> Unit,
     onRemoveCouplerBoltSlot: (String) -> Unit,
     collidingComponentIds: Set<String> = emptySet(),
+    perComponentUnitsEnabled: Boolean = false,
+    unitOverrides: Map<String, UnitSystem> = emptyMap(),
+    onSetComponentUnit: (String, UnitSystem?) -> Unit = { _, _ -> },
 ) {
     fun f1(mm: Float): String = "%.1f".format(mm)
 
@@ -620,6 +677,9 @@ internal fun ComponentPagerCard(
                     onRemoveBody(b.id)
                 }
             ) {
+                if (perComponentUnitsEnabled) {
+                    ComponentUnitChip(b.id, unit, unitOverrides, onSetComponentUnit)
+                }
                 // Explicit-body toggle (checked). Unchecking demotes this body back to an
                 // auto-fill span, but only after confirmation — the same trash/delete
                 // pipeline (onRemoveBody) does the removal, and the resolve layer regenerates
@@ -832,6 +892,9 @@ internal fun ComponentPagerCard(
                     onRemoveTaper(t.id)
                 }
             ) {
+                if (perComponentUnitsEnabled) {
+                    ComponentUnitChip(t.id, unit, unitOverrides, onSetComponentUnit)
+                }
                 val computedRateText = remember(t.lengthMm, t.startDiaMm, t.endDiaMm) {
                     autoTaperRateText(
                         lengthMm = t.lengthMm,
@@ -1070,6 +1133,9 @@ internal fun ComponentPagerCard(
                     onRemoveThread(th.id)
                 }
             ) {
+                if (perComponentUnitsEnabled) {
+                    ComponentUnitChip(th.id, unit, unitOverrides, onSetComponentUnit)
+                }
                 val includeInOal = !th.excludeFromOAL
                 Row(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -1107,19 +1173,34 @@ internal fun ComponentPagerCard(
                     }
                 } else {
                     CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit), validator = startValidator(th.id, ComponentKind.THREAD, th.lengthMm)) { s ->
-                        toMmOrNull(s, unit)?.let { onUpdateThread(idx, it, th.lengthMm, th.majorDiaMm, th.pitchMm) }
+                        toMmOrNull(s, unit)?.let { onUpdateThread(idx, it, th.lengthMm, th.majorDiaMm, th.pitchMm, th.metricDesignation) }
                     }
                 }
-                CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
-                    toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, th.lengthMm, it, th.pitchMm) }
-                }
-                CommitNum("TPI", tpiDisplay) { s ->
-                    parseFractionOrDecimal(s)?.takeIf { it > 0f }?.let { tpi ->
-                        onUpdateThread(idx, th.startFromAftMm, th.lengthMm, th.majorDiaMm, tpiToPitchMm(tpi))
+                // Metric threads are self-declaring (major Ø + pitch both come off the
+                // designation, see `ThreadDesignation`) so a thread stored with one shows its
+                // designation field here instead of the imperial Major Ø/TPI pair — same
+                // parity rule as the Add dialog's Imperial/Metric toggle.
+                if (th.metricDesignation != null) {
+                    CommitDesignationField(
+                        "Thread designation",
+                        th.metricDesignation,
+                    ) { text ->
+                        ThreadDesignation.parse(text)?.let { d ->
+                            onUpdateThread(idx, th.startFromAftMm, th.lengthMm, d.majorDiaMm, d.pitchMm ?: 0f, d.format())
+                        }
+                    }
+                } else {
+                    CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
+                        toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, th.lengthMm, it, th.pitchMm, th.metricDesignation) }
+                    }
+                    CommitNum("TPI", tpiDisplay) { s ->
+                        parseFractionOrDecimal(s)?.takeIf { it > 0f }?.let { tpi ->
+                            onUpdateThread(idx, th.startFromAftMm, th.lengthMm, th.majorDiaMm, tpiToPitchMm(tpi), th.metricDesignation)
+                        }
                     }
                 }
                 CommitNum("Length (${abbr(unit)})", disp(th.lengthMm, unit)) { s ->
-                    toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm) }
+                    toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm, th.metricDesignation) }
                 }
             }
         }
@@ -1184,6 +1265,9 @@ internal fun ComponentPagerCard(
                     onRemoveLiner(ln.id)
                 }
             ) {
+                if (perComponentUnitsEnabled) {
+                    ComponentUnitChip(ln.id, unit, unitOverrides, onSetComponentUnit)
+                }
                 // AFT / FWD reference toggle
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1466,6 +1550,40 @@ private fun CommitNum(
         validator = validator,
         parseValid = parseValid,
         onCommit = onCommit
+    )
+}
+
+/**
+ * Free-text commit-on-blur field for the metric thread designation (e.g. "M20×2.5").
+ * Unlike [CommitNum] this does not filter input to numeric characters — a designation
+ * carries a leading "M" and a "×"/"x" separator — so it commits the raw typed text
+ * verbatim and lets the caller parse it (`ThreadDesignation.parse`).
+ */
+@Composable
+private fun CommitDesignationField(
+    label: String,
+    initialText: String,
+    onCommit: (String) -> Unit
+) {
+    var text by remember(initialText) { mutableStateOf(initialText) }
+    var textWhenFocused by remember(initialText) { mutableStateOf<String?>(null) }
+    val isValid = ThreadDesignation.parse(text) != null
+    OutlinedTextField(
+        value = text,
+        onValueChange = { text = it },
+        label = { Text(label) },
+        singleLine = true,
+        isError = !isValid,
+        supportingText = if (!isValid) { { Text("e.g. M20×2.5") } } else null,
+        modifier = Modifier.fillMaxWidth()
+            .onFocusChanged { f ->
+                if (f.isFocused) {
+                    textWhenFocused = text
+                } else if (shouldCommitOnBlur(textWhenFocused, text)) {
+                    onCommit(text)
+                    textWhenFocused = null
+                }
+            }
     )
 }
 

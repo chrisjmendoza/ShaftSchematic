@@ -165,6 +165,13 @@ fun ShaftScreen(
 
     sessionAddDefaults: SessionAddDefaults,
 
+    // Mixed per-component units (Settings → Drawing → "Per-component units"). Defaulted
+    // off/empty/no-op so a caller that doesn't wire them draws every carousel card
+    // identically to before the capability existed.
+    perComponentUnitsEnabled: Boolean = false,
+    unitOverrides: Map<String, UnitSystem> = emptyMap(),
+    onSetComponentUnit: (String, UnitSystem?) -> Unit = { _, _ -> },
+
     // Setters
     onSetCustomer: (String) -> Unit,
     onSetVessel: (String) -> Unit,
@@ -187,7 +194,8 @@ fun ShaftScreen(
                  rateText: String, reference: LinerAuthoredReference,
                  keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                  keywayOffsetFromSetMm: Float, keywaySpooned: Boolean) -> Unit,
-    onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean, isAftEnd: Boolean) -> Unit,
+    onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean,
+                  isAftEnd: Boolean, metricDesignation: String?) -> Unit,
     onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
     onAddCouplerBoltSlot: (startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float, reference: SlotAuthoredReference) -> Unit,
 
@@ -200,7 +208,7 @@ fun ShaftScreen(
     onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
-    onUpdateThread: (Int, Float, Float, Float, Float) -> Unit,
+    onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
@@ -694,6 +702,9 @@ fun ShaftScreen(
                     onRemoveCouplerBoltSlot = onRemoveCouplerBoltSlot,
                     onSelectComponentById = onSelectComponentById,
                     collidingComponentIds = collidingComponentIds,
+                    perComponentUnitsEnabled = perComponentUnitsEnabled,
+                    unitOverrides = unitOverrides,
+                    onSetComponentUnit = onSetComponentUnit,
                 )
 
                 if (chooserOpen) {
@@ -745,18 +756,20 @@ fun ShaftScreen(
                         initialLengthMm = sessionAddDefaults.threadLenMm,
                         initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
                         initialPitchMm = sessionAddDefaults.threadPitchMm,
-                        onSubmit = { startMm, lengthMm, majorDiaMm, tpi, excludeFromOAL, isAftEnd ->
+                        onSubmit = { startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL, isAftEnd, metricDesignation ->
                             addThreadOpen = false
-                            // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL.
-                            // Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt` to avoid
-                            // pitch/major swaps.
+                            // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL,
+                            // isAftEnd, metricDesignation. The dialog already converts TPI to pitch (or
+                            // reads pitch straight off a metric designation) so this call never re-derives
+                            // it. Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt`.
                             onAddThread(
                                 startMm,
                                 lengthMm,
                                 majorDiaMm,
-                                tpiToPitchMm(tpi),
+                                pitchMm,
                                 excludeFromOAL,
-                                isAftEnd
+                                isAftEnd,
+                                metricDesignation
                             )
                         },
                         onCancel = { addThreadOpen = false }

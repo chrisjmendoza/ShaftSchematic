@@ -68,6 +68,20 @@ Do Nots
 - Thread pitch/TPI: `decode()` calls `.normalized()` so metric-only (`pitchMm`) and
   imperial-only (`tpi`) saves both end up with both fields populated.
   See `Model_Conventions.md`.
+- Mixed units + dual display: `unit_overrides` (resolved component id → `UnitSystem`) and
+  `dual_units` are additive envelope fields with defaults (`emptyMap()`, `false`) that
+  reproduce single-unit output exactly — an older file opens unchanged, and a file written
+  now still opens in a build that predates them. Both ride the autosave/draft snapshot
+  (`AutosaveManager.SessionSnapshot`), so a mixed-unit session survives a crash and a draft
+  restore. They are **document state, not undoable** — the same posture as `RunoutConfig`'s
+  slider slice: dirtiness is derived from `buildCurrentSnapshot()`, not from `EditState`.
+  An override whose component id no longer resolves is **not pruned** (the resolver falls
+  back to the document unit) — the render-layer posture, matching runout readings and wear
+  pits. Per-component overrides travel with a template (they describe how the shaft is
+  authored); the per-job `dual_units` flag does not. `ShaftViewModel.setDualUnits` also
+  writes the global Settings default, so the toggle and Settings → Drawing →
+  *Dual-unit display* stay in step; a document open then overrides the session with the
+  document's own stored value. See `docs/DATA_MODEL.md`.
 
 **Goal:** a shop can open any file, freely switch units, and print/export in the
 desired unit without re-saving the document.

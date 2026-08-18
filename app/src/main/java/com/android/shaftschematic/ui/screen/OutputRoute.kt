@@ -81,6 +81,7 @@ import com.android.shaftschematic.ui.nav.appVersionFromContext
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
@@ -127,6 +128,7 @@ private data class ConsolidatedRenderInputs(
     val stationPlacements: RunoutStationPlacements,
     val wearRecord: WearRecord,
     val blankValues: Boolean,
+    val displayUnits: DisplayUnits,
     /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
     val draft: Boolean,
 )
@@ -183,6 +185,11 @@ fun OutputRoute(
     // Whether a blank schematic in the batch carries Ø leaders — one preference for every
     // surface that prints a blank schematic (see PdfExportOptions.showDiaCallouts).
     val pdfBlankDiaCallouts by vm.pdfBlankDiaCallouts.collectAsState()
+    // Per-component display units + inline-dual flag: same posture as `pdfFractionStyle` —
+    // neither reaches the composer through a field already collected above, so both ride
+    // along as explicit render-loop inputs.
+    val unitOverrides      by vm.unitOverrides.collectAsState()
+    val dualUnits          by vm.dualUnits.collectAsState()
 
     val ctx = LocalContext.current
     // Footer stamp for the schematic document in the batch — the same version string the
@@ -276,9 +283,11 @@ fun OutputRoute(
         placementsSnap: RunoutStationPlacements,
         wearSnap: WearRecord,
         blankSnap: Boolean,
+        displayUnitsSnap: DisplayUnits,
     ) = composeRunoutPdf(
         page = page, spec = specSnap, config = configSnap, project = projectSnap,
         unit = unitSnap,
+        displayUnits = displayUnitsSnap,
         pdfPrefs = prefsSnap,
         resolvedComponents = resolvedSnap,
         lineThicknessScale = thicknessSnap,
@@ -304,6 +313,7 @@ fun OutputRoute(
                         jobNumber = jobNumber, side = shaftPosition),
                     unit, vm.currentPdfPrefs, resolvedComponents,
                     lineThicknessScale, runoutReadings, stationPlacements, wearRecord, blankDraft,
+                    vm.currentDisplayUnits(),
                 )
             }
             if (wrote && openAfterExport) openRunoutPdf(ctx, uri)
@@ -323,6 +333,7 @@ fun OutputRoute(
             val project = ProjectInfo(customer = customer, vessel = vessel,
                 jobNumber = jobNumber, side = shaftPosition)
             val prefs = vm.currentPdfPrefs
+            val displayUnits = vm.currentDisplayUnits()
             var attempted = 0
             var wroteCount = 0
             OutputDoc.entries.forEachIndexed { i, doc ->
@@ -337,11 +348,11 @@ fun OutputRoute(
                         OutputDoc.CONSOLIDATED -> composeConsolidated(
                             page, variant, spec, runoutConfig, project, unit, prefs,
                             resolvedComponents, lineThicknessScale, runoutReadings,
-                            stationPlacements, wearRecord, blankDraft,
+                            stationPlacements, wearRecord, blankDraft, displayUnits,
                         )
                         OutputDoc.RUNOUT -> composeRunoutPdf(
                             page = page, spec = spec, config = runoutConfig, project = project,
-                            unit = unit, pdfPrefs = prefs,
+                            unit = unit, displayUnits = displayUnits, pdfPrefs = prefs,
                             resolvedComponents = resolvedComponents,
                             lineThicknessScale = lineThicknessScale,
                             runoutReadings = runoutReadings,
@@ -361,9 +372,11 @@ fun OutputRoute(
                             lineThicknessScale = lineThicknessScale,
                             heightScale = runoutConfig.heightScale,
                             linerMinFracOfTrue = runoutConfig.linerMinFracOfTrue,
+                            displayUnits = displayUnits,
                         )
                         OutputDoc.WEAR -> composeWearPdf(
                             page = page, spec = spec, project = project, unit = unit,
+                            displayUnits = displayUnits,
                             pdfPrefs = prefs, resolvedComponents = resolvedComponents,
                             wearRecord = wearRecord,
                             lineThicknessScale = lineThicknessScale,
@@ -375,6 +388,7 @@ fun OutputRoute(
                         )
                         OutputDoc.UNDERCUT -> composeUndercutPdf(
                             page = page, spec = spec, project = project, unit = unit,
+                            displayUnits = displayUnits,
                             pdfPrefs = prefs, resolvedComponents = resolvedComponents,
                             undercutRecord = undercutRecord,
                             lineThicknessScale = lineThicknessScale,
@@ -423,6 +437,7 @@ fun OutputRoute(
                 stationPlacements = stationPlacements,
                 wearRecord = wearRecord,
                 blankValues = blankDraft,
+                displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
                 draft = tuning.active,
             )
         }.conflate().collect { inputs ->
@@ -449,7 +464,7 @@ fun OutputRoute(
                         page, inputs.variant, inputs.spec, inputs.config, inputs.project,
                         inputs.unit, prefsSnapshot, inputs.resolved,
                         inputs.lineThicknessScale, inputs.readings, inputs.stationPlacements,
-                        inputs.wearRecord, inputs.blankValues,
+                        inputs.wearRecord, inputs.blankValues, inputs.displayUnits,
                     )
                 }
                 raster to raster?.takeIf { !inputs.draft }?.inkBand()
@@ -579,12 +594,13 @@ fun OutputRoute(
                     val placementsSnapshot = stationPlacements
                     val wearSnapshot = wearRecord
                     val blankSnapshot = blankDraft
+                    val displayUnitsSnapshot = vm.currentDisplayUnits()
                     printShaftPdfPage(ctx, jobName) { page ->
                         composeConsolidated(
                             page, variantSnapshot, specSnapshot, configSnapshot,
                             projectSnapshot, unitSnapshot, prefsSnapshot, resolvedSnapshot,
                             thicknessSnapshot, readingsSnapshot, placementsSnapshot,
-                            wearSnapshot, blankSnapshot,
+                            wearSnapshot, blankSnapshot, displayUnitsSnapshot,
                         )
                     }
                 },

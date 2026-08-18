@@ -85,6 +85,7 @@ import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
@@ -167,6 +168,11 @@ fun PdfPreviewScreen(
     // other input moved.
     val curveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
     val curveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
+    // Per-component display units + inline-dual flag: the composer reads them through
+    // `displayUnits`, which neither `unit` nor any field above already covers, so both
+    // ride along as explicit render-loop inputs (same posture as `fractionStyle`).
+    val unitOverrides by vm.unitOverrides.collectAsState()
+    val dualUnits by vm.dualUnits.collectAsState()
 
     val project = remember(customer, vessel, shaftPosition, jobNumber) {
         ProjectInfo(customer = customer, vessel = vessel, side = shaftPosition, jobNumber = jobNumber)
@@ -225,6 +231,7 @@ fun PdfPreviewScreen(
                 curveHiHeightIn = curveHiHeightIn,
                 heightScale = config.heightScale,
                 linerMinFracOfTrue = config.linerMinFracOfTrue,
+                displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
                 draft = tuning.active,
             )
         }.conflate().collect { inputs ->
@@ -258,6 +265,7 @@ fun PdfPreviewScreen(
                         lineThicknessScale = inputs.lineThicknessScale,
                         heightScale = inputs.heightScale,
                         linerMinFracOfTrue = inputs.linerMinFracOfTrue,
+                        displayUnits = inputs.displayUnits,
                     )
                 }
                 raster to raster?.takeIf { !inputs.draft }?.inkBand()
@@ -379,6 +387,7 @@ fun PdfPreviewScreen(
                         val thicknessSnapshot = lineThicknessScale
                         val heightSnapshot = runoutConfig.heightScale
                         val linerFracSnapshot = runoutConfig.linerMinFracOfTrue
+                        val displayUnitsSnapshot = vm.currentDisplayUnits()
                         val versionSnapshot = appVersionName(ctx)
                         printShaftPdfPage(ctx, jobName) { page ->
                             composeShaftPdf(
@@ -394,6 +403,7 @@ fun PdfPreviewScreen(
                                 lineThicknessScale = thicknessSnapshot,
                                 heightScale = heightSnapshot,
                                 linerMinFracOfTrue = linerFracSnapshot,
+                                displayUnits = displayUnitsSnapshot,
                             )
                         }
                     }) {
@@ -583,6 +593,7 @@ private data class SchematicRenderInputs(
     val curveHiHeightIn: Float,
     val heightScale: Float,
     val linerMinFracOfTrue: Float,
+    val displayUnits: DisplayUnits,
     /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
     val draft: Boolean,
 )

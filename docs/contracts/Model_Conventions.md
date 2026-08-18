@@ -15,6 +15,13 @@ Invariants
   `pitchMm` present → `tpi = 25.4/pitchMm`) and is applied on decode (`ShaftDocCodec.decode`
   calls `.normalized()`). Other units (in, mixed) are still forbidden — only mm and TPI,
   the two canonical thread-pitch representations, are stored.
+- `Threads.metricDesignation: String?` is the **third** thread-spec field and the only one
+  that is text: an ISO metric designation authored by the user (`M20×2.5`). It is not a unit
+  and not geometry — `majorDiaMm`/`pitchMm` remain the canonical mm values, parsed from the
+  designation once at entry (`util/ThreadDesignation.kt`) and never re-derived from it in the
+  model. Its presence marks the thread metric-mode: the printed spec is the designation
+  verbatim (a designation converted to decimal inches stops meaning anything), and the
+  display layer resolves that thread to mm. `null` = imperial, the pre-existing behavior.
 - **Exception — excluded threads:** `Threads` with `excludeFromOAL = true` are placed outside the 0..OAL shaft span by `syncExcludedThreadPositions()`. Their `startFromAftMm` will be **negative** for AFT-end threads (`–lengthMm`) or equal to `overallLengthMm` for FWD-end threads. Do not validate excluded-thread positions against `overallLengthMm`.
 
 `LinerAuthoredReference` (enum: AFT / FWD)

@@ -31,6 +31,7 @@ import com.android.shaftschematic.model.*
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
@@ -139,6 +140,13 @@ fun composeUndercutPdf(
     spec: ShaftSpec,
     project: ProjectInfo,
     unit: UnitSystem,
+    /**
+     * Per-component display-unit overrides + the sheet-wide dual (inline "primary [secondary]")
+     * flag. Defaults to a single-unit resolver equivalent to [unit] everywhere, reproducing
+     * today's output exactly. A liner strip resolves its own unit via [DisplayUnits.unitFor];
+     * a bare-shaft strip or the OAL line (no component) uses [DisplayUnits.documentUnit].
+     */
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
     pdfPrefs: PdfPrefs = PdfPrefs(),
     resolvedComponents: List<ResolvedComponent>? = null,
     undercutRecord: UndercutRecord = UndercutRecord(),
@@ -331,7 +339,7 @@ fun composeUndercutPdf(
 
         drawUndercutOalLine(
             c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox,
-            unit, spec.overallLengthMm, blankValues,
+            displayUnits.documentUnit, spec.overallLengthMm, blankValues, dual = displayUnits.dual,
         )
         drawUndercutShaftProfile(
             c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
@@ -362,18 +370,21 @@ fun composeUndercutPdf(
         // from the liner's edges.
         val stripLiner = (strip as? UndercutStrip.LinerStrip)
             ?.let { ls -> docSpec.liners.firstOrNull { it.id == ls.linerId } }
+        // A liner strip resolves the liner's own unit override; a bare-shaft cluster has no
+        // single component to key off, so it falls back to the document unit.
+        val stripUnit = displayUnits.unitFor(stripLiner?.id)
         drawUndercutDetailStrip(
             c, docSpec, surfaceSegs, strip,
             strip.undercutIds.mapNotNull { id -> undercutById[id] },
             clampedById,
             cell.top, cell.bottom, cell.left, cell.right,
-            unit, aftSetMm, fwdSetMm, text, outline, dim, diaText,
+            stripUnit, aftSetMm, fwdSetMm, text, outline, dim, diaText,
             bodyFill = bodyFill, taperFill = taperFill, linerFill = stripLinerFill,
             shaftExtentMm = shaftExtentMm,
             voidFill = voidFill,
             linerTitle = (strip as? UndercutStrip.LinerStrip)?.let { linerTitles[it.linerId] },
             linerAnchorLabel = stripLiner
-                ?.let { buildLinerAnchorLabel(docSpec, it, setPositions, unit) }
+                ?.let { buildLinerAnchorLabel(docSpec, it, setPositions, stripUnit, displayUnits.dual) }
                 ?.takeIf { it.isNotBlank() },
             linerAnchorAlignRight = stripLiner
                 ?.let { linerAnchorForPdf(docSpec, it) } == LinerAnchor.FWD_SET,
@@ -386,6 +397,7 @@ fun composeUndercutPdf(
             linerSpanBlank = startedPage && blankValues,
             deepestDepthMm = deepestDepthMm,
             exaggerationFrac = exaggerationFrac,
+            dual = displayUnits.dual,
         )
     }
     if (overflow.isNotEmpty()) {
@@ -462,6 +474,8 @@ private fun drawUndercutOalLine(
     oalLineY: Float, shaftTopY: Float,
     unit: UnitSystem, oalMm: Float,
     blankValues: Boolean,
+    /** OAL is a whole-shaft dimension, not component-keyed — one dual flag for the sheet. */
+    dual: Boolean = false,
 ) {
     val arrowLen = 8f
     val witnessGap = 3f
@@ -478,7 +492,7 @@ private fun drawUndercutOalLine(
     } else {
         // Same formatter as the schematic's OAL rail — inches print as mixed fractions
         // (falling back to 3 decimals), never raw 4-decimal.
-        val label = "OAL: ${formatLenDim(oalMm.toDouble(), unit)}"
+        val label = "OAL: ${formatLenDimDual(oalMm.toDouble(), unit, dual)}"
         val lw = text.measureRichText(label)
         val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
         if ((mid - gapHalf) - x0 >= arrowLen + 2f) {
@@ -834,6 +848,9 @@ private fun drawUndercutDetailStrip(
     linerSpanBlank: Boolean,
     deepestDepthMm: Float,
     exaggerationFrac: Float,
+    /** [unit] is already this strip's resolved unit (liner override, else the document unit);
+     *  this only carries the sheet-wide dual (inline "primary [secondary]") flag through. */
+    dual: Boolean = false,
 ) {
     // Draw range, widened at layout time so the undimensioned pad outside each chain datum
     // prints with real air whatever the strip's scale is — the mm pad alone reads as cramped in
@@ -864,7 +881,7 @@ private fun drawUndercutDetailStrip(
 
     // Measured-Ø plan first, so the strip reserves exactly the label rows its cuts need.
     val diaStations = buildUndercutDiaStations(
-        undercuts, clampedById, ::xAtStrip, unit, { s -> diaText.measureText(s) },
+        undercuts, clampedById, ::xAtStrip, unit, { s -> diaText.measureText(s) }, dual,
     )
     val diaPlan = if (diaStations.isEmpty()) null else
         planDiaCallouts(diaStations, stripLeft + 2f, stripRight - 2f, UC_DIA_MIN_GAP_PT)
@@ -873,8 +890,8 @@ private fun drawUndercutDetailStrip(
     // A started strip dimensions nothing: with no cuts the chain would degenerate to a single
     // liner-length span, which is a figure the machinist has not measured and did not ask for.
     val railSpans = if (startedStrip) emptyList()
-    else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, unit)
-    val totalSpan = if (startedStrip) null else buildUndercutTotalSpan(spans, unit)
+    else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, unit, dual)
+    val totalSpan = if (startedStrip) null else buildUndercutTotalSpan(spans, unit, dual)
 
     // Chain resolved before the vertical split (it is pure horizontal geometry), so the split
     // reserves only the fallback rows these labels actually use, on the side of the line the
@@ -1045,7 +1062,7 @@ private fun drawUndercutDetailStrip(
             fwdSetXMm = fwdSetMm,
         )
         val label = ellipsizeToWidth(
-            buildUndercutStripTitle(null, buildUndercutAnchorLabel(anchor, unit)),
+            buildUndercutStripTitle(null, buildUndercutAnchorLabel(anchor, unit, dual)),
             titleText,
             stripRight - stripLeft,
             rich = true,

@@ -323,7 +323,9 @@ data class ShaftDocV1(
     val runoutReadings: RunoutReadings = RunoutReadings(),// @SerialName("runout_readings")
     val runoutStationPlacements: RunoutStationPlacements  // @SerialName("runout_stations")
         = RunoutStationPlacements(),
-    val undercutRecord: UndercutRecord = UndercutRecord() // @SerialName("undercut_record")
+    val undercutRecord: UndercutRecord = UndercutRecord(),// @SerialName("undercut_record")
+    val unitOverrides: Map<String, UnitSystem> = emptyMap(), // @SerialName("unit_overrides")
+    val dualUnits: Boolean = false                        // @SerialName("dual_units")
 )
 
 **Reference-only inspection records** live in the envelope, never in `ShaftSpec`, so they
@@ -365,6 +367,18 @@ are pruned at **decode**; pits, measured-Ø readings, runout readings, and runou
 placements key on resolved ids (incl. auto-bodies) the codec cannot know, so their orphans
 are skipped at the **render layer** and survive decode untouched. Worn sections and
 undercuts are shaft-space, so the question does not arise — they are never pruned.
+
+**Mixed units + dual display** (`unit_overrides`, `dual_units`) are a **display axis only** —
+canonical geometry stays in millimeters everywhere (golden rule). `unitOverrides` maps a
+resolved component id → its display `UnitSystem`; a component with no entry follows
+`preferredUnit`. An override whose id no longer resolves is harmless (the resolver falls back
+to `preferredUnit`) and is **not** pruned — the same render-layer posture as the readings
+above. A metric-designation thread (`Threads.metricDesignation`, e.g. `M20×2.5`) carries an
+implicit mm override registered by the ViewModel. `dualUnits` is the sheet-wide flag: when
+true every dimension prints `<primary> [<secondary>]` inline (`pdf/UnitFormat.kt` `*Dual`),
+seeded for new documents from a global default (`SettingsStore.dualUnitsDefaultFlow`) but
+persisted per document. Overrides travel with a template (they describe authoring); the
+per-job dual flag does not. The resolver is `util/DisplayUnits.kt`.
 
 Migration:
 

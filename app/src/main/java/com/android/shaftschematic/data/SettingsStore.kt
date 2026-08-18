@@ -85,6 +85,10 @@ object SettingsStore {
     private val KEY_PDF_TIERING_MODE = stringPreferencesKey("pdf_tiering_mode")
     private val KEY_PDF_SHOW_COMPONENT_TITLES = booleanPreferencesKey("pdf_show_component_titles")
     private val KEY_PDF_EXPORT_MODE = stringPreferencesKey("pdf_export_mode")
+    // Mixed units + dual display. Capability gate for per-component unit chips, and the
+    // global default for new documents' dual-unit display (a document persists its own value).
+    private val KEY_PER_COMPONENT_UNITS = booleanPreferencesKey("per_component_units")
+    private val KEY_DUAL_UNITS_DEFAULT  = booleanPreferencesKey("dual_units_default")
     private val KEY_PDF_SHADED_BODIES  = booleanPreferencesKey("pdf_shaded_bodies")
     private val KEY_PDF_SHADED_TAPERS  = booleanPreferencesKey("pdf_shaded_tapers")
     private val KEY_PDF_SHADED_LINERS  = booleanPreferencesKey("pdf_shaded_liners")
@@ -113,6 +117,20 @@ object SettingsStore {
 
     suspend fun setPdfShowComponentTitles(ctx: Context, show: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_PDF_SHOW_COMPONENT_TITLES] = show }
+    }
+
+    /** Capability: show a per-component in/mm chip in the carousel cards and Add dialogs. */
+    fun perComponentUnitsFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_PER_COMPONENT_UNITS] ?: false }
+    suspend fun setPerComponentUnits(ctx: Context, v: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_PER_COMPONENT_UNITS] = v }
+    }
+
+    /** Global default for new documents' inline dual-unit display. */
+    fun dualUnitsDefaultFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_DUAL_UNITS_DEFAULT] ?: false }
+    suspend fun setDualUnitsDefault(ctx: Context, v: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_DUAL_UNITS_DEFAULT] = v }
     }
 
     fun pdfShadedBodiesFlow(ctx: Context): Flow<Boolean> =

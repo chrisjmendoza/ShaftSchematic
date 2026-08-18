@@ -30,6 +30,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
@@ -105,6 +106,14 @@ fun composeWearPdf(
     spec: ShaftSpec,
     project: ProjectInfo,
     unit: UnitSystem,
+    /**
+     * Per-component display-unit overrides + the sheet-wide dual (inline "primary [secondary]")
+     * flag. Defaults to a single-unit resolver equivalent to [unit] everywhere, reproducing
+     * today's output exactly. A measured-Ø reading or a strip's anchor dimension resolves its
+     * own unit via [DisplayUnits.unitFor]; a value with no component (the OAL line) uses
+     * [DisplayUnits.documentUnit] instead.
+     */
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
     pdfPrefs: PdfPrefs = PdfPrefs(),
     resolvedComponents: List<ResolvedComponent>? = null,
     wearRecord: WearRecord = WearRecord(),
@@ -255,7 +264,7 @@ fun composeWearPdf(
     // at the zoomed scale — the placement rule liners have always followed.
     val profileDia = if (showProfile && resolvedComponents != null) {
         buildProfileDiaCalloutInput(
-            effectiveRecord.diaReadings, resolvedComponents, ::xAt, diaText, unit,
+            effectiveRecord.diaReadings, resolvedComponents, ::xAt, diaText, displayUnits,
             skipComponentIds = onPageComponentIds,
         )
     } else ProfileDiaCalloutInput(emptyList(), emptyMap())
@@ -418,7 +427,10 @@ fun composeWearPdf(
         // shown bare (no "OAL" prefix — the end-to-end span already implies it); the arrows below
         // bracket the drawn SET-to-SET span. Blank draft: no label at all, just an empty writable
         // break mid-span (drawWearOalLine).
-        drawWearOalLine(c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox, unit, spec.overallLengthMm, blankValues)
+        drawWearOalLine(
+            c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox,
+            displayUnits.documentUnit, spec.overallLengthMm, blankValues, dual = displayUnits.dual,
+        )
         drawWearShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
             bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
 
@@ -481,7 +493,7 @@ fun composeWearPdf(
         val ids = window.components.map { it.id }.toSet()
         drawWearStripWindow(
             c, docSpec, window, cell.top, cell.bottom, cell.left, cell.right,
-            unit, setPositions, text, outline, dim,
+            displayUnits, setPositions, text, outline, dim,
             stripPtPerMm = stripPtPerMm,
             stubWidthPt = stripStubWidthPt,
             breakRoomLeftPt = stripBreakRooms[i].first,
@@ -576,6 +588,8 @@ private fun drawWearOalLine(
     oalLineY: Float, shaftTopY: Float,
     unit: UnitSystem, oalMm: Float,
     blankValues: Boolean = false,
+    /** OAL is a whole-shaft dimension, not component-keyed — one dual flag for the sheet. */
+    dual: Boolean = false,
 ) {
     val arrowLen    = 8f
     val witnessGap  = 3f   // gap between shaft edge and witness line start
@@ -597,7 +611,7 @@ private fun drawWearOalLine(
     } else {
         // Same formatter as the schematic's OAL rail — inches print as mixed fractions
         // (falling back to 3 decimals), never raw 4-decimal.
-        val label = "OAL: ${formatLenDim(oalMm.toDouble(), unit)}"
+        val label = "OAL: ${formatLenDimDual(oalMm.toDouble(), unit, dual)}"
         val lw = text.measureRichText(label)
         val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
         if ((mid - gapHalf) - x0 >= arrowLen + 2f) {
@@ -910,7 +924,7 @@ private fun buildProfileDiaCalloutInput(
     components: List<ResolvedComponent>,
     xAt: (Float) -> Float,
     diaText: Paint,
-    unit: UnitSystem,
+    displayUnits: DisplayUnits,
     skipComponentIds: Set<String> = emptySet(),
 ): ProfileDiaCalloutInput {
     if (readings.isEmpty()) return ProfileDiaCalloutInput(emptyList(), emptyMap())
@@ -932,7 +946,7 @@ private fun buildProfileDiaCalloutInput(
             else -> return@forEach   // liners → detail strip; threads/slots ineligible
         }
         if (drawnDiaMm <= 0f) return@forEach
-        val label = formatDiaWithUnit(r.diaMm.toDouble(), unit)
+        val label = formatDiaWithUnitDual(r.diaMm.toDouble(), displayUnits.unitFor(r.componentId), displayUnits.dual)
         stations += DiaCalloutStation(
             key = r.id,
             stationX = xAt(rc.startMmPhysical + local),
@@ -1027,7 +1041,9 @@ private fun drawWearStripWindow(
     stripBottom: Float,
     contentLeft: Float,
     contentRight: Float,
-    unit: UnitSystem,
+    /** Per-attachment-cluster anchor labels and per-reading Ø callouts each resolve their own
+     *  unit via [DisplayUnits.unitFor] — a window may mix components with different overrides. */
+    displayUnits: DisplayUnits,
     setPositions: SetPositions,
     text: Paint,
     outline: Paint,
@@ -1081,10 +1097,14 @@ private fun drawWearStripWindow(
         if (!wearStripClusterShowsAnchor(cl)) {
             ClusterTitle(cl, names, null, null)
         } else {
+            // A cluster that shows an anchor is always a single lone component (a taper
+            // disqualifies it above, and bodies/liners never combine with each other) — its own
+            // id is the resolved-component key for a per-component unit override.
+            val clusterUnit = displayUnits.unitFor(cl.components.firstOrNull()?.id)
             val ln = cl.components.firstOrNull { it.kind == WearStripComponentKind.LINER }
                 ?.let { lc -> docSpec.liners.firstOrNull { it.id == lc.id } }
-            val label = if (ln != null) buildLinerAnchorLabel(docSpec, ln, setPositions, unit)
-            else buildSpanAnchorLabel(docSpec, cl.startMm, cl.endMm, setPositions, unit)
+            val label = if (ln != null) buildLinerAnchorLabel(docSpec, ln, setPositions, clusterUnit, displayUnits.dual)
+            else buildSpanAnchorLabel(docSpec, cl.startMm, cl.endMm, setPositions, clusterUnit, displayUnits.dual)
             val from = if (ln != null) linerAnchorForPdf(docSpec, ln)
             else wearStripAnchorForSpan(docSpec, cl.startMm, cl.endMm, setPositions).anchor
             ClusterTitle(cl, names, label.takeIf { it.isNotEmpty() }, from)
@@ -1102,7 +1122,7 @@ private fun drawWearStripWindow(
     val diaStations = valuedReadings.map { r ->
         val comp = compById.getValue(r.componentId)
         val local = r.axialMm.coerceIn(0f, comp.lengthMm)
-        val label = formatDiaWithUnit(r.diaMm.toDouble(), unit)
+        val label = formatDiaWithUnitDual(r.diaMm.toDouble(), displayUnits.unitFor(r.componentId), displayUnits.dual)
         DiaCalloutStation(r.id, xAtStrip(comp.startMm + local), label, dimText.measureText(label))
     }
     // Drawn diameter under each station, so a leader and its witness tick meet the actual
@@ -1390,7 +1410,9 @@ private fun drawWearStripWindow(
     // FWD edge — standard witness-line/arrowed-span/centered-label rail convention. The rail
     // measures WEAR, so it belongs to the window's liner; a taper/body-only window has none.
     if (linerComp != null) {
-        val railSpans = buildWearStripRailSpans(linerComp.lengthMm, clampedBands, unit)
+        val railSpans = buildWearStripRailSpans(
+            linerComp.lengthMm, clampedBands, displayUnits.unitFor(linerComp.id), displayUnits.dual,
+        )
         val railLayout = layoutWearStripRail(
             railSpans,
             xAtStripMm = { mm -> xAtStrip(linerComp.startMm + mm) },

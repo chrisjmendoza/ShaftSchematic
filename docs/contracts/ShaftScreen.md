@@ -4,7 +4,7 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.11 (2026-07-26)
+Version: v0.12 (2026-08-18)
 
 ---
 
@@ -12,6 +12,20 @@ Invariants
 -----------
 - Model values are canonical **millimeters (mm)** at all times.  
 - All unit conversion (mm ↔ in) occurs **only at the UI edge** for display and input.  
+- **Per-component display units** (Settings → Drawing → *Per-component units*) widen the
+  edge rule without breaking it: a component may carry a display-unit override
+  (`unit_overrides`, keyed by resolved component id) that decides the unit it **prints** in on
+  every sheet. Overrides are a display axis only — the model stays canonical mm, and an
+  override never rewrites a stored value. The carousel's `ComponentUnitChip` sets it; a
+  component with no override follows the document unit.
+- **Entry fields always take the document unit**, on the cards and in the Add dialogs, even
+  for a component whose override prints it in the other unit. `formatDisplay`/`disp` and
+  `toMmOrNull` on a card are deliberately keyed to `unit`, not to the override — mixing entry
+  units per field is a follow-up (`TODO.md`), and until it lands the chip's label reads
+  "Prints in:" for exactly that reason.
+- **Dual-unit display** (`dual_units`) prints both units inline — `1 1/2" [38.1 mm]` — on
+  sheets. Both terms always carry a unit suffix: on a mixed-unit drawing a bare number is
+  how a shaft gets machined wrong.
 - Component carousel shows the **resolved** component list (auto-bodies included) in
   **physical position order** along the shaft. See `ComponentsOrdering.md` (v1.2).  
 - Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.

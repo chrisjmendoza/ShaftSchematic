@@ -67,6 +67,10 @@ object AutosaveManager {
         // Added (draggable runout bubbles): authored station positions. Absent in older
         // drafts; default empty set derives every station as before.
         val runoutStationPlacements: RunoutStationPlacements = RunoutStationPlacements(),
+        // Added (mixed units + dual display): per-component display-unit overrides and the
+        // sheet-wide dual flag. Absent in older drafts; defaults reproduce single-unit output.
+        val unitOverrides: Map<String, UnitSystem> = emptyMap(),
+        val dualUnits: Boolean = false,
     )
 
     /**

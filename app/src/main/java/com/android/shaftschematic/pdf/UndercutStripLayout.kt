@@ -467,6 +467,9 @@ fun buildUndercutRailSpans(
     chainEndMm: Float,
     spans: List<UndercutSpanMm>,
     unit: UnitSystem,
+    /** The strip's resolved unit (liner override, else the document unit for a bare-shaft
+     *  strip) is already picked by the caller; this only carries the sheet-wide dual flag. */
+    dual: Boolean = false,
 ): List<WearRailSpan> {
     val out = mutableListOf<WearRailSpan>()
     var cursor = chainStartMm
@@ -474,16 +477,16 @@ fun buildUndercutRailSpans(
         if (s.endMm - s.startMm <= UNDERCUT_RAIL_SPAN_EPS_MM) return@forEach
         val effStart = maxOf(s.startMm, cursor)
         if (effStart - cursor > UNDERCUT_RAIL_SPAN_EPS_MM) {
-            out += WearRailSpan(cursor, effStart, formatLenDim((effStart - cursor).toDouble(), unit))
+            out += WearRailSpan(cursor, effStart, formatLenDimDual((effStart - cursor).toDouble(), unit, dual))
         }
         val end = maxOf(s.endMm, effStart)
         if (end - effStart > UNDERCUT_RAIL_SPAN_EPS_MM) {
-            out += WearRailSpan(effStart, end, formatLenDim((end - effStart).toDouble(), unit))
+            out += WearRailSpan(effStart, end, formatLenDimDual((end - effStart).toDouble(), unit, dual))
         }
         cursor = maxOf(cursor, end)
     }
     if (chainEndMm - cursor > UNDERCUT_RAIL_SPAN_EPS_MM) {
-        out += WearRailSpan(cursor, chainEndMm, formatLenDim((chainEndMm - cursor).toDouble(), unit))
+        out += WearRailSpan(cursor, chainEndMm, formatLenDimDual((chainEndMm - cursor).toDouble(), unit, dual))
     }
     return out
 }
@@ -497,13 +500,13 @@ fun buildUndercutRailSpans(
  * same "don't re-state a figure the rail already carries" rule that suppresses a wear
  * strip's band-less span line.
  */
-fun buildUndercutTotalSpan(spans: List<UndercutSpanMm>, unit: UnitSystem): WearRailSpan? {
+fun buildUndercutTotalSpan(spans: List<UndercutSpanMm>, unit: UnitSystem, dual: Boolean = false): WearRailSpan? {
     val live = spans.filter { it.endMm - it.startMm > UNDERCUT_RAIL_SPAN_EPS_MM }
     if (live.size < 2) return null
     val first = live.minOf { it.startMm }
     val last = live.maxOf { it.endMm }
     if (last - first <= UNDERCUT_RAIL_SPAN_EPS_MM) return null
-    return WearRailSpan(first, last, formatLenDim((last - first).toDouble(), unit))
+    return WearRailSpan(first, last, formatLenDimDual((last - first).toDouble(), unit, dual))
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -532,11 +535,12 @@ fun buildUndercutDiaStations(
     xAtMm: (Float) -> Float,
     unit: UnitSystem,
     labelWidthPt: (String) -> Float,
+    dual: Boolean = false,
 ): List<DiaCalloutStation> = undercuts.mapNotNull { u ->
     if (u.diaMm <= 0f) return@mapNotNull null
     val span = clampedById[u.id] ?: return@mapNotNull null
     if (span.isEmpty) return@mapNotNull null
-    val label = formatDiaWithUnit(u.diaMm.toDouble(), unit)
+    val label = formatDiaWithUnitDual(u.diaMm.toDouble(), unit, dual)
     DiaCalloutStation(
         key = u.id,
         stationX = xAtMm((span.startMm + span.endMm) * 0.5f),
@@ -602,11 +606,11 @@ fun undercutAnchorFor(
  * [linerAnchorSuffix] for the wording so the undercut sheet and the wear sheet phrase their
  * SET references identically.
  */
-fun buildUndercutAnchorLabel(anchor: UndercutAnchor, unit: UnitSystem): String {
+fun buildUndercutAnchorLabel(anchor: UndercutAnchor, unit: UnitSystem, dual: Boolean = false): String {
     val suffix = linerAnchorSuffix(
         if (anchor.side == UndercutAnchorSide.AFT_SET) LinerAnchor.AFT_SET else LinerAnchor.FWD_SET,
     )
-    return "${formatLenDim(anchor.distanceMm.toDouble(), unit)} $suffix"
+    return "${formatLenDimDual(anchor.distanceMm.toDouble(), unit, dual)} $suffix"
 }
 
 /**

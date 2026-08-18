@@ -115,6 +115,23 @@ object ShaftDocCodec {
          */
         @SerialName("station_interval_version")
         val stationIntervalVersion: Int = 0,
+        /**
+         * Per-component display-unit overrides, keyed by resolved component id. Absent in older
+         * files → empty, i.e. every component follows [preferredUnit]. Additive + defaulted: no
+         * version bump. A display axis only — canonical geometry stays mm (golden rule). Orphan
+         * entries (component no longer resolves, e.g. a regenerated auto-body id) are harmless:
+         * the resolver simply finds no override and falls back to [preferredUnit]. Not pruned
+         * here, the same posture as [runoutReadings]. See `util/DisplayUnits.kt`.
+         */
+        @SerialName("unit_overrides")
+        val unitOverrides: Map<String, UnitSystem> = emptyMap(),
+        /**
+         * Sheet-wide dual-unit display: when true every dimension prints `<primary> [<secondary>]`
+         * inline. Absent in older files → false (single unit, unchanged output). Additive +
+         * defaulted: no version bump. See `pdf/UnitFormat.kt` (`*Dual`) and `util/DisplayUnits.kt`.
+         */
+        @SerialName("dual_units")
+        val dualUnits: Boolean = false,
     )
 
     enum class Format { ENVELOPE_V1, LEGACY_SPEC }
@@ -134,6 +151,8 @@ object ShaftDocCodec {
         val runoutReadings: RunoutReadings,
         val runoutStationPlacements: RunoutStationPlacements,
         val undercutRecord: UndercutRecord,
+        val unitOverrides: Map<String, UnitSystem>,
+        val dualUnits: Boolean,
     )
 
     private val json = Json {
@@ -259,6 +278,11 @@ object ShaftDocCodec {
                     // Undercuts have no component key at all, so there is nothing to orphan-check
                     // here — pass through untouched. See model/Undercut.kt.
                     undercutRecord = doc.undercutRecord,
+                    // Unit overrides pass through untouched: an override whose component no longer
+                    // resolves is harmless (the resolver falls back to preferredUnit), and auto-body
+                    // ids aren't known here — the same render-layer orphan rule as runoutReadings.
+                    unitOverrides = doc.unitOverrides,
+                    dualUnits = doc.dualUnits,
                 )
             }
 
@@ -280,6 +304,8 @@ object ShaftDocCodec {
             runoutReadings = RunoutReadings(),
             runoutStationPlacements = RunoutStationPlacements(),
             undercutRecord = UndercutRecord(),
+            unitOverrides = emptyMap(),
+            dualUnits = false,
         )
     }
 }

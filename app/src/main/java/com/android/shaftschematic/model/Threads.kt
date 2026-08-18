@@ -29,6 +29,12 @@ import java.util.UUID
  * @property isAftEnd When [excludeFromOAL] is true: true = thread sits at the AFT end (start = 0),
  *                    false = FWD end (start = OAL − length). Ignored when included in OAL.
  * @property tpi Optional threads-per-inch (imperial). Preferred when set; see [normalized].
+ * @property metricDesignation Optional ISO metric designation authored by the user (e.g.
+ *                             `M20×2.5`). When present the thread is metric-mode: its printed
+ *                             spec is the designation verbatim and its effective display unit is
+ *                             mm. Canonical geometry stays in [majorDiaMm]/[pitchMm] (parsed
+ *                             from the designation at entry, never re-derived here — golden rule).
+ *                             See [com.android.shaftschematic.util.ThreadDesignation].
  *
  * Invariants:
  * - All distances are ≥ 0.
@@ -46,6 +52,8 @@ data class Threads(
     val excludeFromOAL: Boolean = false,
     val isAftEnd: Boolean = true,
     val tpi: Float? = null,
+    @JsonNames("metricDesignation", "metric_designation")
+    val metricDesignation: String? = null,
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
 ) : Segment {

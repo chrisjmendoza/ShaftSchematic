@@ -141,6 +141,7 @@ import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.runoutComponentSpans
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
@@ -188,6 +189,11 @@ fun RunoutRoute(
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
     val stationPlacements  by vm.runoutStationPlacements.collectAsState()
+    // Per-component display units + inline-dual flag: same posture as `pdfFractionStyle` —
+    // neither reaches the composer through a field already collected above, so both ride
+    // along as explicit render-loop inputs.
+    val unitOverrides      by vm.unitOverrides.collectAsState()
+    val dualUnits          by vm.dualUnits.collectAsState()
 
     // Which bubble's editor dialog is open, if any (component id + station index + display title).
     var editingBubble by remember { mutableStateOf<EditingRunoutBubble?>(null) }
@@ -256,9 +262,11 @@ fun RunoutRoute(
         readingsSnap: RunoutReadings,
         placementsSnap: RunoutStationPlacements,
         blankSnap: Boolean,
+        displayUnitsSnap: DisplayUnits,
     ) = composeRunoutPdf(
         page = page, spec = specSnap, config = configSnap, project = projectSnap,
         unit = unitSnap,
+        displayUnits = displayUnitsSnap,
         pdfPrefs = prefsSnap,
         resolvedComponents = resolvedSnap,
         lineThicknessScale = thicknessSnap,
@@ -281,6 +289,7 @@ fun RunoutRoute(
                         jobNumber = jobNumber, side = shaftPosition),
                     unit, vm.currentPdfPrefs, resolvedComponents,
                     lineThicknessScale, runoutReadings, stationPlacements, blankDraft,
+                    vm.currentDisplayUnits(),
                 )
             }
             if (wrote && openAfterExport) openRunoutPdf(ctx, uri)
@@ -312,6 +321,7 @@ fun RunoutRoute(
                 readings = runoutReadings,
                 stationPlacements = stationPlacements,
                 blankValues = blankDraft,
+                displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
                 draft = tuning.active,
             )
         }.conflate().collect { inputs ->
@@ -338,6 +348,7 @@ fun RunoutRoute(
                         page, inputs.spec, inputs.config, inputs.project, inputs.unit,
                         prefsSnapshot, inputs.resolved, inputs.lineThicknessScale,
                         inputs.readings, inputs.stationPlacements, inputs.blankValues,
+                        inputs.displayUnits,
                     )
                 }
                 raster to raster?.takeIf { !inputs.draft }?.inkBand()
@@ -772,12 +783,13 @@ fun RunoutRoute(
                     val readingsSnapshot = runoutReadings
                     val placementsSnapshot = stationPlacements
                     val blankSnapshot = blankDraft
+                    val displayUnitsSnapshot = vm.currentDisplayUnits()
                     printShaftPdfPage(ctx, jobName) { page ->
                         composeClassicRunout(
                             page, specSnapshot, configSnapshot, projectSnapshot,
                             unitSnapshot, prefsSnapshot, resolvedSnapshot,
                             thicknessSnapshot, readingsSnapshot, placementsSnapshot,
-                            blankSnapshot,
+                            blankSnapshot, displayUnitsSnapshot,
                         )
                     }
                 },
@@ -905,6 +917,7 @@ private data class RunoutRenderInputs(
     val readings: RunoutReadings,
     val stationPlacements: RunoutStationPlacements,
     val blankValues: Boolean,
+    val displayUnits: DisplayUnits,
     /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
     val draft: Boolean,
 )

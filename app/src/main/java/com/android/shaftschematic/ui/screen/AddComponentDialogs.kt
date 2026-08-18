@@ -49,6 +49,7 @@ import com.android.shaftschematic.util.autoTaperRateText
 import com.android.shaftschematic.util.manualTaperRateBlockingMessage
 import com.android.shaftschematic.util.manualTaperRateWarning
 import com.android.shaftschematic.util.parseTaperRateText
+import com.android.shaftschematic.util.ThreadDesignation
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.max
 
@@ -517,7 +518,8 @@ fun AddThreadDialog(
     initialLengthMm: Float,
     initialMajorDiaMm: Float,
     initialPitchMm: Float,
-    onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, tpi: Float, excludeFromOAL: Boolean, isAftEnd: Boolean) -> Unit,
+    onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean,
+               isAftEnd: Boolean, metricDesignation: String?) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -536,10 +538,23 @@ fun AddThreadDialog(
     var countInOal by remember { mutableStateOf(true) }
     var isAftEnd by remember { mutableStateOf(true) }
 
+    // Imperial (TPI, entered in the session unit) vs Metric (a self-declaring M-designation
+    // that always names its own mm values — see `ThreadDesignation`).
+    var metricMode by remember { mutableStateOf(false) }
+    var designationText by remember { mutableStateOf("") }
+    val parsedDesignation = if (metricMode) ThreadDesignation.parse(designationText) else null
+
     val startMm = toMmOrNull(start, unit) ?: -1f
     val lengthMm = toMmOrNull(length, unit) ?: -1f
-    val majorMm = toMmOrNull(major, unit) ?: -1f
+    val majorMmImperial = toMmOrNull(major, unit) ?: -1f
+    val majorMm = if (metricMode) (parsedDesignation?.majorDiaMm ?: -1f) else majorMmImperial
     val tpi = parseFractionOrDecimal(tpiText) ?: -1f   // allow e.g., "20", "10", "32"
+    // Pitch omitted from a coarse designation (e.g. "M20") reads as 0 — not "unset" — so a
+    // metric thread never blocks on a pitch the designation deliberately left out.
+    val pitchMm = if (metricMode) (parsedDesignation?.pitchMm ?: 0f) else tpiToPitchMm(tpi)
+    // Metric gate: a real tpi-shaped value only when the designation parses, so the shared
+    // gate's `tpi > 0f` check reads the same pass/fail without a second gate function.
+    val tpiGate = if (metricMode) (if (parsedDesignation != null) 1f else -1f) else tpi
 
     val startError = if (!countInOal) null
                      else if (startMm >= 0f && lengthMm > 0f)
@@ -589,10 +604,30 @@ fun AddThreadDialog(
                     }
                     Spacer(Modifier.height(4.dp))
                 }
-                CommitNumField("Major Ø (${abbr(unit)})", major) { major = it }
-                Spacer(Modifier.height(8.dp))
-                CommitNumField("TPI", tpiText) { tpiText = it }
-                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DirectionChip("Imperial (TPI)", selected = !metricMode) { metricMode = false }
+                    DirectionChip("Metric (M-designation)", selected = metricMode) { metricMode = true }
+                }
+                if (metricMode) {
+                    CommitNumField(
+                        "Thread designation",
+                        designationText,
+                        errorText = if (designationText.isNotBlank() && parsedDesignation == null)
+                            "e.g. M20×2.5" else null,
+                        supportingText = if (designationText.isBlank()) "e.g. M20×2.5" else null,
+                        keyboardType = KeyboardType.Ascii,
+                    ) { designationText = it }
+                    Spacer(Modifier.height(8.dp))
+                } else {
+                    CommitNumField("Major Ø (${abbr(unit)})", major) { major = it }
+                    Spacer(Modifier.height(8.dp))
+                    CommitNumField("TPI", tpiText) { tpiText = it }
+                    Spacer(Modifier.height(8.dp))
+                }
                 CommitNumField("Length (${abbr(unit)})", length) { length = it }
                 Spacer(Modifier.height(12.dp))
                 Row(
@@ -609,10 +644,11 @@ fun AddThreadDialog(
             }
         },
         confirmButton = {
-            val ok = threadAddEnabled(countInOal, startMm, lengthMm, majorMm, tpi, startError)
+            val ok = threadAddEnabled(countInOal, startMm, lengthMm, majorMm, tpiGate, startError)
             Button(enabled = ok, onClick = {
                 val excludeFromOAL = !countInOal
-                val action = { onSubmit(startMm, lengthMm, majorMm, tpi, excludeFromOAL, isAftEnd) }
+                val designation = if (metricMode) parsedDesignation?.format() else null
+                val action = { onSubmit(startMm, lengthMm, majorMm, pitchMm, excludeFromOAL, isAftEnd, designation) }
                 // Excluded threads don't live on the shaft span, so skip collision for them.
                 val warnings = if (excludeFromOAL) emptyList()
                                else collectAddWarnings(spec, startMm, lengthMm, overallIsManual)

@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.7, 2026-08-06)
+# AddComponentDialogs Contract (v1.8, 2026-08-18)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -29,6 +29,39 @@ just per field.
 
 Failure mode: the AFT/FWD thread-end selector was present in the carousel card but
 missing from `AddThreadDialog` for several versions (restored 2026-06-23).
+
+---
+
+## Units — what is shared, and the one card-only control
+
+**Under the parity rule (both surfaces):** the Add Thread dialog's **Imperial (TPI) |
+Metric (M-designation)** mode. It decides what a thread *is* — a metric thread stores a
+designation (`Threads.metricDesignation`, e.g. `M20×2.5`) and its major Ø and pitch are
+parsed from that designation rather than typed — so it is value entry, not display. The
+thread card is its counterpart: a thread stored with a designation shows a **Thread
+designation** field in place of the imperial Major Ø / TPI pair, and a thread stored without
+one shows the pair. The card carries no mode *switch* — the stored mode selects the field.
+Re-designating an existing thread is deliberately not offered: a different designation is a
+different thread, added as one.
+
+**Card-only (a carve-out from the parity rule):** the per-component **"Prints in: in | mm"**
+chip, shown on the explicit-**Body**, **Taper**, **Thread**, and **Liner** cards when
+Settings → Drawing → *Per-component units* is on. It is the **third** post-hoc display
+toggle to qualify for the carve-out recorded in `CLAUDE.md`, on the same grounds as the other
+two: it changes only how an already-drawn component *prints*, its default is stable
+("follows the document unit"), and it is reached for after looking at a printed sheet. In an
+Add dialog it would be a permanently-preset chip pair on every add — and it would have
+nothing to key an override to, since overrides key on the **resolved component id**, which
+does not exist until the component does.
+
+Two cards deliberately omit the chip: the **auto-body** card (a derived span — same posture
+as its disabled Start/Length; promote it first) and the **coupler-bolt-slot** card.
+
+The chip is display-only in a second sense that matters at the card: it governs how the
+component **prints**, not the unit its own fields are typed in. Entry fields stay in the
+document unit on both surfaces (see `ShaftScreen.md`), so a component set to print in mm is
+still authored in inches on an inch document. That asymmetry is a known follow-up, tracked in
+`TODO.md`.
 
 ---
 
@@ -80,8 +113,10 @@ by definition, so there is nothing to toggle. This is intentional and not a pari
 |-----------------|-----------|
 | Start | Only when `countInOal = true` |
 | Thread end: AFT \| FWD chips | Only when `countInOal = false` |
-| Major Ø | Always |
-| TPI | Always |
+| Thread spec mode: Imperial (TPI) \| Metric (M-designation) chips | Always |
+| Major Ø | Only in Imperial mode |
+| TPI | Only in Imperial mode |
+| Thread designation (`M20×2.5`) | Only in Metric mode |
 | Length | Always |
 | Count in OAL toggle | Always |
 
@@ -91,6 +126,13 @@ not hidden in addition to them. Matches `ComponentCarousel.kt` `ResolvedThread` 
 
 `isAftEnd` is passed through: `onSubmit → ShaftScreen.onAddThread → ShaftRoute →
 ShaftViewModel.addThreadAt()` and stored on the `Threads` model object.
+
+`metricDesignation` rides the same path (`onSubmit → ShaftScreen.onAddThread → ShaftRoute →
+ShaftViewModel.addThreadAt`): in Metric mode the designation is stored verbatim and the
+major Ø / pitch handed over are the ones **parsed from it**, so the two can never disagree.
+A coarse designation with the pitch omitted (`M20`) submits pitch `0` — omitted, not unset —
+so it does not block the Add button. The ViewModel additionally registers an implicit **mm**
+unit override for that thread; see `docs/DATA_MODEL.md`.
 
 ### AddTaperDialog
 | Field / control | Condition |

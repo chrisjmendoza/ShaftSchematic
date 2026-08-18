@@ -84,6 +84,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.inkBand
@@ -146,6 +147,11 @@ fun WearRoute(
     val wearTraceDefault   by vm.pdfWearTraceDepthFrac.collectAsState()
     val wearBandShadeFrac  by vm.pdfWearBandShadeFrac.collectAsState()
     val wearJoinGapMaxMm   by vm.pdfWearJoinGapMaxMm.collectAsState()
+    // Per-component display units + inline-dual flag: same posture as `pdfFractionStyle` —
+    // neither reaches the composer through a field already collected above, so both ride
+    // along as explicit LaunchedEffect keys below.
+    val unitOverrides      by vm.unitOverrides.collectAsState()
+    val dualUnits          by vm.dualUnits.collectAsState()
 
     // The ONE resolution of this job's trace-depth override against the Settings default. Every
     // consumer on this tab — the slider, the detail overlay's canvas, and every composeWearPdf
@@ -192,6 +198,7 @@ fun WearRoute(
                     project = ProjectInfo(customer = customer, vessel = vessel,
                         jobNumber = jobNumber, side = shaftPosition),
                     unit = unit,
+                    displayUnits = vm.currentDisplayUnits(),
                     pdfPrefs = vm.currentPdfPrefs,
                     resolvedComponents = resolvedComponents,
                     lineThicknessScale = lineThicknessScale,
@@ -211,14 +218,17 @@ fun WearRoute(
     // change to the Settings default reaches an un-overridden document only through this.
     // wearBandShadeFrac and wearJoinGapMaxMm are keys for the same reason: the composer reads
     // them off the PdfPrefs snapshot taken inside this effect, which is not snapshot state either.
+    // unitOverrides and dualUnits are keys for the same reason: they reach the composer only
+    // through the displayUnits snapshot built below.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
                    wearRecord, blankDraft, pdfFractionStyle, traceDepthFrac, wearBandShadeFrac,
-                   wearJoinGapMaxMm) {
+                   wearJoinGapMaxMm, unitOverrides, dualUnits) {
         if (!showPreview) { previewBitmap = null; previewInkBand = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
         val thicknessSnapshot = lineThicknessScale
+        val displayUnitsSnapshot = DisplayUnits(unit, unitOverrides, dualUnits)
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
             jobNumber = jobNumber, side = shaftPosition)
         // The ink band is measured off the raw raster, on the same IO pass that produced it.
@@ -226,6 +236,7 @@ fun WearRoute(
             val raster = renderPdfPageBitmap(ctx) { page ->
                 composeWearPdf(
                     page = page, spec = spec, project = projectSnapshot, unit = unit,
+                    displayUnits = displayUnitsSnapshot,
                     pdfPrefs = prefsSnapshot, resolvedComponents = resolvedComponents,
                     lineThicknessScale = thicknessSnapshot, wearRecord = wearRecord,
                     blankValues = blankDraft, traceDepthFrac = traceDepthFrac,
@@ -436,10 +447,12 @@ fun WearRoute(
                     val recordSnapshot = wearRecord
                     val blankSnapshot = blankDraft
                     val traceDepthSnapshot = traceDepthFrac
+                    val displayUnitsSnapshot = vm.currentDisplayUnits()
                     printShaftPdfPage(ctx, jobName) { page ->
                         composeWearPdf(
                             page = page, spec = specSnapshot,
                             project = projectSnapshot, unit = unitSnapshot,
+                            displayUnits = displayUnitsSnapshot,
                             pdfPrefs = prefsSnapshot,
                             resolvedComponents = resolvedSnapshot,
                             lineThicknessScale = thicknessSnapshot,

@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**  
-**Last updated: 2026-08-14**
+**Last updated: 2026-08-17**
 
 Tasks are ordered by priority. Completed series are collapsed to a single summary line to
 keep this readable — full detail lives in `CHANGELOG.md` and git history.
@@ -247,8 +247,56 @@ would make that body untappable at the slot. Decide before changing.
   position/unit) is deliberately excluded from the undoable state — revisit if that
   becomes a complaint.
 - [ ] Preset library (common tapers, common shoulder patterns)
-- [ ] Dual-unit display (primary in, secondary mm in smaller text)
+- [x] Dual-unit display (shipped 2026-08-18): inline `1 1/2" [38.1 mm]`, single-line by
+  design (width-only, no tier/height budget change — the earlier stacked attempt was what
+  collided). Sheet-wide toggle, off by default. See CHANGELOG 2026-08-18.
 - [ ] Quick inline mm ↔ in calculator in dialogs
+- [x] **Mixed units within one drawing** (shipped 2026-08-18, requested 2026-08-17): per-component
+  in/mm chip (capability-gated) + metric thread designation entry, honored on every sheet. Display
+  axis only (`util/DisplayUnits.kt`, envelope `unit_overrides`), off by default. **Follow-ups still
+  open:** carousel numeric *entry* fields still take the document unit (the chip governs how a
+  component PRINTS, not how its fields are typed) — a metric keyway is entered in inches and stored
+  mm; and standard metric key-stock presets for keyways are not built yet. Original design notes
+  retained below.
+  A real shaft drawing turned
+  up with some dimensions in mm and others in inches. The app previously allowed exactly one
+  unit per document (`preferredUnit`, `ShaftDocCodec.kt:65`; `docs/DATA_MODEL.md` L315).
+  **Feasibility is better than it looks.** The model is already millimeter-canonical —
+  `UnitSystem` converts only at the UI/render edge, and `RunoutReading.kt:46` states values
+  are "never converted in the model" — so this is a display-and-entry change, not a data
+  migration. Seams: `pdf/UnitFormat.kt` (`formatLenDim` / `formatLenWithUnit` /
+  `formatDiaWithUnit`), `ShaftScreen.formatDisplay` (L1232), `util/RunoutValueFormat.kt`,
+  plus wherever a per-value override gets stored. ~150 `UnitSystem` call sites, so scope the
+  override narrowly rather than threading a unit parameter through all of them.
+  **Safety requirement, not a nicety:** the moment a drawing mixes units, every dimension on
+  it must carry its own unit suffix. A single-unit drawing can declare the unit once in the
+  title block; a mixed one where a bare `2.5` could mean either is exactly how a shaft gets
+  machined wrong. An implementation that does not label per dimension should not ship.
+  **Observed pattern (provisional — example page being sourced 2026-08-17):** on the drawing
+  that prompted this, the *threads* and the *keyway* were in mm and everything else had been
+  converted to inches by the leads. If that holds up, the mixing is not arbitrary: it is
+  "features defined by a metric standard keep their native units; measured geometry follows
+  the shop's working unit." A metric thread has a designation (`M20×2.5`) that stops meaning
+  anything once converted to decimal inches, and metric keyways come from standard metric key
+  stock — so those two resist conversion for a real reason, while a body length is just a
+  measurement and converts cleanly. Confirm against the example page before designing to it.
+  Note the asymmetry for labelling: `M20×2.5` is self-declaring, a keyway written `6 × 6` is
+  not, and that is the dangerous one.
+  **Answers as built:**
+  1. Granularity — **per component**, keyed by resolved id in `unit_overrides`; a metric thread
+     carries an implicit mm override.
+  2. Entry — a `Prints in: in | mm` chip on each explicit Body/Taper/Thread/Liner **card**
+     (card-only by decision: a post-hoc display toggle, and there is no resolved id to key an
+     override to at add time — the third documented carve-out from add-dialog parity); the Add
+     Thread dialog adds an Imperial/Metric M-designation mode, which IS under the parity rule
+     because it is value entry.
+  3. `preferredUnit` is the default for components with no override; overrides survive a change
+     to it (they are absolute, not deltas).
+  4. All documents honor overrides (schematic, runout, wear, undercut, consolidated).
+  5. `unitLocked` is unchanged — it still pins the **document** unit; overrides are independent.
+  Related but distinct: dual-unit *display* shows both units for every dimension; this shows one
+  chosen unit per component. §8 guardrail respected — tier origin, measurement reference, and
+  units remain independent concerns.
 - [ ] Backup auto-mirror folder — user picks a SAF folder once in Settings (persisted URI); every internal save silently mirrors a copy there so the off-device backup is always current. Needs `takePersistableUriPermission` + careful URI-permission lifecycle handling (revoked permission, deleted folder). Originally Tier 3 of the 2026-05-27 backup plan; the shipped backup system covers Tiers 1–2.
 - [ ] "Indicated wear" rendering style for wear bands (requested 2026-07-18): match the shop
   hand-sketch convention — squiggly/wavy lines along the liner top and bottom edges in

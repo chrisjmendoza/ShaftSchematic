@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
@@ -128,6 +129,11 @@ fun ShaftRoute(
 
     val sessionAddDefaults by vm.sessionAddDefaults.collectAsState()
 
+    // Mixed per-component units: the capability flag lives in Settings (device-wide), the
+    // overrides map is per-document ViewModel state (same posture as `unit` itself).
+    val perComponentUnitsEnabled by SettingsStore.perComponentUnitsFlow(ctx).collectAsState(initial = false)
+    val unitOverrides by vm.unitOverrides.collectAsState()
+
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
             context = ctx,
@@ -192,7 +198,7 @@ fun ShaftRoute(
         onSetAutoSectionDia = vm::setAutoSectionDiaMm,
         onSetShowAutoBodyDia = vm::setShowAutoBodyDia,
         onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS -> vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS) },
-        onAddThread = { s, l, maj, p, ex, aft -> vm.addThreadAt(s, l, maj, p, ex, aft) },
+        onAddThread = { s, l, maj, p, ex, aft, desig -> vm.addThreadAt(s, l, maj, p, ex, aft, desig) },
         onAddLiner  = { s, l, od, ref -> vm.addLinerAt(s, l, od, ref) },
         onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref) },
 
@@ -204,7 +210,7 @@ fun ShaftRoute(
         onUpdateTaperLabel = { i, label    -> vm.updateTaperLabel(i, label) },
         onUpdateTaperKeyway = { i, w, d, l, offset, spooned -> vm.updateTaperKeyway(i, w, d, l, offset, spooned) },
         onUpdateTaperReference = { i, ref -> vm.updateTaperAuthoredReference(i, ref) },
-        onUpdateThread = { i, s, l, maj, p -> vm.updateThread(i, s, l, maj, p) },
+        onUpdateThread = { i, s, l, maj, p, desig -> vm.updateThread(i, s, l, maj, p, desig) },
         onUpdateThreadLabel = { i, label   -> vm.updateThreadLabel(i, label) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
         onUpdateLinerShowDia = { i, show   -> vm.updateLinerShowDia(i, show) },
@@ -247,5 +253,9 @@ fun ShaftRoute(
         onRedo = vm::redoEdit,
 
         sessionAddDefaults = sessionAddDefaults,
+
+        perComponentUnitsEnabled = perComponentUnitsEnabled,
+        unitOverrides = unitOverrides,
+        onSetComponentUnit = vm::setComponentUnit,
     )
 }
