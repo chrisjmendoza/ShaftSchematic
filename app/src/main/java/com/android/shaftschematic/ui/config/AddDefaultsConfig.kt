@@ -33,4 +33,12 @@ object AddDefaultsConfig {
     const val SLOT_SPACING_IN    = 2f
     const val SLOT_DEPTH_IN      = 0.25f
     const val SLOT_COUNT_DEFAULT = 2
+
+    // ---- Blend defaults -------------------------------------------------------
+    /**
+     * Axial length a face takes when its blend is first switched on (2 in). A blend is a
+     * couple of inches of hand-worked transition, not a dimensioned section; this is a
+     * starting value the user types over, never a derivation.
+     */
+    const val BLEND_LEN_IN = 2f
 }

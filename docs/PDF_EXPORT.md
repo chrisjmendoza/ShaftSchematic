@@ -184,6 +184,45 @@ the wear header never carries the OAL in either mode.
 
 ---
 
+# 5.2b Blended Body Faces
+
+`Body.blendAftMm` / `blendFwdMm` / `blendProfile` replace a body's square end face with a
+machined curve running INWARD from the face: it leaves the neighbouring diameter AT the face and
+reaches the body's own Ø that far in. Both draw sites decompose the same
+`ui/resolved/BodyBlends.kt` → `bodyDrawEdges` result, so the preview canvas and the sheet place
+the identical curve by construction; the curve itself comes from `geom/BlendProfileMath.kt`
+(pure, unit-tested).
+
+Where they differ is only in assembly. `ShaftRenderer` builds one closed silhouette path per run.
+`drawBodiesCompressedCenterBreak` keeps the parts separate because its **flat span still has to
+host the S-break pair** — so it draws the curves, then the flat run (plain rectangle or the
+break-pair stubs, unchanged), then the end caps last. Two consequences worth knowing:
+
+- The **break decision stays on the run's full drawn width**, not the shortened flat span. A blend
+  is a face detail; it must not change whether the body reads as compressed. The break *layout*
+  (gap and amplitude) does use the flat span, so stubs never overlap the curves.
+- An end cap at a blended face stands at the **neighbour's** radius, where the curve arrives.
+  That puts it on the neighbouring component's own face line instead of stranding a vertical
+  partway along the body.
+
+Blends print **no dimension rail and no footer row**. Rails keep dimensioning the STORED span —
+you dimension to the theoretical sharp corner and let the curve show the blend — which is why
+nothing in `DimensionRailLayout` (§5.4) or either composer's rail pass changed.
+
+That silence is what licenses the one exaggeration on the sheet: a 2″ blend on a 25′ shaft is
+sub-pixel at true scale under the compressed x map, so the **drawn** width floors at
+`MIN_BLEND_WIDTH_PT` (7 pt), capped at `MAX_BLEND_FRAC_OF_HOST` (40%) of the run it is cut into.
+Same posture as the undercut notch depth and the wear trace, and safe **only** because no
+exaggerated number can reach a machinist. The stored length is never rewritten; a length longer
+than its body is clamped where it is drawn. The cap also makes it impossible for two blends to
+swallow the run between them.
+
+The surface envelope (`surfaceSegsFrom`) takes the blends too, so an undercut or a wear reading
+landing in a transition sees the diameter actually there — sampled at the blend's **true** mm
+span, never the drawn floor.
+
+---
+
 # 5.3 On-Shaft Diameter Callouts
 
 Body OD and liner OD each get a leader-line "Ø" callout hanging **BELOW** the shaft

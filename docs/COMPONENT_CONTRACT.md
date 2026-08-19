@@ -116,6 +116,38 @@ absorbed into an explicit-body run) are dormant, never pruned, and resurrect whe
 does. When a separator is deleted and two differing sections remerge, the joined run takes the
 **more aftward** section's Ø — aft is authored first. See DATA_MODEL.md §`AutoDiaOverride`.
 
+### Two explicit bodies never fuse
+
+`normalizeBodies` (resolve) merges contiguous body spans into one drawn run so a bare-shaft gap
+flows into the explicit body beside it and inherits its Ø. That merge stops at an **explicit**
+body: one never gets absorbed into a run that already carries an explicit body.
+
+Without that stop, a stepped shaft built from two abutting bodies resolved to a **single run at
+the aft-most diameter**, with one carousel card instead of two — the second body's Ø and card
+silently discarded. It hides well, because any taper/thread/liner between the bodies flushes the
+accumulator, and on a marine shaft there usually is one; a shaft that is simply Ø6 stepping up to
+Ø8 is what exposes it. Auto spans still merge into an explicit body for continuity — that is what
+the pass is for.
+
+### A body face can be blended
+
+`Body.blendAftMm` / `blendFwdMm` / `blendProfile` cut a smooth machined transition INWARD from a
+face, out of the body that carries it: the curve leaves the neighbouring diameter at the face and
+reaches the body's own Ø that far in. **No other component's span moves — drawn or stored** — so
+the golden rule holds by construction and two neighbouring blends can never contend for the same
+material.
+
+- Diameters are **derived** from whatever sits across the face, never typed. Re-diametering a
+  neighbour re-curves the blend; derived values are exactly what may move.
+- Nothing across the face, or a neighbour at the same Ø → **no blend drawn** (not an error).
+  Liners are excluded from that lookup: a sleeve over the shaft is not a diameter it steps to.
+- Silhouette only — no dimension rail, no footer row, no effect on OAL, coverage, or collision.
+- Only **explicit** bodies carry blends; an auto span has no card fields to set one on.
+- A split body blends on the run holding the **stored** face, never an interior fragment edge.
+
+Geometry: `ui/resolved/BodyBlends.kt`; curve math `geom/BlendProfileMath.kt` (a general
+join-two-radii primitive, shared with the queued liner-shoulder fillet and undercut end radius).
+
 ### Explicit bodies are the fluid base (reverted 2026-07-21)
 
 An explicit (stored) body is the shaft's base material / filler — **not** a rigid

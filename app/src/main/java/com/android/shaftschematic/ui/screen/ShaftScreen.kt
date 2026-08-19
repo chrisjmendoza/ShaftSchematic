@@ -89,6 +89,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
+import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.MM_PER_IN
@@ -189,7 +190,8 @@ fun ShaftScreen(
     onAddBody: (startMm: Float, lengthMm: Float, diaMm: Float,
                 keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                 keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
-                keywaySpooned: Boolean, keywayUnit: UnitSystem?) -> Unit,
+                keywaySpooned: Boolean, keywayUnit: UnitSystem?,
+                blendAftMm: Float, blendFwdMm: Float, blendProfile: BlendProfile) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onAddTaper: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float,
@@ -205,6 +207,7 @@ fun ShaftScreen(
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -667,15 +670,19 @@ fun ShaftScreen(
                     edgeArrowWidthDp = componentArrowWidthDp,
                     showComponentDebugLabels = showComponentDebugLabels,
                     selectedComponentId = selectedComponentId,
-                    // Auto-body promotion adds a plain body; keyways are added later
-                    // via the promoted card's keyway fields.
+                    // Auto-body promotion adds a plain body; keyways and blends are added
+                    // later via the promoted card's own fields.
                     onAddBody = { s, l, d ->
-                        onAddBody(s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null)
+                        onAddBody(
+                            s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null,
+                            0f, 0f, BlendProfile.OGEE,
+                        )
                     },
                     onSetAutoSectionDia = onSetAutoSectionDia,
                     onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
+                    onUpdateBodyBlend = onUpdateBodyBlend,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
                     onUpdateTaper = onUpdateTaper,
@@ -804,9 +811,9 @@ fun ShaftScreen(
                         initialStartMm = addStartMm,
                         initialLengthMm = addLengthMm,
                         perComponentUnitsEnabled = perComponentUnitsEnabled,
-                        onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit ->
+                        onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf ->
                             addBodyOpen = false
-                            onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit)
+                            onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf)
                             onSetKeyways180Apart(k180)
                             onSetKeyways90Apart(k90)
                             if (k90) onSetKeyways90Cw(cw90)

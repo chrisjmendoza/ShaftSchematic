@@ -369,6 +369,34 @@ value formatting in `util/RunoutValueFormat.kt`. One reserved key, `COUPLING_PIL
 resolved component and must **never** be pruned as an orphan. See `docs/contracts/RunoutSheet.md` (Runout Bubble
 Editor, Coupling Face) and `docs/archive/RunoutBubbleEditor_PLAN.md`.
 
+### Body blends are a draw-only face treatment
+`Body.blendAftMm` / `blendFwdMm` / `blendProfile` cut a smooth machined transition **inward from
+one face, out of the body that carries it** — the curve leaves the neighbouring diameter AT the
+face and reaches the body's own Ø that far in. Nothing else moves: no other component's span
+changes, drawn or stored, so the golden rule holds by construction. The blend's diameters are
+**derived** from whatever sits across the face (a liner is excluded — a sleeve is not a diameter
+the shaft steps to); nothing across the face, or a neighbour at the same Ø, draws no blend at all.
+Only **explicit** bodies carry blends. Blends print **no dimension rail and no footer row** — the
+rails keep dimensioning the STORED span (dimension to the theoretical sharp corner), which is why
+nothing in `DimensionRailLayout` or either composer's rail pass changed. That silence is what
+licenses the one exaggeration: a 2" blend on a 25' shaft is sub-pixel at true scale, so the
+**drawn** width takes a floor (`MIN_BLEND_WIDTH_PT`/`_PX`) capped at `MAX_BLEND_FRAC_OF_HOST` of
+its run — the undercut-depth/wear-trace posture, safe ONLY because no exaggerated number can reach
+a machinist. The stored length is never rewritten; a length longer than the body is clamped where
+it is DRAWN. Both draw sites decompose the SAME `bodyDrawEdges` (`ui/resolved/BodyBlends.kt`) —
+`ShaftRenderer` builds one silhouette path, `ShaftPdfComposer` keeps its flat span separate because
+that span still hosts the S-break pair. Pure curve math in `geom/BlendProfileMath.kt`, deliberately
+a general "join two radii across an axial span" primitive (`(x, radius)` points, the
+`KeywaySilhouetteMath`/`SurfaceProfileMath` convention) so the queued liner-shoulder fillet and the
+undercut end radius call it rather than reimplementing it. `surfaceSegsFrom` takes the blends so an
+undercut or wear reading in a transition sees the real diameter — sampled at the blend's **true**
+mm span, never the drawn floor. The controls are under the **add-dialog-parity rule**, not the
+card-only carve-out (they change geometry): one shared `ui/screen/BlendSection.kt` renders them on
+the card and in `AddBodyDialog`. Related: `normalizeBodies` must never fuse two **explicit** bodies
+— absorbing one into a run that already has an explicit body drops its Ø and its carousel card, so
+a Ø6-to-Ø8 stepped shaft drew as one run. Auto spans still merge in for continuity. See
+`docs/COMPONENT_CONTRACT.md`.
+
 ### Spooned keyways are a draw-only variant
 `keywaySpooned` (on `Taper` and `Body`) is a **drawing** flag — it changes nothing in the model,
 resolve, OAL, collision, or footer geometry (only the footer *text* gains `(spooned)` plus a

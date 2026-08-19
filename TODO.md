@@ -120,6 +120,21 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
   standard radii (like the taper-rate 3% snap list) or free entry; does it print as a value +
   leader, a footer note, or both. Shares the draw-both-sites rule — preview and PDF must
   construct the fillet identically, so the arc math belongs in `geom/`.
+- [ ] **Seal-area radius grooves** (photographed 2026-08-14, on-device note 2026-08-19 — "each
+  is a small radius cut, nothing we need to mark yet") — a band of roughly five parallel
+  circumferential grooves cut at the END of a body section, immediately before the liner. Not
+  urgent and not to be drawn yet; recorded so the shape is on file.
+  **Do not assume this is a call site of `geom/BlendProfileMath.kt`.** A blend is a transition
+  BETWEEN two diameters along the surface; a seal groove is a cut BELOW the surface, so its
+  topology is the undercut family (`notchProfiles`) with an arc floor rather than a flat one.
+  The shared part is arc math, not the primitive.
+  Open before building: (a) is it authored as a GROUP — count + pitch + groove radius, which is
+  what the photo shows — or as individual cuts; (b) is it owned by the body face or anchored to
+  the liner edge it sits against, since the whole point is that it lands just before the liner;
+  (c) drawing convention — at true scale these are hairline and would need the blend's
+  drawn-width floor treatment, or a deliberately schematic count; (d) does it print a value or a
+  note. Unlike a blend it IS a real machining instruction, so silence is probably wrong here.
+  Related: the undercut end radii and the fiberglass seal areas in the same request.
 - [ ] **Fiberglass body segments** — model flag, dark fill / hatch pattern, label.
   Reference: `assets/20251022_172641.jpg`. Two halves, and the second is the open one
   (2026-08-14): (a) *selection* — which body sections are fiberglassed, presumably a

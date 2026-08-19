@@ -89,6 +89,7 @@ import com.android.shaftschematic.pdf.composeUndercutPdf
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
+import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
@@ -186,7 +187,7 @@ fun UndercutRoute(
     val gate = remember(spec, collidingIds) { exportPdfGate(spec, collidingIds) }
 
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
-    val segs = remember(resolvedComponents) { surfaceSegsFrom(resolvedComponents) }
+    val segs = remember(resolvedComponents, spec) { surfaceSegsFrom(resolvedComponents, bodyBlends(spec, resolvedComponents)) }
     val notches = remember(undercutRecord, segs, oalMm) {
         buildUndercutNotches(
             undercutRecord.undercuts, segs, oalMm,

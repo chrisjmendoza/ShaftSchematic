@@ -15,6 +15,12 @@ Responsibilities
 - Hold `ShaftSpec`, `UnitSystem`, `showGrid`, and project meta fields.  
 - Commit APIs accept raw text (e.g., `onSetOverallLengthRaw`), parse, convert, clamp, and update.  
 - Expose derived values (e.g., `freeToEndMm`) from the model.  
+- `updateBodyBlend(index, blendAftMm, blendFwdMm, profile)` — sets a body's blended faces.
+  Drawing-only: it changes the silhouette and nothing else (not OAL, resolve, collision, or any
+  other component's span). Lengths are stored **verbatim**; a length longer than the body is
+  clamped where it is DRAWN, never here. Returns the spec unchanged when nothing moves, so a
+  no-op set never marks the document dirty. `addBodyAt` takes the same three values so the Add
+  dialog can set them at creation (add-dialog parity — a blend changes geometry).
 - Load/save documents via `io/InternalStorage.kt` (atomic internal `.shaft` saves, listing,
   delete/rename) and `io/ShaftBackup.kt` (zip backup/restore). There is no repository class.
 - Hold persisted display settings: `lineThicknessScale` (0.5–2.0, applied to preview and PDF stroke widths; 1.0 = default thin weight, 2.0 = original thick weight).

@@ -35,7 +35,12 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponentType
 import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
+import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PX
+import com.android.shaftschematic.ui.resolved.BodyDrawEdges
+import com.android.shaftschematic.ui.resolved.BodyEdgePoint
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
+import com.android.shaftschematic.ui.resolved.bodyBlends
+import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import com.android.shaftschematic.ui.resolved.ResolvedThread
 import kotlin.math.max
 import kotlin.math.min
@@ -146,28 +151,37 @@ object ShaftRenderer {
             ?.filter { it.type == ResolvedComponentType.BODY || it.type == ResolvedComponentType.BODY_AUTO }
 
         // ───────── Bodies ─────────
+        // Blended faces need the resolved neighbours to know what diameter each face steps
+        // to, so they ride the resolved branch only; without one, faces stay square.
+        val blends = if (components != null) bodyBlends(spec, components) else emptyList()
         if (resolvedBodies != null) {
             for (b in resolvedBodies) {
-                val x0 = L.xPx(b.startMmPhysical)
-                val x1 = L.xPx(b.endMmPhysical)
-                val r = L.rPx(b.diaMm)
-                val top = cy - r
-                val size = Size(x1 - x0, r * 2f)
-                val topLeft = Offset(x0, top)
+                val edges = bodyDrawEdges(
+                    runId = b.id,
+                    runStartMm = b.startMmPhysical,
+                    runEndMm = b.endMmPhysical,
+                    runDiaMm = b.diaMm,
+                    blends = blends,
+                    xAt = { mm -> L.xPx(mm) },
+                    rAt = { dia -> L.rPx(dia) },
+                    minWidthPx = MIN_BLEND_WIDTH_PX,
+                )
+                val path = bodySilhouettePath(
+                    edges, cy, L.xPx(b.startMmPhysical), L.xPx(b.endMmPhysical)
+                )
 
-                drawRect(color = bodyFill, topLeft = topLeft, size = size)
+                drawPath(path, color = bodyFill)
 
                 // Highlight under-stroke
                 if (isHighlighted(hiEnabled, hiId, b.id)) {
-                    drawHighlightStrokeRect(
-                        topLeft = topLeft,
-                        size = size,
+                    drawHighlightStroke(
+                        path = path,
                         baseStrokePx = outlineW,
                         glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                     )
                 }
 
-                drawRect(color = outline, topLeft = topLeft, size = size, style = Stroke(width = outlineW))
+                drawPath(path, color = outline, style = Stroke(width = outlineW))
             }
         } else {
             for (b in spec.bodies) {
@@ -796,4 +810,32 @@ private fun DrawScope.drawKeywaySilhouetteNotch(
     stroke(notch.wallStartMm())
     stroke(notch.floorMm())
     stroke(notch.wallEndMm())
+}
+
+/**
+ * A body run's closed silhouette: the top edge aft → fwd (any blended face replaced by its
+ * curve), down the fwd cap, the mirrored bottom edge fwd → aft, and up the aft cap.
+ *
+ * With no blend the point list collapses to the run's four rectangle corners, so an unblended
+ * body draws exactly as it always has. The PDF composer decomposes the same [BodyDrawEdges]
+ * instead of building one path, because its flat span still has to host the S-break pair.
+ */
+private fun bodySilhouettePath(
+    edges: BodyDrawEdges,
+    cy: Float,
+    x0: Float,
+    x1: Float,
+): Path {
+    val topPts = buildList {
+        if (edges.aftCurve.isNotEmpty()) addAll(edges.aftCurve) else add(BodyEdgePoint(x0, edges.capAftR))
+        add(BodyEdgePoint(edges.flatX0, edges.flatR))
+        add(BodyEdgePoint(edges.flatX1, edges.flatR))
+        if (edges.fwdCurve.isNotEmpty()) addAll(edges.fwdCurve) else add(BodyEdgePoint(x1, edges.capFwdR))
+    }
+    return Path().apply {
+        moveTo(topPts.first().xPx, cy - topPts.first().rPx)
+        topPts.drop(1).forEach { lineTo(it.xPx, cy - it.rPx) }
+        topPts.reversed().forEach { lineTo(it.xPx, cy + it.rPx) }
+        close()
+    }
 }

@@ -35,7 +35,12 @@ import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_OFF
 import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_ON
+import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PT
+import com.android.shaftschematic.ui.resolved.BodyBlend
+import com.android.shaftschematic.ui.resolved.BodyEdgePoint
 import com.android.shaftschematic.ui.resolved.ResolvedBody
+import com.android.shaftschematic.ui.resolved.bodyBlends
+import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
@@ -157,6 +162,9 @@ fun composeShaftPdf(
         ?.map { b -> spec.bodyForPdf(b) }
 
     val bodiesForPdf = resolvedBodies ?: spec.bodies
+    // Blends need the resolved neighbours to know what diameter each face steps to; without
+    // a resolve pass there is nothing to blend against, so the faces simply stay square.
+    val blendsForPdf = resolvedComponents?.let { bodyBlends(spec, it) } ?: emptyList()
     val hasNonBodyDetail = spec.tapers.isNotEmpty() || spec.threads.isNotEmpty() || spec.liners.isNotEmpty()
     val bodyOnlyResolved = resolvedBodies != null && resolvedBodies.size == 1 && !hasNonBodyDetail
 
@@ -310,6 +318,7 @@ fun composeShaftPdf(
         c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect, bodyFill,
         truePtPerMm = diaPtPerMm,
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
+        blends = blendsForPdf,
     )
     // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every other
     // host is a secondary. At 180° a secondary renders hidden (dashed, no fill); at 90° it renders
@@ -793,6 +802,12 @@ private fun drawBodiesCompressedCenterBreak(
     truePtPerMm: Float = 0f,
     /** The user's `PdfPrefs.sBreakThresholdFrac`; 0 = never break on compression. */
     breakMinFracOfTrue: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
+    /**
+     * Blended faces on these runs ([bodyBlends]). A blend is machined out of the body, so it
+     * shortens the FLAT span and stands the end cap at the neighbouring diameter; the run's
+     * compression treatment is otherwise untouched.
+     */
+    blends: List<BodyBlend> = emptyList(),
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
     bodies.forEach { b ->
@@ -800,24 +815,41 @@ private fun drawBodiesCompressedCenterBreak(
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
 
+        val edges = bodyDrawEdges(
+            runId = b.id,
+            runStartMm = b.startFromAftMm,
+            runEndMm = b.startFromAftMm + b.lengthMm,
+            runDiaMm = b.diaMm,
+            blends = blends,
+            xAt = xAt,
+            rAt = { dia -> rPx(dia) },
+            minWidthPx = MIN_BLEND_WIDTH_PT,
+        )
+        val fx0 = edges.flatX0
+        val fx1 = edges.flatX1
+
+        // The break decision stays on the run's FULL drawn width — a blend is a face
+        // detail, not a reason for the body to read as more or less compressed.
         val bodyLenPt = abs(x1 - x0)
         val foreshortened = breakForCompression(bodyLenPt, b.lengthMm, truePtPerMm, breakMinFracOfTrue)
         val compress = foreshortened || bodyLenPt >= COMPRESS_TRIGGER_PT
 
+        drawBlendCurvePdf(c, edges.aftCurve, cy, outline, fill)
+        drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, fill)
+
         if (!compress) {
             // classic rectangle body
-            if (fill != null) c.drawRect(x0, top, x1, bot, fill)
-            c.drawLine(x0, top, x1, top, outline)
-            c.drawLine(x0, bot, x1, bot, outline)
-            c.drawLine(x0, top, x0, bot, outline)
-            c.drawLine(x1, top, x1, bot, outline)
+            if (fill != null) c.drawRect(fx0, top, fx1, bot, fill)
+            c.drawLine(fx0, top, fx1, top, outline)
+            c.drawLine(fx0, bot, fx1, bot, outline)
         } else {
             // centered break: two stubs, each with an S-curve end instead of a straight cap
-            val mid = (x0 + x1) * 0.5f
+            val flatLenPt = abs(fx1 - fx0)
+            val mid = (fx0 + fx1) * 0.5f
             val (gap, amp) = breakPairLayout(
-                runLenPt = bodyLenPt,
+                runLenPt = flatLenPt,
                 desiredAmplitudePt = r * 0.6f,
-                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * bodyLenPt),
+                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * flatLenPt),
                 strokeWidthPt = capPaint.strokeWidth,
             )
             val half = 0.5f * gap
@@ -825,19 +857,52 @@ private fun drawBodiesCompressedCenterBreak(
             val rightBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
 
             // Left stub — S-curve on right end
-            if (fill != null) c.drawRect(x0, top, leftEnd, bot, fill)
-            c.drawLine(x0, top, leftEnd, top, outline)
-            c.drawLine(x0, bot, leftEnd, bot, outline)
-            c.drawLine(x0, top, x0, bot, outline)
+            if (fill != null) c.drawRect(fx0, top, leftEnd, bot, fill)
+            c.drawLine(fx0, top, leftEnd, top, outline)
+            c.drawLine(fx0, bot, leftEnd, bot, outline)
             drawBreakEdge(c, leftEnd, top, bot, amp, capPaint, eyeAtTop = false)
 
             // Right stub — same-direction S-curve on left end (curves match so edges appear to merge)
-            if (fill != null) c.drawRect(rightBeg, top, x1, bot, fill)
+            if (fill != null) c.drawRect(rightBeg, top, fx1, bot, fill)
             drawBreakEdge(c, rightBeg, top, bot, amp, capPaint, eyeAtTop = true)
-            c.drawLine(rightBeg, top, x1, top, outline)
-            c.drawLine(rightBeg, bot, x1, bot, outline)
-            c.drawLine(x1, top, x1, bot, outline)
+            c.drawLine(rightBeg, top, fx1, top, outline)
+            c.drawLine(rightBeg, bot, fx1, bot, outline)
         }
+
+        // End caps last, at the OUTER ends of the whole run. A blended face caps at the
+        // neighbour's radius (where the curve arrives), so the cap coincides with that
+        // component's own face line instead of stranding a vertical inside the body.
+        c.drawLine(x0, cy - edges.capAftR, x0, cy + edges.capAftR, outline)
+        c.drawLine(x1, cy - edges.capFwdR, x1, cy + edges.capFwdR, outline)
+    }
+}
+
+/**
+ * One blended face: the void between the curve and the centreline filled, then the top and
+ * bottom curves stroked. Mirrors `ShaftRenderer.drawBlendCurve` — the two draw sites must
+ * place the identical curve, so both build it from [bodyDrawEdges].
+ */
+private fun drawBlendCurvePdf(
+    c: Canvas,
+    curve: List<BodyEdgePoint>,
+    cy: Float,
+    outline: Paint,
+    fill: Paint?,
+) {
+    if (curve.size < 2) return
+    if (fill != null) {
+        val path = Path()
+        path.moveTo(curve.first().xPx, cy - curve.first().rPx)
+        curve.drop(1).forEach { path.lineTo(it.xPx, cy - it.rPx) }
+        curve.reversed().forEach { path.lineTo(it.xPx, cy + it.rPx) }
+        path.close()
+        c.drawPath(path, fill)
+    }
+    for (i in 1 until curve.size) {
+        val a = curve[i - 1]
+        val b = curve[i]
+        c.drawLine(a.xPx, cy - a.rPx, b.xPx, cy - b.rPx, outline)
+        c.drawLine(a.xPx, cy + a.rPx, b.xPx, cy + b.rPx, outline)
     }
 }
 

@@ -30,6 +30,7 @@ import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
@@ -238,7 +239,8 @@ fun composeUndercutPdf(
     // With no resolved list the drawn spec is the only source available, so its components
     // stand in — auto-body spans are already folded into `docSpec.bodies` by
     // `withResolvedBodies` whenever a resolved list WAS supplied.
-    val surfaceSegs = resolvedComponents?.let { surfaceSegsFrom(it) } ?: surfaceSegsFromSpec(docSpec)
+    val surfaceSegs = resolvedComponents?.let { surfaceSegsFrom(it, bodyBlends(spec, it)) }
+        ?: surfaceSegsFromSpec(docSpec)
     val shaftExtentMm = max(spec.overallLengthMm, fwdSetMm)
     val clampedById: Map<String, ClampedUndercutSpanMm> = effectiveRecord.undercuts.associate { u ->
         u.id to clampUndercutSpan(u.startFromAftMm, u.lengthMm, shaftExtentMm)

@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SlotAuthoredReference
@@ -147,7 +148,8 @@ fun AddBodyDialog(
                keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
                keywaySpooned: Boolean, keyways180Apart: Boolean, keyways90Apart: Boolean,
-               keyways90Cw: Boolean, keywayUnit: UnitSystem?) -> Unit,
+               keyways90Cw: Boolean, keywayUnit: UnitSystem?,
+               blendAftMm: Float, blendFwdMm: Float, blendProfile: BlendProfile) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -157,6 +159,14 @@ fun AddBodyDialog(
     var start by remember(unit, effectiveStartMm) { mutableStateOf(toDisplayString(effectiveStartMm, unit)) }
     var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
     var dia by remember(unit, d.bodyDiaMm) { mutableStateOf(toDisplayString(max(1f, d.bodyDiaMm), unit)) }
+
+    // Blend — mirrors the body card by contract (it changes drawn geometry, so it is under
+    // the add-dialog-parity rule, not the card-only carve-out). Same shared BlendSection.
+    var blendAftOn by remember { mutableStateOf(false) }
+    var blendFwdOn by remember { mutableStateOf(false) }
+    var blendAft by remember { mutableStateOf("") }
+    var blendFwd by remember { mutableStateOf("") }
+    var blendProfile by remember { mutableStateOf(BlendProfile.OGEE) }
 
     // Keyway — gated behind a checkbox (fields hidden until turned on); mirrors the body card.
     var kwEnabled by remember { mutableStateOf(false) }
@@ -202,6 +212,27 @@ fun AddBodyDialog(
                 CommitNumField("Length (${abbr(unit)})", length) { length = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Diameter (${abbr(unit)})", dia) { dia = it }
+                Spacer(Modifier.height(12.dp))
+                BlendSection(
+                    aftOn = blendAftOn,
+                    fwdOn = blendFwdOn,
+                    profile = blendProfile,
+                    onToggleAft = { on ->
+                        blendAftOn = on
+                        if (on && blendAft.isBlank()) blendAft = toDisplayString(defaultBlendMm(lengthMm), unit)
+                    },
+                    onToggleFwd = { on ->
+                        blendFwdOn = on
+                        if (on && blendFwd.isBlank()) blendFwd = toDisplayString(defaultBlendMm(lengthMm), unit)
+                    },
+                    onProfile = { blendProfile = it },
+                    aftLengthField = {
+                        CommitNumField("Blend AFT (${abbr(unit)})", blendAft) { blendAft = it }
+                    },
+                    fwdLengthField = {
+                        CommitNumField("Blend FWD (${abbr(unit)})", blendFwd) { blendFwd = it }
+                    },
+                )
                 Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
@@ -311,6 +342,9 @@ fun AddBodyDialog(
                     if (showClockingToggle) clock90 else spec.keyways90Apart,
                     if (showClockingToggle) cw90 else spec.keyways90Cw,
                     if (kwEnabled) kwUnitOverride else null,
+                    if (blendAftOn) toMmOrNull(blendAft, unit) ?: 0f else 0f,
+                    if (blendFwdOn) toMmOrNull(blendFwd, unit) ?: 0f else 0f,
+                    blendProfile,
                 )
             }) { Text("Add") }
         },

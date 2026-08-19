@@ -226,7 +226,8 @@ Add dialog — when all three hold:
    pre-set box on every add; and
 3. it is reached for **after looking at a printed sheet**, not while adding a component.
 
-Exactly two controls qualify today:
+Exactly two controls qualify today (the per-component "Prints in" unit chip above is the
+third carve-out, recorded in `CLAUDE.md`):
 
 | Control | Cards | Why card-only |
 |---|---|---|
@@ -235,6 +236,21 @@ Exactly two controls qualify today:
 
 Anything that moves a value or a component stays under the parity rule above. See
 `docs/PDF_EXPORT.md` §5.3 for what the Ø toggle does to the callout pass.
+
+**Body blend — under the parity rule, NOT a carve-out.** A blend changes the drawn silhouette,
+so it fails test 1 above. `AddBodyDialog` and the explicit-body carousel card must both expose
+the same section, and they do so by sharing one composable (`ui/screen/BlendSection.kt`) — the
+length FIELD is a slot because the card commits on blur while the dialog holds local state until
+submit, but every control and every visibility condition is decided in one place:
+
+| Control | Shown when |
+|---|---|
+| **Blend AFT face** / **Blend FWD face** checkboxes | always, on an explicit body |
+| Axial length field, per face | that face's checkbox is on |
+| Profile chips — S-curve \| Fillet \| Eased cone | either face is on |
+
+The auto-body card omits the section: an auto span is a derived gap with no card fields of its
+own, and promoting it to an explicit body is the documented way to gain them.
 
 FWD-reference math: the entered position locates the fwd-most cutout; the ViewModel stores
 the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spacingMm`.

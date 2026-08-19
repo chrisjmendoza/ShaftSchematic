@@ -31,7 +31,9 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - [ ] **Liner shoulders with a radius selector** — aft/fwd shoulder length fields and stepped
   shoulder rendering in preview and PDF, plus a fillet radius at each shoulder edge (a real
   machining instruction, not a drawing nicety). Open: per-end or per-liner, standard-radius
-  list or free entry, and how it prints. Arc math belongs in `geom/` — draw-both-sites
+  list or free entry, and how it prints. The arc math now exists — `geom/BlendProfileMath.kt`
+  is a general "join two radii across an axial span" primitive built for the body blend and
+  meant to be called here too, so this is a call site rather than new math
 - [ ] **Fiberglass body support** — per-body flag with the usual dialog/card parity; styling
   (dark fill vs hatch vs label) is **undecided and blocked on a sketch or photographed sheet**,
   the same way the "indicated wear" squiggle convention is
@@ -62,6 +64,12 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   move, and lower priority
 
 **Delivered in v0.5.x so far** (newest first):
+- Body face blends — a smooth machined transition from a body face into whatever diameter it
+  steps to, in place of a square shoulder, with S-curve / Fillet / Eased-cone profiles. Machined
+  inward out of the body that carries it, so no other component moves; diameters derived from the
+  neighbour; silhouette only (no rail, no footer row), with a drawn-width floor so a 2" blend
+  still reads on a compressed sheet. Fixed alongside it: two abutting explicit bodies fused into
+  one resolved run at the aft-most diameter
 - Tap-to-add removed — the Schematic preview's canvas tap is selection only; components are
   added from the FAB chooser, the single entry point. Took the whole snap pipeline with it
 - Draggable runout bubbles — press and hold a bubble on the Runout tab's live preview to slide

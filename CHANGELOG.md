@@ -6,6 +6,79 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-19
+
+### feat: a body face can be blended into the diameter it steps to
+
+A shaft in the shop goes from a coupling fit to a larger body through a **smooth machined
+transition** — no square shoulder, and no taper rate. Drawing it as a `Taper` was wrong in the
+way that matters: a taper on these sheets means a precision fit with a rate, a SET/LET
+convention and a keyway, and calling a hand-worked blend one of those misreads the part.
+
+An explicit **Body** card — and `AddBodyDialog`, since this changes drawn geometry and so falls
+under the add-dialog-parity rule rather than the card-only carve-out — now offers **Blend AFT
+face** / **Blend FWD face**, an axial length per face, and a profile: **S-curve** (tangent at
+both ends, the default), **Fillet** (tangent at the large end only), or **Eased cone**.
+
+The blend is machined **inward from the face, out of the body that carries it**. That is what
+makes it safe: the curve leaves the neighbouring diameter at the face and reaches the body's own
+diameter the blend length further in, so no other component's span moves — drawn or stored — and
+two neighbouring blends can never fight over the same material. Its diameters are never typed;
+they are **derived** from whatever sits across the face, so re-diametering a neighbour re-curves
+the blend on its own. A face with nothing across it, or a neighbour at the same diameter, simply
+stays square. A liner is excluded from that lookup — a sleeve over the shaft is not a diameter
+the shaft steps to.
+
+Blends print **no dimension rail and no footer row**. The rails keep dimensioning the stored
+span: you dimension to the theoretical sharp corner and let the drawn curve show the blend, which
+is both standard practice and the reason nothing in the rail planner or either composer's rail
+pass had to change.
+
+That silence is also what licenses one exaggeration. A 2″ blend on a 25′ shaft is sub-pixel at
+true scale on a compressed sheet — invisible on exactly the drawings that want it — so the
+**drawn** width takes a floor of ~7 pt, capped at 40% of the run it is cut into. The stored
+length is never touched, and the same-λ cap makes it impossible for two blends to swallow the run
+between them. This is the posture already used for undercut notch depth and the wear trace, and
+it is only safe because no exaggerated number can reach a machinist.
+
+New pure math in `geom/BlendProfileMath.kt` — deliberately a general "join two radii across an
+axial span" primitive returning `(x, radius)` points, the convention `KeywaySilhouetteMath` and
+`SurfaceProfileMath` already use. Each profile is one `(easeAft, easeFwd)` pair through
+`blendRadiusFrac`, whose middle runs at constant slope with a parabola carrying the slope in and
+out, so an eased end meets its neighbour with a horizontal tangent and a bare end keeps its
+corner. The drawn curve is a C¹ parabolic biarc, not a dimensioned circular arc: it fits any
+authored length and diameter step exactly with no degenerate cases, which is the right trade
+while a blend prints no radius. A true-arc profile belongs there the day a radius becomes a
+printed call-out — the same primitive is what the queued liner-shoulder fillet and the undercut
+end radius will call.
+
+Both draw sites decompose the same `bodyDrawEdges` result (`ui/resolved/BodyBlends.kt`) so the
+preview canvas and the PDF place the identical curve by construction; the PDF keeps its flat span
+separate because that span still has to host the S-break pair. The surface envelope
+(`surfaceSegsFrom`) now takes the blends too, so an undercut or a wear reading landing in a
+transition sees the diameter actually there — sampled at the blend's **true** mm span, never the
+drawn floor.
+
+Off by default and additive: a document that never touches a blend encodes and prints exactly as
+before.
+
+### fix(resolve): two explicit bodies no longer fuse into one run
+
+`normalizeBodies` merged every contiguous body span into a single resolved run. That is correct
+for auto spans flowing into an explicit body — a bare-shaft gap should inherit the flanking
+diameter — but it also absorbed a **second explicit body**, silently discarding its diameter and
+its carousel card.
+
+The effect: a stepped shaft built from two abutting bodies drew as **one run at the aft-most
+diameter**, with one card instead of two. It hid well, because a taper, thread or liner between
+the bodies flushes the accumulator — and on a marine shaft there usually is one. A shaft that is
+simply Ø6 stepping up to Ø8 is what exposed it, which is the same shaft the blend work is for.
+
+An explicit body now always starts its own run; auto spans still merge into it for continuity.
+Found while building the blend, which cannot work at all without it.
+
+---
+
 ## 2026-08-18
 
 ### fix(ui): the preview's blank-draft chip gets its own box

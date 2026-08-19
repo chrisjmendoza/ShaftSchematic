@@ -142,6 +142,20 @@ blocks and the liner↔body boundary negotiation `linerBodyBoundaryAdjust` /
 On delete, flanking bodies merge back — `max(left.diaMm, right.diaMm)` — but `mergeBodiesAround`
 refuses to merge across a component still occupying the freed span (phantom-body guard).
 
+**Two explicit bodies never fuse in resolve.** `normalizeBodies` merges contiguous body spans so
+a bare-shaft gap flows into the explicit body beside it, but it stops at an explicit body — one is
+never absorbed into a run that already carries one. Without that stop a Ø6 body butted to a Ø8 body
+resolved to a single run at the aft-most Ø with **one card instead of two**. See
+`docs/COMPONENT_CONTRACT.md`.
+
+**Blend section (explicit bodies only).** Below "Show Ø on drawing": **Blend AFT face** /
+**Blend FWD face** checkboxes, an axial length field per checked face, and profile chips
+(S-curve | Fillet | Eased cone) shown once either face is on. It changes drawn geometry, so it is
+under the add-dialog-parity rule — `AddBodyDialog` shows the same section, and both surfaces
+render one shared composable (`ui/screen/BlendSection.kt`) so they cannot drift. The auto-body card
+omits it: an auto span has no card fields of its own, and the "Explicit body" checkbox is the
+documented way to gain them.
+
 ### 3.1.5 Direction Chip (AFT / FWD Toggle)
 
 Add dialogs that expose a direction toggle (Liner, Taper, Coupler Bolt Slot) use a custom `DirectionChip` composable:

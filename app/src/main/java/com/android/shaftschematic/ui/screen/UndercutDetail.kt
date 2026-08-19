@@ -110,6 +110,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.ResolvedThread
+import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.UndercutStyle
 import com.android.shaftschematic.util.UnitSystem
@@ -206,7 +207,7 @@ fun UndercutWindowDetailOverlay(
     onClose: () -> Unit,
 ) {
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
-    val segs = remember(resolvedComponents) { surfaceSegsFrom(resolvedComponents) }
+    val segs = remember(resolvedComponents, spec) { surfaceSegsFrom(resolvedComponents, bodyBlends(spec, resolvedComponents)) }
 
     // Every liner on the shaft, in strip space — the pool the cards' liner references draw from.
     val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }

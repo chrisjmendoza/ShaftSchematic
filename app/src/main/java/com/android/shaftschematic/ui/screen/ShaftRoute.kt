@@ -3,6 +3,7 @@ package com.android.shaftschematic.ui.screen
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import com.android.shaftschematic.model.BlendProfile
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
@@ -194,8 +195,8 @@ fun ShaftRoute(
         onSetOverallIsManual = vm::setOverallIsManual,
         onSelectComponentById = vm::selectComponentById,
 
-        onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit ->
-            vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit)
+        onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf ->
+            vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf)
         },
         onSetAutoSectionDia = vm::setAutoSectionDiaMm,
         onSetShowAutoBodyDia = vm::setShowAutoBodyDia,
@@ -208,6 +209,7 @@ fun ShaftRoute(
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateBodyShowDia = { i, show    -> vm.updateBodyShowDia(i, show) },
+        onUpdateBodyBlend = { i, aft, fwd, p -> vm.updateBodyBlend(i, aft, fwd, p) },
         onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label) },
         onUpdateBodyKeyway = { i, w, d, l, offset, end, spooned -> vm.updateBodyKeyway(i, w, d, l, offset, end, spooned) },
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },

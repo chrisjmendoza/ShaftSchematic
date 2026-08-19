@@ -177,6 +177,19 @@ data class Taper(
     val label: String? = null,  // optional user-defined display label; not used for geometry
 ) : Segment
 
+Blend fields on Body (drawing-only, additive, default 0/OGEE):
+- `blendAftMm` / `blendFwdMm`: axial length of a machined **blend** cut INWARD from that face
+  (0 = a square face). The curve eases from the neighbouring component's diameter AT the face to
+  the body's own `diaMm` that far in, so the blend is machined out of its own body and never
+  moves or trims another component. Diameters are DERIVED at resolve, never stored.
+- `blendProfile`: `OGEE` (tangent both ends, default) | `FILLET` (tangent at the large end only)
+  | `EASED_CONE` (straight cone, both corners eased).
+- Silhouette only: no dimension rail, no footer row, no effect on OAL, coverage, resolve spans,
+  or collision. Rails keep dimensioning the STORED span (dimension to the theoretical sharp
+  corner). A stored length longer than the body is clamped where it is DRAWN, never rewritten.
+- Derived: `Body.hasBlendOn(end)`, `Body.blendMmOn(end)`; geometry in
+  `ui/resolved/BodyBlends.kt`, curve math in `geom/BlendProfileMath.kt`.
+
 Keyways are features, not standalone components.
 They are hosted on **Tapers** (offset from the SET face) or **Bodies** (offset from the
 AFT/FWD end face selected by `keywayEnd`) and cannot exist without a host.

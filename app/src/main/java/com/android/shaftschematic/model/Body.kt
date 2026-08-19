@@ -30,6 +30,14 @@ import java.util.UUID
  *   callouts are opt-in per card, so the schematic stays clean unless a Ø is deliberately
  *   shown — the footer's "Body:" list still always carries every Ø. When several shown
  *   bodies share a Ø, the callout anchors at the longest of them.
+ * @property blendAftMm Axial length of a machined **blend** cut into this body's AFT face
+ *   (0 = a square face). The blend runs INWARD from the face, easing from the neighbouring
+ *   component's diameter at the face to [diaMm] this far in, so it is machined entirely out
+ *   of this body and never moves or trims any other component. Silhouette only: it carries
+ *   no dimension rail and no footer row, and rails keep dimensioning the stored span — you
+ *   dimension to the theoretical sharp corner and let the drawn curve show the blend.
+ * @property blendFwdMm The same for this body's FWD face.
+ * @property blendProfile How both faces ease. Drawing-only, like the blend lengths.
  */
 @Serializable
 data class Body(
@@ -44,6 +52,9 @@ data class Body(
     val keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val keywaySpooned: Boolean = false,
     val showDiaOnDrawing: Boolean = false,
+    val blendAftMm: Float = 0f,
+    val blendFwdMm: Float = 0f,
+    val blendProfile: BlendProfile = BlendProfile.OGEE,
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
 ) : Segment
@@ -56,6 +67,8 @@ fun Body.isValid(overallLengthMm: Float): Boolean =
         keywayDepthMm >= 0f &&
         keywayLengthMm >= 0f &&
         keywayOffsetFromEndMm >= 0f &&
+        blendAftMm >= 0f &&
+        blendFwdMm >= 0f &&
         (keywayOffsetFromEndMm + keywayLengthMm) <= lengthMm
 
 /** True if this body has a keyway defined (all three dimensions non-zero). */
@@ -87,3 +100,19 @@ fun Body.withoutKeyway(): Body = copy(
     keywayOffsetFromEndMm = 0f,
     keywaySpooned = false,
 )
+
+/**
+ * True if this body asks for a blend on the given face. A stored length longer than the body
+ * still reads as "blended" — the draw sites clamp it, because clamping a drawn curve is not
+ * the same as rewriting what the user typed.
+ */
+fun Body.hasBlendOn(end: LinerAuthoredReference): Boolean = when (end) {
+    LinerAuthoredReference.AFT -> blendAftMm > 0f
+    LinerAuthoredReference.FWD -> blendFwdMm > 0f
+}
+
+/** Stored blend length on the given face (mm); 0 = a square face. */
+fun Body.blendMmOn(end: LinerAuthoredReference): Float = when (end) {
+    LinerAuthoredReference.AFT -> blendAftMm
+    LinerAuthoredReference.FWD -> blendFwdMm
+}

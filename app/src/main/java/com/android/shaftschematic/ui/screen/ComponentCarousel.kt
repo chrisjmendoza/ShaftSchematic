@@ -56,7 +56,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.LinerAuthoredReference
+import com.android.shaftschematic.ui.config.AddDefaultsConfig
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.hasKeyway
@@ -159,6 +161,7 @@ internal fun ComponentCarouselPager(
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -303,6 +306,7 @@ internal fun ComponentCarouselPager(
                     onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
+                    onUpdateBodyBlend = onUpdateBodyBlend,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
                     onUpdateTaper = onUpdateTaper,
@@ -556,6 +560,7 @@ internal fun ComponentPagerCard(
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -785,6 +790,32 @@ internal fun ComponentPagerCard(
                     checked = b.showDiaOnDrawing,
                     testTag = "body_show_dia_toggle",
                     onCheckedChange = { onUpdateBodyShowDia(idx, it) },
+                )
+
+                // Blend — a machined smooth transition into whatever the face steps to.
+                // Silhouette only: the rails keep dimensioning the stored span, so nothing
+                // here moves a value or a neighbour. Mirrored in AddBodyDialog by contract.
+                BlendSection(
+                    aftOn = b.blendAftMm > 0f,
+                    fwdOn = b.blendFwdMm > 0f,
+                    profile = b.blendProfile,
+                    onToggleAft = { on ->
+                        onUpdateBodyBlend(idx, if (on) defaultBlendMm(b.lengthMm) else 0f, b.blendFwdMm, b.blendProfile)
+                    },
+                    onToggleFwd = { on ->
+                        onUpdateBodyBlend(idx, b.blendAftMm, if (on) defaultBlendMm(b.lengthMm) else 0f, b.blendProfile)
+                    },
+                    onProfile = { p -> onUpdateBodyBlend(idx, b.blendAftMm, b.blendFwdMm, p) },
+                    aftLengthField = {
+                        CommitNum("Blend AFT (${abbr(unit)})", disp(b.blendAftMm, unit)) { str ->
+                            toMmOrNull(str, unit)?.let { onUpdateBodyBlend(idx, it, b.blendFwdMm, b.blendProfile) }
+                        }
+                    },
+                    fwdLengthField = {
+                        CommitNum("Blend FWD (${abbr(unit)})", disp(b.blendFwdMm, unit)) { str ->
+                            toMmOrNull(str, unit)?.let { onUpdateBodyBlend(idx, b.blendAftMm, it, b.blendProfile) }
+                        }
+                    },
                 )
 
                 // Keyway — gated behind a checkbox so the fields only appear once turned on
@@ -1664,3 +1695,13 @@ private fun dispKw(mm: Float, unit: UnitSystem): String = when (unit) {
 private fun Float.fmtTrim(d: Int) = "%.${d}f".format(this).trimEnd('0').trimEnd('.')
 
 internal fun pitchMmToTpi(pitchMm: Float): Float = if (pitchMm > 0f) 25.4f / pitchMm else 0f
+
+/**
+ * Starting blend length when a face is first switched on: the 2 in preset, or a quarter of a
+ * body too short to host it. A starting value only — the user types over it, and nothing
+ * re-derives it afterwards.
+ */
+internal fun defaultBlendMm(bodyLengthMm: Float): Float {
+    val preset = AddDefaultsConfig.BLEND_LEN_IN * 25.4f
+    return if (bodyLengthMm > 0f) minOf(preset, bodyLengthMm * 0.25f) else preset
+}

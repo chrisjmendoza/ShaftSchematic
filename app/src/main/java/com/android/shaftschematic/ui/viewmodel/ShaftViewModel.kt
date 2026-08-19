@@ -1776,6 +1776,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
          * no new field.
          */
         keywayUnit: UnitSystem? = null,
+        /** Blended faces (mm) and their profile — drawing only, stored verbatim. */
+        blendAftMm: Float = 0f,
+        blendFwdMm: Float = 0f,
+        blendProfile: BlendProfile = BlendProfile.OGEE,
     ) {
         val id = newId()
         _spec.update { s ->
@@ -1792,6 +1796,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         keywayOffsetFromEndMm = max(0f, keywayOffsetFromEndMm),
                         keywayEnd = keywayEnd,
                         keywaySpooned = keywaySpooned,
+                        blendAftMm = max(0f, blendAftMm),
+                        blendFwdMm = max(0f, blendFwdMm),
+                        blendProfile = blendProfile,
                     )
                 ) + s.bodies
             )
@@ -2370,6 +2377,33 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
     }
+
+    /**
+     * Sets a body's blended faces and their profile.
+     *
+     * Drawing-only: a blend changes the silhouette and nothing else — not OAL, not resolve,
+     * not collision, and no other component's span. The lengths are stored VERBATIM; a value
+     * longer than the body is clamped where it is DRAWN, never here.
+     */
+    fun updateBodyBlend(index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile) =
+        _spec.update { s ->
+            if (index !in s.bodies.indices) s else {
+                val old = s.bodies[index]
+                if (old.blendAftMm == blendAftMm &&
+                    old.blendFwdMm == blendFwdMm &&
+                    old.blendProfile == profile
+                ) return@update s
+                s.copy(
+                    bodies = s.bodies.toMutableList().also { l ->
+                        l[index] = old.copy(
+                            blendAftMm = blendAftMm.coerceAtLeast(0f),
+                            blendFwdMm = blendFwdMm.coerceAtLeast(0f),
+                            blendProfile = profile,
+                        )
+                    }
+                )
+            }
+        }
 
     /** Liner mirror of [updateBodyShowDia]. */
     fun updateLinerShowDia(index: Int, show: Boolean) = _spec.update { s ->

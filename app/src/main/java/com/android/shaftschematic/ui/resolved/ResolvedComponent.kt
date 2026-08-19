@@ -442,6 +442,16 @@ private fun normalizeBodies(
             is ResolvedBody -> {
                 if (current == null) {
                     current = startAccum(comp)
+                } else if (
+                    comp.source == ResolvedComponentSource.EXPLICIT && current!!.hasExplicit
+                ) {
+                    // Two explicit bodies never fuse. Absorbing one into a run that already
+                    // carries an explicit body would drop its Ø and its carousel card — a
+                    // stepped shaft built from abutting bodies would draw as a single run at
+                    // the aft-most diameter. Merging is for auto spans flowing into an
+                    // explicit body, not for two authored bodies meeting.
+                    flush()
+                    current = startAccum(comp)
                 } else if (comp.startMmPhysical <= current!!.end + eps) {
                     current!!.start = kotlin.math.min(current!!.start, comp.startMmPhysical)
                     current!!.end = kotlin.math.max(current!!.end, comp.endMmPhysical)

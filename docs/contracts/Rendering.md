@@ -79,11 +79,20 @@ in / half out), mirrored top and bottom; local surface radius looked up from the
 covering component (falls back to max OD); fill from `RenderOptions.slotFillColor`.
 See `CouplerBoltSlot.md`.
 
+- Bodies draw as a **closed silhouette path**, not a plain rect: `bodyDrawEdges`
+  (`ui/resolved/BodyBlends.kt`) decomposes each resolved run into its aft curve, flat span,
+  fwd curve, and the two end-cap radii, and the renderer walks the top edge, mirrors it, and
+  closes. With no blend the point list collapses to the run's four rectangle corners, so an
+  unblended body draws exactly as it always has. A rect cannot express this because it strokes
+  all four sides: a blended face has to cap at the NEIGHBOUR's radius while the curve's inner
+  end carries no vertical at all. The PDF composer decomposes the same result rather than
+  building one path — its flat span still hosts the S-break pair — so the two remain a
+  draw-both-sites pair (see `docs/PDF_EXPORT.md` §5.2b).
 - Threads: diagonal hatch (`drawThreadHatch`), pitch-spaced, clipped to the envelope.
   (The unused "unified profile" path and `ThreadStyle` enum were deleted 2026-07-26.)
 - `centerlineYPx` is a **Y-reference for positioning geometry only** — the renderer
   never draws a visible centerline stroke.
-- Performance: avoid allocations in hot paths except small Paths for tapers; no
+- Performance: avoid allocations in hot paths except small Paths for bodies and tapers; no
   density/unit lookups inside draw scopes.
 
 RenderOptions (styling config)
