@@ -61,8 +61,15 @@ data class BlendDrawSpan(
  * set one on, and promoting it to an explicit body is the documented way to gain them.
  *
  * A blend is dropped (not drawn, never an error) when there is no step to blend: nothing
- * across the face, or a neighbour at the same diameter. Liners are excluded from the
- * neighbour lookup — a liner is a sleeve OVER the shaft, not a diameter the shaft steps to.
+ * across the face, or a neighbour at the same diameter.
+ *
+ * Liners are excluded from the ordinary neighbour lookup — a sleeve sitting over mid-body is
+ * not a diameter the shaft steps to. The one exception is a face a liner butts directly
+ * against, which is a real seal area: the shaft is cut down under the liner, but that seat is
+ * covered by the liner and never drawn, and its true depth varies job to job (on-device: "the
+ * size of the step can vary"). The blend there leaves from the MIDPOINT of the liner OD and
+ * the body Ø — a derived visual cue, not a measurement, which is why nothing authors it. See
+ * [seatDiaUnderLiner].
  */
 fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyBlend> {
     val blended = spec.bodies.filter { it.blendAftMm > 0f || it.blendFwdMm > 0f }
@@ -99,8 +106,11 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
                 // Sample just OUTSIDE the face: that is the diameter the curve leaves from.
                 val probeMm = if (end == LinerAuthoredReference.AFT) faceMm - BLEND_EPS_MM * 10f
                               else faceMm + BLEND_EPS_MM * 10f
-                val neighbourDia = outerDiaAt(segs, probeMm)
-                if (neighbourDia <= 0f) continue
+                // Shaft surface first (liners excluded); a liner butting the face is the
+                // seal-area case and supplies a derived seat instead.
+                val neighbourDia = outerDiaAt(segs, probeMm).takeIf { it > 0f }
+                    ?: seatDiaUnderLiner(components, probeMm, run.diaMm)
+                    ?: continue
                 if (abs(neighbourDia - run.diaMm) <= BLEND_EPS_MM) continue
 
                 add(
@@ -144,6 +154,32 @@ fun BodyBlend.drawSpan(
     } else {
         BlendDrawSpan(xAftPx = xFace - w, xFwdPx = xFace, diaAtAftMm = bodyDiaMm, diaAtFwdMm = neighbourDiaMm)
     }
+}
+
+/**
+ * Derived seat diameter where a liner butts a body face — the MIDPOINT of the liner's OD and
+ * the body's own Ø, or null when no liner covers [probeMm].
+ *
+ * The shaft really is cut down under a liner, but that seat is never drawn (the liner covers
+ * it) and how far down it goes varies from job to job. Stepping the blend straight to the
+ * liner OD would overstate the shoulder; running it to a seat nobody entered would be a made-up
+ * measurement. Half-way reads as a shoulder without claiming a number, which is all a seal area
+ * needs on a schematic. An under-liner seat authored as its own body is not consulted — it is
+ * trimmed out of the drawing by `subtractBodiesAgainstNonBodies`, so there is nothing on the
+ * sheet for the curve to arrive at.
+ */
+internal fun seatDiaUnderLiner(
+    components: List<ResolvedComponent>,
+    probeMm: Float,
+    bodyDiaMm: Float,
+): Float? {
+    val liner = components
+        .filterIsInstance<ResolvedLiner>()
+        .filter { probeMm >= it.startMmPhysical - BLEND_EPS_MM && probeMm <= it.endMmPhysical + BLEND_EPS_MM }
+        .maxByOrNull { it.odMm }
+        ?: return null
+    if (liner.odMm <= 0f) return null
+    return (liner.odMm + bodyDiaMm) / 2f
 }
 
 /** One vertex of a body's drawn silhouette edge: x and RADIUS, both in drawn units. */

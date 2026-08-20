@@ -111,6 +111,94 @@ class BodyBlendsTest {
         assertEquals(150f, b.neighbourDiaMm, eps)
     }
 
+    // ───────── seal areas: a liner butting the face ─────────
+
+    /**
+     * The shaft IS cut down under a liner, but that seat is never drawn and its depth varies job
+     * to job, so the blend leaves from the midpoint of the liner OD and the body Ø — a shoulder
+     * that reads without claiming a measurement.
+     */
+    @Test
+    fun `a liner butting the face supplies a derived midpoint seat`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 800f,
+            bodies = listOf(
+                Body(id = "run", startFromAftMm = 0f, lengthMm = 300f, diaMm = 200f, blendFwdMm = 25.4f),
+            ),
+            liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 400f, odMm = 220f)),
+        )
+        val b = blendsOf(spec).single()
+        assertEquals(LinerAuthoredReference.FWD, b.end)
+        assertEquals(300f, b.faceMm, eps)
+        assertEquals(210f, b.neighbourDiaMm, eps) // halfway between Ø220 liner and Ø200 body
+        assertEquals(200f, b.bodyDiaMm, eps)
+    }
+
+    @Test
+    fun `the derived seat works on an aft face too`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 800f,
+            bodies = listOf(
+                Body(id = "run", startFromAftMm = 400f, lengthMm = 400f, diaMm = 200f, blendAftMm = 25.4f),
+            ),
+            liners = listOf(Liner(startFromAftMm = 100f, lengthMm = 300f, odMm = 260f)),
+        )
+        val b = blendsOf(spec).single()
+        assertEquals(LinerAuthoredReference.AFT, b.end)
+        assertEquals(230f, b.neighbourDiaMm, eps)
+    }
+
+    @Test
+    fun `a liner flush with the body diameter leaves no shoulder to blend`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 800f,
+            bodies = listOf(
+                Body(id = "run", startFromAftMm = 0f, lengthMm = 300f, diaMm = 200f, blendFwdMm = 25.4f),
+            ),
+            liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 400f, odMm = 200f)),
+        )
+        assertTrue(blendsOf(spec).isEmpty())
+    }
+
+    /** Drawn shaft surface always wins: a visible component across the face is never a seat. */
+    @Test
+    fun `a drawn body across the face beats the derived seat`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 800f,
+            bodies = listOf(
+                Body(id = "run", startFromAftMm = 0f, lengthMm = 300f, diaMm = 200f, blendFwdMm = 25.4f),
+                Body(id = "next", startFromAftMm = 300f, lengthMm = 300f, diaMm = 150f),
+            ),
+            // Liner starts 100 mm along "next", so "next" still draws across the face.
+            liners = listOf(Liner(startFromAftMm = 400f, lengthMm = 200f, odMm = 260f)),
+        )
+        val b = blendsOf(spec).single()
+        assertEquals(150f, b.neighbourDiaMm, eps) // the body, not (260+200)/2
+    }
+
+    /**
+     * A seat authored as its own body under a liner is NOT consulted: the resolve layer trims a
+     * fully-covered body out of the drawing, so there is nothing on the sheet for the curve to
+     * arrive at and the derived midpoint applies just as if the seat had never been authored.
+     */
+    @Test
+    fun `a seat body hidden under a liner still yields the derived midpoint`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 800f,
+            bodies = listOf(
+                Body(id = "run", startFromAftMm = 0f, lengthMm = 300f, diaMm = 200f, blendFwdMm = 25.4f),
+                Body(id = "seat", startFromAftMm = 300f, lengthMm = 300f, diaMm = 150f),
+            ),
+            liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 300f, odMm = 260f)),
+        )
+        val comps = resolveComponents(spec, overallIsManual = true)
+        assertNull(
+            "a fully covered body should not draw",
+            comps.filterIsInstance<ResolvedBody>().firstOrNull { it.id == "seat" },
+        )
+        assertEquals(230f, blendsOf(spec).single().neighbourDiaMm, eps) // (260 + 200) / 2
+    }
+
     @Test
     fun `both faces can blend independently`() {
         val spec = ShaftSpec(

@@ -2,6 +2,7 @@ package com.android.shaftschematic.ui.resolved
 
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.Body
+import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
 import org.junit.Test
 import java.io.File
@@ -12,7 +13,8 @@ import java.io.File
  * on-device build. Writes `app/build/reports/blend-preview/blend-profiles.svg`.
  *
  * Nothing here asserts an appearance — it is a review artifact. The only assertion is that
- * every profile produced a curve, so a silently empty sheet fails instead of publishing.
+ * every row that asked for a blend produced one, so a silently empty sheet fails instead of
+ * publishing.
  */
 class BlendSvgPreviewTest {
 
@@ -24,50 +26,96 @@ class BlendSvgPreviewTest {
         fun poly(pts: List<Pair<Float, Float>>, fill: String) {
             sb.append("""<polygon points="${pts.joinToString(" ") { "${it.first},${it.second}" }}" fill="$fill" stroke="none"/>""").append('\n')
         }
-        fun text(x: Float, y: Float, s: String, size: Float = 13f, fill: String = "#111") {
-            sb.append("""<text x="$x" y="$y" font-family="Helvetica,Arial" font-size="$size" fill="$fill">$s</text>""").append('\n')
+        fun text(x: Float, y: Float, s: String, size: Float = 13f, fill: String = "#111", weight: String = "normal") {
+            sb.append("""<text x="$x" y="$y" font-family="Helvetica,Arial" font-size="$size" font-weight="$weight" fill="$fill">$s</text>""").append('\n')
         }
         fun render() =
             """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $w $h" width="$w" height="$h" style="background:white">""" +
                 "\n$sb</svg>\n"
     }
 
-    /** The shop case: a coupling fit at Ø6 enlarging to a Ø8 body, blended over 2 in. */
-    private fun spec(profile: BlendProfile, blendMm: Float) = ShaftSpec(
+    private class Row(
+        val title: String,
+        val profile: BlendProfile,
+        val blendMm: Float,
+        val smallDiaMm: Float = 152.4f,   // 6 in
+        val bigDiaMm: Float = 203.2f,     // 8 in
+        val group: String? = null,
+        /** > 0 puts a liner fwd of the face instead of a second body — the seal-area case. */
+        val linerOdMm: Float = 0f,
+    )
+
+    /** Smaller aft body enlarging into a bigger one — the coupling-fit case, blended on its AFT face. */
+    private fun spec(r: Row) = if (r.linerOdMm > 0f) ShaftSpec(
+        // Seal area: the body's FWD face butts a liner; the seat under it is never drawn.
         overallLengthMm = 1000f,
         bodies = listOf(
-            Body(id = "fit", startFromAftMm = 0f, lengthMm = 500f, diaMm = 152.4f),
             Body(
-                id = "run", startFromAftMm = 500f, lengthMm = 500f, diaMm = 203.2f,
-                blendAftMm = blendMm, blendProfile = profile,
+                id = "run", startFromAftMm = 0f, lengthMm = 500f, diaMm = r.smallDiaMm,
+                blendFwdMm = r.blendMm, blendProfile = r.profile,
+            ),
+        ),
+        liners = listOf(Liner(startFromAftMm = 500f, lengthMm = 500f, odMm = r.linerOdMm)),
+    ) else ShaftSpec(
+        overallLengthMm = 1000f,
+        bodies = listOf(
+            Body(id = "fit", startFromAftMm = 0f, lengthMm = 500f, diaMm = r.smallDiaMm),
+            Body(
+                id = "run", startFromAftMm = 500f, lengthMm = 500f, diaMm = r.bigDiaMm,
+                blendAftMm = r.blendMm, blendProfile = r.profile,
             ),
         ),
     )
 
     @Test
     fun `render blend profiles to svg`() {
-        val rowH = 150f
-        val padL = 130f
-        val padT = 46f
-        val scaleX = 0.62f       // pt per mm along the shaft
-        val scaleR = 0.28f       // pt per mm of radius
+        val rowH = 128f
+        val padL = 152f
+        val padT = 40f
+        val scaleX = 0.60f       // pt per mm along the shaft
+        val scaleR = 0.26f       // pt per mm of radius
+        val IN = 25.4f
 
         val rows = listOf(
-            Triple("S-curve (default)", BlendProfile.OGEE, 50.8f),
-            Triple("Fillet", BlendProfile.FILLET, 50.8f),
-            Triple("Eased cone", BlendProfile.EASED_CONE, 50.8f),
-            Triple("Square face (no blend)", BlendProfile.OGEE, 0f),
-            Triple("S-curve, 6 in", BlendProfile.OGEE, 152.4f),
-        )
-        val svg = Svg(w = padL + 1000f * scaleX + 40f, h = padT + rows.size * rowH + 20f)
-        var drewACurve = false
+            Row("S-curve (default)", BlendProfile.OGEE, 2 * IN, group = "2 in blend  ·  Ø6 → Ø8"),
+            Row("Fillet", BlendProfile.FILLET, 2 * IN),
+            Row("Eased cone", BlendProfile.EASED_CONE, 2 * IN),
+            Row("No blend (control)", BlendProfile.OGEE, 0f),
 
-        rows.forEachIndexed { i, (title, profile, blendMm) ->
-            val cy = padT + i * rowH + rowH / 2f
-            val s = spec(profile, blendMm)
+            Row("S-curve", BlendProfile.OGEE, 1 * IN, group = "1 in blend, same step  —  twice as steep"),
+            Row("Fillet", BlendProfile.FILLET, 1 * IN),
+            Row("Eased cone", BlendProfile.EASED_CONE, 1 * IN),
+
+            Row("S-curve", BlendProfile.OGEE, 1 * IN, 177.8f, 190.5f,
+                group = "Coupling seat  —  1 in blend, Ø7 → Ø7½"),
+            Row("Eased cone", BlendProfile.EASED_CONE, 1 * IN, 177.8f, 190.5f),
+            Row("No blend (control)", BlendProfile.OGEE, 0f, 177.8f, 190.5f),
+
+            Row("S-curve", BlendProfile.OGEE, 1 * IN, 177.8f, linerOdMm = 203.2f,
+                group = "Liner seal area  —  body Ø7 butting a Ø8 liner, seat derived at the midpoint (Ø7½)"),
+            Row("Eased cone", BlendProfile.EASED_CONE, 1 * IN, 177.8f, linerOdMm = 203.2f),
+            Row("No blend (control)", BlendProfile.OGEE, 0f, 177.8f, linerOdMm = 203.2f),
+        )
+
+        val groupCount = rows.count { it.group != null }
+        val svg = Svg(w = padL + 1000f * scaleX + 40f, h = padT + rows.size * rowH + groupCount * 30f + 20f)
+        var y = padT
+        var missing = 0
+
+        rows.forEach { r ->
+            r.group?.let {
+                y += 22f
+                svg.text(12f, y, it, size = 12.5f, fill = "#b0432c", weight = "bold")
+                svg.line(12f, y + 8f, padL + 1000f * scaleX + 12f, y + 8f, stroke = "#e0ddd6", sw = 1f)
+                y += 8f
+            }
+            val cy = y + rowH / 2f
+            val s = spec(r)
             val comps = resolveComponents(s, overallIsManual = true)
             val blends = bodyBlends(s, comps)
-            svg.text(12f, cy - 44f, title, size = 13f)
+            if (r.blendMm > 0f && blends.isEmpty()) missing++
+
+            svg.text(12f, cy - 38f, r.title, size = 13f)
             svg.line(padL - 12f, cy, padL + 1000f * scaleX + 12f, cy, stroke = "#c33", sw = 0.5f)
 
             comps.filterIsInstance<ResolvedBody>().forEach { run ->
@@ -81,8 +129,6 @@ class BlendSvgPreviewTest {
                     rAt = { dia -> dia / 2f * scaleR },
                     minWidthPx = 7f,
                 )
-                if (e.hasBlend) drewACurve = true
-
                 val x0 = padL + run.startMmPhysical * scaleX
                 val x1 = padL + run.endMmPhysical * scaleX
                 val top = buildList {
@@ -104,10 +150,25 @@ class BlendSvgPreviewTest {
                 svg.line(x0, cy - e.capAftR, x0, cy + e.capAftR)
                 svg.line(x1, cy - e.capFwdR, x1, cy + e.capFwdR)
             }
+
+            comps.filterIsInstance<ResolvedLiner>().forEach { ln ->
+                val lx0 = padL + ln.startMmPhysical * scaleX
+                val lx1 = padL + ln.endMmPhysical * scaleX
+                val lr = ln.odMm / 2f * scaleR
+                svg.poly(
+                    listOf(lx0 to cy - lr, lx1 to cy - lr, lx1 to cy + lr, lx0 to cy + lr),
+                    fill = "#00000028",
+                )
+                svg.line(lx0, cy - lr, lx1, cy - lr)
+                svg.line(lx0, cy + lr, lx1, cy + lr)
+                svg.line(lx0, cy - lr, lx0, cy + lr)
+                svg.line(lx1, cy - lr, lx1, cy + lr)
+            }
+            y += rowH
         }
 
         val out = File("build/reports/blend-preview").also { it.mkdirs() }
         File(out, "blend-profiles.svg").writeText(svg.render())
-        org.junit.Assert.assertTrue("no blend curve was produced", drewACurve)
+        org.junit.Assert.assertEquals("rows asked for a blend and got none", 0, missing)
     }
 }

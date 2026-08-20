@@ -181,7 +181,9 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
 - `blendAftMm` / `blendFwdMm`: axial length of a machined **blend** cut INWARD from that face
   (0 = a square face). The curve eases from the neighbouring component's diameter AT the face to
   the body's own `diaMm` that far in, so the blend is machined out of its own body and never
-  moves or trims another component. Diameters are DERIVED at resolve, never stored.
+  moves or trims another component. Diameters are DERIVED at resolve, never stored. Where a liner
+  butts the face (a seal area) the curve leaves from the midpoint of the liner OD and `diaMm`
+  (`seatDiaUnderLiner`) — the real seat is hidden under the liner and its depth varies job to job.
 - `blendProfile`: `OGEE` (tangent both ends, default) | `FILLET` (tangent at the large end only)
   | `EASED_CONE` (straight cone, both corners eased).
 - Silhouette only: no dimension rail, no footer row, no effect on OAL, coverage, resolve spans,

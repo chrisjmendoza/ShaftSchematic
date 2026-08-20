@@ -140,7 +140,15 @@ material.
 - Diameters are **derived** from whatever sits across the face, never typed. Re-diametering a
   neighbour re-curves the blend; derived values are exactly what may move.
 - Nothing across the face, or a neighbour at the same Ø → **no blend drawn** (not an error).
-  Liners are excluded from that lookup: a sleeve over the shaft is not a diameter it steps to.
+- Liners are excluded from the ordinary neighbour lookup — a sleeve over mid-body is not a
+  diameter the shaft steps to. The exception is a face a liner **butts directly against**, a real
+  seal area: the shaft IS cut down under the liner, but that seat is covered and never drawn, and
+  its depth varies job to job. The curve there leaves from the **midpoint of the liner OD and the
+  body Ø** (`seatDiaUnderLiner`) — a derived visual cue, not a measurement, so nothing authors it.
+  Stepping straight to the liner OD would overstate the shoulder; running to a seat nobody entered
+  would be a made-up number. A seat authored as its own body under the liner is **not** consulted:
+  `subtractBodiesAgainstNonBodies` trims a fully covered body out of the drawing, so there is
+  nothing on the sheet for the curve to arrive at.
 - Silhouette only — no dimension rail, no footer row, no effect on OAL, coverage, or collision.
 - Only **explicit** bodies carry blends; an auto span has no card fields to set one on.
 - A split body blends on the run holding the **stored** face, never an interior fragment edge.

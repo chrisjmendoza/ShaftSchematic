@@ -62,6 +62,24 @@ drawn floor.
 Off by default and additive: a document that never touches a blend encodes and prints exactly as
 before.
 
+### feat: a liner seal area blends to a derived midpoint seat
+
+A body face butting a liner produced no blend at all. The shaft really is cut down under a
+liner, but `subtractBodiesAgainstNonBodies` trims a fully covered body out of the drawing, so
+there was no diameter on the sheet for the curve to arrive at — and liners were excluded from the
+neighbour lookup on purpose, since a sleeve over mid-body should not hijack a face's diameter.
+
+That exclusion now has one exception: a liner **butting** the face is a seal area, and the curve
+leaves from the **midpoint of the liner OD and the body Ø**. On-device the step size varies job to
+job — a bigger step fiberglasses better than one that was not cut down well — so this is a visual
+cue, not a measurement. Half-way is the honest choice: stepping straight to the liner OD would
+overstate the shoulder, and running to a seat nobody entered would be a made-up number. Nothing
+authors it, so there is no field to get wrong.
+
+A seat authored as its own body under the liner is deliberately not consulted — it is trimmed out
+of the drawing, so the midpoint applies as if it had never been entered. That is the piece to
+revisit if the derived step ever needs fine-tuning.
+
 ### fix(resolve): two explicit bodies no longer fuse into one run
 
 `normalizeBodies` merged every contiguous body span into a single resolved run. That is correct

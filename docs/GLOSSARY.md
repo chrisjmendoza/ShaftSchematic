@@ -84,7 +84,9 @@ term rather than a short taper. Authored per face on an explicit `Body`
 (`blendAftMm` / `blendFwdMm`) with a profile: **S-curve** (tangent at both ends, the
 default), **Fillet** (tangent at the large end only), or **Eased cone**. The blend is cut
 INWARD out of the body carrying it, so no other component's span moves; its diameters are
-DERIVED from whatever sits across the face. **Silhouette only** — no dimension rail and no
+DERIVED from whatever sits across the face — and at a **seal area**, where a liner butts the
+face, from the midpoint of the liner OD and the body Ø, since the machined seat is hidden
+under the liner. **Silhouette only** — no dimension rail and no
 footer row; rails keep dimensioning the stored span (dimension to the theoretical sharp
 corner). Not to be confused with a *seal groove*, which is a cut BELOW the surface
 (undercut topology), or with a *fillet radius* on a liner shoulder.

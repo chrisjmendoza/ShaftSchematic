@@ -374,8 +374,13 @@ Editor, Coupling Face) and `docs/archive/RunoutBubbleEditor_PLAN.md`.
 one face, out of the body that carries it** — the curve leaves the neighbouring diameter AT the
 face and reaches the body's own Ø that far in. Nothing else moves: no other component's span
 changes, drawn or stored, so the golden rule holds by construction. The blend's diameters are
-**derived** from whatever sits across the face (a liner is excluded — a sleeve is not a diameter
-the shaft steps to); nothing across the face, or a neighbour at the same Ø, draws no blend at all.
+**derived** from whatever sits across the face; nothing across the face, or a neighbour at the same
+Ø, draws no blend at all. A liner is excluded from that lookup — a sleeve over mid-body is not a
+diameter the shaft steps to — EXCEPT where a liner butts the face (a seal area): the shaft is cut
+down under the liner but that seat is never drawn and its depth varies job to job, so the curve
+leaves from the **midpoint of the liner OD and the body Ø** (`seatDiaUnderLiner`), a derived visual
+cue nothing authors. A seat authored as its own body under a liner is NOT consulted —
+`subtractBodiesAgainstNonBodies` trims a fully covered body out of the drawing.
 Only **explicit** bodies carry blends. Blends print **no dimension rail and no footer row** — the
 rails keep dimensioning the STORED span (dimension to the theoretical sharp corner), which is why
 nothing in `DimensionRailLayout` or either composer's rail pass changed. That silence is what
