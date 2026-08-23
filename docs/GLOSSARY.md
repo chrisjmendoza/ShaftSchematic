@@ -96,9 +96,10 @@ shop cuts 3–4 rings across the blended section running up to the liner. Drawn 
 cuts (`SEAL_GROOVE_COUNT`), each a V notch in both silhouette edges with a **dashed** line
 across seated on the notch floors: a solid full-height line is this drawing's glyph for a
 component face, and three of them made one shaft read as three or four segments. A schematic
-cue, not a count to machine from, and it prints no value. Only offered on a **blended** face,
-since the cuts are machined into the blend. Per-face flag: `Body.blendAftSeal` /
-`blendFwdSeal`, or `AutoBlend.seal` on a bare-shaft span.
+cue, not a count to machine from, and it prints no value. Authored as the third state of a
+face's finish chips (**Square | Blend | Seal area**) — exclusive as presented, but a seal area
+INCLUDES its blend, since the cuts are machined into the blended section. Stored per face as
+`Body.blendAftSeal` / `blendFwdSeal`, or `AutoBlend.seal` on a bare-shaft span.
 
 ---
 

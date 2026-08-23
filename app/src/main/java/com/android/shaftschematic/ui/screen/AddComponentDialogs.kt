@@ -163,13 +163,11 @@ fun AddBodyDialog(
 
     // Blend — mirrors the body card by contract (it changes drawn geometry, so it is under
     // the add-dialog-parity rule, not the card-only carve-out). Same shared BlendSection.
-    var blendAftOn by remember { mutableStateOf(false) }
-    var blendFwdOn by remember { mutableStateOf(false) }
+    var blendAftMode by remember { mutableStateOf(BlendFaceMode.SQUARE) }
+    var blendFwdMode by remember { mutableStateOf(BlendFaceMode.SQUARE) }
     var blendAft by remember { mutableStateOf("") }
     var blendFwd by remember { mutableStateOf("") }
     var blendProfile by remember { mutableStateOf(BlendProfile.OGEE) }
-    var blendAftSeal by remember { mutableStateOf(false) }
-    var blendFwdSeal by remember { mutableStateOf(false) }
 
     // Keyway — gated behind a checkbox (fields hidden until turned on); mirrors the body card.
     var kwEnabled by remember { mutableStateOf(false) }
@@ -217,16 +215,20 @@ fun AddBodyDialog(
                 CommitNumField("Diameter (${abbr(unit)})", dia) { dia = it }
                 Spacer(Modifier.height(12.dp))
                 BlendSection(
-                    aftOn = blendAftOn,
-                    fwdOn = blendFwdOn,
+                    aftMode = blendAftMode,
+                    fwdMode = blendFwdMode,
                     profile = blendProfile,
-                    onToggleAft = { on ->
-                        blendAftOn = on
-                        if (on && blendAft.isBlank()) blendAft = toDisplayString(defaultBlendMm(lengthMm), unit)
+                    onSetAftMode = { m ->
+                        blendAftMode = m
+                        if (m != BlendFaceMode.SQUARE && blendAft.isBlank()) {
+                            blendAft = toDisplayString(defaultBlendMm(lengthMm), unit)
+                        }
                     },
-                    onToggleFwd = { on ->
-                        blendFwdOn = on
-                        if (on && blendFwd.isBlank()) blendFwd = toDisplayString(defaultBlendMm(lengthMm), unit)
+                    onSetFwdMode = { m ->
+                        blendFwdMode = m
+                        if (m != BlendFaceMode.SQUARE && blendFwd.isBlank()) {
+                            blendFwd = toDisplayString(defaultBlendMm(lengthMm), unit)
+                        }
                     },
                     onProfile = { blendProfile = it },
                     aftLengthField = {
@@ -235,10 +237,6 @@ fun AddBodyDialog(
                     fwdLengthField = {
                         CommitNumField("Blend FWD (${abbr(unit)})", blendFwd) { blendFwd = it }
                     },
-                    aftSeal = blendAftSeal,
-                    fwdSeal = blendFwdSeal,
-                    onToggleAftSeal = { blendAftSeal = it },
-                    onToggleFwdSeal = { blendFwdSeal = it },
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(
@@ -349,11 +347,11 @@ fun AddBodyDialog(
                     if (showClockingToggle) clock90 else spec.keyways90Apart,
                     if (showClockingToggle) cw90 else spec.keyways90Cw,
                     if (kwEnabled) kwUnitOverride else null,
-                    if (blendAftOn) toMmOrNull(blendAft, unit) ?: 0f else 0f,
-                    if (blendFwdOn) toMmOrNull(blendFwd, unit) ?: 0f else 0f,
+                    if (blendAftMode != BlendFaceMode.SQUARE) toMmOrNull(blendAft, unit) ?: 0f else 0f,
+                    if (blendFwdMode != BlendFaceMode.SQUARE) toMmOrNull(blendFwd, unit) ?: 0f else 0f,
                     blendProfile,
-                    blendAftOn && blendAftSeal,
-                    blendFwdOn && blendFwdSeal,
+                    blendAftMode == BlendFaceMode.SEAL,
+                    blendFwdMode == BlendFaceMode.SEAL,
                 )
             }) { Text("Add") }
         },

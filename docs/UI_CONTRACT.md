@@ -148,11 +148,19 @@ never absorbed into a run that already carries one. Without that stop a Ø6 body
 resolved to a single run at the aft-most Ø with **one card instead of two**. See
 `docs/COMPONENT_CONTRACT.md`.
 
-**Blend section.** Below "Show Ø on drawing": **Blend AFT face** /
-**Blend FWD face** checkboxes, an axial length field per checked face, and profile chips
-(S-curve | Fillet | Eased cone) shown once either face is on. Each blended face additionally
-offers **Seal area (3 cuts)** — the radius cuts the fiberglass seats into; it appears with that
-face's length field, since the cuts are machined into the blend. It changes drawn geometry, so it is
+**Face finish section.** Below "Show Ø on drawing", one chip row per face —
+**AFT / FWD: Square | Blend | Seal area** — with an axial length field under any face that is not
+Square, and shape chips (S-curve | Fillet | Eased cone) once some face is finished.
+
+The three modes are mutually exclusive *as presented*, which is a deliberate small fiction:
+**Seal area includes the blend**, because the radius cuts are machined across the blended section
+and there is nowhere to put them on a square face. It is presented that way because the shop
+describes a face as square, blended, or a seal area — a seal area is a thing you add, not a
+modifier on something else. The earlier nesting (a Blend checkbox revealing a Seal area checkbox)
+hid the seal behind a control nobody would think to tick first. Storage is unaffected: the model
+still carries a length and a flag independently, and `blendFaceMode`/`blendLenForMode`
+(`ComponentCarousel.kt`, unit-tested) are the only projection. Switching Blend ↔ Seal area keeps
+the typed length. It changes drawn geometry, so it is
 under the add-dialog-parity rule — `AddBodyDialog` shows the same section, and both surfaces
 render one shared composable (`ui/screen/BlendSection.kt`) so they cannot drift. The auto-body card
 carries the same section, writing a shaft-space `AutoBlend` anchor instead of a stored field. It

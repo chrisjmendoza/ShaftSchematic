@@ -62,6 +62,25 @@ drawn floor.
 Off by default and additive: a document that never touches a blend encodes and prints exactly as
 before.
 
+### feat: a body face is Square, Blend, or Seal area — one chip row
+
+The seal area shipped nested: tick **Blend**, and a **Seal area** checkbox appeared under the
+length field. Geometrically that is honest — the radius cuts are machined across the blended
+section, so there is nowhere to put them on a square face — but nobody thinks about it that way.
+On-device: *"I was thinking a body could have a blend OR a seal area."* When the person who asked
+for the feature describes it differently from how it was built, the build is wrong for them, and
+the nesting also hid the seal behind a control nobody would think to tick first.
+
+Each face now gets one chip row: **Square | Blend | Seal area**, with the length field under any
+face that is not Square and the shape chips once some face is finished. **Seal area includes the
+blend** — you never have to reason about the blend underneath. Presenting the three as exclusive is
+a deliberate small fiction; the stored model is unchanged and still carries a length and a seal
+flag independently, with `blendFaceMode`/`blendLenForMode` as the only projection. Switching
+Blend ↔ Seal area keeps the typed length, since the two differ only by the cuts.
+
+No model, codec, or draw change — the same shared `BlendSection` feeds both carousel cards and
+`AddBodyDialog`, so the parity rule holds by construction.
+
 ### feat: a blended face can carry a seal area
 
 The seal area at a body-to-liner transition is not just the shoulder — it is the **radius cuts

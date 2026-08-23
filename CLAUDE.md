@@ -419,7 +419,12 @@ undercut end radius call it rather than reimplementing it. `surfaceSegsFrom` tak
 undercut or wear reading in a transition sees the real diameter — sampled at the blend's **true**
 mm span, never the drawn floor. The controls are under the **add-dialog-parity rule**, not the
 card-only carve-out (they change geometry): one shared `ui/screen/BlendSection.kt` renders them on
-the card and in `AddBodyDialog`. Related: `normalizeBodies` must never fuse two **explicit** bodies
+both carousel cards and in `AddBodyDialog`, as one chip row per face —
+**Square | Blend | Seal area**. Those modes are exclusive AS PRESENTED only: a seal area INCLUDES
+its blend (the cuts are machined across the blended section), and the stored model keeps length and
+seal flag independent — `blendFaceMode`/`blendLenForMode` are the only projection, and switching
+Blend ↔ Seal keeps the typed length. Do not restore the nested Blend-checkbox-reveals-Seal-checkbox
+layout: it hid the seal behind a control nobody thinks to tick first (on-device report). Related: `normalizeBodies` must never fuse two **explicit** bodies
 — absorbing one into a run that already has an explicit body drops its Ø and its carousel card, so
 a Ø6-to-Ø8 stepped shaft drew as one run. Auto spans still merge in for continuity. See
 `docs/COMPONENT_CONTRACT.md`.

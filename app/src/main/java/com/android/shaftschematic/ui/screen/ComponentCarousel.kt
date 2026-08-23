@@ -695,23 +695,23 @@ internal fun ComponentPagerCard(
                         component.startMmPhysical, component.endMmPhysical, LinerAuthoredReference.FWD)
                     val autoProfile = aftBlend?.profile ?: fwdBlend?.profile ?: BlendProfile.OGEE
                     BlendSection(
-                        aftOn = aftBlend != null,
-                        fwdOn = fwdBlend != null,
+                        aftMode = blendFaceMode(aftBlend?.lengthMm ?: 0f, aftBlend?.seal == true),
+                        fwdMode = blendFaceMode(fwdBlend?.lengthMm ?: 0f, fwdBlend?.seal == true),
                         profile = autoProfile,
-                        onToggleAft = { on ->
+                        onSetAftMode = { m ->
                             onSetAutoBlend(
                                 component.startMmPhysical, component.endMmPhysical,
                                 LinerAuthoredReference.AFT,
-                                if (on) defaultBlendMm(lengthMm) else 0f, autoProfile,
-                                aftBlend?.seal ?: false,
+                                blendLenForMode(m, aftBlend?.lengthMm ?: 0f, lengthMm),
+                                autoProfile, m == BlendFaceMode.SEAL,
                             )
                         },
-                        onToggleFwd = { on ->
+                        onSetFwdMode = { m ->
                             onSetAutoBlend(
                                 component.startMmPhysical, component.endMmPhysical,
                                 LinerAuthoredReference.FWD,
-                                if (on) defaultBlendMm(lengthMm) else 0f, autoProfile,
-                                fwdBlend?.seal ?: false,
+                                blendLenForMode(m, fwdBlend?.lengthMm ?: 0f, lengthMm),
+                                autoProfile, m == BlendFaceMode.SEAL,
                             )
                         },
                         onProfile = { p ->
@@ -738,20 +738,6 @@ internal fun ComponentPagerCard(
                                     onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
                                         LinerAuthoredReference.FWD, it, autoProfile, fwdBlend?.seal ?: false)
                                 }
-                            }
-                        },
-                        aftSeal = aftBlend?.seal ?: false,
-                        fwdSeal = fwdBlend?.seal ?: false,
-                        onToggleAftSeal = { on ->
-                            aftBlend?.let {
-                                onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                                    LinerAuthoredReference.AFT, it.lengthMm, it.profile, on)
-                            }
-                        },
-                        onToggleFwdSeal = { on ->
-                            fwdBlend?.let {
-                                onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                                    LinerAuthoredReference.FWD, it.lengthMm, it.profile, on)
                             }
                         },
                     )
@@ -871,34 +857,40 @@ internal fun ComponentPagerCard(
                 // Blend — a machined smooth transition into whatever the face steps to.
                 // Silhouette only: the rails keep dimensioning the stored span, so nothing
                 // here moves a value or a neighbour. Mirrored in AddBodyDialog by contract.
+                val aftMode = blendFaceMode(b.blendAftMm, b.blendAftSeal)
+                val fwdMode = blendFaceMode(b.blendFwdMm, b.blendFwdSeal)
                 BlendSection(
-                    aftOn = b.blendAftMm > 0f,
-                    fwdOn = b.blendFwdMm > 0f,
+                    aftMode = aftMode,
+                    fwdMode = fwdMode,
                     profile = b.blendProfile,
-                    onToggleAft = { on ->
-                        onUpdateBodyBlend(idx, if (on) defaultBlendMm(b.lengthMm) else 0f, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal)
+                    onSetAftMode = { m ->
+                        onUpdateBodyBlend(
+                            idx, blendLenForMode(m, b.blendAftMm, b.lengthMm), b.blendFwdMm,
+                            b.blendProfile, m == BlendFaceMode.SEAL, b.blendFwdSeal,
+                        )
                     },
-                    onToggleFwd = { on ->
-                        onUpdateBodyBlend(idx, b.blendAftMm, if (on) defaultBlendMm(b.lengthMm) else 0f, b.blendProfile, b.blendAftSeal, b.blendFwdSeal)
+                    onSetFwdMode = { m ->
+                        onUpdateBodyBlend(
+                            idx, b.blendAftMm, blendLenForMode(m, b.blendFwdMm, b.lengthMm),
+                            b.blendProfile, b.blendAftSeal, m == BlendFaceMode.SEAL,
+                        )
                     },
-                    onProfile = { p -> onUpdateBodyBlend(idx, b.blendAftMm, b.blendFwdMm, p, b.blendAftSeal, b.blendFwdSeal) },
+                    onProfile = { p ->
+                        onUpdateBodyBlend(idx, b.blendAftMm, b.blendFwdMm, p, b.blendAftSeal, b.blendFwdSeal)
+                    },
                     aftLengthField = {
                         CommitNum("Blend AFT (${abbr(unit)})", disp(b.blendAftMm, unit)) { str ->
-                            toMmOrNull(str, unit)?.let { onUpdateBodyBlend(idx, it, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal) }
+                            toMmOrNull(str, unit)?.let {
+                                onUpdateBodyBlend(idx, it, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal)
+                            }
                         }
                     },
                     fwdLengthField = {
                         CommitNum("Blend FWD (${abbr(unit)})", disp(b.blendFwdMm, unit)) { str ->
-                            toMmOrNull(str, unit)?.let { onUpdateBodyBlend(idx, b.blendAftMm, it, b.blendProfile, b.blendAftSeal, b.blendFwdSeal) }
+                            toMmOrNull(str, unit)?.let {
+                                onUpdateBodyBlend(idx, b.blendAftMm, it, b.blendProfile, b.blendAftSeal, b.blendFwdSeal)
+                            }
                         }
-                    },
-                    aftSeal = b.blendAftSeal,
-                    fwdSeal = b.blendFwdSeal,
-                    onToggleAftSeal = { on ->
-                        onUpdateBodyBlend(idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, on, b.blendFwdSeal)
-                    },
-                    onToggleFwdSeal = { on ->
-                        onUpdateBodyBlend(idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, b.blendAftSeal, on)
                     },
                 )
 
@@ -1789,3 +1781,19 @@ internal fun defaultBlendMm(bodyLengthMm: Float): Float {
     val preset = AddDefaultsConfig.BLEND_LEN_IN * 25.4f
     return if (bodyLengthMm > 0f) minOf(preset, bodyLengthMm * 0.25f) else preset
 }
+
+/** The stored (length, seal) pair read back as the face's mode. */
+internal fun blendFaceMode(lengthMm: Float, seal: Boolean): BlendFaceMode = when {
+    lengthMm <= 0f -> BlendFaceMode.SQUARE
+    seal -> BlendFaceMode.SEAL
+    else -> BlendFaceMode.BLEND
+}
+
+/**
+ * The blend length a mode change should commit: zero for a square face, otherwise whatever the
+ * face already carried, falling back to the starting preset. Switching Blend ↔ Seal area keeps
+ * the typed length — the two differ only by the cuts.
+ */
+internal fun blendLenForMode(mode: BlendFaceMode, currentMm: Float, bodyLengthMm: Float): Float =
+    if (mode == BlendFaceMode.SQUARE) 0f
+    else currentMm.takeIf { it > 0f } ?: defaultBlendMm(bodyLengthMm)

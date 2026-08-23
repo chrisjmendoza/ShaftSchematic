@@ -245,10 +245,12 @@ submit, but every control and every visibility condition is decided in one place
 
 | Control | Shown when |
 |---|---|
-| **Blend AFT face** / **Blend FWD face** checkboxes | always, on an explicit body |
-| Axial length field, per face | that face's checkbox is on |
-| **Seal area (3 cuts)** checkbox, per face | that face's checkbox is on |
-| Profile chips — S-curve \| Fillet \| Eased cone | either face is on |
+| Face-finish chips, per face — **Square \| Blend \| Seal area** | always |
+| Axial length field, per face | that face is not Square |
+| Shape chips — S-curve \| Fillet \| Eased cone | either face is not Square |
+
+**Seal area includes the blend** — the cuts are machined across the blended section, so the three
+modes are exclusive as presented while the stored model keeps length and seal flag independent.
 
 The auto-body card omits the section: an auto span is a derived gap with no card fields of its
 own, and promoting it to an explicit body is the documented way to gain them.

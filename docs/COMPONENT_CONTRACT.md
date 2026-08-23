@@ -154,8 +154,9 @@ material.
   is a V notch in both silhouette edges plus a DASHED line across seated on the notch floors —
   never a solid full-height line, which is the glyph for a component face and made the shaft read
   as segments (on-device report); the dash is finer than the hidden-keyway pattern on purpose (`sealNotchGeom` sizes the notch;
-  line and notch derive from the same geometry so they meet exactly). Only offered on a blended
-  face: the cuts are machined into the blend. A fixed count, since the drawing is a cue rather
+  line and notch derive from the same geometry so they meet exactly). Authored as the third state of a face's
+  finish chips (Square | Blend | Seal area) — exclusive as presented, but a seal area INCLUDES its
+  blend, since the cuts are machined into the blended section. A fixed count, since the drawing is a cue rather
   than something to machine from.
 - Silhouette only — no dimension rail, no footer row, no effect on OAL, coverage, or collision.
 - The face is the run's **DRAWN outer edge**, not the stored position. A bare-shaft gap absorbed
