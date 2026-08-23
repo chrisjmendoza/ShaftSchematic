@@ -1,7 +1,15 @@
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.model.BlendProfile
+import com.android.shaftschematic.model.Body
+import com.android.shaftschematic.model.LinerAuthoredReference
+import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.autoBlendFor
+import com.android.shaftschematic.model.withAutoBlend
 import com.android.shaftschematic.ui.config.AddDefaultsConfig
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -54,5 +62,72 @@ class BlendFaceModeTest {
             val len = blendLenForMode(mode, currentMm = 0f, bodyLengthMm = 800f)
             assertEquals(mode, blendFaceMode(len, seal = mode == BlendFaceMode.SEAL))
         }
+    }
+
+    // ───────── turning a face back off ─────────
+
+    /**
+     * Picking **Square** must actually clear the face — the chips are the only enable/disable
+     * control, so a mode that cannot be switched off would strand a body with a permanent seal
+     * area. Mirrors what `updateBodyBlend` does inside `_spec.update {}`.
+     */
+    @Test
+    fun `square clears an explicit face without touching the other one`() {
+        val sealed = Body(
+            id = "b", startFromAftMm = 0f, lengthMm = 800f, diaMm = 200f,
+            blendAftMm = 50f, blendAftSeal = true,
+            blendFwdMm = 60f, blendFwdSeal = true,
+        )
+        val mode = BlendFaceMode.SQUARE
+        val cleared = sealed.copy(
+            blendAftMm = blendLenForMode(mode, sealed.blendAftMm, sealed.lengthMm),
+            blendAftSeal = mode == BlendFaceMode.SEAL,
+        )
+
+        assertEquals(BlendFaceMode.SQUARE, blendFaceMode(cleared.blendAftMm, cleared.blendAftSeal))
+        assertEquals(0f, cleared.blendAftMm, eps)
+        assertTrue("the seal flag must not survive the clear", !cleared.blendAftSeal)
+        // The FWD face is untouched.
+        assertEquals(BlendFaceMode.SEAL, blendFaceMode(cleared.blendFwdMm, cleared.blendFwdSeal))
+        assertEquals(60f, cleared.blendFwdMm, eps)
+    }
+
+    /** The auto-span mirror: Square drops the anchor rather than storing a zero-length one. */
+    @Test
+    fun `square drops an auto span's anchor without touching the other face`() {
+        val spec = ShaftSpec(overallLengthMm = 900f)
+            .withAutoBlend(200f, 600f, LinerAuthoredReference.AFT, 50f, BlendProfile.OGEE, seal = true)
+            .withAutoBlend(200f, 600f, LinerAuthoredReference.FWD, 60f, BlendProfile.OGEE, seal = true)
+        assertEquals(2, spec.autoBlends.size)
+
+        val mode = BlendFaceMode.SQUARE
+        val cleared = spec.withAutoBlend(
+            200f, 600f, LinerAuthoredReference.AFT,
+            blendLenForMode(mode, 50f, bodyLengthMm = 400f),
+            BlendProfile.OGEE, seal = mode == BlendFaceMode.SEAL,
+        )
+
+        assertNull(cleared.autoBlends.autoBlendFor(200f, 600f, LinerAuthoredReference.AFT))
+        assertEquals(1, cleared.autoBlends.size)
+        assertEquals(
+            60f,
+            cleared.autoBlends.autoBlendFor(200f, 600f, LinerAuthoredReference.FWD)!!.lengthMm,
+            eps,
+        )
+    }
+
+    /** Square → Blend → Square returns to exactly the starting state, so the toggle is lossless. */
+    @Test
+    fun `a face round-trips off, on, and off again`() {
+        var len = 0f
+        var seal = false
+        assertEquals(BlendFaceMode.SQUARE, blendFaceMode(len, seal))
+
+        len = blendLenForMode(BlendFaceMode.SEAL, len, bodyLengthMm = 800f); seal = true
+        assertEquals(BlendFaceMode.SEAL, blendFaceMode(len, seal))
+
+        len = blendLenForMode(BlendFaceMode.SQUARE, len, bodyLengthMm = 800f); seal = false
+        assertEquals(BlendFaceMode.SQUARE, blendFaceMode(len, seal))
+        assertEquals(0f, len, eps)
     }
 }

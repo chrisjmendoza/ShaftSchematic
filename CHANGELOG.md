@@ -62,6 +62,31 @@ drawn floor.
 Off by default and additive: a document that never touches a blend encodes and prints exactly as
 before.
 
+### fix(ui): the face-finish chips read as controls, and their text fits
+
+Two on-device reports against the new chip row, with one shared cause: the row was fighting for
+horizontal space it did not have, and losing quietly.
+
+**Nothing looked like an off switch.** M3 draws an unselected filter chip with a transparent
+container and no border, so "Square" and "Blend" rendered as plain words beside the one chip that
+looked like a control — "I can't disable the blend or seal area". Square always cleared the face
+correctly; there was simply nothing that looked tappable. Every option now carries a visible
+outline, with a heavier primary one on the active choice, so the row reads as a segmented choice.
+
+**"FWD" wrapped where "AFT" did not,** because W is a wider glyph than A — enough on its own to
+push that row's last chip onto a second line. Chips now split the row's width equally, so the
+longest label in a row sizes all of them and no chip can wrap while its neighbours sit half empty.
+
+**And then even "Square" ellipsized to "Squ…".** The leading label gutter plus each chip's ~32 pt
+of internal padding left barely 50 pt for text. The label moved above its chips, which hands the
+row its full width — roughly 40% more per chip — and chip text dropped to `labelMedium` for
+headroom at large system font scales. Overflow past that ellipsizes visibly rather than silently
+growing the row.
+
+No behaviour change: the modes, their storage, and the drawn geometry are untouched. Tests pin the
+disable path itself — Square clears an explicit face without touching the other, drops an auto
+span's anchor rather than storing a zero-length one, and a face round-trips off → on → off.
+
 ### feat: a body face is Square, Blend, or Seal area — one chip row
 
 The seal area shipped nested: tick **Blend**, and a **Seal area** checkbox appeared under the

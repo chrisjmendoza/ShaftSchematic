@@ -160,7 +160,21 @@ modifier on something else. The earlier nesting (a Blend checkbox revealing a Se
 hid the seal behind a control nobody would think to tick first. Storage is unaffected: the model
 still carries a length and a flag independently, and `blendFaceMode`/`blendLenForMode`
 (`ComponentCarousel.kt`, unit-tested) are the only projection. Switching Blend ↔ Seal area keeps
-the typed length. It changes drawn geometry, so it is
+the typed length, and **Square is the off switch** — it clears the length and the seal flag,
+leaving the other face untouched.
+
+Two rules make the rows read correctly, both learned on device:
+- **Every chip keeps a visible outline, selected or not.** M3's default filter chip gives an
+  unselected chip a transparent container and no border, which rendered "Square" and "Blend" as
+  plain words beside the one chip that looked like a control — so the way to turn a face off did
+  not look tappable ("I can't disable the blend or seal area"). Do not restore `border = null`.
+- **Label above the row, equal-weight chips.** A leading label gutter plus each chip's ~32 dp of
+  internal padding left barely 50 dp for text, so even "Square" ellipsized to "Squ…". The label
+  now sits above its chips, handing the row its full width (~40% more per chip), and the chips
+  split that width equally so the longest label in a row sizes all of them. Chip text is
+  `labelMedium` — a step down from the chip default — for headroom at large font scales. The
+  gutter also caused the original symptom: "FWD" renders wider than "AFT", enough on its own to
+  wrap that row's last chip while the AFT row fit. It changes drawn geometry, so it is
 under the add-dialog-parity rule — `AddBodyDialog` shows the same section, and both surfaces
 render one shared composable (`ui/screen/BlendSection.kt`) so they cannot drift. The auto-body card
 carries the same section, writing a shaft-space `AutoBlend` anchor instead of a stored field. It

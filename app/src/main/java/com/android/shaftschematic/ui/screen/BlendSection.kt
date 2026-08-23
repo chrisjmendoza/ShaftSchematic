@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
@@ -15,8 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.BlendProfile
 
@@ -117,8 +119,28 @@ private fun BlendFaceRow(
 }
 
 /**
- * One labelled row of mutually exclusive chips, styled like the card's other chip pairs
- * (KW from AFT|FWD, keyway clocking) so the section does not read as a foreign control.
+ * One labelled row of mutually exclusive chips.
+ *
+ * Three rules keep the rows readable, all learned on device.
+ *
+ * The label sits **above** its chips rather than in a leading gutter. Inline, the gutter plus each
+ * chip's ~32 dp of internal padding left barely 50 dp for text, so even "Square" ellipsized to
+ * "Squ…"; dropping it hands the row its full width and roughly 40% more room per chip. It also
+ * removes the alignment trap that caused the first symptom — "FWD" renders wider than "AFT", which
+ * alone was enough to push that row's last chip onto a second line while the AFT row fit.
+ *
+ * The chips **share the remaining width equally**, so the longest label in a row ("Seal area",
+ * "Eased cone") sizes every chip in it and none can wrap while its neighbours sit half empty. Text
+ * is one line at `labelMedium` — a step down from the chip default, so "Seal area" and "Eased cone"
+ * clear their box with margin left for a large system font scale; any overflow past that
+ * ellipsizes visibly rather than silently growing the row.
+ *
+ * **Every option keeps a visible outline, selected or not.** M3's default filter chip draws an
+ * unselected chip with a transparent container and no border, which left "Square" and "Blend"
+ * reading as plain words beside the one chip that looked like a control — so the way to turn a
+ * face off did not look tappable at all (on-device: "I can't disable the blend or seal area").
+ * The unselected outline is what makes this row read as a segmented choice; do not drop it back
+ * to `border = null`.
  */
 @Composable
 private fun <T> ChipRow(
@@ -130,28 +152,45 @@ private fun <T> ChipRow(
     onSelect: (T) -> Unit,
 ) {
     val colors = FilterChipDefaults.filterChipColors(
+        containerColor = MaterialTheme.colorScheme.surface,
         selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
     )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    val restingBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    val chosenBorder = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
         Text(
             label,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.padding(bottom = 2.dp),
         )
-        options.forEach { opt ->
-            val on = opt == selected
-            FilterChip(
-                selected = on,
-                onClick = { onSelect(opt) },
-                label = { Text(labelOf(opt)) },
-                colors = colors,
-                border = if (on) BorderStroke(1.dp, Color.Black) else null,
-                modifier = Modifier.testTag(tagOf(opt)),
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            options.forEach { opt ->
+                val on = opt == selected
+                FilterChip(
+                    selected = on,
+                    onClick = { onSelect(opt) },
+                    label = {
+                        Text(
+                            labelOf(opt),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    },
+                    colors = colors,
+                    border = if (on) chosenBorder else restingBorder,
+                    modifier = Modifier.weight(1f).testTag(tagOf(opt)),
+                )
+            }
         }
     }
 }
