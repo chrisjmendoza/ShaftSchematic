@@ -184,6 +184,9 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
   moves or trims another component. Diameters are DERIVED at resolve, never stored. Where a liner
   butts the face (a seal area) the curve leaves from the midpoint of the liner OD and `diaMm`
   (`seatDiaUnderLiner`) — the real seat is hidden under the liner and its depth varies job to job.
+- `blendAftSeal` / `blendFwdSeal`: whether that face's blend carries a seal area — the radius
+  cuts the fiberglass seats into, drawn as 3 silhouette-notched cuts across the curve. Ignored
+  on an unblended face.
 - `blendProfile`: `OGEE` (tangent both ends, default) | `FILLET` (tangent at the large end only)
   | `EASED_CONE` (straight cone, both corners eased).
 - Silhouette only: no dimension rail, no footer row, no effect on OAL, coverage, resolve spans,
@@ -191,6 +194,18 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
   corner). A stored length longer than the body is clamped where it is DRAWN, never rewritten.
 - Derived: `Body.hasBlendOn(end)`, `Body.blendMmOn(end)`; geometry in
   `ui/resolved/BodyBlends.kt`, curve math in `geom/BlendProfileMath.kt`.
+
+`ShaftSpec.autoBlends: List<AutoBlend>` (additive, defaults empty) — blended faces on auto-body
+spans, keyed in **shaft space** by anchor rather than by a component id, since auto ids are
+position-derived and regenerate on every edit:
+- `AutoBlend(anchorMm, end, lengthMm, profile, seal)`. The span whose half-open extent
+  `[startMm, endMm)` contains the anchor blends the named face; the anchor is system-placed at
+  the span midpoint and carries no authored meaning. `lengthMm` is typed and stored verbatim.
+- Aft-most anchor wins **per face**, so one span may carry both an aft and a fwd blend.
+- Dormant under a component or inside an absorbed gap; **never pruned**, resurrects unchanged.
+- Helpers: `List<AutoBlend>.autoBlendFor(startMm, endMm, end)`,
+  `ShaftSpec.withAutoBlend(spanStart, spanEnd, end, lengthMm, profile)` (upsert; `lengthMm` ≤ 0
+  clears that face only).
 
 Keyways are features, not standalone components.
 They are hosted on **Tapers** (offset from the SET face) or **Bodies** (offset from the

@@ -149,8 +149,26 @@ material.
   would be a made-up number. A seat authored as its own body under the liner is **not** consulted:
   `subtractBodiesAgainstNonBodies` trims a fully covered body out of the drawing, so there is
   nothing on the sheet for the curve to arrive at.
+- A face may carry a **seal area** — `Body.blendAftSeal`/`blendFwdSeal` (or `AutoBlend.seal`) —
+  drawing `SEAL_GROOVE_COUNT` (3) cuts across the curve for the fiberglass to seat into. Each cut
+  is a V notch in both silhouette edges plus a DASHED line across seated on the notch floors —
+  never a solid full-height line, which is the glyph for a component face and made the shaft read
+  as segments (on-device report); the dash is finer than the hidden-keyway pattern on purpose (`sealNotchGeom` sizes the notch;
+  line and notch derive from the same geometry so they meet exactly). Only offered on a blended
+  face: the cuts are machined into the blend. A fixed count, since the drawing is a cue rather
+  than something to machine from.
 - Silhouette only — no dimension rail, no footer row, no effect on OAL, coverage, or collision.
-- Only **explicit** bodies carry blends; an auto span has no card fields to set one on.
+- The face is the run's **DRAWN outer edge**, not the stored position. A bare-shaft gap absorbed
+  into a body's run moves that edge outward, and the drawn step moves with it; matching the stored
+  value dropped the blend whenever a neighbour shortened.
+- Explicit bodies store their blends as fields; **auto spans anchor them in shaft space**
+  (`AutoBlend` / `ShaftSpec.autoBlends`, the `AutoDiaOverride` posture — anchor at the span
+  midpoint, aft-most wins per face, dormant under a component, never pruned). A saved template
+  therefore keeps its seal areas when liners or the overall length move under it. Both kinds
+  resolve to the same `BodyBlend`.
+- An anchor only applies where the auto span survives as its **own AUTO run** — bounded by
+  non-bodies, e.g. bare shaft between two liners. A gap flanked by an explicit body is absorbed
+  into that body's run, where the body's own blend already covers the face.
 - A split body blends on the run holding the **stored** face, never an interior fragment edge.
 
 Geometry: `ui/resolved/BodyBlends.kt`; curve math `geom/BlendProfileMath.kt` (a general

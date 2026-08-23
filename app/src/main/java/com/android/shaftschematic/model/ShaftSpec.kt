@@ -36,6 +36,10 @@ import kotlinx.serialization.Serializable
  *           between a section override and neighbor derivation. 0 = unset → derive from
  *           neighbors. Affects drawn diameter only — auto-span positioning stays derived.
  *           Defaults 0 for back-compat.
+ * @property autoBlends Blended faces on individual auto-body spans, keyed in shaft space by
+ *           anchor — the [AutoDiaOverride] posture, so a saved layout keeps its seal areas when
+ *           liner positions or the overall length move under it. Draw-only and
+ *           additive/defaulted; dormant anchors are never pruned. See [AutoBlend].
  * @property autoDiaOverrides Per-section diameters for individual auto-body spans, keyed in
  *           shaft space by anchor. An auto span containing an anchor draws at that
  *           [AutoDiaOverride.diaMm], beating [autoBodyDiaMm] and neighbor derivation;
@@ -62,6 +66,7 @@ data class ShaftSpec(
     val autoBodyDiaMm: Float = 0f,
     val showAutoBodyDia: Boolean = false,
     val autoDiaOverrides: List<AutoDiaOverride> = emptyList(),
+    val autoBlends: List<AutoBlend> = emptyList(),
 )
 
 /**

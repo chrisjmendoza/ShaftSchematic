@@ -36,6 +36,8 @@ import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_OFF
 import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_ON
 import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PT
+import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
+import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.ui.resolved.BodyBlend
 import com.android.shaftschematic.ui.resolved.BodyEdgePoint
 import com.android.shaftschematic.ui.resolved.ResolvedBody
@@ -874,6 +876,21 @@ private fun drawBodiesCompressedCenterBreak(
         // component's own face line instead of stranding a vertical inside the body.
         c.drawLine(x0, cy - edges.capAftR, x0, cy + edges.capAftR, outline)
         c.drawLine(x1, cy - edges.capFwdR, x1, cy + edges.capFwdR, outline)
+
+        // Seal area: the radius cuts the fiberglass seats into, drawn across the blend.
+        // Same construction and dash as the canvas renderer — both read `bodyDrawEdges`.
+        // Dashed so the shaft still reads as one unit (a solid vertical is the
+        // component-face glyph); finer than the hidden-keyway dash on purpose.
+        if (edges.aftSeal.isNotEmpty() || edges.fwdSeal.isNotEmpty()) {
+            val sealPaint = Paint(outline).apply {
+                style = Paint.Style.STROKE
+                pathEffect = android.graphics.DashPathEffect(
+                    floatArrayOf(SEAL_DASH_ON_PT, SEAL_DASH_OFF_PT), 0f)
+            }
+            (edges.aftSeal + edges.fwdSeal).forEach { g ->
+                c.drawLine(g.xPx, cy - g.rPx, g.xPx, cy + g.rPx, sealPaint)
+            }
+        }
     }
 }
 

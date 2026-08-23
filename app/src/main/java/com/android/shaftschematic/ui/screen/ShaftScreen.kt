@@ -191,8 +191,10 @@ fun ShaftScreen(
                 keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                 keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
                 keywaySpooned: Boolean, keywayUnit: UnitSystem?,
-                blendAftMm: Float, blendFwdMm: Float, blendProfile: BlendProfile) -> Unit,
+                blendAftMm: Float, blendFwdMm: Float, blendProfile: BlendProfile,
+                blendAftSeal: Boolean, blendFwdSeal: Boolean) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
+    onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onAddTaper: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float,
                  rateText: String, reference: LinerAuthoredReference,
@@ -207,7 +209,7 @@ fun ShaftScreen(
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
-    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile) -> Unit,
+    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -675,10 +677,11 @@ fun ShaftScreen(
                     onAddBody = { s, l, d ->
                         onAddBody(
                             s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null,
-                            0f, 0f, BlendProfile.OGEE,
+                            0f, 0f, BlendProfile.OGEE, false, false,
                         )
                     },
                     onSetAutoSectionDia = onSetAutoSectionDia,
+                    onSetAutoBlend = onSetAutoBlend,
                     onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
@@ -811,9 +814,9 @@ fun ShaftScreen(
                         initialStartMm = addStartMm,
                         initialLengthMm = addLengthMm,
                         perComponentUnitsEnabled = perComponentUnitsEnabled,
-                        onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf ->
+                        onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd ->
                             addBodyOpen = false
-                            onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf)
+                            onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd)
                             onSetKeyways180Apart(k180)
                             onSetKeyways90Apart(k90)
                             if (k90) onSetKeyways90Cw(cw90)

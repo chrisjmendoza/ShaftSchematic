@@ -1780,6 +1780,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         blendAftMm: Float = 0f,
         blendFwdMm: Float = 0f,
         blendProfile: BlendProfile = BlendProfile.OGEE,
+        blendAftSeal: Boolean = false,
+        blendFwdSeal: Boolean = false,
     ) {
         val id = newId()
         _spec.update { s ->
@@ -1799,6 +1801,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                         blendAftMm = max(0f, blendAftMm),
                         blendFwdMm = max(0f, blendFwdMm),
                         blendProfile = blendProfile,
+                        blendAftSeal = blendAftSeal,
+                        blendFwdSeal = blendFwdSeal,
                     )
                 ) + s.bodies
             )
@@ -2385,13 +2389,22 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * not collision, and no other component's span. The lengths are stored VERBATIM; a value
      * longer than the body is clamped where it is DRAWN, never here.
      */
-    fun updateBodyBlend(index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile) =
+    fun updateBodyBlend(
+        index: Int,
+        blendAftMm: Float,
+        blendFwdMm: Float,
+        profile: BlendProfile,
+        sealAft: Boolean = false,
+        sealFwd: Boolean = false,
+    ) =
         _spec.update { s ->
             if (index !in s.bodies.indices) s else {
                 val old = s.bodies[index]
                 if (old.blendAftMm == blendAftMm &&
                     old.blendFwdMm == blendFwdMm &&
-                    old.blendProfile == profile
+                    old.blendProfile == profile &&
+                    old.blendAftSeal == sealAft &&
+                    old.blendFwdSeal == sealFwd
                 ) return@update s
                 s.copy(
                     bodies = s.bodies.toMutableList().also { l ->
@@ -2399,11 +2412,31 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                             blendAftMm = blendAftMm.coerceAtLeast(0f),
                             blendFwdMm = blendFwdMm.coerceAtLeast(0f),
                             blendProfile = profile,
+                            blendAftSeal = sealAft,
+                            blendFwdSeal = sealFwd,
                         )
                     }
                 )
             }
         }
+
+    /**
+     * Sets a blended face on ONE auto-body span, keyed in shaft space by an anchor at the span
+     * midpoint (the [setAutoSectionDiaMm] posture).
+     *
+     * Drawing-only, and it never promotes the span: an auto body stays derived, which is the
+     * point — a blend anchored to the span survives edits that would strand one authored
+     * against a promoted body's fixed boundary. [lengthMm] ≤ 0 clears that face; the value is
+     * stored verbatim and clamped only where it is drawn.
+     */
+    fun setAutoBlend(
+        spanStartMm: Float,
+        spanEndMm: Float,
+        end: LinerAuthoredReference,
+        lengthMm: Float,
+        profile: BlendProfile,
+        seal: Boolean = false,
+    ) = _spec.update { s -> s.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile, seal) }
 
     /** Liner mirror of [updateBodyShowDia]. */
     fun updateLinerShowDia(index: Int, show: Boolean) = _spec.update { s ->

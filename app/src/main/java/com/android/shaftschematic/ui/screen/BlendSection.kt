@@ -35,7 +35,9 @@ import com.android.shaftschematic.model.BlendProfile
  * and every visibility condition is decided here, once.
  *
  * The profile chips appear only once a face is blended — with both faces square there is
- * nothing for a profile to describe.
+ * nothing for a profile to describe. A face's **Seal area** checkbox appears with its length
+ * field, for the same reason: the radius cuts the fiberglass seats into are cut INTO the blended
+ * section, so there is nowhere to put them on a square face.
  */
 @Composable
 fun BlendSection(
@@ -47,6 +49,10 @@ fun BlendSection(
     onProfile: (BlendProfile) -> Unit,
     aftLengthField: @Composable () -> Unit,
     fwdLengthField: @Composable () -> Unit,
+    aftSeal: Boolean = false,
+    fwdSeal: Boolean = false,
+    onToggleAftSeal: (Boolean) -> Unit = {},
+    onToggleFwdSeal: (Boolean) -> Unit = {},
 ) {
     Column(Modifier.fillMaxWidth()) {
         Text(
@@ -55,9 +61,15 @@ fun BlendSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         BlendFaceRow("Blend AFT face", aftOn, "body_blend_aft_toggle", onToggleAft)
-        if (aftOn) aftLengthField()
+        if (aftOn) {
+            aftLengthField()
+            BlendFaceRow("Seal area (3 cuts)", aftSeal, "body_seal_aft_toggle", onToggleAftSeal)
+        }
         BlendFaceRow("Blend FWD face", fwdOn, "body_blend_fwd_toggle", onToggleFwd)
-        if (fwdOn) fwdLengthField()
+        if (fwdOn) {
+            fwdLengthField()
+            BlendFaceRow("Seal area (3 cuts)", fwdSeal, "body_seal_fwd_toggle", onToggleFwdSeal)
+        }
 
         if (aftOn || fwdOn) {
             Spacer(Modifier.height(8.dp))

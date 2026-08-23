@@ -88,8 +88,17 @@ DERIVED from whatever sits across the face — and at a **seal area**, where a l
 face, from the midpoint of the liner OD and the body Ø, since the machined seat is hidden
 under the liner. **Silhouette only** — no dimension rail and no
 footer row; rails keep dimensioning the stored span (dimension to the theoretical sharp
-corner). Not to be confused with a *seal groove*, which is a cut BELOW the surface
-(undercut topology), or with a *fillet radius* on a liner shoulder.
+corner). Not to be confused with a *fillet radius* on a liner shoulder.
+
+### Seal area
+The radius cuts a body-to-liner transition carries for the **fiberglass to seat into** — the
+shop cuts 3–4 rings across the blended section running up to the liner. Drawn as a fixed 3
+cuts (`SEAL_GROOVE_COUNT`), each a V notch in both silhouette edges with a **dashed** line
+across seated on the notch floors: a solid full-height line is this drawing's glyph for a
+component face, and three of them made one shaft read as three or four segments. A schematic
+cue, not a count to machine from, and it prints no value. Only offered on a **blended** face,
+since the cuts are machined into the blend. Per-face flag: `Body.blendAftSeal` /
+`blendFwdSeal`, or `AutoBlend.seal` on a bare-shaft span.
 
 ---
 

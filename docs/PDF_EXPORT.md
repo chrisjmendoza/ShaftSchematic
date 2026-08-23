@@ -221,6 +221,22 @@ The surface envelope (`surfaceSegsFrom`) takes the blends too, so an undercut or
 landing in a transition sees the diameter actually there — sampled at the blend's **true** mm
 span, never the drawn floor.
 
+**The face is the run's DRAWN outer edge**, not the body's stored position: a bare-shaft gap
+absorbed into the run moves that edge outward and the drawn step moves with it. Auto spans carry
+blends too, as shaft-space anchors (`AutoBlend`), and resolve to the same `BodyBlend` — this pass
+cannot tell the two sources apart.
+
+**Seal areas.** A blended face may carry the radius cuts the fiberglass seats into
+(`Body.blendAftSeal`/`blendFwdSeal`, `AutoBlend.seal`): `SEAL_GROOVE_COUNT` (3) stations from
+`sealGrooveFracs`, each drawn as a V notch in both silhouette edges plus a **dashed** line across
+seated on the notch floors. The notches ride the curve point lists this pass already walks, so the
+fill polygon and the stroked edges inherit them with no extra code here — only the dashed lines are
+a separate draw. Two constructions are load-bearing and must not be "simplified": the line stops on
+the notch floors rather than spanning the silhouette, and it is dashed with
+`SEAL_DASH_ON_PT`/`SEAL_DASH_OFF_PT` — a solid full-height vertical is this sheet's glyph for a
+component face, and three of them made one shaft read as three or four segments (on-device report).
+The dash is finer than the hidden-keyway 6/4 so a near-side cut never reads as a far-side feature.
+
 ---
 
 # 5.3 On-Shaft Diameter Callouts

@@ -37,6 +37,11 @@ import java.util.UUID
  *   no dimension rail and no footer row, and rails keep dimensioning the stored span — you
  *   dimension to the theoretical sharp corner and let the drawn curve show the blend.
  * @property blendFwdMm The same for this body's FWD face.
+ * @property blendAftSeal Whether the AFT blend carries a **seal area** — the radius cuts the
+ *   fiberglass seats into, drawn as [com.android.shaftschematic.geom.SEAL_GROOVE_COUNT] lines
+ *   across the curve. A schematic cue, not a machining count; ignored when that face has no
+ *   blend, since the grooves are cut INTO the blended section.
+ * @property blendFwdSeal The same for the FWD blend.
  * @property blendProfile How both faces ease. Drawing-only, like the blend lengths.
  */
 @Serializable
@@ -54,6 +59,8 @@ data class Body(
     val showDiaOnDrawing: Boolean = false,
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,
+    val blendAftSeal: Boolean = false,
+    val blendFwdSeal: Boolean = false,
     val blendProfile: BlendProfile = BlendProfile.OGEE,
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
@@ -115,4 +122,10 @@ fun Body.hasBlendOn(end: LinerAuthoredReference): Boolean = when (end) {
 fun Body.blendMmOn(end: LinerAuthoredReference): Float = when (end) {
     LinerAuthoredReference.AFT -> blendAftMm
     LinerAuthoredReference.FWD -> blendFwdMm
+}
+
+/** Whether the blend on the given face carries seal grooves. */
+fun Body.blendSealOn(end: LinerAuthoredReference): Boolean = when (end) {
+    LinerAuthoredReference.AFT -> blendAftSeal
+    LinerAuthoredReference.FWD -> blendFwdSeal
 }

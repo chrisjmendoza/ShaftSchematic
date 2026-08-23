@@ -247,6 +247,7 @@ submit, but every control and every visibility condition is decided in one place
 |---|---|
 | **Blend AFT face** / **Blend FWD face** checkboxes | always, on an explicit body |
 | Axial length field, per face | that face's checkbox is on |
+| **Seal area (3 cuts)** checkbox, per face | that face's checkbox is on |
 | Profile chips — S-curve \| Fillet \| Eased cone | either face is on |
 
 The auto-body card omits the section: an auto span is a derived gap with no card fields of its

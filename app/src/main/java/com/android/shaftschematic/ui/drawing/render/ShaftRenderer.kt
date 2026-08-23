@@ -36,6 +36,8 @@ import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PX
+import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
+import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.ui.resolved.BodyDrawEdges
 import com.android.shaftschematic.ui.resolved.BodyEdgePoint
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
@@ -182,6 +184,21 @@ object ShaftRenderer {
                 }
 
                 drawPath(path, color = outline, style = Stroke(width = outlineW))
+
+                // Seal area: the radius cuts the fiberglass seats into, drawn across the
+                // blend. Dashed so the shaft still reads as one unit — a solid vertical is
+                // the component-face glyph (on-device report: 3 solid lines looked like 3-4
+                // segments). Finer than the hidden-keyway dash on purpose.
+                val sealDash = PathEffect.dashPathEffect(floatArrayOf(SEAL_DASH_ON_PT, SEAL_DASH_OFF_PT), 0f)
+                (edges.aftSeal + edges.fwdSeal).forEach { g ->
+                    drawLine(
+                        color = outline,
+                        start = Offset(g.xPx, cy - g.rPx),
+                        end = Offset(g.xPx, cy + g.rPx),
+                        strokeWidth = outlineW,
+                        pathEffect = sealDash,
+                    )
+                }
             }
         } else {
             for (b in spec.bodies) {

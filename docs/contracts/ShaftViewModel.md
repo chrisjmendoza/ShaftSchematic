@@ -21,6 +21,10 @@ Responsibilities
   clamped where it is DRAWN, never here. Returns the spec unchanged when nothing moves, so a
   no-op set never marks the document dirty. `addBodyAt` takes the same three values so the Add
   dialog can set them at creation (add-dialog parity — a blend changes geometry).
+- `setAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile)` — the auto-span mirror, writing a
+  shaft-space `AutoBlend` anchor (`ShaftSpec.withAutoBlend`). Never promotes the span: staying
+  derived is the point, since an anchored blend follows a span that re-derives while a promoted
+  body's boundary is fixed. `lengthMm` ≤ 0 clears that face only.
 - Load/save documents via `io/InternalStorage.kt` (atomic internal `.shaft` saves, listing,
   delete/rename) and `io/ShaftBackup.kt` (zip backup/restore). There is no repository class.
 - Hold persisted display settings: `lineThicknessScale` (0.5–2.0, applied to preview and PDF stroke widths; 1.0 = default thin weight, 2.0 = original thick weight).

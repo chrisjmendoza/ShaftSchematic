@@ -56,7 +56,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.model.AutoBlend
 import com.android.shaftschematic.model.BlendProfile
+import com.android.shaftschematic.model.autoBlendFor
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.ui.config.AddDefaultsConfig
 import com.android.shaftschematic.model.ShaftSpec
@@ -158,10 +160,11 @@ internal fun ComponentCarouselPager(
     selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
+    onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
-    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile) -> Unit,
+    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -303,6 +306,7 @@ internal fun ComponentCarouselPager(
                     showComponentDebugLabels = showComponentDebugLabels,
                     onAddBody = onAddBody,
                     onSetAutoSectionDia = onSetAutoSectionDia,
+                    onSetAutoBlend = onSetAutoBlend,
                     onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
@@ -557,10 +561,11 @@ internal fun ComponentPagerCard(
     showComponentDebugLabels: Boolean,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
+    onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
-    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile) -> Unit,
+    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -678,6 +683,77 @@ internal fun ComponentPagerCard(
                         checked = spec.showAutoBodyDia,
                         testTag = "autobody_show_dia_toggle",
                         onCheckedChange = onSetShowAutoBodyDia,
+                    )
+
+                    // Blend — available here as well as on explicit bodies. An auto span
+                    // re-derives its extent from whatever surrounds it, so a blend anchored to
+                    // the span survives edits that would strand one authored against a
+                    // promoted body's fixed boundary (a template whose liners move).
+                    val aftBlend = spec.autoBlends.autoBlendFor(
+                        component.startMmPhysical, component.endMmPhysical, LinerAuthoredReference.AFT)
+                    val fwdBlend = spec.autoBlends.autoBlendFor(
+                        component.startMmPhysical, component.endMmPhysical, LinerAuthoredReference.FWD)
+                    val autoProfile = aftBlend?.profile ?: fwdBlend?.profile ?: BlendProfile.OGEE
+                    BlendSection(
+                        aftOn = aftBlend != null,
+                        fwdOn = fwdBlend != null,
+                        profile = autoProfile,
+                        onToggleAft = { on ->
+                            onSetAutoBlend(
+                                component.startMmPhysical, component.endMmPhysical,
+                                LinerAuthoredReference.AFT,
+                                if (on) defaultBlendMm(lengthMm) else 0f, autoProfile,
+                                aftBlend?.seal ?: false,
+                            )
+                        },
+                        onToggleFwd = { on ->
+                            onSetAutoBlend(
+                                component.startMmPhysical, component.endMmPhysical,
+                                LinerAuthoredReference.FWD,
+                                if (on) defaultBlendMm(lengthMm) else 0f, autoProfile,
+                                fwdBlend?.seal ?: false,
+                            )
+                        },
+                        onProfile = { p ->
+                            aftBlend?.let {
+                                onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
+                                    LinerAuthoredReference.AFT, it.lengthMm, p, it.seal)
+                            }
+                            fwdBlend?.let {
+                                onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
+                                    LinerAuthoredReference.FWD, it.lengthMm, p, it.seal)
+                            }
+                        },
+                        aftLengthField = {
+                            CommitNum("Blend AFT (${abbr(unit)})", disp(aftBlend?.lengthMm ?: 0f, unit)) { str ->
+                                toMmOrNull(str, unit)?.let {
+                                    onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
+                                        LinerAuthoredReference.AFT, it, autoProfile, aftBlend?.seal ?: false)
+                                }
+                            }
+                        },
+                        fwdLengthField = {
+                            CommitNum("Blend FWD (${abbr(unit)})", disp(fwdBlend?.lengthMm ?: 0f, unit)) { str ->
+                                toMmOrNull(str, unit)?.let {
+                                    onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
+                                        LinerAuthoredReference.FWD, it, autoProfile, fwdBlend?.seal ?: false)
+                                }
+                            }
+                        },
+                        aftSeal = aftBlend?.seal ?: false,
+                        fwdSeal = fwdBlend?.seal ?: false,
+                        onToggleAftSeal = { on ->
+                            aftBlend?.let {
+                                onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
+                                    LinerAuthoredReference.AFT, it.lengthMm, it.profile, on)
+                            }
+                        },
+                        onToggleFwdSeal = { on ->
+                            fwdBlend?.let {
+                                onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
+                                    LinerAuthoredReference.FWD, it.lengthMm, it.profile, on)
+                            }
+                        },
                     )
                 }
                 return
@@ -800,21 +876,29 @@ internal fun ComponentPagerCard(
                     fwdOn = b.blendFwdMm > 0f,
                     profile = b.blendProfile,
                     onToggleAft = { on ->
-                        onUpdateBodyBlend(idx, if (on) defaultBlendMm(b.lengthMm) else 0f, b.blendFwdMm, b.blendProfile)
+                        onUpdateBodyBlend(idx, if (on) defaultBlendMm(b.lengthMm) else 0f, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal)
                     },
                     onToggleFwd = { on ->
-                        onUpdateBodyBlend(idx, b.blendAftMm, if (on) defaultBlendMm(b.lengthMm) else 0f, b.blendProfile)
+                        onUpdateBodyBlend(idx, b.blendAftMm, if (on) defaultBlendMm(b.lengthMm) else 0f, b.blendProfile, b.blendAftSeal, b.blendFwdSeal)
                     },
-                    onProfile = { p -> onUpdateBodyBlend(idx, b.blendAftMm, b.blendFwdMm, p) },
+                    onProfile = { p -> onUpdateBodyBlend(idx, b.blendAftMm, b.blendFwdMm, p, b.blendAftSeal, b.blendFwdSeal) },
                     aftLengthField = {
                         CommitNum("Blend AFT (${abbr(unit)})", disp(b.blendAftMm, unit)) { str ->
-                            toMmOrNull(str, unit)?.let { onUpdateBodyBlend(idx, it, b.blendFwdMm, b.blendProfile) }
+                            toMmOrNull(str, unit)?.let { onUpdateBodyBlend(idx, it, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal) }
                         }
                     },
                     fwdLengthField = {
                         CommitNum("Blend FWD (${abbr(unit)})", disp(b.blendFwdMm, unit)) { str ->
-                            toMmOrNull(str, unit)?.let { onUpdateBodyBlend(idx, b.blendAftMm, it, b.blendProfile) }
+                            toMmOrNull(str, unit)?.let { onUpdateBodyBlend(idx, b.blendAftMm, it, b.blendProfile, b.blendAftSeal, b.blendFwdSeal) }
                         }
+                    },
+                    aftSeal = b.blendAftSeal,
+                    fwdSeal = b.blendFwdSeal,
+                    onToggleAftSeal = { on ->
+                        onUpdateBodyBlend(idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, on, b.blendFwdSeal)
+                    },
+                    onToggleFwdSeal = { on ->
+                        onUpdateBodyBlend(idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, b.blendAftSeal, on)
                     },
                 )
 

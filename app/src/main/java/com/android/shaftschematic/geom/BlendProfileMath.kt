@@ -132,6 +132,71 @@ fun drawnBlendWidthPx(trueWidthPx: Float, hostWidthPx: Float, minWidthPx: Float)
     return maxOf(trueWidthPx, minWidthPx).coerceAtMost(ceiling)
 }
 
+/**
+ * How many radius cuts a seal area draws. The shop cuts 3–4 for the fiberglass to seat into;
+ * the drawing is a schematic cue, not a count to machine from, so it draws a fixed 3.
+ */
+const val SEAL_GROOVE_COUNT = 3
+
+/**
+ * Where the seal grooves cross a blend, as fractions of its span.
+ *
+ * Evenly spaced with a margin at each end — `(i + 1) / (count + 1)` — so no groove lands on the
+ * curve's own end faces, where it would read as a component boundary rather than a cut.
+ */
+fun sealGrooveFracs(count: Int = SEAL_GROOVE_COUNT): List<Float> =
+    if (count < 1) emptyList() else (1..count).map { it.toFloat() / (count + 1) }
+
+/**
+ * Drawn geometry of one seal cut's silhouette notch.
+ *
+ * A groove is a cut INTO the surface, so the silhouette must break at it — a plain line
+ * across the body is this app's glyph for a component face, and three of them read as three
+ * phantom boundaries. On the photographed shaft every ring visibly interrupts the profile
+ * edge. Depth is display-exaggerated like the undercut notch and the wear trace: a true seal
+ * groove is sub-pixel at sheet scale, and it prints no number, so the exaggeration can never
+ * reach a machinist.
+ */
+data class SealNotch(val depthPx: Float, val halfWidthPx: Float)
+
+/** Notch depth as a fraction of the blend's drawn width — ties the cut size to its host. */
+const val SEAL_NOTCH_DEPTH_FRAC_OF_SPAN = 0.10f
+
+/** A notch never cuts deeper than this fraction of the smaller end radius. */
+const val SEAL_NOTCH_MAX_DEPTH_FRAC_OF_RADIUS = 0.12f
+
+/** Half-width relative to depth — a radius cut reads slightly wider than deep. */
+const val SEAL_NOTCH_HALF_WIDTH_FRAC_OF_DEPTH = 0.7f
+
+/**
+ * Size one seal notch for a blend drawn [spanWidthPx] wide between end radii whose smaller
+ * is [minEndRadiusPx]. Null when the geometry is degenerate. The half-width is additionally
+ * capped against the groove pitch so adjacent notches always keep clear surface between them.
+ */
+// Dash pattern for the line a seal cut draws between its notch floors. Dashed on purpose:
+// a solid vertical is the glyph for a component face, and three solid lines made the shaft
+// read as 3-4 segments when it is one whole unit (on-device report). Deliberately FINER than
+// the hidden-keyway 6/4 dash — that pattern means "far-side feature", and a seal cut is a
+// near-side cut, so the two must never read alike. Shared verbatim by both draw sites and
+// the SVG preview.
+const val SEAL_DASH_ON_PT = 2.5f
+const val SEAL_DASH_OFF_PT = 2f
+
+fun sealNotchGeom(
+    spanWidthPx: Float,
+    minEndRadiusPx: Float,
+    count: Int = SEAL_GROOVE_COUNT,
+): SealNotch? {
+    if (spanWidthPx <= 0f || minEndRadiusPx <= 0f || count < 1) return null
+    val depth = minOf(
+        spanWidthPx * SEAL_NOTCH_DEPTH_FRAC_OF_SPAN,
+        minEndRadiusPx * SEAL_NOTCH_MAX_DEPTH_FRAC_OF_RADIUS,
+    )
+    if (depth <= 0f) return null
+    val pitch = spanWidthPx / (count + 1)
+    return SealNotch(depth, minOf(depth * SEAL_NOTCH_HALF_WIDTH_FRAC_OF_DEPTH, pitch * 0.35f))
+}
+
 /** A blend never eats more than this fraction of the drawn run it is machined into. */
 const val MAX_BLEND_FRAC_OF_HOST = 0.4f
 

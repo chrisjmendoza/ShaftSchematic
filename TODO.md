@@ -120,21 +120,21 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
   standard radii (like the taper-rate 3% snap list) or free entry; does it print as a value +
   leader, a footer note, or both. Shares the draw-both-sites rule — preview and PDF must
   construct the fillet identically, so the arc math belongs in `geom/`.
-- [ ] **Seal-area radius grooves** (photographed 2026-08-14, on-device note 2026-08-19 — "each
-  is a small radius cut, nothing we need to mark yet") — a band of roughly five parallel
-  circumferential grooves cut at the END of a body section, immediately before the liner. Not
-  urgent and not to be drawn yet; recorded so the shape is on file.
-  **Do not assume this is a call site of `geom/BlendProfileMath.kt`.** A blend is a transition
-  BETWEEN two diameters along the surface; a seal groove is a cut BELOW the surface, so its
-  topology is the undercut family (`notchProfiles`) with an arc floor rather than a flat one.
-  The shared part is arc math, not the primitive.
-  Open before building: (a) is it authored as a GROUP — count + pitch + groove radius, which is
-  what the photo shows — or as individual cuts; (b) is it owned by the body face or anchored to
-  the liner edge it sits against, since the whole point is that it lands just before the liner;
-  (c) drawing convention — at true scale these are hairline and would need the blend's
-  drawn-width floor treatment, or a deliberately schematic count; (d) does it print a value or a
-  note. Unlike a blend it IS a real machining instruction, so silence is probably wrong here.
-  Related: the undercut end radii and the fiberglass seal areas in the same request.
+- [x] **Seal-area radius grooves** — DONE 2026-08-22 as part of the body-blend work, once it was
+  clear the cuts sit ON the blended section running up to the liner rather than on a plain
+  cylindrical run. A blended face carries a `Seal area (3 cuts)` flag; each cut draws as a V notch
+  in both silhouette edges with a dashed line across the notch floors. Fixed count and no printed
+  value — a schematic cue, not something to machine from. See `docs/COMPONENT_CONTRACT.md` and
+  `docs/PDF_EXPORT.md` §5.2b.
+- [ ] **Blends and seal cuts on the consolidated / runout sheet** — the schematic PDF, the preview
+  canvas and the undercut surface envelope all draw blends; `drawBodiesForRunout`
+  (`RunoutPdfComposer`) and the wear document have their own body passes that were never taught
+  the curve, so those sheets still print square faces. Wear may be correct as-is — it already
+  omits keyways by product decision — but the consolidated sheet carries the schematic's own
+  rails and footer, so a body that blends on one output and steps square on another is a real
+  inconsistency. Not urgent; blocked on nothing but a decision. The work is threading
+  `bodyBlends`/`bodyDrawEdges` into that pass the way `drawBodiesCompressedCenterBreak` already
+  does, including its S-break interaction.
 - [ ] **Fiberglass body segments** — model flag, dark fill / hatch pattern, label.
   Reference: `assets/20251022_172641.jpg`. Two halves, and the second is the open one
   (2026-08-14): (a) *selection* — which body sections are fiberglassed, presumably a

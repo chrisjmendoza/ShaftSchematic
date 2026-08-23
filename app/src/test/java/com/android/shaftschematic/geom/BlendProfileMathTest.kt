@@ -125,6 +125,37 @@ class BlendProfileMathTest {
         }
     }
 
+    // ───────── sealNotchGeom ─────────
+
+    @Test
+    fun `notch depth follows the span until the radius cap takes over`() {
+        // Wide span, small shaft: the radius cap wins so the notch stays subordinate.
+        val capped = sealNotchGeom(spanWidthPx = 100f, minEndRadiusPx = 10f)!!
+        assertEquals(10f * SEAL_NOTCH_MAX_DEPTH_FRAC_OF_RADIUS, capped.depthPx, eps)
+        // Ordinary case: depth rides the span.
+        val open = sealNotchGeom(spanWidthPx = 20f, minEndRadiusPx = 100f)!!
+        assertEquals(20f * SEAL_NOTCH_DEPTH_FRAC_OF_SPAN, open.depthPx, eps)
+    }
+
+    @Test
+    fun `adjacent notches always keep clear surface between them`() {
+        // Even at the 7 pt floored span, total notch width per groove must stay under the
+        // pitch, or the V's merge and the silhouette loses its surface returns.
+        for (span in listOf(7f, 12f, 30f, 120f)) {
+            val n = sealNotchGeom(spanWidthPx = span, minEndRadiusPx = 50f)!!
+            val pitch = span / (SEAL_GROOVE_COUNT + 1)
+            assertTrue("span $span: 2·halfW ${2 * n.halfWidthPx} vs pitch $pitch",
+                2 * n.halfWidthPx < pitch)
+        }
+    }
+
+    @Test
+    fun `degenerate seal geometry yields null, not a broken notch`() {
+        assertEquals(null, sealNotchGeom(0f, 50f))
+        assertEquals(null, sealNotchGeom(20f, 0f))
+        assertEquals(null, sealNotchGeom(20f, 50f, count = 0))
+    }
+
     // ───────── drawnBlendWidthPx ─────────
 
     @Test

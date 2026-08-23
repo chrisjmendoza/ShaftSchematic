@@ -1,16 +1,20 @@
 package com.android.shaftschematic.ui.resolved
 
+import com.android.shaftschematic.geom.SEAL_GROOVE_COUNT
+import com.android.shaftschematic.model.AutoDiaOverride
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.withAutoBlend
 import com.android.shaftschematic.model.Taper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 /**
  * BodyBlends — the derived geometry behind a blended body face. Pins the rules both draw
@@ -239,6 +243,205 @@ class BodyBlendsTest {
         val b = blendsOf(spec).single()
         assertEquals(200f, b.lengthMm, eps)                // clamped for drawing
         assertEquals(900f, spec.bodies[1].blendAftMm, eps) // stored value untouched
+    }
+
+    // ───────── auto-body spans ─────────
+
+    /**
+     * The fiberglass-between-liners case: bare shaft carrying its own Ø, blended into the liner
+     * at each end. Anchored in shaft space, so it survives the liners moving under it — which is
+     * the whole reason it is not a promoted body.
+     */
+    @Test
+    fun `an auto span blends from a shaft-space anchor`() {
+        fun spec(linerEndMm: Float, bigLinerStartMm: Float) = ShaftSpec(
+            overallLengthMm = 900f,
+            liners = listOf(
+                Liner(id = "aft", startFromAftMm = 0f, lengthMm = linerEndMm, odMm = 220f),
+                Liner(id = "fwd", startFromAftMm = bigLinerStartMm, lengthMm = 900f - bigLinerStartMm, odMm = 220f),
+            ),
+            autoDiaOverrides = listOf(
+                AutoDiaOverride(anchorMm = (linerEndMm + bigLinerStartMm) / 2f, diaMm = 180f),
+            ),
+        )
+            .withAutoBlend(linerEndMm, bigLinerStartMm, LinerAuthoredReference.AFT, 25.4f)
+            .withAutoBlend(linerEndMm, bigLinerStartMm, LinerAuthoredReference.FWD, 25.4f)
+
+        val blends = blendsOf(spec(200f, 600f))
+        assertEquals(2, blends.size)
+        val aft = blends.single { it.end == LinerAuthoredReference.AFT }
+        val fwd = blends.single { it.end == LinerAuthoredReference.FWD }
+        assertEquals(200f, aft.faceMm, eps)
+        assertEquals(600f, fwd.faceMm, eps)
+        assertEquals(180f, aft.bodyDiaMm, eps)
+        assertEquals(200f, aft.neighbourDiaMm, eps) // derived seat: (220 liner + 180 shaft) / 2
+
+        // Both liners move and resize; the anchors stay inside the bare span, so the seal
+        // areas follow instead of being stranded.
+        val moved = blendsOf(spec(260f, 640f))
+        assertEquals(2, moved.size)
+        assertEquals(260f, moved.single { it.end == LinerAuthoredReference.AFT }.faceMm, eps)
+        assertEquals(640f, moved.single { it.end == LinerAuthoredReference.FWD }.faceMm, eps)
+    }
+
+    @Test
+    fun `an auto blend anchored under a component goes dormant, never pruned`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 900f,
+            liners = listOf(
+                Liner(id = "aft", startFromAftMm = 0f, lengthMm = 200f, odMm = 220f),
+                Liner(id = "fwd", startFromAftMm = 600f, lengthMm = 300f, odMm = 220f),
+            ),
+            autoDiaOverrides = listOf(AutoDiaOverride(anchorMm = 400f, diaMm = 180f)),
+        ).withAutoBlend(200f, 600f, LinerAuthoredReference.AFT, 25.4f)
+        assertEquals(1, blendsOf(spec).size)
+
+        // The aft liner grows to swallow the span the anchor sat in.
+        val covered = spec.copy(liners = listOf(spec.liners[0].copy(lengthMm = 600f), spec.liners[1]))
+        assertTrue(blendsOf(covered).isEmpty())
+        assertEquals("the anchor must survive", 1, covered.autoBlends.size)
+
+        // Restoring the span resurrects it unchanged.
+        assertEquals(1, blendsOf(spec).size)
+    }
+
+    @Test
+    fun `clearing an auto blend drops only that face`() {
+        val spec = ShaftSpec(overallLengthMm = 900f)
+            .withAutoBlend(200f, 400f, LinerAuthoredReference.AFT, 20f)
+            .withAutoBlend(200f, 400f, LinerAuthoredReference.FWD, 25.4f)
+        assertEquals(2, spec.autoBlends.size)
+
+        val cleared = spec.withAutoBlend(200f, 400f, LinerAuthoredReference.AFT, 0f)
+        assertEquals(1, cleared.autoBlends.size)
+        assertEquals(LinerAuthoredReference.FWD, cleared.autoBlends.single().end)
+    }
+
+    /**
+     * An absorbed bare-shaft gap moves a body's DRAWN edge outward. The blend follows the drawn
+     * face, because that is where the step actually is; matching the stored position instead
+     * dropped the blend the moment a neighbour shortened.
+     */
+    @Test
+    fun `a blend follows its drawn face when a gap is absorbed into the run`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 600f,
+            tapers = listOf(
+                Taper(id = "t", startFromAftMm = 0f, lengthMm = 160f, startDiaMm = 120f, endDiaMm = 150f),
+            ),
+            bodies = listOf(
+                // Stored start 200, but the [160, 200) gap merges into this run.
+                Body(id = "big", startFromAftMm = 200f, lengthMm = 400f, diaMm = 200f, blendAftMm = 25.4f),
+            ),
+        )
+        val b = blendsOf(spec).single()
+        assertEquals(160f, b.faceMm, eps)   // the drawn edge, not the stored 200
+        assertEquals(200f, b.bodyDiaMm, eps)
+    }
+
+    // ───────── seal areas: the radius cuts ─────────
+
+    @Test
+    fun `a seal area draws its cuts across the blend, inside its span`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 800f,
+            bodies = listOf(
+                Body(
+                    id = "run", startFromAftMm = 0f, lengthMm = 300f, diaMm = 200f,
+                    blendFwdMm = 50f, blendFwdSeal = true,
+                ),
+            ),
+            liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 400f, odMm = 240f)),
+        )
+        val comps = resolveComponents(spec, overallIsManual = true)
+        val run = comps.filterIsInstance<ResolvedBody>().single { it.id == "run" }
+        val e = bodyDrawEdges(
+            runId = run.id,
+            runStartMm = run.startMmPhysical, runEndMm = run.endMmPhysical, runDiaMm = run.diaMm,
+            blends = bodyBlends(spec, comps),
+            xAt = { mm -> mm }, rAt = { dia -> dia / 2f }, minWidthPx = 7f,
+        )
+        assertEquals(SEAL_GROOVE_COUNT, e.fwdSeal.size)
+        assertTrue("no cuts belong on the unblended aft face", e.aftSeal.isEmpty())
+
+        // Every cut sits strictly inside the curve, never on its end faces.
+        val x0 = e.fwdCurve.first().xPx
+        val x1 = e.fwdCurve.last().xPx
+        e.fwdSeal.forEach {
+            assertTrue("cut at ${it.xPx} outside ($x0, $x1)", it.xPx > x0 && it.xPx < x1)
+        }
+        // Evenly spaced, ordered aft -> fwd.
+        val gaps = e.fwdSeal.zipWithNext { a, b -> b.xPx - a.xPx }
+        gaps.forEach { assertEquals(gaps.first(), it, eps) }
+
+        // A groove is a cut INTO the surface: the silhouette carries a notch at each station,
+        // and the line across ends exactly on that notch's floor — never at full silhouette
+        // height, which is the glyph for a component face. Lockstep is the invariant: the
+        // seal point must BE a vertex of the curve polyline.
+        e.fwdSeal.forEach { g ->
+            assertTrue(
+                "no notch vertex under the line at x=${g.xPx}",
+                e.fwdCurve.any { abs(it.xPx - g.xPx) < eps && abs(it.rPx - g.rPx) < eps },
+            )
+            // And the floor sits below the local surface on both sides of the cut.
+            val flankR = e.fwdCurve
+                .filter { abs(it.xPx - g.xPx) > eps && abs(it.xPx - g.xPx) < 5f }
+                .minOf { it.rPx }
+            assertTrue("floor ${g.rPx} not below flank $flankR", g.rPx < flankR)
+        }
+    }
+
+    @Test
+    fun `seal notches never merge and never touch the curve ends`() {
+        // The 7 pt floored span is the tightest host a seal area can land on.
+        val e = edgesWithSealedLiner(blendMm = 0.5f, minWidthPx = 7f)
+        assertEquals(SEAL_GROOVE_COUNT, e.fwdSeal.size)
+        val xs = e.fwdCurve.map { it.xPx }
+        // Strictly increasing x — overlapping notch windows would fold the polyline back.
+        xs.zipWithNext { a, b -> assertTrue("polyline folds at $a", b >= a - eps) }
+        // Full surface height survives between and outside the notches.
+        val surfaceMax = e.fwdCurve.maxOf { it.rPx }
+        assertTrue(surfaceMax > e.fwdSeal.maxOf { it.rPx })
+    }
+
+    private fun edgesWithSealedLiner(blendMm: Float, minWidthPx: Float): BodyDrawEdges {
+        val spec = ShaftSpec(
+            overallLengthMm = 800f,
+            bodies = listOf(
+                Body(
+                    id = "run", startFromAftMm = 0f, lengthMm = 300f, diaMm = 200f,
+                    blendFwdMm = blendMm, blendFwdSeal = true,
+                ),
+            ),
+            liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 400f, odMm = 240f)),
+        )
+        val comps = resolveComponents(spec, overallIsManual = true)
+        val run = comps.filterIsInstance<ResolvedBody>().single { it.id == "run" }
+        return bodyDrawEdges(
+            runId = run.id,
+            runStartMm = run.startMmPhysical, runEndMm = run.endMmPhysical, runDiaMm = run.diaMm,
+            blends = bodyBlends(spec, comps),
+            xAt = { mm -> mm }, rAt = { dia -> dia / 2f }, minWidthPx = minWidthPx,
+        )
+    }
+
+    @Test
+    fun `a blend without a seal area draws no cuts`() {
+        val e = edges(steppedSpec(blendAftMm = 50f), "big")
+        assertTrue(e.aftSeal.isEmpty() && e.fwdSeal.isEmpty())
+    }
+
+    @Test
+    fun `an auto span can carry a seal area too`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 900f,
+            liners = listOf(
+                Liner(id = "aft", startFromAftMm = 0f, lengthMm = 200f, odMm = 220f),
+                Liner(id = "fwd", startFromAftMm = 600f, lengthMm = 300f, odMm = 220f),
+            ),
+            autoDiaOverrides = listOf(AutoDiaOverride(anchorMm = 400f, diaMm = 180f)),
+        ).withAutoBlend(200f, 600f, LinerAuthoredReference.AFT, 25.4f, BlendProfile.OGEE, seal = true)
+        assertTrue(blendsOf(spec).single().seal)
     }
 
     // ───────── bodyDrawEdges ─────────

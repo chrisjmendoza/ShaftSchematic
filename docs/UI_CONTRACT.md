@@ -148,13 +148,18 @@ never absorbed into a run that already carries one. Without that stop a Ø6 body
 resolved to a single run at the aft-most Ø with **one card instead of two**. See
 `docs/COMPONENT_CONTRACT.md`.
 
-**Blend section (explicit bodies only).** Below "Show Ø on drawing": **Blend AFT face** /
+**Blend section.** Below "Show Ø on drawing": **Blend AFT face** /
 **Blend FWD face** checkboxes, an axial length field per checked face, and profile chips
-(S-curve | Fillet | Eased cone) shown once either face is on. It changes drawn geometry, so it is
+(S-curve | Fillet | Eased cone) shown once either face is on. Each blended face additionally
+offers **Seal area (3 cuts)** — the radius cuts the fiberglass seats into; it appears with that
+face's length field, since the cuts are machined into the blend. It changes drawn geometry, so it is
 under the add-dialog-parity rule — `AddBodyDialog` shows the same section, and both surfaces
 render one shared composable (`ui/screen/BlendSection.kt`) so they cannot drift. The auto-body card
-omits it: an auto span has no card fields of its own, and the "Explicit body" checkbox is the
-documented way to gain them.
+carries the same section, writing a shaft-space `AutoBlend` anchor instead of a stored field. It
+is deliberately NOT gated behind promotion: promoting pins a span's start and length, so a blend
+authored against a promoted body's boundary is stranded when a template's liners or overall length
+later move, while an anchored one follows the span that re-derives around it. (The keyway section
+stays promotion-only — a keyway is real geometry needing a stable host, a blend is draw-only.)
 
 ### 3.1.5 Direction Chip (AFT / FWD Toggle)
 

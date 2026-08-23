@@ -1,5 +1,7 @@
 package com.android.shaftschematic.ui.resolved
 
+import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
+import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
@@ -20,8 +22,9 @@ class BlendSvgPreviewTest {
 
     private class Svg(val w: Float, val h: Float) {
         val sb = StringBuilder()
-        fun line(x0: Float, y0: Float, x1: Float, y1: Float, stroke: String = "#111", sw: Float = 1.4f) {
-            sb.append("""<line x1="$x0" y1="$y0" x2="$x1" y2="$y1" stroke="$stroke" stroke-width="$sw"/>""").append('\n')
+        fun line(x0: Float, y0: Float, x1: Float, y1: Float, stroke: String = "#111", sw: Float = 1.4f, dash: String? = null) {
+            val d = if (dash != null) """ stroke-dasharray="$dash"""" else ""
+            sb.append("""<line x1="$x0" y1="$y0" x2="$x1" y2="$y1" stroke="$stroke" stroke-width="$sw"$d/>""").append('\n')
         }
         fun poly(pts: List<Pair<Float, Float>>, fill: String) {
             sb.append("""<polygon points="${pts.joinToString(" ") { "${it.first},${it.second}" }}" fill="$fill" stroke="none"/>""").append('\n')
@@ -43,6 +46,7 @@ class BlendSvgPreviewTest {
         val group: String? = null,
         /** > 0 puts a liner fwd of the face instead of a second body — the seal-area case. */
         val linerOdMm: Float = 0f,
+        val seal: Boolean = false,
     )
 
     /** Smaller aft body enlarging into a bigger one — the coupling-fit case, blended on its AFT face. */
@@ -52,7 +56,7 @@ class BlendSvgPreviewTest {
         bodies = listOf(
             Body(
                 id = "run", startFromAftMm = 0f, lengthMm = 500f, diaMm = r.smallDiaMm,
-                blendFwdMm = r.blendMm, blendProfile = r.profile,
+                blendFwdMm = r.blendMm, blendProfile = r.profile, blendFwdSeal = r.seal,
             ),
         ),
         liners = listOf(Liner(startFromAftMm = 500f, lengthMm = 500f, odMm = r.linerOdMm)),
@@ -95,6 +99,14 @@ class BlendSvgPreviewTest {
                 group = "Liner seal area  —  body Ø7 butting a Ø8 liner, seat derived at the midpoint (Ø7½)"),
             Row("Eased cone", BlendProfile.EASED_CONE, 1 * IN, 177.8f, linerOdMm = 203.2f),
             Row("No blend (control)", BlendProfile.OGEE, 0f, 177.8f, linerOdMm = 203.2f),
+
+            Row("S-curve + seal area", BlendProfile.OGEE, 1 * IN, 177.8f, linerOdMm = 203.2f,
+                seal = true,
+                group = "Seal area  —  3 radius cuts across the blend, for the fiberglass to seat into"),
+            Row("Eased cone + seal area", BlendProfile.EASED_CONE, 1 * IN, 177.8f,
+                linerOdMm = 203.2f, seal = true),
+            Row("S-curve + seal, 2 in blend", BlendProfile.OGEE, 2 * IN, 177.8f,
+                linerOdMm = 203.2f, seal = true),
         )
 
         val groupCount = rows.count { it.group != null }
@@ -149,6 +161,10 @@ class BlendSvgPreviewTest {
                 }
                 svg.line(x0, cy - e.capAftR, x0, cy + e.capAftR)
                 svg.line(x1, cy - e.capFwdR, x1, cy + e.capFwdR)
+                (e.aftSeal + e.fwdSeal).forEach { g ->
+                    svg.line(g.xPx, cy - g.rPx, g.xPx, cy + g.rPx,
+                        dash = "$SEAL_DASH_ON_PT $SEAL_DASH_OFF_PT")
+                }
             }
 
             comps.filterIsInstance<ResolvedLiner>().forEach { ln ->

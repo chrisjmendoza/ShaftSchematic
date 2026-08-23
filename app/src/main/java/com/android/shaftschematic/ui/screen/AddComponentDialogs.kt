@@ -149,7 +149,8 @@ fun AddBodyDialog(
                keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
                keywaySpooned: Boolean, keyways180Apart: Boolean, keyways90Apart: Boolean,
                keyways90Cw: Boolean, keywayUnit: UnitSystem?,
-               blendAftMm: Float, blendFwdMm: Float, blendProfile: BlendProfile) -> Unit,
+               blendAftMm: Float, blendFwdMm: Float, blendProfile: BlendProfile,
+               blendAftSeal: Boolean, blendFwdSeal: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -167,6 +168,8 @@ fun AddBodyDialog(
     var blendAft by remember { mutableStateOf("") }
     var blendFwd by remember { mutableStateOf("") }
     var blendProfile by remember { mutableStateOf(BlendProfile.OGEE) }
+    var blendAftSeal by remember { mutableStateOf(false) }
+    var blendFwdSeal by remember { mutableStateOf(false) }
 
     // Keyway — gated behind a checkbox (fields hidden until turned on); mirrors the body card.
     var kwEnabled by remember { mutableStateOf(false) }
@@ -232,6 +235,10 @@ fun AddBodyDialog(
                     fwdLengthField = {
                         CommitNumField("Blend FWD (${abbr(unit)})", blendFwd) { blendFwd = it }
                     },
+                    aftSeal = blendAftSeal,
+                    fwdSeal = blendFwdSeal,
+                    onToggleAftSeal = { blendAftSeal = it },
+                    onToggleFwdSeal = { blendFwdSeal = it },
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(
@@ -345,6 +352,8 @@ fun AddBodyDialog(
                     if (blendAftOn) toMmOrNull(blendAft, unit) ?: 0f else 0f,
                     if (blendFwdOn) toMmOrNull(blendFwd, unit) ?: 0f else 0f,
                     blendProfile,
+                    blendAftOn && blendAftSeal,
+                    blendFwdOn && blendFwdSeal,
                 )
             }) { Text("Add") }
         },

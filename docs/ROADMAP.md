@@ -64,12 +64,18 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   move, and lower priority
 
 **Delivered in v0.5.x so far** (newest first):
-- Body face blends — a smooth machined transition from a body face into whatever diameter it
-  steps to, in place of a square shoulder, with S-curve / Fillet / Eased-cone profiles. Machined
-  inward out of the body that carries it, so no other component moves; diameters derived from the
-  neighbour; silhouette only (no rail, no footer row), with a drawn-width floor so a 2" blend
-  still reads on a compressed sheet. Fixed alongside it: two abutting explicit bodies fused into
-  one resolved run at the aft-most diameter
+- Body face blends and seal areas — a smooth machined transition from a body face into whatever
+  diameter it steps to, in place of a square shoulder, with S-curve / Fillet / Eased-cone
+  profiles. Machined inward out of the body that carries it, so no other component moves;
+  diameters derived from the neighbour; silhouette only (no rail, no footer row), with a
+  drawn-width floor so a 2" blend still reads on a compressed sheet. A liner butting the face
+  supplies a derived midpoint seat (the machined seat is hidden under the liner and varies job to
+  job), and a blended face can carry a **seal area** — the 3 radius cuts the fiberglass seats
+  into, each a silhouette V notch with a dashed line across. **Auto-body spans blend too**, keyed
+  by shaft-space anchor (`AutoBlend`), so a saved template keeps its seal areas when the liners or
+  the overall length move under it. Fixed alongside: two abutting explicit bodies fused into one
+  resolved run at the aft-most diameter, and a blend matched its stored face instead of its drawn
+  one, so an absorbed bare-shaft gap silently dropped it
 - Tap-to-add removed — the Schematic preview's canvas tap is selection only; components are
   added from the FAB chooser, the single entry point. Took the whole snap pipeline with it
 - Draggable runout bubbles — press and hold a bubble on the Runout tab's live preview to slide

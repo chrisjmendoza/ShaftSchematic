@@ -381,7 +381,29 @@ down under the liner but that seat is never drawn and its depth varies job to jo
 leaves from the **midpoint of the liner OD and the body Ø** (`seatDiaUnderLiner`), a derived visual
 cue nothing authors. A seat authored as its own body under a liner is NOT consulted —
 `subtractBodiesAgainstNonBodies` trims a fully covered body out of the drawing.
-Only **explicit** bodies carry blends. Blends print **no dimension rail and no footer row** — the
+Explicit bodies carry blends as stored fields; **auto spans carry them as shaft-space anchors**
+(`AutoBlend`, `ShaftSpec.autoBlends` — the `AutoDiaOverride` posture: anchor at the span midpoint,
+aft-most wins, dormant under a component, NEVER pruned), so a saved template keeps its seal areas
+when the liners or the overall length move under it. Both resolve to the same `BodyBlend`, and the
+draw sites cannot tell them apart. The face a blend curves from is the run's **DRAWN outer edge**,
+never the stored position — an absorbed bare-shaft gap moves that edge outward, which is exactly
+where the step then is, and matching the stored value silently dropped the blend the moment a
+neighbour shortened. A gap absorbed into an explicit body is therefore covered by that body's own
+blend; an anchor only comes into play where the auto span survives as its own run (bounded by
+non-bodies, e.g. bare shaft between two liners). A blended face may carry a **seal area** (`Body.blendAftSeal`/`blendFwdSeal`, `AutoBlend.seal`) —
+the radius cuts the fiberglass seats into, a fixed `SEAL_GROOVE_COUNT` (3) at `sealGrooveFracs`
+stations (evenly spaced, margin at each end). Each cut draws as a **V notch in both silhouette
+edges plus a DASHED line across seated on the notch floors** (`sealNotchGeom` — depth rides the
+blend's drawn width, capped against the shaft radius; notch width capped against the groove pitch
+so the V's never merge; dash `SEAL_DASH_ON_PT`/`SEAL_DASH_OFF_PT`, deliberately finer than the
+hidden-keyway 6/4 so a near-side cut never reads as a far-side feature). Inset + dash are both
+load-bearing: a solid full-height stroke is this drawing's glyph for a component face, and three of
+them made one shaft read as 3–4 segments (on-device report) — so seal lines stop on the notch floors, and
+`sealGrooveLines` + `curvePoints` derive floor and notch from the SAME `sealNotchGeom` so they
+cannot disagree. The shop cuts 3–4, but the sheet is a cue rather than a count to machine from.
+The cuts are made INTO the blend, so the control only appears once that face is blended, and both
+draw sites build them from the same `bodyDrawEdges` (`aftSeal`/`fwdSeal` carry FLOOR radii; the
+notches ride the curve point lists, so fill and stroke inherit them with no draw-site code). Blends print **no dimension rail and no footer row** — the
 rails keep dimensioning the STORED span (dimension to the theoretical sharp corner), which is why
 nothing in `DimensionRailLayout` or either composer's rail pass changed. That silence is what
 licenses the one exaggeration: a 2" blend on a 25' shaft is sub-pixel at true scale, so the

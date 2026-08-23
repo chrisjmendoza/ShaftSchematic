@@ -4,6 +4,8 @@ package com.android.shaftschematic.ui.resolved
 import com.android.shaftschematic.geom.BLEND_CURVE_STEPS
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.blendRadiusFrac
+import com.android.shaftschematic.geom.sealGrooveFracs
+import com.android.shaftschematic.geom.sealNotchGeom
 import com.android.shaftschematic.geom.easeAftFrac
 import com.android.shaftschematic.geom.easeFwdFrac
 import com.android.shaftschematic.geom.drawnBlendWidthPx
@@ -12,8 +14,11 @@ import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.autoBlendFor
 import com.android.shaftschematic.model.blendMmOn
+import com.android.shaftschematic.model.blendSealOn
 import kotlin.math.abs
+import kotlin.math.min
 
 /**
  * BodyBlends — the derived geometry behind a body's blended face, shared by every draw site.
@@ -44,6 +49,8 @@ data class BodyBlend(
     val bodyDiaMm: Float,
     val neighbourDiaMm: Float,
     val profile: BlendProfile,
+    /** Seal area: radius cuts drawn across the curve for the fiberglass to seat into. */
+    val seal: Boolean = false,
 )
 
 /** A blend's drawn span, already floored and clamped, ready to hand to `blendPolyline`. */
@@ -57,8 +64,10 @@ data class BlendDrawSpan(
 /**
  * Every drawable blend on the shaft.
  *
- * Only EXPLICIT bodies carry blends — an auto-body is a derived gap with no card fields to
- * set one on, and promoting it to an explicit body is the documented way to gain them.
+ * Explicit bodies carry their blends as stored fields; auto spans carry them as shaft-space
+ * anchors ([AutoBlend]), so a saved layout keeps its seal areas when the liners or the overall
+ * length move under it. Both resolve to the same [BodyBlend] here, and every draw site is blind
+ * to which kind it came from.
  *
  * A blend is dropped (not drawn, never an error) when there is no step to blend: nothing
  * across the face, or a neighbour at the same diameter.
@@ -73,7 +82,10 @@ data class BlendDrawSpan(
  */
 fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyBlend> {
     val blended = spec.bodies.filter { it.blendAftMm > 0f || it.blendFwdMm > 0f }
-    if (blended.isEmpty()) return emptyList()
+    // Auto spans carry their blends as anchors, not as fields on a stored body, so the
+    // early-out has to clear BOTH sources or a shaft with only bare-shaft seal areas
+    // (no explicit body anywhere) returns before the auto pass runs.
+    if (blended.isEmpty() && spec.autoBlends.isEmpty()) return emptyList()
 
     // Neighbour diameters come off the shaft's own surface, so a blend follows a taper's
     // local Ø as readily as a body's. Liners are sleeves, not steps, so they are left out.
@@ -84,50 +96,91 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
         .filter { it.source == ResolvedComponentSource.EXPLICIT }
         .groupBy { resolvedBodyBaseId(it.id) }
 
+    val autoRuns = components
+        .filterIsInstance<ResolvedBody>()
+        .filter { it.source == ResolvedComponentSource.AUTO }
+
     return buildList {
+        // Auto spans: the blend is anchored in shaft space, so the span that contains the
+        // anchor wears it however the surrounding geometry has moved.
+        for (run in autoRuns) {
+            for (end in LinerAuthoredReference.values()) {
+                val auto = spec.autoBlends.autoBlendFor(run.startMmPhysical, run.endMmPhysical, end)
+                    ?: continue
+                blendAt(components, segs, run, end, auto.lengthMm, auto.profile, auto.seal)
+                    ?.let(::add)
+            }
+        }
+
         for (b in blended) {
             val runs = runsByBase[b.id] ?: continue
             for (end in LinerAuthoredReference.values()) {
                 val stored = b.blendMmOn(end)
                 if (stored <= 0f) continue
 
-                // A split body draws as several runs; the blend belongs to the run that
-                // actually carries the stored face, never to an interior fragment edge.
-                val faceMm = if (end == LinerAuthoredReference.AFT) b.startFromAftMm
-                             else b.startFromAftMm + b.lengthMm
-                val run = runs.firstOrNull { r ->
-                    val edge = if (end == LinerAuthoredReference.AFT) r.startMmPhysical else r.endMmPhysical
-                    abs(edge - faceMm) <= BLEND_EPS_MM
-                } ?: continue
+                // The face is the OUTER edge of the body's drawn extent, not its stored
+                // position. A split body draws as several runs, so only the aft-most (or
+                // fwd-most) one carries that face; and an absorbed bare-shaft gap moves the
+                // edge outward, which is exactly where the drawn step then is. Matching the
+                // stored value instead would silently drop the blend the moment a neighbour
+                // shortened — the template case, where liner and shaft sizes move under a
+                // saved layout.
+                val run = (
+                    if (end == LinerAuthoredReference.AFT) runs.minByOrNull { it.startMmPhysical }
+                    else runs.maxByOrNull { it.endMmPhysical }
+                ) ?: continue
+                val faceMm = if (end == LinerAuthoredReference.AFT) run.startMmPhysical
+                             else run.endMmPhysical
 
-                val runLen = run.endMmPhysical - run.startMmPhysical
-                if (runLen <= BLEND_EPS_MM) continue
-
-                // Sample just OUTSIDE the face: that is the diameter the curve leaves from.
-                val probeMm = if (end == LinerAuthoredReference.AFT) faceMm - BLEND_EPS_MM * 10f
-                              else faceMm + BLEND_EPS_MM * 10f
-                // Shaft surface first (liners excluded); a liner butting the face is the
-                // seal-area case and supplies a derived seat instead.
-                val neighbourDia = outerDiaAt(segs, probeMm).takeIf { it > 0f }
-                    ?: seatDiaUnderLiner(components, probeMm, run.diaMm)
-                    ?: continue
-                if (abs(neighbourDia - run.diaMm) <= BLEND_EPS_MM) continue
-
-                add(
-                    BodyBlend(
-                        bodyId = run.id,
-                        end = end,
-                        faceMm = faceMm,
-                        // Clamping the DRAWN curve is not rewriting what was typed.
-                        lengthMm = stored.coerceAtMost(runLen),
-                        bodyDiaMm = run.diaMm,
-                        neighbourDiaMm = neighbourDia,
-                        profile = b.blendProfile,
-                    )
-                )
+                blendAt(components, segs, run, end, stored, b.blendProfile, b.blendSealOn(end))
+                    ?.let(::add)
             }
         }
     }
+}
+
+/**
+ * Resolve one face of one drawn run into a [BodyBlend], or null when there is no step to blend.
+ *
+ * Shared by the explicit and auto paths so the two can never disagree about what a face steps
+ * to. The face is the run's own outer edge — its DRAWN extent, which an absorbed bare-shaft gap
+ * may have moved outward from the stored value.
+ */
+private fun blendAt(
+    components: List<ResolvedComponent>,
+    segs: List<SurfaceSeg>,
+    run: ResolvedBody,
+    end: LinerAuthoredReference,
+    storedLengthMm: Float,
+    profile: BlendProfile,
+    seal: Boolean,
+): BodyBlend? {
+    if (storedLengthMm <= 0f) return null
+    val runLen = run.endMmPhysical - run.startMmPhysical
+    if (runLen <= BLEND_EPS_MM) return null
+    val faceMm = if (end == LinerAuthoredReference.AFT) run.startMmPhysical else run.endMmPhysical
+
+    // Sample just OUTSIDE the face: that is the diameter the curve leaves from.
+    val probeMm = if (end == LinerAuthoredReference.AFT) faceMm - BLEND_EPS_MM * 10f
+                  else faceMm + BLEND_EPS_MM * 10f
+    // Shaft surface first (liners excluded); a liner butting the face is the seal-area case
+    // and supplies a derived seat instead.
+    val neighbourDia = outerDiaAt(segs, probeMm).takeIf { it > 0f }
+        ?: seatDiaUnderLiner(components, probeMm, run.diaMm)
+        ?: return null
+    if (abs(neighbourDia - run.diaMm) <= BLEND_EPS_MM) return null
+
+    return BodyBlend(
+        bodyId = run.id,
+        end = end,
+        faceMm = faceMm,
+        // Clamping the DRAWN curve is not rewriting what was typed.
+        lengthMm = storedLengthMm.coerceAtMost(runLen),
+        bodyDiaMm = run.diaMm,
+        neighbourDiaMm = neighbourDia,
+        profile = profile,
+        seal = seal,
+    )
 }
 
 /**
@@ -205,6 +258,14 @@ data class BodyDrawEdges(
     val flatR: Float,
     val capAftR: Float,
     val capFwdR: Float,
+    /**
+     * Seal grooves on the aft curve: one (x, radius) per cut, in drawn units, radius at the
+     * notch FLOOR — a draw site strokes `cy − r → cy + r` and the line lands exactly on the
+     * bottoms of the two silhouette notches [curvePoints] cut for the same station.
+     */
+    val aftSeal: List<BodyEdgePoint> = emptyList(),
+    /** Seal grooves on the fwd curve, same convention. */
+    val fwdSeal: List<BodyEdgePoint> = emptyList(),
 ) {
     val hasBlend: Boolean get() = aftCurve.isNotEmpty() || fwdCurve.isNotEmpty()
 }
@@ -246,13 +307,15 @@ fun bodyDrawEdges(
     if (flatX1 <= flatX0) { flatX0 = x0; flatX1 = x1; return BodyDrawEdges(emptyList(), emptyList(), x0, x1, r, r, r) }
 
     return BodyDrawEdges(
-        aftCurve = aftSpan?.let { curvePoints(it, aft.profile, rAt, steps) } ?: emptyList(),
-        fwdCurve = fwdSpan?.let { curvePoints(it, fwd.profile, rAt, steps) } ?: emptyList(),
+        aftCurve = aftSpan?.let { curvePoints(it, aft.profile, rAt, steps, seal = aft.seal) } ?: emptyList(),
+        fwdCurve = fwdSpan?.let { curvePoints(it, fwd.profile, rAt, steps, seal = fwd.seal) } ?: emptyList(),
         flatX0 = flatX0,
         flatX1 = flatX1,
         flatR = r,
         capAftR = aft?.let { rAt(it.neighbourDiaMm) } ?: r,
         capFwdR = fwd?.let { rAt(it.neighbourDiaMm) } ?: r,
+        aftSeal = if (aft?.seal == true) sealGrooveLines(aftSpan!!, aft.profile, rAt) else emptyList(),
+        fwdSeal = if (fwd?.seal == true) sealGrooveLines(fwdSpan!!, fwd.profile, rAt) else emptyList(),
     )
 }
 
@@ -269,6 +332,7 @@ private fun curvePoints(
     profile: BlendProfile,
     rAt: (Float) -> Float,
     steps: Int,
+    seal: Boolean = false,
 ): List<BodyEdgePoint> {
     val r0 = rAt(span.diaAtAftMm)
     val r1 = rAt(span.diaAtFwdMm)
@@ -276,8 +340,69 @@ private fun curvePoints(
     val a = profile.easeAftFrac(largerAtAft)
     val b = profile.easeFwdFrac(largerAtAft)
     val w = span.xFwdPx - span.xAftPx
-    return (0..steps).map { i ->
-        val t = i.toFloat() / steps
-        BodyEdgePoint(span.xAftPx + w * t, r0 + (r1 - r0) * blendRadiusFrac(t, a, b))
+
+    fun surfaceR(t: Float) = r0 + (r1 - r0) * blendRadiusFrac(t, a, b)
+
+    val notch = if (seal) sealNotchGeom(w, min(r0, r1)) else null
+    if (notch == null) {
+        return (0..steps).map { i ->
+            val t = i.toFloat() / steps
+            BodyEdgePoint(span.xAftPx + w * t, surfaceR(t))
+        }
+    }
+
+    // Seal cuts break the silhouette: a V notch per groove, assembled as (t, radial inset)
+    // stations. Regular samples inside a notch window are dropped so no surface point
+    // pollutes the V. Both draw sites (and the fill polygons they build) iterate this list,
+    // so the notches reach fill and stroke everywhere with no draw-site change.
+    val dt = notch.halfWidthPx / w
+    val fracs = sealGrooveFracs()
+    val stations = buildList {
+        for (i in 0..steps) {
+            val t = i.toFloat() / steps
+            if (fracs.none { g -> t > g - dt && t < g + dt }) add(t to 0f)
+        }
+        for (g in fracs) {
+            add(g - dt to 0f)
+            add(g to notch.depthPx)
+            add(g + dt to 0f)
+        }
+        sortBy { it.first }
+    }
+    return stations.map { (t, inset) ->
+        BodyEdgePoint(span.xAftPx + w * t, surfaceR(t) - inset)
+    }
+}
+
+/**
+ * Where a seal area's radius cuts cross its blend, in drawn units.
+ *
+ * The shop cuts 3–4 rings for the fiberglass to seat into, and they sit ON the blended section
+ * running up to the liner. Each point carries the radius of the notch FLOOR — the local
+ * surface minus [sealNotchGeom]'s depth — so a draw site stroking `cy − r → cy + r` produces a
+ * line that ends exactly on the bottoms of the two silhouette notches [curvePoints] cuts at
+ * the same station. Stopping short of the silhouette is deliberate: a full-height line is this
+ * app's glyph for a component face, and the notch + inset line pair is what makes a groove
+ * read as a cut instead of a boundary.
+ *
+ * Stations come from the shared [sealGrooveFracs] and keep a margin from the curve's own ends.
+ */
+internal fun sealGrooveLines(
+    span: BlendDrawSpan,
+    profile: BlendProfile,
+    rAt: (Float) -> Float,
+): List<BodyEdgePoint> {
+    val r0 = rAt(span.diaAtAftMm)
+    val r1 = rAt(span.diaAtFwdMm)
+    val largerAtAft = r0 > r1
+    val a = profile.easeAftFrac(largerAtAft)
+    val b = profile.easeFwdFrac(largerAtAft)
+    val w = span.xFwdPx - span.xAftPx
+    val notch = sealNotchGeom(w, min(r0, r1)) ?: return emptyList()
+    return sealGrooveFracs().map { t ->
+        BodyEdgePoint(
+            span.xAftPx + w * t,
+            r0 + (r1 - r0) * blendRadiusFrac(t, a, b) - notch.depthPx,
+        )
     }
 }

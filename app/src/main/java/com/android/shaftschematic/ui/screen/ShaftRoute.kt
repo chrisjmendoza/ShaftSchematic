@@ -195,10 +195,11 @@ fun ShaftRoute(
         onSetOverallIsManual = vm::setOverallIsManual,
         onSelectComponentById = vm::selectComponentById,
 
-        onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf ->
-            vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf)
+        onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd ->
+            vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd)
         },
         onSetAutoSectionDia = vm::setAutoSectionDiaMm,
+        onSetAutoBlend = { s0, s1, end, len, prof, seal -> vm.setAutoBlend(s0, s1, end, len, prof, seal) },
         onSetShowAutoBodyDia = vm::setShowAutoBodyDia,
         onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit ->
             vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit)
@@ -209,7 +210,7 @@ fun ShaftRoute(
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateBodyShowDia = { i, show    -> vm.updateBodyShowDia(i, show) },
-        onUpdateBodyBlend = { i, aft, fwd, p -> vm.updateBodyBlend(i, aft, fwd, p) },
+        onUpdateBodyBlend = { i, aft, fwd, p, sAft, sFwd -> vm.updateBodyBlend(i, aft, fwd, p, sAft, sFwd) },
         onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label) },
         onUpdateBodyKeyway = { i, w, d, l, offset, end, spooned -> vm.updateBodyKeyway(i, w, d, l, offset, end, spooned) },
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },

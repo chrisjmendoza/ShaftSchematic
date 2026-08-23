@@ -62,6 +62,69 @@ drawn floor.
 Off by default and additive: a document that never touches a blend encodes and prints exactly as
 before.
 
+### feat: a blended face can carry a seal area
+
+The seal area at a body-to-liner transition is not just the shoulder — it is the **radius cuts
+the fiberglass seats into**, 3–4 of them, machined across the blended section running up to the
+liner (on-device photo).
+
+A blended face now offers **Seal area (3 cuts)**. Each cut draws as a small V notch in both
+silhouette edges with a **dashed** line across seated on the notch floors — on the photographed shaft every
+ring visibly interrupts the profile edge, and a groove that leaves the silhouette untouched reads
+as a scribe mark, not a cut. The inset matters for a second reason: a full silhouette-to-silhouette
+stroke is this drawing's glyph for a component face, so three of them would read as three phantom
+boundaries — and on-device review of the first solid-line draft confirmed it: three solid lines
+made one shaft read as 3–4 segments, which is why the line is dashed (finer than the hidden-keyway
+pattern, so a near-side cut never reads as a far-side feature). Notch depth rides the blend's
+drawn width (capped against the shaft radius —
+display-exaggerated like the undercut notch, safe because no number prints); notch width is capped
+against the groove pitch so three cuts keep clear surface between them even on the 7 pt minimum
+blend. The count is fixed at `SEAL_GROOVE_COUNT` stations (`sealGrooveFracs`, evenly spaced,
+margin at each end): the shop cuts 3–4, but a schematic is a cue rather than something to machine
+from, and a drawn count that looked authoritative would be worse than one that obviously is not.
+
+The control only appears once that face is blended — the cuts are made INTO the blend, so there is
+nowhere to put them on a square face. It rides the shared `BlendSection`, so the explicit card, the
+auto-body card and `AddBodyDialog` all get it at once, and both draw sites build the lines from the
+same `bodyDrawEdges` result.
+
+Line and notch derive from the same `sealNotchGeom`, so they meet exactly; the notches ride the
+curve point lists both sites already iterate, so fill and stroke inherit them with no draw-site
+code. If the shop's hand-drawn version differs, the construction is one place.
+
+### feat: auto-body spans can blend too, anchored in shaft space
+
+Blends were explicit-bodies-only, which pushed you into promoting a body just to blend it — and a
+promoted body pins its start and length. On-device: an SKF coupling seat with a larger body after
+it, where the shaft or the coupling later changes length and a fresh bare-shaft gap opens beside
+the promoted body. Worse for a template, where the saved layout has seal areas but the liners and
+the shaft both move under it.
+
+**Auto spans now carry blends as shaft-space anchors** (`AutoBlend` / `ShaftSpec.autoBlends`) —
+the `AutoDiaOverride` posture exactly: anchor system-placed at the span midpoint, aft-most wins per
+face, dormant under a component, never pruned, resurrects unchanged when its span reappears. The
+auto-body card gets the same shared `BlendSection` the explicit card and `AddBodyDialog` use, and
+both kinds resolve to the same `BodyBlend` — the draw sites cannot tell them apart. Templates carry
+the whole `ShaftSpec`, so anchored seal areas ride along with no new plumbing.
+
+The keyway section stays promotion-only: a keyway is real geometry needing a stable host, a blend
+is draw-only.
+
+### fix: a blend follows its DRAWN face, not its stored position
+
+A blend matched the body's stored start/end to find the run it belonged to. A bare-shaft gap
+absorbed into that run moves the run's outer edge outward — and the drawn step moves with it — so
+the exact match failed and the blend silently vanished. Three of four gap scenarios lost it: a gap
+between a taper and the blended body, between a liner and the blended body, and fwd of the blended
+body with a liner beyond. Only a gap between two plain bodies survived, because there the gap
+merges into the aft body and leaves the face where it was.
+
+The face is now the run's own outer edge — the aft-most run for an AFT blend, the fwd-most for a
+FWD one — which is where the step actually is in every case. This is also why an absorbed gap needs
+no anchor: the flanking body's own blend already covers it.
+
+Found while acting on the auto-body request; it was a live bug in the shipped blend.
+
 ### feat: a liner seal area blends to a derived midpoint seat
 
 A body face butting a liner produced no blend at all. The shaft really is cut down under a
