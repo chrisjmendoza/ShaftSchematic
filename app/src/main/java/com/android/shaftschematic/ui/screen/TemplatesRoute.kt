@@ -67,7 +67,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.io.TemplateStorage
-import com.android.shaftschematic.model.coverageEndMm
+import com.android.shaftschematic.model.oalIsManualOnLoad
 import com.android.shaftschematic.template.TemplateLinerCount
 import com.android.shaftschematic.template.TemplateSizeBucket
 import com.android.shaftschematic.template.sortKey
@@ -358,15 +358,12 @@ private fun TemplateCard(
     onDelete: () -> Unit,
 ) {
     // Resolved once per card — the same pure resolve the editor runs, so the preview shows
-    // auto-body fill and subtracted bodies exactly as the drawing will. The manual-OAL
-    // predicate must match applyTemplate's (`> coverageEndMm + eps`): a bare `OAL > 0` treats
-    // every stored auto-OAL document as manual and previews a leading auto-fill span that
-    // vanishes when the template is used.
+    // auto-body fill and subtracted bodies exactly as the drawing will. The manual-OAL decision
+    // comes from the shared [oalIsManualOnLoad] so it cannot drift from applyTemplate's: a
+    // predicate of its own here previews auto-fill spans that appear or vanish when the
+    // template is used.
     val resolved = remember(summary.filename, summary.spec) {
-        resolveComponents(
-            summary.spec,
-            overallIsManual = summary.spec.overallLengthMm > summary.spec.coverageEndMm() + 1e-3f,
-        )
+        resolveComponents(summary.spec, overallIsManual = summary.spec.oalIsManualOnLoad())
     }
     var menuOpen by remember { mutableStateOf(false) }
 

@@ -20,7 +20,6 @@ import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.io.TemplateStorage
 import java.io.File
 import com.android.shaftschematic.model.*
-import com.android.shaftschematic.model.snapForwardFrom
 import com.android.shaftschematic.ui.input.TaperSide
 import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
 import com.android.shaftschematic.ui.input.oalAfterTaperAddMm
@@ -1739,7 +1738,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun ensureOverall(minFreeMm: Float = 0f) = _spec.update { s ->
         if (_overallIsManual.value) return@update s
-        val end = coverageEndMm(s)
+        val end = s.coverageEndMm()
         val minOverall = end + max(0f, minFreeMm)
         if (s.overallLengthMm < minOverall) s.withNewOal(minOverall) else s
     }
@@ -2844,8 +2843,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _unitOverrides.value = decoded.unitOverrides
         _dualUnits.value = false
 
-        _overallIsManual.value =
-            decoded.spec.overallLengthMm > coverageEndMm(decoded.spec) + 1e-3f
+        _overallIsManual.value = decoded.spec.oalIsManualOnLoad()
 
         // Deliberately NOT markDocumentSaved() — see the KDoc. The baseline stays where it
         // was, so the session reads as unsaved work and autosave keeps a draft of it.
@@ -2890,10 +2888,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _dualUnits.value = decoded.dualUnits
 
         // Derive OAL mode from the document instead of leaking the previous session's
-        // flag: an authored OAL beyond the content end must be treated as manual, or
-        // the auto-sync path would snap it back down to the content end on open.
-        _overallIsManual.value =
-            decoded.spec.overallLengthMm > coverageEndMm(decoded.spec) + 1e-3f
+        // flag: an authored OAL must be treated as manual, or the auto path would snap it
+        // back down to the content end on open — and with it drop a leading auto span.
+        // See [oalIsManualOnLoad] for the two signals.
+        _overallIsManual.value = decoded.spec.oalIsManualOnLoad()
 
         markDocumentSaved()
     }
@@ -3013,17 +3011,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ────────────────────────────────────────────────────────────────────────────
     // Private helpers
     // ────────────────────────────────────────────────────────────────────────────
-
-    /** Last occupied end among all components (mm). */
-    private fun coverageEndMm(s: ShaftSpec): Float {
-        var end = 0f
-        s.bodies.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
-        s.tapers.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
-        s.threads.filter { !it.excludeFromOAL }
-                 .forEach { end = max(end, it.startFromAftMm + it.lengthMm) }
-        s.liners.forEach  { end = max(end, it.startFromAftMm + it.lengthMm) }
-        return end
-    }
 
     /** Emits a deletion snackbar request for the given [ComponentKind]. */
     private fun emitDeletedSnack(kind: ComponentKind) {

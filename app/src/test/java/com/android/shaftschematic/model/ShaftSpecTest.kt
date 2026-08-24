@@ -131,6 +131,84 @@ class ShaftSpecTest {
         assertEquals(0f, spec.freeToEndMm(), 0.001f)
     }
 
+    // ── oalIsManualOnLoad ───────────────────────────────────────────────────────────────
+    // The load-time OAL mode decision, shared by open / template-apply / template-preview.
+
+    @Test
+    fun `oalIsManualOnLoad is manual when overall reaches past the coverage end`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = 100f))
+        )
+        assertTrue(spec.oalIsManualOnLoad())
+    }
+
+    @Test
+    fun `oalIsManualOnLoad is auto when content starts at 0 and fills the overall`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 500f,
+            bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = 100f))
+        )
+        assertFalse(spec.oalIsManualOnLoad())
+    }
+
+    @Test
+    fun `oalIsManualOnLoad is manual when a leading gap precedes the first component`() {
+        // The reload edge: overall exactly equals the coverage end, so the free-length rule
+        // says nothing — but the shaft starts with 100mm of bare stock that only a manual OAL
+        // resolves into an auto span.
+        val spec = ShaftSpec(
+            overallLengthMm = 600f,
+            bodies = listOf(Body(startFromAftMm = 100f, lengthMm = 500f, diaMm = 100f))
+        )
+        assertTrue(spec.oalIsManualOnLoad())
+    }
+
+    @Test
+    fun `oalIsManualOnLoad reads the aft-most start across every component type`() {
+        // The aft-most component is the liner at 0 — a taper further FWD is not a leading gap.
+        val spec = ShaftSpec(
+            overallLengthMm = 400f,
+            tapers = listOf(Taper(startFromAftMm = 300f, lengthMm = 100f, startDiaMm = 50f, endDiaMm = 30f)),
+            liners = listOf(Liner(startFromAftMm = 0f, lengthMm = 200f, odMm = 60f))
+        )
+        assertFalse(spec.oalIsManualOnLoad())
+    }
+
+    @Test
+    fun `oalIsManualOnLoad is auto for an empty spec`() {
+        // No components → the leading-gap rule can never fire; a bare length still reads as
+        // authored, which is the pre-existing coverage-end behaviour.
+        assertFalse(ShaftSpec().oalIsManualOnLoad())
+        assertTrue(ShaftSpec(overallLengthMm = 1000f).oalIsManualOnLoad())
+    }
+
+    @Test
+    fun `oalIsManualOnLoad ignores threads excluded from OAL`() {
+        // An excluded thread is parked outside the envelope (negative start at the AFT end),
+        // which is neither a leading gap nor coverage.
+        val spec = ShaftSpec(
+            overallLengthMm = 500f,
+            bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = 100f)),
+            threads = listOf(
+                Threads(
+                    startFromAftMm = -50f, lengthMm = 50f, majorDiaMm = 45f, pitchMm = 2f,
+                    excludeFromOAL = true
+                )
+            )
+        )
+        assertFalse(spec.oalIsManualOnLoad())
+    }
+
+    @Test
+    fun `oalIsManualOnLoad is auto when no overall length is stored`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 0f,
+            bodies = listOf(Body(startFromAftMm = 100f, lengthMm = 200f, diaMm = 100f))
+        )
+        assertFalse(spec.oalIsManualOnLoad())
+    }
+
     @Test
     fun `maxOuterDiaMm returns 0 for empty spec`() {
         val spec = ShaftSpec()
