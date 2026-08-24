@@ -5,6 +5,7 @@ import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.model.maxDiaMm
 import kotlin.math.abs
 
 /**
@@ -28,11 +29,34 @@ private const val SHORT_SEGMENT_MM = 1f
 /** Adjacent-body Ø ratio (max/min) above which a discontinuity is flagged. */
 private const val BODY_STEP_WARN_RATIO = 1.5f
 
+/**
+ * Provisional sanity ceiling on a stored component's axial length (mm), above which a
+ * value reads as a fat-fingered typo rather than a real shaft (~50 ft). Chosen without shop
+ * input — same posture as [BODY_STEP_WARN_RATIO] and [SHORT_SEGMENT_MM], both under review
+ * per `TODO.md` §2.2. Advisory only: it never clamps or rewrites the typed value.
+ */
+private const val SANITY_MAX_COMPONENT_LENGTH_MM = 15_000f
+
+/**
+ * Provisional sanity ceiling on any component diameter field (mm), above which a value
+ * reads as a fat-fingered typo rather than a real shaft (~40 in). Same posture and caveats
+ * as [SANITY_MAX_COMPONENT_LENGTH_MM].
+ */
+private const val SANITY_MAX_DIA_MM = 1_000f
+
 private const val SHORT_SEGMENT_MSG = "Very short segment (< 1 mm)"
+private const val LENGTH_SANITY_MSG = "Length exceeds 15 m — check for a typo"
+private const val DIA_SANITY_MSG = "Diameter exceeds 1 m — check for a typo"
 
 /** True for a positive length at or below the short-segment threshold (0 excluded). */
 private fun isShortSegment(lengthMm: Float): Boolean =
     lengthMm in Float.MIN_VALUE..SHORT_SEGMENT_MM
+
+/** True when [lengthMm] exceeds the implausible-length sanity ceiling. */
+private fun isImplausiblyLong(lengthMm: Float): Boolean = lengthMm > SANITY_MAX_COMPONENT_LENGTH_MM
+
+/** True when [diaMm] exceeds the implausible-diameter sanity ceiling. */
+private fun isImplausiblyLargeDia(diaMm: Float): Boolean = diaMm > SANITY_MAX_DIA_MM
 
 /** Positive-overlap length of the two axial spans (≤ 0 when they do not overlap). */
 private fun overlapLenMm(aStart: Float, aEnd: Float, bStart: Float, bEnd: Float): Float =
@@ -47,18 +71,22 @@ private fun facesAbut(aStart: Float, aEnd: Float, bStart: Float, bEnd: Float): B
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Advisory warnings for a stored [body]. Includes the very-short-segment check plus
- * §3.2 Ø-discontinuity vs an adjacent stored body.
+ * Advisory warnings for a stored [body]. Includes the very-short-segment check, the
+ * implausible length/diameter sanity checks (§2.1), plus §3.2 Ø-discontinuity vs an
+ * adjacent stored body.
  */
 fun bodyWarningMessages(spec: ShaftSpec, body: Body): List<String> {
     val out = mutableListOf<String>()
     if (isShortSegment(body.lengthMm)) out += SHORT_SEGMENT_MSG
+    if (isImplausiblyLong(body.lengthMm)) out += LENGTH_SANITY_MSG
+    if (isImplausiblyLargeDia(body.diaMm)) out += DIA_SANITY_MSG
     if (hasAdjacentBodyStep(spec, body)) out += "Large Ø step vs adjacent body"
     return out
 }
 
 /**
- * Advisory warnings for a stored [taper] — currently only the very-short-segment check.
+ * Advisory warnings for a stored [taper]: the very-short-segment check plus the implausible
+ * length/diameter sanity checks (§2.1), checked against the larger of SET/LET diameter.
  *
  * A taper-vs-body Ø mismatch advisory is intentionally not included: the mismatch is
  * already visible in the drawing itself, and the two storage paths (Add dialog vs carousel
@@ -68,25 +96,36 @@ fun bodyWarningMessages(spec: ShaftSpec, body: Body): List<String> {
 fun taperWarningMessages(spec: ShaftSpec, taper: Taper): List<String> {
     val out = mutableListOf<String>()
     if (isShortSegment(taper.lengthMm)) out += SHORT_SEGMENT_MSG
+    if (isImplausiblyLong(taper.lengthMm)) out += LENGTH_SANITY_MSG
+    if (isImplausiblyLargeDia(taper.maxDiaMm)) out += DIA_SANITY_MSG
     return out
 }
 
 /**
- * Advisory warnings for a stored [liner]. Includes the very-short-segment check plus
- * §3.5 liner OD below the diameter of a body it overlaps.
+ * Advisory warnings for a stored [liner]. Includes the very-short-segment check, the
+ * implausible length/diameter sanity checks (§2.1), plus §3.5 liner OD below the diameter
+ * of a body it overlaps.
  */
 fun linerWarningMessages(spec: ShaftSpec, liner: Liner): List<String> {
     val out = mutableListOf<String>()
     if (isShortSegment(liner.lengthMm)) out += SHORT_SEGMENT_MSG
+    if (isImplausiblyLong(liner.lengthMm)) out += LENGTH_SANITY_MSG
+    if (isImplausiblyLargeDia(liner.odMm)) out += DIA_SANITY_MSG
     if (linerOdBelowUnderlyingBody(spec, liner)) out += "Liner OD smaller than shaft Ø beneath it"
     return out
 }
 
-/** Advisory warning for a [thread] — zero pitch or very short segment. Unchanged; no spec context. */
-fun threadWarningMessage(thread: Threads): String? {
-    if (thread.pitchMm == 0f) return "Zero pitch — thread renders flat"
-    if (isShortSegment(thread.lengthMm)) return SHORT_SEGMENT_MSG
-    return null
+/**
+ * Advisory warnings for a [thread]: zero pitch, very short segment, or the implausible
+ * length/major-diameter sanity checks (§2.1). No spec context needed.
+ */
+fun threadWarningMessages(thread: Threads): List<String> {
+    val out = mutableListOf<String>()
+    if (thread.pitchMm == 0f) out += "Zero pitch — thread renders flat"
+    if (isShortSegment(thread.lengthMm)) out += SHORT_SEGMENT_MSG
+    if (isImplausiblyLong(thread.lengthMm)) out += LENGTH_SANITY_MSG
+    if (isImplausiblyLargeDia(thread.majorDiaMm)) out += DIA_SANITY_MSG
+    return out
 }
 
 /** §3.2 — a stored body adjacent to [body] whose Ø differs by more than [BODY_STEP_WARN_RATIO]. */

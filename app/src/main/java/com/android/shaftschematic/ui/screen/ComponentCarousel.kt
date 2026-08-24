@@ -85,7 +85,7 @@ import com.android.shaftschematic.ui.util.buildThreadTitleById
 import com.android.shaftschematic.ui.util.linerWarningMessages
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.taperWarningMessages
-import com.android.shaftschematic.ui.util.threadWarningMessage
+import com.android.shaftschematic.ui.util.threadWarningMessages
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.ThreadDesignation
 import com.android.shaftschematic.util.DisplayUnits
@@ -1297,7 +1297,7 @@ internal fun ComponentPagerCard(
                     startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)
                         ?: if (th.id in collidingComponentIds) "Overlaps another component" else null
                 ),
-                warningMessage = threadWarningMessage(th),
+                warningMessage = threadWarningMessages(th).joinToString("; ").ifEmpty { null },
                 componentId = th.id, componentKind = ComponentKind.THREAD,
                 outerPaddingHorizontal = outerPaddingHorizontal,
                 onRemove = {

@@ -20,6 +20,12 @@ class ComponentWarningsTest {
     private val LINER_UNDER = "Liner OD smaller than shaft Ø beneath it"
     private val SHORT = "Very short segment (< 1 mm)"
     private val NO_BODIES = "No explicit bodies — shaft body is all auto-fill"
+    private val LENGTH_SANITY = "Length exceeds 15 m — check for a typo"
+    private val DIA_SANITY = "Diameter exceeds 1 m — check for a typo"
+
+    // Mirrors the private thresholds in ComponentWarnings.kt.
+    private val MAX_LEN = 15_000f
+    private val MAX_DIA = 1_000f
 
     /* ── §3.2 Body Ø discontinuity vs adjacent body ─────────────────────────── */
 
@@ -135,13 +141,150 @@ class ComponentWarningsTest {
     @Test
     fun `thread zero pitch warns`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = 40f, pitchMm = 0f)
-        assertEquals("Zero pitch — thread renders flat", threadWarningMessage(th))
+        assertTrue(threadWarningMessages(th).contains("Zero pitch — thread renders flat"))
     }
 
     @Test
     fun `thread short segment warns`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 0.5f, majorDiaMm = 40f, pitchMm = 2f)
-        assertEquals(SHORT, threadWarningMessage(th))
+        assertTrue(threadWarningMessages(th).contains(SHORT))
+    }
+
+    /* ── §2.1 Implausible length/diameter sanity checks ────────────────────── */
+
+    @Test
+    fun `body warns on implausible length`() {
+        val a = Body(startFromAftMm = 0f, lengthMm = MAX_LEN + 1f, diaMm = 50f)
+        val spec = ShaftSpec(overallLengthMm = MAX_LEN + 1000f, bodies = listOf(a))
+        assertTrue(bodyWarningMessages(spec, a).contains(LENGTH_SANITY))
+    }
+
+    @Test
+    fun `body silent on length exactly at threshold`() {
+        val a = Body(startFromAftMm = 0f, lengthMm = MAX_LEN, diaMm = 50f)
+        val spec = ShaftSpec(overallLengthMm = MAX_LEN, bodies = listOf(a))
+        assertFalse(bodyWarningMessages(spec, a).contains(LENGTH_SANITY))
+    }
+
+    @Test
+    fun `body warns on implausible diameter`() {
+        val a = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = MAX_DIA + 1f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a))
+        assertTrue(bodyWarningMessages(spec, a).contains(DIA_SANITY))
+    }
+
+    @Test
+    fun `body silent on diameter exactly at threshold`() {
+        val a = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = MAX_DIA)
+        val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a))
+        assertFalse(bodyWarningMessages(spec, a).contains(DIA_SANITY))
+    }
+
+    @Test
+    fun `body implausible dia produces sanity warning plus legitimate step warning only`() {
+        val a = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = MAX_DIA + 1f)
+        val b = Body(startFromAftMm = 100f, lengthMm = 100f, diaMm = 50f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a, b))
+        val warnings = bodyWarningMessages(spec, a)
+        assertEquals(setOf(DIA_SANITY, STEP), warnings.toSet())
+    }
+
+    @Test
+    fun `taper warns on implausible length`() {
+        val t = Taper(startFromAftMm = 0f, lengthMm = MAX_LEN + 1f, startDiaMm = 80f, endDiaMm = 60f)
+        val spec = ShaftSpec(overallLengthMm = MAX_LEN + 1000f, tapers = listOf(t))
+        assertTrue(taperWarningMessages(spec, t).contains(LENGTH_SANITY))
+    }
+
+    @Test
+    fun `taper silent on length exactly at threshold`() {
+        val t = Taper(startFromAftMm = 0f, lengthMm = MAX_LEN, startDiaMm = 80f, endDiaMm = 60f)
+        val spec = ShaftSpec(overallLengthMm = MAX_LEN, tapers = listOf(t))
+        assertFalse(taperWarningMessages(spec, t).contains(LENGTH_SANITY))
+    }
+
+    @Test
+    fun `taper warns on implausible diameter via either end`() {
+        val setEnd = Taper(startFromAftMm = 0f, lengthMm = 100f, startDiaMm = MAX_DIA + 1f, endDiaMm = 60f)
+        val letEnd = Taper(startFromAftMm = 0f, lengthMm = 100f, startDiaMm = 60f, endDiaMm = MAX_DIA + 1f)
+        val spec = ShaftSpec(overallLengthMm = 1000f)
+        assertTrue(taperWarningMessages(spec, setEnd).contains(DIA_SANITY))
+        assertTrue(taperWarningMessages(spec, letEnd).contains(DIA_SANITY))
+    }
+
+    @Test
+    fun `taper silent on diameter exactly at threshold`() {
+        val t = Taper(startFromAftMm = 0f, lengthMm = 100f, startDiaMm = MAX_DIA, endDiaMm = 60f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, tapers = listOf(t))
+        assertFalse(taperWarningMessages(spec, t).contains(DIA_SANITY))
+    }
+
+    @Test
+    fun `liner warns on implausible length`() {
+        val ln = Liner(startFromAftMm = 0f, lengthMm = MAX_LEN + 1f, odMm = 80f)
+        val spec = ShaftSpec(overallLengthMm = MAX_LEN + 1000f, liners = listOf(ln))
+        assertTrue(linerWarningMessages(spec, ln).contains(LENGTH_SANITY))
+    }
+
+    @Test
+    fun `liner silent on length exactly at threshold`() {
+        val ln = Liner(startFromAftMm = 0f, lengthMm = MAX_LEN, odMm = 80f)
+        val spec = ShaftSpec(overallLengthMm = MAX_LEN, liners = listOf(ln))
+        assertFalse(linerWarningMessages(spec, ln).contains(LENGTH_SANITY))
+    }
+
+    @Test
+    fun `liner warns on implausible od`() {
+        val ln = Liner(startFromAftMm = 0f, lengthMm = 100f, odMm = MAX_DIA + 1f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, liners = listOf(ln))
+        assertTrue(linerWarningMessages(spec, ln).contains(DIA_SANITY))
+    }
+
+    @Test
+    fun `liner silent on od exactly at threshold`() {
+        val ln = Liner(startFromAftMm = 0f, lengthMm = 100f, odMm = MAX_DIA)
+        val spec = ShaftSpec(overallLengthMm = 1000f, liners = listOf(ln))
+        assertFalse(linerWarningMessages(spec, ln).contains(DIA_SANITY))
+    }
+
+    @Test
+    fun `liner implausible od produces sanity warning plus legitimate underlying-body warning only`() {
+        val body = Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = MAX_DIA + 500f)
+        val ln = Liner(startFromAftMm = 100f, lengthMm = 200f, odMm = MAX_DIA + 1f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), liners = listOf(ln))
+        val warnings = linerWarningMessages(spec, ln)
+        assertEquals(setOf(DIA_SANITY, LINER_UNDER), warnings.toSet())
+    }
+
+    @Test
+    fun `thread warns on implausible length`() {
+        val th = Threads(startFromAftMm = 0f, lengthMm = MAX_LEN + 1f, majorDiaMm = 40f, pitchMm = 2f)
+        assertTrue(threadWarningMessages(th).contains(LENGTH_SANITY))
+    }
+
+    @Test
+    fun `thread silent on length exactly at threshold`() {
+        val th = Threads(startFromAftMm = 0f, lengthMm = MAX_LEN, majorDiaMm = 40f, pitchMm = 2f)
+        assertFalse(threadWarningMessages(th).contains(LENGTH_SANITY))
+    }
+
+    @Test
+    fun `thread warns on implausible major diameter`() {
+        val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = MAX_DIA + 1f, pitchMm = 2f)
+        assertTrue(threadWarningMessages(th).contains(DIA_SANITY))
+    }
+
+    @Test
+    fun `thread silent on major diameter exactly at threshold`() {
+        val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = MAX_DIA, pitchMm = 2f)
+        assertFalse(threadWarningMessages(th).contains(DIA_SANITY))
+    }
+
+    @Test
+    fun `thread implausible dia produces sanity warning plus legitimate zero-pitch warning only`() {
+        val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = MAX_DIA + 1f, pitchMm = 0f)
+        val warnings = threadWarningMessages(th)
+        assertEquals(setOf(DIA_SANITY, "Zero pitch — thread renders flat"), warnings.toSet())
     }
 
     /* ── §4.3 Spec-level tiny segments ──────────────────────────────────────── */
