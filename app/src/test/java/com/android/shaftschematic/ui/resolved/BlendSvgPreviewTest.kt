@@ -1,11 +1,19 @@
 package com.android.shaftschematic.ui.resolved
 
+import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PT
+import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
+import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
+import com.android.shaftschematic.geom.ProfileFeatureSpan
 import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
 import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
+import com.android.shaftschematic.geom.buildCompressedProfileXMap
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Taper
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
@@ -186,5 +194,136 @@ class BlendSvgPreviewTest {
         val out = File("build/reports/blend-preview").also { it.mkdirs() }
         File(out, "blend-profiles.svg").writeText(svg.render())
         org.junit.Assert.assertEquals("rows asked for a blend and got none", 0, missing)
+    }
+
+    /**
+     * The runout/consolidated sheet draws the same edges through its COMPRESSED piecewise
+     * x map, not the linear one — this renders that case so the sheet's blends can be
+     * reviewed the same way. A long working shaft: aft taper, one long body blended into
+     * the taper's LET on its AFT face and carrying a seal area against a liner at FWD.
+     *
+     * Pinned (not just rendered): under the compressed map each curve still leaves exactly
+     * AT the drawn face, the floored curve width never collapses below
+     * [MIN_BLEND_WIDTH_PT] even when the host run compresses hard, and every seal cut
+     * stays strictly inside its curve's span.
+     */
+    @Test
+    fun `render blends under the compressed sheet map to svg`() {
+        val padL = 152f
+        val contentW = 420f          // narrow on purpose: the 17 ft body run must compress
+        val diaPtPerMm = 0.26f
+        val rowH = 150f
+
+        val s = ShaftSpec(
+            overallLengthMm = 6096f,  // 20 ft
+            tapers = listOf(Taper(startFromAftMm = 0f, lengthMm = 300f, startDiaMm = 127f, endDiaMm = 165.1f)),
+            bodies = listOf(
+                Body(
+                    id = "run", startFromAftMm = 300f, lengthMm = 5296f, diaMm = 177.8f,
+                    blendAftMm = 50.8f, blendProfile = BlendProfile.OGEE,
+                    blendFwdMm = 50.8f, blendFwdSeal = true,
+                ),
+            ),
+            liners = listOf(Liner(startFromAftMm = 5596f, lengthMm = 500f, odMm = 203.2f)),
+        )
+        val comps = resolveComponents(s, overallIsManual = true)
+        val blends = bodyBlends(s, comps)
+        assertEquals("both faces should blend (taper step aft, liner seal fwd)", 2, blends.size)
+
+        val xMap = buildCompressedProfileXMap(
+            windowStartMm = 0f,
+            windowEndMm = 6096f,
+            features = listOf(
+                ProfileFeatureSpan(0f, 300f, 0f, PROFILE_TAPER_MIN_FRAC_OF_TRUE),
+                ProfileFeatureSpan(5596f, 6096f, PROFILE_MIN_LINER_PT),
+            ),
+            contentLeft = padL,
+            contentRight = padL + contentW,
+            diaPtPerMm = diaPtPerMm,
+        )
+        val maps = listOf(
+            "Compressed sheet map (runout/consolidated)" to { mm: Float -> xMap.xAt(mm) },
+            "Linear map (control — same geometry)" to { mm: Float -> padL + mm * (contentW / 6096f) },
+        )
+
+        val svg = Svg(w = padL + contentW + 40f, h = 40f + maps.size * rowH + 20f)
+        var y = 40f
+        maps.forEach { (title, xAt) ->
+            val cy = y + rowH / 2f
+            svg.text(12f, y, title, size = 12.5f, fill = "#b0432c", weight = "bold")
+            svg.line(padL - 12f, cy, padL + contentW + 12f, cy, stroke = "#c33", sw = 0.5f)
+
+            comps.filterIsInstance<ResolvedBody>().forEach { run ->
+                val e = bodyDrawEdges(
+                    runId = run.id,
+                    runStartMm = run.startMmPhysical,
+                    runEndMm = run.endMmPhysical,
+                    runDiaMm = run.diaMm,
+                    blends = blends,
+                    xAt = xAt,
+                    rAt = { dia -> dia / 2f * diaPtPerMm },
+                    minWidthPx = MIN_BLEND_WIDTH_PT,
+                )
+                val x0 = xAt(run.startMmPhysical)
+                val x1 = xAt(run.endMmPhysical)
+                if (e.aftCurve.isNotEmpty()) {
+                    assertEquals("aft curve leaves AT the drawn face", x0, e.aftCurve.first().xPx, 1e-3f)
+                    assertTrue(
+                        "floored curve width holds under compression",
+                        e.aftCurve.last().xPx - e.aftCurve.first().xPx >= MIN_BLEND_WIDTH_PT - 1e-3f,
+                    )
+                }
+                if (e.fwdCurve.isNotEmpty()) {
+                    assertEquals("fwd curve arrives AT the drawn face", x1, e.fwdCurve.last().xPx, 1e-3f)
+                }
+                e.fwdSeal.forEach { g ->
+                    assertTrue(
+                        "seal cut stays inside its curve span",
+                        g.xPx > e.fwdCurve.first().xPx && g.xPx < e.fwdCurve.last().xPx,
+                    )
+                }
+
+                val top = buildList {
+                    if (e.aftCurve.isNotEmpty()) addAll(e.aftCurve.map { it.xPx to it.rPx })
+                    else add(x0 to e.capAftR)
+                    add(e.flatX0 to e.flatR)
+                    add(e.flatX1 to e.flatR)
+                    if (e.fwdCurve.isNotEmpty()) addAll(e.fwdCurve.map { it.xPx to it.rPx })
+                    else add(x1 to e.capFwdR)
+                }
+                svg.poly(
+                    top.map { it.first to cy - it.second } + top.reversed().map { it.first to cy + it.second },
+                    fill = "#00000018",
+                )
+                for (k in 1 until top.size) {
+                    svg.line(top[k - 1].first, cy - top[k - 1].second, top[k].first, cy - top[k].second)
+                    svg.line(top[k - 1].first, cy + top[k - 1].second, top[k].first, cy + top[k].second)
+                }
+                svg.line(x0, cy - e.capAftR, x0, cy + e.capAftR)
+                svg.line(x1, cy - e.capFwdR, x1, cy + e.capFwdR)
+                (e.aftSeal + e.fwdSeal).forEach { g ->
+                    svg.line(g.xPx, cy - g.rPx, g.xPx, cy + g.rPx,
+                        dash = "$SEAL_DASH_ON_PT $SEAL_DASH_OFF_PT")
+                }
+            }
+
+            comps.filterIsInstance<ResolvedTaper>().forEach { t ->
+                val tx0 = xAt(t.startMmPhysical); val tx1 = xAt(t.endMmPhysical)
+                val r0 = t.startDiaMm / 2f * diaPtPerMm; val r1 = t.endDiaMm / 2f * diaPtPerMm
+                svg.line(tx0, cy - r0, tx1, cy - r1); svg.line(tx0, cy + r0, tx1, cy + r1)
+                svg.line(tx0, cy - r0, tx0, cy + r0); svg.line(tx1, cy - r1, tx1, cy + r1)
+            }
+            comps.filterIsInstance<ResolvedLiner>().forEach { ln ->
+                val lx0 = xAt(ln.startMmPhysical); val lx1 = xAt(ln.endMmPhysical)
+                val lr = ln.odMm / 2f * diaPtPerMm
+                svg.poly(listOf(lx0 to cy - lr, lx1 to cy - lr, lx1 to cy + lr, lx0 to cy + lr), fill = "#00000028")
+                svg.line(lx0, cy - lr, lx1, cy - lr); svg.line(lx0, cy + lr, lx1, cy + lr)
+                svg.line(lx0, cy - lr, lx0, cy + lr); svg.line(lx1, cy - lr, lx1, cy + lr)
+            }
+            y += rowH
+        }
+
+        val out = File("build/reports/blend-preview").also { it.mkdirs() }
+        File(out, "blend-compressed-sheet.svg").writeText(svg.render())
     }
 }

@@ -9,6 +9,9 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.DimensionRailLayout
+import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PT
+import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
+import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.geom.couplingFaceLayout
 import com.android.shaftschematic.geom.PlacedRunoutBubble
 import com.android.shaftschematic.geom.RunoutBubbleGeometry
@@ -42,9 +45,12 @@ import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
+import com.android.shaftschematic.ui.resolved.BodyBlend
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
+import com.android.shaftschematic.ui.resolved.bodyBlends
+import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualLabel
@@ -217,6 +223,10 @@ fun composeRunoutPdf(
     c.drawColor(Color.WHITE)
 
     val docSpec = spec.withResolvedBodies(resolvedComponents)
+    // Blends need the resolved neighbours to know what diameter each face steps to; without
+    // a resolve pass there is nothing to blend against, so the faces simply stay square —
+    // the schematic composer's rule (`ShaftPdfComposer.blendsForPdf`).
+    val bodyBlendsForSheet = resolvedComponents?.let { bodyBlends(spec, it) } ?: emptyList()
 
     val pageW = page.info.pageWidth.toFloat()
     val pageH = page.info.pageHeight.toFloat()
@@ -654,7 +664,8 @@ fun composeRunoutPdf(
     drawShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill,
         ptPerMm = diaPtPerMm, truePtPerMm = diaPtPerMm,
-        breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac)
+        breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
+        blends = bodyBlendsForSheet)
 
     // ── Wear marks + worn sections + in-profile values (consolidated sheet) ───
     // Z-order (on-device request): marks first — wear-area bands and pit X's — then the
@@ -1259,15 +1270,16 @@ private fun drawShaftProfile(
     truePtPerMm: Float = 0f,
     /** The user's `PdfPrefs.sBreakThresholdFrac`; 0 = never break on compression. */
     breakMinFracOfTrue: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
+    /**
+     * Blended faces on the body runs ([bodyBlends]). A blend is a face detail machined out
+     * of the body — the flat span shrinks, the curve occupies what it gave up, and the end
+     * cap stands at the neighbouring diameter. Empty without a resolve pass (square faces).
+     */
+    blends: List<BodyBlend> = emptyList(),
 ) {
     // ── Shade fills first (drawn under all outlines) ──────────────────────
-    bodyFill?.let { f ->
-        spec.bodies.forEach { b ->
-            if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
-            val r = rPx(b.diaMm)
-            c.drawRect(xAt(b.startFromAftMm), cy - r, xAt(b.startFromAftMm + b.lengthMm), cy + r, f)
-        }
-    }
+    // Body fill is drawn inside `drawBodiesForRunout` — a blended face shades under its
+    // curve, not to a square corner, so fill and outline must decompose the same edges.
     taperFill?.let { f ->
         spec.tapers.forEach { t ->
             if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
@@ -1289,7 +1301,10 @@ private fun drawShaftProfile(
         }
     }
     // Bodies — with compression breaks for foreshortened (and very long) sections
-    drawBodiesForRunout(c, spec.bodies, cy, xAt, rPx, outline, geomRect, truePtPerMm, breakMinFracOfTrue)
+    drawBodiesForRunout(
+        c, spec.bodies, cy, xAt, rPx, outline, geomRect, truePtPerMm, breakMinFracOfTrue,
+        fill = bodyFill, blends = blends,
+    )
     // Tapers
     drawTapersForRunout(c, spec, xAt, rPx, cy, outline)
     // Liners (elevated outline, thin end ticks)
@@ -1343,41 +1358,88 @@ private fun drawBodiesForRunout(
     truePtPerMm: Float = 0f,
     /** The user's `PdfPrefs.sBreakThresholdFrac`; 0 = never break on compression. */
     breakMinFracOfTrue: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
+    /** `shadedBodies` fill, drawn here (not pre-passed) so it follows the blend curves. */
+    fill: Paint? = null,
+    /** Blended faces on these runs ([bodyBlends]); see `drawShaftProfile`'s parameter doc. */
+    blends: List<BodyBlend> = emptyList(),
 ) {
     val capPaint = Paint(outline)
     bodies.forEach { b ->
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r  = rPx(b.diaMm);          val top = cy - r; val bot = cy + r
+
+        // Same decomposition as the schematic composer: the blend is machined out of the
+        // body, so the FLAT span shrinks by the drawn curve width at each blended face and
+        // the run's compression treatment applies to what remains.
+        val edges = bodyDrawEdges(
+            runId = b.id,
+            runStartMm = b.startFromAftMm,
+            runEndMm = b.startFromAftMm + b.lengthMm,
+            runDiaMm = b.diaMm,
+            blends = blends,
+            xAt = xAt,
+            rAt = { dia -> rPx(dia) },
+            minWidthPx = MIN_BLEND_WIDTH_PT,
+        )
+        val fx0 = edges.flatX0
+        val fx1 = edges.flatX1
+
+        // The break decision stays on the run's FULL drawn width — a blend is a face
+        // detail, not a reason for the body to read as more or less compressed.
         val lenPt = abs(x1 - x0)
         val foreshortened = breakForCompression(lenPt, b.lengthMm, truePtPerMm, breakMinFracOfTrue)
 
+        drawBlendCurvePdf(c, edges.aftCurve, cy, outline, fill)
+        drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, fill)
+
         if (!foreshortened && lenPt < COMPRESS_TRIGGER_PT) {
-            c.drawLine(x0, top, x1, top, outline)
-            c.drawLine(x0, bot, x1, bot, outline)
-            c.drawLine(x0, top, x0, bot, outline)
-            c.drawLine(x1, top, x1, bot, outline)
+            if (fill != null) c.drawRect(fx0, top, fx1, bot, fill)
+            c.drawLine(fx0, top, fx1, top, outline)
+            c.drawLine(fx0, bot, fx1, bot, outline)
         } else {
-            // Centre break (same S-curve logic as the main schematic PDF)
-            val mid   = (x0 + x1) * 0.5f
+            // Centre break (same S-curve logic as the main schematic PDF), cut into the
+            // flat span — the curves at the faces stay whole.
+            val flatLenPt = abs(fx1 - fx0)
+            val mid   = (fx0 + fx1) * 0.5f
             val (gap, amp) = breakPairLayout(
-                runLenPt = lenPt,
+                runLenPt = flatLenPt,
                 desiredAmplitudePt = r * 0.6f,
-                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * lenPt),
+                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * flatLenPt),
                 strokeWidthPt = capPaint.strokeWidth,
             )
             val half  = gap * 0.5f
             val lEnd  = (mid - half).coerceIn(geomRect.left, geomRect.right)
             val rBeg  = (mid + half).coerceIn(geomRect.left, geomRect.right)
 
-            c.drawLine(x0, top, lEnd, top, outline)
-            c.drawLine(x0, bot, lEnd, bot, outline)
-            c.drawLine(x0, top, x0, bot, outline)
+            if (fill != null) c.drawRect(fx0, top, lEnd, bot, fill)
+            c.drawLine(fx0, top, lEnd, top, outline)
+            c.drawLine(fx0, bot, lEnd, bot, outline)
             drawBreakEdge(c, lEnd, top, bot, amp, capPaint, eyeAtTop = false)
             drawBreakEdge(c, rBeg, top, bot, amp, capPaint, eyeAtTop = true)
-            c.drawLine(rBeg, top, x1, top, outline)
-            c.drawLine(rBeg, bot, x1, bot, outline)
-            c.drawLine(x1, top, x1, bot, outline)
+            if (fill != null) c.drawRect(rBeg, top, fx1, bot, fill)
+            c.drawLine(rBeg, top, fx1, top, outline)
+            c.drawLine(rBeg, bot, fx1, bot, outline)
+        }
+
+        // End caps last, at the OUTER ends of the whole run. A blended face caps at the
+        // neighbour's radius (where the curve arrives), so the cap coincides with that
+        // component's own face line instead of stranding a vertical inside the body.
+        c.drawLine(x0, cy - edges.capAftR, x0, cy + edges.capAftR, outline)
+        c.drawLine(x1, cy - edges.capFwdR, x1, cy + edges.capFwdR, outline)
+
+        // Seal area: the radius cuts the fiberglass seats into, drawn across the blend.
+        // Dashed and stopped on the notch floors — a solid full-height vertical is this
+        // drawing's glyph for a component face. Same construction as the schematic PDF
+        // and the canvas renderer; all three read `bodyDrawEdges`.
+        if (edges.aftSeal.isNotEmpty() || edges.fwdSeal.isNotEmpty()) {
+            val sealPaint = Paint(outline).apply {
+                style = Paint.Style.STROKE
+                pathEffect = DashPathEffect(floatArrayOf(SEAL_DASH_ON_PT, SEAL_DASH_OFF_PT), 0f)
+            }
+            (edges.aftSeal + edges.fwdSeal).forEach { g ->
+                c.drawLine(g.xPx, cy - g.rPx, g.xPx, cy + g.rPx, sealPaint)
+            }
         }
     }
 }

@@ -897,9 +897,11 @@ private fun drawBodiesCompressedCenterBreak(
 /**
  * One blended face: the void between the curve and the centreline filled, then the top and
  * bottom curves stroked. Mirrors `ShaftRenderer.drawBlendCurve` — the two draw sites must
- * place the identical curve, so both build it from [bodyDrawEdges].
+ * place the identical curve, so both build it from [bodyDrawEdges]. Shared with
+ * `RunoutPdfComposer`'s body pass so the schematic and the runout/consolidated sheets
+ * print the same curve from the same points.
  */
-private fun drawBlendCurvePdf(
+internal fun drawBlendCurvePdf(
     c: Canvas,
     curve: List<BodyEdgePoint>,
     cy: Float,
