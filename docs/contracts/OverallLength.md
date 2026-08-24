@@ -42,7 +42,8 @@ Excluded threads (`excludeFromOAL = true`) live outside the 0..OAL span by desig
 (`Model_Conventions.md`) and must be filtered out before folding into the max — otherwise
 an AFT excluded thread's negative start or a FWD excluded thread's `OAL`-anchored end would
 corrupt the result. Both real implementations filter first:
-`ShaftSpecExtensions.kt` `ShaftSpec.lastOccupiedEndMm()` and the ViewModel's `coverageEndMm`.
+`ShaftSpecExtensions.kt` `ShaftSpec.lastOccupiedEndMm()` and `ShaftSpec.coverageEndMm()`
+(`model/ShaftSpec.kt`), which the ViewModel now calls rather than duplicating.
 ```
 /** Latest occupied end (in mm) from all components. */
 fun ShaftSpec.lastOccupiedEndMm(): Float {
@@ -56,9 +57,32 @@ fun ShaftSpec.lastOccupiedEndMm(): Float {
 }
 ```
 
+### Load-time mode (open, template apply, template preview)
+
+`overallIsManual` is **derived from the document**, never inherited from the previous session.
+One pure predicate decides it — `ShaftSpec.oalIsManualOnLoad()` (`model/ShaftSpec.kt`) — and it
+is manual on either signal:
+
+- `overallLengthMm > coverageEndMm() + 1e-3` — free length to the FWD end.
+- `overallLengthMm > 0` **and** the aft-most component starts past 0 — a leading bare-shaft
+  span. Auto mode passes `overallLengthMm = 0f` to `deriveAutoBodies`, which derives leading and
+  trailing spans only when a manual OAL is in play, so loading such a document as auto drops
+  that span from the drawing.
+
+Membership mirrors `coverageEndMm`: threads excluded from OAL sit outside the 0..OAL span and
+are skipped on both ends. A spec with no components in the envelope is never manual by the
+leading-gap rule.
+
+All three load paths read the one predicate — `ShaftViewModel.importJson`,
+`ShaftViewModel.applyTemplate`, and the template card's preview resolve in `TemplatesRoute`.
+A private predicate at any of them lets a preview disagree with the drawing it becomes.
+
 ---
 
 ## Change Log
+**v1.3 (2026-08-24)** — Added the "Load-time mode" section: `ShaftSpec.oalIsManualOnLoad()` is
+the single load-time OAL-mode predicate (adds the leading-gap clause); the ViewModel's private
+`coverageEndMm` duplicate is gone.
 **v1.2 (2026-07-18)** — Fixed the sample to filter `!it.excludeFromOAL` on threads before
 folding into the max, matching the real `lastOccupiedEndMm()`/`coverageEndMm` implementations
 (the old sample summed all threads, including excluded ones).

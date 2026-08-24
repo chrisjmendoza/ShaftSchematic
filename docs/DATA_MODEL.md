@@ -41,6 +41,7 @@ data class ShaftSpec(
     val autoBodyDiaMm: Float = 0f,         // LEGACY shaft-wide bare-shaft Ø; fallback for spans with no override, 0 = derive from neighbors
     val showAutoBodyDia: Boolean = false,  // one Ø-callout visibility for ALL auto spans (draw-only)
     val autoDiaOverrides: List<AutoDiaOverride> = emptyList(),  // per-section bare-shaft Ø, keyed by shaft-space anchor
+    val autoBlends: List<AutoBlend> = emptyList(),  // shaft-space blended faces on auto-body spans
 )
 Responsibilities:
 ```
@@ -153,6 +154,13 @@ data class Body(
     val keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,  // which face the offset is measured from
     val keywaySpooned: Boolean = false,
     val label: String? = null,  // optional user-defined display label; not used for geometry
+    val showDiaOnDrawing: Boolean = false,  // below-shaft Ø callout visibility; OPT-IN for bodies
+    // Blended faces (draw-only): curve length inward from each face, 0 = square.
+    val blendAftMm: Float = 0f,
+    val blendFwdMm: Float = 0f,
+    val blendAftSeal: Boolean = false,  // seal area: 3 radius cuts across the aft blend
+    val blendFwdSeal: Boolean = false,
+    val blendProfile: BlendProfile = BlendProfile.OGEE,
 ) : Segment
 Taper
 @Serializable
@@ -252,6 +260,7 @@ data class Threads(
     val isAftEnd: Boolean = true,
     val tpi: Float? = null,
     val label: String? = null,  // optional user-defined display label; not used for geometry
+    val metricDesignation: String? = null,  // e.g. "M20×2.5"; parsed at entry, drives implicit mm unit override
 ) : Segment
 `isAftEnd` only matters when `excludeFromOAL = true`: true pins the thread's derived position
 to the AFT end (start = 0, extending to negative mm outside the envelope), false pins it to the
@@ -269,6 +278,7 @@ data class Liner(
     override val lengthMm: Float = 0f,
     val odMm: Float = 0f,
     val label: String? = null,  // optional user-defined display label; not used for geometry
+    val showDiaOnDrawing: Boolean = true,  // below-shaft Ø callout visibility; defaults true (unlike Body)
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val endMmPhysical: Float = 0f,  // kept in sync with start + length by Liner.normalized()
 ) : Segment
@@ -286,7 +296,7 @@ data class CouplerBoltSlot(
     val depthMm: Float = 0f,                   // blind depth; ignored when through
     val authoredReference: SlotAuthoredReference = SlotAuthoredReference.FWD,
     val showDimensionRail: Boolean = false,    // deferred — no rail drawn in v1
-    val label: String = "",
+    val label: String? = null,  // optional user-defined display label; not used for geometry
 ) : Segment
 
 Derived axial footprint:
@@ -336,6 +346,10 @@ fun ShaftSpec.freeToEndMm(): Float =
     (overallLengthMm - coverageEndMm()).coerceAtLeast(0f)
 maxOuterDiaMm
 Used by layout engine for vertical fit.
+oalIsManualOnLoad
+fun ShaftSpec.oalIsManualOnLoad(): Boolean = ...
+Load-time OAL mode: manual when the stored length reaches past `coverageEndMm()`, or when a
+leading gap precedes the aft-most component. See `docs/contracts/OverallLength.md`.
 
 Serialization & Migration
 Format (the **document envelope**, `doc/ShaftDocCodec.ShaftDocV1` — abridged):

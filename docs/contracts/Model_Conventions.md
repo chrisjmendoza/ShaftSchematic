@@ -4,7 +4,7 @@ Model Conventions
 Layer: Model  
 Purpose: Shared expectations across Body, Taper, ThreadSpec, Liner, CouplerBoltSlot, Segment.
 
-Version: v0.5 (2026-08-06)
+Version: v0.6 (2026-08-24)
 
 Invariants
 - All fields are **Float mm** unless stated otherwise.  
@@ -46,7 +46,7 @@ Taper `startDiaMm`/`endDiaMm` are **x-ordered, SET faces the nearer shaft end**
 - One axial **row** of radial bolt cutouts. `startFromAftMm` = the aft-most cutout center; `count`, `spacingMm` describe the row; `holeDiaMm`, `through`/`depthMm` the hole.
 - `SlotAuthoredReference` (AFT / **FWD** default) is UI-only; canonical `startFromAftMm` is always stored AFT-face. FWD → `startFromAftMm = OAL − enteredFwd − (count−1)·spacingMm`.
 - **Excluded from OAL/coverage**: `coverageEndMm` and `maxOuterDiaMm` ignore slots. Its `lengthMm` (derived footprint) exists only for layout/ordering, never for OAL.
-- Never split bodies, never collide. `isValid(overallLengthMm)` checks non-negative fields, `count ≥ 1`, and that all cutout centers fall within `0..OAL`.
+- Never split bodies, never collide. `isValid(overallLengthMm)` checks non-negative fields, `count ≥ 1`, and that every cutout's full footprint (center ± half hole Ø) falls within `0..OAL` (edges checked, not just centers).
 
 Responsibilities
 - Keep data classes passive (no business logic).  
@@ -59,10 +59,18 @@ Do Nots
 - Do not clamp or mutate an excluded thread's `startFromAftMm` to keep it within 0..OAL — that would destroy the intended rendering position.
 
 Notes
-- `ShaftSpec` hosts aggregate helpers: `coverageEndMm`, `freeToEndMm`, `maxOuterDiaMm`.
+- `ShaftSpec` hosts aggregate helpers: `coverageEndMm`, `freeToEndMm`, `maxOuterDiaMm`,
+  `oalIsManualOnLoad` (the single load-time OAL-mode predicate — see
+  `docs/contracts/OverallLength.md`).
 - `syncExcludedThreadPositions()` must be called after any OAL change or excluded-thread topology change.
 
 Change Log
+
+**v0.6 (2026-08-24)**
+- Added `oalIsManualOnLoad` to the aggregate-helper list (single load-time OAL-mode predicate).
+- Corrected the coupler-slot `isValid` description: hole edges are checked, not just centers.
+
+**v0.5 (2026-08-06)** — entry not recorded at the time; see git history.
 ----------
 **v0.4 (2026-07-18)**
 - Corrected thread-pitch convention: `pitchMm` and `tpi` are both canonical stored

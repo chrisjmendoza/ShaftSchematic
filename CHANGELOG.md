@@ -6,6 +6,99 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-24
+
+### fix: a taper overlap blocks PDF export, the same as a thread or liner
+
+The export gate ran the overlap check over threads and liners and stopped there. Tapers were
+never asked. A shaft with two tapers driven into each other — or a taper buried in a liner —
+carried the red "Overlaps another component" badge on its carousel card and then exported
+anyway, printing a sheet whose geometry the app had already said was wrong.
+
+`blockingExportError()` now runs a taper pass too. It asks the same question the taper card
+asks: `collidingIds()`. That matters more than closing the hole — a second, private notion of
+"do these tapers overlap?" living in the gate is exactly how a gate and a badge drift apart, so
+the gate borrows the badge's predicate rather than growing its own. Threads and liners still go
+through `startOverlapErrorMm`, which has no collision group for tapers at all (it contributes
+only the `start ≥ 0` guard there); that is why the taper answer has to come from elsewhere.
+
+Bodies stay out of it, by construction rather than by a special case: `collidingIds()` already
+excludes them. A taper crossing a stored body span is normal — the resolve layer trims the drawn
+body around it — and it must not, and does not, stop an export.
+
+`blockingExportError()` remains the single export gate; nothing was added to any other surface.
+The five export surfaces already disabled their buttons on `collidingIds()`, tapers included, so
+this only brings the schematic export's own gate into line with what the rest of the app was
+already enforcing.
+
+### fix: a leading bare-shaft span survives reload
+
+A document saved with a manual OAL that happens to equal its content end reloaded as **auto**:
+the load predicate was `overallLengthMm > coverageEndMm + 1e-3`, which that document fails by
+definition. Auto mode hands `deriveAutoBodies` an OAL of 0, and the leading/trailing spans are
+derived only when a manual OAL is in play — so a shaft whose first component starts past 0 lost
+its leading bare-shaft span on open. No stored value moved; only the picture changed.
+
+The decision now has one home, the pure `ShaftSpec.oalIsManualOnLoad()` (`model/ShaftSpec.kt`),
+and it reads two signals: the stored length reaches past the last component (as before), **or**
+the aft-most component starts past 0 — a leading gap that only a manual OAL resolves into a
+drawn span. Membership mirrors `coverageEndMm`: threads excluded from OAL sit outside the
+envelope by construction and are skipped on both ends, and a spec with no components is never
+manual by the new clause. A spec whose first component starts at 0 is decided exactly as before.
+
+All three load paths read it — `importJson`, `applyTemplate`, and the template card's preview
+resolve, whose own predicate was documented as having to match `applyTemplate`'s (a mismatch
+previews auto-fill spans that vanish when the template is used). The ViewModel's private
+duplicate of `coverageEndMm` is gone; `ensureOverall` calls the model extension.
+
+Consequence worth knowing: a leading-gap document now opens in manual mode, so the Free-to-End
+badge is eligible and a stored OAL shorter than the content reports oversize instead of being
+grown silently by the auto path.
+
+Docs: `docs/contracts/OverallLength.md` (Load-time mode), `docs/DATA_MODEL.md`,
+`docs/contracts/Model_Conventions.md`, `TODO.md` §2.3.
+
+### feat: implausibly-large values get a warning badge
+
+A fat-fingered 4,700,000 mm body was accepted silently. `ComponentWarnings.kt` now flags a
+component length over 15 m or any diameter field over 1 m — bodies, tapers (SET/LET), threads,
+liners — with a non-blocking "check for a typo" warning on the existing yellow carousel badge.
+Both thresholds are provisional named constants chosen without shop input, the same posture as
+the step-ratio/short-segment thresholds already awaiting review. Nothing blocks, clamps, or
+rewrites the typed value (golden rule). `threadWarningMessage` became list-returning
+(`threadWarningMessages`) so a diameter warning can't hide behind an existing zero-pitch one —
+the pattern the other three component kinds already used.
+
+### feat: blends and seal areas print on the runout / consolidated sheet
+
+The schematic PDF, the preview canvas, and the undercut surface envelope all drew body blends;
+`drawBodiesForRunout` (`RunoutPdfComposer`) had its own body pass that was never taught the
+curve, so the runout and consolidated sheets still printed square faces — a real inconsistency
+on the consolidated sheet, which carries the schematic's own rails and footer.
+
+The pass now decomposes the same `bodyDrawEdges` (`ui/resolved/BodyBlends.kt`) as the schematic
+composer, through the sheet's compressed `xAt`: blend curves and seal-area cuts print with the
+same construction (drawn width floored at `MIN_BLEND_WIDTH_PT`, dashed seal lines seated on the
+V-notch floors), the S-break pair is cut into the **flat** span so a curve is never broken, the
+break **decision** stays on the run's full drawn width, body shade fill follows the curves
+(drawn inside the body pass now, not as a square pre-fill), and end caps stand at the
+neighbour's radius. The shared curve helper `drawBlendCurvePdf` was promoted from file-private
+so both composers stroke the identical polyline. Without a resolve pass the faces simply stay
+square — the schematic's own fallback.
+
+The **wear document deliberately keeps square faces**: it omits machining detail by product
+decision, the same posture as its keyway omission.
+
+Review artifact: `BlendSvgPreviewTest` gained a compressed-map case
+(`blend-compressed-sheet.svg`) that renders a 20 ft shaft through the real
+`buildCompressedProfileXMap` and pins that each curve leaves exactly at the drawn face, the
+floored curve width survives heavy compression, and every seal cut stays inside its curve.
+
+Docs: `docs/contracts/RunoutSheet.md` (Blended faces), `docs/COMPONENT_CONTRACT.md`,
+`CLAUDE.md` (§Body blends — three draw sites now).
+
+---
+
 ## 2026-08-19
 
 ### feat: a body face can be blended into the diameter it steps to

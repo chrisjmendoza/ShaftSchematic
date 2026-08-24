@@ -410,9 +410,12 @@ licenses the one exaggeration: a 2" blend on a 25' shaft is sub-pixel at true sc
 **drawn** width takes a floor (`MIN_BLEND_WIDTH_PT`/`_PX`) capped at `MAX_BLEND_FRAC_OF_HOST` of
 its run — the undercut-depth/wear-trace posture, safe ONLY because no exaggerated number can reach
 a machinist. The stored length is never rewritten; a length longer than the body is clamped where
-it is DRAWN. Both draw sites decompose the SAME `bodyDrawEdges` (`ui/resolved/BodyBlends.kt`) —
-`ShaftRenderer` builds one silhouette path, `ShaftPdfComposer` keeps its flat span separate because
-that span still hosts the S-break pair. Pure curve math in `geom/BlendProfileMath.kt`, deliberately
+it is DRAWN. All three draw sites decompose the SAME `bodyDrawEdges` (`ui/resolved/BodyBlends.kt`) —
+`ShaftRenderer` builds one silhouette path; `ShaftPdfComposer` and the runout/consolidated sheet's
+`drawBodiesForRunout` keep their flat span separate because that span still hosts the S-break pair
+(the break is cut into the FLAT span, the curves stay whole, and the break decision stays on the
+run's FULL drawn width). The wear document deliberately keeps square faces — it omits machining
+detail by product decision, the same posture as its keyway omission. Pure curve math in `geom/BlendProfileMath.kt`, deliberately
 a general "join two radii across an axial span" primitive (`(x, radius)` points, the
 `KeywaySilhouetteMath`/`SurfaceProfileMath` convention) so the queued liner-shoulder fillet and the
 undercut end radius call it rather than reimplementing it. `surfaceSegsFrom` takes the blends so an

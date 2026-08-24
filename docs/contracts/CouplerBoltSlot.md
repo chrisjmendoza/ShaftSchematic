@@ -39,8 +39,9 @@ Implements `Segment`. Stored on `ShaftSpec.couplerBoltSlots: List<CouplerBoltSlo
 Derived: `lengthMm = (count − 1) · spacingMm + holeDiaMm` (axial footprint) and
 `centerMmAt(i) = startFromAftMm + i · spacingMm`.
 
-`isValid(overallLengthMm)`: non-negative fields, `count ≥ 1`, and all cutout centers
-within `0 .. overallLengthMm` (± epsilon).
+`isValid(overallLengthMm)`: non-negative fields, `count ≥ 1`, and every cutout's full
+footprint (center ± half hole Ø) within `0 .. overallLengthMm` (± epsilon) — the hole
+edges are checked, not just the centers.
 
 ---
 

@@ -80,7 +80,7 @@ clamping, no range enforcement — ViewModel setters layer validation on top):
   null) on invalid input. There is **no `toMmOrNull` in this file**.
 
 **Known duplication (consolidation candidate):** `ui/screen/ShaftScreen.kt`
-(~lines 1354–1362) defines its own internal, Float-based `toMmOrNull` and
+(~lines 1289–1305) defines its own internal, Float-based `toMmOrNull` and
 `parseFractionOrDecimal`, and most inline commit paths in that screen use them
 instead of `util.parseToMm`. Near-identical parsing logic in two layers —
 consolidate onto one convention if touching either.

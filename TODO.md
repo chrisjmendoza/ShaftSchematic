@@ -17,8 +17,8 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 | PDF export — one-page, landscape | ✅ Stable |
 | Validation — blocking errors | ✅ Wired in UI (Add dialogs, carousel badges, export gate) |
 | Validation — non-blocking warnings | ✅ Yellow badges in carousel; FreeToEndBadge 3-state |
-| Snapping engine | ✅ Implemented & unit-tested |
-| Tap-to-add pipeline | ✅ Implemented |
+| Snapping engine | ❌ Removed — whole pipeline (`SnapUtils.kt`) deleted with tap-to-add; nothing snaps a position any more (golden rule) |
+| Tap-to-add pipeline | ❌ Removed — canvas tap is selection-only; components are added via the FAB chooser only |
 | OAL window / excluded thread logic | ✅ Implemented & unit-tested |
 | Taper rate input + derivation | ✅ Implemented (taperRateText, parseRateText, deriveTaperDiameters) |
 | Taper rate colon entry (`1:12`) | ✅ Keyboard-compatible on Android (ASCII rate input + colon filter path) |
@@ -29,7 +29,7 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 | Internal save/open | ✅ Working |
 | Backup & restore | ✅ Zip backup/restore via file picker, per-shaft import/export, pre-update snapshots (keep 3), Auto Backup rules; sample pruning made non-destructive (seed-hash ledger) |
 | Autosave / draft restore | ✅ Reworked 2026-07-25 — dirty-gated 3-entry draft ring (per-document identity) replaces the single always-overwriting slot that caused a data-loss incident; StartScreen shows an "Unsaved drafts" list. See `docs/archive/Autosave_Incident_2026-07-25.md` |
-| ShaftScreen.kt | ✅ Carousel, preview panel, and event wiring extracted (2322 → 1235 lines) |
+| ShaftScreen.kt | ✅ Carousel, preview panel, and event wiring extracted (2322 → 1235 lines at the 2026-07 extraction; grown since from later feature work) |
 | Sidebar nav (5 tabs) | ✅ Schematic / Runout Sheet / Wear Document / Undercut Drawing / Consolidated Output (`EditorSidebar` + `EditorTab` + `ShaftEditorRoute`) |
 | Runout drawing | ✅ RunoutPdfComposer, inline shaft preview, scrollable layout, collision-free alternating bubble layout via shared `geom/RunoutBubbleLayout.kt`; resolved-component geometry (2026-07-18) |
 | Wear document | ✅ WearPdfComposer, dye-pen PASS/FAIL checkboxes, field notes; resolved-component geometry (2026-07-18). Reworked 2026-07-28: every liner gets a detail strip (with or without wear), blank write-in template (circle-one AFT/FWD anchors, edge-bar rails), profile-band space reclaim, uniform strip heights, shared positional liner titles. On-device verified through the layout round |
@@ -70,10 +70,14 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 
 - [x] 2026-07 items done — taper on-blur field validation; slope-guard pinning tests;
   `freeToEndMm` safeSpec fallback (`freeToEndSignedMm`). Details in CHANGELOG
-- [ ] No numeric upper bound on inputs — documented as a gap in `VALIDATION_RULES.md` §2.3
-  (from the 2026-07-18 doc sweep); a fat-fingered 4700000 mm body is accepted silently
-- [ ] Export gate only checks thread/liner positions — taper overlaps never block export
-  (from the 2026-07-18 doc sweep)
+- [x] No numeric upper bound on inputs — DONE 2026-08-24 as a non-blocking per-component
+  sanity warning (length > 15 m, any Ø > 1 m → yellow carousel badge, "check for a typo");
+  thresholds provisional pending shop input, nothing blocks or rewrites the typed value.
+  See `VALIDATION_RULES.md` §2.3
+- [x] Export gate checked only thread/liner positions — taper overlaps now block export too
+  (2026-08-24; `blockingExportError()` runs a taper pass through `collidingIds()`, the same
+  predicate as the carousel badge). Remaining sub-gap: Thread↔Liner pairs are still not caught
+  by `blockingExportError()` itself — see `VALIDATION_RULES.md` §6
 
 ### 2.2 Warning Rules (VALIDATION_RULES.md §3–4)
 
@@ -101,12 +105,12 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
   face bug. Data-repair normalization deliberately **declined** — reversed pairs stored by
   earlier builds decode exactly as saved (golden rule; pinned by test). Full detail:
   CHANGELOG 2026-08-06 + `docs/archive/TaperOrientation_Analysis_2026-07-26.md` (marked RESOLVED).
-- [ ] **OAL reload edge (low):** a file saved with manual OAL exactly equal to the content end
-  reloads as "auto" (`importJson` uses `> coverageEnd + 1e-3`), and the auto-sync effect then
-  keeps OAL glued to the content end — silently dropping a *leading* auto span (components not
-  starting at 0). Adds no bodies; changes the picture. Candidate fixes: also treat OAL as
-  manual when the first component starts > 0, or persist the manual flag in the doc envelope
-  (schema change). Found during the 2026-07-26 explicit-bodies investigation.
+- [x] **OAL reload edge — fixed 2026-08-24:** a file saved with manual OAL exactly equal to the
+  content end reloaded as "auto", and auto mode derives no leading/trailing auto span — silently
+  dropping a *leading* span when components don't start at 0. Fixed by the chosen candidate:
+  the shared pure `ShaftSpec.oalIsManualOnLoad()` also treats OAL as manual when the aft-most
+  component starts > 0. All three load paths (`importJson`, `applyTemplate`, template-card
+  preview) share it. The doc-envelope schema change was declined. Pinned by `ShaftSpecTest`.
 
 ---
 
@@ -126,15 +130,14 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
   in both silhouette edges with a dashed line across the notch floors. Fixed count and no printed
   value — a schematic cue, not something to machine from. See `docs/COMPONENT_CONTRACT.md` and
   `docs/PDF_EXPORT.md` §5.2b.
-- [ ] **Blends and seal cuts on the consolidated / runout sheet** — the schematic PDF, the preview
-  canvas and the undercut surface envelope all draw blends; `drawBodiesForRunout`
-  (`RunoutPdfComposer`) and the wear document have their own body passes that were never taught
-  the curve, so those sheets still print square faces. Wear may be correct as-is — it already
-  omits keyways by product decision — but the consolidated sheet carries the schematic's own
-  rails and footer, so a body that blends on one output and steps square on another is a real
-  inconsistency. Not urgent; blocked on nothing but a decision. The work is threading
-  `bodyBlends`/`bodyDrawEdges` into that pass the way `drawBodiesCompressedCenterBreak` already
-  does, including its S-break interaction.
+- [x] **Blends and seal cuts on the consolidated / runout sheet** — DONE 2026-08-24:
+  `drawBodiesForRunout` (`RunoutPdfComposer`) now decomposes the same `bodyDrawEdges` as the
+  schematic composer — curves + seal cuts ride the compressed `xAt`, the S-break is cut into
+  the FLAT span, body shade fill follows the curves, end caps stand at the neighbour's radius.
+  The **wear document deliberately keeps square faces** (it omits machining detail by product
+  decision, same posture as its keyway omission). Compressed-map SVG review artifact +
+  face-position assertions in `BlendSvgPreviewTest`. See `docs/contracts/RunoutSheet.md`
+  (Blended faces) and `docs/COMPONENT_CONTRACT.md`.
 - [ ] **Fiberglass body segments** — model flag, dark fill / hatch pattern, label.
   Reference: `assets/20251022_172641.jpg`. Two halves, and the second is the open one
   (2026-08-14): (a) *selection* — which body sections are fiberglassed, presumably a
@@ -208,7 +211,7 @@ Waves 1–2 shipped (Wave 1 fixes 2026-07-11; Wave 2 deletion pass 2026-07-26, `
 
 ### 5.1 Unit (Complete)
 
-- [x] Complete — SnapEngine, freeToEndMm, taper rates, thread pitch ↔ TPI, OAL exclusion,
+- [x] Complete — freeToEndMm, taper rates, thread pitch ↔ TPI, OAL exclusion,
   PDF footer, LinerDimAdapter, TaperDimSpan, BlockingExportError, StartOverlapValidation,
   TaperKeyway. Details in git history
 
@@ -216,7 +219,7 @@ Waves 1–2 shipped (Wave 1 fixes 2026-07-11; Wave 2 deletion pass 2026-07-26, `
 
 - [x] Done — Robolectric JVM Compose harness added (`testDebugUnitTest`, no device; assert
   against `testTag`s, never composable parameter lists); commit-on-blur, blocking-dialog
-  gates, tap-add position, and carousel selection sync all extracted pure + covered. Found
+  gates, and carousel selection sync all extracted pure + covered. Found
   and fixed the `NumericInputField` composition-commit bug along the way. Suite 719 → 796.
   Full detail: CHANGELOG "2026-07-26 (night)".
   **Deliberately not covered** (decision, not a gap): no Compose test for

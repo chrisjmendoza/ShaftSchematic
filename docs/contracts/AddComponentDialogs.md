@@ -274,6 +274,13 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.8 (2026-08-18)**
+- Add Thread dialog gains the **Imperial (TPI) | Metric (M-designation)** spec-mode chips: a
+  metric thread stores a designation (`Threads.metricDesignation`, e.g. `M20×2.5`) with major Ø
+  and pitch parsed from it. Value entry, so it sits under the parity rule (mirrored on the
+  thread card by the field the stored mode selects); the mixed-units wave. This entry was added
+  retroactively 2026-08-24 — the header was bumped without a log entry at the time.
+
 **v1.7 (2026-08-06)**
 - `AddTaperDialog` submit keys the SET/LET storage order on the taper's **physical half**
   (against the post-add OAL) instead of the Measure From chip, and passes the chip through as

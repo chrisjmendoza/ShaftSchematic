@@ -159,6 +159,13 @@ material.
   blend, since the cuts are machined into the blended section. A fixed count, since the drawing is a cue rather
   than something to machine from.
 - Silhouette only — no dimension rail, no footer row, no effect on OAL, coverage, or collision.
+- Draw sites: the schematic canvas (`ShaftRenderer`), the schematic PDF (`ShaftPdfComposer`),
+  and the runout/consolidated sheet (`RunoutPdfComposer.drawBodiesForRunout`) all decompose the
+  same `bodyDrawEdges`, so all three print the same curve. On the compressed sheets the S-break
+  pair is cut into the FLAT span — the curves at the faces stay whole — and the break decision
+  stays on the run's full drawn width (a blend is a face detail, not a reason to read as more or
+  less compressed). The **wear document deliberately keeps square faces**: it omits machining
+  detail by product decision, the same posture as its keyway omission.
 - The face is the run's **DRAWN outer edge**, not the stored position. A bare-shaft gap absorbed
   into a body's run moves that edge outward, and the drawn step moves with it; matching the stored
   value dropped the blend whenever a neighbour shortened.

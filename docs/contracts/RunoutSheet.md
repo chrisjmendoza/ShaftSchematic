@@ -879,6 +879,17 @@ On-device request following the worn-sections review:
     drawing plan re-solves on the real mapping. The SCHEMATIC composer uses the same
     scale + engine (`ShaftPdfComposer` — dims, callout leaders, keyways, and the
     compression footer note all ride the compressed `xAt`).
+  - *Blended faces:* body blends and seal areas print on this sheet exactly as on the
+    schematic — `drawBodiesForRunout` decomposes the same `bodyDrawEdges`
+    (`ui/resolved/BodyBlends.kt`) as `ShaftPdfComposer` and the preview canvas, with the
+    curves riding the compressed `xAt` (drawn width floored at `MIN_BLEND_WIDTH_PT`, the
+    schematic's rule). The S-break pair is cut into the FLAT span so a curve is never
+    broken, the break decision stays on the run's FULL drawn width, body shade fill
+    follows the curves (it is drawn inside the body pass, not as a square pre-fill), and
+    end caps stand at the neighbour's radius. Requires a resolve pass — without
+    `resolvedComponents` the faces simply stay square, the schematic's fallback. The wear
+    document deliberately keeps square faces (it omits machining detail, same posture as
+    its keyway omission).
   - *Liner grey, conditionally:* liners follow the `shadedLiners` pref like bodies and
     tapers **unless the sheet prints Ø values inside the profile** — against a grey liner
     every sheet-white knockout reads as a pasted box (on-device request), so on such a

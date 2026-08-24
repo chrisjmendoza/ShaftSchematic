@@ -4,7 +4,7 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.12 (2026-08-18)
+Version: v0.15 (2026-08-17)
 
 ---
 

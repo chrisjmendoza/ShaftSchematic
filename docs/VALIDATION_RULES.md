@@ -1,6 +1,9 @@
 # Validation Rules  
 Version: v0.5.x
-Last updated: 2026-08-05 — removed a stale header claim that §3.3's taper-vs-body Ø mismatch
+Last updated: 2026-08-24 — §5/§5.2/§6: the export gate now checks taper overlaps
+(`blockingExportError()` runs a taper pass through `collidingIds()`, the carousel badge's own
+predicate). Removed the stale "Taper overlaps never block export" claim; recorded the remaining
+Thread↔Liner gap in §6. 2026-08-05 — removed a stale header claim that §3.3's taper-vs-body Ø mismatch
 advisory compares a "physical face diameter (`taperFaceDiametersMm`)": that advisory was
 **removed entirely 2026-07-26** by product decision and no such helper exists. §3.3's body
 already records the removal correctly. 2026-07-24 — corrected two stale "`ShaftSpec.validate()` is dead code" claims
@@ -99,8 +102,17 @@ If user commits:
 1. The change is **not committed**, and  
 2. UI reverts to last valid committed value.
 
-## 2.3 Numeric Safety Filter — Gap (nothing implemented)
-**No numeric safety filter exists anywhere in the codebase.** This section previously claimed a
+## 2.3 Numeric Safety Filter — Gap (advisory only)
+**Sanity advisory (2026-08-24):** `ComponentWarnings.kt` now flags a component length >
+`SANITY_MAX_COMPONENT_LENGTH_MM` (15,000 mm) or any diameter field > `SANITY_MAX_DIA_MM`
+(1,000 mm) as a **non-blocking** warning ("Length/Diameter exceeds … — check for a typo"),
+surfaced via the existing yellow carousel warning badge across bodies, tapers, threads, and
+liners. Both thresholds are provisional, chosen without shop input — same posture as the §2.2
+step-ratio/short-segment thresholds — and never clamp, round, or otherwise rewrite the typed
+value (golden rule).
+
+Beyond that advisory, **no blocking numeric safety filter exists anywhere in the codebase.**
+This section previously claimed a
 blocking rejection of `Float.NaN` / `Float.POSITIVE_INFINITY` / `Float.NEGATIVE_INFINITY` /
 negative values, and a sanity-max rejection above `100000f`. Neither was ever built:
 - `util/Parsing.kt`'s `parseToMm()`/`parseFractionOrDecimal()` are explicitly documented to be
@@ -307,7 +319,8 @@ Coupler bolt slots are **excluded from all collision detection** (`collisionGrou
   them as outside the envelope), and emits `"$tiny segments shorter than 1 mm"` when the count
   is `> 0`. This is in addition to the existing **component-level** short-segment check already
   folded into `bodyWarningMessages`/`taperWarningMessages`/`linerWarningMessages`/
-  `threadWarningMessage` (same `SHORT_SEGMENT_MM` threshold, one message per affected card).
+  `threadWarningMessages` (same `SHORT_SEGMENT_MM` threshold; all four are list-returning, so
+  every applicable warning surfaces on the card).
   `specWarningMessages` is pure and unit-tested but **not yet wired to any UI surface** — where
   it should render (badge, banner, elsewhere) is an open UX decision for Chris.
 - Free-to-end space < 10 mm *(implemented)*
@@ -322,7 +335,8 @@ Coupler bolt slots are **excluded from all collision detection** (`collisionGrou
 
 # 5. Overlap Rules
 
-Overlaps **never** block validation.
+Overlaps **never** block an edit or a commit — a component may always be moved into an overlap
+and the document saved. They do gate **export**: see §5.2 and §6 for which pairs.
 
 ### 5.1 Bodies do not collide (reverted 2026-07-21)
 
@@ -343,7 +357,10 @@ No body pair is checked for collision — the checks below are all sacred-vs-sac
 
 ### 5.2 Sacred-Component Overlaps — Warning Shown
 
-The following pairs are also checked by `collidingIds()`. A warning ("Overlaps another component") is shown in the carousel card when detected:
+The following pairs are checked by `collidingIds()`. A warning ("Overlaps another component") is
+shown in the carousel card when detected, and the same set gates the toolbar/tab Export buttons
+via `exportPdfGate()`; the taper pairs additionally block the schematic export through
+`blockingExportError()` (§6):
 - Taper ↔ Taper
 - Taper ↔ Thread (non-excluded only)
 - Taper ↔ Liner
@@ -385,18 +402,29 @@ Before exporting:
 2. If it returns a non-null message → cancel export, show a blocking dialog with that reason.
 3. If it returns `null` → export continues, regardless of any outstanding non-blocking warnings.
 
-`blockingExportError()` actually checks only two component kinds, both via
-`startOverlapErrorMm()` (`ui/util/StartOverlapValidation.kt`):
-- **Non-excluded Threads** (`excludeFromOAL = false`): pairwise Thread↔Thread overlap, plus
-  `start ≥ 0`. Excluded threads are skipped — they intentionally sit at negative/OAL+
-  `startFromAftMm` outside the envelope.
-- **Liners**: pairwise Liner↔Liner overlap, plus `start ≥ 0`.
+`blockingExportError()` checks three component kinds:
+- **Non-excluded Threads** (`excludeFromOAL = false`), via `startOverlapErrorMm()`
+  (`ui/util/StartOverlapValidation.kt`): pairwise Thread↔Thread overlap, the "thread must be at
+  a shaft end" rule, plus `start ≥ 0`. Excluded threads are skipped — they intentionally sit at
+  negative/OAL+ `startFromAftMm` outside the envelope.
+- **Liners**, via `startOverlapErrorMm()`: pairwise Liner↔Liner overlap, plus `start ≥ 0`.
+- **Tapers**, via `collidingIds()` (`model/ShaftSpecExtensions.kt`) — Taper↔Taper,
+  Taper↔Thread (non-excluded), and Taper↔Liner, per §5.2 — plus the `start ≥ 0` guard that
+  `startOverlapErrorMm()` still contributes for a taper. `startOverlapErrorMm()` has no
+  collision group for tapers (`collisionGroup()` → null), so the overlap answer deliberately
+  comes from `collidingIds()`: that is the same predicate behind the taper card's blocking
+  badge, so the gate and the badge cannot disagree.
 
-It does **not** check Bodies, Tapers, or Coupler Bolt Slots at all. In particular, **Taper
-overlaps never block export** — they are only surfaced as a non-blocking warning via
-`collidingIds()` (§5.2); a shaft with two overlapping tapers exports successfully. Coupler bolt
-slots are reference overlays outside the OAL envelope and never gate export (`collisionGroup()`
-→ null, consistent with §3.6/§5.2).
+It does **not** check Bodies or Coupler Bolt Slots. Bodies are fillers, not collision
+participants (§5.1) — a taper or liner crossing a stored body span is normal, the resolve layer
+trims the drawn body around it, and `collidingIds()` excludes bodies, so it never blocks export.
+Coupler bolt slots are reference overlays outside the OAL envelope and never gate export
+(`collisionGroup()` → null, consistent with §3.6/§5.2).
+
+**Known gap:** the thread and liner passes go through `startOverlapErrorMm()`, which compares
+each kind only against its own kind — a Thread↔Liner overlap is flagged by `collidingIds()`
+(§5.2) and by the button-level `exportPdfGate()`, but is not caught by `blockingExportError()`
+itself.
 
 PDF export does not interpret warnings; UI handles presentation.
 

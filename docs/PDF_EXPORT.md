@@ -564,7 +564,7 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
 - **Tapers may shrink but never equalize** (on-device direction: two very different
   taper lengths must never draw equal): tapers carry NO flat width floor — a flat
   floor equalizes unequal tapers when both clamp to it — and use a ratio-preserving
-  fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` = 0.5, λ-fit like
+  fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` = 0.7, λ-fit like
   the liner raises, so the drawn height never yields to it; ratio preservation is
   structural — both tapers scale by the same factor at every squeeze). The SCHEMATIC
   composer additionally uses lean floors (`SCHEMATIC_MIN_THREAD_PT` 28 /
@@ -575,7 +575,7 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
   liners are taking up way too much space… I can't tell that the span between the aft
   and mid liner is longer. There has to be some kind of balance"): the body gaps between
   features carry a ratio-preserving fraction-of-true floor of their own,
-  `PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` = 0.35, and it joins the **same single λ pool** as
+  `PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` = 0.30, and it joins the **same single λ pool** as
   the taper and liner raises (`walkSpans`/`buildCompressedProfileXMap`/`fracFitFactor`
   take it as `gapMinFracOfTrue`). Two consequences. (1) A liner raise can no longer
   consume the page: when the pool overflows, liners and body runs shrink *together*
