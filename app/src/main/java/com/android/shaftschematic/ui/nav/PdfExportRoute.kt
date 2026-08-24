@@ -18,6 +18,7 @@ import androidx.navigation.NavController
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.ui.order.ComponentKind
@@ -167,6 +168,11 @@ fun PdfExportRoute(
     }
 }
 
+/**
+ * The single export gate: returns the reason this spec may not be exported, or `null` when it
+ * may. Every checked condition reuses the validation the carousel already shows on a card, so a
+ * spec that exports is exactly a spec with no blocking badge.
+ */
 internal fun blockingExportError(spec: ShaftSpec): String? {
     // Excluded threads sit outside the shaft envelope (negative or OAL+ start); skip them.
     spec.threads.filter { !it.excludeFromOAL }.forEach { th ->
@@ -176,6 +182,22 @@ internal fun blockingExportError(spec: ShaftSpec): String? {
     spec.liners.forEach { ln ->
         startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm)
             ?.let { return it }
+    }
+    // Tapers have no collision group inside `startOverlapErrorMm` (that call contributes only
+    // the start ≥ 0 guard), so their overlaps come from `collidingIds()` — the very predicate
+    // behind the taper card's blocking badge, so the gate and the badge cannot disagree.
+    // `startFromAftMm` is canonical mm from the AFT face for every taper; `authoredReference`
+    // is display metadata and never moves the stored position.
+    // Bodies are fillers, never collision participants: a taper crossing a stored body span is
+    // normal (the resolve layer trims the drawn body around it), and `collidingIds()` already
+    // excludes bodies — so a taper over a body must not, and does not, block export.
+    if (spec.tapers.isNotEmpty()) {
+        val collidingIds = spec.collidingIds()
+        spec.tapers.forEach { t ->
+            startOverlapErrorMm(spec, t.id, ComponentKind.TAPER, t.lengthMm, t.startFromAftMm)
+                ?.let { return it }
+            if (t.id in collidingIds) return "Overlaps another component"
+        }
     }
     return null
 }
