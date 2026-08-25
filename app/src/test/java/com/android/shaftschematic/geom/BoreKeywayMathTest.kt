@@ -165,6 +165,58 @@ class BoreKeywayMathTest {
         assertNull(nearestSixtyFourthLabel(0.004))  // rounds to 0/64
     }
 
+    // ── Nearest fraction, generalized (Scale chip: 64 | 32 | 16) ────────────────
+
+    @Test
+    fun `denominator 64 delegate matches nearestFractionLabel exactly`() {
+        // Not just equal values — the SAME function, so any future 64th behavior change
+        // cannot silently diverge between the two entry points.
+        for (v in listOf(0.5483, 0.5, 0.2501, 0.3749, 1.2031, 1.999, 0.0, -0.5, 0.004)) {
+            assertEquals(nearestSixtyFourthLabel(v), nearestFractionLabel(v, 64))
+        }
+    }
+
+    @Test
+    fun `nearest fraction at 32nds reduces`() {
+        // 0.5483 * 32 = 17.5456 -> round 18 -> 18/32 -> gcd(18, 32) = 2 -> 9/16.
+        assertEquals("9/16", nearestFractionLabel(0.5483, 32))
+        // 0.5 * 32 = 16.0 -> 16/32 -> gcd 16 -> 1/2.
+        assertEquals("1/2", nearestFractionLabel(0.5, 32))
+        // 0.65625 * 32 = 21.0 exactly -> 21/32, gcd(21,32) = 1, already reduced.
+        assertEquals("21/32", nearestFractionLabel(0.65625, 32))
+    }
+
+    @Test
+    fun `nearest fraction at 16ths reduces`() {
+        // 0.5483 * 16 = 8.7728 -> round 9 -> 9/16, gcd(9,16) = 1, already reduced.
+        assertEquals("9/16", nearestFractionLabel(0.5483, 16))
+        // 0.5 * 16 = 8.0 -> 8/16 -> gcd 8 -> 1/2.
+        assertEquals("1/2", nearestFractionLabel(0.5, 16))
+        // 0.3125 * 16 = 5.0 exactly -> 5/16, gcd(5,16) = 1, already reduced.
+        assertEquals("5/16", nearestFractionLabel(0.3125, 16))
+    }
+
+    @Test
+    fun `nearest fraction handles mixed numbers and wholes at every grid`() {
+        // 1.03125 * 32 = 33.0 exactly -> whole 1, num 1 -> "1 1/32".
+        assertEquals("1 1/32", nearestFractionLabel(1.03125, 32))
+        // 1.1875 * 16 = 19.0 exactly -> whole 1, num 3 -> "1 3/16".
+        assertEquals("1 3/16", nearestFractionLabel(1.1875, 16))
+        // 2.0 * 16 = 32.0 -> whole 2, num 0 -> "2".
+        assertEquals("2", nearestFractionLabel(2.0, 16))
+        // 2.0 * 32 = 64.0 -> whole 2, num 0 -> "2".
+        assertEquals("2", nearestFractionLabel(2.0, 32))
+    }
+
+    @Test
+    fun `nearest fraction is null at and below zero at every grid`() {
+        for (den in listOf(64, 32, 16)) {
+            assertNull(nearestFractionLabel(0.0, den))
+            assertNull(nearestFractionLabel(-0.5, den))
+        }
+        assertNull(nearestFractionLabel(0.008, 16))  // 0.008 * 16 = 0.128 -> rounds to 0/16
+    }
+
     @Test
     fun `bore surface rise matches the spec worked example`() {
         assertEquals(0.0813, boreSurfaceRise(3.5, 0.75), 5e-4)

@@ -31,7 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.BoreKeywayIssue
 import com.android.shaftschematic.geom.BoreKeywayResult
-import com.android.shaftschematic.geom.nearestSixtyFourthLabel
+import com.android.shaftschematic.geom.nearestFractionLabel
 import com.android.shaftschematic.geom.roughCutterTargetDepth
 import com.android.shaftschematic.geom.validateBoreKeyway
 import com.android.shaftschematic.util.UnitSystem
@@ -53,9 +53,10 @@ import java.util.Locale
  *
  * The in | mm chips label the ENTRY unit and are unit-reinterpreting, not converting: the
  * geometry is unit-independent, so typed numbers are simply read in the selected unit
- * (defaulted from the document, on-device preference). The nearest-64th line — a scale-check
- * companion, never a substitute for the decimal — only prints in inches; 64ths of a
- * millimeter are not a thing any scale reads.
+ * (defaulted from the document, on-device preference). The scale-check fraction line — a
+ * companion, never a substitute for the decimal — only prints in inches; a fraction of a
+ * millimeter is not a thing any scale reads. The Scale chip (64 | 32 | 16, default 64) picks
+ * the snap denominator for that line only; it never touches the decimal.
  */
 @Composable
 fun BoreKeywayCalcDialog(
@@ -63,6 +64,7 @@ fun BoreKeywayCalcDialog(
     onDismiss: () -> Unit,
 ) {
     var unit by rememberSaveable { mutableStateOf(defaultUnit) }
+    var scaleDenominator by rememberSaveable { mutableStateOf(64) }
     var boreDia by rememberSaveable { mutableStateOf("") }
     var finalWidth by rememberSaveable { mutableStateOf("") }
     var finalDepth by rememberSaveable { mutableStateOf("") }
@@ -86,6 +88,11 @@ fun BoreKeywayCalcDialog(
                 )
 
                 UnitChipRow(unit = unit, onSelect = { unit = it })
+                // The scale-check fraction only ever prints in inches (see class doc), so the
+                // chip that picks its snap grid is noise in mm mode.
+                if (unit == UnitSystem.INCHES) {
+                    ScaleChipRow(denominator = scaleDenominator, onSelect = { scaleDenominator = it })
+                }
 
                 // Everything is parsed and solved BEFORE the fields are laid out so each
                 // field can carry its own error state — an entry that cannot produce a
@@ -162,7 +169,7 @@ fun BoreKeywayCalcDialog(
                         modifier = Modifier.testTag("bore_kw_calc_waiting"),
                     )
 
-                    else -> entered.forEach { row -> CutterResult(row, dep, unit) }
+                    else -> entered.forEach { row -> CutterResult(row, dep, unit, scaleDenominator) }
                 }
             }
         },
@@ -197,6 +204,7 @@ private fun CutterResult(
     row: CutterRow,
     finalDepth: Double,
     unit: UnitSystem,
+    scaleDenominator: Int,
 ) {
     val suffix = if (unit == UnitSystem.INCHES) "in" else "mm"
     val index = row.index
@@ -232,7 +240,7 @@ private fun CutterResult(
 
     Column(Modifier.testTag("bore_kw_calc_result_$index")) {
         val scale = if (unit == UnitSystem.INCHES) {
-            nearestSixtyFourthLabel(depth)?.let { "  (≈ $it)" } ?: ""
+            nearestFractionLabel(depth, scaleDenominator)?.let { "  (≈ $it)" } ?: ""
         } else ""
         Text(
             "Cutter $index (${fmt(cutterWidth)} $suffix):  ${fmt(depth)} $suffix$scale",
@@ -278,6 +286,55 @@ private fun CalcField(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
         modifier = Modifier.fillMaxWidth().testTag(tag),
     )
+}
+
+/**
+ * Snap-grid denominator for the scale-check fraction line — 64 | 32 | 16, a coarser scale
+ * reads fewer, coarser ticks. Affects only that label; the decimal result is unchanged.
+ * Same chip conventions as [UnitChipRow]: label above, outline on EVERY chip.
+ */
+@Composable
+private fun ScaleChipRow(denominator: Int, onSelect: (Int) -> Unit) {
+    val colors = FilterChipDefaults.filterChipColors(
+        containerColor = MaterialTheme.colorScheme.surface,
+        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+    )
+    val restingBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    val chosenBorder = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            "Scale",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 2.dp),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            listOf(64, 32, 16).forEach { d ->
+                val on = d == denominator
+                FilterChip(
+                    selected = on,
+                    onClick = { onSelect(d) },
+                    label = {
+                        Text(
+                            d.toString(),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    },
+                    colors = colors,
+                    border = if (on) chosenBorder else restingBorder,
+                    modifier = Modifier.weight(1f).testTag("bore_kw_calc_scale_$d"),
+                )
+            }
+        }
+    }
 }
 
 /** Same chip conventions as `BlendSection.ChipRow`: label above, outline on EVERY chip. */

@@ -117,20 +117,30 @@ fun roughCutterTargetDepth(
 }
 
 /**
- * The nearest 64th to [value], as a reduced-fraction label for checking with a machinist's
- * scale — "35/64", "1/2", "1 13/64", "2". Display companion only: the decimal result stays
- * the authoritative machining value and this label must never replace it.
+ * The nearest 1/[denominator] to [value], as a reduced-fraction label for checking with a
+ * machinist's scale — "35/64", "1/2", "1 13/64", "2". [denominator] is the scale's snap grid
+ * (64, 32, 16, ...); the caller picks it, this function only snaps and reduces. Display
+ * companion only: the decimal result stays the authoritative machining value and this label
+ * must never replace it.
  *
- * Null for values that round to zero or below — a scale reading below 1/128 is noise.
+ * Null for values that round to zero or below — a scale reading below half a grid tick is
+ * noise.
  */
-fun nearestSixtyFourthLabel(value: Double): String? {
-    val total = (value * 64.0).roundToInt()
+fun nearestFractionLabel(value: Double, denominator: Int): String? {
+    val total = (value * denominator).roundToInt()
     if (total <= 0) return null
-    val whole = total / 64
-    var num = total % 64
+    val whole = total / denominator
+    var num = total % denominator
     if (num == 0) return whole.toString()
-    var den = 64
-    while (num % 2 == 0) { num /= 2; den /= 2 }
+    var den = denominator
+    val g = gcd(num, den)
+    num /= g
+    den /= g
     val frac = "$num/$den"
     return if (whole > 0) "$whole $frac" else frac
 }
+
+/** Nearest 64th — the finest scale grid and this tool's default. */
+fun nearestSixtyFourthLabel(value: Double): String? = nearestFractionLabel(value, 64)
+
+private tailrec fun gcd(a: Int, b: Int): Int = if (b == 0) a else gcd(b, a % b)
