@@ -43,7 +43,7 @@ class RunoutBubbleSvgPreviewTest {
             sb.append("<circle cx=\"${b.bubbleX}\" cy=\"${b.bubbleCenterY}\" r=\"${geom.radius}\" fill=\"white\" stroke=\"black\" stroke-width=\"1.3\"/>\n")
             sb.append("<text x=\"${b.bubbleX}\" y=\"${b.bubbleCenterY + 4f}\" font-size=\"11\" text-anchor=\"middle\" font-family=\"sans-serif\">${b.stationIndex}</text>\n")
         }
-        sb.append("<text x=\"36\" y=\"${h - 16f}\" font-size=\"11\" font-family=\"sans-serif\" fill=\"#555\">blue = straight leader (aims at circle center) · red = dogleg (vertical drop lands it)</text>\n")
+        sb.append("<text x=\"36\" y=\"${h - 16f}\" font-size=\"11\" font-family=\"sans-serif\" fill=\"#555\">blue = straight leader (aims at circle center) · red = dogleg (elbow dips for slope, then drops onto the bubble top)</text>\n")
         sb.append("</svg>\n")
 
         val outDir = File("build/reports/runout-bubble-preview").apply { mkdirs() }

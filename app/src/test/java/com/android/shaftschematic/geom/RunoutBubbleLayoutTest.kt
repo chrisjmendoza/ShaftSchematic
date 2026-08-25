@@ -16,6 +16,9 @@ import kotlin.random.Random
  *  3. No two leader lines ever properly cross.
  *  4. Bubbles stay within the content bounds.
  *  5. Within a component, stations alternate rows (hand-drawn shop convention).
+ *  6. Every bubble is JOINED to its station by a leader that starts at the station's x on
+ *     the shaft surface and ends on the bubble's rim — a bubble sitting off its station is
+ *     never left to be matched by proximity.
  */
 class RunoutBubbleLayoutTest {
 
@@ -94,6 +97,30 @@ class RunoutBubbleLayoutTest {
         for ((i, b) in bubbles.withIndex()) {
             assertTrue("bubble $i past left bound", b.bubbleX - geom.radius >= geom.contentLeft - 1e-3)
             assertTrue("bubble $i past right bound", b.bubbleX + geom.radius <= geom.contentRight + 1e-3)
+        }
+
+        // 6. Every leader joins its station to its bubble. The station end sits at the
+        //    station's own x ON the shaft surface (so it reads as pointing at that station,
+        //    not floating under the profile) and the bubble end sits on the rim. A bubble
+        //    that is not directly over its station always carries a drawable pointer —
+        //    nothing may suppress or shorten one because the two happen to be close.
+        for ((i, b) in bubbles.withIndex()) {
+            val start = b.leader.first()
+            assertEquals("leader $i does not start at its station's x", b.stationX, start.x, 1e-3f)
+            assertEquals("leader $i does not start on the shaft surface", b.surfaceY, start.y, 1e-3f)
+            val end = b.leader.last()
+            assertEquals(
+                "leader $i does not end on its bubble's rim",
+                geom.radius.toDouble(),
+                hypot((end.x - b.bubbleX).toDouble(), (end.y - b.bubbleCenterY).toDouble()),
+                1e-2,
+            )
+            if (abs(b.bubbleX - b.stationX) > 0.5f) {
+                val drawn = b.leader.zipWithNext { p, q ->
+                    hypot((q.x - p.x).toDouble(), (q.y - p.y).toDouble())
+                }.sum()
+                assertTrue("off-station bubble $i has no visible leader", drawn > 1e-3)
+            }
         }
     }
 
@@ -300,6 +327,99 @@ class RunoutBubbleLayoutTest {
                 (end.y - start.y) * (b.bubbleX - start.x)
             assertEquals("leader does not aim at the center", 0f, cross, 1e-1f)
         }
+    }
+
+    /** The three shapes that actually produce doglegs, keyed by what makes each one crowd. */
+    private val doglegConfigs: Map<String, List<RunoutStationX>> = mapOf(
+        // Clustered stations under compressed runs — the on-device complaint shape: a FWD
+        // group whose bubbles are pushed left off their stations by the page's right edge,
+        // so every row-1 leader has to route past its row-0 neighbour.
+        "clustered" to listOf(
+            RunoutStationX("taperA", 0f, 106f, 0), RunoutStationX("taperA", 1f, 258f, 1),
+            RunoutStationX("linerA", 2f, 284f, 0), RunoutStationX("linerA", 3f, 431f, 1),
+            RunoutStationX("linerA", 4f, 578f, 2),
+            RunoutStationX("body2", 5f, 606f, 0), RunoutStationX("body2", 6f, 634f, 1),
+            RunoutStationX("linerF", 7f, 662f, 0), RunoutStationX("linerF", 8f, 700f, 1),
+            RunoutStationX("taperF", 9f, 716f, 0), RunoutStationX("taperF", 10f, 740f, 1),
+        ),
+        // Components meeting at a shared boundary, stations ~15pt apart on page.
+        "denseBoundary" to listOf(
+            RunoutStationX("body1", 100f, 300f), RunoutStationX("body1", 120f, 315f),
+            RunoutStationX("liner1", 140f, 330f), RunoutStationX("liner1", 160f, 345f),
+            RunoutStationX("body2", 180f, 360f), RunoutStationX("body2", 200f, 375f),
+        ),
+        // One component cranked to 8 stations over a 120pt page span.
+        "highCount" to List(8) { i -> RunoutStationX("body1", 100f + i * 10f, 300f + i * 15f) },
+    )
+
+    @Test
+    fun `dogleg elbows dip to the readable slope wherever the circle field allows`() {
+        // A dogleg's diagonal carries all of the leader's sideways travel. Confined to the
+        // thin lane above row 0 it goes near-horizontal exactly where doglegs are common —
+        // it leaves the shaft almost tangent to the profile line, so it points at nothing
+        // (on-device report). The elbow therefore dips until the diagonal descends at
+        // LEADER_DOGLEG_MIN_SLOPE, bounded by the bubble's own top (the last leg has to stay
+        // a drop). In these configurations every dogleg has room to reach that bound; on a
+        // genuinely overloaded sheet a neighbouring circle can block the dip, which is why
+        // the slope is a target and not an invariant.
+        var seen = 0
+        for ((name, stations) in doglegConfigs) {
+            val result = place(stations)
+            assertInvariants(result)
+            for ((i, b) in result.bubbles.withIndex()) {
+                if (b.leader.size != 4) continue
+                seen++
+                val depart = b.leader[1]
+                val elbow = b.leader[2]
+                val run = abs(elbow.x - depart.x)
+                val rise = elbow.y - depart.y
+                // Never past the bubble's own top: the diagonal hands off to a real drop.
+                val cap = (b.bubbleCenterY - geom.radius) - depart.y
+                val want = minOf(LEADER_DOGLEG_MIN_SLOPE * run, cap)
+                assertTrue(
+                    "$name: dogleg $i descends $rise over $run — short of the readable $want",
+                    rise >= want - 1e-2f,
+                )
+            }
+        }
+        assertTrue("no doglegs exercised — the configurations stopped crowding", seen >= 8)
+    }
+
+    @Test
+    fun `a dogleg hands off to a downward drop onto its bubble top`() {
+        // The elbow may dip, but never below the circle it feeds: if it did, the closing
+        // segment would climb back up and the leader would read as arriving from underneath.
+        for ((name, stations) in doglegConfigs) {
+            for ((i, b) in place(stations).bubbles.withIndex()) {
+                if (b.leader.size != 4) continue
+                val elbow = b.leader[2]
+                val land = b.leader[3]
+                assertEquals("$name: dogleg $i drop is not vertical", elbow.x, land.x, 1e-3f)
+                assertTrue("$name: dogleg $i drop runs upward", land.y >= elbow.y - 1e-3f)
+                assertEquals(
+                    "$name: dogleg $i does not land on the bubble top",
+                    b.bubbleCenterY - geom.radius, land.y, 1e-3f,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `pinned stations get the same leader treatment as derived ones`() {
+        // A dragged station is an authored position, so it reaches the planner as an ordinary
+        // stationX — it must not be able to produce a bubble with no pointer, or one whose
+        // pointer starts anywhere but on the shaft at the station. This is the shape a drag
+        // makes and derivation cannot: a component's stations packed to the minimum axial
+        // separation while its neighbours stay put.
+        val stations = listOf(
+            RunoutStationX("taperA", 0f, 90f, 0), RunoutStationX("taperA", 1f, 150f, 1),
+            RunoutStationX("linerA", 2f, 300f, 0), RunoutStationX("linerA", 3f, 326f, 1),
+            RunoutStationX("linerA", 4f, 352f, 2), RunoutStationX("linerA", 5f, 378f, 3),
+            RunoutStationX("linerA", 6f, 404f, 4),
+            RunoutStationX("body2", 7f, 560f, 0),
+            RunoutStationX("taperF", 8f, 680f, 0), RunoutStationX("taperF", 9f, 730f, 1),
+        )
+        assertInvariants(place(stations))
     }
 
     @Test

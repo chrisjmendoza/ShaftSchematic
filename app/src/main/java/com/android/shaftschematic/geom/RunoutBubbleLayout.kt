@@ -38,16 +38,30 @@ import kotlin.math.sqrt
  *    every other bubble and leader. A straight leader AIMS AT ITS CIRCLE'S CENTER and
  *    stops on the rim (the hand-sheet drafting convention): the arrival direction alone
  *    says which circle it lands in, where a leader bent to the top-center of a distant
- *    bubble read ambiguously (on-device report). Straight leaders are also verified with
+ *    bubble reads ambiguously (on-device report). Straight leaders are also verified with
  *    a wider VISUAL clearance ([STRAIGHT_LEADER_CLEARANCE_RADIUS_FRAC] of the radius) —
  *    a segment that grazes a foreign circle by a hair is geometrically legal but
- *    unreadable. Otherwise the leader becomes a DOGLEG: a diagonal from the station to an
- *    elbow ABOVE the first bubble row at the bubble's x, then a vertical drop to the
- *    bubble top. The diagonal lives entirely above every circle and the drop is
- *    guaranteed clear by invariant 3 — a dogleg can never enter a bubble. Dogleg segments
- *    keep the tighter geometric clearance (0.5·minGap): their diagonals legitimately skim
- *    the lane just above the row-0 circle tops, and the vertical drop already lands
- *    unambiguously.
+ *    unreadable. Otherwise the leader becomes a DOGLEG: a vertical stub from the station
+ *    down to a common departure line at the deepest shaft surface, a diagonal to an elbow
+ *    at the bubble's x, then a vertical drop to the bubble top. Dogleg segments keep the
+ *    tighter geometric clearance (0.5·minGap): their diagonals legitimately skim the lane
+ *    just above the row-0 circle tops, and the vertical drop already lands unambiguously.
+ *
+ *    A dogleg's elbow DIPS below that lane wherever the circle field allows — as deep as
+ *    its own horizontal run needs to descend at [LEADER_DOGLEG_MIN_SLOPE], and never past
+ *    the bubble's own top, so the last leg stays a drop. A leader that spends all of its
+ *    sideways travel inside the thin lane leaves the shaft nearly tangent to the profile
+ *    line and so points at nothing; several of them read as a bundle of rules under the
+ *    shaft and the eye cannot tell which station any one of them left (on-device report).
+ *    The dip costs no page height — it stays inside the band the rows already occupy — and
+ *    it re-establishes clearance per leader instead of inheriting it: the depth comes from
+ *    a search that only ever accepts a diagonal clearing every foreign circle, floored at
+ *    the lane, and the drop is a sub-segment of the lane-level drop, which invariant 3
+ *    already covers. A dipped diagonal no longer shares the lane's common elbow line, so
+ *    it can cross a neighbour; flattening it back to the lane is the repair's fallback.
+ *    Repair therefore moves each leader through at most two states (straight → dipped
+ *    dogleg → lane dogleg), which is what keeps the loop terminating on the all-lane
+ *    layout whose no-crossing guarantee is structural.
  * 6. Two rows is not just the shop convention — it is width-optimal. Every leader's
  *    final drop passes through every row band above its bubble and needs its own
  *    horizontal lane (`crossRowPitch`) past the circles there, so each bubble consumes
@@ -108,6 +122,17 @@ const val BUBBLE_SPREAD_MAX_OFFSET_FACTOR = 1.0f
  * runs just above the row-0 circle tops, and the vertical drop is unambiguous anyway.
  */
 const val STRAIGHT_LEADER_CLEARANCE_RADIUS_FRAC = 0.35f
+
+/**
+ * Descent slope (rise ÷ run, ≈ 26.6°) a dogleg's diagonal aims for before its elbow stops
+ * dipping — see [planRunoutBubbles] rule 5. It is a TARGET, not a guarantee: the elbow may
+ * only dip as far as the surrounding circles leave room, and never past its own bubble's
+ * top, so a leader whose bubble sits far off its station on a packed sheet still finishes
+ * shallow. The value is the shallowest slope at which a pointer still reads as leaving the
+ * shaft rather than running along it, and asking for more would buy nothing: past this the
+ * dips get blocked by the neighbouring circles instead of granted.
+ */
+const val LEADER_DOGLEG_MIN_SLOPE = 0.5f
 
 /**
  * Axial mm positions of [count] measurement stations within one component.
@@ -405,8 +430,11 @@ data class RunoutBubbleGeometry(
 data class LeaderVertex(val x: Float, val y: Float)
 
 /** A fully placed bubble: circle centre, row, and its leader polyline — a straight
- *  station→rim segment (2 vertices, aimed at the circle centre) or a dogleg (4 vertices,
- *  ending in a vertical drop to the bubble top). */
+ *  station→rim segment (2 vertices, aimed at the circle centre) or a dogleg (4 vertices:
+ *  a vertical stub at the station, a diagonal to the elbow, and a vertical drop to the
+ *  bubble top). Either way the polyline STARTS at the station's x on the shaft surface and
+ *  ENDS on the bubble's rim, so a bubble sitting off its station always shows a pointer
+ *  joining the two — there is no proximity rule that drops or shortens one. */
 data class PlacedRunoutBubble(
     val componentId: String,
     val stationMm: Float,
@@ -655,15 +683,17 @@ class RunoutBubblePlan internal constructor(
         val anchor = max(anchorY, surfaceY.max())
         val centerY = FloatArray(n) { anchor + geom.shortLeader + geom.radius + rows[it] * geom.rowStep }
 
-        // Dogleg geometry. The diagonal of every dogleg runs between the same two
+        // Dogleg geometry. At LANE level every dogleg's diagonal runs between the same two
         // horizontal lines — a common departure line at the deepest shaft surface and a
         // common elbow line just above the row-0 circle tops. Station order equals bubble
-        // order (both monotonic), so two dogleg diagonals can never properly cross; the
-        // elbow clearance keeps diagonals above every circle; and the vertical stub/drop
-        // segments are parallel. A dogleg therefore cannot collide with anything except a
-        // straight leader — which the repair loop then also converts. This is what makes
-        // the repair provably converge to zero collisions (when spacing isn't compressed).
-        val elbowY = anchor + geom.shortLeader - 0.75f * geom.minGap
+        // order (both monotonic), so two lane diagonals can never properly cross; the
+        // elbow clearance keeps them above every circle; and the vertical stub/drop
+        // segments are parallel. A lane dogleg therefore cannot collide with anything
+        // except a straight leader — which the repair loop then also converts. This is
+        // what makes the repair converge to zero collisions (when spacing isn't
+        // compressed), and it is why the lane is the fallback every dipped elbow can be
+        // flattened back to.
+        val laneElbowY = anchor + geom.shortLeader - 0.75f * geom.minGap
         val clearance = 0.5f * geom.minGap
         // Straight leaders take a wider VISUAL clearance (rule 5): geometrically-legal
         // grazes read as entering the circle they shave past. Dogleg segments keep the
@@ -693,17 +723,70 @@ class RunoutBubblePlan internal constructor(
             }
         }
         val dogleg = BooleanArray(n)
-        fun makeDogleg(i: Int) {
-            dogleg[i] = true
+        val elbow = FloatArray(n) { laneElbowY }
+
+        // A dogleg diagonal is clear when it misses every FOREIGN circle by [clearance].
+        // Its own circle is skipped: the diagonal lands on that circle's top, and the
+        // endpoint is its lowest point, so it cannot enter the circle on the way in.
+        fun diagonalClears(i: Int, elbowY: Float): Boolean {
+            val a = LeaderVertex(stations[i].stationX, anchor)
+            val b = LeaderVertex(bubbleX[i], elbowY)
+            for (j in 0 until n) {
+                if (j == i) continue
+                if (segmentIntersectsCircle(a, b, bubbleX[j], centerY[j], geom.radius + clearance)) {
+                    return false
+                }
+            }
+            return true
+        }
+
+        // How far this dogleg's elbow may dip below the lane (rule 5): far enough for the
+        // diagonal to descend at LEADER_DOGLEG_MIN_SLOPE over its own horizontal run, but
+        // never past the bubble's own top and never into a foreign circle. Only the depth
+        // actually needed is taken — dipping deeper than that would buy no readability and
+        // would put the diagonal in the way of more of its neighbours.
+        fun elbowDepthFor(i: Int): Float {
+            val run = abs(bubbleX[i] - stations[i].stationX)
+            val target = min(anchor + run * LEADER_DOGLEG_MIN_SLOPE, centerY[i] - geom.radius)
+            if (target <= laneElbowY) return laneElbowY
+            if (diagonalClears(i, target)) return target
+            // Clearance is not monotone in elbow depth (a diagonal can dive UNDER a circle
+            // it would clip at mid depth), so the search only ever moves `lo` onto a depth
+            // it has verified. `laneElbowY` seeds it: the lane runs above every circle top,
+            // so it is clear by construction and the search can never return worse.
+            var lo = laneElbowY
+            var hi = target
+            repeat(16) {
+                val mid = (lo + hi) / 2f
+                if (diagonalClears(i, mid)) lo = mid else hi = mid
+            }
+            return lo
+        }
+
+        fun buildDogleg(i: Int) {
             paths[i] = listOf(
                 LeaderVertex(stations[i].stationX, surfaceY[i]),
                 // Vertical stub down to the common departure line (zero-length when the
                 // station already sits on the deepest surface — harmless to draw/test).
                 LeaderVertex(stations[i].stationX, anchor),
-                LeaderVertex(bubbleX[i], elbowY),
+                LeaderVertex(bubbleX[i], elbow[i]),
                 LeaderVertex(bubbleX[i], centerY[i] - geom.radius),
             )
         }
+
+        fun makeDogleg(i: Int) {
+            dogleg[i] = true
+            elbow[i] = elbowDepthFor(i)
+            buildDogleg(i)
+        }
+
+        /** Give up this leader's dip and put its elbow back on the provably safe lane. */
+        fun flattenToLane(i: Int) {
+            elbow[i] = laneElbowY
+            buildDogleg(i)
+        }
+
+        fun dipped(i: Int): Boolean = elbow[i] > laneElbowY + 1e-3f
 
         fun pathHitsForeignCircle(i: Int): Boolean {
             val p = paths[i]
@@ -728,22 +811,27 @@ class RunoutBubblePlan internal constructor(
             return false
         }
 
-        // Repair loop: any straight leader that clips a circle or crosses another leader
-        // becomes a dogleg. Doglegging is monotone (never reverts), so the loop terminates
-        // in ≤ n passes; anything left after that is counted, not silently drawn over.
+        // Repair loop: a leader that clips a circle or crosses another leader gives up one
+        // step of freedom — a straight becomes a dogleg (dipped as far as rule 5 allows), a
+        // dipped dogleg flattens onto the lane. Both moves are one-way, so each leader
+        // changes at most twice and the loop terminates in ≤ 2n+1 passes; anything left
+        // after that is counted, not silently drawn over.
+        fun yieldOneStep(i: Int): Boolean = when {
+            !dogleg[i] -> { makeDogleg(i); true }
+            dipped(i) -> { flattenToLane(i); true }
+            else -> false
+        }
+
         var pass = 0
-        while (pass++ <= n) {
+        while (pass++ <= 2 * n + 1) {
             var changed = false
             for (i in 0 until n) {
-                if (!dogleg[i] && pathHitsForeignCircle(i)) {
-                    makeDogleg(i)
-                    changed = true
-                }
+                if (pathHitsForeignCircle(i) && yieldOneStep(i)) changed = true
             }
             for (i in 0 until n) for (j in i + 1 until n) {
                 if (pathsCross(i, j)) {
-                    if (!dogleg[i]) { makeDogleg(i); changed = true }
-                    if (!dogleg[j]) { makeDogleg(j); changed = true }
+                    if (yieldOneStep(i)) changed = true
+                    if (yieldOneStep(j)) changed = true
                 }
             }
             if (!changed) break
