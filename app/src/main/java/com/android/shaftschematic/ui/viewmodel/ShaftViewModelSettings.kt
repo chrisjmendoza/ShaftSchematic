@@ -6,6 +6,9 @@ import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.pdf.PdfExportMode
 import com.android.shaftschematic.settings.AppThemeMode
+import com.android.shaftschematic.settings.DRAWING_LINE_THICKNESS_MAX
+import com.android.shaftschematic.settings.DRAWING_LINE_THICKNESS_MIN
+import com.android.shaftschematic.settings.DrawingProfile
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
@@ -244,10 +247,60 @@ fun ShaftViewModel.setPreviewBlackWhiteOnly(enabled: Boolean, persist: Boolean =
 }
 
 fun ShaftViewModel.setLineThicknessScale(scale: Float, persist: Boolean = true) {
-    _lineThicknessScale.value = scale.coerceIn(0.5f, 2.0f)
+    _lineThicknessScale.value = scale.coerceIn(DRAWING_LINE_THICKNESS_MIN, DRAWING_LINE_THICKNESS_MAX)
     if (persist) {
         viewModelScope.launch { SettingsStore.setLineThicknessScale(getApplication(), scale) }
     }
+}
+
+// ── Drawing preset profiles (app-wide) ───────────────────────────────────────
+
+/**
+ * The drawing look this device is currently set to, ready to be saved under a name.
+ *
+ * Reads the `SettingsStore.pdfPrefs` mirror rather than the individual StateFlows: that mirror
+ * is what every draw site consumes, so a profile captures exactly what the sheets are drawing.
+ */
+fun ShaftViewModel.currentDrawingProfile(): DrawingProfile =
+    DrawingProfile.of(
+        prefs = SettingsStore.pdfPrefs,
+        lineThicknessScale = _lineThicknessScale.value,
+    )
+
+/**
+ * Copies a profile into the live preferences — one call per pref, through the SAME setters the
+ * Settings controls use, so every mirror fires (`SettingsStore.updatePdfPrefs`, and with it
+ * `FractionTypography.active`) and every value lands clamped and persisted.
+ *
+ * A one-shot copy: nothing records which profile this was, and the user may adjust any of it
+ * afterwards without the profile changing under them.
+ */
+fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
+    val prefs = profile.toPdfPrefs()
+    setPdfTieringMode(prefs.tieringMode)
+    setPdfShowComponentTitles(prefs.showComponentTitles)
+    setPdfShadedBodies(prefs.shadedBodies)
+    setPdfShadedTapers(prefs.shadedTapers)
+    setPdfShadedLiners(prefs.shadedLiners)
+    setPdfCurveLoHeightIn(prefs.curveLoHeightIn)
+    setPdfCurveHiHeightIn(prefs.curveHiHeightIn)
+    setPdfSBreakThresholdFrac(prefs.sBreakThresholdFrac)
+    setPdfArrowSizePt(prefs.arrowSizePt)
+    setPdfFractionStyle(prefs.fractionStyle)
+    setPdfDualUnitLayout(prefs.dualUnitLayout)
+    setPdfWearTraceDepthFrac(prefs.wearTraceDepthFrac)
+    setPdfWearBandShadeFrac(prefs.wearBandShadeFrac)
+    setPdfWearJoinGapMaxMm(prefs.wearJoinGapMaxMm)
+    setLineThicknessScale(profile.clampedLineThicknessScale)
+}
+
+/**
+ * Settings → Drawing → "Restore Drawing defaults": every drawing-look pref back to what a fresh
+ * install starts with. Saved profiles are untouched — this restores the defaults, it does not
+ * clear the presets.
+ */
+fun ShaftViewModel.restoreDrawingDefaults() {
+    applyDrawingProfile(DrawingProfile())
 }
 
 fun ShaftViewModel.setPreviewOutlineSetting(setting: PreviewColorSetting, persist: Boolean = true) {

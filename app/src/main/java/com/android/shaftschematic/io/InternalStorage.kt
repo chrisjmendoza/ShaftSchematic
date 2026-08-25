@@ -34,7 +34,9 @@ import java.io.File
  * - Not responsible for JSON schema; ViewModel handles serialization.
  *
  * Non-Goals
- * - No SAF, sharing, or export features (those live in SafRoutes.kt).
+ * - No SAF, sharing, or export features (those live in SafRoutes.kt). The one exception is the
+ *   backup auto-mirror hook in [save]: it hands the saved bytes to [BackupMirror] and returns,
+ *   owning none of the SAF work itself.
  * - No exception UI; errors propagate to caller.
  */
 
@@ -95,10 +97,20 @@ object InternalStorage {
         return base + SHAFT_DOT_EXT
     }
 
+    /**
+     * The document save. Every saved shaft goes through here, which is why it — and not the
+     * directory-taking overload below — carries the off-device mirror hook: templates and
+     * backup-zip restores call the overload and are deliberately not mirrored.
+     */
     fun save(ctx: Context, name: String, content: String) {
         require(name.endsWith(SHAFT_DOT_EXT, ignoreCase = true)) { "Name must end with $SHAFT_DOT_EXT" }
         VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") { "save name=$name chars=${content.length}" }
         save(dir(ctx), name, content)
+
+        // Strictly after the internal write, and fire-and-forget: [BackupMirror] queues the copy
+        // on its own IO scope and swallows every failure, so a missing/revoked mirror folder can
+        // neither delay this call nor undo the save that just succeeded.
+        BackupMirror.onDocumentSaved(ctx, name, content)
     }
 
     /**

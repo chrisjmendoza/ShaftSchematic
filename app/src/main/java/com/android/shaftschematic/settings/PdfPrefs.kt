@@ -11,7 +11,13 @@ import com.android.shaftschematic.util.FractionStyle
 enum class PdfTieringMode {
     AUTO, // Let the PDF composer choose the anchor (default)
     AFT,  // Always anchor liner rails to the aft (leftmost) liner
-    FWD   // Always anchor liner rails to the fwd (rightmost) liner
+    FWD;  // Always anchor liner rails to the fwd (rightmost) liner
+
+    companion object {
+        /** Tolerant decode for a persisted name; an unknown value falls back to [AUTO]. */
+        fun fromName(raw: String?): PdfTieringMode =
+            if (raw.isNullOrBlank()) AUTO else runCatching { valueOf(raw) }.getOrDefault(AUTO)
+    }
 }
 
 // Bounds for the sizing-curve anchor heights (paper inches). The ceiling matches the

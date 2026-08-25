@@ -58,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -159,6 +160,10 @@ fun SettingsRoute(
     val scope = rememberCoroutineScope()
     val perComponentUnits by SettingsStore.perComponentUnitsFlow(ctx).collectAsState(initial = false)
     val dualUnitsDefault by SettingsStore.dualUnitsDefaultFlow(ctx).collectAsState(initial = false)
+    val linerShoulders by SettingsStore.linerShouldersEnabledFlow(ctx).collectAsState(initial = false)
+    // Named drawing-look presets. App-wide device preferences, read the same way.
+    val drawingProfiles by SettingsStore.drawingProfilesFlow(ctx)
+        .collectAsState(initial = emptyMap())
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -410,6 +415,52 @@ fun SettingsRoute(
                             )
                         }
                     }
+                    // Capability gate, same posture as per-component units: most shop
+                    // drawings never carry shoulders, so the authoring controls stay off
+                    // the liner card until wanted (on-device request). Liners already
+                    // carrying shoulder values keep their controls whatever this says.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = linerShoulders,
+                            onCheckedChange = { checked ->
+                                scope.launch { SettingsStore.setLinerShouldersEnabled(ctx, checked) }
+                            },
+                            modifier = Modifier.testTag("settings_liner_shoulders"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Liner shoulders")
+                            Text(
+                                "Stepped shoulder fields on liners (length, Ø, edge radius)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    // Closes the Drawing section: named presets over the drawing look, and the
+                    // one reset for all of it. A profile and the reset cover the SAME set — the
+                    // whole `PdfPrefs` plus line thickness — so a profile can always be undone.
+                    // That set reaches past this heading (line thickness sits under Editor
+                    // Screen, shading / titles / tiering on the PDF Export page) because it is
+                    // defined by what styles a sheet, not by where a control was placed.
+                    HorizontalDivider()
+                    DrawingProfilesSection(
+                        profiles = drawingProfiles,
+                        onSave = { name ->
+                            // Snapshot the live prefs on the UI thread, persist off it.
+                            val profile = vm.currentDrawingProfile()
+                            scope.launch { SettingsStore.saveDrawingProfile(ctx, name, profile) }
+                        },
+                        onApply = { vm.applyDrawingProfile(it) },
+                        onRename = { from, to ->
+                            scope.launch { SettingsStore.renameDrawingProfile(ctx, from, to) }
+                        },
+                        onDelete = { name ->
+                            scope.launch { SettingsStore.deleteDrawingProfile(ctx, name) }
+                        },
+                        onRestoreDefaults = { vm.restoreDrawingDefaults() },
+                    )
 
                     HorizontalDivider()
                     Text("Editor Screen", style = MaterialTheme.typography.titleMedium)
@@ -522,6 +573,7 @@ fun SettingsRoute(
                                 )
                             }
                     )
+                    BackupMirrorSection()
                     ListItem(
                         headlineContent = { Text("Restore sample shafts") },
                         supportingContent = { Text("Re-add bundled examples to Saved (won't overwrite your files)") },

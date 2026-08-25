@@ -16,6 +16,14 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.settings.AppThemeMode
+import com.android.shaftschematic.settings.DRAWING_LINE_THICKNESS_DEFAULT
+import com.android.shaftschematic.settings.DRAWING_LINE_THICKNESS_MAX
+import com.android.shaftschematic.settings.DRAWING_LINE_THICKNESS_MIN
+import com.android.shaftschematic.settings.DRAWING_PROFILE_MAX_COUNT
+import com.android.shaftschematic.settings.DrawingProfile
+import com.android.shaftschematic.settings.decodeDrawingProfiles
+import com.android.shaftschematic.settings.encodeDrawingProfiles
+import com.android.shaftschematic.settings.normalizeDrawingProfileName
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
@@ -90,6 +98,12 @@ object SettingsStore {
     // global default for new documents' dual-unit display (a document persists its own value).
     private val KEY_PER_COMPONENT_UNITS = booleanPreferencesKey("per_component_units")
     private val KEY_DUAL_UNITS_DEFAULT  = booleanPreferencesKey("dual_units_default")
+    // Liner shoulders. Capability gate for the AUTHORING UI only (liner card + Add Liner
+    // dialog sections) — most shop drawings never carry shoulders, so the controls stay
+    // hidden until wanted. Stored shoulder data always draws and a liner that carries any
+    // keeps its controls visible whatever this says: a device pref may hide empty entry
+    // fields, never authored work.
+    private val KEY_LINER_SHOULDERS_ENABLED = booleanPreferencesKey("liner_shoulders_enabled")
     private val KEY_PDF_SHADED_BODIES  = booleanPreferencesKey("pdf_shaded_bodies")
     private val KEY_PDF_SHADED_TAPERS  = booleanPreferencesKey("pdf_shaded_tapers")
     private val KEY_PDF_SHADED_LINERS  = booleanPreferencesKey("pdf_shaded_liners")
@@ -106,9 +120,7 @@ object SettingsStore {
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
     fun pdfTieringModeFlow(ctx: Context): Flow<PdfTieringMode> =
-        ctx.settingsDataStore.data.map { p ->
-            runCatching { PdfTieringMode.valueOf(p[KEY_PDF_TIERING_MODE] ?: "AUTO") }.getOrDefault(PdfTieringMode.AUTO)
-        }
+        ctx.settingsDataStore.data.map { p -> PdfTieringMode.fromName(p[KEY_PDF_TIERING_MODE]) }
 
     suspend fun setPdfTieringMode(ctx: Context, mode: PdfTieringMode) {
         ctx.settingsDataStore.edit { it[KEY_PDF_TIERING_MODE] = mode.name }
@@ -126,6 +138,17 @@ object SettingsStore {
         ctx.settingsDataStore.data.map { p -> p[KEY_PER_COMPONENT_UNITS] ?: false }
     suspend fun setPerComponentUnits(ctx: Context, v: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_PER_COMPONENT_UNITS] = v }
+    }
+
+    /**
+     * Capability: show liner shoulder controls on liner cards and in the Add Liner dialog.
+     * A liner already carrying shoulder values shows its controls regardless — see the key's
+     * comment.
+     */
+    fun linerShouldersEnabledFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_LINER_SHOULDERS_ENABLED] ?: false }
+    suspend fun setLinerShouldersEnabled(ctx: Context, v: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_LINER_SHOULDERS_ENABLED] = v }
     }
 
     /** Global default for new documents' inline dual-unit display. */
@@ -254,10 +277,93 @@ object SettingsStore {
 
 
     fun lineThicknessScaleFlow(ctx: Context): Flow<Float> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_LINE_THICKNESS_SCALE] ?: 1.0f }
+        ctx.settingsDataStore.data.map { p ->
+            p[KEY_LINE_THICKNESS_SCALE] ?: DRAWING_LINE_THICKNESS_DEFAULT
+        }
 
     suspend fun setLineThicknessScale(ctx: Context, scale: Float) {
-        ctx.settingsDataStore.edit { it[KEY_LINE_THICKNESS_SCALE] = scale.coerceIn(0.5f, 2.0f) }
+        ctx.settingsDataStore.edit {
+            it[KEY_LINE_THICKNESS_SCALE] =
+                scale.coerceIn(DRAWING_LINE_THICKNESS_MIN, DRAWING_LINE_THICKNESS_MAX)
+        }
+    }
+
+    // ── Drawing preset profiles (app-wide) ────────────────────────────────────
+    // Named sets of drawing-look prefs, stored as one JSON name → profile map — the
+    // seeded-sample ledger's posture: an unreadable value degrades to "no saved profiles"
+    // rather than failing the settings read. Nothing here is per-document: a profile is a
+    // device preference, and applying one is a one-shot copy into the live prefs.
+
+    private val KEY_DRAWING_PROFILES = stringPreferencesKey("drawing_profiles")
+
+    fun drawingProfilesFlow(ctx: Context): Flow<Map<String, DrawingProfile>> =
+        ctx.settingsDataStore.data.map { p -> decodeDrawingProfiles(p[KEY_DRAWING_PROFILES]) }
+
+    suspend fun getDrawingProfiles(ctx: Context): Map<String, DrawingProfile> =
+        decodeDrawingProfiles(ctx.settingsDataStore.data.first()[KEY_DRAWING_PROFILES])
+
+    /**
+     * Saves [profile] under [name], replacing any profile already stored under it. Returns false
+     * when the name is empty or the store is at [DRAWING_PROFILE_MAX_COUNT] and this would be a
+     * new entry — overwriting an existing profile is always allowed.
+     */
+    suspend fun saveDrawingProfile(ctx: Context, name: String, profile: DrawingProfile): Boolean {
+        val key = normalizeDrawingProfileName(name) ?: return false
+        var saved = false
+        ctx.settingsDataStore.edit { prefs ->
+            val current = decodeDrawingProfiles(prefs[KEY_DRAWING_PROFILES])
+            if (!current.containsKey(key) && current.size >= DRAWING_PROFILE_MAX_COUNT) return@edit
+            prefs[KEY_DRAWING_PROFILES] = encodeDrawingProfiles(current + (key to profile))
+            saved = true
+        }
+        return saved
+    }
+
+    suspend fun deleteDrawingProfile(ctx: Context, name: String) {
+        ctx.settingsDataStore.edit { prefs ->
+            val current = decodeDrawingProfiles(prefs[KEY_DRAWING_PROFILES])
+            if (!current.containsKey(name)) return@edit
+            prefs[KEY_DRAWING_PROFILES] = encodeDrawingProfiles(current - name)
+        }
+    }
+
+    /** Returns false when [from] is gone or [to] is empty or already taken by another profile. */
+    suspend fun renameDrawingProfile(ctx: Context, from: String, to: String): Boolean {
+        val target = normalizeDrawingProfileName(to) ?: return false
+        var renamed = false
+        ctx.settingsDataStore.edit { prefs ->
+            val current = decodeDrawingProfiles(prefs[KEY_DRAWING_PROFILES])
+            val profile = current[from] ?: return@edit
+            if (target != from && current.containsKey(target)) return@edit
+            prefs[KEY_DRAWING_PROFILES] =
+                encodeDrawingProfiles(current - from + (target to profile))
+            renamed = true
+        }
+        return renamed
+    }
+
+    // ── Backup auto-mirror folder ─────────────────────────────────────────────
+    // The SAF tree URI every saved shaft document is copied to, so the off-device backup is
+    // always current. Stored as the raw URI string; absent/blank means mirroring is off.
+    //
+    // The stored value is only ever cleared by the user. A mirror write that finds its grant
+    // revoked skips and logs — clearing on failure would turn the feature off behind the user's
+    // back, and re-granting the same folder must be enough to resume.
+
+    private val KEY_BACKUP_MIRROR_TREE_URI = stringPreferencesKey("backup_mirror_tree_uri")
+
+    fun backupMirrorFolderUriFlow(ctx: Context): Flow<String?> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_BACKUP_MIRROR_TREE_URI]?.takeIf { it.isNotBlank() } }
+
+    suspend fun getBackupMirrorFolderUri(ctx: Context): String? =
+        ctx.settingsDataStore.data.first()[KEY_BACKUP_MIRROR_TREE_URI]?.takeIf { it.isNotBlank() }
+
+    /** Passing null (or a blank string) stops mirroring. */
+    suspend fun setBackupMirrorFolderUri(ctx: Context, uri: String?) {
+        ctx.settingsDataStore.edit { prefs ->
+            if (uri.isNullOrBlank()) prefs.remove(KEY_BACKUP_MIRROR_TREE_URI)
+            else prefs[KEY_BACKUP_MIRROR_TREE_URI] = uri
+        }
     }
 
     // One-time migrations
