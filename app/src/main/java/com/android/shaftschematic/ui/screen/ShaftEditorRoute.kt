@@ -52,8 +52,12 @@ fun ShaftEditorRoute(
 ) {
     var activeTab by rememberSaveable { mutableStateOf(EditorTab.SCHEMATIC) }
     var sidebarOpen by rememberSaveable { mutableStateOf(false) }
+    // Standalone shop-floor tool, reachable from every tab; the dialog owns its own blank
+    // state, so all the route holds is whether it is open.
+    var keywayCalcOpen by rememberSaveable { mutableStateOf(false) }
 
     val spec by vm.spec.collectAsState()
+    val unit by vm.unit.collectAsState()
     val isBuilt = remember(spec.bodies, spec.tapers, spec.threads, spec.liners, spec.overallLengthMm) {
         (spec.bodies.isNotEmpty() || spec.tapers.isNotEmpty() ||
             spec.threads.isNotEmpty() || spec.liners.isNotEmpty()) &&
@@ -127,6 +131,14 @@ fun ShaftEditorRoute(
             },
             onHome = onNavigateHome,
             onSettings = onOpenSettings,
+            onKeywayCalculator = { keywayCalcOpen = true },
         )
+
+        if (keywayCalcOpen) {
+            BoreKeywayCalcDialog(
+                defaultUnit = unit,
+                onDismiss = { keywayCalcOpen = false },
+            )
+        }
     }
 }

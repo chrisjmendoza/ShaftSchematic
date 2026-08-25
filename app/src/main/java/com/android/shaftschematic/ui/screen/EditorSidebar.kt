@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Home
@@ -67,7 +68,8 @@ import androidx.compose.ui.unit.dp
  * ## Items
  * Top group:  Home · Schematic · Runout Sheet · Wear Document · Undercut Drawing ·
  *             Consolidated Output
- * Bottom group: Settings
+ * Bottom group: Keyway calculator · Settings — tools, not document views, so they are
+ * never dimmed by the "built" gate (the calculator reads nothing from the shaft).
  * Runout, Wear, Undercut, and Consolidated Output are dimmed when [runoutEnabled] is
  * false (shaft not yet built).
  *
@@ -80,6 +82,7 @@ import androidx.compose.ui.unit.dp
  * @param onTabSelected Called with the newly selected [EditorTab].
  * @param onHome        Called when the user taps the Home item.
  * @param onSettings    Called when the user taps the Settings item.
+ * @param onKeywayCalculator Called when the user taps the Keyway calculator tool item.
  */
 @Composable
 fun EditorSidebarOverlay(
@@ -91,6 +94,7 @@ fun EditorSidebarOverlay(
     onTabSelected: (EditorTab) -> Unit,
     onHome: () -> Unit,
     onSettings: () -> Unit,
+    onKeywayCalculator: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize()) {
@@ -206,6 +210,15 @@ fun EditorSidebarOverlay(
 
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
                         Spacer(Modifier.size(4.dp))
+
+                        // ── Tools ─────────────────────────────────────────────
+                        NavItem(
+                            icon = Icons.Filled.Calculate,
+                            label = "Keyway calculator",
+                            selected = false,
+                            enabled = true,
+                            onClick = { onKeywayCalculator(); onClose() },
+                        )
 
                         // ── Settings ──────────────────────────────────────────
                         NavItem(

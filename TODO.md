@@ -240,6 +240,15 @@ would make that body untappable at the slot. Decide before changing.
 
 ## 6. Backlog (v0.5.x+)
 
+- [x] **Bore keyway rough-cutter depth calculator** — DONE 2026-08-24 (requested same day):
+  standalone shop-floor tool computing the edge depth for a narrower rough cutter so its flat
+  bottom lands on the finished keyway's plane in a bore. Sidebar bottom group ("Keyway
+  calculator", every tab, never gated on a built shaft); up to 2 cutters; in|mm chip
+  defaulting to the document unit; decimal authoritative + nearest-64th scale check; blank
+  every open, nothing persisted. Pure math `geom/BoreKeywayMath.kt` (spec vectors +
+  invariants pinned). Plan + settled decisions: `docs/BoreKeywayCalculator_Plan_2026-08-24.md`.
+  Awaiting on-device verification.
+
 - [ ] **Multi-shaft per job number** (requested 2026-07-26): sometimes two shafts share one
   job number; want to select between them. Feasibility + phased architecture plan in
   `docs/MultiShaftJob_Plan_2026-07-26.md` (recommends derived job grouping over

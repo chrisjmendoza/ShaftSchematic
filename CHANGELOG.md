@@ -8,6 +8,41 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-24
 
+### feat: bore keyway rough-cutter depth calculator
+
+A shop-floor tool, not a document surface: cutting a keyway in a bore with a narrower roughing
+cutter, the cutter's edges sit closer to the keyway centerline where the bore surface is lower —
+so the depth to measure at the rough cutter's edges is less than the finished keyway's specified
+edge depth. The calculator solves it exactly (the bore-radius terms cancel):
+
+    depth_current = depth_final + √(R² − (w_final/2)²) − √(R² − (w_current/2)²)
+
+Reached from the editor sidebar's bottom group ("Keyway calculator", available on every tab and
+never gated on a built shaft — it reads nothing from the document). Inputs: bore Ø, finished
+keyway width × depth, and up to two cutter widths; fraction entry works ("29/32"). Output
+per cutter: the decimal target depth (authoritative, three decimals with trailing zeros kept —
+the app's shop-print convention) plus the nearest 64th ("≈ 51/64") as a scale-check companion
+in inches, reduced when it lands on a coarser mark ("3/4", "1/2"), and the difference from the
+finished depth. Keyway depth is measured at the edges by definition here, so the label does not
+say so. An in | mm chip
+defaults to the document unit and reinterprets the typed numbers — the geometry is
+unit-independent. Fields start blank every open; nothing persists, nothing marks the document
+dirty, nothing prints on any sheet.
+
+Input checks, each marking the offending FIELD as well as printing a reason — an entry that
+cannot produce a depth has to read wrong where it was typed, not only in the results block. A
+cutter **wider than the finished keyway** is rejected rather than solved: a roughing cutter cuts
+inside the finished profile, so a wider one leaves the keyway oversize, and the bare geometry
+answering anyway is precisely the trap (on-device report — a 2" cutter kept calculating after
+the job switched to a 1½" keyway). That bound also removes any need to check a cutter against
+the bore: it can be no wider than the keyway, which is already bounded inside the bore. Also
+flagged, never printed negative: a cutter so narrow the finished plane sits above the bore
+surface at its edges, and the non-positive / keyway-wider-than-bore cases.
+
+Pure math in `geom/BoreKeywayMath.kt`, pinned by the spec's four test vectors and the
+invariants (equal widths → finished depth; narrower → always less; smaller bore → larger
+correction; unit independence). Plan: `docs/BoreKeywayCalculator_Plan_2026-08-24.md`.
+
 ### fix: a taper overlap blocks PDF export, the same as a thread or liner
 
 The export gate ran the overlap check over threads and liners and stopped there. Tapers were
