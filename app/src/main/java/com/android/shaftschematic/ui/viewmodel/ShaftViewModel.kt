@@ -2287,6 +2287,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         lengthMm: Float,
         odMm: Float,
         reference: LinerAuthoredReference = LinerAuthoredReference.AFT,
+        // Shoulders ride the add under the add-dialog-parity rule; all-zero = none.
+        shoulderAftLenMm: Float = 0f,
+        shoulderAftOdMm: Float = 0f,
+        shoulderAftRadiusMm: Float = 0f,
+        shoulderFwdLenMm: Float = 0f,
+        shoulderFwdOdMm: Float = 0f,
+        shoulderFwdRadiusMm: Float = 0f,
     ) {
         val id = newId()
         _spec.update { s ->
@@ -2299,7 +2306,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 lengthMm = len,
                 odMm = od,
                 endMmPhysical = startMm + len,
-                authoredReference = reference
+                authoredReference = reference,
+                shoulderAftLenMm = shoulderAftLenMm,
+                shoulderAftOdMm = shoulderAftOdMm,
+                shoulderAftRadiusMm = shoulderAftRadiusMm,
+                shoulderFwdLenMm = shoulderFwdLenMm,
+                shoulderFwdOdMm = shoulderFwdOdMm,
+                shoulderFwdRadiusMm = shoulderFwdRadiusMm,
             )
             split.spec.copy(liners = listOf(liner) + split.spec.liners)
         }
@@ -2447,6 +2460,30 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     l[index] = old.copy(showDiaOnDrawing = show)
                 }
             )
+        }
+    }
+
+    /**
+     * One end's shoulder, stored verbatim (golden rule — no clamp, no snap; the DRAW site
+     * clamps what it cannot express). Zeroed length or Ø means "no shoulder on this end".
+     */
+    fun updateLinerShoulder(
+        index: Int,
+        end: LinerAuthoredReference,
+        lenMm: Float,
+        odMm: Float,
+        radiusMm: Float,
+    ) = _spec.update { s ->
+        if (index !in s.liners.indices) s else {
+            val old = s.liners[index]
+            val new = when (end) {
+                LinerAuthoredReference.AFT -> old.copy(
+                    shoulderAftLenMm = lenMm, shoulderAftOdMm = odMm, shoulderAftRadiusMm = radiusMm)
+                LinerAuthoredReference.FWD -> old.copy(
+                    shoulderFwdLenMm = lenMm, shoulderFwdOdMm = odMm, shoulderFwdRadiusMm = radiusMm)
+            }
+            if (new == old) return@update s
+            s.copy(liners = s.liners.toMutableList().also { l -> l[index] = new })
         }
     }
 

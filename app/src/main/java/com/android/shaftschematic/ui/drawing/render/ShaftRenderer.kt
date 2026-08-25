@@ -38,12 +38,17 @@ import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PX
 import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
 import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
+import com.android.shaftschematic.geom.ShoulderDrawSpec
+import com.android.shaftschematic.geom.linerTopSilhouette
+import com.android.shaftschematic.geom.shoulderDrawSpec
+import com.android.shaftschematic.model.shoulderOn
 import com.android.shaftschematic.ui.resolved.BodyDrawEdges
 import com.android.shaftschematic.ui.resolved.BodyEdgePoint
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import com.android.shaftschematic.ui.resolved.ResolvedThread
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -422,19 +427,41 @@ object ShaftRenderer {
         val resolvedLiners = components?.filterIsInstance<ResolvedLiner>()
 
         // ───────── Liners ─────────
-        if (resolvedLiners != null) {
-            for (ln in resolvedLiners) {
-                val x0 = L.xPx(ln.startMmPhysical)
-                val x1 = L.xPx(ln.endMmPhysical)
-                val r = L.rPx(ln.odMm)
-                val top = cy - r
-                val size = Size(x1 - x0, r * 2f)
-                val topLeft = Offset(x0, top)
+        // One drawer for both branches. A liner with no shoulders keeps the plain rect
+        // (byte-identical output); a shouldered one decomposes the same `linerTopSilhouette`
+        // the PDF composer strokes, mirrored about the centerline, so the two sites can
+        // never place a different step. Stored shoulder values come off the STORED liner —
+        // liners never fragment, so the resolved id is the stored id.
+        fun drawOneLiner(storedId: String, x0: Float, x1: Float, odMm: Float) {
+            val r = L.rPx(odMm)
+            val top = cy - r
+            val size = Size(x1 - x0, r * 2f)
+            val topLeft = Offset(x0, top)
+            val stored = spec.liners.firstOrNull { it.id == storedId }
 
+            fun spec(end: LinerAuthoredReference): ShoulderDrawSpec? {
+                val s = stored?.shoulderOn(end) ?: return null
+                val trueLenPx = when (end) {
+                    LinerAuthoredReference.AFT -> abs(L.xPx(stored.startFromAftMm + s.lenMm) - x0)
+                    LinerAuthoredReference.FWD ->
+                        abs(x1 - L.xPx(stored.startFromAftMm + stored.lengthMm - s.lenMm))
+                }
+                return shoulderDrawSpec(
+                    trueLenPx = trueLenPx,
+                    runWidthPx = abs(x1 - x0),
+                    linerRPx = r,
+                    shoulderRPx = L.rPx(s.odMm),
+                    // The stored value is a RADIUS; L.rPx maps a diameter.
+                    filletRPx = L.rPx(s.radiusMm * 2f),
+                    minWidthPx = MIN_BLEND_WIDTH_PX,
+                )
+            }
+
+            val aftSpec = spec(LinerAuthoredReference.AFT)
+            val fwdSpec = spec(LinerAuthoredReference.FWD)
+            if (aftSpec == null && fwdSpec == null) {
                 drawRect(color = linerFill, topLeft = topLeft, size = size)
-
-                // Highlight under-stroke
-                if (isHighlighted(hiEnabled, hiId, ln.id)) {
+                if (isHighlighted(hiEnabled, hiId, storedId)) {
                     drawHighlightStrokeRect(
                         topLeft = topLeft,
                         size = size,
@@ -442,22 +469,19 @@ object ShaftRenderer {
                         glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                     )
                 }
-
                 drawRect(color = outline, topLeft = topLeft, size = size, style = Stroke(width = outlineW))
+                return
             }
-        } else {
-            for (ln in spec.liners) {
-                val x0 = L.xPx(ln.startFromAftMm)
-                val x1 = L.xPx(ln.startFromAftMm + ln.lengthMm)
-                val r = L.rPx(ln.odMm)
-            val top = cy - r
-            val size = Size(x1 - x0, r * 2f)
-            val topLeft = Offset(x0, top)
 
-            drawRect(color = linerFill, topLeft = topLeft, size = size)
-
-            // Highlight under-stroke
-            if (isHighlighted(hiEnabled, hiId, ln.id)) {
+            val pts = linerTopSilhouette(x0, x1, r, aftSpec, fwdSpec)
+            val path = Path().apply {
+                moveTo(pts.first().xPx, cy - pts.first().rPx)
+                pts.drop(1).forEach { lineTo(it.xPx, cy - it.rPx) }
+                pts.reversed().forEach { lineTo(it.xPx, cy + it.rPx) }
+                close()
+            }
+            drawPath(path, color = linerFill)
+            if (isHighlighted(hiEnabled, hiId, storedId)) {
                 drawHighlightStrokeRect(
                     topLeft = topLeft,
                     size = size,
@@ -465,8 +489,16 @@ object ShaftRenderer {
                     glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                 )
             }
+            drawPath(path, color = outline, style = Stroke(width = outlineW))
+        }
 
-                drawRect(color = outline, topLeft = topLeft, size = size, style = Stroke(width = outlineW))
+        if (resolvedLiners != null) {
+            for (ln in resolvedLiners) {
+                drawOneLiner(ln.id, L.xPx(ln.startMmPhysical), L.xPx(ln.endMmPhysical), ln.odMm)
+            }
+        } else {
+            for (ln in spec.liners) {
+                drawOneLiner(ln.id, L.xPx(ln.startFromAftMm), L.xPx(ln.startFromAftMm + ln.lengthMm), ln.odMm)
             }
         }
 

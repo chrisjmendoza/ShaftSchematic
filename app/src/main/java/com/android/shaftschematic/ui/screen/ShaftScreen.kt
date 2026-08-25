@@ -203,7 +203,7 @@ fun ShaftScreen(
                  keywayUnit: UnitSystem?) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean,
                   isAftEnd: Boolean, metricDesignation: String?) -> Unit,
-    onAddLiner: (Float, Float, Float, LinerAuthoredReference) -> Unit,
+    onAddLiner: (Float, Float, Float, LinerAuthoredReference, LinerShoulderDraft) -> Unit,
     onAddCouplerBoltSlot: (startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float, reference: SlotAuthoredReference) -> Unit,
 
     // Updates (all mm)
@@ -220,6 +220,8 @@ fun ShaftScreen(
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
+    onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
+    linerShouldersEnabled: Boolean = false,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
@@ -664,6 +666,8 @@ fun ShaftScreen(
                     }
                 }
 
+                SpecWarningBanner(spec = spec)
+
                 ComponentCarouselPager(
                     spec = spec,
                     resolvedComponents = resolvedComponents,
@@ -696,6 +700,8 @@ fun ShaftScreen(
                     onUpdateThreadLabel = onUpdateThreadLabel,
                     onUpdateLiner = onUpdateLiner,
                     onUpdateLinerShowDia = onUpdateLinerShowDia,
+                    onUpdateLinerShoulder = onUpdateLinerShoulder,
+                    linerShouldersEnabled = linerShouldersEnabled,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
                     onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
@@ -832,9 +838,10 @@ fun ShaftScreen(
                         overallIsManual = overallIsManual,
                         initialStartMm = addStartMm,
                         initialLengthMm = addLengthMm,
-                        onSubmit = { s, l, od, ref ->
+                        linerShouldersEnabled = linerShouldersEnabled,
+                        onSubmit = { s, l, od, ref, shoulders ->
                             addLinerOpen = false
-                            onAddLiner(s, l, od, ref)
+                            onAddLiner(s, l, od, ref, shoulders)
                         },
                         onCancel = { addLinerOpen = false }
                     )

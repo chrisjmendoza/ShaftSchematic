@@ -363,6 +363,12 @@ fun AddBodyDialog(
  * Liner — Start, Length, Outer Diameter
  * ──────────────────────────────────────────────────────────────────────────── */
 
+/** One end's shoulder values a new liner is created with. */
+data class ShoulderEndDraft(val lenMm: Float, val odMm: Float, val radiusMm: Float)
+
+/** Shoulders for a new liner; a null end has none. */
+data class LinerShoulderDraft(val aft: ShoulderEndDraft? = null, val fwd: ShoulderEndDraft? = null)
+
 @Composable
 fun AddLinerDialog(
     unit: UnitSystem,
@@ -370,7 +376,12 @@ fun AddLinerDialog(
     overallIsManual: Boolean = false,
     initialStartMm: Float? = null,
     initialLengthMm: Float? = null,
-    onSubmit: (startMm: Float, lengthMm: Float, odMm: Float, reference: LinerAuthoredReference) -> Unit,
+    /** The "Liner shoulders" Settings capability — parity with the liner card's gate. */
+    linerShouldersEnabled: Boolean = false,
+    onSubmit: (
+        startMm: Float, lengthMm: Float, odMm: Float, reference: LinerAuthoredReference,
+        shoulders: LinerShoulderDraft,
+    ) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -385,6 +396,17 @@ fun AddLinerDialog(
 
     var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
     var od by remember(unit, d.linerOdMm) { mutableStateOf(toDisplayString(max(1f, d.linerOdMm), unit)) }
+
+    // Shoulders (add-dialog-parity rule: they change drawn geometry, so the same section the
+    // liner card shows appears here, under the same capability gate).
+    var shAftOn by remember { mutableStateOf(false) }
+    var shFwdOn by remember { mutableStateOf(false) }
+    var shAftLen by remember(unit) { mutableStateOf("") }
+    var shAftOd by remember(unit) { mutableStateOf("") }
+    var shAftRadiusMm by remember { mutableStateOf(0f) }
+    var shFwdLen by remember(unit) { mutableStateOf("") }
+    var shFwdOd by remember(unit) { mutableStateOf("") }
+    var shFwdRadiusMm by remember { mutableStateOf(0f) }
 
     val startEntered = toMmOrNull(if (isFwd) startFwd else startAft, unit) ?: -1f
     val lengthMm = toMmOrNull(length, unit) ?: -1f
@@ -449,13 +471,49 @@ fun AddLinerDialog(
                 CommitNumField("Length (${abbr(unit)})", length) { length = it }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Outer Ø (${abbr(unit)})", od) { od = it }
+
+                if (linerShouldersEnabled) {
+                    Spacer(Modifier.height(8.dp))
+                    LinerShoulderSection(
+                        aftOn = shAftOn,
+                        fwdOn = shFwdOn,
+                        aftRadiusMm = shAftRadiusMm,
+                        fwdRadiusMm = shFwdRadiusMm,
+                        unit = unit,
+                        onSetAftOn = { shAftOn = it },
+                        onSetFwdOn = { shFwdOn = it },
+                        onSetAftRadiusMm = { shAftRadiusMm = it },
+                        onSetFwdRadiusMm = { shFwdRadiusMm = it },
+                        aftFields = {
+                            CommitNumField("Shoulder length (${abbr(unit)})", shAftLen) { shAftLen = it }
+                            Spacer(Modifier.height(4.dp))
+                            CommitNumField("Shoulder Ø (${abbr(unit)})", shAftOd) { shAftOd = it }
+                        },
+                        fwdFields = {
+                            CommitNumField("Shoulder length (${abbr(unit)})", shFwdLen) { shFwdLen = it }
+                            Spacer(Modifier.height(4.dp))
+                            CommitNumField("Shoulder Ø (${abbr(unit)})", shFwdOd) { shFwdOd = it }
+                        },
+                    )
+                }
             }
         },
         confirmButton = {
             val ok = linerAddEnabled(physStartMm, lengthMm, odMm, startError)
             Button(enabled = ok, onClick = {
                 val ref = if (isFwd) LinerAuthoredReference.FWD else LinerAuthoredReference.AFT
-                val action = { onSubmit(physStartMm, lengthMm, odMm, ref) }
+                fun end(on: Boolean, len: String, sOd: String, rMm: Float): ShoulderEndDraft? {
+                    if (!on) return null
+                    val l = toMmOrNull(len, unit) ?: return null
+                    val o = toMmOrNull(sOd, unit) ?: return null
+                    if (l <= 0f || o <= 0f) return null
+                    return ShoulderEndDraft(lenMm = l, odMm = o, radiusMm = rMm)
+                }
+                val shoulders = LinerShoulderDraft(
+                    aft = end(shAftOn, shAftLen, shAftOd, shAftRadiusMm),
+                    fwd = end(shFwdOn, shFwdLen, shFwdOd, shFwdRadiusMm),
+                )
+                val action = { onSubmit(physStartMm, lengthMm, odMm, ref, shoulders) }
                 val warnings = collectAddWarnings(spec, physStartMm, lengthMm, overallIsManual)
                 if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
             }) { Text("Add") }

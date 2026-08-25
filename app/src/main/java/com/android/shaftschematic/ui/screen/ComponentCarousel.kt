@@ -64,7 +64,9 @@ import com.android.shaftschematic.ui.config.AddDefaultsConfig
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.hasKeyway
+import com.android.shaftschematic.model.hasShoulder
 import com.android.shaftschematic.model.keywayCount
+import com.android.shaftschematic.model.shoulderOn
 import com.android.shaftschematic.ui.input.NumericInputField
 import com.android.shaftschematic.ui.input.shouldCommitOnBlur
 import com.android.shaftschematic.ui.input.taperSetLetMapping
@@ -175,6 +177,8 @@ internal fun ComponentCarouselPager(
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
+    onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
+    linerShouldersEnabled: Boolean = false,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
@@ -321,6 +325,8 @@ internal fun ComponentCarouselPager(
                     onUpdateThreadLabel = onUpdateThreadLabel,
                     onUpdateLiner = onUpdateLiner,
                     onUpdateLinerShowDia = onUpdateLinerShowDia,
+                    onUpdateLinerShoulder = onUpdateLinerShoulder,
+                    linerShouldersEnabled = linerShouldersEnabled,
                     onUpdateLinerLabel = onUpdateLinerLabel,
                     onUpdateLinerReference = onUpdateLinerReference,
                     onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
@@ -576,6 +582,8 @@ internal fun ComponentPagerCard(
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
+    onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
+    linerShouldersEnabled: Boolean = false,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
@@ -1489,6 +1497,75 @@ internal fun ComponentPagerCard(
                     testTag = "liner_show_dia_toggle",
                     onCheckedChange = { onUpdateLinerShowDia(idx, it) },
                 )
+
+                // Shoulders: capability-gated entry, but authored work always keeps its
+                // controls — a device pref may hide empty fields, never stored values.
+                if (linerShouldersEnabled || ln.hasShoulder()) {
+                    var aftWanted by remember(ln.id) {
+                        mutableStateOf(ln.shoulderOn(LinerAuthoredReference.AFT) != null)
+                    }
+                    var fwdWanted by remember(ln.id) {
+                        mutableStateOf(ln.shoulderOn(LinerAuthoredReference.FWD) != null)
+                    }
+                    LinerShoulderSection(
+                        aftOn = aftWanted,
+                        fwdOn = fwdWanted,
+                        aftRadiusMm = ln.shoulderAftRadiusMm,
+                        fwdRadiusMm = ln.shoulderFwdRadiusMm,
+                        unit = unit,
+                        onSetAftOn = { on ->
+                            aftWanted = on
+                            // None zeroes the end (the blend section's Square posture).
+                            if (!on) onUpdateLinerShoulder(idx, LinerAuthoredReference.AFT, 0f, 0f, 0f)
+                        },
+                        onSetFwdOn = { on ->
+                            fwdWanted = on
+                            if (!on) onUpdateLinerShoulder(idx, LinerAuthoredReference.FWD, 0f, 0f, 0f)
+                        },
+                        onSetAftRadiusMm = { r ->
+                            onUpdateLinerShoulder(
+                                idx, LinerAuthoredReference.AFT,
+                                ln.shoulderAftLenMm, ln.shoulderAftOdMm, r)
+                        },
+                        onSetFwdRadiusMm = { r ->
+                            onUpdateLinerShoulder(
+                                idx, LinerAuthoredReference.FWD,
+                                ln.shoulderFwdLenMm, ln.shoulderFwdOdMm, r)
+                        },
+                        aftFields = {
+                            CommitNum("Shoulder length (${abbr(unit)})", disp(ln.shoulderAftLenMm, unit)) { s ->
+                                toMmOrNull(s, unit)?.let {
+                                    onUpdateLinerShoulder(
+                                        idx, LinerAuthoredReference.AFT,
+                                        it, ln.shoulderAftOdMm, ln.shoulderAftRadiusMm)
+                                }
+                            }
+                            CommitNum("Shoulder Ø (${abbr(unit)})", disp(ln.shoulderAftOdMm, unit)) { s ->
+                                toMmOrNull(s, unit)?.let {
+                                    onUpdateLinerShoulder(
+                                        idx, LinerAuthoredReference.AFT,
+                                        ln.shoulderAftLenMm, it, ln.shoulderAftRadiusMm)
+                                }
+                            }
+                        },
+                        fwdFields = {
+                            CommitNum("Shoulder length (${abbr(unit)})", disp(ln.shoulderFwdLenMm, unit)) { s ->
+                                toMmOrNull(s, unit)?.let {
+                                    onUpdateLinerShoulder(
+                                        idx, LinerAuthoredReference.FWD,
+                                        it, ln.shoulderFwdOdMm, ln.shoulderFwdRadiusMm)
+                                }
+                            }
+                            CommitNum("Shoulder Ø (${abbr(unit)})", disp(ln.shoulderFwdOdMm, unit)) { s ->
+                                toMmOrNull(s, unit)?.let {
+                                    onUpdateLinerShoulder(
+                                        idx, LinerAuthoredReference.FWD,
+                                        ln.shoulderFwdLenMm, it, ln.shoulderFwdRadiusMm)
+                                }
+                            }
+                        },
+                    )
+                }
 
                 if (perComponentUnitsEnabled) {
                     ComponentUnitChip(ln.id, unit, unitOverrides, onSetComponentUnit)

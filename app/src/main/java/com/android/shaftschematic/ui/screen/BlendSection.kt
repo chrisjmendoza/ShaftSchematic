@@ -143,7 +143,7 @@ private fun BlendFaceRow(
  * to `border = null`.
  */
 @Composable
-private fun <T> ChipRow(
+internal fun <T> ChipRow(
     label: String,
     options: List<T>,
     selected: T,

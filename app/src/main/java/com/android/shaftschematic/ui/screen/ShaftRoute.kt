@@ -134,6 +134,9 @@ fun ShaftRoute(
     // overrides map is per-document ViewModel state (same posture as `unit` itself).
     val perComponentUnitsEnabled by SettingsStore.perComponentUnitsFlow(ctx).collectAsState(initial = false)
     val unitOverrides by vm.unitOverrides.collectAsState()
+    // Liner shoulders: same capability posture — the gate hides the authoring UI only;
+    // a liner already carrying shoulders keeps its controls (decided in the carousel).
+    val linerShouldersEnabled by SettingsStore.linerShouldersEnabledFlow(ctx).collectAsState(initial = false)
 
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
@@ -205,7 +208,15 @@ fun ShaftRoute(
             vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit)
         },
         onAddThread = { s, l, maj, p, ex, aft, desig -> vm.addThreadAt(s, l, maj, p, ex, aft, desig) },
-        onAddLiner  = { s, l, od, ref -> vm.addLinerAt(s, l, od, ref) },
+        onAddLiner  = { s, l, od, ref, shoulders -> vm.addLinerAt(
+            s, l, od, ref,
+            shoulderAftLenMm = shoulders.aft?.lenMm ?: 0f,
+            shoulderAftOdMm = shoulders.aft?.odMm ?: 0f,
+            shoulderAftRadiusMm = shoulders.aft?.radiusMm ?: 0f,
+            shoulderFwdLenMm = shoulders.fwd?.lenMm ?: 0f,
+            shoulderFwdOdMm = shoulders.fwd?.odMm ?: 0f,
+            shoulderFwdRadiusMm = shoulders.fwd?.radiusMm ?: 0f,
+        ) },
         onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
@@ -221,6 +232,8 @@ fun ShaftRoute(
         onUpdateThreadLabel = { i, label   -> vm.updateThreadLabel(i, label) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
         onUpdateLinerShowDia = { i, show   -> vm.updateLinerShowDia(i, show) },
+        onUpdateLinerShoulder = { i, end, len, od, r -> vm.updateLinerShoulder(i, end, len, od, r) },
+        linerShouldersEnabled = linerShouldersEnabled,
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
         onUpdateCouplerBoltSlot = { i, s, dia, cnt, sp, thru, dep -> vm.updateCouplerBoltSlot(i, s, dia, cnt, sp, thru, dep) },

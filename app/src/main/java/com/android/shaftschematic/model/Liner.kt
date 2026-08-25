@@ -23,6 +23,14 @@ enum class LinerAuthoredReference { AFT, FWD }
  * @property showDiaOnDrawing Whether this liner's OD prints as a below-shaft callout on the
  *   schematic. Draw-only flag — mirrors [com.android.shaftschematic.model.Body.showDiaOnDrawing];
  *   it never rewrites [odMm] and never touches geometry. Defaults true for back-compat.
+ *
+ * Shoulders: a machined step at a liner end — the OD drops to a reduced diameter over the
+ * outermost [shoulderAftLenMm]/[shoulderFwdLenMm] of the liner's OWN span (cut into the liner,
+ * the blend posture: no other component's span moves, drawn or stored). A shoulder exists on an
+ * end when its length AND reduced OD are both > 0; every value is typed and stored verbatim
+ * (golden rule). The radius is the fillet where the shoulder's step face meets the liner OD —
+ * picked from a standard list, drawn as a small arc, and printed only as a footer note.
+ * All fields default 0 so documents that never touch shoulders decode byte-identical.
  */
 @Serializable
 @OptIn(ExperimentalSerializationApi::class)
@@ -39,7 +47,29 @@ data class Liner(
     @JsonNames("endFromAftMm", "endMmPhysical")
     val endMmPhysical: Float = 0f,
     val showDiaOnDrawing: Boolean = true,
+    val shoulderAftLenMm: Float = 0f,
+    val shoulderAftOdMm: Float = 0f,
+    val shoulderAftRadiusMm: Float = 0f,
+    val shoulderFwdLenMm: Float = 0f,
+    val shoulderFwdOdMm: Float = 0f,
+    val shoulderFwdRadiusMm: Float = 0f,
 ) : Segment
+
+/** One end's shoulder, or null when that end has none (needs BOTH length and OD > 0). */
+data class LinerShoulder(val lenMm: Float, val odMm: Float, val radiusMm: Float)
+
+fun Liner.shoulderOn(end: LinerAuthoredReference): LinerShoulder? {
+    val (len, od, r) = when (end) {
+        LinerAuthoredReference.AFT -> Triple(shoulderAftLenMm, shoulderAftOdMm, shoulderAftRadiusMm)
+        LinerAuthoredReference.FWD -> Triple(shoulderFwdLenMm, shoulderFwdOdMm, shoulderFwdRadiusMm)
+    }
+    if (len <= 0f || od <= 0f) return null
+    return LinerShoulder(lenMm = len, odMm = od, radiusMm = r)
+}
+
+/** True when either end carries a shoulder — what keeps the card's controls visible with the capability gate off. */
+fun Liner.hasShoulder(): Boolean =
+    shoulderOn(LinerAuthoredReference.AFT) != null || shoulderOn(LinerAuthoredReference.FWD) != null
 
 /** Normalize to ensure endMmPhysical matches start + length. */
 fun Liner.normalized(): Liner {
