@@ -91,6 +91,11 @@ geometric bound (this is a measuring aid, not a design validator).
   dimension), stores nothing in the document, no dirty state, no export surface, outside
   the add-dialog-parity invariant. Golden rule trivially safe — all outputs derived.
 
+**Scale precision (added 2026-08-25).** The nearest-fraction line snaps to a user-selected
+grid — 64 | 32 | 16, default 64 — via a "Scale" chip next to the unit chips, inches-only like
+the fraction line itself; the math generalized to `nearestFractionLabel(value, denominator)`,
+with `nearestSixtyFourthLabel` kept as its 64ths delegate.
+
 ## Decisions (settled on-device 2026-08-24)
 
 1. **Placement: (c)** — dialog launched from the sidebar's bottom group ("Keyway

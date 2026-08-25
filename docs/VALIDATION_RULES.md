@@ -321,15 +321,15 @@ Coupler bolt slots are **excluded from all collision detection** (`collisionGrou
   folded into `bodyWarningMessages`/`taperWarningMessages`/`linerWarningMessages`/
   `threadWarningMessages` (same `SHORT_SEGMENT_MM` threshold; all four are list-returning, so
   every applicable warning surfaces on the card).
-  `specWarningMessages` is pure and unit-tested but **not yet wired to any UI surface** — where
-  it should render (badge, banner, elsewhere) is an open UX decision for Chris.
+  `specWarningMessages` is pure and unit-tested and renders as a dismissable banner above the
+  component carousel on the Schematic tab (`ui/screen/SpecWarningBanner.kt`), 2026-08-25.
 - Free-to-end space < 10 mm *(implemented)*
 - Zero-body coverage (no explicit bodies in `ShaftSpec`; auto bodies are derived and do not
-  satisfy this warning) *(implemented, 2026-07-24 — computed only, not yet surfaced)* —
+  satisfy this warning) *(implemented, 2026-07-24 — surfaced 2026-08-25)* —
   `specWarningMessages(spec)` emits `"No explicit bodies — shaft body is all auto-fill"` when
   `spec.bodies` is empty and at least one taper, liner, or non-excluded thread exists
   (`hasAnyNonBodyComponent`). Like the tiny-segment count above, this is pure and unit-tested
-  but **not yet wired to any UI surface** — same open UX decision.
+  and shares the same Schematic-tab banner, 2026-08-25.
 
 ---
 

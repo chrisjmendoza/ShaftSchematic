@@ -692,6 +692,13 @@ Same-day review feedback on step 4; supersedes step 4's picker placement:
     to a dogleg when they'd graze; dogleg segments keep the geometric 0.5 × minGap —
     their diagonals legitimately skim the lane just above the row-0 tops, and testing
     them at the visual clearance would break the repair loop's convergence guarantee.
+    (4) **The dogleg elbow dips for slope** (2026-08-25, same on-device report re-raised:
+    the earlier three refinements fixed the *straight* leaders' aim but left the dogleg
+    diagonals near-horizontal — 15.6°–17.7° measured on the engine's own preview cases).
+    The elbow descends until the diagonal makes `LEADER_DOGLEG_MIN_SLOPE` (≈26.6°), bounded
+    by the bubble's own top and by a per-leader circle-clearance search; the corridor stays
+    the fallback the repair loop flattens to, which is what preserves convergence. Doglegs
+    below 25° fall ~80% on realistic sheets at zero page cost.
 
 ---
 
@@ -1177,15 +1184,31 @@ Any leader that fails is re-routed as a **dogleg**:
 ```
 (stationX, surfaceY)          vertical stub down to the common departure line
    → (stationX, departY)      (departY = deepest shaft surface; zero-length when already there)
-   → (bubbleX, elbowY)        diagonal in the corridor above the row-0 circle tops
+   → (bubbleX, elbowY)        diagonal — dips below the row-0 corridor for slope (see below)
    → (bubbleX, bubbleTop)     vertical drop through the rows (clears circles by crossRowPitch)
 ```
 
-All dogleg diagonals run between the same two horizontal lines with matching left-to-right
-order at both ends, so dogleg-vs-dogleg crossings are geometrically impossible; the repair
-loop therefore provably converges to **zero intersections** in every non-compressed
-configuration. The unit test suite asserts this across randomized stress configurations,
-stepped shaft surfaces (OD jumps), and dense component boundaries.
+**The elbow dips for slope (engine rule 5).** The diagonal carries all of the leader's
+sideways travel. Pinned at the corridor 0.75·minGap above the row-0 tops it has a constant
+~14 pt of vertical budget on the PDF against a horizontal run of up to a same-row pitch, so
+its slope degenerates precisely where doglegs are common: it leaves the shaft nearly tangent
+to the profile line and points at nothing (on-device report, "not clear to where
+they are pointing"). `elbowY` therefore descends until the diagonal makes
+`LEADER_DOGLEG_MIN_SLOPE` (0.5 rise/run, ≈26.6°) over its own run, capped at the bubble's own
+top so the closing segment stays a drop, and capped again by a search that only accepts
+a depth whose diagonal clears every foreign circle by `minGap/2`. The dip costs **no page
+height** — it stays inside the band the rows already occupy, so `sectionHeight` is unchanged.
+The slope is a **target, not an invariant**: on an overloaded sheet a neighbouring circle
+blocks the dip and the leader finishes on the corridor, as before.
+
+**Convergence.** At *corridor* level all dogleg diagonals run between the same two horizontal
+lines with matching left-to-right order at both ends, so corridor-vs-corridor crossings are
+geometrically impossible. A dipped diagonal leaves that common line and so may cross a
+neighbour; the repair's answer is to flatten it back to the corridor. Each leader therefore
+moves through at most two states — straight → dipped dogleg → corridor dogleg — and the loop
+provably converges to **zero intersections** in every non-compressed configuration. The unit
+suite asserts this across randomized stress configurations, stepped shaft surfaces (OD jumps),
+and dense component boundaries.
 
 ---
 
@@ -1836,31 +1859,38 @@ All four routes (Runout, Wear, Undercut, Consolidated Output) pass `RunoutWearOp
 | Components (Checkboxes + Default / All / None) | `vm.setWearShowShaftProfile()` / `vm.setWearStripComponents()` — only when `showWearControls` (Wear only); the selection callback is nullable, and `null` is the "Default (all liners)" action. The **Wear tab body** hosts the same section, same bindings (see "Selection & pagination") |
 | Taper–liner join (Slider 0–12", 1/2" steps; 10 mm in metric) | `vm.setPdfWearJoinGapMaxMm()` — only when `showWearControls` (Wear only); canonical mm, displayed in the session's unit |
 | Body S-break (Slider Never–Always, 5% steps) | `vm.setPdfSBreakThresholdFrac()` — only when `showSBreak` (see below) |
-| Shaft height (Slider) | `vm.setRunoutHeightScale()` — only when `showHeightControls` (Consolidated Output only) |
-| Liner compression (Checkbox + Slider) | `vm.setLinersProportional()` / `vm.setLinerCompression()` — only when `showHeightControls` (Consolidated Output only) |
+| Shaft height (Slider) | `vm.setRunoutHeightScale()` — only when `showHeightControls` (Consolidated Output **and Runout**) |
+| Liner compression (Checkbox + Slider) | `vm.setLinersProportional()` / `vm.setLinerCompression()` — only when `showHeightControls` (Consolidated Output **and Runout**) |
 | Measurement reference (Radio: Auto / AFT / FWD) | `vm.setPdfTieringMode()` — only when `showMeasurementReference` (Consolidated Output only) |
 | Shade Bodies (Checkbox) | `vm.setPdfShadedBodies()` |
 | Shade Tapers (Checkbox) | `vm.setPdfShadedTapers()` |
 | Shade Liners (Checkbox) | `vm.setPdfShadedLiners()` — locked (disabled, shown unchecked) when the document prints Ø values inside the profile; display-only, the pref is never rewritten |
 
-Only the Consolidated Output instance turns on the Shaft height / Liner compression pair and
-the Measurement reference radios — the same set the schematic Tune sheet exposes
+The Consolidated Output **and Runout** instances turn on the Shaft height / Liner compression
+pair — one composer serves both sheets and reads `config.heightScale` /
+`config.linerMinFracOfTrue` whether or not it is drawing the consolidated variant, so hiding
+the pair on the Runout sheet left the classic sheet's drawn height governed from a different
+tab. Only Consolidated Output adds the Measurement reference radios — the same set the
+schematic Tune sheet exposes
 (`PdfPreviewScreen.kt`'s `PdfOptionsSheet`), minus Component labels and the blank Ø-callouts
 sub-toggle: the consolidated composer never reads either of those two prefs, so they would be
 inert controls on this sheet. Only the **Wear** instance turns on `showWearControls`, the block
 that tunes the wear strips; the other three documents draw no wear strips.
 
-The **blank-draft row** is on for Consolidated Output, Wear, and Undercut — the three
-documents with a write-in mode. Wear and Undercut pass the SAME state their tab-body switch
+The **blank-draft row** is on for every instance — Consolidated Output, Wear, Undercut, and
+Runout all have a write-in mode. Wear and Undercut pass the SAME state their tab-body switch
 owns (`blankDraft` + `onSetBlankDraft = { blankDraft = it }`), so the two surfaces always agree
-and either one re-renders the preview through the route's existing `blankDraft` render key. The
-Runout instance leaves it at its `null` default.
+and either one re-renders the preview through the route's existing `blankDraft` render key.
 
 So, top to bottom: the **Wear** sheet shows Blank draft → Line thickness → Components (complete
 shaft + per-component checkboxes + the Default/All/None quick actions) → Trace depth
-exaggeration → Wear area shade → Taper–liner join → Fractions → Shade in PDF; the **Undercut** sheet shows Blank
-draft → Line thickness → Fractions → Shade in PDF; the **Runout** sheet Line thickness → Body
-S-break → Fractions → Shade in PDF. The wear sliders are commit-on-release like every other
+exaggeration → Wear area shade → Taper–liner join → Fractions → Shade in PDF → Dual units +
+layout; the **Undercut** sheet shows Blank draft → Line thickness → Fractions → Shade in PDF →
+Dual units + layout; the **Runout** sheet Blank draft → Coupling face → Line thickness →
+Body S-break → Shaft height → Liner compression → Fractions → Shade in PDF → Dual units +
+layout. Two ordering rules, both on-device requests: the live-tuning sliders LEAD (matching
+the schematic Tune sheet's group), and the dual-units pair sits LAST on every sheet —
+drawing- and output-specific controls first, rarely used options at the foot. The wear sliders are commit-on-release like every other
 slider here, so the Wear preview is **not** a live-drag surface (`tuning` stays null): the
 release commit re-renders the whole page through the route's render keys. It does pass
 `sheetTunesPage = true` all the same — a commit that redraws the page is worthless if the sheet
@@ -1870,7 +1900,7 @@ to the overlay.
 
 All of these values are included in the render loop's `RenderInputs` holder so changing any option immediately re-renders the preview bitmap.
 
-**Live tuning (Runout + Consolidated Output).** Both routes pass a `PreviewTuning` (`ui/screen/PreviewTuning.kt`) into the sheet, so the sliders here — Line thickness and Body S-break on both routes, plus Shaft height and Liner compression on the Consolidated Output sheet — reshape the page **while the finger is still on the track** ("see the differences without choosing, closing menu, opening menu, choosing" — on-device request). The shared controls report their in-progress value through an optional `onDrag: (Float?) -> Unit` (same units as their commit callback, `null` on release); the route folds it into the render inputs as `override ?: committed`. Three rules hold:
+**Live tuning (Runout + Consolidated Output).** Both routes pass a `PreviewTuning` (`ui/screen/PreviewTuning.kt`) into the sheet, so the sliders here — Line thickness and Body S-break on both routes, plus Shaft height and Liner compression on the Consolidated Output AND Runout sheets — reshape the page **while the finger is still on the track** ("see the differences without choosing, closing menu, opening menu, choosing" — on-device request). The shared controls report their in-progress value through an optional `onDrag: (Float?) -> Unit` (same units as their commit callback, `null` on release); the route folds it into the render inputs as `override ?: committed`. Three rules hold:
 
 - **Visual only.** A drag frame never writes DataStore and never updates `RunoutConfig` — persistence and the per-job dirty mark stay on commit-on-release. The Wear and Undercut routes leave `tuning` at its `null` default and are unaffected.
 - **Draft then sharp.** The loop is `snapshotFlow { RenderInputs(…) }.conflate().collect { … }` — latest-wins, so intermediate drag values are dropped while a render is in flight — and drag frames raster at `renderScale = 1` (¼ the pixels). When the drag ends the overrides go null, the inputs change once more, and that pass restores `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back across drag frames and that release pass so the page never strobes.
@@ -1900,7 +1930,10 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
 - Thread components produce no runout stations; they are drawn as hatched envelopes for visual reference only and may extend past the OAL arrows (excluded threads sit outside the SET-to-SET span).
 - The PDF page is U.S. Letter landscape (792 × 612 pt).
 - Canvas preview and PDF share one placement engine (`geom/RunoutBubbleLayout.kt`) so they are identical by construction — never re-implement placement in a renderer.
-- Bubbles never touch each other; leader lines never enter a bubble or cross another leader (engine-verified; see the algorithm section).
+- Bubbles never touch each other; leader lines never enter a bubble or cross another leader
+  (engine-verified; see the algorithm section). Every bubble is **joined** to its station by a
+  leader that starts at the station's x on the shaft surface and ends on the bubble's rim —
+  nothing suppresses or shortens a leader because the bubble happens to sit near its station.
 - Keyway reference cutout — an **open-topped keyway slot** at 12-o'clock (the top arc is broken across the slot mouth; two walls descend into the circle with a bottom connector), replacing the older protruding square notch. Nothing extends past the rim. Drawn identically in BOTH the PDF (`drawRunoutBubbleRingPdf`) and the canvas preview (`drawRunoutBubbleRing`).
 - **Runout readings are reference-only** (like coupler bolt slots / wear spots): a per-station TIR value + high-spot marker that never affect OAL/`coverageEndMm`, body resolution, collision, or the Free-to-End badge. Both are optional and independent; a sheet exports fine with neither. See "Runout Bubble Editor".
 - Any recorded value/marker is drawn identically in BOTH draw sites (the two must stay in lockstep — `RunoutRoute.drawRunoutMarkers` ⇔ `RunoutPdfComposer.drawPlacedBubbles`).

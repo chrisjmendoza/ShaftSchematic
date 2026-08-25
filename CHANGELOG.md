@@ -6,6 +6,166 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-25
+
+### feat: liner shoulders, behind a Settings gate
+
+A machined step at a liner end — the OD drops to a reduced diameter over the shoulder length,
+with a fillet where the step face meets the liner OD. Authored per end (length + shoulder Ø +
+edge radius), drawn in the preview and on the schematic PDF from ONE shared silhouette
+(`geom/LinerShoulderMath.kt` → `linerTopSilhouette`; fill and stroke decompose the same point
+list, so the two sites can never place a different step). The fillet is a true quarter-round,
+which is why it does not ride `BlendProfileMath`'s ease curves: a machined corner radius has no
+independent axial span to give a blend primitive.
+
+**Capability-gated, default OFF** (on-device request: "we usually don't worry about shoulders in
+our drawings… I don't want to inundate the UI"): Settings → "Liner shoulders" reveals the
+authoring controls on the liner card and in the Add Liner dialog (add-dialog-parity rule — a
+shoulder changes drawn geometry). A liner already carrying shoulder values keeps its controls
+and keeps drawing whatever the gate says: a device pref may hide empty entry fields, never
+authored work.
+
+The **edge radius comes from a standard list** (sharp, 1/16"–1/2" — provisional pending shop
+input, the warning-threshold posture) and prints in ONE place: a footer line ("Liner shoulder
+R: 1/8\"") in the column matching the shouldered end — no leader, no rail. That silence licenses
+the drawn clamps: a sub-pixel shoulder takes the blend visibility floor, an oversized one clamps
+where it is DRAWN, and the stored values are never rewritten (golden rule). Every value stored
+verbatim; a shoulder whose reduced Ø meets the liner OD simply draws square.
+
+Deliberate v1 bounds, recorded in TODO: the runout/consolidated sheet's liner pass still draws
+square ends (the blends rollout order), and the wear/undercut surface envelope treats a
+shouldered liner as full OD.
+
+### feat: named drawing preset profiles, and one reset for the whole drawing look
+
+Per-device tailoring already existed — every drawing pref persists in DataStore, so each install
+keeps its own look. What was missing sat above that: a way to name a look and switch between
+them, and one button to get back to the shipped one.
+
+Settings → Drawing now ends in a **Profiles** block. Save the current drawing look under a name,
+apply a saved one, rename or delete it. **Restore Drawing defaults** puts the whole look back to
+what a fresh install starts with, behind a confirmation; saved profiles survive it.
+
+**App-wide by decision.** A profile is a set of device preferences and nothing more: no document
+field, no envelope key, and a drawing never remembers which profile made it. Applying one is a
+one-shot copy into the live preferences — there is no "active profile" to drift out of sync with
+the controls the user then adjusts by hand, which is also why no row is shown as selected. The
+per-job "Shaft height" and liner-compression pair stay per-document: a look is app-wide, a fit is
+per-job.
+
+A profile covers the drawing look and only the drawing look — tiering reference, component
+titles, body/taper/liner shading, sizing-curve anchors, body S-break threshold, dimension arrow
+size, fraction style, dual-unit layout, wear depth exaggeration, wear area shade, taper–liner
+join, and line thickness. Capability gates (per-component units, liner shoulders), the dual-units
+default, theme and preview colors, undercut styles and developer options are deliberately outside
+it: they decide which controls exist or how the app itself looks, not how a sheet prints.
+Restore Drawing defaults resets exactly the same set, so a profile can always be undone.
+
+Stored as one JSON map in preferences with every field defaulted and enums held by name, so a
+profile saved by an older build still loads after the app gains new drawing prefs, an unknown
+value falls back to the shipped look, and an unreadable map costs the presets rather than the
+Settings screen. Applying writes through the same setters the controls use, so every mirror —
+`FractionTypography` included — fires exactly as it would from a manual change.
+
+### feat: spec-level warnings get a Schematic-tab banner
+
+`specWarningMessages` (tiny-segment count, zero-body coverage — `ui/util/ComponentWarnings.kt`)
+was computed and unit-tested but wired to no UI surface. It now renders as a dismissable line
+above the component carousel on the Schematic tab (`ui/screen/SpecWarningBanner.kt`) — one
+`Text` per message, the same tertiary-container warning color already used per-card in
+`ComponentCarousel.kt`. An X dismisses it for the current warning set only
+(`ui/util/SpecWarningVisibility.kt`'s `bannerVisible`/`warningSetKey`); a changed set (a new or
+different warning) re-shows it. Dismissal is plain Compose view state, not persisted and not
+part of the document, `EditState`, or undo.
+
+### fix: preview options sheets — the tuning sliders sit where the page is
+
+**The four live-tuning sliders are one group at the head of both PDF options sheets** —
+Line thickness → Body S-break → Shaft height → Liner compression, above the typography,
+reference and shade rows. The schematic's "Shaft height" slider was the tenth of thirteen
+blocks in a sheet capped near half the screen: present, wired, and effectively invisible
+("there is no slider that changes the height of the shaft" — on-device report). These four
+are exactly the controls the page-strip layout exists to keep judgeable, so they lead.
+
+**The Runout preview's options sheet gains the controls its sheet already honors.**
+`composeRunoutPdf` reads `config.heightScale` and `config.linerMinFracOfTrue` whether or
+not it is drawing the consolidated variant, so the classic runout sheet's drawn height and
+liner floors were set from a different tab. Its Tune menu now carries the same Shaft height
++ Liner compression pair (live-dragging through the `PreviewTuning` sink the route already
+threaded) and the Blank draft (write-in) row its Wear/Undercut/Output siblings all had.
+
+**The wear and undercut sheets stack dual values again.** Neither route passed
+`dualUnitLayout` into `RunoutWearOptionsSheet`, so its chips always drew the default rather
+than the stored preference, and neither preview carried the pref as a re-render key —
+picking Stacked moved neither the chip nor the page, on documents whose composers do honor
+it (`wantDualStacked`).
+
+**Dual units sit last on every options sheet** (on-device request, same session): the dual
+switch + layout chips moved to the foot of the schematic Tune sheet and every
+`RunoutWearOptionsSheet` instance — drawing- and output-specific controls lead, rarely used
+options trail. Nothing about the controls changed, only their position.
+
+**One base per composer behind the "Shaft height" track** — `schematicHeightSliderBase`
+(the sizing curve alone) and `runoutHeightSliderBase` (max(width-fit, curve)) in
+`ui/screen/ShaftHeightSlider.kt`, pure and unit-tested. The track is stated in paper inches,
+so two surfaces computing it apart would offer one job two different heights. The
+consolidated preview also gains the sizing-curve anchors as render keys, matching the
+schematic loop.
+
+### feat: mirror every save to a folder of your choosing
+
+Pick one folder in Settings → Data ("Mirror saves to folder") and every shaft you save is
+copied there as well, under the same filename — the off-device backup is always current
+without anybody remembering to make one. The grant is persisted
+(`takePersistableUriPermission`, read + write), so it survives reboots and app updates.
+
+**The mirror may never cost the save anything.** It is hooked strictly after
+`InternalStorage.save` has returned and runs fire-and-forget on its own IO scope, so a
+revoked grant, a deleted folder, a full disk or any other IO failure can neither delay the
+save nor undo it. Every provider call is wrapped; the only signal is a log line on the IO
+channel plus quiet supporting text on the Settings row that set the feature up. A
+found-revoked permission is deliberately NOT cleared — re-granting the same folder must be
+enough to resume.
+
+Overwrite-in-place, never accumulate: the folder's children are queried and an existing
+document of that name is written over, because a provider's create call de-duplicates by
+appending a counter rather than replacing — an unconditional create would leave
+`Job 1 (1).shaft`, `Job 1 (2).shaft` behind on every save. Documents are created as
+`application/octet-stream`, the one MIME type that leaves a `.shaft` name intact.
+
+Scope is saved shaft documents only. Autosave drafts live in DataStore and never reach the
+mirror; templates, backup-zip restores and pre-update snapshots go through
+`InternalStorage`'s directory-taking overload, which carries no hook — the exclusions are
+structural rather than a filter that could drift. Pure decisions (find-or-create, the
+should-mirror predicate, the folder label) live in `io/BackupMirrorPlan.kt` and are
+unit-tested; `io/BackupMirror.kt` is the thin untestable SAF shell.
+
+### fix: runout bubble leaders now point at their stations
+
+A dogleg's diagonal used to carry all of the leader's sideways travel inside a fixed 14 pt lane
+above the first bubble row, so on a crowded sheet it went near-horizontal (16–20° measured) —
+it left the shaft almost tangent to the profile line and pointed at nothing, and several of
+them read as a bundle of rules under the shaft (on-device report: "there are still times they
+are not clear to where they are pointing"). The elbow now dips below that lane until the
+diagonal descends at `LEADER_DOGLEG_MIN_SLOPE` (≈26.6°), bounded by the bubble's own top and by
+a per-leader clearance search, so no leader may enter a circle and none may cross. Doglegs
+under 25° drop by ~80% on realistic sheets; the dip costs no page height, and the worst case —
+a row-0 dogleg whose terminal drop was an invisible 3.75 pt — usually stops occurring at all.
+Fixed in the shared engine (`geom/RunoutBubbleLayout.kt`), so the canvas preview and the PDF
+inherit it identically; neither renderer changed. The slope is a target, not an invariant — on
+a genuinely overloaded sheet a neighbouring circle blocks the dip and that leader stays on the
+lane, as before.
+
+### feat: keyway calculator scale chip
+
+Added a Scale chip (64 | 32 | 16) to the bore keyway calculator's scale-check fraction line, so
+the fraction snaps to the grid a coarser machinist's scale actually reads; defaults to 64ths,
+shown only in inches (like the fraction line itself). Decimal output is unaffected — the math
+generalized to `nearestFractionLabel(value, denominator)` with the 64ths function as its
+delegate.
+
+---
+
 ## 2026-08-24
 
 ### feat: bore keyway rough-cutter depth calculator

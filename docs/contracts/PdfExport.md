@@ -89,10 +89,12 @@ schematic Tune sheet this section otherwise describes.
 Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
 (`PdfDocument` + `PdfRenderer`, 2× raster), pinch-to-zoom 0.5×–8×, double-tap reset.
 
-- **Options sheet (Tune icon):** blank draft (write-in) toggle, component labels, line
-  thickness (50–200%), "Body S-break" threshold, "Dimension arrows" size, "Shaft height"
-  slider, liner compression control, measurement reference (Auto/AFT/FWD), shade
-  bodies/tapers/liners — bound to
+- **Options sheet (Tune icon):** blank draft (write-in) toggle + Ø-callouts sub-switch,
+  component labels, then the live-tuning slider group at the head — line thickness
+  (50–200%), "Body S-break" threshold, "Shaft height" slider, liner compression control —
+  then "Dimension arrows" size, fractions, measurement reference (Auto/AFT/FWD), shade
+  bodies/tapers/liners, and dual units + layout LAST (rarely used options trail, on-device
+  request) — bound to
   `PdfPrefs` (or, for the
   height/liner-compression pair, the per-job `RunoutConfig`) via VM setters, persisted,
   applied live (each option is a `LaunchedEffect` key). Blank draft is session-scoped, not

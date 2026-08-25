@@ -84,10 +84,10 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 - [x] All five §3–4 warning rules computed + shown on carousel cards, 2026-07-24
   (`ui/util/ComponentWarnings.kt`, `specWarningMessages`). §3.3 taper-vs-body mismatch
   later removed by product decision — see §2.3
-- [ ] Decide UI surface for spec-level warnings (`specWarningMessages`) — UX decision. Both the
-  tiny-segment count and zero-body-coverage message are computed and unit-tested but not wired
-  to any screen (badge, banner, or elsewhere); the five carousel-card-level warnings above are
-  already live.
+- [x] Spec-level warnings (`specWarningMessages`) now show as a dismissable banner above the
+  carousel on the Schematic tab, 2026-08-25 (`ui/screen/SpecWarningBanner.kt`,
+  `ui/util/SpecWarningVisibility.kt`). Dismissal keys off the message set and is Compose view
+  state only (not persisted, not in `EditState`/undo).
 - [ ] Review the warning thresholds picked during the 2026-07-24 loop (1.5× adjacent-body
   step, 0.5 mm adjacency eps in `ui/util/ComponentWarnings.kt`) — chosen without shop input;
   sanity-check against real drawings. (Taper-mismatch 10% threshold is moot — that rule was
@@ -116,14 +116,16 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 
 ## 3. Rendering / Component Backlog
 
-- [ ] **Liner shoulders with a radius selector** (expanded 2026-08-14) — aft/fwd shoulder
-  length fields and stepped shoulder rendering in preview and PDF, plus a **radius selector**
-  for the shoulder edge at each liner end: a machined liner shoulder is rarely a sharp corner,
-  and the fillet is a real machining instruction, not just a drawing nicety. Open questions
-  before building: is the radius per-end or one value per liner; does it come from a list of
-  standard radii (like the taper-rate 3% snap list) or free entry; does it print as a value +
-  leader, a footer note, or both. Shares the draw-both-sites rule — preview and PDF must
-  construct the fillet identically, so the arc math belongs in `geom/`.
+- [x] **Liner shoulders with a radius selector** — DONE 2026-08-25 (questions answered
+  same day: radius per-end from a standard list — sharp, 1/16"–1/2", provisional; prints as a
+  FOOTER NOTE only). Per-end length + shoulder Ø + edge radius on `Liner` (verbatim storage);
+  ONE shared silhouette (`geom/LinerShoulderMath.kt`) decomposed by the preview canvas and the
+  schematic PDF; **capability-gated** behind Settings → "Liner shoulders" (default OFF,
+  on-device request — authored shoulders keep their controls and always draw). SVG review
+  artifact in `LinerShoulderSvgPreviewTest`. **Follow-ups deliberately open:** the
+  runout/consolidated sheet's liner pass still draws square ends (same rollout order as
+  blends), and `SurfaceSegs` treats a shouldered liner as full OD (wear/undercut readings
+  near a shoulder read the un-stepped surface).
 - [x] **Seal-area radius grooves** — DONE 2026-08-22 as part of the body-blend work, once it was
   clear the cuts sit ON the blended section running up to the liner rather than on a plain
   cylindrical run. A blended face carries a `Seal area (3 cuts)` flag; each cut draws as a V notch
@@ -156,17 +158,15 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
   condensed or slab face before shipping one: `FractionTextRendererTest` pins that the stack
   stays inside the font's own ascent/descent, and a face with unusual metrics is exactly what
   that test exists to catch. Same pref posture as `PdfPrefs.fractionStyle`.
-- [ ] **Runout bubble leader clarity** (on-device report 2026-08-14: "there are still times
-  they are not clear to where they are pointing") — the auto-placed alternating bubble rows
-  leave the eye guessing which station a bubble belongs to once rows stack or a shaft is
-  crowded. Same underlying problem as the tap-to-place leader-line item in §6, and probably
-  the same fix: draw a leader from the bubble to its station whenever the bubble is not
-  directly over it, rather than relying on proximity. Cheaper interim options if the full
-  leader is deferred: a witness tick at the station, or tightening the alternation so a bubble
-  never sits closer to a neighbour's station than its own (`geom/RunoutBubbleLayout.kt` is pure
-  and unit-tested, so the rule can be pinned before any drawing changes). Canvas + PDF must
-  draw the leader identically — draw-both-sites, same posture as the bubble value/high-spot
-  marker.
+- [x] **Runout bubble leader clarity** — DONE 2026-08-25. Diagnosis: leaders were never
+  missing or proximity-suppressed; the *dogleg diagonal* was confined to a fixed ~14 pt lane
+  above row 0 against an unbounded horizontal run, so it went near-horizontal (15.6°–17.7°
+  measured) exactly where doglegs occur and pointed at nothing. Fixed in the pure engine by
+  letting the elbow dip for slope (`LEADER_DOGLEG_MIN_SLOPE` ≈26.6°), bounded by the bubble's
+  own top and a per-leader clearance search; no page-height cost, no renderer changes, all
+  collision guarantees preserved. The interim options listed here were not needed: a witness
+  tick would have eaten the very lane depth that was the problem, and the alternation was
+  already correct.
 
 ---
 
@@ -324,7 +324,17 @@ would make that body untappable at the slot. Decide before changing.
   Related but distinct: dual-unit *display* shows both units for every dimension; this shows one
   chosen unit per component. §8 guardrail respected — tier origin, measurement reference, and
   units remain independent concerns.
-- [ ] Backup auto-mirror folder — user picks a SAF folder once in Settings (persisted URI); every internal save silently mirrors a copy there so the off-device backup is always current. Needs `takePersistableUriPermission` + careful URI-permission lifecycle handling (revoked permission, deleted folder). Originally Tier 3 of the 2026-05-27 backup plan; the shipped backup system covers Tiers 1–2.
+- [x] Backup auto-mirror folder — DONE 2026-08-25: user picks a SAF folder once in Settings →
+  Data (persisted tree URI, `takePersistableUriPermission` read+write); every internal document
+  save silently mirrors a copy there, overwrite-in-place by display name. Hooked in
+  `InternalStorage.save`'s Context overload, fire-and-forget on `BackupMirror`'s own IO scope —
+  a revoked grant, deleted folder or IO error can never delay or roll back the save; it logs on
+  the IO channel and never clears the stored URI (the user may re-grant). Drafts, templates,
+  zip restores and snapshots are excluded structurally (they use the directory-taking save
+  overload / DataStore). Was Tier 3 of the 2026-05-27 backup plan.
+  **Deliberate v1 bounds:** a rename or delete of a saved document does not propagate to the
+  mirror (a stale copy stays under the old name), and there is no "mirror everything now"
+  catch-up action for documents saved before the folder was picked. Both are additive.
 - [ ] "Indicated wear" rendering style for wear bands (requested 2026-07-18): match the shop
   hand-sketch convention — squiggly/wavy lines along the liner top and bottom edges in
   the worn region, with straight lines depicting the wear on the liner face itself —
@@ -334,35 +344,22 @@ would make that body untappable at the slot. Decide before changing.
 - [ ] Compact wear-strip option: strips currently stretch the liner toward full content
   width for readability; a denser mode (don't stretch, natural/shared scale) would ease
   crowded 3-strip pages. Full-stretch reads well, so keep it the default.
-- [ ] **Runout sheet: tap-to-place bubble with leader line** (requested 2026-07-26): tap a
-  shaft location, then tap where the bubble should sit, and connect the two with a leader
-  line per the normal drawing convention — instead of (or in addition to) the current
-  auto-placed alternating bubble rows. Canvas + PDF must draw the leader identically
-  (draw-both-sites rule, same posture as the bubble value/high-spot marker).
-  **Related:** the auto-placed rows have their own clarity complaint (§3, 2026-08-14). If the
-  leader gets built here, an automatic leader probably fixes both — decide the two together
-  rather than shipping two conventions.
-- [ ] **Drawing preset profiles (app-wide)** (asked 2026-08-14). Note first that per-user
-  tailoring **already exists**: every drawing pref (fraction style, arrow size, line thickness,
-  S-break threshold, sizing-curve anchors, shading) is persisted per device in DataStore, so
-  each install already keeps its own look — the `PdfPrefs` defaults only decide what a *fresh*
-  install starts with. What is genuinely missing is above that: a **section-wide "restore
-  Drawing defaults"** (today only individual controls have their own reset buttons), and
-  **named preset profiles** — save the current drawing prefs under a name and switch between
-  them, for a shared device or a shop that wants a different look per customer.
-
-  **Product decision (2026-08-14): profiles are APP-WIDE, never per-document.** A machinist is
-  working against the clock; restyling per job is a hassle they should not have to think about,
-  so a profile is set once and applies to every shaft they draw. This is what makes the feature
-  cheap: it stays a set of DataStore prefs, with **no persisted per-doc field and no
-  doc-envelope change**. Do not "improve" it later by having a document remember the profile it
-  was drawn with.
-
-  **Not in scope of that decision:** the per-job `RunoutConfig` pair ("Shaft height" +
-  liner compression) stays per-document, and is not an exception to be tidied away. Those are
-  not style preferences — they are how *this particular shaft* is made to fit the page, a
-  geometry consequence of its own proportions, so a shared value would be wrong for the next
-  shaft. The line is: a **look** is app-wide; a **fit** is per-job.
+- [ ] **Runout sheet: tap-to-place bubble** (requested 2026-07-26) — tap a shaft location,
+  then tap where the bubble should sit. **The leader half of this item is superseded**: the
+  auto leader shipped 2026-08-25 (§3) and answers the shared clarity complaint, so a manual
+  placement would reuse the same engine-planned leader rather than introducing a second
+  convention. What is left is the *placement* gesture — and note that long-press-drag on a
+  bubble already pins a station (`RunoutStationPlacements`), which covers most of the need.
+  Worth confirming on-device whether anything remains wanted here before building it.
+- [x] **Drawing preset profiles (app-wide)** (asked 2026-08-14, shipped 2026-08-25). Settings →
+  Drawing → "Profiles": save the current drawing look under a name, apply / rename / delete it,
+  plus a section-wide **Restore Drawing defaults** behind a confirmation. `settings/DrawingProfile.kt`
+  (payload + pure codec), one `drawing_profiles` JSON map in DataStore, applied through the
+  existing setters so every mirror fires. App-wide as decided: no per-doc field, no envelope
+  change, no "active profile" state. Scope = the whole `PdfPrefs` plus line thickness; capability
+  gates, the dual-units default, theme/preview/undercut styling and dev options are out.
+  The per-job `RunoutConfig` pair (Shaft height, liner compression) stays per-document — a look
+  is app-wide, a fit is per-job.
 
 ---
 

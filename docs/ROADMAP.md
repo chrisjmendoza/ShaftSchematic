@@ -28,32 +28,28 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 
 **In progress / next up:**
 
-- [ ] **Liner shoulders with a radius selector** — aft/fwd shoulder length fields and stepped
-  shoulder rendering in preview and PDF, plus a fillet radius at each shoulder edge (a real
-  machining instruction, not a drawing nicety). Open: per-end or per-liner, standard-radius
-  list or free entry, and how it prints. The arc math now exists — `geom/BlendProfileMath.kt`
-  is a general "join two radii across an axial span" primitive built for the body blend and
-  meant to be called here too, so this is a call site rather than new math
+- [ ] **Liner shoulders on the runout/consolidated sheet + surface envelope** — the base
+  feature shipped 2026-08-25 (per-end length + Ø + standard-list edge radius,
+  capability-gated, preview + schematic PDF from one `geom/LinerShoulderMath.kt` silhouette,
+  radius as a footer note). Still open, deliberately: the runout/consolidated sheet's liner
+  pass draws square ends, and `SurfaceSegs` treats a shouldered liner as full OD
 - [ ] **Fiberglass body support** — per-body flag with the usual dialog/card parity; styling
   (dark fill vs hatch vs label) is **undecided and blocked on a sketch or photographed sheet**,
   the same way the "indicated wear" squiggle convention is
 - [ ] **Additional output fonts** — a typeface choice for the printed sheets. Safe by
   construction (every metric is measured live from the `Paint`), but check the fraction stack
   against a condensed or slab face before shipping one
-- [ ] **Runout bubble leader clarity** — the 2026-08-16 pointer rework (station-fidelity brake,
-  center-aimed leaders, dogleg reroute) answered the reported case, and long-press-drag now
-  covers *moving* a station to a measured spot. What is still open from the original request is
-  **tap-to-place a NEW bubble** at an arbitrary station rather than adding one with `+` and
-  dragging it. The drag work settled the hard parts (authored positions, the neighbour clamp,
-  reading re-keys), so this is now mostly a gesture + insertion-index question
+- [ ] **Tap-to-place a NEW bubble** — leader clarity itself is resolved (2026-08-25 dogleg-dip
+  rework, on top of the 2026-08-16 pointer rework), and long-press-drag covers *moving* a
+  station. What remains of the original request is placing a NEW bubble at an arbitrary
+  station rather than adding with `+` and dragging. The drag work settled the hard parts
+  (authored positions, the neighbour clamp, reading re-keys), so this is now mostly a gesture +
+  insertion-index question — confirm on-device that it is still wanted
 - [ ] **Drag on the compressed preview** — the Runout tab's canvas maps mm linearly while the
   printed sheet foreshortens, so a bubble dragged to look centred in the preview does not look
   centred on paper in a compressed region (the stored mm is correct either way). Teaching the
   canvas the sheet's piecewise `xAt` would close the gap; on-device the linear preview has been
   fine so far, so this is watch-and-see rather than queued
-- [ ] **Drawing preset profiles** — named, **app-wide** sets of drawing prefs plus a
-  section-wide "restore Drawing defaults". Per-job `RunoutConfig` (Shaft height, liner
-  compression) deliberately stays per-document: a *look* is app-wide, a *fit* is per-job
 - [ ] **Multi-shaft per job number** — plan in `docs/MultiShaftJob_Plan_2026-07-26.md`
   (derived job grouping over single-shaft files; no format change). Awaiting answers to its
   6 product questions
@@ -64,6 +60,20 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   move, and lower priority
 
 **Delivered in v0.5.x so far** (newest first):
+- Liner shoulders (2026-08-25) — per-end stepped shoulder (length + reduced Ø + standard-list
+  edge radius), capability-gated behind Settings → "Liner shoulders", one shared silhouette for
+  preview + schematic PDF, radius printed as a footer note only
+- Drawing preset profiles (2026-08-25) — named app-wide drawing looks + section-wide "Restore
+  Drawing defaults"; a look is app-wide, a fit is per-job, and no document ever remembers a
+  profile
+- Runout bubble leader dogleg-dip rework (2026-08-25) — dogleg diagonals dip for slope
+  (≈26.6° target) so leaders read as pointers on crowded sheets; pure-engine change, both draw
+  sites inherit it
+- Spec-level warnings banner (2026-08-25) + implausibly-large value warnings (2026-08-24)
+- Bore keyway rough-cutter depth calculator (2026-08-24/25) — sidebar tool, up to 2 cutters,
+  nearest-fraction scale check with a 64|32|16 grid chip
+- Blends and seal areas on the runout/consolidated sheet (2026-08-24); taper overlaps block
+  export; leading bare-shaft span survives reload
 - Body face blends and seal areas — a smooth machined transition from a body face into whatever
   diameter it steps to, in place of a square shoulder, with S-curve / Fillet / Eased-cone
   profiles. Machined inward out of the body that carries it, so no other component moves;

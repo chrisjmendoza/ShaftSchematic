@@ -467,11 +467,16 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   **theme-driven**, not `SheetInk`: it is an interactive affordance over the paper, not ink
   printed on it, and a forced-white box would carry dark theme's near-white label onto white.
 
-**The Tune options sheet** (`PdfPreviewScreen.kt`) hosts, in order: Blank draft (write-in),
-Component labels, Line thickness, the **"Shaft height" slider** and the **liner compression**
-control (both §5.7 — the same per-job `RunoutConfig` values the Consolidated Output tab
-exposes, §5.6), Measurement reference, and the Shade-in-PDF checkboxes. The sheet scrolls,
-capped at 78% of screen height so it never covers the preview entirely.
+**The Tune options sheet** (`PdfPreviewScreen.kt`) hosts, in order: Blank draft (write-in)
++ its Ø-callouts sub-switch, Component labels, then the **live-tuning group at the head of
+the sliders** — Line thickness, Body S-break, **"Shaft height"**, **Liner compression**
+(the latter two §5.7 — the same per-job `RunoutConfig` values the Consolidated Output tab
+exposes, §5.6; the group leads because these are the controls the page-strip layout exists
+to keep judgeable, and the height slider buried tenth of thirteen read as absent —
+on-device report) — then Dimension arrows, Fractions, Measurement reference, the
+Shade-in-PDF checkboxes, and Dual units + layout LAST (rarely used options trail, on-device
+request). The sheet scrolls; its height is capped by
+`tuningSheetMaxHeightDp` (78% is only the ceiling — the page strip usually binds first).
 
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
 `PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print

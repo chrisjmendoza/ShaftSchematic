@@ -182,7 +182,7 @@ path); the per-job **"Liner compression" pair** (`RunoutConfig.linersProportiona
 **the drawing height takes PRECEDENCE**: the raises are best-effort, never enter the
 scale solve, and λ-fit whatever room the page has at the selected height
 (`fracFitFactor`) — do not let a liner demand lower the drawn shaft; control on the
-Output tab + schematic Tune sheet with a live kept-% readout
+Output tab + the schematic and runout preview Tune sheets with a live kept-% readout
 (`estimatedLinerKeptFracOfTrue`); ONLY keyway-bearing bodies stay pinned at true width
 with the height yielding (`solveMaxProfileScale`). Body runs join the same λ pool
 (`PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` 0.30 — ratio-preserving gap floors), so liner raises
@@ -431,6 +431,36 @@ layout: it hid the seal behind a control nobody thinks to tick first (on-device 
 — absorbing one into a run that already has an explicit body drops its Ø and its carousel card, so
 a Ø6-to-Ø8 stepped shaft drew as one run. Auto spans still merge in for continuity. See
 `docs/COMPONENT_CONTRACT.md`.
+
+### Liner shoulders are capability-gated, drawn from one silhouette
+`Liner` shoulder fields (per end: length + reduced Ø + edge radius, all stored verbatim —
+golden rule) draw a machined step at the liner end. ONE shared silhouette
+(`geom/LinerShoulderMath.kt` → `linerTopSilhouette`, quarter-round fillet — deliberately NOT a
+`BlendProfileMath` ease curve, a corner radius has no independent axial span) is decomposed by
+BOTH draw sites (`ShaftRenderer` liner pass, `ShaftPdfComposer.drawLiners`); fill and stroke
+build from the same point list. The authoring UI (liner card + `AddLinerDialog`, under
+add-dialog parity) is gated by Settings → "Liner shoulders" (`SettingsStore.
+linerShouldersEnabledFlow`, default OFF — on-device request: don't inundate the UI), but a
+liner already carrying shoulder values keeps its controls and always draws them: a device pref
+may hide empty entry fields, never authored work. The edge radius comes from the standard list
+(`LINER_SHOULDER_STD_RADII_IN`, provisional) and prints ONLY as a footer line ("Liner shoulder
+R: …") — no leader, no rail — which is what licenses the drawn clamps (blend-width floor,
+oversize clamped where DRAWN, values never rewritten). Known v1 bounds: the runout/consolidated
+sheet's liner pass draws square ends, and `SurfaceSegs` treats a shouldered liner as full OD.
+
+### Drawing profiles are app-wide, never per-document
+Named drawing preset profiles (`settings/DrawingProfile.kt`, Settings → Drawing → "Profiles")
+capture the drawing LOOK — the whole `PdfPrefs` plus line thickness — as one DataStore JSON
+map. A profile is device preferences and nothing more: **no doc-envelope field, no per-document
+state, no "active profile" tracking** — applying is a one-shot copy through the EXISTING
+setters (so every mirror fires, `FractionTypography` included), and a document never remembers
+which profile drew it. Do not "improve" this by persisting a profile reference anywhere in a
+document. Excluded from capture, deliberately: capability gates (per-component units, liner
+shoulders — they decide which controls exist), the dual-units default (document behavior), the
+per-job `RunoutConfig` pair (a FIT, not a look), theme/preview/undercut styling, dev options.
+"Restore Drawing defaults" resets exactly the captured set, so a profile can always be undone.
+Enums are stored by NAME through the tolerant `fromName` helpers; every payload field is
+defaulted — profiles from older builds must keep loading.
 
 ### Spooned keyways are a draw-only variant
 `keywaySpooned` (on `Taper` and `Body`) is a **drawing** flag — it changes nothing in the model,

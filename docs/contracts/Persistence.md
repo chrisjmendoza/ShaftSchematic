@@ -47,6 +47,36 @@ Do Nots
 
 ---
 
+## Backup auto-mirror (`io/BackupMirror.kt`, `io/BackupMirrorPlan.kt`)
+
+One SAF folder, picked once in Settings → Data ("Mirror saves to folder", persisted tree URI
+with `takePersistableUriPermission` read+write); every internal document save mirrors a copy
+there under the same filename.
+
+Invariants
+- **One choke point**: the hook is the single line after the atomic write in
+  `InternalStorage.save(ctx, name, content)` — the Context overload every UI save site calls.
+  Exclusions are **structural, not filtered**: templates, zip restores, and pre-update
+  snapshots use the directory-taking `save(dir, …)` overload (no hook) or their own streams,
+  and autosave drafts live in DataStore and never reach `InternalStorage` at all.
+- **The mirror may never cost the save anything**: fire-and-forget on `BackupMirror`'s own
+  `SupervisorJob + Dispatchers.IO` scope, hooked strictly after the internal write returned;
+  every provider call wrapped; concurrent saves serialize on a mutex.
+- **A found-revoked permission never clears the stored URI** — re-granting the same folder
+  must be enough to resume; only the user's explicit "Stop" clears it. Failures log on the
+  VerboseLog IO channel plus quiet session-only status text on the Settings row.
+- **Overwrite-in-place by display name** (`planMirrorWrite`): an existing document is written
+  over (`"wt"`); only a genuinely new name is created — an unconditional create would leave
+  `" (1)"` duplicates on every save. Created as `application/octet-stream`, the one MIME type
+  that leaves a `.shaft` name intact; names carrying a path separator are rejected.
+- Pure decisions (find-or-create, should-mirror, folder label) in `BackupMirrorPlan.kt`
+  (unit-tested); `BackupMirror.kt` is the thin untestable SAF shell.
+
+Deliberate v1 bounds: a rename/delete of a saved document does not propagate to the mirror,
+and there is no catch-up action for documents saved before the folder was picked.
+
+---
+
 ## Doc format & units policy (`doc/ShaftDocCodec.kt`)
 
 - Canonical storage: **millimeters** in `ShaftSpec`; UI unit persisted to Settings
