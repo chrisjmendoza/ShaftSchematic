@@ -77,10 +77,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.model.maxOuterDiaMm
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -770,61 +768,20 @@ private fun PdfOptionsSheet(
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
 
-        // ── Dimension arrows ─────────────────────────────────────────────────
-        DimensionArrowSizeChips(
-            arrowSizePt = arrowSizePt,
-            onCommit = { vm.setPdfArrowSizePt(it) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        FractionStyleChips(
-            fractionStyle = fractionStyle,
-            onCommit = { vm.setPdfFractionStyle(it) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        // ── Dual units (this document) ───────────────────────────────────────
-        // The document's own flag, not a preference: `dual_units` travels with the job. The
-        // layout chips under it style what this switch turns on, so they read as disabled
-        // until it is — a control for something invisible is worse than no control.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(
-                checked = dualUnits,
-                onCheckedChange = { vm.setDualUnits(it) },
-            )
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("Dual units", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "Print every dimension in both inches and millimetres. Saved with the document.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        DualUnitLayoutChips(
-            layout = dualUnitLayout,
-            enabled = dualUnits,
-            onCommit = { vm.setPdfDualUnitLayout(it) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
-
         // ── Shaft height ─────────────────────────────────────────────────────
         // The same per-job multiplier the runout / consolidated sheets carry
         // (`RunoutConfig.heightScale`) — one slider value behind every drawing
         // (on-device request: the schematic was meant to follow it too). Selected by
         // drawn-height VALUE in paper inches; the schematic's base is the default
         // sizing curve at the configured anchor heights, no width-fit term.
-        val sliderDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) }
-        val sliderBase = defaultVisualScale(sliderDiaMm, curveLoHeightIn * 72f, curveHiHeightIn * 72f)
+        //
+        // It sits with Line thickness and Body S-break because those four sliders are the
+        // ones that reshape the page under a finger — the live-tuning group the page strip
+        // above this sheet exists to keep in view. The sheet is taller than its cap and
+        // scrolls, so a tuning slider parked below the typography rows reads as absent
+        // (on-device report).
+        val sliderDiaMm = remember(spec) { heightSliderMaxDiaFor(spec) }
+        val sliderBase = schematicHeightSliderBase(sliderDiaMm, curveLoHeightIn, curveHiHeightIn)
         ShaftHeightSlider(
             heightScale = heightScale,
             baseScale = sliderBase,
@@ -848,6 +805,23 @@ private fun PdfOptionsSheet(
             onSetProportional = { vm.setLinersProportional(it) },
             onSetCompression = { vm.setLinerCompression(it) },
             onDrag = { tuning.linerCompression = it },
+        )
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Dimension arrows ─────────────────────────────────────────────────
+        DimensionArrowSizeChips(
+            arrowSizePt = arrowSizePt,
+            onCommit = { vm.setPdfArrowSizePt(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        FractionStyleChips(
+            fractionStyle = fractionStyle,
+            onCommit = { vm.setPdfFractionStyle(it) },
         )
 
         Spacer(Modifier.height(12.dp))
@@ -884,6 +858,40 @@ private fun PdfOptionsSheet(
             onSetShadedBodies = { vm.setPdfShadedBodies(it) },
             onSetShadedTapers = { vm.setPdfShadedTapers(it) },
             onSetShadedLiners = { vm.setPdfShadedLiners(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Dual units (this document) — LAST by design ──────────────────────
+        // The document's own flag, not a preference: `dual_units` travels with the job. The
+        // layout chips under it style what this switch turns on, so they read as disabled
+        // until it is — a control for something invisible is worse than no control. The pair
+        // sits at the FOOT of the sheet: drawing- and output-specific controls lead, rarely
+        // used options trail (on-device request).
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(
+                checked = dualUnits,
+                onCheckedChange = { vm.setDualUnits(it) },
+            )
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("Dual units", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Print every dimension in both inches and millimetres. Saved with the document.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        DualUnitLayoutChips(
+            layout = dualUnitLayout,
+            enabled = dualUnits,
+            onCommit = { vm.setPdfDualUnitLayout(it) },
         )
 
         Spacer(Modifier.height(24.dp))

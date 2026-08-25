@@ -143,6 +143,10 @@ fun WearRoute(
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
+    // Dual-unit layout: this document stacks its dual values like every other
+    // (`wantDualStacked`), so its options sheet has to show the stored choice — and the
+    // preview has to redraw when it changes.
+    val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
     val wearTraceDefault   by vm.pdfWearTraceDepthFrac.collectAsState()
     val wearBandShadeFrac  by vm.pdfWearBandShadeFrac.collectAsState()
@@ -219,11 +223,13 @@ fun WearRoute(
     // wearBandShadeFrac and wearJoinGapMaxMm are keys for the same reason: the composer reads
     // them off the PdfPrefs snapshot taken inside this effect, which is not snapshot state either.
     // unitOverrides and dualUnits are keys for the same reason: they reach the composer only
-    // through the displayUnits snapshot built below.
+    // through the displayUnits snapshot built below. pdfDualUnitLayout joins them — the
+    // composer reads it off the PdfPrefs snapshot, so without the key the sheet's own layout
+    // chips would change nothing on the page they sit over.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
                    wearRecord, blankDraft, pdfFractionStyle, traceDepthFrac, wearBandShadeFrac,
-                   wearJoinGapMaxMm, unitOverrides, dualUnits) {
+                   wearJoinGapMaxMm, unitOverrides, dualUnits, pdfDualUnitLayout) {
         if (!showPreview) { previewBitmap = null; previewInkBand = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
@@ -552,6 +558,7 @@ fun WearRoute(
                 RunoutWearOptionsSheet(
                     dualUnits = dualUnits,
                     onDualUnitsChange = { vm.setDualUnits(it) },
+                    dualUnitLayout = pdfDualUnitLayout,
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,

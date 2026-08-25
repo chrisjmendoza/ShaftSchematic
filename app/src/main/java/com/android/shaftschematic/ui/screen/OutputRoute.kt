@@ -56,7 +56,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -67,7 +66,6 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WornSection
 import com.android.shaftschematic.model.collidingIds
-import com.android.shaftschematic.model.maxOuterDiaMm
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.pdf.composeShaftPdf
@@ -129,6 +127,10 @@ private data class ConsolidatedRenderInputs(
      * budget cannot absorb the taller stacked value falls back to inline on its own.
      */
     val dualUnitLayout: DualUnitLayout,
+    /** Sizing-curve anchors — the drawn shaft height rides on them. Keys only; they travel
+     *  to the composer inside the `PdfPrefs` snapshot. */
+    val curveLoHeightIn: Float,
+    val curveHiHeightIn: Float,
     val tieringMode: PdfTieringMode,
     val readings: RunoutReadings,
     val stationPlacements: RunoutStationPlacements,
@@ -243,15 +245,11 @@ fun OutputRoute(
     val aftSetXMm = setPositions.aftSETxMm.toFloat()
     val fwdSetXMm = setPositions.fwdSETxMm.toFloat()
 
-    // Height slider inputs: the base here approximates the composer's solve (width-fit
-    // vs the default sizing curve at the configured anchor heights; the in-profile value
-    // demand and the page budget are ignored — both only ever LOWER the drawn height a
-    // hair in extreme layouts, never raise it).
-    val heightSliderDiaMm = remember(spec) { spec.maxOuterDiaMm().coerceAtLeast(10f) }
-    val heightSliderBase = remember(spec, curveLoHeightIn, curveHiHeightIn) {
-        val spanMm = (setPositions.fwdSETxMm - setPositions.aftSETxMm).toFloat().coerceAtLeast(1f)
-        val contentW = 792f - 72f
-        maxOf(contentW / spanMm, defaultVisualScale(heightSliderDiaMm, curveLoHeightIn * 72f, curveHiHeightIn * 72f))
+    // Height slider inputs — the shared runout-family base, so this tab and the Runout
+    // tab's preview can never state different paper inches for the same job.
+    val heightSliderDiaMm = remember(spec) { heightSliderMaxDiaFor(spec) }
+    val heightSliderBase = remember(spec, heightSliderDiaMm, curveLoHeightIn, curveHiHeightIn) {
+        runoutHeightSliderBase(spec, heightSliderDiaMm, curveLoHeightIn, curveHiHeightIn)
     }
 
     // Liner shading is unavailable exactly when this sheet prints measured Ø values inside
@@ -440,6 +438,8 @@ fun OutputRoute(
                 arrowSizePt = pdfArrowSizePt,
                 fractionStyle = pdfFractionStyle,
                 dualUnitLayout = pdfDualUnitLayout,
+                curveLoHeightIn = curveLoHeightIn,
+                curveHiHeightIn = curveHiHeightIn,
                 tieringMode = pdfTieringMode,
                 readings = runoutReadings,
                 stationPlacements = stationPlacements,

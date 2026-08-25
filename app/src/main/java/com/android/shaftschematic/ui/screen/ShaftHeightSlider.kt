@@ -22,6 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.geom.drawnShaftHeightPt
 import com.android.shaftschematic.geom.exaggeratedProfileScale
 import com.android.shaftschematic.geom.fracFitFactor
@@ -53,6 +56,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfWearTraceDepthFrac
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.LengthFormat
+import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -623,8 +627,9 @@ internal fun ShadeInPdfChecks(
 }
 
 /**
- * The per-job "Shaft height" slider, shared by the Consolidated Output tab and the
- * schematic PDF options sheet (one `RunoutConfig.heightScale` value behind both).
+ * The per-job "Shaft height" slider, shared by the Consolidated Output tab and by every
+ * options sheet whose document is sized by it — the schematic preview's, the runout
+ * preview's, the consolidated preview's. ONE `RunoutConfig.heightScale` behind all of them.
  *
  * The slider selects the drawn shaft height by VALUE, in inches on paper (on-device
  * request: "the end of the slider would be 1.5\" and I can select the height by value,
@@ -709,6 +714,55 @@ internal fun ShaftHeightSlider(
 
 /** Paper-inch label, two decimals: 1.13″, 1.50″. */
 private fun fmtIn(inches: Float): String = "%.2f″".format(inches)
+
+/**
+ * The true largest OD a [ShaftHeightSlider] sizes against, floored so a spec with no
+ * diameters yet still yields a usable track. ONE reading for every surface that hosts the
+ * slider — the track is stated in paper inches, so two surfaces disagreeing about the
+ * shaft's diameter would offer the same job two different heights.
+ */
+internal fun heightSliderMaxDiaFor(spec: ShaftSpec): Float = spec.maxOuterDiaMm().coerceAtLeast(10f)
+
+/** Points per inch — the anchor heights are stored in inches, every scale solve is in points. */
+private const val PT_PER_IN = 72f
+
+/**
+ * [ShaftHeightSlider]'s `baseScale` for the SCHEMATIC sheet: the default sizing curve at the
+ * configured anchor heights (`PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`). The schematic
+ * never widens the shaft to fill the page, so the curve alone is its conventional solve —
+ * the same base `composeShaftPdf` starts from.
+ */
+internal fun schematicHeightSliderBase(
+    maxDiaMm: Float,
+    curveLoHeightIn: Float,
+    curveHiHeightIn: Float,
+): Float = defaultVisualScale(maxDiaMm, curveLoHeightIn * PT_PER_IN, curveHiHeightIn * PT_PER_IN)
+
+/**
+ * [ShaftHeightSlider]'s `baseScale` for a RUNOUT-family sheet — the classic runout sheet and
+ * the consolidated output come off one composer, so they share one base:
+ * max(width-fit across the SET-to-SET span, the default sizing curve).
+ *
+ * An approximation of `composeRunoutPdf`'s solve on purpose: the in-profile value demand and
+ * the page budget are left out, and both only ever LOWER the drawn height a hair in extreme
+ * layouts, never raise it. ONE construction for both surfaces, so the two sliders can never
+ * report different inches for the same job.
+ */
+internal fun runoutHeightSliderBase(
+    spec: ShaftSpec,
+    maxDiaMm: Float,
+    curveLoHeightIn: Float,
+    curveHiHeightIn: Float,
+): Float {
+    val sets = computeSetPositionsInMeasureSpace(computeOalWindow(spec), spec)
+    val spanMm = (sets.fwdSETxMm - sets.aftSETxMm).toFloat().coerceAtLeast(1f)
+    // 0.5 in margins on both sides of the landscape page — the composer's content width.
+    val contentWidthPt = PDF_PAGE_WIDTH_PT - 72f
+    return maxOf(
+        contentWidthPt / spanMm,
+        defaultVisualScale(maxDiaMm, curveLoHeightIn * PT_PER_IN, curveHiHeightIn * PT_PER_IN),
+    )
+}
 
 /**
  * The per-job "Liner compression" control, shared by the same two surfaces as

@@ -189,6 +189,11 @@ fun RunoutRoute(
     // cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
+    // Sizing-curve anchors: the composer sizes the drawn shaft off them and the preview's
+    // "Shaft height" slider states its track in paper inches from the same pair, so a
+    // Settings change to "Default drawing size" has to reach both.
+    val curveLoHeightIn    by vm.pdfCurveLoHeightIn.collectAsState()
+    val curveHiHeightIn    by vm.pdfCurveHiHeightIn.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
     val stationPlacements  by vm.runoutStationPlacements.collectAsState()
     // Per-component display units + inline-dual flag: same posture as `pdfFractionStyle` —
@@ -250,6 +255,14 @@ fun RunoutRoute(
     val gate = remember(spec, collidingIds) { exportPdfGate(spec, collidingIds) }
 
     val outputFilename = buildOutputFilename(customer, vessel, jobNumber, OutputDoc.RUNOUT, blankDraft)
+
+    // "Shaft height" / "Liner compression" slider inputs. The classic sheet honors both
+    // (`config.heightScale`, `config.linerMinFracOfTrue`) exactly as the consolidated one
+    // does — one composer — so its preview offers the same pair, off the same shared base.
+    val heightSliderDiaMm = remember(spec) { heightSliderMaxDiaFor(spec) }
+    val heightSliderBase = remember(spec, heightSliderDiaMm, curveLoHeightIn, curveHiHeightIn) {
+        runoutHeightSliderBase(spec, heightSliderDiaMm, curveLoHeightIn, curveHiHeightIn)
+    }
 
     /** The runout tab's one document: the classic standalone runout sheet. */
     fun composeClassicRunout(
@@ -321,6 +334,8 @@ fun RunoutRoute(
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
                 fractionStyle = pdfFractionStyle,
                 dualUnitLayout = pdfDualUnitLayout,
+                curveLoHeightIn = curveLoHeightIn,
+                curveHiHeightIn = curveHiHeightIn,
                 readings = runoutReadings,
                 stationPlacements = stationPlacements,
                 blankValues = blankDraft,
@@ -839,9 +854,11 @@ fun RunoutRoute(
                 },
             )
 
-            // (Worn-section authoring, the consolidated variant picker, and the "Shaft
-            // height" slider live on the Consolidated Output tab — this tab is the runout
-            // authoring surface and produces the classic runout sheet.)
+            // (Worn-section authoring and the consolidated variant picker live on the
+            // Consolidated Output tab — this tab is the runout authoring surface and
+            // produces the classic runout sheet. The per-job "Shaft height" / "Liner
+            // compression" pair reaches this document from the preview's Tune menu, where
+            // the drawing they reshape is on screen while they move.)
         }
     }
 
@@ -873,6 +890,22 @@ fun RunoutRoute(
                     dualUnits = dualUnits,
                     onDualUnitsChange = { vm.setDualUnits(it) },
                     tuning = tuning,
+                    // The same session-only state as the tab body's switch — ONE value, so
+                    // the two can never disagree about what the preview is showing.
+                    blankDraft = blankDraft,
+                    onSetBlankDraft = { blankDraft = it },
+                    // The classic sheet's drawn height and liner floors come off the same
+                    // `RunoutConfig` fields as the consolidated sheet's, so the sheet being
+                    // looked at can be tuned against itself here too.
+                    showHeightControls = true,
+                    heightScale = runoutConfig.heightScale,
+                    heightSliderBase = heightSliderBase,
+                    heightSliderMaxDiaMm = heightSliderDiaMm,
+                    linersProportional = runoutConfig.linersProportional,
+                    linerCompression = runoutConfig.linerCompression,
+                    estimateKeptFrac = { frac ->
+                        estimatedLinerKeptFracOfTrue(spec, heightSliderBase, runoutConfig.heightScale, frac)
+                    },
                 )
             },
             sheetTunesPage = true,
@@ -925,6 +958,10 @@ private data class RunoutRenderInputs(
      * budget cannot absorb the taller stacked value falls back to inline on its own.
      */
     val dualUnitLayout: DualUnitLayout,
+    /** Sizing-curve anchors — the drawn shaft height rides on them. Keys only; they travel
+     *  to the composer inside the `PdfPrefs` snapshot. */
+    val curveLoHeightIn: Float,
+    val curveHiHeightIn: Float,
     val readings: RunoutReadings,
     val stationPlacements: RunoutStationPlacements,
     val blankValues: Boolean,
@@ -1583,8 +1620,10 @@ internal fun RunoutWearOptionsSheet(
     onSetBlankDraft: ((Boolean) -> Unit)? = null,
     /**
      * Shows the per-job "Shaft height" + "Liner compression" pair (`RunoutConfig`). On for
-     * the consolidated sheet, whose preview these tune live; off elsewhere, where the pair
-     * has nothing to act on.
+     * both documents `composeRunoutPdf` produces — the classic runout sheet and the
+     * consolidated one — since one composer means one drawn height and one liner floor; off
+     * for the wear and undercut documents, whose composers take neither, so the pair would
+     * be inert noise there.
      */
     showHeightControls: Boolean = false,
     heightScale: Float = 1f,
@@ -1742,55 +1781,13 @@ internal fun RunoutWearOptionsSheet(
             Spacer(Modifier.height(12.dp))
         }
 
-        // ── Dimension arrows ─────────────────────────────────────────────────
-        if (showDimensionArrows) {
-            DimensionArrowSizeChips(
-                arrowSizePt = arrowSizePt,
-                onCommit = { vm.setPdfArrowSizePt(it) },
-            )
-
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(Modifier.height(12.dp))
-        }
-
-        // ── Fractions ────────────────────────────────────────────────────────
-        // Ungated: every document this sheet serves prints lengths.
-        if (onDualUnitsChange != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = dualUnits, onCheckedChange = onDualUnitsChange)
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("Dual units", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "Print every dimension in both inches and millimetres. Saved with the document.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-        }
-
-        DualUnitLayoutChips(
-            layout = dualUnitLayout,
-            enabled = dualUnits,
-            onCommit = { vm.setPdfDualUnitLayout(it) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        FractionStyleChips(
-            fractionStyle = fractionStyle,
-            onCommit = { vm.setPdfFractionStyle(it) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
-
         // ── Shaft height / Liner compression ────────────────────────────────
-        // Same per-job pair as the Consolidated Output tab (`RunoutConfig`).
+        // Same per-job pair as the Consolidated Output tab (`RunoutConfig`), and they sit
+        // with Line thickness and Body S-break: those are the sliders that reshape the page
+        // under a finger, the live-tuning group the page strip above this sheet exists to
+        // keep in view. The sheet is taller than its cap and scrolls, so a tuning slider
+        // parked below the typography rows reads as absent (on-device report). Same order as
+        // the schematic's `PdfOptionsSheet`.
         if (showHeightControls) {
             ShaftHeightSlider(
                 heightScale = heightScale,
@@ -1817,6 +1814,29 @@ internal fun RunoutWearOptionsSheet(
             HorizontalDivider()
             Spacer(Modifier.height(12.dp))
         }
+
+        // ── Dimension arrows ─────────────────────────────────────────────────
+        if (showDimensionArrows) {
+            DimensionArrowSizeChips(
+                arrowSizePt = arrowSizePt,
+                onCommit = { vm.setPdfArrowSizePt(it) },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // ── Fractions ────────────────────────────────────────────────────────
+        // Ungated: every document this sheet serves prints lengths.
+        FractionStyleChips(
+            fractionStyle = fractionStyle,
+            onCommit = { vm.setPdfFractionStyle(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
 
         // ── Measurement reference ────────────────────────────────────────────
         if (showMeasurementReference) {
@@ -1851,6 +1871,36 @@ internal fun RunoutWearOptionsSheet(
             onSetShadedTapers = { vm.setPdfShadedTapers(it) },
             onSetShadedLiners = { vm.setPdfShadedLiners(it) },
             linerShadeLocked = linerShadeLocked,
+        )
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
+
+        // ── Dual units — LAST by design ──────────────────────────────────────
+        // Drawing- and output-specific controls lead the sheet; rarely used options
+        // trail (on-device request). The layout chips style what the switch turns on,
+        // so they read as disabled until it is.
+        if (onDualUnitsChange != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = dualUnits, onCheckedChange = onDualUnitsChange)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Dual units", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Print every dimension in both inches and millimetres. Saved with the document.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        DualUnitLayoutChips(
+            layout = dualUnitLayout,
+            enabled = dualUnits,
+            onCommit = { vm.setPdfDualUnitLayout(it) },
         )
 
         Spacer(Modifier.height(24.dp))
