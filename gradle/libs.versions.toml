@@ -1,26 +1,30 @@
 [versions]
 agp = "9.3.1"
 kotlin = "2.2.20"
-coreKtx = "1.13.1"
+coreKtx = "1.17.0"            # 1.19.0 needs compileSdk 37 — blocked by the Robolectric chain (TODO §4.2)
 junit = "4.13.2"
-junitVersion = "1.1.5"
-espressoCore = "3.6.1"
-lifecycleRuntimeKtx = "2.8.4"
-lifecycleRuntimeCompose = "2.8.4"
-activityKtx = "1.9.2"
-activityCompose = "1.9.2"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
+lifecycleRuntimeKtx = "2.10.0"      # 2.11.0 needs compileSdk 37 — same cap as coreKtx
+lifecycleRuntimeCompose = "2.10.0"
+activityKtx = "1.13.0"
+activityCompose = "1.13.0"
+appcompat = "1.7.1"
 composeBom = "2024.09.00"
+coroutines = "1.11.0"
 kotlinx-serialization = "1.9.0"
-navigationCompose = "2.9.5"
-roomCompiler = "2.8.1"
-serialization = "1.6.3"
-datastore = "1.1.1"          # current stable
-robolectric = "4.16"         # runs Compose UI tests on the JVM (no device)
+material = "1.13.0"
+navigationCompose = "2.9.8"
+datastore = "1.2.1"
+robolectric = "4.16.1"        # runs Compose UI tests on the JVM (no device)
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
@@ -45,7 +49,6 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
-androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "roomCompiler" }  # no version
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

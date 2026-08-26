@@ -109,16 +109,15 @@ kotlin {
 
 dependencies {
     // --- Core / AppCompat (if you still use any View-based screens)
-    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
 
     // --- Activity / Lifecycle
-    implementation(libs.androidx.activity.compose)           // 1.9.2
-    implementation(libs.androidx.lifecycle.runtime.compose)  // 2.8.4
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.ktx)               // for viewModels()
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.datastore.preferences)
 
@@ -127,19 +126,15 @@ dependencies {
 
     // Compose UI
     implementation(libs.androidx.compose.ui)
-    implementation("androidx.compose.ui:ui")
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation("androidx.compose.material3:material3")
     implementation(libs.androidx.compose.material.icons.extended)
-    implementation("androidx.navigation:navigation-compose:2.8.2")
     implementation(libs.androidx.compose.foundation)
-    implementation("androidx.activity:activity-compose:1.9.2")
+    implementation(libs.androidx.navigation.compose)
 
     // Material (View system) — only if you actually use Views; otherwise you can remove
-    implementation("com.google.android.material:material:1.13.0")
-    implementation(libs.androidx.navigation.compose)
+    implementation(libs.material)
 
     // --- Debug / Tooling
     debugImplementation(libs.androidx.compose.ui.tooling)
