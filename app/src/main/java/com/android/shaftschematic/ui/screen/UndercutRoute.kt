@@ -192,10 +192,15 @@ fun UndercutRoute(
 
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
     val segs = remember(resolvedComponents, spec) { surfaceSegsFrom(resolvedComponents, bodyBlends(spec, resolvedComponents)) }
-    val notches = remember(undercutRecord, segs, oalMm) {
+    // In-progress exaggeration drag (PreviewTuning doctrine): the canvas restyles from this
+    // local value while the finger is on the track, and the ViewModel sees ONE write on
+    // release — a drag frame must never touch the record or the per-job dirty mark.
+    var dragExaggeration by remember { mutableStateOf<Float?>(null) }
+    val shownExaggeration = dragExaggeration ?: undercutRecord.exaggerationFrac
+    val notches = remember(undercutRecord, segs, oalMm, shownExaggeration) {
         buildUndercutNotches(
             undercutRecord.undercuts, segs, oalMm,
-            exaggerationFrac = undercutRecord.exaggerationFrac,
+            exaggerationFrac = shownExaggeration,
         )
     }
     val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }
@@ -507,10 +512,10 @@ fun UndercutRoute(
                 // it restyles so the change is visible while dragging. Display-only: the
                 // deepest cut draws at this fraction of its local surface Ø and shallower
                 // cuts scale relative to it, so sheets with very different absolute depths
-                // read alike; stored and printed Ø values never move (golden rule). Commits
-                // continuously — the same live-update posture as the OAL field and the
-                // preview options sliders (not a NumericInputField, so the commit-on-blur
-                // rule does not apply here).
+                // read alike; stored and printed Ø values never move (golden rule). The
+                // canvas follows the drag from route-local state; the record takes ONE
+                // write on release (PreviewTuning doctrine) — committing per frame marked
+                // the document dirty on every pixel of travel.
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -519,14 +524,18 @@ fun UndercutRoute(
                     ) {
                         Text("Cut depth exaggeration", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            text = "${(undercutRecord.exaggerationFrac * 100f).roundToInt()}%",
+                            text = "${(shownExaggeration * 100f).roundToInt()}%",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Slider(
-                        value = undercutRecord.exaggerationFrac,
-                        onValueChange = { vm.setUndercutExaggeration(it) },
+                        value = shownExaggeration,
+                        onValueChange = { dragExaggeration = it },
+                        onValueChangeFinished = {
+                            dragExaggeration?.let { vm.setUndercutExaggeration(it) }
+                            dragExaggeration = null
+                        },
                         valueRange = 0f..UNDERCUT_EXAGGERATION_MAX_FRAC,
                         modifier = Modifier
                             .fillMaxWidth()

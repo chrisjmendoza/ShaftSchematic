@@ -78,6 +78,15 @@ above the component carousel on the Schematic tab (`ui/screen/SpecWarningBanner.
 different warning) re-shows it. Dismissal is plain Compose view state, not persisted and not
 part of the document, `EditState`, or undo.
 
+### fix: the undercut exaggeration slider commits once per gesture
+
+The Undercut tab's "Cut depth exaggeration" slider wrote the ViewModel on every drag frame —
+the only slider left outside the `PreviewTuning` doctrine — so a single adjustment marked the
+document dirty on every pixel of travel. The overview canvas now follows the drag from
+route-local state (same live restyle as before, no ViewModel involved) and the record takes
+ONE write on release, landing one dirty mark per gesture. Its comment had claimed parity with
+"the preview options sliders", which are commit-on-release — the claim is now true.
+
 ### fix: preview options sheets — the tuning sliders sit where the page is
 
 **The four live-tuning sliders are one group at the head of both PDF options sheets** —
