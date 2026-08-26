@@ -76,8 +76,9 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
   See `VALIDATION_RULES.md` §2.3
 - [x] Export gate checked only thread/liner positions — taper overlaps now block export too
   (2026-08-24; `blockingExportError()` runs a taper pass through `collidingIds()`, the same
-  predicate as the carousel badge). Remaining sub-gap: Thread↔Liner pairs are still not caught
-  by `blockingExportError()` itself — see `VALIDATION_RULES.md` §6
+  predicate as the carousel badge). The remaining Thread↔Liner sub-gap closed 2026-08-25:
+  the gate now runs the whole `collidingIds()` set once, so every §5.2 sacred pair blocks the
+  schematic export — see `VALIDATION_RULES.md` §6 (no known gaps left)
 
 ### 2.2 Warning Rules (VALIDATION_RULES.md §3–4)
 
@@ -188,14 +189,104 @@ Waves 1–2 shipped (Wave 1 fixes 2026-07-11; Wave 2 deletion pass 2026-07-26, `
   dark mode can't blank the drawings; PDF untouched (theme-independent per §8). Remaining:
   on-device visual pass of dark/high-contrast chrome — see
   `docs/contracts/Appearance.md`.
-- [ ] **Wave 3:** shared PDF profile-drawing helper across the three composers + parity
-  controls; ViewModel update-method generics
-- [ ] **Wave 4:** structural splits of the remaining oversized files
+- [x] **Wave 3 as written — closed 2026-08-25, re-scoped below.** A full duplication audit
+  found the pure-math layer already unified (scale solve `geom/ProfileCompression.kt`,
+  S-break `pdf/BreakSymbol.kt`, rails `pdf/render/PdfDimensionRenderer.kt`, blends
+  `ui/resolved/BodyBlends.kt`, keyway/coupler-slot/footer draws shared out of
+  `ShaftPdfComposer`), so "one shared profile-drawing helper" is overtaken by events —
+  what survives is ORCHESTRATION duplication, itemized below. The **ViewModel
+  update-method generics** sub-item is closed as largely N/A: per-kind update logic is
+  load-bearing (OAL-provisional small-end detection in `updateTaper`, excluded-thread
+  start re-derivation, split/merge asymmetry, `carryBodyKeyway`), and a forced generic
+  would wrap it in a leakier read. Optional narrow polish only: collapse the 4 label +
+  2 showDia trivial setters (~70 lines) behind a lens-shaped private helper.
+- [ ] **Wave 3 re-scoped — named extractions** (independently shippable, ordered):
+  1. Shared `ProfileFeatureSpan` builder in `geom/` — the span list is built 3× by hand
+     (`ShaftPdfComposer`, `RunoutPdfComposer`, `ShaftHeightSlider.estimatedLinerKeptFracOfTrue`)
+     and the UI estimator mirrors the composers by convention only (`REFACTOR_CANDIDATES.md` #2).
+  2. Hoist `COMPRESS_TRIGGER_PT` (220f) + `ZIGZAG_GAP_MAX_PT` (20f) into `pdf/BreakSymbol.kt` —
+     four private copies (`UC_`-prefixed in the undercut composer) of the constants gating the
+     already-shared break functions; tuning one and missing three is the invited failure.
+  3. `drawBodyRunWithBreak` for the two blend-aware composers (`drawBodiesCompressedCenterBreak`
+     / `drawBodiesForRunout`, ~200 near-identical LOC over the same `bodyDrawEdges`) — needs an
+     SVG-artifact review pass; the sites differ in real ways (`REFACTOR_CANDIDATES.md` #3).
+  4. Wear/Undercut twin shaft-profile draw + page-geometry preamble
+     (`drawWearShaftProfile`/`drawUndercutShaftProfile` + setup, ~245 near-identical LOC) — the
+     strongest undocumented drift risk: wear's square-face/no-keyway posture is a written product
+     decision, undercut's identical posture is written nowhere. Write the contract sentence
+     (deliberate twin, or divergence allowed?) before or with the extraction.
+  5. Lower priority: unify the 3-way blank-draft header layout (Runout/Wear/Undercut,
+     ~150 LOC of re-typed layout decisions over shared primitives); the schematic's thread
+     hatch has silently diverged from the Runout/Wear/Undercut convention (different step
+     math, paint, clip) — reconcile or document as deliberate (product eyes needed: it is a
+     visible difference between sheets).
+- [x] **Wave 4: structural splits — audited AND EXECUTED 2026-08-25; five files split, LEAVE
+  for one.** All splits were pure moves of self-contained functions (explicit params, no
+  shared mutable state), not restructurings; full suite 1795 green after every step. In order:
+  1. ~~`RunoutRoute.kt`~~ — DONE 2026-08-25: `PdfPreviewOverlay` + `RunoutWearOptionsSheet` +
+     `openRunoutPdf` moved verbatim to `ui/screen/PdfPreviewOverlay.kt` (724 lines;
+     RunoutRoute.kt 1908 → 1251). They are called from all four PDF-bearing routes and only
+     lived in RunoutRoute by history. Zero call-site changes; doc pointers updated
+     (`RunoutSheet.md`, `PDF_EXPORT.md`); suite 1795 green.
+  2. ~~`ShaftViewModel.kt`~~ — DONE 2026-08-25: 3128 → 1377 via the proven
+     `ShaftViewModelSettings.kt` extension pattern, three verbatim-move stages, suite
+     green after each: `ShaftViewModelWear.kt` (269) + `ShaftViewModelRunout.kt` (222) +
+     `ShaftViewModelUndercut.kt` (111), then `ShaftViewModelComponents.kt` (944, the
+     component CRUD with its load-bearing per-kind logic untouched), then
+     `ShaftViewModelPersistence.kt` (340). Backing flows/helpers the extensions need were
+     promoted `private` → `internal`; call sites changed by imports only. 1377 is the
+     expected floor — `StateFlow` declarations (with their contract KDoc), the `init`
+     wiring, undo/EditState, and the draft ring stay in the class by design.
+  3. ~~`WearPdfComposer.kt`~~ — DONE 2026-08-25: `drawWearStripWindow` + its strip-exclusive
+     helpers/constants moved verbatim to `pdf/WearPdfComposerStrip.kt` (777 lines; composer
+     1915 → 1173), pairing the draw half with the math half in `WearStripLayout.kt`.
+     `drawVerticalBand` deliberately stayed (main-profile + `RunoutPdfComposer` consumer —
+     it was never strip-exclusive). Doc pointers updated (`RunoutSheet.md`,
+     `FractionTypography.md`).
+  4. ~~`UndercutDetail.kt`~~ — DONE 2026-08-25: the cross-file shared tail split by
+     dependency — pure reference/notch/SET math to `geom/UndercutOverlayMath.kt` (160
+     lines, model-only imports), the `DrawScope` notch pass + resolved→liner-span mapping
+     to `ui/screen/UndercutSharedDraw.kt` (124 lines). UndercutDetail.kt 1926 → 1683. The
+     window-geometry and canvas-helper sections turned out overlay-private ("shared by the
+     Canvas renderer and the tap handler" meant the overlay's own) and stayed. CLAUDE.md
+     undercut invariant + `UndercutDrawing.md` updated.
+  5. ~~`ComponentCarousel.kt`~~ — DONE 2026-08-25: the five `ComponentPagerCard` `when`
+     branches extracted verbatim to `BodyPagerCard.kt` (478) / `TaperPagerCard.kt` (336) /
+     `ThreadPagerCard.kt` (206) / `LinerPagerCard.kt` (265) /
+     `CouplerBoltSlotPagerCard.kt` (146); the dispatcher stays as a thin `when` passing
+     every argument by name (ComponentCarousel.kt 1876 → 925). Each card takes only the
+     ~11–28 parameters its kind uses instead of sharing the ~35-callback surface. All
+     `testTag`s unchanged; add-dialog-parity location pointers updated in CLAUDE.md +
+     `AddComponentDialogs.md`/`COMPONENT_CONTRACT.md`/`UI_CONTRACT.md`/`ARCHITECTURE.md`/
+     `VALIDATION_RULES.md`.
+  - **LEAVE `ShaftPdfComposer.kt` (2082)**: cohesive single pipeline with real region
+    banners; its complexity lives in the 484-line `composeShaftPdf` entry function (inline
+    scale/placement math), which a file split does not shrink. Revisit only after Wave-3
+    items 3–4 reshape what is composer-local vs shared.
 
 ### 4.2 Build Tooling (`§5.3`)
 
 - [ ] Keep Gradle wrapper, AGP, and `libs.versions.toml` in sync
 - [ ] Isolate tooling updates into `chore(build)` commits
+- [x] Currency pass 2026-08-25 (suite 1795 green after): Gradle wrapper 9.6.1 → 9.7.1
+  (AGP 9.3.1 + JUnit 4.13.2 already current); core-ktx 1.17.0, lifecycle 2.10.0,
+  activity 1.13.0, navigation 2.9.8, datastore 1.2.1, robolectric 4.16.1,
+  androidx.test junit 1.3.0, espresso 3.7.0, coroutines 1.11.0. Catalog hygiene:
+  appcompat/coroutines/material moved into the catalog, duplicate literal deps removed
+  from `app/build.gradle.kts` (including a stale `navigation-compose:2.8.2` losing to the
+  catalog's version at resolution), dead `serialization = "1.6.3"` key and the entirely
+  unused Room entries deleted (no Room usage anywhere in `app/src`).
+  **Deferred, with reasons — do NOT bump blind:**
+  - **compileSdk-37 chain**: core/core-ktx 1.19.0, lifecycle 2.11.0, and Compose BOM
+    2026.08.00 all require compileSdk 37, but stable Robolectric (4.16.x) certifies only
+    through API 36 — the whole Compose test suite runs on Robolectric, so compileSdk 37
+    waits for Robolectric 4.17 stable, then moves as ONE coordinated bump.
+  - **Compose BOM 2024.09.00 → 2026.04.01** (last compileSdk-36-safe BOM): real Compose
+    API surface over ~19 months — its own branch with a compile + visual pass, not a chore.
+  - **Kotlin 2.2.20 → 2.3.20 (+ kotlinx-serialization 1.11.0, version-coupled)**: AGP 9
+    has built-in Kotlin support and the separate `kotlin-android` plugin is on its way out
+    (hard error reported for some Kotlin-2.3+/AGP-9 combos); needs its own branch and build
+    pass, possibly migrating to the built-in-Kotlin DSL. Kotlin 2.4.0 (K1 drop) only after.
 - [x] Bump `actions/checkout` and `actions/setup-java` to v5 in the Firebase workflow —
   done 2026-07-28, deprecation warning cleared
 

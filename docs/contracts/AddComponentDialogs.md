@@ -3,7 +3,8 @@
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
 `AddThreadDialog`, `AddTaperDialog`, `AddCouplerBoltSlotDialog`. Each dialog is the
-**add-time counterpart** to the component's carousel edit card in `ComponentCarousel.kt`.
+**add-time counterpart** to the component's carousel edit card (`BodyPagerCard.kt`,
+`TaperPagerCard.kt`, `ThreadPagerCard.kt`, `LinerPagerCard.kt`, `CouplerBoltSlotPagerCard.kt`).
 
 Default field values are seeded per `Defaults.md` (`ui/config/AddDefaultsConfig.kt`
 + `SessionAddDefaults`).
@@ -82,7 +83,7 @@ still authored in inches on an inch document. That asymmetry is a known follow-u
 | Start | Always |
 | Length | Always |
 | Diameter (Ø) | Always |
-| KW from: AFT \| FWD chips | Always (keyway end-face reference, default AFT) |
+| KW from: AFT \| FWD chips | Always (keyway end-face reference). Default seeded by `ShaftSpec.suggestedBodyKeywayEnd`: opposite the shaft's existing keyway when exactly one side is taken (an aft taper keyway suggests FWD, and vice versa); both/neither → AFT. The SAME seed drives the card's chips for a not-yet-real keyway (parity of behavior, on-device report: a new body keyway defaulting onto the taken side read as a second aft keyway). A seed only — the chips always win, and nothing stored is ever rewritten by it |
 | KW W / KW D / KW L | Always (blank = 0 = no keyway) |
 | KW Offset from AFT / FWD | Always (label follows chip; 0 = open, > 0 = floating) |
 | Keyway spooned toggle | Always (disabled + "N/A — floating" when offset > 0) |
@@ -90,7 +91,7 @@ still authored in inches on an inch document. That asymmetry is a known follow-u
 | Keyways 90° apart toggle | Same condition as the 180° toggle |
 | CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on |
 
-Matches `ComponentCarousel.kt` `ResolvedBody` explicit-body branch. The **auto-body**
+Matches `BodyPagerCard.kt`'s explicit-body branch. The **auto-body**
 card intentionally shows only Start/Length/Ø — Start/Length disabled/greyed (derived),
 Ø editable (sets the shared bare-shaft `ShaftSpec.autoBodyDiaMm` without promoting) —
 auto-bodies are derived and cannot host a keyway until promoted; that reduced card is
@@ -130,7 +131,7 @@ by definition, so there is nothing to toggle. This is intentional and not a pari
 | Count in OAL toggle | Always |
 
 The Start field is **replaced** by the AFT/FWD chips when excluded from OAL — it is
-not hidden in addition to them. Matches `ComponentCarousel.kt` `ResolvedThread` branch,
+not hidden in addition to them. Matches `ThreadPagerCard.kt`,
 `!includeInOal` block.
 
 `isAftEnd` is passed through: `onSubmit → ShaftScreen.onAddThread → ShaftRoute →
@@ -208,7 +209,7 @@ Auto taper-rate rules (both surfaces — dialog and carousel card):
 | Through hole toggle | Always |
 | Depth | Only when blind (`through = false`) |
 
-Matches `ComponentCarousel.kt` `ResolvedCouplerBoltSlot` branch. The carousel card carries
+Matches `CouplerBoltSlotPagerCard.kt`. The carousel card carries
 one extra control — the **"show dimension rail"** toggle (deferred; off by default). It is
 a card-only affordance (not an add-time choice), so its absence from the dialog is
 intentional and does not violate parity. See `CouplerBoltSlot.md`.

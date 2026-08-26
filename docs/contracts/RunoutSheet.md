@@ -8,7 +8,8 @@
 - `geom/WornSectionMath.kt` — pure worn-section column/halo layout + value auto-fit
 - `pdf/BreakSymbol.kt` — S-curve break edge geometry + `breakPairLayout` (shared by every
   composer and the Compose port in the wear detail overlay)
-- `ui/screen/RunoutRoute.kt` — runout station config, canvas preview, PDF preview overlay
+- `ui/screen/RunoutRoute.kt` — runout station config, canvas preview
+- `ui/screen/PdfPreviewOverlay.kt` — shared PDF preview overlay + `RunoutWearOptionsSheet`
 - `ui/screen/OutputRoute.kt` — Consolidated Output tab: variant election, worn-section
   editor, shaft-height slider, preview/print/export + "Export all"
 - `ui/screen/OutputDoc.kt` — output selection + filename shapes (`buildOutputFilename`)
@@ -26,6 +27,8 @@
   and PDF draw sites (no `pdf → ui` dep)
 - `pdf/RunoutPdfComposer.kt` — letter-landscape runout PDF generation
 - `pdf/WearPdfComposer.kt` — letter-landscape wear document PDF generation
+- `pdf/WearPdfComposerStrip.kt` — the wear document's detail-strip Canvas drawing
+  (`drawWearStripWindow` and its helpers); see "Wear Detail Strips" below
 - `pdf/WearStripLayout.kt` — android-free pure-math layout for the wear PDF's per-liner
   detail strips (Phase 4); see "Wear Detail Strips" below
 
@@ -357,7 +360,7 @@ material side. This is the *opposite* of the flag choice used for a centered com
 shared gap in the middle — there, left edge = false, right edge = true): here each stub's break
 sits at its own far/outer end (void beyond it, material toward the liner), so the mapping
 inverts — left (AFT) stub = `eyeAtTop = true`, right (FWD) stub = `eyeAtTop = false`. The same
-fix applies to `WearPdfComposer.kt`'s `drawWearDetailStrip` neighbor-stub break calls (its main
+fix applies to `WearPdfComposerStrip.kt`'s `drawWearDetailStrip` neighbor-stub break calls (its main
 shaft-profile compression break is unaffected — that one *is* the centered-gap case and keeps
 the original flags). See `drawBreakEdgeCompose`'s KDoc for the full derivation.
 
@@ -499,7 +502,7 @@ via an elbow above the row-0 band so drops provably clear every label; uniform c
 (`pickDiaReadingAt`, point-to-tick distance).
 
 **Rendering** (draw-both-sites lockstep, all through the one engine):
-- **PDF detail strip** (`WearPdfComposer.drawWearStripWindow`): a reading prints on the strip of
+- **PDF detail strip** (`WearPdfComposerStrip.drawWearStripWindow`): a reading prints on the strip of
   the component it belongs to, whenever that component has one — liners always, and (since
   2026-08-14) an elected taper or body too — witness tick across the full cylinder height (overshoot
   `WEAR_DIA_TICK_OVERSHOOT_PT`), value labels in a band reserved **below** the cylinder by
@@ -532,7 +535,7 @@ band's fill follows them, so the material measured away shows as white slivers a
 (on-device report: a liner measured almost half an inch down still printed as a perfect
 cylinder). Pure construction in **`geom/WearTraceMath.kt`** (`buildWearTrace` /
 `smoothWearTrace` / `sequenceWearTraces`, `WearTraceMathTest`); the two draw sites — the **PDF
-liner detail strip** (`WearPdfComposer.drawWearDetailStrip`) and the **canvas overlay**
+liner detail strip** (`WearPdfComposerStrip.drawWearDetailStrip`) and the **canvas overlay**
 (`ComponentWearDetailOverlay`, whose silhouette path carries the dip so fill, stroke and the
 clipped red band tint all bite together) — walk that same output through their own scale, so
 they render identically (the draw-both-sites rule, same posture as the pit "X").
@@ -832,6 +835,11 @@ On-device request following the worn-sections review:
     **keyway-bearing body**, whose drawn slot geometry must stay real) needs the room:
     then the height yields instead (`solveMaxProfileScale` bisects the largest scale
     that still lays out; "doesn't have to be perfectly proportional, just close").
+    Those pins come from `keywayPinnedBodySpans(spec)` off the **STORED** spec, never
+    from the resolved runs: `ResolvedBody` has no keyway fields and `bodyForPdf` builds
+    none, so a filter over resolved bodies matches nothing and the pin quietly dies.
+    Same rule for the keyway DRAW (see "Keyways on the profile" below) — the span that
+    pins is exactly the span the slot draws in.
     **Tapers may shrink but never equalize**: no flat floor (a flat floor equalizes
     unequal tapers when both clamp to it — on-device report) — a ratio-preserving
     fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` 0.7, λ-fit, never
@@ -924,6 +932,47 @@ On-device request following the worn-sections review:
     authoring model), UI to be worked out. Until then they stay their own in-profile mark.
   - *North star:* ONE sheet — spec header + dimensioned schematic + runout + wear + notes
     (second hand sketch, 2026-08-04). Explicitly deferred.
+
+---
+
+## Keyways on the profile (bodies + tapers, 2026-08-25)
+
+The sheet prints keyways for **both** hosts, through the schematic composer's own passes —
+`drawBodyKeywaysPdf` (all keyway-bearing bodies of the sheet) and `drawTaperKeywayPdf` (one
+taper, after its outline). ONE implementation each, called by `ShaftPdfComposer` and by
+`RunoutPdfComposer.drawShaftProfile`, so a slot can never print on one sheet and go missing
+from the other — the draw-both-sites rule that governs the bubble markers and the wear-pit X.
+
+Two rules make the difference between a printed keyway and a silent nothing:
+
+1. **Read keyways off the STORED spec.** `drawShaftProfile` draws resolved runs but takes the
+   authored spec alongside them (`authoredSpec`) for the keyway passes. `ResolvedBody` has no
+   keyway fields and `bodyForPdf` builds none, so `resolved.filter { it.hasKeyway }` matches
+   nothing, always. Stored spans also keep ONE slot per authored keyway where a liner trims the
+   run into several drawn pieces, and put the slot at its physical position.
+2. **The keyway-bearing body pins at true width** (`keywayPinnedBodySpans`, same stored-spec
+   rule) — a slot drawn on a foreshortened body is not real geometry, and on this sheet a
+   compressed body can carry the S-break pair straight through where the slot belongs.
+3. **A keyed run never carries the S-break** — either composer's body pass
+   (`drawBodiesCompressedCenterBreak` / `drawBodiesForRunout`, `keyedBodyIds` off the stored
+   spec, base-id keyed so fragments inherit it). The pin already rules out the foreshortening
+   break; this gives up the LONG-SPAN glyph (`COMPRESS_TRIGGER_PT`) too, deliberately: a break
+   gap could land inside the slot, and the slot must read as real geometry end-to-end. The
+   schematic footer's compression note shares the exemption at its call site, so the note and
+   the drawn breaks cannot disagree. Pinned by `KeyedBodyNoBreakTest` (both draw sites).
+
+Clocking is decided once per sheet from the authored spec (`keywayClocking`,
+`hiddenKeywayHostIds`, `secondaryKeywayHostIds`) and handed to both passes, so the two cannot
+disagree about which host is the secondary: face-on for the aft-most datum, dashed/hidden at
+180°, a silhouette notch at 90°.
+
+**History:** the sheet drew taper keyways and had no body-keyway pass at all, so a body keyway
+printed on the schematic, drew on the Runout tab's canvas (that canvas renders through
+`ShaftRenderer`, which has always drawn them), and was missing from the printed sheet —
+on-device report. Both keyway pins were dead at the same time and for the same reason (they
+filtered resolved bodies), so the body was compressed as well as unmarked. Pinned by
+`RunoutProfileKeywayTest` (differential ink inside the silhouette), `BodyKeywayDrawTest`, and
+`KeywayPinnedBodySpansTest`.
 
 ---
 
@@ -1770,7 +1819,7 @@ witness-line/arrowed-span/centered-label convention the main schematic uses
   label rows, regardless of how many wear spots the liner has (the rail is always one chained
   line no matter how many spans it's divided into; the old per-spot row budget scaled with
   spot count, which no longer applies). `computeWearStripInnerLayout` no longer takes a
-  `spotCount` parameter. `WearPdfComposer`'s `drawWearStripRail` draws the witness lines,
+  `spotCount` parameter. `WearPdfComposerStrip`'s `drawWearStripRail` draws the witness lines,
   arrowed spans, and labels, clamping any label row beyond what `computeWearStripInnerLayout`
   actually fit for this strip's height to the last available row rather than draw past the
   strip's edges.
@@ -1831,7 +1880,7 @@ Fills are drawn before outlines so the outline strokes are always visible on top
 
 ## PdfPreviewOverlay
 
-`PdfPreviewOverlay` is an in-place full-screen composable (not a nav destination) used by both RunoutRoute and WearRoute. It shares the file with RunoutRoute.
+`PdfPreviewOverlay` is an in-place full-screen composable (not a nav destination) used by both RunoutRoute and WearRoute. It lives in `ui/screen/PdfPreviewOverlay.kt`.
 
 ```
 PdfPreviewOverlay(

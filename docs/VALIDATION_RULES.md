@@ -1,6 +1,9 @@
 # Validation Rules  
 Version: v0.5.x
-Last updated: 2026-08-24 — §5/§5.2/§6: the export gate now checks taper overlaps
+Last updated: 2026-08-25 — §5.2/§6: `blockingExportError()` now runs the whole `collidingIds()`
+set, closing the last known gap (Thread↔Liner was flagged by the badge and `exportPdfGate()`
+but not by the schematic export gate itself). §6 rewritten as the gate's two passes.
+2026-08-24 — §5/§5.2/§6: the export gate now checks taper overlaps
 (`blockingExportError()` runs a taper pass through `collidingIds()`, the carousel badge's own
 predicate). Removed the stale "Taper overlaps never block export" claim; recorded the remaining
 Thread↔Liner gap in §6. 2026-08-05 — removed a stale header claim that §3.3's taper-vs-body Ø mismatch
@@ -24,7 +27,8 @@ Validation ensures data consistency, machining plausibility, and clean export co
 Validation is **not** performed only in the ViewModel. The ViewModel owns numeric parsing and
 per-field clamping (e.g. length/diameter ≥ 0), but overlap/bounds validation lives in
 `ui/util/StartOverlapValidation.kt` (`startOverlapErrorMm`, `collectAddWarnings`) and is called
-directly from Compose UI code — `AddComponentDialogs.kt`, `ComponentCarousel.kt`,
+directly from Compose UI code — `AddComponentDialogs.kt`, `ComponentCarousel.kt` and its
+per-kind cards (`TaperPagerCard.kt`, `ThreadPagerCard.kt`, `LinerPagerCard.kt`),
 `ShaftScreen.kt`. This is a deliberate exception to the general "UI performs no validation
 logic" rule stated elsewhere in this doc set; treat `StartOverlapValidation.kt` as part of the
 validation system regardless of which layer it happens to live in.
@@ -359,8 +363,7 @@ No body pair is checked for collision — the checks below are all sacred-vs-sac
 
 The following pairs are checked by `collidingIds()`. A warning ("Overlaps another component") is
 shown in the carousel card when detected, and the same set gates the toolbar/tab Export buttons
-via `exportPdfGate()`; the taper pairs additionally block the schematic export through
-`blockingExportError()` (§6):
+via `exportPdfGate()` and blocks the schematic export through `blockingExportError()` (§6):
 - Taper ↔ Taper
 - Taper ↔ Thread (non-excluded only)
 - Taper ↔ Liner
@@ -402,29 +405,26 @@ Before exporting:
 2. If it returns a non-null message → cancel export, show a blocking dialog with that reason.
 3. If it returns `null` → export continues, regardless of any outstanding non-blocking warnings.
 
-`blockingExportError()` checks three component kinds:
-- **Non-excluded Threads** (`excludeFromOAL = false`), via `startOverlapErrorMm()`
-  (`ui/util/StartOverlapValidation.kt`): pairwise Thread↔Thread overlap, the "thread must be at
-  a shaft end" rule, plus `start ≥ 0`. Excluded threads are skipped — they intentionally sit at
-  negative/OAL+ `startFromAftMm` outside the envelope.
-- **Liners**, via `startOverlapErrorMm()`: pairwise Liner↔Liner overlap, plus `start ≥ 0`.
-- **Tapers**, via `collidingIds()` (`model/ShaftSpecExtensions.kt`) — Taper↔Taper,
-  Taper↔Thread (non-excluded), and Taper↔Liner, per §5.2 — plus the `start ≥ 0` guard that
-  `startOverlapErrorMm()` still contributes for a taper. `startOverlapErrorMm()` has no
-  collision group for tapers (`collisionGroup()` → null), so the overlap answer deliberately
-  comes from `collidingIds()`: that is the same predicate behind the taper card's blocking
-  badge, so the gate and the badge cannot disagree.
+`blockingExportError()` runs two passes:
+- **Per-component, via `startOverlapErrorMm()`** (`ui/util/StartOverlapValidation.kt`) over
+  non-excluded Threads, Liners, and Tapers: the `start ≥ 0` guard for all three, same-kind
+  overlaps (Thread↔Thread, Liner↔Liner), and the "thread must be at a shaft end" rule.
+  Excluded threads are skipped — they intentionally sit at negative/OAL+ `startFromAftMm`
+  outside the envelope. Tapers have no collision group here (`collisionGroup()` → null), so
+  this pass contributes only their start guard.
+- **Whole-spec, via `collidingIds()`** (`model/ShaftSpecExtensions.kt`): every §5.2 sacred
+  pair — Taper↔Taper, Taper↔Thread, Taper↔Liner, Thread↔Thread, Thread↔Liner, Liner↔Liner
+  (non-excluded threads only). Any non-empty result blocks with "Overlaps another component".
+  This is the same predicate behind the carousel cards' blocking badges and the toolbar/tab
+  `exportPdfGate()`, so the gate and both of those surfaces cannot disagree. The cross-kind
+  pairs (Thread↔Liner included) are caught **only** by this pass —
+  `startOverlapErrorMm()` compares each kind against its own kind alone.
 
 It does **not** check Bodies or Coupler Bolt Slots. Bodies are fillers, not collision
 participants (§5.1) — a taper or liner crossing a stored body span is normal, the resolve layer
 trims the drawn body around it, and `collidingIds()` excludes bodies, so it never blocks export.
 Coupler bolt slots are reference overlays outside the OAL envelope and never gate export
 (`collisionGroup()` → null, consistent with §3.6/§5.2).
-
-**Known gap:** the thread and liner passes go through `startOverlapErrorMm()`, which compares
-each kind only against its own kind — a Thread↔Liner overlap is flagged by `collidingIds()`
-(§5.2) and by the button-level `exportPdfGate()`, but is not caught by `blockingExportError()`
-itself.
 
 PDF export does not interpret warnings; UI handles presentation.
 
@@ -435,7 +435,8 @@ PDF export does not interpret warnings; UI handles presentation.
 1. Validation occurs **only** before state update or export.
 2. Renderer/Layout must never throw validation errors.
 3. UI performs overlap/bounds validation directly (`ui/util/StartOverlapValidation.kt`, called
-   from `AddComponentDialogs.kt`/`ComponentCarousel.kt`/`ShaftScreen.kt`) in addition to string
+   from `AddComponentDialogs.kt`/`ComponentCarousel.kt`/`ShaftScreen.kt` and the per-kind
+   cards `TaperPagerCard.kt`/`ThreadPagerCard.kt`/`LinerPagerCard.kt`) in addition to string
    formatting — this is a deliberate, documented exception (see the Purpose section and §3.1),
    not a violation to fix.
 4. Warnings do not affect behavior, only UI hints.

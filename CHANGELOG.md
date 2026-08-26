@@ -8,6 +8,133 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-25
 
+### feat(keyway): keyed bodies never draw the S-break; new body keyways default to the free end
+
+Two on-device follow-ups to the body-keyway work, plus a unit bug found on the way:
+
+- **A keyway-bearing body never carries the S-break** — either composer's body pass
+  (`drawBodiesCompressedCenterBreak` / `drawBodiesForRunout`, `keyedBodyIds` off the stored
+  spec, base-id keyed so liner-trimmed fragments inherit it). The true-width pin already rules
+  out the foreshortening break; this gives up the long-span glyph (`COMPRESS_TRIGGER_PT`) too,
+  deliberately: a break gap could land inside the slot, and the slot must read as real geometry
+  end-to-end. The schematic footer's compression note shares the exemption at its call site, so
+  the note and the drawn breaks cannot disagree. Pinned by `KeyedBodyNoBreakTest` (both sites +
+  the fragment-id case).
+- **A new body keyway defaults to the OPPOSITE end of the shaft's existing keyway**
+  (`ShaftSpec.suggestedBodyKeywayEnd`): an aft keyway alone (taper or body) seeds the AFT/FWD
+  chips to FWD, a fwd keyway alone seeds AFT, both/neither fall back to AFT — the same seed in
+  `AddBodyDialog` and on the body card (whose chips ride a local draft until a real keyway value
+  commits, so the model is never touched by a default). On-device report: with an aft taper
+  keyway already on the shaft, a new body keyway defaulting to AFT read as a second aft keyway.
+  A seed only — the chips always win, and no stored keyway ever moves. Pinned by
+  `SuggestedBodyKeywayEndTest`.
+- **fix: keyway fields now parse in the keyway's own unit everywhere.** The "Keyway in: in|mm"
+  chip governs what every keyway number MEANS, but KW L and KW Offset on both carousel cards —
+  and KW W/D/L at `AddTaperDialog`'s submit — parsed in the document unit under a kwUnit label:
+  a metric keyway's length typed as "100" under an "mm" label was stored as 100 inches. All
+  keyway fields now convert through `kwUnit`, matching the documented contract and the fields'
+  own labels.
+
+### fix(runout): body keyways print on the runout/consolidated sheet
+
+A keyway authored on a body printed on the schematic and drew on the Runout tab's canvas, but
+was missing from the printed runout sheet (on-device report). The sheet drew taper keyways and
+had **no body-keyway pass at all** — while already paying for one: it pins a keyway-bearing
+body at true width precisely "so its drawn slot geometry stays real".
+
+Both halves failed for one reason: **`bodyForPdf` carries no keyway fields** (`ResolvedBody`
+has none to carry), so every `resolved.filter { it.hasKeyway }` matched nothing. That silently
+killed the true-width pin on BOTH sheets — the schematic's too, where the keyway still drew but
+could print foreshortened — and left the runout sheet with nothing to draw from even if it had
+tried. The pins now come from `keywayPinnedBodySpans(spec)` off the stored spec, and
+`drawShaftProfile` takes the authored spec alongside the resolved runs for its keyway passes.
+
+The slot draw is now ONE implementation per host, shared by both composers —
+`drawBodyKeywaysPdf` and `drawTaperKeywayPdf` — so a keyway cannot print on one sheet and vanish
+from the other, the same draw-both-sites rule as the bubble markers and the wear-pit X. The
+runout sheet's taper keyway picked up clocking awareness on the way (it drew every host face-on,
+so a 180° secondary that the schematic hides printed solid there).
+
+`bodyForPdf` now documents that dropping the keyway fields is deliberate — a keyway is authored
+against a stored body's own end face, and a run trimmed by a liner would otherwise repeat the
+slot on every drawn piece. Pinned by `RunoutProfileKeywayTest` (verified to fail without the
+fix), `BodyKeywayDrawTest`, and `KeywayPinnedBodySpansTest`; contract in
+`docs/contracts/RunoutSheet.md` ("Keyways on the profile").
+
+### refactor: Wave-4 structural splits — five oversized files, zero behavior change
+
+Pure verbatim moves, full suite (1795) green after every step; no signatures, testTags, or
+logic changed anywhere. What moved:
+
+- **`ui/screen/RunoutRoute.kt` 1908 → 1251** — `PdfPreviewOverlay`, `RunoutWearOptionsSheet`,
+  and `openRunoutPdf` now live in `ui/screen/PdfPreviewOverlay.kt` (724). All four PDF-bearing
+  routes (Runout/Wear/Undercut/Output) call them; they only lived in RunoutRoute by history,
+  which hid the blast radius of an edit there. Zero call-site changes (same package).
+- **`ui/viewmodel/ShaftViewModel.kt` 3128 → 1377** — the `ShaftViewModelSettings.kt`
+  extension-file pattern extended in three stages: `ShaftViewModelWear.kt` (269) +
+  `ShaftViewModelRunout.kt` (222) + `ShaftViewModelUndercut.kt` (111), then
+  `ShaftViewModelComponents.kt` (944 — the component CRUD with its load-bearing per-kind
+  logic byte-identical), then `ShaftViewModelPersistence.kt` (340). Backing flows/helpers
+  the extensions touch went `private` → `internal`; call sites changed by imports only.
+  What stays in the class is what structurally must: `StateFlow` declarations with their
+  contract KDoc, the `init` wiring, undo/EditState, and the draft ring.
+- **`pdf/WearPdfComposer.kt` 1915 → 1173** — the detail-strip Canvas pass
+  (`drawWearStripWindow` + strip-exclusive helpers/constants) moved to
+  `pdf/WearPdfComposerStrip.kt` (777), finally pairing the draw half with its math half
+  (`WearStripLayout.kt`). Shared profile/strip symbols went `internal`; `drawVerticalBand`
+  stayed (it serves the main profile and `RunoutPdfComposer`).
+- **`ui/screen/UndercutDetail.kt` 1926 → 1683** — the tail `UndercutRoute.kt` also consumes,
+  split by dependency: pure reference/notch/SET math → `geom/UndercutOverlayMath.kt` (160,
+  model-only imports, the shared-math convention), the `DrawScope` notch pass +
+  resolved→liner-span mapping → `ui/screen/UndercutSharedDraw.kt` (124). Overlay-private
+  sections (window geometry, canvas dim helpers, draft state) stayed.
+- **`ui/screen/ComponentCarousel.kt` 1876 → 925** — `ComponentPagerCard`'s five `when`
+  branches extracted verbatim to per-kind files (`BodyPagerCard` 478, `TaperPagerCard` 336,
+  `ThreadPagerCard` 206, `LinerPagerCard` 265, `CouplerBoltSlotPagerCard` 146); the
+  dispatcher remains as a thin `when` passing every argument by name, and each card's
+  parameter list is only the slice its kind uses (11–28 params) instead of the shared
+  ~35-callback surface that made the pager untestable.
+
+`pdf/ShaftPdfComposer.kt` was deliberately LEFT whole — it is one cohesive pipeline whose
+complexity sits inside the `composeShaftPdf` entry function, which a file split would not
+shrink; TODO §4.1b records the reasoning and sequences it behind the re-scoped Wave-3
+extractions. Contract-doc location pointers were updated with each move (CLAUDE.md,
+`AddComponentDialogs.md`, `RunoutSheet.md`, `UndercutDrawing.md`, `FractionTypography.md`,
+`PDF_EXPORT.md`, `VALIDATION_RULES.md`, `COMPONENT_CONTRACT.md`, `UI_CONTRACT.md`,
+`ARCHITECTURE.md`); behavioral prose is untouched.
+
+### chore(build): tooling currency pass — Gradle 9.7.1, AndroidX bumps, catalog hygiene
+
+Gradle wrapper 9.6.1 → 9.7.1 (AGP 9.3.1 and JUnit 4.13.2 were already current). Library
+bumps, all catalog-side: core-ktx 1.17.0, lifecycle 2.10.0, activity 1.13.0, navigation
+2.9.8, datastore 1.2.1, robolectric 4.16.1, androidx.test junit 1.3.0, espresso 3.7.0,
+coroutines 1.11.0. core-ktx and lifecycle are deliberately CAPPED below latest: 1.19.0 /
+2.11.0 require compileSdk 37, and stable Robolectric — which runs the whole Compose test
+suite — certifies only through API 36, so the compileSdk-37 move (with Compose BOM
+2026.08.00) waits for Robolectric 4.17 stable as one coordinated bump. The Kotlin 2.3.x
+and Compose BOM 2026.04.01 steps are deferred to their own branches (TODO §4.2 records
+the reasons). Hygiene: appcompat/coroutines/material moved into the version catalog,
+duplicate literal dependency declarations removed from `app/build.gradle.kts` (one was a
+stale `navigation-compose:2.8.2` silently losing to the catalog's 2.9.x at resolution),
+and the dead `serialization = "1.6.3"` key plus the unused Room catalog entries deleted
+(no Room usage exists in `app/src`). Suite 1795 green on the new toolchain.
+
+### fix(export): the schematic gate now blocks every sacred overlap pair — Thread↔Liner included
+
+`blockingExportError()` (`ui/nav/PdfExportRoute.kt`) kept its per-component
+`startOverlapErrorMm()` pass (start ≥ 0, same-kind overlaps, thread-at-a-shaft-end) but its
+collision answer now comes from ONE whole-spec `collidingIds()` pass instead of a
+taper-membership check. `startOverlapErrorMm()` compares each kind only against its own kind,
+so the cross-kind pairs were only as covered as the passes that happened to run — a
+Thread↔Liner overlap raised the carousel badge and disabled the toolbar buttons
+(`exportPdfGate()`), yet a spec reaching `blockingExportError()` directly would still export.
+The gate, the badges, and the buttons now share the same predicate end-to-end, so they cannot
+disagree; taper-over-body stays exempt (bodies are fillers, `collidingIds()` excludes them),
+and excluded threads stay outside every pair. `VALIDATION_RULES.md` §6 rewritten as the gate's
+two passes — its "known gap" paragraph is gone. Pinned by three new
+`BlockingExportErrorTest` cases (thread-over-liner blocks, butted thread/liner exports,
+excluded thread over a liner exports).
+
 ### feat: liner shoulders, behind a Settings gate
 
 A machined step at a liner end — the OD drops to a reduced diameter over the shoulder length,

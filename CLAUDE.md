@@ -33,11 +33,14 @@ it from the other is a bug.
 Specifically:
 - **Thread excluded from OAL** (`countInOal = false`): `AddThreadDialog` must show
   "Thread end: AFT | FWD" chips and hide the Start field — same as the carousel card
-  (`ComponentCarousel.kt`, `ResolvedThread` branch, `!includeInOal` block).
+  (`ThreadPagerCard.kt`, `!includeInOal` block).
 - **Liner AFT/FWD reference**: `AddLinerDialog` must show "Measure From: AFT | FWD" chips.
 - **Body keyway**: `AddBodyDialog` and the explicit-body carousel card must both expose
   the keyway section (KW from AFT | FWD chips, W × D, L, offset, spooned toggle). The
   auto-body card intentionally omits it (auto-bodies can't host keyways until promoted).
+  The AFT/FWD chips' DEFAULT is seeded by `ShaftSpec.suggestedBodyKeywayEnd` on BOTH
+  surfaces — opposite the shaft's existing keyway when exactly one side is taken,
+  AFT otherwise; a seed only, never applied to a stored keyway.
 - **Keyway clocking**: the spec-level 180°/90° toggles and the CW/CCW chips appear on
   keyway-bearing cards when the shaft has ≥ 2 keyways, and in
   `AddBodyDialog`/`AddTaperDialog` when adding would reach ≥ 2 (≥ 1 existing + this
@@ -173,7 +176,12 @@ foreshortening ("why lock it in one way when different users may want different 
 `drawBodiesForRunout`, `showCompressionNote`), so the note and the drawn breaks can never
 disagree; there is no duplicate constant. The long-span trigger `COMPRESS_TRIGGER_PT` is
 deliberately NOT governed by the slider — a run eating 220 pt of paper at true scale is
-not hidden compression, so it breaks at every setting, Never included.
+not hidden compression, so it breaks at every setting, Never included. **Keyway-bearing
+bodies never draw the S-break at all** (`keyedBodyIds`, stored-spec base ids, both body
+passes AND the footer note's predicate): their span is pinned at true width
+(`keywayPinnedBodySpans`) so foreshortening cannot reach them, and the long-span glyph is
+given up deliberately — a break gap could land inside the slot, which must read as real
+geometry end-to-end.
 **Liners compress in SIZE only** (finite `PROFILE_MIN_LINER_PT` floor — proportional
 foreshortening, NEVER a body-style S-break cutout; the S-break glyph is a body-only draw
 path); the per-job **"Liner compression" pair** (`RunoutConfig.linersProportional` +
@@ -272,8 +280,11 @@ so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut agai
 liner shade — `UNDERCUT_SECTION_FILL_ALPHA`, half the liner's alpha) must render
 **identically** in all draw sites — `UndercutRoute`/`UndercutWindowDetailOverlay` (canvas)
 and `UndercutPdfComposer` (PDF) — from the shared pure pipeline `geom/SurfaceProfileMath.kt`
-+ `geom/UndercutMath.kt` (cluster windows, clamps, hit-tests; no `pdf → ui` dep) with
-`ui/resolved/SurfaceSegs.kt` as the single resolved→surface mapping. See
++ `geom/UndercutMath.kt` (cluster windows, clamps, hit-tests; no `pdf → ui` dep)
++ `geom/UndercutOverlayMath.kt` (reference resolution, `buildUndercutNotches`, S.E.T.
+positions) with `ui/resolved/SurfaceSegs.kt` as the single resolved→surface mapping; the two
+canvas sites additionally share `ui/screen/UndercutSharedDraw.kt`, which holds what `geom/`
+cannot — the `DrawScope` notch pass and the resolved→liner-span mapping. See
 `docs/archive/UndercutDrawing_PLAN.md`.
 
 ### Paper sheets are theme-independent
@@ -711,7 +722,7 @@ existing `onRemoveBody(b.id)` pipeline (the resolve layer regenerates the auto-f
 Cancel keeps it explicit. On **both** cards the checkbox row sits **above** the
 Start/Length/Ø fields, so it stays put when checking it swaps the card from auto to
 explicit. `testTag`s: `body_explicit_checkbox`, `body_demote_confirm`. See
-`ComponentCarousel.kt`.
+`BodyPagerCard.kt`.
 
 ### Bodies are fillers, not collision participants
 Bodies (stored `ShaftSpec.bodies`) are the shaft's fluid base. A body legitimately runs
