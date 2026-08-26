@@ -3,12 +3,10 @@ import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
-import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.pdf.PdfExportMode
 
 import android.app.Application
 import android.content.Context
-import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.BuildConfig
@@ -22,21 +20,7 @@ import java.io.File
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.ui.input.TaperSide
 import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
-import com.android.shaftschematic.ui.input.oalAfterTaperAddMm
 import com.android.shaftschematic.ui.order.ComponentKind
-import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
-import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
-import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
-import com.android.shaftschematic.geom.RunoutComponentKind
-import com.android.shaftschematic.geom.RunoutComponentSpan
-import com.android.shaftschematic.geom.authoredStationIndexToRemove
-import com.android.shaftschematic.geom.clampPitAcrossFrac
-import com.android.shaftschematic.geom.currentLocalStationPositions
-import com.android.shaftschematic.geom.insertStationPosition
-import com.android.shaftschematic.geom.planStationInsertion
-import com.android.shaftschematic.geom.removeStationPosition
-import com.android.shaftschematic.geom.runoutComponentSpanMm
-import com.android.shaftschematic.ui.resolved.runoutComponentSpans
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.FractionStyle
@@ -46,12 +30,10 @@ import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.UndercutStyle
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
-import com.android.shaftschematic.util.keywayUnitKey
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.parseToMm
 import com.android.shaftschematic.util.VerboseLog
-import android.util.Log
 import com.android.shaftschematic.data.AutosaveManager
 import com.android.shaftschematic.data.isDefaultSession
 import com.android.shaftschematic.data.shouldWriteDraft
@@ -74,7 +56,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.math.max
-import kotlin.math.min
 
 /**
  * File: ShaftViewModel.kt
@@ -102,7 +83,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     // Per-editing-session draft identity. Minted on construction, re-minted on newDocument()
     // and importJson() so working on one document can never touch another's draft entry.
-    private var currentDraftId: String = UUID.randomUUID().toString()
+    internal var currentDraftId: String = UUID.randomUUID().toString()
 
     // Full snapshot of the last saved-to-file / freshly-loaded state — the dirty gate's
     // baseline. The autosave observer writes a draft only when the live snapshot differs.
@@ -112,7 +93,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     // Whether currentDraftId currently has a persisted entry in the ring. Used to remove the
     // entry exactly once on a dirty→clean transition (avoids hammering DataStore).
-    private var draftPersisted: Boolean = false
+    internal var draftPersisted: Boolean = false
 
     /** Build a snapshot of the current live session state (mirrors the autosave combine). */
     private fun buildCurrentSnapshot(): AutosaveManager.SessionSnapshot =
@@ -172,7 +153,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     // Filename (with .shaft extension) of the last save/open, or null when the document
     // has never been saved. Used to enable silent quick-save without reprompting for a name.
-    private val _currentDocumentName = MutableStateFlow<String?>(null)
+    internal val _currentDocumentName = MutableStateFlow<String?>(null)
     val currentDocumentName: StateFlow<String?> = _currentDocumentName.asStateFlow()
 
     fun setCurrentDocumentName(name: String?) { _currentDocumentName.value = name }
@@ -233,20 +214,20 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // Reactive state (observed by Compose)
     // ────────────────────────────────────────────────────────────────────────────
 
-    private val _spec = MutableStateFlow(ShaftSpec())
+    internal val _spec = MutableStateFlow(ShaftSpec())
     val spec: StateFlow<ShaftSpec> = _spec.asStateFlow()
 
-    private val _unit = MutableStateFlow(UnitSystem.MILLIMETERS)
+    internal val _unit = MutableStateFlow(UnitSystem.MILLIMETERS)
     val unit: StateFlow<UnitSystem> = _unit.asStateFlow()
 
-    private val _unitLocked = MutableStateFlow(false)
+    internal val _unitLocked = MutableStateFlow(false)
     val unitLocked: StateFlow<Boolean> = _unitLocked.asStateFlow()
 
     // Mixed units + dual display (document state, non-undoable — mirrors _runoutConfig's posture,
     // so dirtiness is derived from buildCurrentSnapshot). Display axis only; geometry stays mm.
-    private val _unitOverrides = MutableStateFlow<Map<String, UnitSystem>>(emptyMap())
+    internal val _unitOverrides = MutableStateFlow<Map<String, UnitSystem>>(emptyMap())
     val unitOverrides: StateFlow<Map<String, UnitSystem>> = _unitOverrides.asStateFlow()
-    private val _dualUnits = MutableStateFlow(false)
+    internal val _dualUnits = MutableStateFlow(false)
     val dualUnits: StateFlow<Boolean> = _dualUnits.asStateFlow()
 
     /** The resolver every composer/route reads to format unit-aware strings. */
@@ -395,10 +376,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _componentArrowWidthDp = MutableStateFlow(40)
     val componentArrowWidthDp: StateFlow<Int> = _componentArrowWidthDp.asStateFlow()
 
-    private val _resolvedComponents = MutableStateFlow<List<ResolvedComponent>>(emptyList())
+    internal val _resolvedComponents = MutableStateFlow<List<ResolvedComponent>>(emptyList())
     val resolvedComponents: StateFlow<List<ResolvedComponent>> = _resolvedComponents.asStateFlow()
 
-    private val _selectedComponentId = MutableStateFlow<String?>(null)
+    internal val _selectedComponentId = MutableStateFlow<String?>(null)
     val selectedComponentId: StateFlow<String?> = _selectedComponentId.asStateFlow()
 
     internal val _devOptionsEnabled = MutableStateFlow(false)
@@ -443,22 +424,22 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _unlockedAchievementIds = MutableStateFlow<Set<String>>(emptySet())
     val unlockedAchievementIds: StateFlow<Set<String>> = _unlockedAchievementIds.asStateFlow()
 
-    private val _customer = MutableStateFlow("")
+    internal val _customer = MutableStateFlow("")
     val customer: StateFlow<String> = _customer.asStateFlow()
 
-    private val _vessel = MutableStateFlow("")
+    internal val _vessel = MutableStateFlow("")
     val vessel: StateFlow<String> = _vessel.asStateFlow()
 
-    private val _jobNumber = MutableStateFlow("")
+    internal val _jobNumber = MutableStateFlow("")
     val jobNumber: StateFlow<String> = _jobNumber.asStateFlow()
 
-    private val _notes = MutableStateFlow("")
+    internal val _notes = MutableStateFlow("")
     val notes: StateFlow<String> = _notes.asStateFlow()
 
-    private val _shaftPosition = MutableStateFlow(ShaftPosition.OTHER)
+    internal val _shaftPosition = MutableStateFlow(ShaftPosition.OTHER)
     val shaftPosition: StateFlow<ShaftPosition> = _shaftPosition.asStateFlow()
 
-    private val _overallIsManual = MutableStateFlow(false)
+    internal val _overallIsManual = MutableStateFlow(false)
     val overallIsManual: StateFlow<Boolean> = _overallIsManual.asStateFlow()
     fun setOverallIsManual(v: Boolean) { _overallIsManual.value = v }
 
@@ -470,69 +451,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // Persisted alongside the spec in the .shaft file so bubble count overrides
     // and TIR direction travel with the job.
 
-    private val _runoutConfig = MutableStateFlow(RunoutConfig())
+    internal val _runoutConfig = MutableStateFlow(RunoutConfig())
     val runoutConfig: StateFlow<RunoutConfig> = _runoutConfig.asStateFlow()
-
-    /**
-     * Override the number of runout bubbles for a specific component.
-     * Pass `count = null` to remove the override and revert to the computed default.
-     * `0` is a valid override — the component is not being measured, so it draws no
-     * bubbles (on-device request). Readings keyed to a zeroed component are kept and
-     * simply not drawn (the render-layer orphan rule), so raising the count restores
-     * them.
-     */
-    fun setRunoutBubbleCount(componentId: String, count: Int?) {
-        _runoutConfig.update { cfg ->
-            val overrides = cfg.componentOverrides.toMutableMap()
-            if (count == null) {
-                overrides.remove(componentId)
-            } else {
-                overrides[componentId] = count.coerceAtLeast(0)
-            }
-            cfg.copy(componentOverrides = overrides)
-        }
-    }
-
-    /** Set the TIR direction label printed at the bottom of the runout sheet. */
-    fun setTirDirection(direction: TirDirection) {
-        _runoutConfig.update { it.copy(tirDirection = direction) }
-    }
-
-    /**
-     * "Shaft height" slider — exaggerate or shrink the drawn shaft on every drawing
-     * output: schematic, runout, and consolidated sheets (one per-job value). Clamped to
-     * the geom slider bounds; the composer additionally hard-caps the drawn height at 1.5"
-     * and the page budget.
-     */
-    fun setRunoutHeightScale(scale: Float) {
-        _runoutConfig.update {
-            it.copy(
-                heightScale = scale.coerceIn(
-                    com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MIN,
-                    com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MAX,
-                )
-            )
-        }
-    }
-
-    /** "Keep liners proportional lengthwise" — see [RunoutConfig.linersProportional]. */
-    fun setLinersProportional(proportional: Boolean) {
-        _runoutConfig.update { it.copy(linersProportional = proportional) }
-    }
-
-    /** "Liner compression" slider — see [RunoutConfig.linerCompression]. */
-    fun setLinerCompression(fraction: Float) {
-        _runoutConfig.update { it.copy(linerCompression = fraction.coerceIn(0f, 1f)) }
-    }
-
-    /**
-     * "Coupling face" — elect the coupling end view onto the runout/consolidated sheets.
-     * Per-job (rides the envelope's `RunoutConfig`), off by default: not every inspection
-     * measures the coupling. See [RunoutConfig.showCouplingFace].
-     */
-    fun setShowCouplingFace(show: Boolean) {
-        _runoutConfig.update { it.copy(showCouplingFace = show) }
-    }
 
     // ── Runout per-station readings (bubble value + high-spot marker) ──────────
     // Reference-only data, same posture as _wearRecord below: plain state updates, no
@@ -540,32 +460,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // an entry with neither value nor marker is dropped by RunoutReadings.withReading.
     // See docs/archive/RunoutBubbleEditor_PLAN.md and model/RunoutReading.kt.
 
-    private val _runoutReadings = MutableStateFlow(RunoutReadings())
+    internal val _runoutReadings = MutableStateFlow(RunoutReadings())
     val runoutReadings: StateFlow<RunoutReadings> = _runoutReadings.asStateFlow()
-
-    /**
-     * Upsert the runout reading for a bubble identified by [componentId] + [stationIndex].
-     * [valueMm] is canonical mm (UI converts from the active unit before calling);
-     * [highSpotHalfHours] is a clock tick in `[0, 23]` (0 = 12 o'clock). Passing both as null
-     * clears the reading (the empty entry is not stored).
-     */
-    fun setRunoutReading(
-        componentId: String,
-        stationIndex: Int,
-        valueMm: Float?,
-        highSpotHalfHours: Int?,
-    ) {
-        _runoutReadings.update { readings ->
-            readings.withReading(
-                RunoutReading(
-                    componentId = componentId,
-                    stationIndex = stationIndex,
-                    valueMm = valueMm,
-                    highSpotHalfHours = highSpotHalfHours?.let { ((it % 24) + 24) % 24 },
-                )
-            )
-        }
-    }
 
     // ── Runout station placement (dragged bubble positions) ───────────────────
     // Reference-only, same posture as _runoutReadings above. A drag pins exactly the station
@@ -574,361 +470,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // freeze the whole current set so an insert/remove renumbers nothing under the user.
     // See model/RunoutStationPlacement.kt and geom/RunoutStationPlacementMath.kt.
 
-    private val _runoutStationPlacements = MutableStateFlow(RunoutStationPlacements())
+    internal val _runoutStationPlacements = MutableStateFlow(RunoutStationPlacements())
     val runoutStationPlacements: StateFlow<RunoutStationPlacements> =
         _runoutStationPlacements.asStateFlow()
-
-    /**
-     * Commit a bubble drag: pin ONE station at [localMm] (component-local, from the AFT edge),
-     * already clamped by the caller (the drag needs the clamped value for its own live
-     * feedback, so re-deriving it here could only disagree).
-     *
-     * Called once on finger-up, never per drag frame — a per-frame write would flip the
-     * unsaved-changes asterisk immediately and push one undo step per coalescing window of
-     * continuous dragging.
-     */
-    fun setRunoutStationPosition(componentId: String, stationIndex: Int, localMm: Float) {
-        _runoutStationPlacements.update { it.withPosition(componentId, stationIndex, localMm) }
-    }
-
-    /** Un-pin one station ("Undo move" on a first drag) — it derives its position again. */
-    fun clearRunoutStationPosition(componentId: String, stationIndex: Int) {
-        _runoutStationPlacements.update { it.withoutPosition(componentId, stationIndex) }
-    }
-
-    /** Return a component's stations to derived placement, discarding every dragged position. */
-    fun resetRunoutStationPositions(componentId: String) {
-        _runoutStationPlacements.update { it.withoutComponent(componentId) }
-    }
-
-    /**
-     * Return EVERY component to derived placement — the "Reset all bubble positions" button
-     * under the measurement-station rows. Recoverable: placements are in [EditState], so a
-     * session undo brings the dragged positions back.
-     */
-    fun resetAllRunoutStationPositions() {
-        _runoutStationPlacements.value = RunoutStationPlacements()
-    }
-
-    /** A component's drawn runs, for the station +/− math. Empty when it no longer resolves. */
-    private fun runoutRunsFor(componentId: String): List<RunoutComponentSpan> =
-        runoutComponentSpans(_resolvedComponents.value).filter { it.id == componentId }
-
-    /**
-     * Add one measurement station to a component.
-     *
-     * A fully derived component simply gains a station and re-derives every position, as
-     * before. A component with any pinned station instead has its **complete current set**
-     * (pins verbatim, siblings at their derived spots — [currentLocalStationPositions])
-     * frozen with the new station inserted into the widest gap ([planStationInsertion]) —
-     * which for the ordinary two-station component means between the existing pair. The
-     * freeze is what keeps every bubble planted while the insert renumbers its neighbours;
-     * the readings shift with their stations ([RunoutReadings.withStationInserted]), so every
-     * typed TIR stays on the bubble it was measured at.
-     */
-    fun addRunoutStation(componentId: String, currentCount: Int) {
-        val placements = _runoutStationPlacements.value
-        if (placements.isAuthored(componentId)) {
-            val runs = runoutRunsFor(componentId)
-            if (runs.isNotEmpty()) {
-                val full = currentLocalStationPositions(
-                    runs, currentCount, placements.positionsFor(componentId),
-                )
-                val useEdgeInset = runs.first().kind != RunoutComponentKind.BODY
-                val insertion =
-                    planStationInsertion(full, runoutComponentSpanMm(runs), useEdgeInset)
-                _runoutStationPlacements.value = placements.withComponent(
-                    componentId, insertStationPosition(full, insertion),
-                )
-                _runoutReadings.update { it.withStationInserted(componentId, insertion.index) }
-            }
-        }
-        setRunoutBubbleCount(componentId, currentCount + 1)
-    }
-
-    /**
-     * Remove one measurement station from a component.
-     *
-     * A fully derived component simply loses a station and re-derives every position, as
-     * before — its FWD-most reading is left in place as an orphan (never drawn, restored if
-     * the count goes back up), matching what a count of 0 already does.
-     *
-     * A component with any pinned station drops its most redundant unmeasured station from
-     * the complete current set ([authoredStationIndexToRemove]) and re-keys the readings
-     * above it, so "−" undoes a "+" instead of deleting a bubble the user had dragged into
-     * place; the remaining set freezes, keeping every surviving bubble planted through the
-     * renumber.
-     */
-    fun removeRunoutStation(componentId: String, currentCount: Int) {
-        val placements = _runoutStationPlacements.value
-        if (placements.isAuthored(componentId)) {
-            val runs = runoutRunsFor(componentId)
-            if (runs.isNotEmpty()) {
-                val full = currentLocalStationPositions(
-                    runs, currentCount, placements.positionsFor(componentId),
-                )
-                val useEdgeInset = runs.first().kind != RunoutComponentKind.BODY
-                val readings = _runoutReadings.value
-                val index = authoredStationIndexToRemove(
-                    full, runoutComponentSpanMm(runs), useEdgeInset,
-                ) { i -> readings.find(componentId, i) != null }
-                if (index >= 0) {
-                    _runoutStationPlacements.value = placements.withComponent(
-                        componentId, removeStationPosition(full, index),
-                    )
-                    _runoutReadings.value = readings.withStationRemoved(componentId, index)
-                }
-            }
-        }
-        setRunoutBubbleCount(componentId, (currentCount - 1).coerceAtLeast(0))
-    }
 
     // ── Liner wear inspection record ──────────────────────────────────────────
     // Persisted alongside the spec in the .shaft file, same as runoutConfig above.
     // Reference-only data: plain state updates, no geometry side effects, no
     // ensureOverall/auto-body interaction. See docs/archive/LinerWearAreas_Proposal.md §5, §7.
 
-    private val _wearRecord = MutableStateFlow(WearRecord())
+    internal val _wearRecord = MutableStateFlow(WearRecord())
     val wearRecord: StateFlow<WearRecord> = _wearRecord.asStateFlow()
-
-    /**
-     * Add a new wear spot on [linerId] with sensible defaults (start 0, no reading). The
-     * default length is 1in (25.4mm), clamped to the liner's own length for tiny liners so
-     * the default band is never rejected by [wearSpotSpanIssue] at first render/edit.
-     */
-    fun addWearSpot(linerId: String) {
-        val linerLengthMm = _spec.value.liners.firstOrNull { it.id == linerId }?.lengthMm ?: 25.4f
-        val defaultLengthMm = min(25.4f, linerLengthMm.coerceAtLeast(0f))
-        _wearRecord.update { rec ->
-            rec.copy(
-                spots = rec.spots + WearSpot(
-                    linerId = linerId,
-                    startMm = 0f,
-                    lengthMm = defaultLengthMm,
-                    minDiaMm = 0f,
-                    note = "",
-                )
-            )
-        }
-    }
-
-    /**
-     * Update an existing wear spot's fields by [id]. No-op if the id is not found.
-     *
-     * [startMm]/[lengthMm] are always canonical (liner-local AFT-edge mm) — reference
-     * conversion happens in the UI (`LinerWearMath.kt`'s `wearStartToCanonicalMm`) before
-     * this is called, and blocking in-span validation (`wearSpotSpanIssue`) happens at the
-     * `NumericInputField` layer, so a rejected entry never reaches here. See
-     * [updateWearSpotReference] for the separate, geometry-free "Measure from" setter.
-     */
-    fun updateWearSpot(id: String, startMm: Float, lengthMm: Float, minDiaMm: Float, note: String) {
-        _wearRecord.update { rec ->
-            rec.copy(
-                spots = rec.spots.map { spot ->
-                    if (spot.id != id) spot else spot.copy(
-                        startMm = max(0f, startMm),
-                        lengthMm = max(0f, lengthMm),
-                        minDiaMm = max(0f, minDiaMm),
-                        note = note,
-                    )
-                }
-            )
-        }
-    }
-
-    /**
-     * Update a wear spot's authored "Measure from" reference by [id]. Display-only — same
-     * pattern as `updateLinerAuthoredReference`/`updateCouplerBoltSlotReference`: it never
-     * touches [WearSpot.startMm]/[WearSpot.lengthMm], only which reference point the Start
-     * field re-projects against.
-     */
-    fun updateWearSpotReference(id: String, reference: WearSpotReference) {
-        _wearRecord.update { rec ->
-            rec.copy(
-                spots = rec.spots.map { spot ->
-                    if (spot.id != id || spot.authoredReference == reference) spot
-                    else spot.copy(authoredReference = reference)
-                }
-            )
-        }
-    }
-
-    /** Remove a wear spot by [id]. Confirm-free, as authored in the detail-view UI. */
-    fun removeWearSpot(id: String) {
-        _wearRecord.update { rec -> rec.copy(spots = rec.spots.filterNot { it.id == id }) }
-    }
-
-    // ── Wear pits (the "X" markers) ───────────────────────────────────────────
-    // Stored in the same reference-only [WearRecord] as wear spots (so they ride the same
-    // autosave/snapshot/import paths), but keyed by *resolved component id* — a pit can sit on
-    // a liner, taper, or body (explicit or auto), unlike a spot (liner-only). No geometry side
-    // effects; orphan pits (component no longer resolves) are skipped at the render layer, same
-    // posture as runout readings. See model/WearSpot.kt (WearPit) and geom/WearPitMath.kt.
-
-    /**
-     * Drop a new pit "X" on [componentId] at component-local [axialMm] (from the AFT edge) and
-     * [acrossFrac] (0 = top outline .. 1 = bottom), with the given [size]. `acrossFrac` is
-     * clamped to the interior band ([clampPitAcrossFrac]) and `axialMm` to non-negative.
-     */
-    fun addWearPit(componentId: String, axialMm: Float, acrossFrac: Float, size: PitSize) {
-        _wearRecord.update { rec ->
-            rec.copy(
-                pits = rec.pits + WearPit(
-                    componentId = componentId,
-                    axialMm = max(0f, axialMm),
-                    acrossFrac = clampPitAcrossFrac(acrossFrac),
-                    size = size,
-                )
-            )
-        }
-    }
-
-    /** Remove a pit by [id]. Confirm-free — the detail canvas removes a pit by tapping its "X". */
-    fun removeWearPit(id: String) {
-        _wearRecord.update { rec -> rec.copy(pits = rec.pits.filterNot { it.id == id }) }
-    }
-
-    // ── Wear diameter readings (measured-Ø callouts) ─────────────────────────
-    // Same reference-only posture and storage as pits: keyed by resolved component id,
-    // component-local axial position, no geometry side effects, render-layer orphans.
-    // See model/WearSpot.kt (WearDiaReading) and geom/WearDiaCalloutLayout.kt.
-
-    /**
-     * Record a measured diameter [diaMm] on [componentId] at component-local [axialMm]
-     * (from the AFT edge). [diaMm] is stored verbatim — user inputs are sacred; only the
-     * tap-derived [axialMm] is coerced non-negative (coarse-gesture clamp).
-     */
-    fun addWearDiaReading(componentId: String, axialMm: Float, diaMm: Float) {
-        _wearRecord.update { rec ->
-            rec.copy(
-                diaReadings = rec.diaReadings + WearDiaReading(
-                    componentId = componentId,
-                    axialMm = max(0f, axialMm),
-                    diaMm = diaMm,
-                )
-            )
-        }
-    }
-
-    /** Replace an existing reading's measured value by [id]. No-op if the id is absent. */
-    fun updateWearDiaReading(id: String, diaMm: Float) {
-        _wearRecord.update { rec ->
-            rec.copy(diaReadings = rec.diaReadings.map { if (it.id == id) it.copy(diaMm = diaMm) else it })
-        }
-    }
-
-    /** Remove a reading by [id]. Confirm-free — deleted from its edit dialog. */
-    fun removeWearDiaReading(id: String) {
-        _wearRecord.update { rec -> rec.copy(diaReadings = rec.diaReadings.filterNot { it.id == id }) }
-    }
-
-    /**
-     * Pin this job's worn-profile trace exaggeration ([WearRecord.traceDepthFrac]), clamped to
-     * [WEAR_TRACE_MIN_DEPTH_FRAC]..[WEAR_TRACE_MAX_DEPTH_FRAC]; `null` clears the override so
-     * the document follows the Settings → Drawing default again.
-     *
-     * Display-only styling for the wear drawing, the undercut-exaggeration posture: the trace
-     * never draws shallower than true scale and stored/printed Ø values never move, so the
-     * golden rule is untouched — but it is per-document, so it lives in the record.
-     */
-    fun setWearTraceDepthFrac(frac: Float?) {
-        val clamped = frac?.coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC)
-        _wearRecord.update { rec ->
-            if (rec.traceDepthFrac == clamped) rec else rec.copy(traceDepthFrac = clamped)
-        }
-    }
-
-    /**
-     * Elect which components get a broken-out detail strip on the wear sheet
-     * ([WearRecord.stripComponentIds] — resolved component ids: liners, tapers, bodies).
-     * `null` restores the default election (every drawable liner); an empty list prints no
-     * strips at all.
-     *
-     * Layout-only, reference-only: no geometry side effects, and ids that no longer resolve are
-     * skipped when the sheet is drawn rather than pruned here (the pit/reading posture).
-     */
-    fun setWearStripComponents(ids: List<String>?) {
-        _wearRecord.update { rec ->
-            if (rec.stripComponentIds == ids) rec else rec.copy(stripComponentIds = ids)
-        }
-    }
-
-    /**
-     * Show or hide the wear sheet's whole-shaft profile band ([WearRecord.showShaftProfile]).
-     * Hiding it hands that vertical budget to the detail strips; the header, dye-pen row, and
-     * elected strips are unaffected. Layout-only, per document.
-     */
-    fun setWearShowShaftProfile(show: Boolean) {
-        _wearRecord.update { rec ->
-            if (rec.showShaftProfile == show) rec else rec.copy(showShaftProfile = show)
-        }
-    }
-
-    /**
-     * Record the dye penetrant inspection's outcome ([WearRecord.dyePenResult]) — printed as
-     * an "X" in the matching PASS/FAIL checkbox on the wear sheet; `null` returns both boxes
-     * to blank for hand-marking. Reference-only, no geometry effect.
-     */
-    fun setDyePenResult(result: DyePenResult?) {
-        _wearRecord.update { rec ->
-            if (rec.dyePenResult == result) rec else rec.copy(dyePenResult = result)
-        }
-    }
-
-    // ── Worn sections (consolidated runout/wear sheet) ─────────────────────────
-    // Reference-only, same posture as pits/diaReadings: plain _wearRecord updates, no
-    // geometry side effects. Shaft-space canonical (no component key → no orphans).
-    // See model/WornSection.kt and docs/contracts/RunoutSheet.md (Worn Sections).
-
-    /**
-     * Add a designated worn section. [diaMm] values are the machinist's typed measurements,
-     * stored verbatim in list order. Returns the new id so the editor can follow the row.
-     */
-    fun addWornSection(
-        startFromAftMm: Float,
-        lengthMm: Float,
-        diaMm: List<Float>,
-        reference: UndercutReference,
-    ): String {
-        val section = WornSection(
-            startFromAftMm = max(0f, startFromAftMm),
-            lengthMm = max(0f, lengthMm),
-            diaMm = diaMm,
-            authoredReference = reference,
-        )
-        _wearRecord.update { rec -> rec.copy(wornSections = rec.wornSections + section) }
-        return section.id
-    }
-
-    /** Replace a section's span and measured values by [id]. No-op if the id is absent. */
-    fun updateWornSection(id: String, startFromAftMm: Float, lengthMm: Float, diaMm: List<Float>) {
-        _wearRecord.update { rec ->
-            rec.copy(wornSections = rec.wornSections.map {
-                if (it.id == id) it.copy(
-                    startFromAftMm = max(0f, startFromAftMm),
-                    lengthMm = max(0f, lengthMm),
-                    diaMm = diaMm,
-                ) else it
-            })
-        }
-    }
-
-    /**
-     * Switch which S.E.T. the Distance field displays against — display metadata only,
-     * canonical position untouched (the WearSpotReference pattern).
-     */
-    fun updateWornSectionReference(id: String, reference: UndercutReference) {
-        _wearRecord.update { rec ->
-            rec.copy(wornSections = rec.wornSections.map {
-                if (it.id == id) it.copy(authoredReference = reference) else it
-            })
-        }
-    }
-
-    /** Remove a section by [id]. Confirm-free — deleted from its edit dialog. */
-    fun removeWornSection(id: String) {
-        _wearRecord.update { rec -> rec.copy(wornSections = rec.wornSections.filterNot { it.id == id }) }
-    }
 
     // ── Undercut drawing record ────────────────────────────────────────────────
     // Reference-only data, same posture as _wearRecord/_runoutReadings above: plain state
@@ -936,106 +488,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // have no component key, so there is no orphan concept here. See
     // docs/archive/UndercutDrawing_PLAN.md §2, §6.
 
-    private val _undercutRecord = MutableStateFlow(UndercutRecord())
+    internal val _undercutRecord = MutableStateFlow(UndercutRecord())
     val undercutRecord: StateFlow<UndercutRecord> = _undercutRecord.asStateFlow()
-
-    /**
-     * Record a new undercut section at [startFromAftMm] (canonical shaft space) with
-     * [lengthMm] and Ø unentered (0). Returns the new undercut's id so the caller can
-     * immediately open its detail overlay.
-     *
-     * [reference]/[referenceLinerId] are the authoring reference the distance was entered
-     * against — display metadata only, stored verbatim. They default to the SET-based
-     * posture ([UndercutReference.AFT_SET], no liner) used by the tab's global "Add
-     * undercut" button; adding from inside a liner's detail strip passes that liner's
-     * `LINER_*` reference instead.
-     */
-    fun addUndercut(
-        startFromAftMm: Float,
-        lengthMm: Float,
-        reference: UndercutReference = UndercutReference.AFT_SET,
-        referenceLinerId: String = "",
-    ): String {
-        val undercut = Undercut(
-            startFromAftMm = startFromAftMm,
-            lengthMm = lengthMm,
-            diaMm = 0f,
-            authoredReference = reference,
-            referenceLinerId = referenceLinerId,
-        )
-        _undercutRecord.update { rec -> rec.copy(undercuts = rec.undercuts + undercut) }
-        return undercut.id
-    }
-
-    /**
-     * Replace an existing undercut's fields by [id]. Fields are stored **verbatim** — golden
-     * rule: no snap/round/derive ever rewrites a typed value, including [diaMm] (0 = placed,
-     * not yet measured). No-op if the id is not found.
-     */
-    fun updateUndercut(id: String, startFromAftMm: Float, lengthMm: Float, diaMm: Float, note: String) {
-        _undercutRecord.update { rec ->
-            rec.copy(
-                undercuts = rec.undercuts.map { u ->
-                    if (u.id != id) u else u.copy(
-                        startFromAftMm = startFromAftMm,
-                        lengthMm = lengthMm,
-                        diaMm = diaMm,
-                        note = note,
-                    )
-                }
-            )
-        }
-    }
-
-    /**
-     * Update an undercut's authored "Measure from" reference by [id]. Display-only — same
-     * pattern as [updateWearSpotReference]: it never touches [Undercut.startFromAftMm],
-     * only which reference point the "Distance" field re-projects against.
-     *
-     * [referenceLinerId] is the liner the distance converts against for the `LINER_*`
-     * references; both values are stored **verbatim**. Callers pass an empty id for the
-     * SET references, so switching back to a S.E.T. also drops the stale liner key.
-     */
-    fun updateUndercutReference(
-        id: String,
-        reference: UndercutReference,
-        referenceLinerId: String = "",
-    ) {
-        _undercutRecord.update { rec ->
-            rec.copy(
-                undercuts = rec.undercuts.map { u ->
-                    if (u.id != id ||
-                        (u.authoredReference == reference && u.referenceLinerId == referenceLinerId)
-                    ) u
-                    else u.copy(authoredReference = reference, referenceLinerId = referenceLinerId)
-                }
-            )
-        }
-    }
-
-    /** Remove an undercut by [id]. Confirm-free, as authored in its edit card. */
-    fun removeUndercut(id: String) {
-        _undercutRecord.update { rec -> rec.copy(undercuts = rec.undercuts.filterNot { it.id == id }) }
-    }
-
-    /**
-     * Set this sheet's drawn-depth exaggeration ([UndercutRecord.exaggerationFrac]), clamped
-     * to `0..`[UNDERCUT_EXAGGERATION_MAX_FRAC]. Display-only styling for the undercut
-     * drawing: the sheet's deepest cut draws at this fraction of its local surface Ø and
-     * shallower cuts scale relative to it (`normalizedNotchFloorDiaMm`). It never touches a
-     * stored or printed Ø, so the golden rule is untouched — but it is per-document, so it
-     * lives in the record rather than in app prefs.
-     */
-    fun setUndercutExaggeration(frac: Float) {
-        val clamped = frac.coerceIn(0f, UNDERCUT_EXAGGERATION_MAX_FRAC)
-        _undercutRecord.update { rec ->
-            if (rec.exaggerationFrac == clamped) rec else rec.copy(exaggerationFrac = clamped)
-        }
-    }
 
     // Incrementing key used by the editor UI to reset Compose-local state (dialogs, focus, scroll, etc.)
     // without relocating that state into the ViewModel.
-    private val _editorResetNonce = MutableStateFlow(0)
+    internal val _editorResetNonce = MutableStateFlow(0)
     val editorResetNonce: StateFlow<Int> = _editorResetNonce.asStateFlow()
 
     // The carousel renders resolved components in PHYSICAL order (auto-bodies interleaved at
@@ -1043,7 +501,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // `docs/contracts/ComponentsOrdering.md`.
 
     // One-shot UI events (snackbars, etc.)
-    private val _uiEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)
+    internal val _uiEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)
     val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -1088,7 +546,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Drop all undo/redo history. Called at every document/session boundary. */
-    private fun clearEditHistory() {
+    internal fun clearEditHistory() {
         editHistory.clear()
         updateHistoryFlags()
     }
@@ -1754,1236 +1212,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // ────────────────────────────────────────────────────────────────────────────
-    // Component add/update/remove — newest on top (all params in mm)
-    // ────────────────────────────────────────────────────────────────────────────
-
-    // Bodies
-    fun addBodyAt(
-        startMm: Float,
-        lengthMm: Float,
-        diaMm: Float,
-        keywayWidthMm: Float = 0f,
-        keywayDepthMm: Float = 0f,
-        keywayLengthMm: Float = 0f,
-        keywayOffsetFromEndMm: Float = 0f,
-        keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,
-        keywaySpooned: Boolean = false,
-        /**
-         * The unit this keyway is authored and printed in, when it differs from the component's.
-         * `null` = follows the component (the overwhelmingly common case). Registered as a
-         * derived-key override exactly like a metric thread's, so it rides `unit_overrides` with
-         * no new field.
-         */
-        keywayUnit: UnitSystem? = null,
-        /** Blended faces (mm) and their profile — drawing only, stored verbatim. */
-        blendAftMm: Float = 0f,
-        blendFwdMm: Float = 0f,
-        blendProfile: BlendProfile = BlendProfile.OGEE,
-        blendAftSeal: Boolean = false,
-        blendFwdSeal: Boolean = false,
-    ) {
-        val id = newId()
-        _spec.update { s ->
-            s.copy(
-                bodies = listOf(
-                    Body(
-                        id = id,
-                        startFromAftMm = startMm,
-                        lengthMm = max(0f, lengthMm),
-                        diaMm = max(0f, diaMm),
-                        keywayWidthMm = max(0f, keywayWidthMm),
-                        keywayDepthMm = max(0f, keywayDepthMm),
-                        keywayLengthMm = max(0f, keywayLengthMm),
-                        keywayOffsetFromEndMm = max(0f, keywayOffsetFromEndMm),
-                        keywayEnd = keywayEnd,
-                        keywaySpooned = keywaySpooned,
-                        blendAftMm = max(0f, blendAftMm),
-                        blendFwdMm = max(0f, blendFwdMm),
-                        blendProfile = blendProfile,
-                        blendAftSeal = blendAftSeal,
-                        blendFwdSeal = blendFwdSeal,
-                    )
-                ) + s.bodies
-            )
-        }
-        applyKeywayUnit(id, keywayUnit)
-        rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
-        ensureOverall()
-        _selectedComponentId.value = id
-    }
-
-    fun updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) {
-        _spec.update { s -> s.withBodyAt(index, startMm, lengthMm, diaMm) }
-        if (index in _spec.value.bodies.indices) {
-            rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
-        }
-        ensureOverall()
-    }
-
-    /** Edit a body's keyway in place (mirrors [updateTaperKeyway]). All params in mm. */
-    fun updateBodyKeyway(
-        index: Int,
-        widthMm: Float,
-        depthMm: Float,
-        lengthMm: Float,
-        offsetFromEndMm: Float,
-        end: LinerAuthoredReference,
-        spooned: Boolean,
-    ) = _spec.update { s ->
-        if (index !in s.bodies.indices) s else {
-            val old = s.bodies[index]
-            s.copy(
-                bodies = s.bodies.toMutableList().also { list ->
-                    list[index] = old.copy(
-                        keywayWidthMm = max(0f, widthMm),
-                        keywayDepthMm = max(0f, depthMm),
-                        keywayLengthMm = max(0f, lengthMm),
-                        keywayOffsetFromEndMm = max(0f, offsetFromEndMm),
-                        keywayEnd = end,
-                        keywaySpooned = spooned,
-                    )
-                }
-            )
-        }
-    }
-
-    /**
-     * Set the drawing note that the shaft's keyways are clocked 180° apart. Enabling clears the
-     * 90° note — a shaft carries at most one clocking note. Unchanged input is a no-op.
-     */
-    fun setKeyways180Apart(enabled: Boolean) = _spec.update { s -> s.withKeyways180Apart(enabled) }
-
-    /**
-     * Set the drawing note that the shaft's keyways are clocked 90° apart. Enabling clears the
-     * 180° note — a shaft carries at most one clocking note. Unchanged input is a no-op.
-     */
-    fun setKeyways90Apart(enabled: Boolean) = _spec.update { s -> s.withKeyways90Apart(enabled) }
-
-    /**
-     * Set the 90° clocking direction — true = clockwise viewed from aft. Meaningful only while
-     * [setKeyways90Apart] is on; the choice survives toggling the note off and back on.
-     */
-    fun setKeyways90Cw(cw: Boolean) = _spec.update { s -> s.withKeyways90Cw(cw) }
-
-    /**
-     * Remove a [Body] by its stable [id].
-     *
-     * The removed body (spec + order) is recoverable via [undoEdit] — the central session
-     * history records the post-delete state, so undo restores both the spec and the row order.
-     */
-    fun removeBody(id: String) {
-        Log.d("ShaftViewModel", "removeBody invoked for id=$id")
-        var removed = false
-
-        _spec.update { s ->
-            val idx = s.bodies.indexOfFirst { it.id == id }
-            if (idx < 0) {
-                Log.w(
-                    "ShaftViewModel",
-                    "removeBody: requested id=$id not found. current ids=${s.bodies.map { it.id }}"
-                )
-                // NOTE: This should never happen during normal UI usage.
-                return@update s
-            }
-            removed = true
-            s.copy(
-                bodies = s.bodies.toMutableList().apply { removeAt(idx) }
-            )
-        }
-
-        if (removed) {
-            ensureOverall()
-            emitDeletedSnack(ComponentKind.BODY)
-        }
-    }
-
-    // Tapers
-    /**
-     * Add a taper. [startDiaMm]/[endDiaMm] arrive x-ordered AFT → FWD (the Add dialog orders
-     * the typed S.E.T./L.E.T. by the taper's physical half); [reference] records which end the
-     * user measured the start from, so the carousel card reopens in that frame.
-     */
-    fun addTaperAt(
-        startMm: Float,
-        lengthMm: Float,
-        startDiaMm: Float,
-        endDiaMm: Float,
-        rateText: String = "",
-        reference: LinerAuthoredReference = LinerAuthoredReference.AFT,
-        keywayWidthMm: Float = 0f,
-        keywayDepthMm: Float = 0f,
-        keywayLengthMm: Float = 0f,
-        keywayOffsetFromSetMm: Float = 0f,
-        keywaySpooned: Boolean = false,
-        /**
-         * The unit this keyway is authored and printed in, when it differs from the component's.
-         * `null` = follows the component (the overwhelmingly common case). Registered as a
-         * derived-key override exactly like a metric thread's, so it rides `unit_overrides` with
-         * no new field.
-         */
-        keywayUnit: UnitSystem? = null,
-    ) {
-        val id = newId()
-        // Which end is the Small End follows the taper's physical half, judged against the OAL
-        // the shaft carries once this taper exists — in auto-OAL mode the add itself can grow
-        // the shaft, and the pre-add OAL would derive the missing diameter for the wrong face.
-        val smallEndAtStart = taperSmallEndAtStart(
-            startMm = startMm,
-            lengthMm = lengthMm,
-            overallLengthMm = oalAfterTaperAddMm(
-                currentOalMm = _spec.value.overallLengthMm,
-                overallIsManual = _overallIsManual.value,
-                startFromAftMm = startMm,
-                lengthMm = lengthMm,
-            ),
-        )
-        _spec.update { s ->
-            val split = s.splitBodiesAround(startMm, startMm + lengthMm) { newId() }
-
-            val (resolvedStartDia, resolvedEndDia) = deriveTaperDiameters(
-                startDiaMm = startDiaMm, endDiaMm = endDiaMm,
-                lengthMm = lengthMm, rateText = rateText,
-                smallEndAtStart = smallEndAtStart
-            )
-            split.spec.copy(
-                tapers = listOf(
-                    Taper(
-                        id = id,
-                        startFromAftMm = startMm,
-                        lengthMm = max(0f, lengthMm),
-                        startDiaMm = max(0f, resolvedStartDia),
-                        endDiaMm = max(0f, resolvedEndDia),
-                        keywayWidthMm = max(0f, keywayWidthMm),
-                        keywayDepthMm = max(0f, keywayDepthMm),
-                        keywayLengthMm = max(0f, keywayLengthMm),
-                        keywayOffsetFromSetMm = max(0f, keywayOffsetFromSetMm),
-                        keywaySpooned = keywaySpooned,
-                        taperRateText = rateText,
-                        authoredReference = reference,
-                    )
-                ) + split.spec.tapers
-            )
-        }
-        // Read the typed SET/LET back out of the x-ordered pair the same way it was put in, so
-        // a FWD-half add seeds the next dialog's SET default from a SET and not from a LET.
-        applyKeywayUnit(id, keywayUnit)
-        rememberTaperDefaults(
-            lengthMm = lengthMm,
-            setDiaMm = if (smallEndAtStart) startDiaMm else endDiaMm,
-            letDiaMm = if (smallEndAtStart) endDiaMm else startDiaMm,
-        )
-        ensureOverall()
-        _selectedComponentId.value = id
-    }
-
-    fun updateTaper(
-        index: Int,
-        startMm: Float,
-        lengthMm: Float,
-        startDiaMm: Float,
-        endDiaMm: Float,
-        rateText: String = "",
-    ) = _spec.update { s ->
-        if (index !in s.tapers.indices) s else {
-            val old = s.tapers[index]
-            val effectiveRate = rateText.ifBlank { old.taperRateText }
-
-            // Same frame as the add path: the half is judged against the OAL that will cover
-            // the edited span, so an edit that pushes the taper past the current end derives
-            // the missing diameter for the face the card will label.
-            val (resolvedStartDia, resolvedEndDia) = deriveTaperDiameters(
-                startDiaMm = startDiaMm, endDiaMm = endDiaMm,
-                lengthMm = lengthMm, rateText = effectiveRate,
-                smallEndAtStart = taperSmallEndAtStart(
-                    startMm = startMm,
-                    lengthMm = lengthMm,
-                    overallLengthMm = oalAfterTaperAddMm(
-                        currentOalMm = s.overallLengthMm,
-                        overallIsManual = _overallIsManual.value,
-                        startFromAftMm = startMm,
-                        lengthMm = lengthMm,
-                    ),
-                )
-            )
-
-            s.copy(
-                tapers = s.tapers.toMutableList().also { list ->
-                    list[index] = old.copy(
-                        startFromAftMm = startMm,
-                        lengthMm = max(0f, lengthMm),
-                        startDiaMm = max(0f, resolvedStartDia),
-                        endDiaMm = max(0f, resolvedEndDia),
-                        taperRateText = effectiveRate,
-                    )
-                }
-            )
-        }
-    }.also {
-        if (index in _spec.value.tapers.indices) {
-            // The x-ordered pair is read back as SET/LET through the taper's own half — seeding
-            // the SET default from startDiaMm alone would take a FWD-half taper's LET.
-            val smallEndAtStart = taperSmallEndAtStart(
-                startMm = startMm,
-                lengthMm = lengthMm,
-                overallLengthMm = oalAfterTaperAddMm(
-                    currentOalMm = _spec.value.overallLengthMm,
-                    overallIsManual = _overallIsManual.value,
-                    startFromAftMm = startMm,
-                    lengthMm = lengthMm,
-                ),
-            )
-            rememberTaperDefaults(
-                lengthMm = lengthMm,
-                setDiaMm = if (smallEndAtStart) startDiaMm else endDiaMm,
-                letDiaMm = if (smallEndAtStart) endDiaMm else startDiaMm,
-            )
-        }
-        ensureOverall()
-    }
-
-    fun updateTaperKeyway(
-        index: Int,
-        widthMm: Float,
-        depthMm: Float,
-        lengthMm: Float,
-        offsetFromSetMm: Float,
-        spooned: Boolean,
-    ) = _spec.update { s ->
-        if (index !in s.tapers.indices) s else {
-            val old = s.tapers[index]
-            val updatedTapers = s.tapers.toMutableList().also { list ->
-                list[index] = old.copy(
-                    keywayWidthMm = max(0f, widthMm),
-                    keywayDepthMm = max(0f, depthMm),
-                    keywayLengthMm = max(0f, lengthMm),
-                    keywayOffsetFromSetMm = max(0f, offsetFromSetMm),
-                    keywaySpooned = spooned,
-                )
-            }
-            s.copy(tapers = updatedTapers)
-        }
-    }
-
-
-    fun updateTaperAuthoredReference(index: Int, reference: LinerAuthoredReference) = _spec.update { s ->
-        if (index !in s.tapers.indices) s else {
-            val old = s.tapers[index]
-            if (old.authoredReference == reference) return@update s
-            s.copy(
-                tapers = s.tapers.toMutableList().also { l ->
-                    l[index] = old.copy(authoredReference = reference)
-                }
-            )
-        }
-    }
-
-    /** Remove a [Taper] by id. Recoverable via [undoEdit] (spec + order restored together). */
-    fun removeTaper(id: String) {
-        Log.d("ShaftViewModel", "removeTaper invoked for id=$id")
-        var removed = false
-
-        _spec.update { s ->
-            val idx = s.tapers.indexOfFirst { it.id == id }
-            if (idx < 0) {
-                Log.w(
-                    "ShaftViewModel",
-                    "removeTaper: requested id=$id not found. current ids=${s.tapers.map { it.id }}"
-                )
-                // NOTE: This should never happen during normal UI usage.
-                return@update s
-            }
-            removed = true
-
-            val taper = s.tapers[idx]
-            val afterRemoval = s.copy(tapers = s.tapers.toMutableList().apply { removeAt(idx) })
-            val merge = afterRemoval.mergeBodiesAround(taper.startFromAftMm, taper.startFromAftMm + taper.lengthMm) { newId() }
-            merge.spec
-        }
-
-        if (removed) {
-            ensureOverall()
-            emitDeletedSnack(ComponentKind.TAPER)
-        }
-    }
-
-    // Threads
-    /**
-     * Adds a thread segment.
-     *
-     * Parameters (mm):
-     *  • startMm — axial start from aft face
-     *  • lengthMm — axial length
-     *  • majorDiaMm — major diameter
-     *  • pitchMm — pitch in mm (e.g., 4 TPI ⇒ 6.35 mm)
-     *  • excludeFromOAL — when true, thread length is excluded from OAL/measure-space
-     *
-     * UI contract: Screen & Route pass arguments in exactly this order.
-     * We also construct `Threads(...)` with named arguments to avoid pitch/major swaps.
-     */
-    fun addThreadAt(
-        startMm: Float,
-        lengthMm: Float,
-        majorDiaMm: Float,
-        pitchMm: Float,
-        excludeFromOAL: Boolean = false,
-        isAftEnd: Boolean = true,
-        metricDesignation: String? = null,
-    ) {
-        val id = newId()
-        _spec.update { s ->
-            // Excluded threads live outside the shaft envelope; they don't split in-shaft bodies.
-            val split = if (!excludeFromOAL) s.splitBodiesAround(startMm, startMm + lengthMm) { newId() }
-                        else BodySplitResult(s, emptyList(), emptyList())
-            split.spec.copy(
-                threads = listOf(
-                    Threads(
-                        id = id,
-                        startFromAftMm = startMm,
-                        majorDiaMm = max(0f, majorDiaMm),
-                        pitchMm = max(0f, pitchMm),
-                        lengthMm = max(0f, lengthMm),
-                        excludeFromOAL = excludeFromOAL,
-                        isAftEnd = isAftEnd,
-                        metricDesignation = metricDesignation?.ifBlank { null },
-                    )
-                ) + split.spec.threads
-            )
-        }
-        // A metric-designation thread keeps its native units — register an implicit mm override
-        // so every formatting site resolves it to mm uniformly (see DisplayUnits).
-        applyMetricThreadUnit(id, metricDesignation)
-        rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
-        ensureOverall()
-        _selectedComponentId.value = id
-    }
-
-    fun updateThread(
-        index: Int,
-        startMm: Float,
-        lengthMm: Float,
-        majorDiaMm: Float,
-        pitchMm: Float,
-        metricDesignation: String? = null,
-    ) = _spec.update { s ->
-        if (index !in s.threads.indices) s else {
-            val old = s.threads[index]
-            val newLength = max(0f, lengthMm)
-
-            // For excluded threads the start position is always derived from isAftEnd + OAL,
-            // never from a user-authored startMm. Use the same formula as syncExcludedThreadPositions()
-            // so the position is correct inside this single _spec.update call, avoiding a transient
-            // wrong position when manual OAL mode prevents ensureOverall() from re-syncing.
-            val effectiveStart = if (old.excludeFromOAL) {
-                if (old.isAftEnd) -newLength else s.overallLengthMm
-            } else startMm
-
-            s.copy(
-                threads = s.threads.toMutableList().also { l ->
-                    l[index] = old.copy(
-                        startFromAftMm = effectiveStart,
-                        lengthMm = newLength,
-                        majorDiaMm = max(0f, majorDiaMm),
-                        pitchMm = max(0f, pitchMm),
-                        metricDesignation = metricDesignation?.ifBlank { null },
-                    )
-                }
-            )
-        }
-    }.also {
-        if (index in _spec.value.threads.indices) {
-            applyMetricThreadUnit(_spec.value.threads[index].id, metricDesignation)
-            rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
-        }
-        ensureOverall()
-    }
-
-    /**
-     * Keeps a thread's implicit display-unit override in step with its metric designation:
-     * a metric thread pins to mm; clearing the designation drops the pin (back to document
-     * unit), unless the user has since set an explicit override for that id.
-     */
-    /**
-     * Sets (or clears, with null) the unit a component's KEYWAY is authored and printed in.
-     *
-     * Public counterpart of [applyMetricThreadUnit]: both register a display-unit override under a
-     * derived key rather than adding storage, so a metric keyway on an imperial taper travels in
-     * the same `unit_overrides` map as everything else.
-     */
-    fun setKeywayUnit(componentId: String, unit: UnitSystem?) {
-        if (componentId.isBlank()) return
-        applyKeywayUnit(componentId, unit)
-    }
-
-    private fun applyKeywayUnit(componentId: String, unit: UnitSystem?) {
-        val key = keywayUnitKey(componentId)
-        _unitOverrides.update { if (unit == null) it - key else it + (key to unit) }
-    }
-
-    private fun applyMetricThreadUnit(threadId: String, metricDesignation: String?) {
-        if (!metricDesignation.isNullOrBlank()) {
-            _unitOverrides.update { it + (threadId to UnitSystem.MILLIMETERS) }
-        } else {
-            _unitOverrides.update { it - threadId }
-        }
-    }
-
-    fun setThreadExcludeFromOal(id: String, excludeFromOAL: Boolean) = _spec.update { s ->
-        val idx = s.threads.indexOfFirst { it.id == id }
-        if (idx == -1) s
-        else s.copy(
-            threads = s.threads.toMutableList().also { l ->
-                val old = l[idx]
-                l[idx] = old.copy(excludeFromOAL = excludeFromOAL)
-            }
-        ).syncExcludedThreadPositions()
-    }.also { ensureOverall() }
-
-    fun setThreadEndPosition(id: String, isAft: Boolean) = _spec.update { s ->
-        val idx = s.threads.indexOfFirst { it.id == id }
-        if (idx == -1) s
-        else s.copy(
-            threads = s.threads.toMutableList().also { l ->
-                l[idx] = l[idx].copy(isAftEnd = isAft)
-            }
-        ).syncExcludedThreadPositions()
-    }
-
-    /** Remove a [Threads] segment by id. Recoverable via [undoEdit] (spec + order together). */
-    fun removeThread(id: String) {
-        Log.d("ShaftViewModel", "removeThread invoked for id=$id")
-        var removed = false
-
-        _spec.update { s ->
-            val idx = s.threads.indexOfFirst { it.id == id }
-            if (idx < 0) {
-                Log.w(
-                    "ShaftViewModel",
-                    "removeThread: requested id=$id not found. current ids=${s.threads.map { it.id }}"
-                )
-                // NOTE: This should never happen during normal UI usage.
-                return@update s
-            }
-            removed = true
-
-            val thread = s.threads[idx]
-            val afterRemoval = s.copy(threads = s.threads.toMutableList().apply { removeAt(idx) })
-            // Only merge bodies around in-shaft threads; excluded threads live outside the envelope.
-            val merge = if (!thread.excludeFromOAL)
-                afterRemoval.mergeBodiesAround(thread.startFromAftMm, thread.startFromAftMm + thread.lengthMm) { newId() }
-            else BodySplitResult(afterRemoval, emptyList(), emptyList())
-            merge.spec
-        }
-
-        if (removed) {
-            // Maintain coverage and show the undo snackbar.
-            ensureOverall()
-            emitDeletedSnack(ComponentKind.THREAD)
-        }
-    }
-
-    // Liners
-    fun addLinerAt(
-        startMm: Float,
-        lengthMm: Float,
-        odMm: Float,
-        reference: LinerAuthoredReference = LinerAuthoredReference.AFT,
-        // Shoulders ride the add under the add-dialog-parity rule; all-zero = none.
-        shoulderAftLenMm: Float = 0f,
-        shoulderAftOdMm: Float = 0f,
-        shoulderAftRadiusMm: Float = 0f,
-        shoulderFwdLenMm: Float = 0f,
-        shoulderFwdOdMm: Float = 0f,
-        shoulderFwdRadiusMm: Float = 0f,
-    ) {
-        val id = newId()
-        _spec.update { s ->
-            val len = max(0f, lengthMm)
-            val split = s.splitBodiesAround(startMm, startMm + len) { newId() }
-            val od = max(0f, odMm)
-            val liner = Liner(
-                id = id,
-                startFromAftMm = startMm,
-                lengthMm = len,
-                odMm = od,
-                endMmPhysical = startMm + len,
-                authoredReference = reference,
-                shoulderAftLenMm = shoulderAftLenMm,
-                shoulderAftOdMm = shoulderAftOdMm,
-                shoulderAftRadiusMm = shoulderAftRadiusMm,
-                shoulderFwdLenMm = shoulderFwdLenMm,
-                shoulderFwdOdMm = shoulderFwdOdMm,
-                shoulderFwdRadiusMm = shoulderFwdRadiusMm,
-            )
-            split.spec.copy(liners = listOf(liner) + split.spec.liners)
-        }
-        rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
-        ensureOverall()
-        _selectedComponentId.value = id
-    }
-
-    fun updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
-        if (index !in s.liners.indices) s else {
-            val old = s.liners[index]
-            val len = max(0f, lengthMm)
-            val od = max(0f, odMm)
-            s.copy(
-                liners = s.liners.toMutableList().also { l ->
-                    l[index] = old.withPhysical(startMmPhysical = startMm, lengthMm = len, odMm = od)
-                }
-            )
-        }
-    }.also {
-        if (index in _spec.value.liners.indices) {
-            rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
-        }
-        ensureOverall()
-    }
-
-    fun updateLinerAuthoredReference(index: Int, reference: LinerAuthoredReference) = _spec.update { s ->
-        if (index !in s.liners.indices) s else {
-            val old = s.liners[index]
-            if (old.authoredReference == reference) return@update s
-            s.copy(
-                liners = s.liners.toMutableList().also { l ->
-                    l[index] = old.copy(authoredReference = reference)
-                }
-            )
-        }
-    }
-
-    fun updateLinerLabel(index: Int, label: String?) = _spec.update { s ->
-        if (index !in s.liners.indices) s else {
-            val old = s.liners[index]
-            val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
-            if (old.label == normalized) return@update s
-            s.copy(
-                liners = s.liners.toMutableList().also { l ->
-                    l[index] = old.copy(label = normalized)
-                }
-            )
-        }
-    }
-
-    fun updateBodyLabel(index: Int, label: String?) = _spec.update { s ->
-        if (index !in s.bodies.indices) s else {
-            val old = s.bodies[index]
-            val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
-            if (old.label == normalized) return@update s
-            s.copy(
-                bodies = s.bodies.toMutableList().also { l ->
-                    l[index] = old.copy(label = normalized)
-                }
-            )
-        }
-    }
-
-    /**
-     * Show/hide this body's Ø callout on the schematic. Draw-only — no geometry, no value
-     * rewrite. No-ops when the flag already matches so a recomposition can never mark the
-     * document dirty.
-     */
-    fun updateBodyShowDia(index: Int, show: Boolean) = _spec.update { s ->
-        if (index !in s.bodies.indices) s else {
-            val old = s.bodies[index]
-            if (old.showDiaOnDrawing == show) return@update s
-            s.copy(
-                bodies = s.bodies.toMutableList().also { l ->
-                    l[index] = old.copy(showDiaOnDrawing = show)
-                }
-            )
-        }
-    }
-
-    /**
-     * Sets a body's blended faces and their profile.
-     *
-     * Drawing-only: a blend changes the silhouette and nothing else — not OAL, not resolve,
-     * not collision, and no other component's span. The lengths are stored VERBATIM; a value
-     * longer than the body is clamped where it is DRAWN, never here.
-     */
-    fun updateBodyBlend(
-        index: Int,
-        blendAftMm: Float,
-        blendFwdMm: Float,
-        profile: BlendProfile,
-        sealAft: Boolean = false,
-        sealFwd: Boolean = false,
-    ) =
-        _spec.update { s ->
-            if (index !in s.bodies.indices) s else {
-                val old = s.bodies[index]
-                if (old.blendAftMm == blendAftMm &&
-                    old.blendFwdMm == blendFwdMm &&
-                    old.blendProfile == profile &&
-                    old.blendAftSeal == sealAft &&
-                    old.blendFwdSeal == sealFwd
-                ) return@update s
-                s.copy(
-                    bodies = s.bodies.toMutableList().also { l ->
-                        l[index] = old.copy(
-                            blendAftMm = blendAftMm.coerceAtLeast(0f),
-                            blendFwdMm = blendFwdMm.coerceAtLeast(0f),
-                            blendProfile = profile,
-                            blendAftSeal = sealAft,
-                            blendFwdSeal = sealFwd,
-                        )
-                    }
-                )
-            }
-        }
-
-    /**
-     * Sets a blended face on ONE auto-body span, keyed in shaft space by an anchor at the span
-     * midpoint (the [setAutoSectionDiaMm] posture).
-     *
-     * Drawing-only, and it never promotes the span: an auto body stays derived, which is the
-     * point — a blend anchored to the span survives edits that would strand one authored
-     * against a promoted body's fixed boundary. [lengthMm] ≤ 0 clears that face; the value is
-     * stored verbatim and clamped only where it is drawn.
-     */
-    fun setAutoBlend(
-        spanStartMm: Float,
-        spanEndMm: Float,
-        end: LinerAuthoredReference,
-        lengthMm: Float,
-        profile: BlendProfile,
-        seal: Boolean = false,
-    ) = _spec.update { s -> s.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile, seal) }
-
-    /** Liner mirror of [updateBodyShowDia]. */
-    fun updateLinerShowDia(index: Int, show: Boolean) = _spec.update { s ->
-        if (index !in s.liners.indices) s else {
-            val old = s.liners[index]
-            if (old.showDiaOnDrawing == show) return@update s
-            s.copy(
-                liners = s.liners.toMutableList().also { l ->
-                    l[index] = old.copy(showDiaOnDrawing = show)
-                }
-            )
-        }
-    }
-
-    /**
-     * One end's shoulder, stored verbatim (golden rule — no clamp, no snap; the DRAW site
-     * clamps what it cannot express). Zeroed length or Ø means "no shoulder on this end".
-     */
-    fun updateLinerShoulder(
-        index: Int,
-        end: LinerAuthoredReference,
-        lenMm: Float,
-        odMm: Float,
-        radiusMm: Float,
-    ) = _spec.update { s ->
-        if (index !in s.liners.indices) s else {
-            val old = s.liners[index]
-            val new = when (end) {
-                LinerAuthoredReference.AFT -> old.copy(
-                    shoulderAftLenMm = lenMm, shoulderAftOdMm = odMm, shoulderAftRadiusMm = radiusMm)
-                LinerAuthoredReference.FWD -> old.copy(
-                    shoulderFwdLenMm = lenMm, shoulderFwdOdMm = odMm, shoulderFwdRadiusMm = radiusMm)
-            }
-            if (new == old) return@update s
-            s.copy(liners = s.liners.toMutableList().also { l -> l[index] = new })
-        }
-    }
-
-    /**
-     * Show/hide the bare-shaft Ø callout. One flag for every auto span — the shaft between
-     * explicit components is one piece of stock, so it carries one visibility, matching the
-     * single [ShaftSpec.autoBodyDiaMm].
-     */
-    fun setShowAutoBodyDia(show: Boolean) = _spec.update { s ->
-        if (s.showAutoBodyDia == show) s else s.copy(showAutoBodyDia = show)
-    }
-
-    fun updateTaperLabel(index: Int, label: String?) = _spec.update { s ->
-        if (index !in s.tapers.indices) s else {
-            val old = s.tapers[index]
-            val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
-            if (old.label == normalized) return@update s
-            s.copy(
-                tapers = s.tapers.toMutableList().also { l ->
-                    l[index] = old.copy(label = normalized)
-                }
-            )
-        }
-    }
-
-    fun updateThreadLabel(index: Int, label: String?) = _spec.update { s ->
-        if (index !in s.threads.indices) s else {
-            val old = s.threads[index]
-            val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
-            if (old.label == normalized) return@update s
-            s.copy(
-                threads = s.threads.toMutableList().also { l ->
-                    l[index] = old.copy(label = normalized)
-                }
-            )
-        }
-    }
-
-    /** Remove a [Liner] by id. Recoverable via [undoEdit] (spec + order restored together). */
-    fun removeLiner(id: String) {
-        Log.d("ShaftViewModel", "removeLiner invoked for id=$id")
-        var removed = false
-
-        _spec.update { s ->
-            val idx = s.liners.indexOfFirst { it.id == id }
-            if (idx < 0) {
-                Log.w(
-                    "ShaftViewModel",
-                    "removeLiner: requested id=$id not found. current ids=${s.liners.map { it.id }}"
-                )
-                // NOTE: This should never happen during normal UI usage.
-                return@update s
-            }
-            removed = true
-
-            val liner = s.liners[idx]
-            val afterRemoval = s.copy(liners = s.liners.toMutableList().apply { removeAt(idx) })
-            val merge = afterRemoval.mergeBodiesAround(liner.startFromAftMm, liner.startFromAftMm + liner.lengthMm) { newId() }
-            merge.spec
-        }
-
-        if (removed) {
-            ensureOverall()
-            emitDeletedSnack(ComponentKind.LINER)
-        }
-    }
-
-    // ────────────────────────────────────────────────────────────────────────────
-    // Coupler bolt slots — reference cutouts. No body-splitting, no OAL impact,
-    // no collision. Add/update/remove mirror the other component trios.
-    // ────────────────────────────────────────────────────────────────────────────
-
-    fun addCouplerBoltSlotAt(
-        startMm: Float,
-        holeDiaMm: Float,
-        count: Int,
-        spacingMm: Float,
-        through: Boolean = true,
-        depthMm: Float = 0f,
-        reference: SlotAuthoredReference = SlotAuthoredReference.FWD,
-    ) {
-        val id = newId()
-        _spec.update { s ->
-            val slot = CouplerBoltSlot(
-                id = id,
-                startFromAftMm = max(0f, startMm),
-                holeDiaMm = max(0f, holeDiaMm),
-                count = count.coerceAtLeast(1),
-                spacingMm = max(0f, spacingMm),
-                through = through,
-                depthMm = max(0f, depthMm),
-                authoredReference = reference,
-            )
-            // Newest-on-top, like the other component lists.
-            s.copy(couplerBoltSlots = listOf(slot) + s.couplerBoltSlots)
-        }
-        rememberSlotDefaults(holeDiaMm = holeDiaMm, spacingMm = spacingMm, depthMm = depthMm, count = count)
-        // NOTE: deliberately no ensureOverall() — slots never drive OAL.
-        _selectedComponentId.value = id
-    }
-
-    fun updateCouplerBoltSlot(
-        index: Int,
-        startMm: Float,
-        holeDiaMm: Float,
-        count: Int,
-        spacingMm: Float,
-        through: Boolean,
-        depthMm: Float,
-    ) = _spec.update { s ->
-        if (index !in s.couplerBoltSlots.indices) s else {
-            val old = s.couplerBoltSlots[index]
-            s.copy(
-                couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
-                    l[index] = old.copy(
-                        startFromAftMm = max(0f, startMm),
-                        holeDiaMm = max(0f, holeDiaMm),
-                        count = count.coerceAtLeast(1),
-                        spacingMm = max(0f, spacingMm),
-                        through = through,
-                        depthMm = max(0f, depthMm),
-                    )
-                }
-            )
-        }
-    }.also {
-        if (index in _spec.value.couplerBoltSlots.indices) {
-            rememberSlotDefaults(holeDiaMm = holeDiaMm, spacingMm = spacingMm, depthMm = depthMm, count = count)
-        }
-    }
-
-    fun updateCouplerBoltSlotReference(index: Int, reference: SlotAuthoredReference) = _spec.update { s ->
-        if (index !in s.couplerBoltSlots.indices) s else {
-            val old = s.couplerBoltSlots[index]
-            if (old.authoredReference == reference) return@update s
-            s.copy(
-                couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
-                    l[index] = old.copy(authoredReference = reference)
-                }
-            )
-        }
-    }
-
-    fun updateCouplerBoltSlotShowRail(index: Int, show: Boolean) = _spec.update { s ->
-        if (index !in s.couplerBoltSlots.indices) s else {
-            val old = s.couplerBoltSlots[index]
-            if (old.showDimensionRail == show) return@update s
-            s.copy(
-                couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
-                    l[index] = old.copy(showDimensionRail = show)
-                }
-            )
-        }
-    }
-
-    /** Remove a [CouplerBoltSlot] by id. Recoverable via [undoEdit] (spec + order together). */
-    fun removeCouplerBoltSlot(id: String) {
-        var removed = false
-
-        _spec.update { s ->
-            val idx = s.couplerBoltSlots.indexOfFirst { it.id == id }
-            if (idx < 0) return@update s
-            removed = true
-            // No body merge needed — slots never split bodies.
-            s.copy(couplerBoltSlots = s.couplerBoltSlots.toMutableList().apply { removeAt(idx) })
-        }
-
-        if (removed) {
-            // Slots never affect OAL, so no ensureOverall() here.
-            emitDeletedSnack(ComponentKind.COUPLER_BOLT_SLOT)
-        }
-    }
-
-    private fun rememberSlotDefaults(holeDiaMm: Float, spacingMm: Float, depthMm: Float, count: Int) {
-        _sessionAddDefaults.update { cur ->
-            cur.copy(
-                slotHoleDiaMm = if (holeDiaMm > 0f) holeDiaMm else cur.slotHoleDiaMm,
-                slotSpacingMm = if (spacingMm > 0f) spacingMm else cur.slotSpacingMm,
-                slotDepthMm = if (depthMm > 0f) depthMm else cur.slotDepthMm,
-                slotCount = if (count >= 1) count else cur.slotCount,
-            )
-        }
-    }
-
-    // ────────────────────────────────────────────────────────────────────────────
     // Explicit snap helpers — never called automatically; only on user request
     // ────────────────────────────────────────────────────────────────────────────
 
-    private fun newId(): String = UUID.randomUUID().toString()
+    internal fun newId(): String = UUID.randomUUID().toString()
 
-    // ────────────────────────────────────────────────────────────────────────────
-    // Persistence — versioned JSON document (UI wires it to SAF)
-    // ────────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Re-seeds bundled samples into the internal Saved list (Settings action).
-     * Safe: never overwrites existing docs; collisions create suffixed duplicates.
-     */
-    fun restoreSampleShafts() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val app = getApplication<Application>()
-
-            val report = runCatching {
-                InternalStorage.seedBundledSamples(app, SettingsStore, force = true)
-            }.getOrElse {
-                _uiEvents.emit(UiEvent.ShowSnackbarMessage("Restore sample shafts failed"))
-                return@launch
-            }
-
-            val msg = when {
-                report.savedCount > 0 -> "Restored sample shafts: +${report.savedCount}"
-                report.attemptedCount == 0 -> "No bundled sample shafts found"
-                else -> "Sample shafts already present"
-            }
-
-            _uiEvents.emit(UiEvent.ShowSnackbarMessage(msg))
-        }
-    }
-
-    /**
-     * Writes every saved shaft into a single zip at the SAF-picked [uri]
-     * (Settings → "Back up all shafts…"). Result is reported via snackbar.
-     */
-    fun backupAllShaftsTo(uri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val app = getApplication<Application>()
-            val result = runCatching {
-                val docs = InternalStorage.list(app).mapNotNull { name ->
-                    runCatching { name to InternalStorage.load(app, name) }.getOrNull()
-                }
-                app.contentResolver.openOutputStream(uri)?.use { out ->
-                    ShaftBackup.writeZip(
-                        out = out,
-                        docs = docs,
-                        manifest = ShaftBackup.Manifest(
-                            appVersion = BuildConfig.VERSION_NAME,
-                            docFormatVersion = ShaftDocCodec.CURRENT_VERSION,
-                            createdEpochMs = System.currentTimeMillis(),
-                            documentCount = docs.size,
-                        ),
-                    )
-                } ?: error("Could not open the selected location")
-                docs.size
-            }
-
-            val msg = result.fold(
-                onSuccess = { count ->
-                    if (count > 0) "Backed up $count shaft${if (count == 1) "" else "s"}"
-                    else "Backup written, but there were no saved shafts"
-                },
-                onFailure = {
-                    VerboseLog.e(VerboseLog.Category.IO, "ShaftBackup") { "backup failed: ${it.message}" }
-                    "Backup failed — could not write the file"
-                },
-            )
-            _uiEvents.emit(UiEvent.ShowSnackbarMessage(msg))
-        }
-    }
-
-    /**
-     * Restores shafts from a backup zip at the SAF-picked [uri]
-     * (Settings → "Restore from backup…"). Never overwrites: identical docs are
-     * skipped, name collisions are saved as "<name> (restored)".
-     */
-    fun restoreShaftsFromBackup(uri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val app = getApplication<Application>()
-            val result = runCatching {
-                val contents = app.contentResolver.openInputStream(uri)?.use { input ->
-                    ShaftBackup.readZip(input)
-                } ?: error("Could not open the selected file")
-
-                if (contents.docs.isEmpty()) return@runCatching null
-
-                ShaftBackup.restoreInto(
-                    dir = InternalStorage.dir(app.filesDir),
-                    docs = contents.docs,
-                ) { raw -> runCatching { ShaftDocCodec.decode(raw) }.isSuccess }
-            }
-
-            val msg = result.fold(
-                onSuccess = { report ->
-                    when {
-                        report == null -> "No shaft files found in that backup"
-                        else -> buildString {
-                            val added = report.restoredCount + report.renamedCount
-                            append("Restored $added shaft${if (added == 1) "" else "s"}")
-                            if (report.renamedCount > 0) append(" (${report.renamedCount} renamed)")
-                            if (report.skippedIdenticalCount > 0) append(", ${report.skippedIdenticalCount} already present")
-                            if (report.failedCount > 0) append(", ${report.failedCount} unreadable")
-                        }
-                    }
-                },
-                onFailure = {
-                    VerboseLog.e(VerboseLog.Category.IO, "ShaftBackup") { "restore failed: ${it.message}" }
-                    "Restore failed — could not read the file"
-                },
-            )
-            _uiEvents.emit(UiEvent.ShowSnackbarMessage(msg))
-        }
-    }
-
-    /** Export the current state as a JSON string (mm spec + unit metadata + runout config). */
-    fun exportJson(): String = ShaftDocCodec.encodeV1(
-        ShaftDocCodec.ShaftDocV1(
-            preferredUnit = _unit.value,
-            unitLocked = _unitLocked.value,
-            jobNumber = _jobNumber.value,
-            customer = _customer.value,
-            vessel = _vessel.value,
-            shaftPosition = _shaftPosition.value,
-            notes = _notes.value,
-            spec = _spec.value,
-            runoutConfig = _runoutConfig.value,
-            wearRecord = _wearRecord.value,
-            runoutReadings = _runoutReadings.value,
-            runoutStationPlacements = _runoutStationPlacements.value,
-            undercutRecord = _undercutRecord.value,
-            unitOverrides = _unitOverrides.value,
-            dualUnits = _dualUnits.value,
-            // station_interval_version is stamped by encodeV1 itself — see its KDoc.
-        )
-    )
-
-    /**
-     * Encode the current drawing as a reusable **template**: geometry only.
-     *
-     * Everything that identifies a job or records a measurement is dropped here, at WRITE
-     * time, so the stored file itself is clean — job number, customer, vessel, shaft position,
-     * notes, and the wear / runout / undercut records. Scrubbing only on load would leave a
-     * customer's name sitting in the template file, to be carried into every drawing built
-     * from it (and into any copy of that file). The per-job sheet tuning in [RunoutConfig]
-     * (shaft height, liner compression) resets too — it is tuned per document, not per shaft
-     * family.
-     *
-     * The unit and unit-lock DO travel: they describe how the geometry is authored, not whose
-     * job it is. Per-component unit overrides travel for the same reason (which features are
-     * metric is an authoring fact); the per-job dual-display flag does not.
-     */
-    fun exportTemplateJson(): String = ShaftDocCodec.encodeV1(
-        ShaftDocCodec.ShaftDocV1(
-            preferredUnit = _unit.value,
-            unitLocked = _unitLocked.value,
-            spec = _spec.value,
-            unitOverrides = _unitOverrides.value,
-        )
-    )
-
-    /**
-     * Start a new document from a template.
-     *
-     * Differs from [importJson] in two deliberate ways:
-     *  - **No identity is adopted.** Job metadata and measurement records are cleared even if
-     *    the file carries them (belt-and-braces against a template authored before
-     *    [exportTemplateJson] scrubbed on write, or one hand-copied into the folder).
-     *  - **The session starts dirty, with no filename.** [importJson] ends by marking the
-     *    document saved; doing that here would leave a loaded template counting as "no unsaved
-     *    work", so quitting would lose it — the draft ring only protects a session it can see
-     *    as dirty, and a template-loaded session is not blank. The null filename means the
-     *    first Save prompts for a name, so a template can never be overwritten by the drawing
-     *    made from it.
-     *
-     * Component ids are kept as-is: ids never cross document boundaries (wear, runout and
-     * undercut records key within one document), so two drawings from one template sharing ids
-     * is harmless.
-     */
-    fun applyTemplate(raw: String) {
-        val decoded = runCatching { ShaftDocCodec.decode(raw) }.getOrElse { throw it }
-
-        _editorResetNonce.update { it + 1 }
-        clearEditHistory()
-        currentDraftId = UUID.randomUUID().toString()
-        draftPersisted = false
-        _selectedComponentId.value = null
-
-        _spec.value = decoded.spec
-        seedSessionAddDefaultsFromSpec(decoded.spec)
-
-        _unitLocked.value = decoded.unitLocked
-        decoded.preferredUnit?.let { setUnit(it, persist = false) }
-
-        // A template is geometry, not a job.
-        _jobNumber.value = ""
-        _customer.value = ""
-        _vessel.value = ""
-        _shaftPosition.value = ShaftPosition.OTHER
-        _notes.value = ""
-        _runoutConfig.value = RunoutConfig()
-        _wearRecord.value = WearRecord()
-        _runoutReadings.value = RunoutReadings()
-        _runoutStationPlacements.value = RunoutStationPlacements()
-        _undercutRecord.value = UndercutRecord()
-        // Overrides describe authoring and travel with the template; dual is per-job.
-        _unitOverrides.value = decoded.unitOverrides
-        _dualUnits.value = false
-
-        _overallIsManual.value = decoded.spec.oalIsManualOnLoad()
-
-        // Deliberately NOT markDocumentSaved() — see the KDoc. The baseline stays where it
-        // was, so the session reads as unsaved work and autosave keeps a draft of it.
-        _currentDocumentName.value = null
-    }
-
-    /**
-     * Import a JSON string and replace current state.
-     * Tries envelope first, then falls back to legacy (spec-only) files.
-     * Seeds/repairs UI order to reflect loaded spec.
-     */
-    fun importJson(raw: String) {
-        val decoded = runCatching { ShaftDocCodec.decode(raw) }.getOrElse { throw it }
-
-        clearEditHistory()
-        // Each open is a fresh draft identity so this document's autosave upserts its own entry
-        // and cannot touch another document's draft. markDocumentSaved() below reseats the
-        // dirty-gate baseline to the just-loaded state (clean → no draft until edited).
-        currentDraftId = UUID.randomUUID().toString()
-        draftPersisted = false
-        // Session boundary: drop the previous document's selection (stale id = orphaned
-        // highlight); the carousel's seed effect reselects the last row of this document.
-        _selectedComponentId.value = null
-        _spec.value = decoded.spec
-        seedSessionAddDefaultsFromSpec(decoded.spec)
-
-        _unitLocked.value = decoded.unitLocked
-        decoded.preferredUnit?.let { setUnit(it, persist = false) }
-
-        _jobNumber.value = decoded.jobNumber
-        _customer.value = decoded.customer
-        _vessel.value = decoded.vessel
-        _shaftPosition.value = decoded.shaftPosition
-        _notes.value = decoded.notes
-        _runoutConfig.value = decoded.runoutConfig
-        // Already orphan-filtered against decoded.spec.liners inside ShaftDocCodec.decode().
-        _wearRecord.value = decoded.wearRecord
-        _runoutReadings.value = decoded.runoutReadings
-        _runoutStationPlacements.value = decoded.runoutStationPlacements
-        _undercutRecord.value = decoded.undercutRecord
-        _unitOverrides.value = decoded.unitOverrides
-        _dualUnits.value = decoded.dualUnits
-
-        // Derive OAL mode from the document instead of leaking the previous session's
-        // flag: an authored OAL must be treated as manual, or the auto path would snap it
-        // back down to the content end on open — and with it drop a leading auto span.
-        // See [oalIsManualOnLoad] for the two signals.
-        _overallIsManual.value = decoded.spec.oalIsManualOnLoad()
-
-        markDocumentSaved()
-    }
-
-    /**
-     * Reset the editor to a new blank document.
-     *
-     * Contract:
-     * - Uses the same defaults as the app's start/new flow (blank spec, empty metadata).
-     * - Clears undo/redo history and resets cross-type component order.
-     */
-    fun newDocument() {
-        _editorResetNonce.update { it + 1 }
-        clearEditHistory()
-        // Fresh draft identity for the new blank session; markDocumentSaved() below reseats the
-        // dirty-gate baseline to blank (clean → no draft until edited).
-        currentDraftId = UUID.randomUUID().toString()
-        draftPersisted = false
-
-        resetSessionAddDefaults()
-
-        // Session boundary: no selection carries into a blank document (stale id would be
-        // an orphaned highlight).
-        _selectedComponentId.value = null
-
-        val blankSpec = ShaftSpec()
-        _spec.value = blankSpec
-
-        // Mirror envelope defaults used by the existing start/new seed path.
-        _unitLocked.value = true
-        setUnit(UnitSystem.INCHES, persist = false)
-
-        _jobNumber.value = ""
-        _customer.value = ""
-        _vessel.value = ""
-        _shaftPosition.value = ShaftPosition.OTHER
-        _runoutConfig.value = RunoutConfig()
-        _wearRecord.value = WearRecord()
-        _runoutReadings.value = RunoutReadings()
-        _runoutStationPlacements.value = RunoutStationPlacements()
-        _undercutRecord.value = UndercutRecord()
-        _unitOverrides.value = emptyMap()
-        _dualUnits.value = false
-        _notes.value = ""
-        _overallIsManual.value = false
-
-        _currentDocumentName.value = null
-        markDocumentSaved()
-    }
-
-    private fun resetSessionAddDefaults() {
+    internal fun resetSessionAddDefaults() {
         _sessionAddDefaults.value = SessionAddDefaults.initial()
     }
 
-    private fun seedSessionAddDefaultsFromSpec(spec: ShaftSpec) {
+    internal fun seedSessionAddDefaultsFromSpec(spec: ShaftSpec) {
         val base = SessionAddDefaults.initial()
         val newestBody = spec.bodies.firstOrNull { it.lengthMm > 0f || it.diaMm > 0f }
         val newestLiner = spec.liners.firstOrNull { it.lengthMm > 0f || it.odMm > 0f }
@@ -3007,7 +1245,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun rememberBodyDefaults(lengthMm: Float, diaMm: Float) {
+    internal fun rememberBodyDefaults(lengthMm: Float, diaMm: Float) {
         _sessionAddDefaults.update { cur ->
             cur.copy(
                 bodyLenMm = if (lengthMm > 0f) lengthMm else cur.bodyLenMm,
@@ -3016,7 +1254,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun rememberLinerDefaults(lengthMm: Float, odMm: Float) {
+    internal fun rememberLinerDefaults(lengthMm: Float, odMm: Float) {
         _sessionAddDefaults.update { cur ->
             cur.copy(
                 linerLenMm = if (lengthMm > 0f) lengthMm else cur.linerLenMm,
@@ -3025,7 +1263,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun rememberTaperDefaults(lengthMm: Float, setDiaMm: Float, letDiaMm: Float) {
+    internal fun rememberTaperDefaults(lengthMm: Float, setDiaMm: Float, letDiaMm: Float) {
         _sessionAddDefaults.update { cur ->
             cur.copy(
                 taperLenMm = if (lengthMm > 0f) lengthMm else cur.taperLenMm,
@@ -3035,7 +1273,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun rememberThreadDefaults(lengthMm: Float, majorDiaMm: Float, pitchMm: Float) {
+    internal fun rememberThreadDefaults(lengthMm: Float, majorDiaMm: Float, pitchMm: Float) {
         _sessionAddDefaults.update { cur ->
             cur.copy(
                 threadLenMm = if (lengthMm > 0f) lengthMm else cur.threadLenMm,
@@ -3045,12 +1283,23 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    internal fun rememberSlotDefaults(holeDiaMm: Float, spacingMm: Float, depthMm: Float, count: Int) {
+        _sessionAddDefaults.update { cur ->
+            cur.copy(
+                slotHoleDiaMm = if (holeDiaMm > 0f) holeDiaMm else cur.slotHoleDiaMm,
+                slotSpacingMm = if (spacingMm > 0f) spacingMm else cur.slotSpacingMm,
+                slotDepthMm = if (depthMm > 0f) depthMm else cur.slotDepthMm,
+                slotCount = if (count >= 1) count else cur.slotCount,
+            )
+        }
+    }
+
     // ────────────────────────────────────────────────────────────────────────────
     // Private helpers
     // ────────────────────────────────────────────────────────────────────────────
 
     /** Emits a deletion snackbar request for the given [ComponentKind]. */
-    private fun emitDeletedSnack(kind: ComponentKind) {
+    internal fun emitDeletedSnack(kind: ComponentKind) {
         viewModelScope.launch {
             _uiEvents.emit(UiEvent.ShowDeletedSnack(kind))
         }

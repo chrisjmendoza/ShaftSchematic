@@ -519,7 +519,7 @@ undercut; all on by default) written to one picked folder (`OpenDocumentTree` +
 `createPdfInTree`), each through the hardened write path, with a written/failed result
 line. Nothing auto-opens after a batch.
 
-**The consolidated preview's Tune sheet** (`RunoutWearOptionsSheet`, `ui/screen/RunoutRoute.kt`)
+**The consolidated preview's Tune sheet** (`RunoutWearOptionsSheet`, `ui/screen/PdfPreviewOverlay.kt`)
 hosts, in order: Blank draft (write-in) — this tab's own toggle, shown here too so the
 sheet can be judged live — Line thickness, Body S-break, the **"Shaft height" slider** and
 the **liner compression** control (§5.7, the same per-job `RunoutConfig` values as the

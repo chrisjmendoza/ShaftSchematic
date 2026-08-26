@@ -11,12 +11,18 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 - `geom/UndercutMath.kt` — conversion pair, validators, cluster windows, liner strips
   (`UndercutStrip`), hit-tests, constants
 - `geom/SurfaceProfileMath.kt` — `SurfaceSeg`, outer-surface envelope, notch-profile geometry
+- `geom/UndercutOverlayMath.kt` — the pure share between the tab and the overlay: reference
+  resolution (`effectiveUndercutReference`, `undercutReferenceLinerFor`,
+  `undercutDisplayedDistanceMm`, `undercutReferenceLabel`), the notch build pipeline
+  (`UndercutNotch`, `buildUndercutNotches`), and `undercutSetPositions`
 - `ui/resolved/SurfaceSegs.kt` — the one `resolvedComponents → SurfaceSeg` mapping every draw
   site shares
 - `ui/screen/UndercutRoute.kt` — the tab: overview canvas, "Add undercut", blank-draft toggle,
   preview/print/export
 - `ui/screen/UndercutDetail.kt` — `UndercutWindowDetailOverlay`, the full-screen zoomed window +
   cards
+- `ui/screen/UndercutSharedDraw.kt` — what the tab and the overlay share but `geom/` cannot
+  hold: the notch draw pass (`DrawScope.drawUndercutNotches`) and `linerSpansOf`
 - `pdf/UndercutStripLayout.kt` — android-free pure layout for the PDF's per-cluster strips
 - `pdf/UndercutPdfComposer.kt` — the document composer (`composeUndercutPdf`)
 
@@ -105,7 +111,7 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   undercut still lives in shaft space and renders wherever it is regardless of this liner). If
   that liner is later deleted, the Distance field falls back to the `AFT_SET` projection for
   display (canonical untouched, and the stored reference is never rewritten behind the
-  machinist's back — `effectiveUndercutReference` in `UndercutDetail.kt`). Empty for
+  machinist's back — `effectiveUndercutReference` in `geom/UndercutOverlayMath.kt`). Empty for
   SET-authored undercuts. Selecting a SET chip clears it back to `""`.
 - **Back-compat**: `LINER_AFT`/`LINER_FWD` are additive enum values (added this iteration) — a
   document that uses one will not decode in an app build that predates them, the same rule

@@ -175,7 +175,8 @@ shop convention and never carried a fraction.
 - `pdf/ShaftPdfComposer.kt` — footer spec lines (`drawFooterLine`). The free-text job fields
   above them stay plain; see §2.
 - `pdf/RunoutPdfComposer.kt` — the OAL rail.
-- `pdf/WearPdfComposer.kt` — strip rails, strip anchor titles, and the OAL rail.
+- `pdf/WearPdfComposer.kt` — the OAL rail.
+- `pdf/WearPdfComposerStrip.kt` — strip rails and strip anchor titles.
 - `pdf/UndercutPdfComposer.kt` — strip rails, strip anchor titles, the OAL rail.
 - `ui/screen/LinerWearDetail.kt`, `ui/screen/UndercutDetail.kt` — the on-screen sheets' dim
   segments, so the preview and the paper construct a fraction the same way.

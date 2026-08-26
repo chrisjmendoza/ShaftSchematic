@@ -101,7 +101,7 @@ Features:
 
 **Rule:** Manual body components promote over auto bodies in any overlapping span. This
 promotion is live today: the carousel's auto-body card promotes ONLY when the user ticks its
-**"Explicit body"** checkbox (`ComponentCarousel.kt` calls `onAddBody(...)`), persisting the
+**"Explicit body"** checkbox (`BodyPagerCard.kt` calls `onAddBody(...)`), persisting the
 section as a real `Body` in `ShaftSpec`. There is no field-edit promotion path — the card's
 editable Ø writes a per-section `AutoDiaOverride` without promoting; viewing the card never
 promotes it.

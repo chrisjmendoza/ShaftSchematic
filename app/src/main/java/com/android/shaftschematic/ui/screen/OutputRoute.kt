@@ -79,6 +79,17 @@ import com.android.shaftschematic.ui.nav.appVersionFromContext
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.addRunoutStation
+import com.android.shaftschematic.ui.viewmodel.addWornSection
+import com.android.shaftschematic.ui.viewmodel.removeRunoutStation
+import com.android.shaftschematic.ui.viewmodel.removeWornSection
+import com.android.shaftschematic.ui.viewmodel.resetAllRunoutStationPositions
+import com.android.shaftschematic.ui.viewmodel.resetRunoutStationPositions
+import com.android.shaftschematic.ui.viewmodel.setLinerCompression
+import com.android.shaftschematic.ui.viewmodel.setLinersProportional
+import com.android.shaftschematic.ui.viewmodel.setRunoutHeightScale
+import com.android.shaftschematic.ui.viewmodel.updateWornSection
+import com.android.shaftschematic.ui.viewmodel.updateWornSectionReference
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle

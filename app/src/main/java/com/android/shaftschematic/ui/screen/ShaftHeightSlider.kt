@@ -53,6 +53,7 @@ import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MAX_MM
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MIN_MM
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.setPdfWearTraceDepthFrac
+import com.android.shaftschematic.ui.viewmodel.setWearTraceDepthFrac
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.LengthFormat

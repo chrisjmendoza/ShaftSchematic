@@ -40,6 +40,9 @@ import com.android.shaftschematic.template.TemplateSizeBucket
 import com.android.shaftschematic.template.templateLinerCount
 import com.android.shaftschematic.template.templateSizeBucket
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.exportJson
+import com.android.shaftschematic.ui.viewmodel.exportTemplateJson
+import com.android.shaftschematic.ui.viewmodel.importJson
 import com.android.shaftschematic.ui.viewmodel.unlockAchievement
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import com.android.shaftschematic.util.Achievements

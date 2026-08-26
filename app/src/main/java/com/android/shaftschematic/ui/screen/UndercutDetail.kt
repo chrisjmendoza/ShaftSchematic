@@ -71,32 +71,27 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.DiaCalloutStation
-import com.android.shaftschematic.geom.NotchProfile
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
-import com.android.shaftschematic.geom.assignUndercutLiner
+import com.android.shaftschematic.geom.buildUndercutNotches
 import com.android.shaftschematic.geom.canonicalToUndercutStartMm
 import com.android.shaftschematic.geom.clampUndercutSpan
-import com.android.shaftschematic.geom.computeOalWindow
-import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
-import com.android.shaftschematic.geom.deepestUndercutDepthMm
-import com.android.shaftschematic.geom.effectiveNotchDiaMm
+import com.android.shaftschematic.geom.effectiveUndercutReference
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
-import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
-import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.minOuterDiaOver
 import com.android.shaftschematic.geom.nearestSetReference
-import com.android.shaftschematic.geom.normalizedNotchFloorDiaMm
-import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.undercutCanonicalForNewLength
 import com.android.shaftschematic.geom.undercutOverlapIssue
 import com.android.shaftschematic.geom.undercutPreviewDrawRange
+import com.android.shaftschematic.geom.undercutReferenceLabel
+import com.android.shaftschematic.geom.undercutReferenceLinerFor
+import com.android.shaftschematic.geom.undercutSetPositions
 import com.android.shaftschematic.geom.undercutSpanIssue
 import com.android.shaftschematic.geom.undercutStartToCanonicalMm
 import com.android.shaftschematic.model.ShaftSpec
@@ -1565,88 +1560,6 @@ private fun UndercutWarning(text: String) {
     }
 }
 
-/** Chip labels for [UndercutReference], used in the Distance field's dynamic label. */
-internal fun undercutReferenceLabel(reference: UndercutReference): String = when (reference) {
-    UndercutReference.AFT_SET -> "AFT S.E.T."
-    UndercutReference.FWD_SET -> "FWD S.E.T."
-    UndercutReference.LINER_AFT -> "Liner AFT"
-    UndercutReference.LINER_FWD -> "Liner FWD"
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Liner references — shared by the overlay's cards and the route's undercut list
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Every resolved liner as an [UndercutLinerSpan], aft → fwd — the liner-reference pool. */
-internal fun linerSpansOf(resolvedComponents: List<ResolvedComponent>): List<UndercutLinerSpan> =
-    resolvedComponents
-        .filterIsInstance<ResolvedLiner>()
-        .sortedBy { it.startMmPhysical }
-        .map { UndercutLinerSpan(it.id, it.startMmPhysical, it.endMmPhysical) }
-
-/**
- * The reference actually used to display/convert an undercut's Distance. A `LINER_*` reference
- * whose [Undercut.referenceLinerId] no longer resolves falls back to
- * [UndercutReference.AFT_SET] — the model's documented display rule. Canonical storage is never
- * touched by the fallback, and the stored reference is never rewritten behind the machinist's
- * back; the card just shows the AFT S.E.T. chip selected until a reference is picked again.
- */
-internal fun effectiveUndercutReference(
-    undercut: Undercut,
-    linerSpans: List<UndercutLinerSpan>,
-): UndercutReference =
-    if (undercut.authoredReference == UndercutReference.LINER_AFT ||
-        undercut.authoredReference == UndercutReference.LINER_FWD
-    ) {
-        if (linerSpans.any { it.id == undercut.referenceLinerId }) undercut.authoredReference
-        else UndercutReference.AFT_SET
-    } else {
-        undercut.authoredReference
-    }
-
-/**
- * The liner an undercut's `LINER_*` chips convert against, or `null` when no liner is available
- * (the chips are then hidden). Preference order: the undercut's own stored reference liner while
- * it resolves, then the liner of the strip being viewed, then the liner holding the largest share
- * of the cut ([assignUndercutLiner]). The stored liner wins so a cut authored against one liner
- * keeps reading against it even while viewed from a neighbor's strip.
- */
-internal fun undercutReferenceLinerFor(
-    undercut: Undercut,
-    linerSpans: List<UndercutLinerSpan>,
-    stripLiner: UndercutLinerSpan?,
-    oalMm: Float,
-): UndercutLinerSpan? {
-    linerSpans.firstOrNull { it.id == undercut.referenceLinerId }?.let { return it }
-    stripLiner?.let { return it }
-    val clamped = clampUndercutSpan(undercut.startFromAftMm, undercut.lengthMm, oalMm)
-    if (clamped.isEmpty) return null
-    val assignedId = assignUndercutLiner(
-        UndercutSpanMm(undercut.id, clamped.startMm, clamped.endMm), linerSpans,
-    ) ?: return null
-    return linerSpans.firstOrNull { it.id == assignedId }
-}
-
-/**
- * The Distance an undercut reads under its effective reference, in canonical mm — the value the
- * card's field shows and the route's list row summarizes, so the two never disagree.
- */
-internal fun undercutDisplayedDistanceMm(
-    undercut: Undercut,
-    reference: UndercutReference,
-    refLiner: UndercutLinerSpan?,
-    aftSetXMm: Float,
-    fwdSetXMm: Float,
-): Float = canonicalToUndercutStartMm(
-    reference = reference,
-    canonicalStartMm = undercut.startFromAftMm,
-    lengthMm = undercut.lengthMm,
-    aftSetXMm = aftSetXMm,
-    fwdSetXMm = fwdSetXMm,
-    linerStartMm = refLiner?.startMm ?: 0f,
-    linerEndMm = refLiner?.endMm ?: 0f,
-)
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Window geometry (shared by the Canvas renderer and the tap handler)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1712,155 +1625,6 @@ internal fun componentDiaAt(rc: ResolvedComponent, xMm: Float): Float = when (rc
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Notch pipeline — shared by the overview canvas and the detail overlay
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * One undercut's drawable notch: its render-clamped span, the **drawn** floor Ø
- * ([normalizedNotchFloorDiaMm] over [effectiveNotchDiaMm] — drawn depth is exaggerated
- * against the sheet's deepest cut so a 1/16" cut still reads as a cut; a placed-but-empty Ø
- * gets a symbolic shallow floor first), and the surface-relative regions from
- * `geom/SurfaceProfileMath.kt`.
- */
-internal data class UndercutNotch(
-    val id: String,
-    val startMm: Float,
-    val endMm: Float,
-    val floorDiaMm: Float,
-    val profiles: List<NotchProfile>,
-)
-
-/**
- * Build every drawable notch for [undercuts] against the local outer surface [segs]. The single
- * pipeline behind both draw sites (this overlay's canvas and the undercut PDF), so the notch a
- * machinist taps on screen is the notch that prints.
- *
- * Regions come from `notchProfiles` at the TRUE effective floor (topology stays honest — a
- * cut that never reached the neighboring body must not draw into it); only the floor Ø on
- * the returned profiles is then swapped for the display-exaggerated one, deepening the
- * drawn floor and shoulders. Printed/stored Ø values are untouched.
- *
- * [exaggerationFrac] is the sheet's drawn-depth setting
- * ([com.android.shaftschematic.model.UndercutRecord.exaggerationFrac]) and
- * [sheetUndercuts] is the WHOLE sheet's cut list — the normalization reference
- * ([deepestUndercutDepthMm]) is per sheet, not per strip, so a strip holding only shallow
- * cuts draws them at the same reduced depth the full drawing gives them. It defaults to
- * [undercuts] for callers that already pass the whole sheet.
- */
-internal fun buildUndercutNotches(
-    undercuts: List<Undercut>,
-    segs: List<SurfaceSeg>,
-    oalMm: Float,
-    exaggerationFrac: Float,
-    sheetUndercuts: List<Undercut> = undercuts,
-): List<UndercutNotch> {
-    val deepest = deepestUndercutDepthMm(sheetUndercuts, segs, oalMm)
-    return undercuts.mapNotNull { u ->
-        val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
-        if (c.isEmpty) return@mapNotNull null
-        val minSurface = minOuterDiaOver(segs, c.startMm, c.endMm)
-        val floor = effectiveNotchDiaMm(u.diaMm, minSurface)
-        val drawnFloor = normalizedNotchFloorDiaMm(u.diaMm, minSurface, deepest, exaggerationFrac)
-        UndercutNotch(
-            id = u.id,
-            startMm = c.startMm,
-            endMm = c.endMm,
-            floorDiaMm = drawnFloor,
-            profiles = notchProfiles(segs, c.startMm, c.endMm, floor)
-                .map { it.copy(floorDiaMm = drawnFloor) },
-        )
-    }.sortedBy { it.startMm }
-}
-
-/**
- * Draw notches as **steps in the silhouette**: [voidColor] fill from the local surface down to
- * the floor (mirrored about the centreline), erasing the profile strokes inside the cut — the
- * mouth stays OPEN at the surface, never closed by a lid — then the outline: a full-height
- * **section face** at each region end (top surface to bottom surface, like any machined
- * diameter step, only where that end's surface stands above the floor) and the floor lines
- * across the span. Each cut reads as its own reduced-Ø rectangle section between two faces —
- * the hand-sketch convention (on-device report: a lid along the surface read as a white box
- * pasted ON the liner instead of material removed FROM it). Coordinate mapping is supplied by
- * the caller ([xPx]/[rPx]) so the overview canvas and the zoomed window run the same
- * construction at their own scales.
- */
-internal fun DrawScope.drawUndercutNotches(
-    notches: List<UndercutNotch>,
-    xPx: (Float) -> Float,
-    rPx: (Float) -> Float,
-    cy: Float,
-    voidColor: Color,
-    outlineColor: Color,
-    strokeWidthPx: Float,
-    // Section-core refill — one step lighter than the caller's liner shade (see
-    // UndercutStyle). Transparent in line-art mode, which leaves the core sheet-white.
-    sectionFillColor: Color = Color.Black.copy(alpha = UNDERCUT_SECTION_FILL_ALPHA),
-    // Dashed shoulders/floor mark a DRAFT notch (provisional, not yet in the record) —
-    // the overlay passes a dash + a status color (primary while valid, error while its
-    // confirm check fails); settled notches and the overview pass neither.
-    pathEffect: PathEffect? = null,
-) {
-    notches.forEach { n ->
-        n.profiles.forEach { p ->
-            if (p.surface.size < 2) return@forEach
-            val rFloor = rPx(p.floorDiaMm)
-            val x0 = xPx(p.startMm)
-            val x1 = xPx(p.endMm)
-            val rSurfStart = rPx(p.surface.first().diaMm)
-            val rSurfEnd = rPx(p.surface.last().diaMm)
-            // The void's surface boundary overdraws OUTWARD by the stroke width: the
-            // component outline is stroked centred on the surface line, so a fill that
-            // stops exactly there would leave half of the *component's* stroke ragged
-            // across the mouth. The mouth is then closed by the notch's own top edge
-            // below, at the notch outline's weight/colour.
-            val od = strokeWidthPx
-
-            val topVoid = Path().apply {
-                moveTo(xPx(p.surface.first().xMm), cy - rSurfStart - od)
-                for (i in 1 until p.surface.size) {
-                    lineTo(xPx(p.surface[i].xMm), cy - rPx(p.surface[i].diaMm) - od)
-                }
-                lineTo(x1, cy - rFloor)
-                lineTo(x0, cy - rFloor)
-                close()
-            }
-            val botVoid = Path().apply {
-                moveTo(xPx(p.surface.first().xMm), cy + rSurfStart + od)
-                for (i in 1 until p.surface.size) {
-                    lineTo(xPx(p.surface[i].xMm), cy + rPx(p.surface[i].diaMm) + od)
-                }
-                lineTo(x1, cy + rFloor)
-                lineTo(x0, cy + rFloor)
-                close()
-            }
-            drawPath(topVoid, color = voidColor)
-            drawPath(botVoid, color = voidColor)
-
-            // Remaining core: erased to the sheet colour, then refilled one step LIGHTER
-            // than the liner shade ([sectionFillColor] — half its alpha) so the section
-            // reads distinct from the liner around it (on-device request).
-            drawRect(voidColor, topLeft = Offset(x0, cy - rFloor), size = Size(x1 - x0, 2f * rFloor))
-            drawRect(
-                sectionFillColor,
-                topLeft = Offset(x0, cy - rFloor),
-                size = Size(x1 - x0, 2f * rFloor),
-            )
-
-            // Step-section outline: full-height faces where the surface stands above the
-            // floor, then the floor lines. No lid — the mouth stays open.
-            if (rSurfStart > rFloor + NOTCH_FACE_MIN_STEP_PX) {
-                drawLine(outlineColor, Offset(x0, cy - rSurfStart), Offset(x0, cy + rSurfStart), strokeWidthPx, pathEffect = pathEffect)
-            }
-            if (rSurfEnd > rFloor + NOTCH_FACE_MIN_STEP_PX) {
-                drawLine(outlineColor, Offset(x1, cy - rSurfEnd), Offset(x1, cy + rSurfEnd), strokeWidthPx, pathEffect = pathEffect)
-            }
-            drawLine(outlineColor, Offset(x0, cy - rFloor), Offset(x1, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)
-            drawLine(outlineColor, Offset(x0, cy + rFloor), Offset(x1, cy + rFloor), strokeWidthPx, pathEffect = pathEffect)
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Canvas helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1916,11 +1680,4 @@ private fun undercutStripTitle(strip: UndercutStrip, spec: ShaftSpec, unit: Unit
         is UndercutStrip.FreeStrip -> rangeText
         is UndercutStrip.LinerStrip -> buildLinerTitleById(spec)[strip.linerId] ?: rangeText
     }
-}
-
-/** AFT/FWD S.E.T. x positions in physical shaft space (mm from the AFT face). */
-internal fun undercutSetPositions(spec: ShaftSpec): Pair<Float, Float> {
-    val win = computeOalWindow(spec)
-    val set = computeSetPositionsInMeasureSpace(win, spec)
-    return set.aftSETxMm.toFloat() to set.fwdSETxMm.toFloat()
 }

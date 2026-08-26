@@ -44,6 +44,10 @@ import com.android.shaftschematic.ui.screen.StartScreen
 import com.android.shaftschematic.ui.screen.TemplatesRoute
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.applyTemplate
+import com.android.shaftschematic.ui.viewmodel.exportJson
+import com.android.shaftschematic.ui.viewmodel.importJson
+import com.android.shaftschematic.ui.viewmodel.newDocument
 import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import kotlinx.coroutines.Dispatchers

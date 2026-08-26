@@ -105,7 +105,7 @@ persisted in `ShaftSpec`:
 - Fill axial gaps between explicit (sacred) components. When OAL is manually authored, a base
   auto body spans 0 → OAL immediately; derived OAL does **not** seed a base auto body.
 - Promotion to an explicit `Body` happens ONLY by ticking the **"Explicit body"** checkbox
-  (`ComponentCarousel.kt` calls `onAddBody(...)` with the derived span). There is no
+  (`BodyPagerCard.kt` calls `onAddBody(...)` with the derived span). There is no
   field-edit promotion path: the auto-body card's Start/Length are disabled derived fields,
   and its editable Ø field sets the shared bare-shaft `ShaftSpec.autoBodyDiaMm` without
   promoting. Viewing the card never promotes it (see the "Auto-body promotion" invariant

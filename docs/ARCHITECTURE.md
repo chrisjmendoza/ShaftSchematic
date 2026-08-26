@@ -117,7 +117,7 @@ Resolved component pipeline (shipped):
   bodies but refuses to merge across a component still occupying the freed span (phantom-body guard).
 - **Auto-body promotion is checkbox-only.** An auto-body card shows Start/Length as disabled
   derived fields — there is no field-edit promotion path. Promotion happens only when the user
-  ticks the **"Explicit body"** checkbox (`ComponentCarousel.kt`), which calls `onAddBody(...)`
+  ticks the **"Explicit body"** checkbox (`BodyPagerCard.kt`), which calls `onAddBody(...)`
   with the derived span to persist a real `Body`; unchecking an explicit body's checkbox opens a
   confirm dialog and demotes via `onRemoveBody`. The auto-body card's **Ø field** is editable but
   does NOT promote — it sets the single shared bare-shaft diameter (`ShaftSpec.autoBodyDiaMm`,
