@@ -155,6 +155,56 @@ class BlockingExportErrorTest {
         assertNull(blockingExportError(spec))
     }
 
+    /**
+     * Thread↔Liner is a cross-kind pair, invisible to `startOverlapErrorMm`'s same-kind
+     * passes — it must gate through the `collidingIds()` pass even with no tapers present.
+     */
+    @Test
+    fun `thread overlapping a liner produces blocking error`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            threads = listOf(
+                Threads(id = "t1", startFromAftMm = 0f, lengthMm = 150f, majorDiaMm = 60f, pitchMm = 2f)
+            ),
+            liners = listOf(
+                Liner(id = "l1", startFromAftMm = 100f, lengthMm = 200f, odMm = 95f)
+            )
+        )
+        assertEquals("Overlaps another component", blockingExportError(spec))
+    }
+
+    @Test
+    fun `thread butted against a liner is allowed`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            threads = listOf(
+                Threads(id = "t1", startFromAftMm = 0f, lengthMm = 100f, majorDiaMm = 60f, pitchMm = 2f)
+            ),
+            liners = listOf(
+                Liner(id = "l1", startFromAftMm = 100f, lengthMm = 200f, odMm = 95f)
+            )
+        )
+        assertNull(blockingExportError(spec))
+    }
+
+    /** Excluded threads sit outside the shaft envelope; no pair involving one gates export. */
+    @Test
+    fun `excluded thread over a liner does not block export`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            threads = listOf(
+                Threads(
+                    id = "t1", startFromAftMm = 50f, lengthMm = 150f,
+                    majorDiaMm = 60f, pitchMm = 2f, excludeFromOAL = true
+                )
+            ),
+            liners = listOf(
+                Liner(id = "l1", startFromAftMm = 100f, lengthMm = 200f, odMm = 95f)
+            )
+        )
+        assertNull(blockingExportError(spec))
+    }
+
     /** Endpoints touching are not an overlap — the shared predicate's eps rule. */
     @Test
     fun `taper butted against a liner is allowed`() {

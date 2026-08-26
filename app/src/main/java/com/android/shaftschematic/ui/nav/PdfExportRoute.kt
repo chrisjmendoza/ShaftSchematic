@@ -175,6 +175,9 @@ fun PdfExportRoute(
  */
 internal fun blockingExportError(spec: ShaftSpec): String? {
     // Excluded threads sit outside the shaft envelope (negative or OAL+ start); skip them.
+    // `startOverlapErrorMm` contributes the start ≥ 0 guard, same-kind overlaps, and the
+    // thread-at-a-shaft-end rule; for tapers it contributes only the start guard (tapers
+    // have no collision group there).
     spec.threads.filter { !it.excludeFromOAL }.forEach { th ->
         startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)
             ?.let { return it }
@@ -183,22 +186,22 @@ internal fun blockingExportError(spec: ShaftSpec): String? {
         startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm)
             ?.let { return it }
     }
-    // Tapers have no collision group inside `startOverlapErrorMm` (that call contributes only
-    // the start ≥ 0 guard), so their overlaps come from `collidingIds()` — the very predicate
-    // behind the taper card's blocking badge, so the gate and the badge cannot disagree.
     // `startFromAftMm` is canonical mm from the AFT face for every taper; `authoredReference`
     // is display metadata and never moves the stored position.
-    // Bodies are fillers, never collision participants: a taper crossing a stored body span is
-    // normal (the resolve layer trims the drawn body around it), and `collidingIds()` already
-    // excludes bodies — so a taper over a body must not, and does not, block export.
-    if (spec.tapers.isNotEmpty()) {
-        val collidingIds = spec.collidingIds()
-        spec.tapers.forEach { t ->
-            startOverlapErrorMm(spec, t.id, ComponentKind.TAPER, t.lengthMm, t.startFromAftMm)
-                ?.let { return it }
-            if (t.id in collidingIds) return "Overlaps another component"
-        }
+    spec.tapers.forEach { t ->
+        startOverlapErrorMm(spec, t.id, ComponentKind.TAPER, t.lengthMm, t.startFromAftMm)
+            ?.let { return it }
     }
+    // Every sacred overlap pair (Taper↔Taper/Thread/Liner, Thread↔Thread/Liner, Liner↔Liner)
+    // gates through `collidingIds()` — the very predicate behind every card's blocking badge
+    // and the toolbar `exportPdfGate()`, so the gate and both of those surfaces cannot
+    // disagree. `startOverlapErrorMm` compares each kind only against its own kind, so the
+    // cross-kind pairs (Thread↔Liner included) MUST come from this pass — dropping it would
+    // let a cross-kind overlap export. Bodies are fillers, never collision participants: a
+    // taper or liner crossing a stored body span is normal (the resolve layer trims the drawn
+    // body around it), and `collidingIds()` already excludes bodies — so a taper over a body
+    // must not, and does not, block export.
+    if (spec.collidingIds().isNotEmpty()) return "Overlaps another component"
     return null
 }
 
