@@ -51,7 +51,13 @@ class BodyKeywayDrawTest {
         keywayEnd = end,
     )
 
-    private fun render(bodies: List<Body>, clocking: KeywayClocking = KeywayClocking.NONE, hidden: Set<String> = emptySet()): Bitmap {
+    private fun render(
+        bodies: List<Body>,
+        clocking: KeywayClocking = KeywayClocking.NONE,
+        hidden: Set<String> = emptySet(),
+        map: (Float) -> Float = xAt,
+        diaPtPerMm: Float = 1f,
+    ): Bitmap {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         c.drawColor(Color.WHITE)
@@ -60,7 +66,7 @@ class BodyKeywayDrawTest {
             strokeWidth = 1.5f
             color = Color.BLACK
         }
-        drawBodyKeywaysPdf(c, bodies, xAt, cy, 1f, outline, clocking, hidden, emptySet())
+        drawBodyKeywaysPdf(c, bodies, map, cy, diaPtPerMm, outline, clocking, hidden, emptySet())
         return bmp
     }
 
@@ -128,6 +134,34 @@ class BodyKeywayDrawTest {
         assertTrue("slot walls at TRUE half-width (±10), not the body average", ink(bmp, 105, 88, 195, 92) > 0)
         assertEquals("no slot ink in the compressed region", 0, ink(bmp, 0, 0, 95, h))
         assertEquals("no slot ink beyond the fwd face", 0, ink(bmp, 205, 0, w, h))
+    }
+
+    /**
+     * The slot's WIDTH is a transverse dimension: it rides the diameter scale — the same scale
+     * as the drawn shaft height — not the compressed x map. Sizing it off the axial scale pins
+     * it to the page width, so raising the "Shaft height" slider grows the shaft and leaves the
+     * keyway behind (on-device report).
+     *
+     * Here the x map is halved while the diameter scale stays 1: the walls must stay at the true
+     * ±10 pt, not follow the axial map down to ±5.
+     */
+    @Test
+    fun `the slot width follows the diameter scale, not the compressed x map`() {
+        val squeezed: (Float) -> Float = { mm -> mm * 0.5f }
+        val bmp = render(listOf(keyedBody(end = LinerAuthoredReference.FWD)), map = squeezed)
+        // Straight walls run x 110..150 (the FWD face at 150, the mill arc centre at 110).
+        assertTrue("walls at the diameter scale's ±10", ink(bmp, 115, 88, 145, 92) > 0)
+        assertEquals("nothing at the axial scale's ±5", 0, ink(bmp, 115, 93, 145, 98))
+    }
+
+    /** Raising the drawn shaft height widens the slot with it. */
+    @Test
+    fun `a taller drawn shaft draws a proportionally wider slot`() {
+        val twice = render(listOf(keyedBody()), diaPtPerMm = 2f)
+        // Ø 100 mm at 2 pt/mm is 200 pt tall, so the 20 mm keyway draws ±20 pt — well under
+        // the host-fraction cap.
+        assertTrue("walls at ±20", ink(twice, 20, 78, 90, 82) > 0)
+        assertEquals("and no longer at ±10", 0, ink(twice, 20, 88, 90, 92))
     }
 
     /** A 180° secondary host is a far-side feature: dashed outline, no white void fill. */

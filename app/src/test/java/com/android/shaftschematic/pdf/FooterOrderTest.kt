@@ -36,8 +36,7 @@ class FooterOrderTest {
             showAftThread = true,
             showFwdThread = false,
             showAftTaper = true,
-            showFwdTaper = false,
-            showCompressionNote = false
+            showFwdTaper = false
         )
 
         val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfg)

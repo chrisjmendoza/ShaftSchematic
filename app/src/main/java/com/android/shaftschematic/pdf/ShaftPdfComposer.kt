@@ -39,6 +39,9 @@ import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_OFF
 import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_ON
 import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PT
+import com.android.shaftschematic.geom.MIN_KEYWAY_WIDTH_PT
+import com.android.shaftschematic.geom.drawnKeywayHalfWidthPx
+import com.android.shaftschematic.geom.minKeywaySlotLenPx
 import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
 import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.geom.ShoulderDrawSpec
@@ -161,10 +164,6 @@ fun composeShaftPdf(
         pageH - PAGE_MARGIN_PT - footerBlockPt
     )
 
-    // PDF-only classification: a shaft with exactly one Body and no other detail
-    // components. Body-only shafts still go through the same body draw path (center
-    // breaks included); the flag only suppresses the footer's compression note, since
-    // there is nothing else on the sheet the squeeze needs explaining against.
     val resolvedBodies = resolvedComponents
         ?.filterIsInstance<ResolvedBody>()
         ?.map { b -> spec.bodyForPdf(b) }
@@ -173,11 +172,6 @@ fun composeShaftPdf(
     // Blends need the resolved neighbours to know what diameter each face steps to; without
     // a resolve pass there is nothing to blend against, so the faces simply stay square.
     val blendsForPdf = resolvedComponents?.let { bodyBlends(spec, it) } ?: emptyList()
-    val hasNonBodyDetail = spec.tapers.isNotEmpty() || spec.threads.isNotEmpty() || spec.liners.isNotEmpty()
-    val bodyOnlyResolved = resolvedBodies != null && resolvedBodies.size == 1 && !hasNonBodyDetail
-
-    val bodyOnly = isBodyOnlyShaft(spec) || bodyOnlyResolved
-    val singleTaperOnly = isSingleTaperOnly(spec)
 
     val scale = lineThicknessScale.coerceIn(0.5f, 2.0f)
     val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -505,15 +499,6 @@ fun composeShaftPdf(
     }
 
     if (effectiveOptions.showFooter) {
-        // Test the same body list the geometry pass drew (resolved incl. auto-bodies),
-        // so the note and the drawn center breaks can't disagree. Keyed bodies break like
-        // any other run (only the slot's own window is protected), so no exemption here.
-        val showCompressionNote = !bodyOnly && bodiesForPdf.any { b ->
-            val drawnPt = abs(xAt(b.startFromAftMm + b.lengthMm) - xAt(b.startFromAftMm))
-            breakForCompression(drawnPt, b.lengthMm, diaPtPerMm, pdfPrefs.sBreakThresholdFrac) ||
-                drawnPt >= COMPRESS_TRIGGER_PT
-        }
-
         // Footer "Body:" diameters — authored bodies as actually drawn. Raw spec.bodies
         // can hold degenerate rows (zero-length, or fully swallowed by body subtraction
         // under a liner/taper) that are invisible in the drawing and the carousel; their
@@ -538,7 +523,6 @@ fun composeShaftPdf(
             // taper details are enabled for the footer at all.
             showAftTaper  = footerTapers.aft != null,
             showFwdTaper  = footerTapers.fwd != null,
-            showCompressionNote = showCompressionNote
         )
 
         val infoTop = cy + halfHeightPx + INFO_GAP_PT
@@ -685,34 +669,9 @@ private fun drawComponentLabelsPdf(
     }
 }
 
-// Compression (paper-space heuristic; bodies only)
-
-// Label collision avoidance
-
-private fun isBodyOnlyShaft(spec: ShaftSpec): Boolean {
-    if (
-        spec.bodies.size != 1 ||
-        spec.tapers.isNotEmpty() ||
-        spec.threads.isNotEmpty() ||
-        spec.liners.isNotEmpty()
-    ) {
-        return false
-    }
-
-    // Future-proofing: also require *no* features that reach either end.
-    // This prevents accidentally treating “body + end details” as “body-only”.
-    val ends = detectEndFeatures(spec)
-    return !(ends.aftThread || ends.fwdThread || ends.aftTaper || ends.fwdTaper)
-}
-
-private fun isSingleTaperOnly(spec: ShaftSpec): Boolean {
-    if (spec.tapers.size != 1) return false
-    if (spec.threads.isNotEmpty()) return false
-    if (spec.liners.isNotEmpty()) return false
-    // Allow at most one base body under the taper; more implies a multi-body shaft.
-    if (spec.bodies.size > 1) return false
-    return true
-}
+// The "body-only" and "single-taper-only" shaft classifiers lived here to decide whether the
+// footer's compression note was worth printing. The note is gone (the S-break says it), and
+// nothing else on the sheet branches on shaft shape — every component draws from its own pass.
 
 internal data class FooterTapers(
     val aft: Taper?,
@@ -941,13 +900,17 @@ private fun drawTapers(
  * false, so a resolved list draws nothing at all. Stored spans also keep one slot per
  * authored keyway where a liner trims the run into several drawn pieces, and put the slot at
  * its physical position (fragments and the center-break pair keep true end faces).
+ *
+ * [diaPtPerMm] is the sheet's DIAMETER scale — every transverse dimension a keyway draws (a
+ * silhouette notch's depth, a plan-view slot's width) rides it, so keyways scale with the drawn
+ * shaft height rather than with the compressed x map.
  */
 internal fun drawBodyKeywaysPdf(
     c: Canvas,
     bodies: List<Body>,
     xAt: (Float) -> Float,
     cy: Float,
-    ptPerMm: Float,
+    diaPtPerMm: Float,
     outline: Paint,
     clocking: KeywayClocking = KeywayClocking.NONE,
     hiddenKeywayIds: Set<String> = emptySet(),
@@ -957,10 +920,10 @@ internal fun drawBodyKeywaysPdf(
     bodies.filter { it.hasKeyway }.forEach { b ->
         if (silhouetteKeyways && b.id in secondaryKeywayIds) {
             b.keywaySilhouetteNotch(clocking)?.let {
-                drawKeywaySilhouetteNotchPdf(c, it, xAt, ptPerMm, cy, outline)
+                drawKeywaySilhouetteNotchPdf(c, it, xAt, diaPtPerMm, cy, outline)
             }
         } else {
-            drawKeywayNotchBodyPdf(c, b, xAt, cy, outline, hidden = b.id in hiddenKeywayIds)
+            drawKeywayNotchBodyPdf(c, b, xAt, cy, diaPtPerMm, outline, hidden = b.id in hiddenKeywayIds)
         }
     }
 }
@@ -976,7 +939,7 @@ internal fun drawTaperKeywayPdf(
     x0: Float, x1: Float, top0: Float, top1: Float,
     xAt: (Float) -> Float,
     cy: Float,
-    ptPerMm: Float,
+    diaPtPerMm: Float,
     outline: Paint,
     clocking: KeywayClocking = KeywayClocking.NONE,
     hiddenKeywayIds: Set<String> = emptySet(),
@@ -985,10 +948,10 @@ internal fun drawTaperKeywayPdf(
     val silhouetteKeyways = clocking == KeywayClocking.DEG_90_CW || clocking == KeywayClocking.DEG_90_CCW
     if (silhouetteKeyways && t.id in secondaryKeywayIds) {
         t.keywaySilhouetteNotch(clocking)?.let {
-            drawKeywaySilhouetteNotchPdf(c, it, xAt, ptPerMm, cy, outline)
+            drawKeywaySilhouetteNotchPdf(c, it, xAt, diaPtPerMm, cy, outline)
         }
     } else {
-        drawKeywayNotchPdf(c, t, x0, x1, top0, top1, cy, outline, hidden = t.id in hiddenKeywayIds)
+        drawKeywayNotchPdf(c, t, x0, x1, top0, top1, cy, diaPtPerMm, outline, hidden = t.id in hiddenKeywayIds)
     }
 }
 
@@ -1041,9 +1004,10 @@ internal fun drawKeywayNotchPdf(
     c: Canvas,
     t: Taper,
     x0: Float, x1: Float,
-    @Suppress("UNUSED_PARAMETER") top0: Float,
-    @Suppress("UNUSED_PARAMETER") top1: Float,
+    top0: Float,
+    top1: Float,
     cy: Float,
+    diaPtPerMm: Float,
     outline: Paint,
     hidden: Boolean = false,
 ) {
@@ -1054,10 +1018,17 @@ internal fun drawKeywayNotchPdf(
     val letX = if (setAtStart) x1 else x0
     val dir  = if (letX > setX) 1f else -1f
 
-    // Scale mm → pt using the taper's own pixel span (avoids needing ptPerMm).
-    val ptPerMm = if (t.lengthMm > 0f) kotlin.math.abs(x1 - x0) / t.lengthMm else 1f
+    // Axial scale from the taper's own pixel span — the compressed map is linear across one
+    // taper, so this is its local pt/mm.
+    val axialPtPerMm = if (t.lengthMm > 0f) kotlin.math.abs(x1 - x0) / t.lengthMm else 1f
+    // The keyway sits at the SET (small) end, so the smaller drawn radius is the host the
+    // slot must stay inside.
+    val hostRadiusPt = min(cy - top0, cy - top1)
 
-    drawKeywaySlotPdf(c, setX, dir, ptPerMm, t.keywayWidthMm, t.keywayOffsetFromSetMm, t.keywayLengthMm, cy, outline, hidden, t.keywaySpooned)
+    drawKeywaySlotPdf(
+        c, setX, dir, axialPtPerMm, diaPtPerMm, hostRadiusPt,
+        t.keywayWidthMm, t.keywayOffsetFromSetMm, t.keywayLengthMm, cy, outline, hidden, t.keywaySpooned,
+    )
 }
 
 /**
@@ -1069,6 +1040,7 @@ internal fun drawKeywayNotchBodyPdf(
     b: Body,
     xAt: (Float) -> Float,
     cy: Float,
+    diaPtPerMm: Float,
     outline: Paint,
     hidden: Boolean = false,
 ) {
@@ -1082,30 +1054,39 @@ internal fun drawKeywayNotchBodyPdf(
     val farX = if (aftRef) x1 else x0
     val dir  = if (farX > refX) 1f else -1f
 
-    // The slot's scale comes from ITS OWN mapped span, not the whole body's average: the
+    // The slot's AXIAL scale comes from ITS OWN mapped span, not the whole body's average: the
     // keyway window is pinned at true scale while the rest of a long body compresses, so a
     // body-average pt/mm would draw the slot shrunken inside the very window that was
     // pinned to keep it real. Within the pinned window the map is linear, so this is exact;
     // an anchor reconstructed one offset back keeps a floating slot at its mapped position.
     val span = b.keywayAbsSpanMm()
-    val ptPerMm: Float
+    val axialPtPerMm: Float
     val anchorX: Float
     if (span != null && span.hiMm > span.loMm) {
         val sLo = xAt(span.loMm); val sHi = xAt(span.hiMm)
-        ptPerMm = kotlin.math.abs(sHi - sLo) / (span.hiMm - span.loMm)
-        anchorX = (if (aftRef) sLo else sHi) - dir * b.keywayOffsetFromEndMm * ptPerMm
+        axialPtPerMm = kotlin.math.abs(sHi - sLo) / (span.hiMm - span.loMm)
+        anchorX = (if (aftRef) sLo else sHi) - dir * b.keywayOffsetFromEndMm * axialPtPerMm
     } else {
-        ptPerMm = kotlin.math.abs(x1 - x0) / b.lengthMm
+        axialPtPerMm = kotlin.math.abs(x1 - x0) / b.lengthMm
         anchorX = refX
     }
 
-    drawKeywaySlotPdf(c, anchorX, dir, ptPerMm, b.keywayWidthMm, b.keywayOffsetFromEndMm, b.keywayLengthMm, cy, outline, hidden, b.keywaySpooned)
+    drawKeywaySlotPdf(
+        c, anchorX, dir, axialPtPerMm, diaPtPerMm, (b.diaMm * 0.5f) * diaPtPerMm,
+        b.keywayWidthMm, b.keywayOffsetFromEndMm, b.keywayLengthMm, cy, outline, hidden, b.keywaySpooned,
+    )
 }
 
 /**
  * Shared keyway slot geometry. [refX] is the referenced face (SET face for tapers,
  * AFT/FWD end face for bodies); [dir] is +1 when the slot extends rightward from it.
  * offset ≈ 0 = open at the referenced face; > 0 = floating (mill arcs both ends).
+ *
+ * Two scales, because the sheet has two: the slot's offset and length ride
+ * [axialPtPerMm] (the compressed x map's local scale), its WIDTH and mill-arc radius ride
+ * [diaPtPerMm] — the same scale as the drawn shaft height, so the slot stays proportional to
+ * its host at every "Shaft height" setting. See `geom/KeywaySlotMath.kt` for the floor and the
+ * [hostRadiusPt] cap.
  *
  * [hidden] draws the slot as a far-side feature (keyways 180° apart): dashed outline and
  * **no** white void fill (the near surface is unbroken). Dash matches the preview
@@ -1115,7 +1096,9 @@ private fun drawKeywaySlotPdf(
     c: Canvas,
     refX: Float,
     dir: Float,
-    ptPerMm: Float,
+    axialPtPerMm: Float,
+    diaPtPerMm: Float,
+    hostRadiusPt: Float,
     widthMm: Float,
     offsetMm: Float,
     lengthMm: Float,
@@ -1124,10 +1107,15 @@ private fun drawKeywaySlotPdf(
     hidden: Boolean = false,
     spooned: Boolean = false,
 ) {
-    val halfW       = (widthMm * ptPerMm) / 2f
-    val kwSetX      = refX + dir * offsetMm * ptPerMm
-    val kwLetX      = kwSetX + dir * lengthMm * ptPerMm
+    val halfW       = drawnKeywayHalfWidthPx(
+        trueHalfWidthPx = (widthMm * diaPtPerMm) / 2f,
+        hostRadiusPx = hostRadiusPt,
+        minWidthPx = MIN_KEYWAY_WIDTH_PT,
+        strokeWidthPx = outline.strokeWidth,
+    )
     val isOpen      = offsetMm < 0.01f
+    val kwSetX      = refX + dir * offsetMm * axialPtPerMm
+    val kwLetX      = kwSetX + dir * maxOf(lengthMm * axialPtPerMm, minKeywaySlotLenPx(halfW, isOpen))
 
     // Spooned (open keyways only): keep the normal keyway (full-length walls + mill semicircle) and
     // ADD an enlarged circle around the closed (LET) end — the mill end stays as an inner reference
@@ -1421,7 +1409,6 @@ internal fun drawFooter(
             add("Customer:"); add("Vessel:"); add("Job #:"); add("Date:")
             if (cfg.bodyDiasMm.isNotEmpty()) add("Body: Ø")
             keywayClockingFooterNote(spec)?.let { add(it) }
-            if (cfg.showCompressionNote) add(COMPRESSION_FOOTER_NOTE)
             add("Side:")
         }
     } else {
@@ -1439,10 +1426,6 @@ internal fun drawFooter(
                 add("Body: $label")
             }
             keywayClockingFooterNote(spec)?.let { add(it) }
-            // The compression note the flag has always carried: the caller sets it off the
-            // very predicate that draws the S-breaks, so the note and the drawn breaks
-            // cannot disagree — a sheet with a break says so, a sheet without one never does.
-            if (cfg.showCompressionNote) add(COMPRESSION_FOOTER_NOTE)
         }
     }
 
@@ -1561,8 +1544,9 @@ internal data class FooterColumns(
  */
 internal const val SPOONED_KW_NOTE = "KW length to base of spoon (mill end)"
 
-/** Footer note printed when any body run draws the S-break pair ([FooterConfig.showCompressionNote]). */
-internal const val COMPRESSION_FOOTER_NOTE = "Not to scale: body sections compressed for readability"
+// The footer carries NO compression note. The S-break pair IS the drawing's statement that a
+// body run is foreshortened — a line of prose repeating it is redundant (on-device direction),
+// and it cost a footer row on exactly the long shafts with the least room to spare.
 
 // Column headings of the footer's end columns. Named because [drawFooter] tests whether a column
 // leads with one to decide the middle column's first baseline — a literal there would drift.
@@ -2029,7 +2013,6 @@ data class FooterConfig(
     val showFwdThread: Boolean,
     val showAftTaper: Boolean,
     val showFwdTaper: Boolean,
-    val showCompressionNote: Boolean,
     /** Distinct body ODs (mm) to print as the "Body:" line; empty hides the line. */
     val bodyDiasMm: List<Float> = emptyList(),
 )

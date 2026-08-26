@@ -160,9 +160,10 @@ and liners are never broken this way. Liners foreshorten in *size* only, down to
 width floor. How much squeeze earns the glyph is a user setting
 (`PdfPrefs.sBreakThresholdFrac`, Settings → Drawing → "Body S-break", default half of
 true drawn width; **Never** hides compression entirely, 100% breaks on any foreshortening) —
-one predicate, `breakForCompression`, for every draw site and the footer's compression note.
+one predicate, `breakForCompression`, behind the single body-run pass both composers call.
 The independent long-span trigger (`COMPRESS_TRIGGER_PT`, 220 pt of paper at true scale)
-fires at every setting.
+fires at every setting. **The footer carries no compression note** — the glyph itself is the
+statement that the run is foreshortened, so prose repeating it is redundant.
 
 ### Default sizing curve
 The 100% base for drawn shaft height (`defaultShaftHeightPt` / `defaultVisualScale`,
@@ -221,6 +222,11 @@ Current state:
   the AFT keyway, viewed from aft. Mutually exclusive with Keyways 180° apart (enabling one
   clears the other). Renders as an edge notch in the silhouette — bottom edge for CW, top edge
   for CCW — not a hidden dashed line; the spoon bowl is not drawn at 90°.
+- **Drawn across two scales.** A plan-view slot's offset and length ride the compressed axial
+  map; its WIDTH and mill-arc radius ride the DIAMETER scale, so the slot stays proportional to
+  the drawn shaft at every "Shaft height" setting. The drawn width is true — a visibility floor
+  and a host ceiling exist (`geom/KeywaySlotMath.kt`) but reach only the smallest shafts at the
+  lowest settings. See `docs/PDF_EXPORT.md` §5.2c.
 
 Non-goal:
 - Keyways will never exist as standalone components.

@@ -239,6 +239,66 @@ The dash is finer than the hidden-keyway 6/4 so a near-side cut never reads as a
 
 ---
 
+# 5.2c Keyway Slot Width (the transverse scale)
+
+A sheet carries **two scales**: the diameter scale (`diaPtPerMm` — the drawn shaft height, what
+the §5.7 "Shaft height" slider moves) and the compressed axial map (§5.7, `xAt`). Every drawn
+dimension belongs to exactly one of them, and a plan-view keyway straddles both:
+
+| Slot dimension | Scale |
+|---|---|
+| Offset from the referenced face | axial (`xAt`'s local pt/mm) |
+| Length | axial |
+| **Width** | **diameter** |
+| **Mill-arc radius** (and the spoon bowl) | **diameter** |
+
+Width is a transverse dimension, so it rides the diameter scale and stays proportional to the
+drawn shaft at every height. Sizing it off the axial scale instead pins it to the page width —
+the x map always fills the content width, so raising the height grew the shaft and left the
+keyway the size it was (on-device report). The arcs stay **circles** at the transverse scale
+rather than becoming ellipses: the end radius is W/2 by definition and the round end is the shop
+glyph, so it keeps its shape and takes the axial over-extent — the same posture the coupler bolt
+holes already take on this sheet (`rPx`-sized).
+
+Both draw sites build the slot from one place, `geom/KeywaySlotMath.kt` (pure) —
+`ShaftPdfComposer.drawKeywaySlotPdf` and `ShaftRenderer.drawKeywaySlot`. The canvas has a single
+uniform scale, so the two terms coincide there; the construction is shared anyway so the sites
+cannot drift.
+
+**The drawn width is TRUE — the slot is proportional to its host to the pixel.** Unlike a blend
+(2″ on a 25′ shaft, genuinely sub-pixel — §5.2b), a keyway is about a quarter of its shaft and
+stays legible at true scale on any drawing that isn't tiny, so the exaggeration posture that
+licenses the blend floor is barely needed here. Two clamps, and neither normally fires:
+
+- **Floor** — `MIN_KEYWAY_WIDTH_PT` (3 pt) / `MIN_KEYWAY_WIDTH_PX` (4 px), raised to
+  `KEYWAY_MIN_WIDTH_STROKES` × the outline stroke (§5.1). Two strokes is the legibility criterion
+  exactly: walls centred at ±width/2 leave `width − stroke` of daylight, so a two-stroke slot
+  keeps one full line width of white in it. Anything more starts lifting ordinary shafts off true.
+  Safe in the blend-floor posture — a keyway prints no dimension rail, its W × D × L is footer
+  text built from the stored values, so no exaggerated number can reach a machinist.
+- **Ceiling on the FLOOR only** — the floor never exceeds `MAX_KEYWAY_FRAC_OF_HOST_DIA` (40%) of
+  the host's drawn diameter (for a taper, its SET end, where the keyway sits), so a small shaft
+  can't be swallowed by its own keyway. It does **not** clamp a true width: an unusually wide
+  authored keyway on a stubby taper end is drawn as authored, bounded only by the silhouette
+  itself. Clamping true geometry there would silently narrow a typed value.
+
+`KeywayWidthFidelityTest` pins the reach across the realistic envelope (2″–14″ shafts, standard
+W ≈ D/4, the whole height-slider range, both line weights at 100% and 200%): at default line
+thickness every shaft draws **exactly true** at 100% height and above; the floor reaches only
+3″-and-under shafts at the 50% height floor, and only sub-4″ shafts at 200% line thickness. The
+ceiling bounds any lift at 1.6× for a standard key, by construction (0.40 ÷ 0.25).
+
+Because the width now leads and the length follows a compressed map, the drawn length takes a
+minimum of `minKeywaySlotLenPx` — one arc radius for a slot open at its referenced face, two for
+a floating one — or a heavily foreshortened short keyway would run its arcs past its own walls
+and invert the slot.
+
+Unaffected: the 90°-clocked **silhouette** notch (`drawKeywaySilhouetteNotchPdf`) was always
+radial and always used the diameter scale; and the true-scale pin on a body keyway's window
+(`keywayPinnedBodySpans`) still protects the slot's **length**, which is the axial term.
+
+---
+
 # 5.3 On-Shaft Diameter Callouts
 
 Body OD and liner OD each get a leader-line "Ø" callout hanging **BELOW** the shaft
@@ -593,6 +653,9 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
   it did with fixed gap floors — that lower number is the balance, not a regression.
   Height precedence is untouched: `solveMaxProfileScale` stays frac-blind, so no body
   run (short of a keyway pin) ever lowers the drawn shaft.
+- **Keyways scale with the height** — a keyway's width and mill-arc radius ride the diameter
+  scale, not the compressed x map, so the slot stays proportional to the drawn shaft at every
+  slider position. Floors and the host cap in §5.2c.
 - The **1.5" ceiling is absolute** (`PROFILE_MAX_SHAFT_HEIGHT_PT` = 108 pt): the drawn
   shaft never exceeds 1.5" on paper at any slider position — a short shaft whose
   width-fit would draw taller is capped too, keeps true proportion, and simply doesn't
@@ -638,9 +701,8 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
    display compression" claim, which is no longer true). `ShaftPdfComposer.drawBodiesCompressedCenterBreak()`
    triggers per-body when that body's on-paper length reaches `COMPRESS_TRIGGER_PT` (220 pt) —
    or when the compressed profile x-map squeezes it below a **user-set fraction of its true
-   drawn width** (`breakForCompression`, `pdf/BreakSymbol.kt` — ONE predicate shared with the
-   consolidated sheet's body loop and the footer's compression note, so the note and the drawn
-   breaks can never disagree). The fraction is `PdfPrefs.sBreakThresholdFrac`, set in
+   drawn width** (`breakForCompression`, `pdf/BreakSymbol.kt` — ONE predicate, behind the single
+   body-run pass both composers call). The fraction is `PdfPrefs.sBreakThresholdFrac`, set in
    Settings → Drawing → **"Body S-break"** (slider, 5% steps, "Default (50%)" reset):
    **Never** (0) suppresses compression breaks entirely — all foreshortening stays hidden —
    and 100% breaks on any foreshortening at all ("why lock it in one way when different users
@@ -657,9 +719,11 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
    amplitude come from `breakPairLayout` (same file, unit-tested): the classic gap (≤ 20 pt,
    ≤ ¼ of the run) widens up to half the run when the glyph needs the room, then the amplitude
    flattens, so the two edges' curves always keep ≥ 1 pt of daylight and never overlap
-   (on-device report). The footer prints an
-   explanatory compression note (`showCompressionNote`) whenever any drawn body triggers this.
-   Only bodies are compressed this way — tapers/threads/liners are never broken.
+   (on-device report). **The footer prints no compression note.** The S-break pair is itself the
+   drawing's statement that the run is foreshortened, so a line of prose saying so again is
+   redundant (on-device direction) — and it cost a footer row on exactly the long shafts with the
+   least room to spare. Only bodies are compressed this way — tapers/threads/liners are never
+   broken.
 5. No component overlays, cross-sections, or detailed machinist symbols (aside from the
    round-stock break symbol above, which is a length-compression cue, not a machinist symbol).
 6. Geometry must reflect the same logic as preview.

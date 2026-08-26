@@ -749,8 +749,6 @@ fun composeRunoutPdf(
             showFwdThread = hasFwdThread(spec),
             showAftTaper = footerTapers.aft != null,
             showFwdTaper = footerTapers.fwd != null,
-            // The note keys off ACTUAL foreshortening in the compressed mapping.
-            showCompressionNote = xMap.isCompressedOver(aftSetMm, fwdSetMm),
         )
         drawFooter(
             c, RectF(contentLeft, footerTop, contentRight, pageH - margin),

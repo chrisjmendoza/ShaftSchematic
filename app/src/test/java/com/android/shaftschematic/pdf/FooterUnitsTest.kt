@@ -34,8 +34,7 @@ class FooterUnitsTest {
             showAftThread = true,
             showFwdThread = false,
             showAftTaper = true,
-            showFwdTaper = false,
-            showCompressionNote = false
+            showFwdTaper = false
         )
 
         run {

@@ -34,8 +34,7 @@ class FooterEndDetectionTest {
             showAftThread = true,
             showFwdThread = true,
             showAftTaper = true,
-            showFwdTaper = true,
-            showCompressionNote = false
+            showFwdTaper = true
         )
 
         val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfg)
@@ -70,8 +69,7 @@ class FooterEndDetectionTest {
             showAftThread = true,
             showFwdThread = true,
             showAftTaper = true,
-            showFwdTaper = true,
-            showCompressionNote = false
+            showFwdTaper = true
         )
 
         val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfg)

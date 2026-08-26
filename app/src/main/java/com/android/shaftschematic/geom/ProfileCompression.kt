@@ -221,10 +221,6 @@ class CompressedProfileXMap internal constructor(val segments: List<ProfileXSegm
         return seg.x0 + (mm - seg.startMm) * seg.ptPerMm
     }
 
-    /** True when any part of [startMm]..[endMm] draws foreshortened. */
-    fun isCompressedOver(startMm: Float, endMm: Float): Boolean =
-        segments.any { it.compressed && it.startMm < endMm && it.endMm > startMm }
-
     /**
      * Inverse of [xAt] — page x → shaft-space mm. Well-defined because the mapping is
      * strictly monotonic; positions outside the drawn window invert at the edge scale.

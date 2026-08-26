@@ -49,8 +49,7 @@ class TaperRatePrintNotationTest {
         showAftThread = false,
         showFwdThread = false,
         showAftTaper = true,
-        showFwdTaper = false,
-        showCompressionNote = false,
+        showFwdTaper = false
     )
 
     @Test

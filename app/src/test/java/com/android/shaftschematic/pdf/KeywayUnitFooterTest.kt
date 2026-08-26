@@ -24,8 +24,7 @@ class KeywayUnitFooterTest {
         showAftThread = false,
         showFwdThread = false,
         showAftTaper = true,
-        showFwdTaper = true,
-        showCompressionNote = false,
+        showFwdTaper = true
     )
 
     private val inch = UnitSystem.INCHES

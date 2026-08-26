@@ -167,17 +167,17 @@ on rails/callouts, so proportion wins); the runout/consolidated sheet keeps the
 writable `PROFILE_MIN_*` floors.
 Body runs compressed below a threshold fraction of their true drawn width
 (`breakForCompression`, `pdf/BreakSymbol.kt` — milder foreshortening prints a plain
-outline; bodies ONLY, and the schematic footer's compression note shares the same
-predicate) draw the S-break pair laid out by `breakPairLayout` — gap widens up to half
+outline; bodies ONLY) draw the S-break pair laid out by `breakPairLayout` — gap widens up to half
 the run, then amplitude flattens, so the two edges always keep ≥ 1 pt of daylight and
 never overlap. The threshold is **user-set** — `PdfPrefs.sBreakThresholdFrac`, Settings →
 Drawing → "Body S-break", default **half** (`PDF_SBREAK_THRESHOLD_DEFAULT`), 5% steps,
 **Never** (0) at the low end = compression stays entirely hidden, 100% = break on any
 foreshortening ("why lock it in one way when different users may want different outputs"
-— on-device request). ONE pref feeds both consumers (`drawBodyRunsWithBreaks` —
-the single body-run pass both composers call, `pdf/BodyRunDraw.kt` — and
-`showCompressionNote`), so the note and the drawn breaks can never
-disagree; there is no duplicate constant. The long-span trigger `COMPRESS_TRIGGER_PT` is
+— on-device request). ONE consumer, `drawBodyRunsWithBreaks` — the single body-run pass both
+composers call, `pdf/BodyRunDraw.kt`. **No footer compression note**: the S-break pair IS the
+statement that a run is foreshortened, so prose repeating it is redundant (on-device direction)
+and cost a footer row on exactly the long shafts with the least room. Do not reintroduce
+`showCompressionNote`. The long-span trigger `COMPRESS_TRIGGER_PT` is
 deliberately NOT governed by the slider — a run eating 220 pt of paper at true scale is
 not hidden compression, so it breaks at every setting, Never included. **A body keyway's
 WINDOW never compresses; the rest of its body compresses and breaks like any other run**
@@ -480,6 +480,33 @@ per-job `RunoutConfig` pair (a FIT, not a look), theme/preview/undercut styling,
 "Restore Drawing defaults" resets exactly the captured set, so a profile can always be undone.
 Enums are stored by NAME through the tolerant `fromName` helpers; every payload field is
 defaulted — profiles from older builds must keep loading.
+
+### A keyway's WIDTH rides the diameter scale, its LENGTH the axial map
+A sheet carries two scales: `diaPtPerMm` (the drawn shaft height, what the "Shaft height" slider
+moves) and the compressed x map. A plan-view keyway straddles both — offset and length are axial,
+**width and mill-arc radius are transverse and therefore ride `diaPtPerMm`**, so the slot stays
+proportional to the drawn shaft at every height. Sizing the width off the axial scale pins it to
+the page width (the x map always fills the content width), and raising the height then grows the
+shaft while the keyway stays the size it was (on-device report). The arcs stay **circles** at the
+transverse scale rather than becoming ellipses — the end radius is W/2 by definition and the round
+end is the shop glyph, the same posture the coupler bolt holes already take (`rPx`-sized). One
+pure source for both draw sites, `geom/KeywaySlotMath.kt` (`ShaftRenderer.drawKeywaySlot` canvas /
+`ShaftPdfComposer.drawKeywaySlotPdf` PDF; the canvas's two terms coincide, the construction is
+shared anyway). The drawn width is **TRUE** — a keyway is a quarter of its shaft, not a blend's
+couple of inches on twenty-five feet, so it reads at true scale and the normal result is exact
+proportion. Only two clamps, and neither normally fires: a visibility floor
+(`MIN_KEYWAY_WIDTH_PT`/`_PX`, raised to `KEYWAY_MIN_WIDTH_STROKES` — **2**, the legibility
+criterion exactly, since walls leave `width − stroke` of daylight; more than that lifts ordinary
+shafts off true), licensed by the blend-floor posture because a keyway prints **no dimension
+rail**, only footer text off the stored W × D × L. `MAX_KEYWAY_FRAC_OF_HOST_DIA` caps the FLOOR
+only — never a true width: clamping true geometry there would silently narrow an authored keyway
+on a stubby taper end, and the only bound on a true width is the silhouette itself.
+`KeywayWidthFidelityTest` pins the reach — at default line weight every 2″–14″ shaft draws exactly
+true at 100% height and up. Because width now leads and length follows a compressed map, the drawn
+length floors at `minKeywaySlotLenPx` or a foreshortened short keyway runs its arcs past its own
+walls. Untouched: the 90° silhouette notch was always radial, and the body-keyway window's
+true-scale pin (`keywayPinnedBodySpans`) still protects the axial term. See
+`docs/PDF_EXPORT.md` §5.2c.
 
 ### Spooned keyways are a draw-only variant
 `keywaySpooned` (on `Taper` and `Body`) is a **drawing** flag — it changes nothing in the model,

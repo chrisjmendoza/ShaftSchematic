@@ -47,8 +47,8 @@ schematic Tune sheet this section otherwise describes.
   Options sheets of the schematic and runout/consolidated previews (one shared
   `SBreakThresholdSlider`, one app-wide pref — see below). The readout shows
   "Never" at 0 and "below N%" elsewhere. It governs only the *compression* trigger of
-  `breakForCompression` (`pdf/BreakSymbol.kt`), shared by the schematic body loop, the
-  consolidated sheet's body loop, and the footer's compression note. The traditional
+  `breakForCompression` (`pdf/BreakSymbol.kt`), behind `drawBodyRunsWithBreaks` — the single
+  body-run pass the schematic and the consolidated sheet both call. The traditional
   long-span trigger `COMPRESS_TRIGGER_PT` (220 pt of paper) is independent and unaffected:
   at "Never" a genuinely long run still shows its break. Bodies only — liners and tapers
   foreshorten silently at every setting. Every preview that rasterizes with the current

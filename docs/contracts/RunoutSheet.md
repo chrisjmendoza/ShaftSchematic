@@ -752,8 +752,7 @@ Overnight wave (on-device request), three features on the Runout tab:
   pin for a finite `PROFILE_MIN_LINER_PT` (100 pt) floor — they foreshorten in proportion
   above it, never draw an S-break (that glyph remains a body-only draw path), and the
   height-yield solve now serves keyway-bearing bodies alone. Dimension labels still print
-  TRUE lengths, and the footer compression note keys off actual foreshortening, liners
-  included.
+  TRUE lengths.
 
 ---
 
@@ -782,8 +781,8 @@ consolidated drawing —
   ONE implementation for both documents): AFT/FWD taper columns (Rate, L.E.T., S.E.T.,
   Length, KW incl. spooned note, Threads), work-order center (Customer/Vessel/Job#/Date,
   bold Side, keyway-clocking note, Body Ø line), blank-draft write-in rules. Replaces
-  the sheet's old one-line header; the footer's compression note keys off ACTUAL
-  foreshortening (`xMap.isCompressedOver`). The TIR line sits directly above the footer.
+  the sheet's old one-line header. No compression note — the S-break pair on a
+  foreshortened body run already says it. The TIR line sits directly above the footer.
 - **Page order:** margin → OAL rail → dim tiers → shaft (compressed, with wear info) →
   bubbles → TIR line → footer → margin. Rail count feeds the vertical budget before the
   diameter-scale solve, so tall tier stacks squeeze the shaft area, not the page.
@@ -876,8 +875,8 @@ On-device request following the worn-sections review:
     (`buildCompressedProfileXMap` + monotone `solveSpanWidths` bisection, unit-tested);
     only BODY runs get the S-break pair, and only when squeezed below a **user-set
     fraction of their true drawn width** (`breakForCompression`, `pdf/BreakSymbol.kt` —
-    one predicate for the shared body pass (`drawBodyRunsWithBreaks`,
-    `pdf/BodyRunDraw.kt` — both composers call it) and the schematic footer's compression note;
+    one predicate behind the shared body pass (`drawBodyRunsWithBreaks`,
+    `pdf/BodyRunDraw.kt` — both composers call it), and no footer note repeating it;
     milder foreshortening prints a plain outline — a break on a barely-squeezed run was
     noise, on-device report). The threshold is `PdfPrefs.sBreakThresholdFrac` —
     Settings → Drawing → "Body S-break" **and** the PDF Options sheet of this preview
@@ -955,15 +954,18 @@ Two rules make the difference between a printed keyway and a silent nothing:
    stored spec; `keywayPinnedBodySpans` turns it into the `Float.MAX_VALUE` feature spans).
    A slot drawn foreshortened is not real geometry — but pinning the whole body made a
    95%-shaft body unrenderable (the height yielded to nothing), so the body around the
-   window stays free to compress (on-device direction). The slot draw derives its pt/mm
+   window stays free to compress (on-device direction). The slot draw derives its AXIAL pt/mm
    from the window's OWN mapped span (`drawKeywayNotchBodyPdf`) — a body-average scale
-   would shrink the slot inside the very window pinned to keep it real.
+   would shrink the slot inside the very window pinned to keep it real. The pin governs the
+   slot's LENGTH only: its width and mill-arc radius ride the DIAMETER scale
+   (`geom/KeywaySlotMath.kt`), so a keyway stays proportional to the drawn shaft at every
+   "Shaft height" setting whether or not its host is pinned. See `docs/PDF_EXPORT.md` §5.2c.
 3. **A keyed body still breaks; the gap steers clear of the window.** Both body passes
    (`drawBodyRunsWithBreaks`, the ONE implementation both composers call) place the S-break gap
    through `breakGapCenter` (`pdf/BreakSymbol.kt`, pure): span midpoint by the hand-sheet
    convention, shifted the minimal distance that clears every protected window, and only a
-   run with NO clear placement prints plain. The schematic footer's compression note keeps
-   the plain shared predicate — keyed bodies break like any other run, so no exemption.
+   run with NO clear placement prints plain. Keyed bodies break like any other run — only the
+   slot's own window is protected, so there is no exemption anywhere.
    Pinned by `BreakGapKeywayAvoidanceTest` (pure placement + both draw sites) and
    `KeywayPinnedBodySpansTest` (window-not-body, long-shaft scale survival).
 

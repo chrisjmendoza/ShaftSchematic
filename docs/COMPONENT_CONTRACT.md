@@ -242,6 +242,14 @@ Body keyways survive body split/merge by **absolute position**: `carryBodyKeyway
 (`model/ShaftSpecExtensions.kt`) re-anchors the offset to the surviving fragment's face,
 and drops the keyway if a cut passes through it.
 
+**Drawing note.** The stored values are canonical mm as always; how they map to paper splits
+across the sheet's two scales. `keywayOffset*Mm` and `keywayLengthMm` ride the compressed axial
+map; `keywayWidthMm` is a transverse dimension and rides the DIAMETER scale, so the drawn slot
+stays proportional to the drawn shaft at every "Shaft height" setting. `keywayDepthMm` is not
+drawn in plan view at all (it appears as footer text, and as the notch depth of a 90°-clocked
+secondary). One pure source for both draw sites: `geom/KeywaySlotMath.kt`; see
+`docs/PDF_EXPORT.md` §5.2c.
+
 ### Keyway clocking — 180° / 90° apart
 
 `ShaftSpec.keyways180Apart` states the shaft's keyways are clocked 180° from each other.

@@ -19,8 +19,7 @@ class SpoonedKeywayFooterNoteTest {
         showAftThread = false,
         showFwdThread = false,
         showAftTaper = true,
-        showFwdTaper = true,
-        showCompressionNote = false,
+        showFwdTaper = true
     )
 
     private fun spoonedTaper() = Taper(

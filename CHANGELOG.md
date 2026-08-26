@@ -8,6 +8,69 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-26
 
+### fix(pdf): drop the footer's compression note — the S-break already says it
+
+On-device direction: an S-break pair IS the drawing's statement that a body run is
+foreshortened, so "Not to scale: body sections compressed for readability" underneath it is
+redundant. It also cost a footer row on exactly the long shafts with the least room to spare,
+and the footer band grows upward into the info gap to fit its content.
+
+`COMPRESSION_FOOTER_NOTE`, `FooterConfig.showCompressionNote`, and both composers' predicates
+for it are gone. `breakForCompression` / `COMPRESS_TRIGGER_PT` are untouched — they still drive
+the drawn breaks through `drawBodyRunsWithBreaks`; only the prose consumer is removed, so the
+`PdfPrefs.sBreakThresholdFrac` slider now has exactly one consumer instead of two that had to
+be kept in agreement.
+
+The note was the sole reason three classifiers existed, so they go with it: the schematic's
+`isBodyOnlyShaft` / `isSingleTaperOnly` and their locals, and `CompressedProfileXMap`'s
+`isCompressedOver` (the runout sheet's predicate). Nothing else on either sheet branches on
+shaft shape — every component draws from its own pass.
+
+### fix(pdf): a keyway's width scales with the drawn shaft height
+
+On-device report: the keyways in the PDF preview don't resize when the "Shaft height" slider
+moves the shaft. Root cause is a scale mix-up. A sheet carries two scales — `diaPtPerMm` (the
+drawn shaft height) and the compressed x map — and the plan-view slot took **both** its width
+and its length from the axial one. But the x map always fills the page's content width, so a
+span's axial pt/mm barely moves when the height changes: raising the slider grew the shaft and
+left the keyway the size it was. On a compressed sheet the slot was also drawn far too thin in
+absolute terms, worst on a taper (the propeller-end case), which foreshortens under its
+ratio-preserving floor while a body keyway's window stays pinned at true scale.
+
+The slot now takes its width and mill-arc radius from the **diameter** scale — the same scale
+as the shaft height — and keeps offset and length on the axial map, so it is proportional by
+construction at any slider position. The arcs stay circles at that scale rather than becoming
+ellipses (the end radius is W/2 by definition and the round end is the shop glyph), matching how
+the coupler bolt holes are already drawn.
+
+New pure `geom/KeywaySlotMath.kt` feeds both draw sites, so the canvas and the sheet cannot
+drift; on the canvas the two scales coincide, so nothing there changes but the floor.
+
+**The drawn width is true, not exaggerated.** A keyway is about a quarter of its shaft — not a
+blend's couple of inches on twenty-five feet — so it reads at true scale and the blend-style
+exaggeration posture is barely needed. Two clamps and neither normally fires: a visibility floor
+(`MIN_KEYWAY_WIDTH_PT` 3 / `_PX` 4, raised to `KEYWAY_MIN_WIDTH_STROKES` × the outline stroke),
+and `MAX_KEYWAY_FRAC_OF_HOST_DIA` (40%) bounding **the floor only** — a true width is never
+narrowed, or an unusually wide authored keyway on a stubby taper end would be silently shrunk;
+its only bound is the silhouette. `KEYWAY_MIN_WIDTH_STROKES` is **2**, the legibility criterion
+exactly (walls leave `width − stroke` of daylight, so two strokes keeps one full line width of
+white in the slot); at 2.5 the floor was lifting a 2" shaft off true at default settings.
+`KeywayWidthFidelityTest` pins the reach across the realistic envelope — 2"–14" shafts, standard
+W ≈ D/4, the whole height-slider range, both sheets at 100% and 200% line thickness: at default
+line weight every shaft draws exactly true at 100% height and above; the floor reaches only
+3"-and-under shafts at the 50% height floor and sub-4" shafts at 200% thickness, and the ceiling
+bounds any lift at 1.6× by construction.
+
+With width leading and length following a compressed map, the drawn length now floors at
+`minKeywaySlotLenPx` — one arc radius open, two floating — so a foreshortened short keyway can't
+run its arcs past its own walls. The 90° silhouette notch was always radial and is untouched; so
+is the body-keyway window's true-scale pin, which protects the axial term.
+
+`KeywaySlotMathTest` covers the floor/ceiling/length math; `BodyKeywayDrawTest` renders the slot
+under a halved x map and at a doubled diameter scale and fails if the width follows the wrong
+one; `KeywayWidthScaleSvgPreviewTest` emits a same-math SVG for markup review. Docs:
+`docs/PDF_EXPORT.md` §5.2c (+ a §5.7 bullet) and a CLAUDE.md invariant.
+
 ### fix(pdf): one thread-hatch convention on every sheet — and the preview matches
 
 On-device ruling on the Wave-3 audit's open question: "no sense in having different forms

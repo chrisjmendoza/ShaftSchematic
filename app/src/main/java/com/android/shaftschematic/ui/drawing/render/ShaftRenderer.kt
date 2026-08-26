@@ -36,6 +36,9 @@ import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PX
+import com.android.shaftschematic.geom.MIN_KEYWAY_WIDTH_PX
+import com.android.shaftschematic.geom.drawnKeywayHalfWidthPx
+import com.android.shaftschematic.geom.minKeywaySlotLenPx
 import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
 import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.geom.ShoulderDrawSpec
@@ -639,9 +642,11 @@ private fun DrawScope.drawHighlightStrokeRect(
 /**
  * Draw a keyway symbol centered on the shaft centerline, matching shop schematic convention.
  *
- * The keyway is shown as a plan-view (top-down) rectangle centered at [cy]:
- *   - Height = keywayWidthMm × pxPerMm  → WIDTH to scale
- *   - Horizontal span = keywayLengthMm  → LENGTH to scale
+ * The keyway is shown as a plan-view (top-down) rectangle centered on the centerline:
+ *   - Height = keywayWidthMm at the DIAMETER scale → WIDTH to scale, proportional to the
+ *     drawn shaft height (`geom/KeywaySlotMath.kt` — floored for visibility, capped against
+ *     the host). This canvas has one uniform scale; the PDF's two differ.
+ *   - Horizontal span = keywayLengthMm at the AXIAL scale → LENGTH to scale
  *   - Depth is NOT drawn; it appears only as text in the PDF footer
  *
  * The LET (closed) end uses a concave semicircle — the mill-cutter profile.
@@ -654,8 +659,8 @@ private fun DrawScope.drawKeywayNotch(
     t: Taper,
     L: ShaftRenderer.Layout,
     x0: Float, x1: Float,
-    @Suppress("UNUSED_PARAMETER") top0: Float,
-    @Suppress("UNUSED_PARAMETER") top1: Float,
+    top0: Float,
+    top1: Float,
     outline: Color,
     outlineW: Float,
     @Suppress("UNUSED_PARAMETER") taperFill: Color,
@@ -673,6 +678,9 @@ private fun DrawScope.drawKeywayNotch(
         widthMm = t.keywayWidthMm,
         offsetMm = t.keywayOffsetFromSetMm,
         lengthMm = t.keywayLengthMm,
+        // The keyway sits at the SET (small) end, so the smaller drawn radius is the host
+        // the slot must stay inside.
+        hostRadiusPx = min(L.centerlineYPx - top0, L.centerlineYPx - top1),
         L = L, outline = outline, outlineW = outlineW, hidden = hidden,
         spooned = t.keywaySpooned,
     )
@@ -704,6 +712,7 @@ private fun DrawScope.drawKeywayNotchBody(
         widthMm = b.keywayWidthMm,
         offsetMm = b.keywayOffsetFromEndMm,
         lengthMm = b.keywayLengthMm,
+        hostRadiusPx = L.rPx(b.diaMm),
         L = L, outline = outline, outlineW = outlineW, hidden = hidden,
         spooned = b.keywaySpooned,
     )
@@ -713,6 +722,7 @@ private fun DrawScope.drawKeywayNotchBody(
  * Shared keyway slot geometry. [refX] is the referenced face (SET face for tapers, the
  * AFT/FWD end face for bodies); [dir] is +1 when the slot extends rightward from it.
  * offset ≈ 0 = open at the referenced face; > 0 = floating (mill arcs both ends).
+ * [hostRadiusPx] is the drawn radius the slot is cut into — the cap on its drawn width.
  *
  * [hidden] draws the slot as a far-side feature (keyways 180° apart): dashed outline and
  * **no** white void fill — the near shaft surface is unbroken, so nothing is carved away
@@ -724,6 +734,7 @@ private fun DrawScope.drawKeywaySlot(
     widthMm: Float,
     offsetMm: Float,
     lengthMm: Float,
+    hostRadiusPx: Float,
     L: ShaftRenderer.Layout,
     outline: Color,
     outlineW: Float,
@@ -732,12 +743,20 @@ private fun DrawScope.drawKeywaySlot(
 ) {
     val cy   = L.centerlineYPx
 
-    val halfW    = (widthMm * L.pxPerMm) / 2f
+    // Width and mill-arc radius ride the diameter scale (here the canvas's single uniform
+    // scale), floored for visibility and capped against the host — `geom/KeywaySlotMath.kt`,
+    // the same construction the PDF slot uses, where the two scales genuinely differ.
+    val halfW    = drawnKeywayHalfWidthPx(
+        trueHalfWidthPx = (widthMm * L.pxPerMm) / 2f,
+        hostRadiusPx = hostRadiusPx,
+        minWidthPx = MIN_KEYWAY_WIDTH_PX,
+        strokeWidthPx = outlineW,
+    )
     val offsetPx = offsetMm * L.pxPerMm
-    val kwLenPx  = lengthMm * L.pxPerMm
+    val isOpen   = offsetMm < 0.01f
+    val kwLenPx  = maxOf(lengthMm * L.pxPerMm, minKeywaySlotLenPx(halfW, isOpen))
     val kwSetX   = refX + dir * offsetPx
     val kwLetX   = kwSetX + dir * kwLenPx
-    val isOpen   = offsetMm < 0.01f
 
     // Spooned (open keyways only): keep the normal keyway (full-length walls + mill semicircle) and
     // ADD an enlarged circle around the closed (LET) end — the mill end stays as an inner reference

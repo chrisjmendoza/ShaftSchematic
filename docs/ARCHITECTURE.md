@@ -203,8 +203,10 @@ shared engine — never re-implemented per renderer):
   the label-width-aware callout placement engine (single-row fan → two-row stagger with
   dogleg leaders → flagged compression), used by the wear overlay canvas, the wear PDF's
   liner strips, and its main-profile band.
-- `KeywaySpoonMath.kt` / `KeywaySilhouetteMath.kt` — spooned-keyway bowl math and the
-  90°-clocked keyway's silhouette notch (schematic canvas ⇔ schematic PDF).
+- `KeywaySlotMath.kt` / `KeywaySpoonMath.kt` / `KeywaySilhouetteMath.kt` — the plan-view slot's
+  transverse width (the diameter-scale term, its visibility floor and host ceiling), the
+  spooned-keyway bowl, and the 90°-clocked keyway's silhouette notch (schematic canvas ⇔
+  schematic PDF).
 - `WornSectionMath.kt` — worn-section span/label placement for the consolidated sheet
   (runout canvas ⇔ runout PDF).
 - `UndercutMath.kt` + `SurfaceProfileMath.kt` — undercut cluster windows, clamps, hit-tests

@@ -46,8 +46,7 @@ class BlankDraftFooterTest {
         showAftThread = true,
         showFwdThread = false,
         showAftTaper = true,
-        showFwdTaper = false,
-        showCompressionNote = false
+        showFwdTaper = false
     )
 
     @Test
@@ -104,8 +103,7 @@ class BlankDraftFooterTest {
             showAftThread = false,
             showFwdThread = false,
             showAftTaper = false,
-            showFwdTaper = false,
-            showCompressionNote = false
+            showFwdTaper = false
         )
 
         val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfgNoEnds, blankValues = true)

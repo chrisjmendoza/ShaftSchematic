@@ -20,8 +20,7 @@ class BodyKeywayFooterTest {
         showAftThread = false,
         showFwdThread = false,
         showAftTaper = false,
-        showFwdTaper = false,
-        showCompressionNote = false,
+        showFwdTaper = false
     )
 
     private fun keyedBody(startMm: Float, lengthMm: Float, end: LinerAuthoredReference) = Body(
