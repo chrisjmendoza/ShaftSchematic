@@ -2,15 +2,17 @@ package com.android.shaftschematic.io
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Pure decision layer of the backup auto-mirror.
  *
- * The two rules worth pinning: a mirror write reuses the document that is already there (a
- * create would leave "Job 1 (1).shaft" behind on every save), and only saved `.shaft` documents
- * are ever mirrored.
+ * The rules worth pinning: a mirror write reuses the document that is already there (a create
+ * would leave "Job 1 (1).shaft" behind on every save), a delete finds exactly the document that
+ * write had been maintaining (anything narrower leaves the stale copy this closes), and only
+ * saved `.shaft` documents are ever mirrored.
  */
 class BackupMirrorPlanTest {
 
@@ -62,6 +64,82 @@ class BackupMirrorPlanTest {
     fun `a different document is not overwritten`() {
         val entries = listOf(MirrorFolderEntry("other", "Job 12.shaft"))
         assertEquals(MirrorWriteTarget.Create, planMirrorWrite(entries, "Job 1.shaft"))
+    }
+
+    // ── planMirrorDelete ─────────────────────────────────────────────────────
+
+    @Test
+    fun `deleting a document removes its copy`() {
+        val entries = listOf(
+            MirrorFolderEntry("primary:Backups/Other.shaft", "Other.shaft"),
+            MirrorFolderEntry("primary:Backups/Job 1.shaft", "Job 1.shaft"),
+        )
+        assertEquals(
+            MirrorDeleteTarget.Delete("primary:Backups/Job 1.shaft"),
+            planMirrorDelete(entries, "Job 1.shaft"),
+        )
+    }
+
+    @Test
+    fun `an empty folder has nothing to delete`() {
+        assertEquals(MirrorDeleteTarget.NotPresent, planMirrorDelete(emptyList(), "Job 1.shaft"))
+    }
+
+    @Test
+    fun `a document that was never mirrored is a no-op, not a failure`() {
+        // Saved before the folder was picked, or tidied away by hand: the folder is allowed to
+        // be behind, and a delete of something that is not there has nothing to answer for.
+        val entries = listOf(MirrorFolderEntry("other", "Job 12.shaft"))
+        assertEquals(MirrorDeleteTarget.NotPresent, planMirrorDelete(entries, "Job 1.shaft"))
+    }
+
+    @Test
+    fun `a provider-deduplicated copy is not deleted for the document`() {
+        val entries = listOf(MirrorFolderEntry("dup", "Job 1 (1).shaft"))
+        assertEquals(MirrorDeleteTarget.NotPresent, planMirrorDelete(entries, "Job 1.shaft"))
+    }
+
+    @Test
+    fun `delete finds the same document a write would have written over`() {
+        // Matching more strictly on delete than on write would leave behind exactly the copy the
+        // write had been maintaining — a stale document under a name the user deleted.
+        val entries = listOf(MirrorFolderEntry("loud", "JOB 1.SHAFT"))
+        assertEquals(MirrorWriteTarget.Overwrite("loud"), planMirrorWrite(entries, "Job 1.shaft"))
+        assertEquals(MirrorDeleteTarget.Delete("loud"), planMirrorDelete(entries, "Job 1.shaft"))
+    }
+
+    @Test
+    fun `delete prefers the exact name over a case-insensitive one`() {
+        val entries = listOf(
+            MirrorFolderEntry("loud", "JOB 1.SHAFT"),
+            MirrorFolderEntry("exact", "Job 1.shaft"),
+        )
+        assertEquals(MirrorDeleteTarget.Delete("exact"), planMirrorDelete(entries, "Job 1.shaft"))
+    }
+
+    @Test
+    fun `a rename resolves the old and the new name to different documents`() {
+        // The rename path writes the new name, then deletes the old one; both halves must land on
+        // their own document or the rename would eat the copy it just wrote.
+        val entries = listOf(
+            MirrorFolderEntry("old-id", "Job 1.shaft"),
+            MirrorFolderEntry("new-id", "Job 2.shaft"),
+        )
+        assertEquals(MirrorWriteTarget.Overwrite("new-id"), planMirrorWrite(entries, "Job 2.shaft"))
+        assertEquals(MirrorDeleteTarget.Delete("old-id"), planMirrorDelete(entries, "Job 1.shaft"))
+    }
+
+    // ── findMirrorEntry ──────────────────────────────────────────────────────
+
+    @Test
+    fun `entry lookup returns null when the folder holds nothing by that name`() {
+        assertNull(findMirrorEntry(listOf(MirrorFolderEntry("other", "Job 12.shaft")), "Job 1.shaft"))
+    }
+
+    @Test
+    fun `entry lookup returns the matched entry whole`() {
+        val entry = MirrorFolderEntry("primary:Backups/Job 1.shaft", "Job 1.shaft")
+        assertEquals(entry, findMirrorEntry(listOf(entry), "Job 1.shaft"))
     }
 
     // ── shouldMirrorDocument ─────────────────────────────────────────────────

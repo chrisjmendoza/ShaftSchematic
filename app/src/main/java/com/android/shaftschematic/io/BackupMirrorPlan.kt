@@ -41,23 +41,51 @@ sealed interface MirrorWriteTarget {
     data object Create : MirrorWriteTarget
 }
 
+/** What a mirror delete should touch. */
+sealed interface MirrorDeleteTarget {
+    /** The folder's copy of the document — remove it. */
+    data class Delete(val documentId: String) : MirrorDeleteTarget
+
+    /** Nothing by that name is in the folder; there is nothing to remove. */
+    data object NotPresent : MirrorDeleteTarget
+}
+
 /**
- * Decides whether [displayName] already exists among [entries].
+ * The folder entry [displayName] refers to, or null when the folder holds nothing by that name.
  *
  * An exact match wins over a case-insensitive one: providers on case-preserving filesystems can
  * hold both `Job 1.shaft` and `JOB 1.shaft`, and the copy of a document must go back over the
  * name it was written under.
+ *
+ * **Write and delete resolve the name the same way, deliberately.** A delete that matched more
+ * strictly than the write would leave behind exactly the copy the write had been maintaining —
+ * a stale document under a name the user has already deleted or renamed away.
  */
-fun planMirrorWrite(entries: List<MirrorFolderEntry>, displayName: String): MirrorWriteTarget {
+fun findMirrorEntry(entries: List<MirrorFolderEntry>, displayName: String): MirrorFolderEntry? =
     entries.firstOrNull { it.displayName == displayName }
-        ?.let { return MirrorWriteTarget.Overwrite(it.documentId) }
-    entries.firstOrNull { it.displayName.equals(displayName, ignoreCase = true) }
-        ?.let { return MirrorWriteTarget.Overwrite(it.documentId) }
-    return MirrorWriteTarget.Create
-}
+        ?: entries.firstOrNull { it.displayName.equals(displayName, ignoreCase = true) }
+
+/** Decides whether [displayName] already exists among [entries]. */
+fun planMirrorWrite(entries: List<MirrorFolderEntry>, displayName: String): MirrorWriteTarget =
+    findMirrorEntry(entries, displayName)
+        ?.let { MirrorWriteTarget.Overwrite(it.documentId) }
+        ?: MirrorWriteTarget.Create
 
 /**
- * True when a save of [name] should be mirrored to [folderUri].
+ * Decides which document a delete of [displayName] should remove from the mirror folder.
+ *
+ * A missing entry is [MirrorDeleteTarget.NotPresent], never an error: the folder is allowed to
+ * be behind (a document saved before the folder was picked, a copy the user tidied away by
+ * hand), and a delete of something that was never mirrored has nothing to answer for.
+ */
+fun planMirrorDelete(entries: List<MirrorFolderEntry>, displayName: String): MirrorDeleteTarget =
+    findMirrorEntry(entries, displayName)
+        ?.let { MirrorDeleteTarget.Delete(it.documentId) }
+        ?: MirrorDeleteTarget.NotPresent
+
+/**
+ * True when [name] is a document the mirror at [folderUri] carries — the one gate on every
+ * mirror operation: a save's copy, a delete's removal, a rename's pair, a catch-up's list.
  *
  * Deliberately narrow — the mirror carries **saved shaft documents only**:
  * - no folder picked (null/blank) → mirroring is off;

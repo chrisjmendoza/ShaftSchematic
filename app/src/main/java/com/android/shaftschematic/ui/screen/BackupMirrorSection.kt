@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.data.SettingsStore
@@ -27,11 +28,14 @@ import kotlinx.coroutines.withContext
 
 /**
  * Settings → Data → "Mirror saves to folder": pick a folder once, and every saved shaft is
- * copied there as well.
+ * copied there as well — plus the "Mirror all now" catch-up row underneath it.
  *
- * The row is the feature's only status surface. Mirroring is deliberately silent while it works
- * and stays silent when it fails — a save must never be interrupted by a backup problem — so the
- * last attempt's result is reported here as quiet supporting text and nowhere else.
+ * These two rows are the feature's only status surface. Mirroring is deliberately silent while it
+ * works and stays silent when it fails — a save must never be interrupted by a backup problem —
+ * so the last attempt's result is reported here as quiet supporting text and nowhere else.
+ *
+ * The catch-up keeps its own status line rather than sharing the folder row's: it reports a whole
+ * run ("Mirrored 7 of 8"), while that line reports what the last single save did.
  *
  * "Stop mirroring" is the only thing that clears the stored folder. A revoked grant leaves the
  * choice standing so re-granting the same folder resumes it.
@@ -43,6 +47,7 @@ internal fun BackupMirrorSection(modifier: Modifier = Modifier) {
 
     val folderUri by SettingsStore.backupMirrorFolderUriFlow(ctx).collectAsState(initial = null)
     val lastOutcome by BackupMirror.lastOutcome.collectAsState()
+    val catchUp by BackupMirror.catchUp.collectAsState()
     var folderLabel by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(folderUri) {
@@ -71,9 +76,17 @@ internal fun BackupMirrorSection(modifier: Modifier = Modifier) {
                             when (outcome.status) {
                                 BackupMirror.Status.WROTE ->
                                     append("\nLast copy: ${outcome.documentName}")
+                                BackupMirror.Status.RENAMED ->
+                                    append(
+                                        "\nRenamed in the folder: " +
+                                            "${outcome.previousName ?: "the old name"} → " +
+                                            outcome.documentName
+                                    )
+                                BackupMirror.Status.REMOVED ->
+                                    append("\nRemoved from the folder: ${outcome.documentName}")
                                 BackupMirror.Status.FAILED ->
                                     append(
-                                        "\nLast copy of ${outcome.documentName} did not go " +
+                                        "\nThe folder copy of ${outcome.documentName} did not go " +
                                             "through (${outcome.detail ?: "write failed"}). " +
                                             "Your saved shaft is fine."
                                     )
@@ -102,4 +115,51 @@ internal fun BackupMirrorSection(modifier: Modifier = Modifier) {
             .testTag("backup_mirror_row")
             .clickable { picker.launch(null) },
     )
+
+    // The catch-up. Only reachable once a folder is picked — there is nothing to catch up to
+    // otherwise — and it follows the Data section's own idiom: a clickable row with its result in
+    // the supporting line, no dialog.
+    if (folderUri != null) {
+        val running = catchUp?.running == true
+        val failedInLastRun = catchUp?.takeIf { !it.running }?.failed ?: 0
+        ListItem(
+            headlineContent = {
+                Text(
+                    "Mirror all now",
+                    color = if (running) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified,
+                )
+            },
+            supportingContent = {
+                Text(
+                    mirrorAllStatusText(catchUp),
+                    color =
+                        if (failedInLastRun > 0) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("backup_mirror_all")
+                .clickable(enabled = !running) { BackupMirror.mirrorAllSavedDocuments(ctx) },
+        )
+    }
+}
+
+/**
+ * The catch-up row's supporting line: what it is for before a run, live counts during one, and
+ * the totals after. Failures are counted, never detailed — the per-document reasons are on the
+ * IO log, and the point of this line is that the saved documents themselves are unaffected.
+ */
+private fun mirrorAllStatusText(catchUp: BackupMirror.CatchUp?): String = when {
+    catchUp == null ->
+        "Copy every saved shaft to the folder now — catches up anything saved before you picked it"
+    catchUp.running ->
+        "Mirroring… ${catchUp.mirrored + catchUp.failed} of ${catchUp.total}"
+    catchUp.failed > 0 ->
+        "Mirrored ${catchUp.mirrored} of ${catchUp.total} — ${catchUp.failed} did not go through. " +
+            "Your saved shafts are fine."
+    else -> "Mirrored ${catchUp.mirrored} of ${catchUp.total}"
 }

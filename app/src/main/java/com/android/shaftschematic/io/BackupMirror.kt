@@ -21,14 +21,16 @@ import kotlinx.coroutines.sync.withLock
  *
  * The user picks one SAF folder in Settings; from then on every saved shaft document is copied
  * there as well, under the same filename, so the off-device backup is always current without
- * anybody remembering to make one.
+ * anybody remembering to make one. A document deleted or renamed internally is deleted or
+ * renamed in the folder too, and [mirrorAllNow] catches the folder up with everything that was
+ * already saved when it was picked.
  *
- * **The mirror may never cost the save anything.** It is hooked *after* [InternalStorage.save]
- * has already returned, runs fire-and-forget on this object's own IO scope, and every provider
- * call is wrapped: a revoked grant, a deleted folder, a full disk or any other IO failure leaves
- * the internal save exactly as it was and never surfaces as an error the user has to dismiss.
- * The only signal is a log line on the IO channel plus [lastOutcome], which Settings shows as
- * quiet supporting text.
+ * **The mirror may never cost the operation anything.** Every hook runs *after* the internal
+ * [InternalStorage] call has already returned (and only when it succeeded), fire-and-forget on
+ * this object's own IO scope, and every provider call is wrapped: a revoked grant, a deleted
+ * folder, a full disk or any other IO failure leaves the internal document exactly as it was and
+ * never surfaces as an error the user has to dismiss. The only signal is a log line on the IO
+ * channel plus [lastOutcome] / [catchUp], which Settings shows as quiet supporting text.
  *
  * **A found-revoked permission is never cleared.** The user may re-grant access to the same
  * folder (remounted card, restored cloud account); dropping the stored URI on the first failure
@@ -43,12 +45,26 @@ object BackupMirror {
     private const val TAG = "BackupMirror"
 
     /** What the last mirror attempt did. Session state — nothing here is persisted. */
-    enum class Status { WROTE, FAILED }
+    enum class Status { WROTE, RENAMED, REMOVED, FAILED }
 
     data class Outcome(
         val status: Status,
         val documentName: String,
         val detail: String? = null,
+        /** The name the document was mirrored under before a [Status.RENAMED] outcome. */
+        val previousName: String? = null,
+    )
+
+    /**
+     * Progress of a [mirrorAllNow] catch-up — session state like [Outcome], and reported
+     * separately from it: driving the per-save status line through forty documents would flicker
+     * a line that is meant to say what the last *save* did.
+     */
+    data class CatchUp(
+        val running: Boolean,
+        val total: Int,
+        val mirrored: Int,
+        val failed: Int,
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -62,6 +78,9 @@ object BackupMirror {
     private val _lastOutcome = MutableStateFlow<Outcome?>(null)
     val lastOutcome: StateFlow<Outcome?> = _lastOutcome.asStateFlow()
 
+    private val _catchUp = MutableStateFlow<CatchUp?>(null)
+    val catchUp: StateFlow<CatchUp?> = _catchUp.asStateFlow()
+
     /**
      * Called by [InternalStorage.save] once the internal write has succeeded.
      *
@@ -69,40 +88,170 @@ object BackupMirror {
      * waits on a provider that may be a network mount.
      */
     fun onDocumentSaved(ctx: Context, name: String, content: String) {
-        val app = ctx.applicationContext
-        scope.launch {
-            runCatching { mirrorDocument(app, name, content) }
-                .onFailure { t ->
-                    // Reaching here means even the outcome bookkeeping threw. Swallow it: the
-                    // document is already safely saved internally.
-                    VerboseLog.e(VerboseLog.Category.IO, TAG) { "mirror dispatch failed: ${t.message}" }
-                }
-        }
+        dispatch(ctx, "save") { mirrorDocument(it, name, content) }
+    }
+
+    /**
+     * Called by [InternalStorage.delete] once the internal file is actually gone.
+     *
+     * Only on success, deliberately: a failed internal delete leaves the document live, and the
+     * folder copy of a live document is a backup, not a leftover.
+     */
+    fun onDocumentDeleted(ctx: Context, name: String) {
+        dispatch(ctx, "delete") { unmirrorDocument(it, name) }
+    }
+
+    /**
+     * Called by [InternalStorage.rename] once the internal rename has succeeded — after it, so
+     * the renamed content can be read back under [toName].
+     */
+    fun onDocumentRenamed(ctx: Context, fromName: String, toName: String) {
+        dispatch(ctx, "rename") { mirrorRenamedDocument(it, fromName, toName) }
+    }
+
+    /**
+     * Settings → Data → "Mirror all now": copies every saved document to the folder, catching up
+     * everything that was already there when the folder was picked. Fire-and-forget like the
+     * hooks; progress lands in [catchUp].
+     */
+    fun mirrorAllSavedDocuments(ctx: Context) {
+        dispatch(ctx, "catch-up") { mirrorAllNow(it) }
     }
 
     /**
      * Copies [content] to the mirror folder under [name]. Suspends; safe to call directly from a
-     * test or a "mirror now" action. Never throws.
+     * test. Never throws. Returns true when the copy actually landed.
      */
-    suspend fun mirrorDocument(ctx: Context, name: String, content: String) {
+    suspend fun mirrorDocument(ctx: Context, name: String, content: String): Boolean {
         val app = ctx.applicationContext
-        val folderUri = runCatching { SettingsStore.getBackupMirrorFolderUri(app) }.getOrNull()
-        if (!shouldMirrorDocument(name, folderUri)) return
-        val treeUri = runCatching { Uri.parse(folderUri!!) }.getOrNull() ?: return
+        val folderUri = storedFolderUri(app)
+        if (!shouldMirrorDocument(name, folderUri)) return false
+        val treeUri = parseTreeUri(folderUri) ?: return false
 
-        writeLock.withLock {
-            val result = runCatching { writeIntoTree(app, treeUri, name, content) }
-            result.fold(
-                onSuccess = {
-                    VerboseLog.d(VerboseLog.Category.IO, TAG) { "mirrored name=$name chars=${content.length}" }
-                    _lastOutcome.value = Outcome(Status.WROTE, name)
-                },
-                onFailure = { t ->
-                    VerboseLog.e(VerboseLog.Category.IO, TAG) { "mirror failed name=$name: ${t.message}" }
-                    _lastOutcome.value = Outcome(Status.FAILED, name, detail = failureDetail(t))
-                },
-            )
+        return writeMirrorCopy(app, treeUri, name, content).fold(
+            onSuccess = {
+                VerboseLog.d(VerboseLog.Category.IO, TAG) { "mirrored name=$name chars=${content.length}" }
+                _lastOutcome.value = Outcome(Status.WROTE, name)
+                true
+            },
+            onFailure = { t ->
+                VerboseLog.e(VerboseLog.Category.IO, TAG) { "mirror failed name=$name: ${t.message}" }
+                _lastOutcome.value = Outcome(Status.FAILED, name, detail = failureDetail(t))
+                false
+            },
+        )
+    }
+
+    /**
+     * Removes the folder's copy of [name]. Never throws; a folder that holds nothing by that
+     * name is a silent no-op (it may predate the folder being picked, or have been tidied away
+     * by hand). Returns true when a copy was actually removed.
+     */
+    suspend fun unmirrorDocument(ctx: Context, name: String): Boolean {
+        val app = ctx.applicationContext
+        val folderUri = storedFolderUri(app)
+        if (!shouldMirrorDocument(name, folderUri)) return false
+        val treeUri = parseTreeUri(folderUri) ?: return false
+
+        return deleteMirrorCopy(app, treeUri, name).fold(
+            onSuccess = { removed ->
+                if (removed) {
+                    VerboseLog.d(VerboseLog.Category.IO, TAG) { "unmirrored name=$name" }
+                    _lastOutcome.value = Outcome(Status.REMOVED, name)
+                } else {
+                    VerboseLog.d(VerboseLog.Category.IO, TAG) { "nothing to unmirror name=$name" }
+                }
+                removed
+            },
+            onFailure = { t ->
+                VerboseLog.e(VerboseLog.Category.IO, TAG) { "unmirror failed name=$name: ${t.message}" }
+                _lastOutcome.value = Outcome(Status.FAILED, name, detail = failureDetail(t))
+                false
+            },
+        )
+    }
+
+    /**
+     * Follows an internal rename into the folder: write the content under [toName], then drop the
+     * copy under [fromName].
+     *
+     * **Write first, delete second.** A failed write must never be able to take the only
+     * off-device copy with it, so the old name is only dropped once the new one is provably
+     * there — a copy under a stale name is a far cheaper failure than no copy at all.
+     *
+     * Deliberately not `DocumentsContract.renameDocument`: tree-URI rename support varies by
+     * provider, and a rename that silently does nothing would leave the same stale copy this
+     * closes. The content is read back from internal storage under the NEW name because the
+     * internal rename has already happened by the time this runs.
+     */
+    suspend fun mirrorRenamedDocument(ctx: Context, fromName: String, toName: String) {
+        val app = ctx.applicationContext
+        val folderUri = storedFolderUri(app)
+        if (folderUri.isNullOrBlank()) return
+        val treeUri = parseTreeUri(folderUri) ?: return
+
+        val content = runCatching { InternalStorage.load(app, toName) }.getOrNull()
+        if (content == null) {
+            VerboseLog.e(VerboseLog.Category.IO, TAG) { "rename mirror skipped: $toName is not readable" }
+            return
         }
+
+        if (!mirrorDocument(app, toName, content)) {
+            VerboseLog.e(VerboseLog.Category.IO, TAG) {
+                "rename mirror kept the copy of $fromName: $toName could not be written"
+            }
+            return
+        }
+
+        if (shouldMirrorDocument(fromName, folderUri)) {
+            deleteMirrorCopy(app, treeUri, fromName).onFailure { t ->
+                VerboseLog.e(VerboseLog.Category.IO, TAG) {
+                    "rename mirror left a stale copy of $fromName: ${t.message}"
+                }
+            }
+        }
+        _lastOutcome.value = Outcome(Status.RENAMED, toName, previousName = fromName)
+    }
+
+    /**
+     * Copies every saved document into the folder, one at a time, reporting through [catchUp].
+     *
+     * This is the answer to a folder picked *after* the shafts were saved: without it the mirror
+     * only ever holds what happened to be saved since. Reuses the same per-document write as a
+     * save, so nothing about the copy differs from an automatic one.
+     */
+    suspend fun mirrorAllNow(ctx: Context): CatchUp {
+        val app = ctx.applicationContext
+        val folderUri = storedFolderUri(app)
+        val treeUri = parseTreeUri(folderUri)
+        if (folderUri.isNullOrBlank() || treeUri == null) {
+            return CatchUp(running = false, total = 0, mirrored = 0, failed = 0)
+                .also { _catchUp.value = it }
+        }
+
+        val names = runCatching { InternalStorage.list(app) }.getOrDefault(emptyList())
+            .filter { shouldMirrorDocument(it, folderUri) }
+        _catchUp.value = CatchUp(running = true, total = names.size, mirrored = 0, failed = 0)
+
+        var mirrored = 0
+        var failed = 0
+        for (name in names) {
+            val content = runCatching { InternalStorage.load(app, name) }.getOrNull()
+            val ok = content != null &&
+                writeMirrorCopy(app, treeUri, name, content)
+                    .onFailure { t ->
+                        VerboseLog.e(VerboseLog.Category.IO, TAG) { "catch-up failed name=$name: ${t.message}" }
+                    }
+                    .isSuccess
+            if (ok) mirrored++ else failed++
+            _catchUp.value = CatchUp(running = true, total = names.size, mirrored = mirrored, failed = failed)
+        }
+
+        VerboseLog.d(VerboseLog.Category.IO, TAG) {
+            "catch-up done total=${names.size} mirrored=$mirrored failed=$failed"
+        }
+        return CatchUp(running = false, total = names.size, mirrored = mirrored, failed = failed)
+            .also { _catchUp.value = it }
     }
 
     /**
@@ -126,6 +275,7 @@ object BackupMirror {
 
         SettingsStore.setBackupMirrorFolderUri(app, treeUri.toString())
         _lastOutcome.value = null
+        _catchUp.value = null
         return true
     }
 
@@ -143,6 +293,7 @@ object BackupMirror {
         }
         SettingsStore.setBackupMirrorFolderUri(app, null)
         _lastOutcome.value = null
+        _catchUp.value = null
     }
 
     /**
@@ -171,17 +322,56 @@ object BackupMirror {
     }
 
     // ────────────────────────────────────────────────────────────────────────────
+    // Dispatch + folder resolution
+    // ────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Queues one mirror operation onto this object's IO scope and returns. Reaching the failure
+     * branch means even the bookkeeping threw — swallow it: the internal document is already in
+     * the state the user asked for, and [what] names which hook gave up.
+     */
+    private fun dispatch(ctx: Context, what: String, work: suspend (Context) -> Unit) {
+        val app = ctx.applicationContext
+        scope.launch {
+            runCatching { work(app) }
+                .onFailure { t ->
+                    VerboseLog.e(VerboseLog.Category.IO, TAG) { "$what mirror dispatch failed: ${t.message}" }
+                }
+        }
+    }
+
+    private suspend fun storedFolderUri(ctx: Context): String? =
+        runCatching { SettingsStore.getBackupMirrorFolderUri(ctx) }.getOrNull()
+
+    private fun parseTreeUri(folderUri: String?): Uri? =
+        folderUri?.let { runCatching { Uri.parse(it) }.getOrNull() }
+
+    /**
+     * The write, with no status bookkeeping of its own — the caller owns the report, so the
+     * catch-up can total its own run without driving the per-save status line.
+     */
+    private suspend fun writeMirrorCopy(
+        ctx: Context,
+        treeUri: Uri,
+        name: String,
+        content: String,
+    ): Result<Unit> = writeLock.withLock { runCatching { writeIntoTree(ctx, treeUri, name, content) } }
+
+    /** The delete, same posture as [writeMirrorCopy]. True when a copy was actually removed. */
+    private suspend fun deleteMirrorCopy(
+        ctx: Context,
+        treeUri: Uri,
+        name: String,
+    ): Result<Boolean> = writeLock.withLock { runCatching { deleteFromTree(ctx, treeUri, name) } }
+
+    // ────────────────────────────────────────────────────────────────────────────
     // Provider plumbing (the untestable shell — keep it thin)
     // ────────────────────────────────────────────────────────────────────────────
 
-    private fun writeIntoTree(ctx: Context, treeUri: Uri, name: String, content: String) {
-        val resolver = ctx.contentResolver
-        val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
-        val parentDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
+    private fun readFolderEntries(ctx: Context, treeUri: Uri, treeDocId: String): List<MirrorFolderEntry> {
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocId)
-
         val entries = mutableListOf<MirrorFolderEntry>()
-        resolver.query(
+        ctx.contentResolver.query(
             childrenUri,
             arrayOf(
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
@@ -197,6 +387,14 @@ object BackupMirror {
                 entries += MirrorFolderEntry(documentId = id, displayName = display)
             }
         } ?: error("mirror folder is not readable")
+        return entries
+    }
+
+    private fun writeIntoTree(ctx: Context, treeUri: Uri, name: String, content: String) {
+        val resolver = ctx.contentResolver
+        val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+        val parentDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
+        val entries = readFolderEntries(ctx, treeUri, treeDocId)
 
         val docUri = when (val target = planMirrorWrite(entries, name)) {
             is MirrorWriteTarget.Overwrite ->
@@ -213,6 +411,20 @@ object BackupMirror {
             ?: resolver.openOutputStream(docUri, "w")
             ?: error("could not open the document for writing")
         stream.use { it.write(bytes) }
+    }
+
+    /** False when the folder holds nothing by that name; throws only on a real provider failure. */
+    private fun deleteFromTree(ctx: Context, treeUri: Uri, name: String): Boolean {
+        val resolver = ctx.contentResolver
+        val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+        val entries = readFolderEntries(ctx, treeUri, treeDocId)
+
+        val target = planMirrorDelete(entries, name) as? MirrorDeleteTarget.Delete ?: return false
+        val docUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, target.documentId)
+        if (!DocumentsContract.deleteDocument(resolver, docUri)) {
+            error("the provider refused to delete the copy")
+        }
+        return true
     }
 
     private fun failureDetail(t: Throwable): String = when (t) {

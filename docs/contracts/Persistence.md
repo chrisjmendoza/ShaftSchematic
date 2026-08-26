@@ -51,29 +51,42 @@ Do Nots
 
 One SAF folder, picked once in Settings → Data ("Mirror saves to folder", persisted tree URI
 with `takePersistableUriPermission` read+write); every internal document save mirrors a copy
-there under the same filename.
+there under the same filename, and a delete or rename follows it there too.
 
 Invariants
-- **One choke point**: the hook is the single line after the atomic write in
-  `InternalStorage.save(ctx, name, content)` — the Context overload every UI save site calls.
+- **Three choke points, all Context overloads**: `InternalStorage.save(ctx, …)` →
+  `onDocumentSaved`, `delete(ctx, …)` → `onDocumentDeleted`, `rename(ctx, …)` →
+  `onDocumentRenamed`, each one line after the internal operation and **only when it
+  succeeded** — the folder copy of a document that is still here is a backup, not a leftover.
   Exclusions are **structural, not filtered**: templates, zip restores, and pre-update
-  snapshots use the directory-taking `save(dir, …)` overload (no hook) or their own streams,
-  and autosave drafts live in DataStore and never reach `InternalStorage` at all.
-- **The mirror may never cost the save anything**: fire-and-forget on `BackupMirror`'s own
-  `SupervisorJob + Dispatchers.IO` scope, hooked strictly after the internal write returned;
-  every provider call wrapped; concurrent saves serialize on a mutex.
+  snapshots use the directory-taking `save(dir, …)`/`delete(dir, …)` overloads (no hook) or
+  their own streams, and autosave drafts live in DataStore and never reach `InternalStorage`
+  at all.
+- **The mirror may never cost the operation anything**: fire-and-forget on `BackupMirror`'s own
+  `SupervisorJob + Dispatchers.IO` scope, hooked strictly after the internal call returned;
+  every provider call wrapped; concurrent writes and deletes serialize on one mutex.
 - **A found-revoked permission never clears the stored URI** — re-granting the same folder
   must be enough to resume; only the user's explicit "Stop" clears it. Failures log on the
-  VerboseLog IO channel plus quiet session-only status text on the Settings row.
+  VerboseLog IO channel plus quiet session-only status text on the Settings rows.
 - **Overwrite-in-place by display name** (`planMirrorWrite`): an existing document is written
   over (`"wt"`); only a genuinely new name is created — an unconditional create would leave
   `" (1)"` duplicates on every save. Created as `application/octet-stream`, the one MIME type
   that leaves a `.shaft` name intact; names carrying a path separator are rejected.
-- Pure decisions (find-or-create, should-mirror, folder label) in `BackupMirrorPlan.kt`
-  (unit-tested); `BackupMirror.kt` is the thin untestable SAF shell.
-
-Deliberate v1 bounds: a rename/delete of a saved document does not propagate to the mirror,
-and there is no catch-up action for documents saved before the folder was picked.
+- **Write and delete resolve a name through the same matcher** (`findMirrorEntry`, exact before
+  case-insensitive). A delete that matched more strictly than the write would leave behind
+  exactly the copy the write had been maintaining. A name that is not in the folder is a
+  **silent no-op** (`MirrorDeleteTarget.NotPresent`) — the folder is allowed to be behind.
+- **A rename is write-new-then-delete-old**, never `DocumentsContract.renameDocument`: tree-URI
+  rename support varies by provider, and a rename that silently does nothing would leave the
+  same stale copy. The content is read back from internal storage under the **new** name (the
+  hook runs after the internal rename), and the old copy is dropped **only once the new one is
+  provably written** — a copy under a stale name is a cheaper failure than no copy at all.
+- **"Mirror all now"** (Settings → Data, shown only with a folder picked) copies every saved
+  document through the same per-document write, reporting `BackupMirror.CatchUp` as
+  "Mirrored N of M" (plus a failure count) in its own row's supporting line. It deliberately
+  does **not** drive the per-save status line — that line says what the last single save did.
+- Pure decisions (find-or-create, find-to-delete, should-mirror, folder label) in
+  `BackupMirrorPlan.kt` (unit-tested); `BackupMirror.kt` is the thin untestable SAF shell.
 
 ---
 

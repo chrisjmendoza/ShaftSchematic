@@ -35,8 +35,10 @@ import java.io.File
  *
  * Non-Goals
  * - No SAF, sharing, or export features (those live in SafRoutes.kt). The one exception is the
- *   backup auto-mirror hook in [save]: it hands the saved bytes to [BackupMirror] and returns,
- *   owning none of the SAF work itself.
+ *   backup auto-mirror hooks in the Context overloads of [save], [delete] and [rename]: each
+ *   hands the operation to [BackupMirror] and returns, owning none of the SAF work itself. The
+ *   directory-taking overloads carry no hook, which is what structurally excludes templates,
+ *   zip restores and pre-update snapshots from the mirror.
  * - No exception UI; errors propagate to caller.
  */
 
@@ -150,8 +152,18 @@ object InternalStorage {
             VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") { "load name=$name chars=${content.length}" }
         }
 
-    /** Returns true when the file was actually deleted. */
-    fun delete(ctx: Context, name: String): Boolean = delete(dir(ctx), name)
+    /**
+     * Returns true when the file was actually deleted.
+     *
+     * Carries the mirror's delete hook for the same reason [save] carries the write hook: this is
+     * the Context overload every UI delete goes through. Only a delete that succeeded propagates
+     * — the folder copy of a document that is still here is a backup, not a leftover.
+     */
+    fun delete(ctx: Context, name: String): Boolean {
+        val deleted = delete(dir(ctx), name)
+        if (deleted) BackupMirror.onDocumentDeleted(ctx, name)
+        return deleted
+    }
 
     internal fun delete(dir: File, name: String): Boolean = File(dir, name).delete()
 
@@ -162,8 +174,15 @@ object InternalStorage {
      * - [fromName] must be an existing filename returned by [list] (may be `.shaft` or legacy).
      * - [toName] must end with `.shaft`.
      * - Returns false if the source is missing, the target already exists, or the rename fails.
+     *
+     * The mirror hook fires only on success and strictly after the internal rename, which is what
+     * lets it read the renamed content back under [toName].
      */
-    fun rename(ctx: Context, fromName: String, toName: String): Boolean = rename(dir(ctx), fromName, toName)
+    fun rename(ctx: Context, fromName: String, toName: String): Boolean {
+        val renamed = rename(dir(ctx), fromName, toName)
+        if (renamed) BackupMirror.onDocumentRenamed(ctx, fromName, toName)
+        return renamed
+    }
 
     internal fun rename(dir: File, fromName: String, toName: String): Boolean {
         require(toName.endsWith(SHAFT_DOT_EXT, ignoreCase = true)) { "Target name must end with $SHAFT_DOT_EXT" }
