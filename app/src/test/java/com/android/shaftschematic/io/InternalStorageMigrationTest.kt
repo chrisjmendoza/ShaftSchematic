@@ -1,5 +1,6 @@
 package com.android.shaftschematic.io
 
+import kotlin.io.path.createTempDirectory
 import com.android.shaftschematic.doc.SHAFT_DOT_EXT
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -11,7 +12,7 @@ class InternalStorageMigrationTest {
 
     @Test
     fun `migration renames legacy json to shaft without overwriting`() {
-        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        val filesDir = createTempDirectory(prefix = "shaftschematic_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
 

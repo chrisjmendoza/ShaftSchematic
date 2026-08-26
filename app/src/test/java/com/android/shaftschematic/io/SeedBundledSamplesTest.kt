@@ -1,5 +1,6 @@
 package com.android.shaftschematic.io
 
+import kotlin.io.path.createTempDirectory
 import com.android.shaftschematic.doc.SHAFT_DOT_EXT
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.model.Body
@@ -65,7 +66,7 @@ class SeedBundledSamplesTest {
 
     @Test
     fun `seedVersion 0 and empty storage seeds samples and bumps version`() = runBlocking {
-        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        val filesDir = createTempDirectory(prefix = "shaftschematic_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
 
@@ -106,7 +107,7 @@ class SeedBundledSamplesTest {
 
     @Test
     fun `seedVersion already current makes seeding a no-op`() = runBlocking {
-        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        val filesDir = createTempDirectory(prefix = "shaftschematic_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
             val assets = FakeAssets(mapOf("01_basic" + SHAFT_DOT_EXT to "{}"))
@@ -125,7 +126,7 @@ class SeedBundledSamplesTest {
 
     @Test
     fun `collision handling appends Sample suffix and never overwrites`() = runBlocking {
-        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        val filesDir = createTempDirectory(prefix = "shaftschematic_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
 
@@ -172,7 +173,7 @@ class SeedBundledSamplesTest {
 
     @Test
     fun `force restore bypasses version gate and does not bump seed version`() = runBlocking {
-        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        val filesDir = createTempDirectory(prefix = "shaftschematic_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
 
@@ -219,7 +220,7 @@ class SeedBundledSamplesTest {
 
     @Test
     fun `force restore re-adds missing samples only and does not duplicate`() = runBlocking {
-        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        val filesDir = createTempDirectory(prefix = "shaftschematic_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
 
@@ -276,7 +277,7 @@ class SeedBundledSamplesTest {
 
     @Test
     fun `version bump prunes only ledger-tracked unmodified seeded samples`() = runBlocking {
-        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        val filesDir = createTempDirectory(prefix = "shaftschematic_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
 
@@ -339,7 +340,7 @@ class SeedBundledSamplesTest {
 
     @Test
     fun `version bump keeps a seeded sample the user has edited`() = runBlocking {
-        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        val filesDir = createTempDirectory(prefix = "shaftschematic_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
 
@@ -411,7 +412,7 @@ class SeedBundledSamplesTest {
 
     @Test
     fun `version bump never deletes files that predate the seed ledger`() = runBlocking {
-        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        val filesDir = createTempDirectory(prefix = "shaftschematic_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
 

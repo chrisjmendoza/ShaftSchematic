@@ -1,5 +1,6 @@
 package com.android.shaftschematic.io
 
+import kotlin.io.path.createTempDirectory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -68,7 +69,7 @@ class ShaftBackupTest {
 
     @Test
     fun `restoreInto restores fresh docs and skips identical ones`() {
-        val dir = createTempDir(prefix = "shaftbackup_test_")
+        val dir = createTempDirectory(prefix = "shaftbackup_test_").toFile()
         try {
             val docs = listOf("A.shaft" to """{"a":1}""", "B.shaft" to """{"b":2}""")
 
@@ -89,7 +90,7 @@ class ShaftBackupTest {
 
     @Test
     fun `restoreInto renames on collision and never overwrites`() {
-        val dir = createTempDir(prefix = "shaftbackup_test_")
+        val dir = createTempDirectory(prefix = "shaftbackup_test_").toFile()
         try {
             File(dir, "A.shaft").writeText("""{"current":true}""")
 
@@ -111,7 +112,7 @@ class ShaftBackupTest {
 
     @Test
     fun `restoreInto counts invalid docs as failed and writes nothing`() {
-        val dir = createTempDir(prefix = "shaftbackup_test_")
+        val dir = createTempDirectory(prefix = "shaftbackup_test_").toFile()
         try {
             val report = ShaftBackup.restoreInto(dir, listOf("bad.shaft" to "not json"), acceptJsonish)
             assertEquals(1, report.failedCount)
@@ -123,7 +124,7 @@ class ShaftBackupTest {
 
     @Test
     fun `writeSnapshot zips saved docs and prunes beyond keep`() {
-        val filesDir = createTempDir(prefix = "shaftbackup_test_")
+        val filesDir = createTempDirectory(prefix = "shaftbackup_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
             File(shaftsDir, "A.shaft").writeText("""{"a":1}""")
@@ -161,7 +162,7 @@ class ShaftBackupTest {
 
     @Test
     fun `writeSnapshot returns null when there is nothing to snapshot`() {
-        val filesDir = createTempDir(prefix = "shaftbackup_test_")
+        val filesDir = createTempDirectory(prefix = "shaftbackup_test_").toFile()
         try {
             val result = ShaftBackup.writeSnapshot(
                 shaftsDir = InternalStorage.dir(filesDir),

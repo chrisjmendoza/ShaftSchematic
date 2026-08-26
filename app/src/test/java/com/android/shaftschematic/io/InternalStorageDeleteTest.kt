@@ -1,5 +1,6 @@
 package com.android.shaftschematic.io
 
+import kotlin.io.path.createTempDirectory
 import com.android.shaftschematic.doc.SHAFT_DOT_EXT
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -11,7 +12,7 @@ class InternalStorageDeleteTest {
 
     @Test
     fun `delete removes only the targeted saved shaft file`() {
-        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        val filesDir = createTempDirectory(prefix = "shaftschematic_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
 
@@ -40,7 +41,7 @@ class InternalStorageDeleteTest {
 
     @Test
     fun `delete returns false when file does not exist and leaves others intact`() {
-        val filesDir = createTempDir(prefix = "shaftschematic_test_")
+        val filesDir = createTempDirectory(prefix = "shaftschematic_test_").toFile()
         try {
             val shaftsDir = InternalStorage.dir(filesDir)
             File(shaftsDir, "A" + SHAFT_DOT_EXT).writeText("{}")
