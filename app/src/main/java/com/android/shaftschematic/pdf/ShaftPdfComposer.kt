@@ -14,6 +14,9 @@ import com.android.shaftschematic.geom.SCHEMATIC_MIN_BODY_RUN_PT
 import com.android.shaftschematic.geom.SCHEMATIC_MIN_LINER_PT
 import com.android.shaftschematic.geom.SCHEMATIC_MIN_THREAD_PT
 import com.android.shaftschematic.geom.ProfileFeatureSpan
+import com.android.shaftschematic.geom.bodyKeywayProtectedSpansMm
+import com.android.shaftschematic.geom.keywayPinnedBodySpans
+import com.android.shaftschematic.geom.profileFeatureSpans
 import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.geom.buildCompressedProfileXMap
 import com.android.shaftschematic.geom.exaggeratedProfileScale
@@ -212,39 +215,15 @@ fun composeShaftPdf(
     // (geom/ProfileCompression.kt); plain body runs absorb the squeeze with center-breaks.
     // Shafts that fit at the visual scale keep a plain linear map.
     val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
-    val featureSpans: List<ProfileFeatureSpan> = buildList {
-        // Tapers may shrink but stay PROPORTIONAL to each other (on-device direction:
-        // two very different taper lengths must never draw equal). No flat floor — a
-        // ratio-preserving fraction-of-true floor instead, λ-fit like the liner raises;
-        // the drawn height never yields to it.
-        spec.tapers.forEach {
-            add(
-                ProfileFeatureSpan(
-                    it.startFromAftMm, it.startFromAftMm + it.lengthMm, 0f,
-                    minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE,
-                )
-            )
-        }
-        // Liners compress in SIZE only — proportional foreshortening above their floor,
-        // never a body-style S-break cutout (on-device clarification). The per-job
-        // "Liner compression" control raises the floor toward true width — best-effort,
-        // λ-fitted; the drawn height never yields to it. The schematic uses the LEAN
-        // floors — its values live on rails and callouts, so proportion wins over
-        // write-in room here (the consolidated sheet keeps the writable floors).
-        spec.liners.forEach {
-            add(
-                ProfileFeatureSpan(
-                    it.startFromAftMm, it.startFromAftMm + it.lengthMm, SCHEMATIC_MIN_LINER_PT,
-                    minWidthFracOfTrue = linerMinFracOfTrue,
-                )
-            )
-        }
-        spec.threads.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, SCHEMATIC_MIN_THREAD_PT))
-        }
-        // A keyway-bearing body pins at true scale — its drawn slot geometry is real.
-        addAll(keywayPinnedBodySpans(spec))
-    }
+    // ONE shared structure (`geom/ProfileFeatureSpans.kt`): the schematic differs from the
+    // runout/consolidated sheet and the UI estimator only by its LEAN floors — its values
+    // live on rails and callouts, so proportion wins over write-in room here.
+    val featureSpans: List<ProfileFeatureSpan> = profileFeatureSpans(
+        spec,
+        linerFloorPt = SCHEMATIC_MIN_LINER_PT,
+        threadFloorPt = SCHEMATIC_MIN_THREAD_PT,
+        linerMinFracOfTrue = linerMinFracOfTrue,
+    )
     // Pinned spans (tapers, keyway bodies) demand true width → when one needs the room,
     // the HEIGHT yields ("doesn't have to be perfectly proportional, just close" —
     // on-device rule). The per-job "Shaft height" slider multiplies the default sizing
@@ -317,7 +296,7 @@ fun composeShaftPdf(
     // threshold, the center-break pair when foreshortened by the compressed mapping or
     // traditionally long — body-only shafts included (a long body-only shaft compresses
     // too under the visual-scale rule).
-    drawBodiesCompressedCenterBreak(
+    drawBodyRunsWithBreaks(
         c, bodiesForPdf, cy, ::xAt, ::rPx, outline, geomRect, bodyFill,
         truePtPerMm = diaPtPerMm,
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
@@ -707,8 +686,6 @@ private fun drawComponentLabelsPdf(
 }
 
 // Compression (paper-space heuristic; bodies only)
-private const val COMPRESS_TRIGGER_PT = 220f // if body length on paper ≥ this, show center-break
-private const val ZIGZAG_GAP_MAX_PT = 20f    // classic central gap; breakPairLayout may widen it to keep the pair clear
 
 // Label collision avoidance
 
@@ -784,131 +761,6 @@ private fun requireFinite(name: String, v: Float): Float {
 // Geometry — bodies with centered long-break compression
 // ──────────────────────────────────────────────────────────────────────────────
 
-internal fun drawBodiesCompressedCenterBreak(
-    c: Canvas,
-    bodies: List<Body>,
-    cy: Float,
-    xAt: (Float) -> Float,
-    rPx: (Float) -> Float,
-    outline: Paint,
-    geomRect: RectF,
-    fill: Paint? = null,
-    /**
-     * True-scale pt/mm — a body drawn below [breakMinFracOfTrue] of its true width at
-     * this scale shows the S-break pair ([breakForCompression]); milder foreshortening
-     * prints plain. 0 disables the check (break on span length alone).
-     */
-    truePtPerMm: Float = 0f,
-    /** The user's `PdfPrefs.sBreakThresholdFrac`; 0 = never break on compression. */
-    breakMinFracOfTrue: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
-    /**
-     * Blended faces on these runs ([bodyBlends]). A blend is machined out of the body, so it
-     * shortens the FLAT span and stands the end cap at the neighbouring diameter; the run's
-     * compression treatment is otherwise untouched.
-     */
-    blends: List<BodyBlend> = emptyList(),
-    /**
-     * Protected body-keyway windows ([bodyKeywayProtectedSpansMm], absolute mm) the break
-     * gap must never cut into: the slot region is pinned at true scale and must read as
-     * real geometry, but the REST of a keyed body compresses and breaks like any other run —
-     * a 95%-shaft body with an end keyway still needs its break (on-device report). The gap
-     * shifts off the window ([breakGapCenter]); only a run with no clear placement at all
-     * prints plain.
-     */
-    keywayAvoidSpansMm: List<KeywaySpan> = emptyList(),
-) {
-    val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
-    val avoidX = keywayAvoidSpansMm.map {
-        val a = xAt(it.loMm); val b2 = xAt(it.hiMm)
-        minOf(a, b2)..maxOf(a, b2)
-    }
-    bodies.forEach { b ->
-        if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
-        val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
-        val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
-
-        val edges = bodyDrawEdges(
-            runId = b.id,
-            runStartMm = b.startFromAftMm,
-            runEndMm = b.startFromAftMm + b.lengthMm,
-            runDiaMm = b.diaMm,
-            blends = blends,
-            xAt = xAt,
-            rAt = { dia -> rPx(dia) },
-            minWidthPx = MIN_BLEND_WIDTH_PT,
-        )
-        val fx0 = edges.flatX0
-        val fx1 = edges.flatX1
-
-        // The break decision stays on the run's FULL drawn width — a blend is a face
-        // detail, not a reason for the body to read as more or less compressed.
-        val bodyLenPt = abs(x1 - x0)
-        val foreshortened = breakForCompression(bodyLenPt, b.lengthMm, truePtPerMm, breakMinFracOfTrue)
-        val compress = foreshortened || bodyLenPt >= COMPRESS_TRIGGER_PT
-
-        drawBlendCurvePdf(c, edges.aftCurve, cy, outline, fill)
-        drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, fill)
-
-        // Break layout first: the gap steers clear of any protected keyway window, and a
-        // run with no clear placement falls back to the plain rectangle.
-        val flatLenPt = abs(fx1 - fx0)
-        val pair = if (compress) breakPairLayout(
-            runLenPt = flatLenPt,
-            desiredAmplitudePt = r * 0.6f,
-            classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * flatLenPt),
-            strokeWidthPt = capPaint.strokeWidth,
-        ) else null
-        val gapCenter = pair?.let {
-            breakGapCenter(minOf(fx0, fx1), maxOf(fx0, fx1), it.gapPt, avoidX)
-        }
-
-        if (pair == null || gapCenter == null) {
-            // classic rectangle body
-            if (fill != null) c.drawRect(fx0, top, fx1, bot, fill)
-            c.drawLine(fx0, top, fx1, top, outline)
-            c.drawLine(fx0, bot, fx1, bot, outline)
-        } else {
-            // break pair: two stubs, each with an S-curve end instead of a straight cap
-            val (gap, amp) = pair
-            val half = 0.5f * gap
-            val leftEnd  = (gapCenter - half).coerceIn(geomRect.left, geomRect.right)
-            val rightBeg = (gapCenter + half).coerceIn(geomRect.left, geomRect.right)
-
-            // Left stub — S-curve on right end
-            if (fill != null) c.drawRect(fx0, top, leftEnd, bot, fill)
-            c.drawLine(fx0, top, leftEnd, top, outline)
-            c.drawLine(fx0, bot, leftEnd, bot, outline)
-            drawBreakEdge(c, leftEnd, top, bot, amp, capPaint, eyeAtTop = false)
-
-            // Right stub — same-direction S-curve on left end (curves match so edges appear to merge)
-            if (fill != null) c.drawRect(rightBeg, top, fx1, bot, fill)
-            drawBreakEdge(c, rightBeg, top, bot, amp, capPaint, eyeAtTop = true)
-            c.drawLine(rightBeg, top, fx1, top, outline)
-            c.drawLine(rightBeg, bot, fx1, bot, outline)
-        }
-
-        // End caps last, at the OUTER ends of the whole run. A blended face caps at the
-        // neighbour's radius (where the curve arrives), so the cap coincides with that
-        // component's own face line instead of stranding a vertical inside the body.
-        c.drawLine(x0, cy - edges.capAftR, x0, cy + edges.capAftR, outline)
-        c.drawLine(x1, cy - edges.capFwdR, x1, cy + edges.capFwdR, outline)
-
-        // Seal area: the radius cuts the fiberglass seats into, drawn across the blend.
-        // Same construction and dash as the canvas renderer — both read `bodyDrawEdges`.
-        // Dashed so the shaft still reads as one unit (a solid vertical is the
-        // component-face glyph); finer than the hidden-keyway dash on purpose.
-        if (edges.aftSeal.isNotEmpty() || edges.fwdSeal.isNotEmpty()) {
-            val sealPaint = Paint(outline).apply {
-                style = Paint.Style.STROKE
-                pathEffect = android.graphics.DashPathEffect(
-                    floatArrayOf(SEAL_DASH_ON_PT, SEAL_DASH_OFF_PT), 0f)
-            }
-            (edges.aftSeal + edges.fwdSeal).forEach { g ->
-                c.drawLine(g.xPx, cy - g.rPx, g.xPx, cy + g.rPx, sealPaint)
-            }
-        }
-    }
-}
 
 /**
  * One blended face: the void between the curve and the centreline filled, then the top and
@@ -1141,38 +993,6 @@ internal fun drawTaperKeywayPdf(
 }
 
 /**
- * The protected axial window around each body keyway: the slot's own span
- * ([keywayAbsSpanMm]) padded by one keyway width at each end (mill arc + spoon-bowl
- * overhang), clamped to the host body. This window — NOT the whole body — is what pins at
- * true scale and what the S-break gap must steer clear of: a 95%-shaft body must stay free
- * to compress and break or a long shaft cannot render at all (on-device report), while the
- * slot itself must never foreshorten.
- */
-internal fun bodyKeywayProtectedSpansMm(spec: ShaftSpec): List<KeywaySpan> =
-    spec.bodies.mapNotNull { b ->
-        val span = b.keywayAbsSpanMm() ?: return@mapNotNull null
-        val pad = b.keywayWidthMm
-        KeywaySpan(
-            loMm = (span.loMm - pad).coerceAtLeast(b.startFromAftMm),
-            hiMm = (span.hiMm + pad).coerceAtMost(b.startFromAftMm + b.lengthMm),
-        )
-    }
-
-/**
- * True-width pins for the body-keyway windows of [spec] — a slot drawn on a foreshortened
- * body is not real geometry, so the slot's padded window ([bodyKeywayProtectedSpansMm])
- * demands full width and the layout yields around it. Deliberately the WINDOW, never the
- * whole host body (see that helper's doc). Built from **STORED** bodies for the reason in
- * [drawBodyKeywaysPdf]: filtering resolved bodies silently yields nothing, which pins
- * nothing at all. Shared by the schematic, the runout/consolidated sheet, and the UI's
- * scale estimator so the span that pins is exactly the span the slot draws in.
- */
-internal fun keywayPinnedBodySpans(spec: ShaftSpec): List<ProfileFeatureSpan> =
-    bodyKeywayProtectedSpansMm(spec).map {
-        ProfileFeatureSpan(it.loMm, it.hiMm, Float.MAX_VALUE)
-    }
-
-/**
  * Draw a 90°-clocked secondary keyway as a notch cut into the host's silhouette edge — the true
  * edge-on projection, where the slot's depth is what shows in profile.
  *
@@ -1368,7 +1188,7 @@ private fun drawKeywaySlotPdf(
     // Open keyway: shaft face end-line already closes the SET end.
 }
 
-private fun drawThreads(
+internal fun drawThreads(
     c: Canvas,
     threads: List<Threads>,
     cy: Float,
@@ -1378,27 +1198,25 @@ private fun drawThreads(
     dim: Paint,
     ptPerMm: Float,
 ) {
+    // ONE hatch convention for every sheet (`drawThreadHatch` + the shared pitch/paint
+    // recipe): full-band diagonals at the thread's own pitch, capped 4–18 pt, on a
+    // 60%-dim-weight alpha-160 paint. A per-sheet hatch style made the same thread read
+    // differently across documents (on-device direction: match them — no sense in
+    // different forms with different outputs).
+    val hatchPaint = Paint(outline).apply { strokeWidth = dim.strokeWidth * 0.6f; alpha = 160 }
     threads.forEach { th ->
         if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
         val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
         val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
 
-        // Envelope
+        val pitchPt = ((th.pitchMm.takeIf { it > 0f } ?: 2.5f) * ptPerMm).coerceIn(4f, 18f)
+        drawThreadHatch(c, min(x0, x1), max(x0, x1), top, bot, hatchPaint, pitchPt)
+
+        // Envelope on top of the hatch
         c.drawLine(x0, top, x1, top, outline)
         c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, outline)
         c.drawLine(x1, top, x1, bot, outline)
-
-        // Hatch — stride = max(8 px, pitchMm * ptPerMm), clipped to band
-        val step = max(8f, th.pitchMm * ptPerMm)
-        val rect = RectF(min(x0, x1), min(top, bot), max(x0, x1), max(top, bot))
-        c.withClip(rect) {
-            var hx = rect.left + 4f
-            while (hx <= rect.right + 4f) {
-                c.drawLine(hx - 4f, rect.bottom, hx + 4f, rect.top, dim)
-                hx += step
-            }
-        }
     }
 }
 

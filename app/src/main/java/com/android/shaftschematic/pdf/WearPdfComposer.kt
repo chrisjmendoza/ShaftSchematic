@@ -41,11 +41,6 @@ import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.measureRichText
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -293,7 +288,14 @@ fun composeWearPdf(
         profileDiaRowHeightPt, WEAR_DIA_ROW_GAP_PT, WEAR_DIA_PROFILE_LEADER_PT) ?: 0f
 
     // ── Header (always drawn) ───────────────────────────────────────────────
-    drawWearHeader(c, text, contentLeft, contentRight, contentTop, project, blankValues)
+    drawSheetHeader(
+        c, text, contentLeft, contentRight, contentTop, project,
+        title = WEAR_DOC_TITLE,
+        headerHeightPt = WEAR_HEADER_HEIGHT_PT,
+        headerHeightBlankPt = WEAR_HEADER_HEIGHT_BLANK_PT,
+        blankLineGapPt = WEAR_HEADER_BLANK_LINE_GAP_PT,
+        blankValues = blankValues,
+    )
 
     // The profile's minimum height also protects the actual drawn shaft radius — ptPerMm is a
     // purely horizontal (SET-to-SET) scale, so a wide/short shaft's true diameter could otherwise
@@ -470,8 +472,14 @@ fun composeWearPdf(
             c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox,
             displayUnits.documentUnit, spec.overallLengthMm, blankValues, dual = displayUnits.dual,
         )
-        drawWearShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
-            bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm)
+        drawSimpleShaftProfile(
+            c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
+            bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm,
+            // Ratio of the outline's (already thickness-scaled) weight, so Settings → "Line
+            // thickness" reaches the liner end faces and the thread hatch too, not just the
+            // silhouette.
+            dimStrokeWidthPt = outline.strokeWidth * (WEAR_DIM_PT / WEAR_OUTLINE_PT),
+        )
 
         // Vertical-stroke wear bands (liner spots) + pit "X"s at true position on the profile. Bands
         // clamp to the liner span for rendering only; the stored data is never touched.
@@ -556,66 +564,6 @@ fun composeWearPdf(
     // ── Notes / dye-pen area ──────────────────────────────────────────────
     // effectiveRecord, not wearRecord: a blank write-in draft keeps both boxes empty.
     drawWearNotesArea(c, text, contentLeft, contentRight, notesY, effectiveRecord.dyePenResult)
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Header
-// ──────────────────────────────────────────────────────────────────────────────
-
-private fun drawWearHeader(
-    c: Canvas,
-    text: Paint,
-    left: Float,
-    right: Float,
-    top: Float,
-    project: ProjectInfo,
-    blankValues: Boolean = false,
-) {
-    val ts = text.textSize
-
-    fun centeredX(str: String): Float =
-        ((left + right - text.measureText(str)) * 0.5f).coerceAtLeast(left)
-
-    if (blankValues) {
-        // Blank draft: the five job-info fields spread edge-to-edge across the full content
-        // width with equal writing rules — handwriting room; the OAL belongs to the drawing's
-        // end-to-end span (drawWearOalLine), not the header, so it is never printed here.
-        val line1Y = top + ts + 4f
-        val line2Y = line1Y + WEAR_HEADER_BLANK_LINE_GAP_PT
-        val labels = listOf("Customer:", "Vessel:", "Job #:", "Date:", "Side:")
-        val labelsW = labels.map { text.measureText(it) }.sum()
-        // drawLabelWithRule inserts 4f label→rule and returns ruleEnd + 14f (inter-field gap).
-        val ruleW = ((right - left - labelsW - labels.size * 4f - (labels.size - 1) * 14f) / labels.size)
-            .coerceAtLeast(BLANK_RULE_PT * 0.5f)
-        var x = left
-        labels.forEach { label -> x = drawLabelWithRule(c, label, x, line1Y, text, ruleWidth = ruleW, maxRight = right) }
-
-        val line2 = "WEAR / INSPECTION RECORD"
-        c.drawText(line2, centeredX(line2), line2Y, text)
-    } else {
-        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
-
-        val line1 = buildString {
-            if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
-            if (project.vessel.isNotBlank())   append("Vessel: ${project.vessel}   ")
-            if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
-            append("Date: $date$side")
-        }
-        // The OAL belongs to the drawing's end-to-end span (drawWearOalLine); the header never
-        // repeats it.
-        val line2 = "WEAR / INSPECTION RECORD"
-
-        val line1Fit = ellipsizeToWidth(line1, text, right - left)
-        val line2Fit = ellipsizeToWidth(line2, text, right - left)
-        c.drawText(line1Fit, centeredX(line1Fit), top + ts, text)
-        c.drawText(line2Fit, centeredX(line2Fit), top + ts + ts * 1.4f, text)
-    }
-
-    val ruleY = top + (if (blankValues) WEAR_HEADER_HEIGHT_BLANK_PT else WEAR_HEADER_HEIGHT_PT)
-    c.drawLine(left, ruleY, right, ruleY, Paint(text).apply {
-        style = Paint.Style.STROKE; strokeWidth = 0.5f
-    })
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -727,123 +675,6 @@ private fun drawWearLinerNamesOnProfile(
         val cx = ((xAt(ln.startFromAftMm) + xAt(ln.startFromAftMm + ln.lengthMm)) * 0.5f).coerceIn(loX, hiX)
         c.drawText(ellipsizeToWidth(name, p, hiX - loX), cx, y, p)
     }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Shaft profile (same drawing logic as runout, just larger)
-// ──────────────────────────────────────────────────────────────────────────────
-
-private fun drawWearShaftProfile(
-    c: Canvas,
-    spec: ShaftSpec,
-    cy: Float,
-    outline: Paint,
-    geomRect: RectF,
-    xAt: (Float) -> Float,
-    rPx: (Float) -> Float,
-    bodyFill: Paint? = null,
-    taperFill: Paint? = null,
-    linerFill: Paint? = null,
-    ptPerMm: Float = 1f,
-) {
-    // ── Shade fills first (drawn under all outlines) ──────────────────────
-    bodyFill?.let { f ->
-        spec.bodies.forEach { b ->
-            if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
-            val r = rPx(b.diaMm)
-            c.drawRect(xAt(b.startFromAftMm), cy - r, xAt(b.startFromAftMm + b.lengthMm), cy + r, f)
-        }
-    }
-    taperFill?.let { f ->
-        spec.tapers.forEach { t ->
-            if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
-            val path = android.graphics.Path().apply {
-                moveTo(xAt(t.startFromAftMm), cy - rPx(t.startDiaMm))
-                lineTo(xAt(t.startFromAftMm + t.lengthMm), cy - rPx(t.endDiaMm))
-                lineTo(xAt(t.startFromAftMm + t.lengthMm), cy + rPx(t.endDiaMm))
-                lineTo(xAt(t.startFromAftMm), cy + rPx(t.startDiaMm))
-                close()
-            }
-            c.drawPath(path, f)
-        }
-    }
-    linerFill?.let { f ->
-        spec.liners.forEach { ln ->
-            if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
-            val r = rPx(ln.odMm)
-            c.drawRect(xAt(ln.startFromAftMm), cy - r, xAt(ln.startFromAftMm + ln.lengthMm), cy + r, f)
-        }
-    }
-    // Bodies with compression breaks
-    val capPaint = Paint(outline)
-    spec.bodies.forEach { b ->
-        if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
-        val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
-        val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
-        val lenPt = abs(x1 - x0)
-        if (lenPt < COMPRESS_TRIGGER_PT) {
-            c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
-            c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
-        } else {
-            val mid = (x0 + x1) * 0.5f
-            val (gap, amp) = breakPairLayout(
-                runLenPt = lenPt,
-                desiredAmplitudePt = r * 0.6f,
-                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * lenPt),
-                strokeWidthPt = capPaint.strokeWidth,
-            )
-            val half = gap * 0.5f
-            val lEnd = (mid - half).coerceIn(geomRect.left, geomRect.right)
-            val rBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
-            c.drawLine(x0, top, lEnd, top, outline); c.drawLine(x0, bot, lEnd, bot, outline)
-            c.drawLine(x0, top, x0, bot, outline)
-            drawBreakEdge(c, lEnd, top, bot, amp, capPaint, eyeAtTop = false)
-            drawBreakEdge(c, rBeg, top, bot, amp, capPaint, eyeAtTop = true)
-            c.drawLine(rBeg, top, x1, top, outline); c.drawLine(rBeg, bot, x1, bot, outline)
-            c.drawLine(x1, top, x1, bot, outline)
-        }
-    }
-    // Tapers
-    spec.tapers.forEach { t ->
-        if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
-        val x0 = xAt(t.startFromAftMm); val x1 = xAt(t.startFromAftMm + t.lengthMm)
-        val top0 = cy - rPx(t.startDiaMm); val bot0 = cy + rPx(t.startDiaMm)
-        val top1 = cy - rPx(t.endDiaMm);   val bot1 = cy + rPx(t.endDiaMm)
-        c.drawLine(x0, top0, x1, top1, outline); c.drawLine(x0, bot0, x1, bot1, outline)
-        c.drawLine(x0, top0, x0, bot0, outline); c.drawLine(x1, top1, x1, bot1, outline)
-    }
-    // Liners
-    // Ratio of the outline's (already thickness-scaled) weight, so Settings -> "Line
-    // thickness" reaches every stroke on the sheet, not just the silhouette.
-    val dimPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (WEAR_DIM_PT / WEAR_OUTLINE_PT) }
-    spec.liners.forEach { ln ->
-        if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
-        val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
-        val r = rPx(ln.odMm); val top = cy - r; val bot = cy + r
-        c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, dimPaint); c.drawLine(x1, top, x1, bot, dimPaint)
-    }
-    // Threads — outline envelope + diagonal hatch so the machinist knows the zone is threaded
-    val hatchPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (WEAR_DIM_PT * 0.6f / WEAR_OUTLINE_PT); alpha = 160 }
-    spec.threads.forEach { th ->
-        if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
-        val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
-        val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
-        val pitchPt = ((th.pitchMm.takeIf { it > 0f } ?: 2.5f) * ptPerMm).coerceIn(4f, 18f)
-        val saved = c.save()
-        c.clipRect(x0, top, x1, bot)
-        var hx = x0 - (bot - top)
-        while (hx <= x1) {
-            c.drawLine(hx, bot, hx + (bot - top), top, hatchPaint)
-            hx += pitchPt
-        }
-        c.restoreToCount(saved)
-        c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
-    }
-    // Coupler bolt slots — reference cutouts, same as the main schematic.
-    val slotFill = Paint(outline).apply { style = Paint.Style.FILL; alpha = 40 }
-    drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, xAt, rPx, outline, slotFill)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1127,6 +958,12 @@ internal const val WEAR_DIM_PT    = 1.2f
 private const val WEAR_TEXT_PT    = 10f
 private const val WEAR_MARGIN_PT  = 36f
 
+/**
+ * Sheet title, printed centred on the header's second line in both modes. One constant so
+ * the shop's preferred wording is a one-line change — the [UNDERCUT_DOC_TITLE] convention.
+ */
+private const val WEAR_DOC_TITLE = "WEAR / INSPECTION RECORD"
+
 private const val WEAR_HEADER_HEIGHT_PT       = 36f   // 2-line header block height
 private const val WEAR_HEADER_HEIGHT_BLANK_PT = 56f   // blank write-in header: taller so the writing rules have hand-writing room (device feedback)
 private const val WEAR_HEADER_BLANK_LINE_GAP_PT = 24f // baseline gap between the two blank header rule lines (printed header keeps ts*1.4)
@@ -1163,9 +1000,6 @@ private const val WEAR_PROFILE_RADIUS_MARGIN_PT  = 8f   // headroom above/below 
 internal fun wearBandShadeAlpha(frac: Float): Int =
     (frac.coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX) * 255f).roundToInt()
 
-private const val COMPRESS_TRIGGER_PT = 220f
-// Classic central gap; breakPairLayout may widen it to keep the pair clear.
-private const val ZIGZAG_GAP_MAX_PT   = 20f
 
 // Measured-Ø callouts (geom/WearDiaCalloutLayout.kt drives placement; these size the text
 // band and clearances on both surfaces — profile + detail strips).

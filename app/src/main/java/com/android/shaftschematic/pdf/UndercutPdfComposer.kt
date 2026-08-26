@@ -43,10 +43,6 @@ import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.measureRichText
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -282,7 +278,14 @@ fun composeUndercutPdf(
     val undercutById = effectiveRecord.undercuts.associateBy { it.id }
 
     // ── Header ───────────────────────────────────────────────────────────────
-    drawUndercutHeader(c, text, contentLeft, contentRight, contentTop, project, blankValues)
+    drawSheetHeader(
+        c, text, contentLeft, contentRight, contentTop, project,
+        title = UNDERCUT_DOC_TITLE,
+        headerHeightPt = UC_HEADER_HEIGHT_PT,
+        headerHeightBlankPt = UC_HEADER_HEIGHT_BLANK_PT,
+        blankLineGapPt = UC_HEADER_BLANK_LINE_GAP_PT,
+        blankValues = blankValues,
+    )
 
     // ── Vertical banding ──────────────────────────────────────────────────────
     // Strips own the page (see the file KDoc): with at least one strip the main profile and
@@ -352,9 +355,13 @@ fun composeUndercutPdf(
             c, dim, text, contentLeft, contentRight, oalLineY, shaftTopApprox,
             displayUnits.documentUnit, spec.overallLengthMm, blankValues, dual = displayUnits.dual,
         )
-        drawUndercutShaftProfile(
+        drawSimpleShaftProfile(
             c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
             bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm,
+            // Ratio of the outline's (already thickness-scaled) weight, so Settings ->
+            // "Line thickness" reaches the secondary strokes here too — the wear sheet's
+            // rule, applied to this document's profile as well.
+            dimStrokeWidthPt = outline.strokeWidth * (UC_DIM_PT / UC_OUTLINE_PT),
         )
         // Notches on the full profile, at true position and the true (small) scale — the same
         // construction the strips draw zoomed, so nothing is a separate "marker style". Only
@@ -441,54 +448,6 @@ fun composeUndercutPdf(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Header
-// ──────────────────────────────────────────────────────────────────────────────
-
-private fun drawUndercutHeader(
-    c: Canvas,
-    text: Paint,
-    left: Float,
-    right: Float,
-    top: Float,
-    project: ProjectInfo,
-    blankValues: Boolean,
-) {
-    val ts = text.textSize
-    fun centeredX(str: String): Float = ((left + right - text.measureText(str)) * 0.5f).coerceAtLeast(left)
-
-    if (blankValues) {
-        // Blank draft: the five job-info fields spread edge-to-edge with equal writing rules.
-        // The OAL belongs to the drawing's end-to-end span, never the header.
-        val line1Y = top + ts + 4f
-        val line2Y = line1Y + UC_HEADER_BLANK_LINE_GAP_PT
-        val labels = listOf("Customer:", "Vessel:", "Job #:", "Date:", "Side:")
-        val labelsW = labels.sumOf { text.measureText(it).toDouble() }.toFloat()
-        // drawLabelWithRule inserts 4f label→rule and returns ruleEnd + 14f (inter-field gap).
-        val ruleW = ((right - left - labelsW - labels.size * 4f - (labels.size - 1) * 14f) / labels.size)
-            .coerceAtLeast(BLANK_RULE_PT * 0.5f)
-        var x = left
-        labels.forEach { label -> x = drawLabelWithRule(c, label, x, line1Y, text, ruleWidth = ruleW, maxRight = right) }
-        c.drawText(UNDERCUT_DOC_TITLE, centeredX(UNDERCUT_DOC_TITLE), line2Y, text)
-    } else {
-        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
-        val line1 = buildString {
-            if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
-            if (project.vessel.isNotBlank()) append("Vessel: ${project.vessel}   ")
-            if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
-            append("Date: $date$side")
-        }
-        val line1Fit = ellipsizeToWidth(line1, text, right - left)
-        val line2Fit = ellipsizeToWidth(UNDERCUT_DOC_TITLE, text, right - left)
-        c.drawText(line1Fit, centeredX(line1Fit), top + ts, text)
-        c.drawText(line2Fit, centeredX(line2Fit), top + ts + ts * 1.4f, text)
-    }
-
-    val ruleY = top + (if (blankValues) UC_HEADER_HEIGHT_BLANK_PT else UC_HEADER_HEIGHT_PT)
-    c.drawLine(left, ruleY, right, ruleY, Paint(text).apply { style = Paint.Style.STROKE; strokeWidth = 0.5f })
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
 // OAL line + direction reference
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -556,122 +515,6 @@ private fun drawUndercutDirectionRow(
     c.drawText("← AFT", left, baselineY, p)
     p.textAlign = Paint.Align.RIGHT
     c.drawText("FWD →", right, baselineY, p)
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Shaft profile (full length) — same drawing approach as the wear sheet's
-// ──────────────────────────────────────────────────────────────────────────────
-
-private fun drawUndercutShaftProfile(
-    c: Canvas,
-    spec: ShaftSpec,
-    cy: Float,
-    outline: Paint,
-    geomRect: RectF,
-    xAt: (Float) -> Float,
-    rPx: (Float) -> Float,
-    bodyFill: Paint?,
-    taperFill: Paint?,
-    linerFill: Paint?,
-    ptPerMm: Float,
-) {
-    bodyFill?.let { f ->
-        spec.bodies.forEach { b ->
-            if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
-            val r = rPx(b.diaMm)
-            c.drawRect(xAt(b.startFromAftMm), cy - r, xAt(b.startFromAftMm + b.lengthMm), cy + r, f)
-        }
-    }
-    taperFill?.let { f ->
-        spec.tapers.forEach { t ->
-            if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
-            val path = Path().apply {
-                moveTo(xAt(t.startFromAftMm), cy - rPx(t.startDiaMm))
-                lineTo(xAt(t.startFromAftMm + t.lengthMm), cy - rPx(t.endDiaMm))
-                lineTo(xAt(t.startFromAftMm + t.lengthMm), cy + rPx(t.endDiaMm))
-                lineTo(xAt(t.startFromAftMm), cy + rPx(t.startDiaMm))
-                close()
-            }
-            c.drawPath(path, f)
-        }
-    }
-    linerFill?.let { f ->
-        spec.liners.forEach { ln ->
-            if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
-            val r = rPx(ln.odMm)
-            c.drawRect(xAt(ln.startFromAftMm), cy - r, xAt(ln.startFromAftMm + ln.lengthMm), cy + r, f)
-        }
-    }
-    // Bodies, with a compression break in any long run.
-    val capPaint = Paint(outline)
-    spec.bodies.forEach { b ->
-        if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
-        val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
-        val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
-        val lenPt = abs(x1 - x0)
-        if (lenPt < UC_COMPRESS_TRIGGER_PT) {
-            c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
-            c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
-        } else {
-            val mid = (x0 + x1) * 0.5f
-            val (gap, amp) = breakPairLayout(
-                runLenPt = lenPt,
-                desiredAmplitudePt = r * 0.6f,
-                classicGapPt = min(UC_ZIGZAG_GAP_MAX_PT, 0.25f * lenPt),
-                strokeWidthPt = capPaint.strokeWidth,
-            )
-            val half = gap * 0.5f
-            val lEnd = (mid - half).coerceIn(geomRect.left, geomRect.right)
-            val rBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
-            c.drawLine(x0, top, lEnd, top, outline); c.drawLine(x0, bot, lEnd, bot, outline)
-            c.drawLine(x0, top, x0, bot, outline)
-            drawBreakEdge(c, lEnd, top, bot, amp, capPaint, eyeAtTop = false)
-            drawBreakEdge(c, rBeg, top, bot, amp, capPaint, eyeAtTop = true)
-            c.drawLine(rBeg, top, x1, top, outline); c.drawLine(rBeg, bot, x1, bot, outline)
-            c.drawLine(x1, top, x1, bot, outline)
-        }
-    }
-    spec.tapers.forEach { t ->
-        if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
-        val x0 = xAt(t.startFromAftMm); val x1 = xAt(t.startFromAftMm + t.lengthMm)
-        c.drawLine(x0, cy - rPx(t.startDiaMm), x1, cy - rPx(t.endDiaMm), outline)
-        c.drawLine(x0, cy + rPx(t.startDiaMm), x1, cy + rPx(t.endDiaMm), outline)
-        c.drawLine(x0, cy - rPx(t.startDiaMm), x0, cy + rPx(t.startDiaMm), outline)
-        c.drawLine(x1, cy - rPx(t.endDiaMm), x1, cy + rPx(t.endDiaMm), outline)
-    }
-    val dimPaint = Paint(outline).apply { strokeWidth = UC_DIM_PT }
-    spec.liners.forEach { ln ->
-        if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
-        val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
-        val r = rPx(ln.odMm); val top = cy - r; val bot = cy + r
-        c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, dimPaint); c.drawLine(x1, top, x1, bot, dimPaint)
-    }
-    val hatchPaint = Paint(outline).apply { strokeWidth = UC_DIM_PT * 0.6f; alpha = 160 }
-    spec.threads.forEach { th ->
-        if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
-        val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
-        val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
-        val pitchPt = ((th.pitchMm.takeIf { it > 0f } ?: 2.5f) * ptPerMm).coerceIn(4f, 18f)
-        drawUndercutHatch(c, x0, x1, top, bot, hatchPaint, pitchPt)
-        c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
-    }
-    val slotFill = Paint(outline).apply { style = Paint.Style.FILL; alpha = 40 }
-    drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, xAt, rPx, outline, slotFill)
-}
-
-/** Diagonal hatch clipped to `[x0,x1] × [top,bot]` — the threaded-zone mark. */
-private fun drawUndercutHatch(c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, pitchPt: Float) {
-    if (x1 <= x0) return
-    val saved = c.save()
-    c.clipRect(x0, top, x1, bot)
-    var hx = x0 - (bot - top)
-    while (hx <= x1) {
-        c.drawLine(hx, bot, hx + (bot - top), top, paint)
-        hx += pitchPt
-    }
-    c.restoreToCount(saved)
 }
 
 /**
@@ -1142,7 +985,7 @@ private fun drawUndercutWindowProfile(
     linerFill: Paint?,
     ptPerMm: Float,
 ) {
-    val dimPaint = Paint(outline).apply { strokeWidth = UC_DIM_PT }
+    val dimPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (UC_DIM_PT / UC_OUTLINE_PT) }
     fun inside(mm: Float) = mm > w0Mm + UC_EDGE_EPS_MM && mm < w1Mm - UC_EDGE_EPS_MM
 
     fun drawConstant(startMm: Float, endMm: Float, diaMm: Float, fill: Paint?, capPaint: Paint) {
@@ -1184,7 +1027,7 @@ private fun drawUndercutWindowProfile(
     spec.liners.forEach { ln ->
         if (ln.lengthMm > 0f) drawConstant(ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm, ln.odMm, linerFill, dimPaint)
     }
-    val hatchPaint = Paint(outline).apply { strokeWidth = UC_DIM_PT * 0.6f; alpha = 160 }
+    val hatchPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (UC_DIM_PT * 0.6f / UC_OUTLINE_PT); alpha = 160 }
     spec.threads.forEach { th ->
         if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
         val s = th.startFromAftMm; val e = s + th.lengthMm
@@ -1192,7 +1035,7 @@ private fun drawUndercutWindowProfile(
         if (b - a <= UC_EDGE_EPS_MM) return@forEach
         val r = rAt(th.majorDiaMm)
         val pitchPt = ((th.pitchMm.takeIf { it > 0f } ?: 2.5f) * ptPerMm).coerceIn(4f, 18f)
-        drawUndercutHatch(c, xAt(a), xAt(b), cy - r, cy + r, hatchPaint, pitchPt)
+        drawThreadHatch(c, xAt(a), xAt(b), cy - r, cy + r, hatchPaint, pitchPt)
         c.drawLine(xAt(a), cy - r, xAt(b), cy - r, outline)
         c.drawLine(xAt(a), cy + r, xAt(b), cy + r, outline)
         if (inside(s)) c.drawLine(xAt(a), cy - r, xAt(a), cy + r, outline)
@@ -1381,9 +1224,6 @@ private const val UC_NOTES_GAP_PT = 28f              // drawing area bottom → 
 private const val UC_OVERFLOW_NOTE_HEIGHT_PT = 16f   // reserved band for the "+N more" note
 private const val UC_PROFILE_RADIUS_MARGIN_PT = 8f   // headroom above/below the shaft's drawn radius
 
-private const val UC_COMPRESS_TRIGGER_PT = 220f
-// Classic central gap; breakPairLayout may widen it to keep the pair clear.
-private const val UC_ZIGZAG_GAP_MAX_PT = 20f
 
 private const val UC_RAIL_WITNESS_GAP_PT = 3f        // clear gap between the drawn surface and a witness line
 private const val UC_RAIL_LABEL_GAP_PT = 5f          // rail arrowheads → a fallback label's nearest edge

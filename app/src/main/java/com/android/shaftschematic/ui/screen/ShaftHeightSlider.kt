@@ -22,7 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.android.shaftschematic.pdf.keywayPinnedBodySpans
+import com.android.shaftschematic.geom.profileFeatureSpans
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.defaultVisualScale
@@ -878,31 +878,14 @@ internal fun estimatedLinerKeptFracOfTrue(
     val maxDia = spec.maxOuterDiaMm().coerceAtLeast(10f)
     val desired = exaggeratedProfileScale(baseScale, heightScale, Float.MAX_VALUE, maxDia)
     val windowEnd = spec.overallLengthMm.coerceAtLeast(1f)
-    val features = buildList {
-        // Tapers: ratio-preserving frac floor, no flat floor — same as the composers.
-        spec.tapers.forEach {
-            add(
-                ProfileFeatureSpan(
-                    it.startFromAftMm, it.startFromAftMm + it.lengthMm, 0f,
-                    minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE,
-                )
-            )
-        }
-        spec.liners.forEach {
-            add(
-                ProfileFeatureSpan(
-                    it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_LINER_PT,
-                    minWidthFracOfTrue = requestedFracOfTrue,
-                )
-            )
-        }
-        spec.threads.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_THREAD_PT))
-        }
-        // The keyway WINDOW pins, never the whole host body — mirrors the composers'
-        // `keywayPinnedBodySpans` so the estimator's scale matches the printed sheet's.
-        addAll(keywayPinnedBodySpans(spec))
-    }
+    // The SAME builder the composers use (`geom/ProfileFeatureSpans.kt`), so this readout
+    // can never drift from the printed sheet's scale by a floor tweak it didn't hear about.
+    val features = profileFeatureSpans(
+        spec,
+        linerFloorPt = PROFILE_MIN_LINER_PT,
+        threadFloorPt = PROFILE_MIN_THREAD_PT,
+        linerMinFracOfTrue = requestedFracOfTrue,
+    )
     val solved = solveMaxProfileScale(
         windowStartMm = 0f, windowEndMm = windowEnd,
         features = features, contentWidth = contentWidthPt, scaleHi = desired,

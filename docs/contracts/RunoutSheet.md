@@ -876,8 +876,8 @@ On-device request following the worn-sections review:
     (`buildCompressedProfileXMap` + monotone `solveSpanWidths` bisection, unit-tested);
     only BODY runs get the S-break pair, and only when squeezed below a **user-set
     fraction of their true drawn width** (`breakForCompression`, `pdf/BreakSymbol.kt` —
-    one predicate for `drawBodiesForRunout`, the schematic's
-    `drawBodiesCompressedCenterBreak`, and the schematic footer's compression note;
+    one predicate for the shared body pass (`drawBodyRunsWithBreaks`,
+    `pdf/BodyRunDraw.kt` — both composers call it) and the schematic footer's compression note;
     milder foreshortening prints a plain outline — a break on a barely-squeezed run was
     noise, on-device report). The threshold is `PdfPrefs.sBreakThresholdFrac` —
     Settings → Drawing → "Body S-break" **and** the PDF Options sheet of this preview
@@ -895,7 +895,7 @@ On-device request following the worn-sections review:
     scale + engine (`ShaftPdfComposer` — dims, callout leaders, keyways, and the
     compression footer note all ride the compressed `xAt`).
   - *Blended faces:* body blends and seal areas print on this sheet exactly as on the
-    schematic — `drawBodiesForRunout` decomposes the same `bodyDrawEdges`
+    schematic — the shared `drawBodyRunsWithBreaks` decomposes the same `bodyDrawEdges`
     (`ui/resolved/BodyBlends.kt`) as `ShaftPdfComposer` and the preview canvas, with the
     curves riding the compressed `xAt` (drawn width floored at `MIN_BLEND_WIDTH_PT`, the
     schematic's rule). The S-break pair is cut into the FLAT span so a curve is never
@@ -959,7 +959,7 @@ Two rules make the difference between a printed keyway and a silent nothing:
    from the window's OWN mapped span (`drawKeywayNotchBodyPdf`) — a body-average scale
    would shrink the slot inside the very window pinned to keep it real.
 3. **A keyed body still breaks; the gap steers clear of the window.** Both body passes
-   (`drawBodiesCompressedCenterBreak` / `drawBodiesForRunout`) place the S-break gap
+   (`drawBodyRunsWithBreaks`, the ONE implementation both composers call) place the S-break gap
    through `breakGapCenter` (`pdf/BreakSymbol.kt`, pure): span midpoint by the hand-sheet
    convention, shifted the minimal distance that clears every protected window, and only a
    run with NO clear placement prints plain. The schematic footer's compression note keeps

@@ -174,8 +174,9 @@ never overlap. The threshold is **user-set** — `PdfPrefs.sBreakThresholdFrac`,
 Drawing → "Body S-break", default **half** (`PDF_SBREAK_THRESHOLD_DEFAULT`), 5% steps,
 **Never** (0) at the low end = compression stays entirely hidden, 100% = break on any
 foreshortening ("why lock it in one way when different users may want different outputs"
-— on-device request). ONE pref feeds all three consumers (`drawBodiesCompressedCenterBreak`,
-`drawBodiesForRunout`, `showCompressionNote`), so the note and the drawn breaks can never
+— on-device request). ONE pref feeds both consumers (`drawBodyRunsWithBreaks` —
+the single body-run pass both composers call, `pdf/BodyRunDraw.kt` — and
+`showCompressionNote`), so the note and the drawn breaks can never
 disagree; there is no duplicate constant. The long-span trigger `COMPRESS_TRIGGER_PT` is
 deliberately NOT governed by the slider — a run eating 220 pt of paper at true scale is
 not hidden compression, so it breaks at every setting, Never included. **A body keyway's
@@ -429,7 +430,8 @@ its run — the undercut-depth/wear-trace posture, safe ONLY because no exaggera
 a machinist. The stored length is never rewritten; a length longer than the body is clamped where
 it is DRAWN. All three draw sites decompose the SAME `bodyDrawEdges` (`ui/resolved/BodyBlends.kt`) —
 `ShaftRenderer` builds one silhouette path; `ShaftPdfComposer` and the runout/consolidated sheet's
-`drawBodiesForRunout` keep their flat span separate because that span still hosts the S-break pair
+the runout sheet keep their flat span separate (ONE shared body pass, `drawBodyRunsWithBreaks`
+in `pdf/BodyRunDraw.kt`) because that span still hosts the S-break pair
 (the break is cut into the FLAT span, the curves stay whole, and the break decision stays on the
 run's FULL drawn width). The wear document deliberately keeps square faces — it omits machining
 detail by product decision, the same posture as its keyway omission. Pure curve math in `geom/BlendProfileMath.kt`, deliberately

@@ -34,7 +34,16 @@ sits in the raster stage's `finally`, which the throw skips. Every copy behaved 
 so the unification kept it; harden it (one `try/finally` around both stages) as its own
 change if cache hygiene ever matters.
 
-## 2. Shared spec → `ProfileFeatureSpan` builder
+## 2. Shared spec → `ProfileFeatureSpan` builder — **DONE 2026-08-25**
+
+Landed as `geom/ProfileFeatureSpans.kt`: `profileFeatureSpans(spec, linerFloorPt,
+threadFloorPt, linerMinFracOfTrue)` serves the schematic (lean `SCHEMATIC_MIN_*` floors),
+the runout/consolidated sheet (writable `PROFILE_MIN_*` floors), and the estimator. The
+anticipated body-list parameter proved unnecessary — tapers/liners/threads read identically
+from a stored spec and a `withResolvedBodies` copy, and the keyway pins must come from
+STORED bodies anyway (a resolved body carries no keyway fields), so every caller passes the
+stored spec. The keyway-window pin helpers moved into the same file. Original entry:
+
 
 **What:** The feature-span list (tapers at `PROFILE_MIN_TAPER_PT`, liners at
 `PROFILE_MIN_LINER_PT` + frac, threads at `PROFILE_MIN_THREAD_PT`, keyway bodies
@@ -53,7 +62,17 @@ bad unification would silently change which spans pin.
 **Recommendation:** Do it the next time the feature list changes for any other reason;
 not urgent on its own.
 
-## 3. Hoist the compressed-body draw loop into `pdf/BreakSymbol.kt`
+## 3. Hoist the compressed-body draw loop — **DONE 2026-08-25**
+
+Landed as `pdf/BodyRunDraw.kt`'s `drawBodyRunsWithBreaks` — ONE pass for the two
+blend-aware composers (schematic + runout/consolidated), and the constants now live once in
+`pdf/BreakSymbol.kt`. The wear/undercut pair deliberately did NOT merge into it: they draw
+at one flat pt/mm with no compression solve, no blends, and no protected keyway windows, so
+they share their own simpler pass (`pdf/SimpleShaftProfile.kt`) instead — the reasoning is
+in both files' KDoc. The mechanical diff the review demanded paid for itself: it caught the
+runout copy painting a shaded body's fill OVER part of the break's S-curve, now unified on
+the schematic's order. Original entry:
+
 
 **What:** All four composers repeat the same body loop: plain rectangle under the
 trigger, else stubs + `breakPairLayout` + two `drawBreakEdge` calls — and each defines

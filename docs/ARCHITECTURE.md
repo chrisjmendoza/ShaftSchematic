@@ -258,7 +258,7 @@ SEPARATE drawing paths.**
 They share model and layout-math *concepts* but not code: `ShaftPdfComposer` never calls
 `ShaftLayout.compute()` and instead has its own fit function — `computeDetailPtPerMm` — plus
 the shared compressed x-map (`geom/ProfileCompression.kt`) and its own drawing functions
-(`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`).
+(`drawBodyRunsWithBreaks`, `drawTapers`, `drawThreads`, `drawLiners`).
 
 Rules:
 - Computes its own `ptPerMm` from page content width/height and overallLengthMm

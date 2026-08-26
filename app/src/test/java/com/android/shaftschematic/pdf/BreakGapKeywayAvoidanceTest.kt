@@ -24,7 +24,8 @@ import org.robolectric.annotation.GraphicsMode
  *
  * `breakGapCenter` places the gap: span midpoint by convention, shifted the minimal
  * distance that clears every protected window, plain-rect fallback only when nothing
- * clears. Both composers' body passes ride it; both are rendered here.
+ * clears. ONE draw implementation (`drawBodyRunsWithBreaks`) serves both composers, so one
+ * render here covers both sheets.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -77,25 +78,19 @@ class BreakGapKeywayAvoidanceTest {
     /** 400 mm at 1 pt/mm = 400 pt of run — far past the 220 pt long-span trigger. */
     private fun longBody() = Body(id = "b1", startFromAftMm = 0f, lengthMm = 400f, diaMm = 80f)
 
-    private fun render(avoid: List<KeywaySpan>, runout: Boolean): Bitmap {
+    /** ONE implementation serves both composers (`drawBodyRunsWithBreaks`). */
+    private fun render(avoid: List<KeywaySpan>, runout: Boolean = false): Bitmap {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         c.drawColor(Color.WHITE)
         val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE; strokeWidth = 1.5f; color = Color.BLACK
         }
-        val rect = RectF(0f, 0f, w.toFloat(), h.toFloat())
-        if (runout) {
-            drawBodiesForRunout(
-                c, listOf(longBody()), cy, { it }, { dia -> dia / 2f }, outline, rect,
-                truePtPerMm = 1f, keywayAvoidSpansMm = avoid,
-            )
-        } else {
-            drawBodiesCompressedCenterBreak(
-                c, listOf(longBody()), cy, { it }, { dia -> dia / 2f }, outline, rect,
-                truePtPerMm = 1f, keywayAvoidSpansMm = avoid,
-            )
-        }
+        drawBodyRunsWithBreaks(
+            c, listOf(longBody()), cy, { it }, { dia -> dia / 2f }, outline,
+            RectF(0f, 0f, w.toFloat(), h.toFloat()),
+            truePtPerMm = 1f, keywayAvoidSpansMm = avoid,
+        )
         return bmp
     }
 
@@ -120,29 +115,24 @@ class BreakGapKeywayAvoidanceTest {
     }
 
     @Test
-    fun `schematic - keyed long run still breaks, gap clear of an end window`() {
-        assertBrokenOutsideWindow(render(listOf(KeywaySpan(280f, 400f)), runout = false), 282, 398)
-    }
-
-    @Test
-    fun `runout - keyed long run still breaks, gap clear of an end window`() {
-        assertBrokenOutsideWindow(render(listOf(KeywaySpan(280f, 400f)), runout = true), 282, 398)
+    fun `keyed long run still breaks, gap clear of an end window`() {
+        assertBrokenOutsideWindow(render(listOf(KeywaySpan(280f, 400f))), 282, 398)
     }
 
     @Test
     fun `a mid-body window shifts the gap rather than losing the break`() {
-        assertBrokenOutsideWindow(render(listOf(KeywaySpan(150f, 250f)), runout = false), 152, 248)
+        assertBrokenOutsideWindow(render(listOf(KeywaySpan(150f, 250f))), 152, 248)
     }
 
     @Test
     fun `no clear placement - the run prints plain rather than cut the window`() {
-        val bmp = render(listOf(KeywaySpan(0f, 400f)), runout = true)
+        val bmp = render(listOf(KeywaySpan(0f, 400f)))
         assertEquals(390, topLineInk(bmp, 5, 395))
     }
 
     @Test
     fun `no window - the classic centered break`() {
-        val bmp = render(emptyList(), runout = false)
+        val bmp = render(emptyList())
         assertTrue("centered gap", topLineInk(bmp, 195, 205) < 5)
     }
 }

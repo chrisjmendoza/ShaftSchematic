@@ -93,6 +93,11 @@ See `CouplerBoltSlot.md`.
   a solid full-height vertical is the component-face glyph, so three solid cuts made one shaft
   read as segments.
 - Threads: diagonal hatch (`drawThreadHatch`), pitch-spaced, clipped to the envelope.
+  ONE convention app-wide (2026-08-26 ruling — "no sense in having different forms with
+  different outputs"): full-band diagonals at the thread's own pitch capped 4–18, mirroring
+  the PDF helper of the same name (`pdf/SimpleShaftProfile.kt`) which every composer calls.
+  The renderer keeps its user-set hatch color; the geometry must not diverge —
+  `ThreadHatchParityTest` pins pixel equality across the PDF sites.
   (The unused "unified profile" path and `ThreadStyle` enum were deleted 2026-07-26.)
 - `centerlineYPx` is a **Y-reference for positioning geometry only** — the renderer
   never draws a visible centerline stroke.

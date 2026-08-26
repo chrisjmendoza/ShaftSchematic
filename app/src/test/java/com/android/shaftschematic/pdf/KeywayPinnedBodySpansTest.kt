@@ -1,5 +1,6 @@
 package com.android.shaftschematic.pdf
 
+import com.android.shaftschematic.geom.keywayPinnedBodySpans
 import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.LinerAuthoredReference

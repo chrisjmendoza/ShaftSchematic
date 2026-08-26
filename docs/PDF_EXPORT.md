@@ -42,7 +42,7 @@ Preview rendering (`ShaftLayout` + `ShaftRenderer`) and the PDF composers (`Shaf
 - Unit formatting conventions match the preview, but the pixel/point math is independent.
 
 **Note:** `ShaftPdfComposer` contains its own geometry drawing functions
-(`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) separate from
+(`drawBodyRunsWithBreaks`, `drawTapers`, `drawThreads`, `drawLiners`) separate from
 `ShaftRenderer`. This is an intentional architectural split, not a bug to unify — see
 `docs/archive/AUDIT.md` §4.4 for history.
 
@@ -75,7 +75,7 @@ PDF uses its own fixed black-and-white styling inside `ShaftPdfComposer`.
    `computeDetailPtPerMm`, taking the geometry rect's width/height in points and fitting
    `overallLengthMm` / `maxOuterDiaMm`.
 3. Draw shaft geometry using `ShaftPdfComposer`'s own drawing functions
-   (`drawBodiesCompressedCenterBreak`, `drawTapers`, `drawThreads`, `drawLiners`) — **not**
+   (`drawBodyRunsWithBreaks`, `drawTapers`, `drawThreads`, `drawLiners`) — **not**
    `ShaftRenderer`.
 4. Draw title block.
 
@@ -194,7 +194,7 @@ the identical curve by construction; the curve itself comes from `geom/BlendProf
 (pure, unit-tested).
 
 Where they differ is only in assembly. `ShaftRenderer` builds one closed silhouette path per run.
-`drawBodiesCompressedCenterBreak` keeps the parts separate because its **flat span still has to
+`drawBodyRunsWithBreaks` keeps the parts separate because its **flat span still has to
 host the S-break pair** — so it draws the curves, then the flat run (plain rectangle or the
 break-pair stubs, unchanged), then the end caps last. Two consequences worth knowing:
 

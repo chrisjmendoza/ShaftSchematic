@@ -570,12 +570,16 @@ object ShaftRenderer {
         color: Color,
     ) {
         if (rightPx <= leftPx || bottomPx <= topPx || pxPerMm <= 0f) return
-        val spacing = max(8f, (pitchMm ?: 0f) * pxPerMm)  // ≥ 8 px for legibility
+        // The app-wide hatch convention (PDF mirror: `pdf/SimpleShaftProfile.drawThreadHatch`
+        // + its shared pitch recipe): full-band diagonals at the thread's own pitch, capped
+        // 4–18 — the same thread must read the same on the preview as on every sheet.
+        val spacing = ((pitchMm?.takeIf { it > 0f } ?: 2.5f) * pxPerMm).coerceIn(4f, 18f)
+        val bandH = bottomPx - topPx
         val stroke = 1f
         withTransform({ clipRect(leftPx, topPx, rightPx, bottomPx) }) {
-            var hx = leftPx + 4f
-            while (hx <= rightPx + 4f) {
-                drawLine(color, Offset(hx - 4f, bottomPx), Offset(hx + 4f, topPx), stroke)
+            var hx = leftPx - bandH
+            while (hx <= rightPx) {
+                drawLine(color, Offset(hx, bottomPx), Offset(hx + bandH, topPx), stroke)
                 hx += spacing
             }
         }

@@ -133,6 +133,17 @@ internal fun breakForCompression(
 ): Boolean =
     truePtPerMm > 0f && minFracOfTrue > 0f && drawnPt < trueLenMm * truePtPerMm * minFracOfTrue
 
+/**
+ * Drawn body-run length (pt of paper) at which the center break appears regardless of
+ * compression — a run eating this much paper at true scale is not hidden foreshortening,
+ * so it breaks at every "Body S-break" setting, Never included. ONE constant for every
+ * composer; a per-file copy invites tuning one sheet and missing the other three.
+ */
+internal const val COMPRESS_TRIGGER_PT = 220f
+
+/** Classic central gap; [breakPairLayout] may widen it to keep the pair clear. */
+internal const val ZIGZAG_GAP_MAX_PT = 20f
+
 /** Minimum stub a break gap must leave at each end of the flat span it cuts. */
 internal const val BREAK_GAP_MIN_STUB_PT = 6f
 
