@@ -133,6 +133,12 @@ Notes
 - `formatDisplay()` always expects mm input.  
 - Free-to-End badge text includes the unit abbreviation (e.g. “Free to end: 100 in” or “2540 mm”).  
 - `ComponentCard` handles its own remove button; callers simply supply `onRemove = { … }`.  
+- `ComponentCard` also ends every card with a **Save** button (`card_save_button`). Fields
+  commit on blur and IME Done, but chips/toggles/checkboxes never TAKE focus, so a typed
+  value followed by a chip tap sat uncommitted (on-device report). Save force-clears focus,
+  driving the one existing commit-on-blur path — no second commit pipeline, and a no-op
+  when nothing is focused or nothing changed. Card-only: the Add dialogs commit through
+  their own Add button. See `NumberField.md`.  
 - Persistence, serialization, and other business logic live strictly in the ViewModel.  
 - Scaffold uses system-bar insets only; FAB uses `WindowInsets.ime.union(WindowInsets.navigationBars)`.
 - `computeAddDefaults()` lives in `ui/screen/ShaftScreenController.kt`. Shared format

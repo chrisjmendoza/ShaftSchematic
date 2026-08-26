@@ -43,6 +43,13 @@ Test coverage
 Responsibilities
 - Maintain internal `text` state; select-all on focus for quick overwrite.
 - Invoke `onCommit(rawText)` on blur or IME Done, only when changed.
+- **The carousel card's Save button is a third path to the SAME commit** — chips, toggles,
+  and checkboxes never take focus, so a typed value followed by a chip tap sits uncommitted
+  in a still-focused field with nothing visibly wrong (on-device report: a body keyway
+  length that never landed). `ComponentCard`'s Save (`card_save_button`) force-clears focus,
+  which drives this field's blur commit; it adds no second commit pipeline, and the
+  no-change rule above still applies (Save after tap-without-edit is a no-op). Pinned by
+  `ComponentCardSaveButtonTest`.
 - Support decimals and shop fractions in display.
 - Optional `validator` and `externalIssueText` parameters surface inline field issues.
 

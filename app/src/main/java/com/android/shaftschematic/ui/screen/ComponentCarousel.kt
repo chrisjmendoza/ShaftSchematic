@@ -802,6 +802,24 @@ internal fun ComponentCard(
                     }
                 }
                 content()
+
+                // Explicit commit affordance for the card's numeric fields. Fields commit on
+                // blur and on IME Done, but chips, toggles, and checkboxes never TAKE focus —
+                // so a value typed and followed by a chip tap sits uncommitted in a still-
+                // focused field with nothing visible wrong (on-device report: a body keyway
+                // length that never landed). Save force-clears focus, which drives the one
+                // existing commit path (`shouldCommitOnBlur`); it adds no second commit
+                // pipeline, and with nothing focused it is a no-op. Card-only by design —
+                // the Add dialogs commit through their own Add button.
+                run {
+                    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        androidx.compose.material3.TextButton(
+                            onClick = { focusManager.clearFocus(force = true) },
+                            modifier = Modifier.testTag("card_save_button"),
+                        ) { Text("Save") }
+                    }
+                }
             }
 
             if (onRemove != null) {
