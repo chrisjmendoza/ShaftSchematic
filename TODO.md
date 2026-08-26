@@ -200,7 +200,41 @@ Waves 1–2 shipped (Wave 1 fixes 2026-07-11; Wave 2 deletion pass 2026-07-26, `
   start re-derivation, split/merge asymmetry, `carryBodyKeyway`), and a forced generic
   would wrap it in a leakier read. Optional narrow polish only: collapse the 4 label +
   2 showDia trivial setters (~70 lines) behind a lens-shaped private helper.
-- [ ] **Wave 3 re-scoped — named extractions** (independently shippable, ordered):
+- [x] **Wave 3 re-scoped — ALL FIVE EXECUTED 2026-08-25 (evening run)**, dispositions:
+  1. DONE — `geom/ProfileFeatureSpans.kt`: `profileFeatureSpans` builds the one span
+     structure for the schematic (lean floors), the runout/consolidated sheet (writable
+     floors), and the liner-compression estimator; the keyway-window pin helpers moved
+     there too (their proper pure home).
+  2. DONE — `COMPRESS_TRIGGER_PT`/`ZIGZAG_GAP_MAX_PT` live once in `pdf/BreakSymbol.kt`
+     (the UC_ aliases folded in).
+  3. DONE — `pdf/BodyRunDraw.kt`: `drawBodyRunsWithBreaks` is the ONE body-run pass both
+     blend-aware composers call. The mechanical diff found exactly one behavioral
+     divergence — the runout copy painted the right stub's shade fill AFTER the break
+     edge, letting a shaded body's fill cover part of the S-curve; unified on the
+     schematic's correct order.
+  4. DONE — `pdf/SimpleShaftProfile.kt`: `drawSimpleShaftProfile` is the shared
+     square-face wear/undercut whole-shaft profile (ONE thread-hatch impl folded in).
+     Posture RULED 2026-08-26: the wear document's no-machining-detail posture stays the
+     standing decision; the undercut document merely draws the same simple profile TODAY
+     and remains free to grow blends later ("allow blends in case we ever need them") —
+     the KDoc says so. The page-geometry preambles
+     were deliberately NOT extracted (no net saving; would couple two sheets' private
+     tuning knobs — reasons in the file KDoc). Line-thickness scaling of secondary
+     strokes now applies to the undercut sheet too (it had never received the wear
+     sheet's fix).
+  5. DONE — `pdf/SheetHeader.kt`: one blank-draft header for the wear/undercut pair;
+     the runout header deliberately left (no title, left-aligned, different baseline —
+     folding it in would be mostly flags; reasons in the file header). The schematic's
+     thread-hatch divergence from the other three sheets is NOT changed — it is a
+     visible difference and stays an open product question (below).
+- [x] **Thread-hatch convention — unified 2026-08-26** (on-device ruling: "no sense in
+  having different forms with different outputs"): every sheet now hatches through the ONE
+  `drawThreadHatch` + shared pitch/paint recipe (thread's own pitch capped 4–18 pt,
+  60%-dim-weight alpha-160), and the preview canvas mirrors the same geometry
+  (`ShaftRenderer.drawThreadHatch`, its user-set hatch color kept). The schematic's old
+  short-tick convention is gone. Pinned by `ThreadHatchParityTest` — pixel equality of the
+  same thread across the schematic, wear/undercut, and runout profile passes.
+- [ ] ~~Wave 3 original list~~ (retained for history):
   1. Shared `ProfileFeatureSpan` builder in `geom/` — the span list is built 3× by hand
      (`ShaftPdfComposer`, `RunoutPdfComposer`, `ShaftHeightSlider.estimatedLinerKeptFracOfTrue`)
      and the UI estimator mirrors the composers by convention only (`REFACTOR_CANDIDATES.md` #2).
@@ -283,10 +317,12 @@ Waves 1–2 shipped (Wave 1 fixes 2026-07-11; Wave 2 deletion pass 2026-07-26, `
     waits for Robolectric 4.17 stable, then moves as ONE coordinated bump.
   - **Compose BOM 2024.09.00 → 2026.04.01** (last compileSdk-36-safe BOM): real Compose
     API surface over ~19 months — its own branch with a compile + visual pass, not a chore.
-  - **Kotlin 2.2.20 → 2.3.20 (+ kotlinx-serialization 1.11.0, version-coupled)**: AGP 9
-    has built-in Kotlin support and the separate `kotlin-android` plugin is on its way out
-    (hard error reported for some Kotlin-2.3+/AGP-9 combos); needs its own branch and build
-    pass, possibly migrating to the built-in-Kotlin DSL. Kotlin 2.4.0 (K1 drop) only after.
+  - ~~Kotlin 2.2.20 → 2.3.20 (+ kotlinx-serialization 1.11.0)~~ — **DONE 2026-08-25
+    (evening run)**: the feared Kotlin-2.3/AGP-9 `kotlin-android` conflict did not
+    materialize — full suite AND `assembleDebug` clean on 2.3.20/AGP 9.3.1. Only fallout:
+    `createTempDir` promoted deprecation → error in 6 test files (19 sites), migrated to
+    `kotlin.io.path.createTempDirectory`. Kotlin 2.4.0 (K1 drop, annotation-target and
+    warning-promotion changes) remains its own future branch.
 - [x] Bump `actions/checkout` and `actions/setup-java` to v5 in the Firebase workflow —
   done 2026-07-28, deprecation warning cleared
 
@@ -423,9 +459,15 @@ would make that body untappable at the slot. Decide before changing.
   the IO channel and never clears the stored URI (the user may re-grant). Drafts, templates,
   zip restores and snapshots are excluded structurally (they use the directory-taking save
   overload / DataStore). Was Tier 3 of the 2026-05-27 backup plan.
-  **Deliberate v1 bounds:** a rename or delete of a saved document does not propagate to the
-  mirror (a stale copy stays under the old name), and there is no "mirror everything now"
-  catch-up action for documents saved before the folder was picked. Both are additive.
+  **Both v1 bounds closed the same day:** a delete and a rename now propagate
+  (`BackupMirror.onDocumentDeleted` / `onDocumentRenamed`, hooked from `InternalStorage.delete`
+  and `rename`'s Context overloads and only when the internal operation succeeded — the folder
+  copy of a document that is still here is a backup, not a leftover). A rename is
+  write-new-then-delete-old, never SAF `renameDocument` (tree-URI rename support varies by
+  provider), and the old copy only goes once the new one is provably written. Settings → Data
+  gained a **"Mirror all now"** catch-up row for documents saved before the folder was picked,
+  reporting "Mirrored N of M". Write and delete resolve a name through one matcher
+  (`findMirrorEntry`) so a delete can never miss the copy a write was maintaining.
 - [ ] "Indicated wear" rendering style for wear bands (requested 2026-07-18): match the shop
   hand-sketch convention — squiggly/wavy lines along the liner top and bottom edges in
   the worn region, with straight lines depicting the wear on the liner face itself —

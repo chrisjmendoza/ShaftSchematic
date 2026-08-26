@@ -6,7 +6,110 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-26
+
+### fix(pdf): one thread-hatch convention on every sheet — and the preview matches
+
+On-device ruling on the Wave-3 audit's open question: "no sense in having different forms
+with different outputs." The schematic's private hatch (short ±4 pt ticks at
+`max(8, pitch)`, full-strength dim paint) is gone; every sheet now hatches through the ONE
+`drawThreadHatch` with the shared recipe — full-band diagonals at the thread's own pitch
+capped 4–18 pt, on a 60%-dim-weight alpha-160 paint. The runout composer's inline copy of
+the same loop is deduped onto the helper, and the preview canvas
+(`ShaftRenderer.drawThreadHatch`) mirrors the same geometry (its user-set hatch color
+stays). Pinned by `ThreadHatchParityTest`: the same thread rendered through the
+schematic pass, the wear/undercut shared profile, and the runout profile must be
+byte-identical bitmaps.
+
+### docs(pdf): undercut document stays free to grow blends
+
+Second ruling: the `SimpleShaftProfile.kt` posture note is softened — the wear document's
+no-machining-detail posture remains the standing product decision, while the undercut
+document merely draws the same simple profile TODAY and may grow blends later ("allow
+blends in case we ever need them"). Growing them means a richer pass or a caller switch,
+never quietly upgrading the wear document.
+
 ## 2026-08-25
+
+### chore(build): Kotlin 2.3.20 + kotlinx-serialization 1.11.0
+
+The deferred toolchain step, landed clean: the feared Kotlin-2.3/AGP-9 conflict with the
+separate `kotlin-android` plugin did not materialize — the full suite and `assembleDebug`
+both build on 2.3.20 / AGP 9.3.1 unchanged. The only fallout was `createTempDir` promoted
+from deprecation to compile error in test code: 19 call sites across 6 `io/` test files
+migrated to `kotlin.io.path.createTempDirectory(...).toFile()`. Kotlin 2.4.0 (the K1 drop)
+stays a separate future branch (TODO §4.2).
+
+### feat(ui): a Save button on every carousel card
+
+Fields commit on blur and on IME Done — but chips, toggles, and checkboxes never TAKE
+focus, so a value typed and followed by a chip tap sat uncommitted in a still-focused field
+with nothing visibly wrong (on-device report: a body keyway length that never landed). Every
+card now ends with a Save button that force-clears focus, driving the one existing
+commit-on-blur path (`shouldCommitOnBlur`) — no second commit pipeline, and the no-change
+rule holds, so Save after tap-without-edit stays a no-op. Card-only by design: the Add
+dialogs commit through their own Add button. Pinned by `ComponentCardSaveButtonTest`;
+contract note in `NumberField.md`.
+
+### refactor: Wave-3 extractions — the five named duplications, closed
+
+The re-scoped Wave-3 list (TODO §4.1b), all five executed; two real defects surfaced and
+died on the way:
+
+- `geom/ProfileFeatureSpans.kt` — ONE `profileFeatureSpans` builder behind the schematic
+  (lean floors), the runout/consolidated sheet (writable floors), and the Output tab's
+  liner-compression estimator, which had mirrored the composers "by convention only". The
+  keyway-window pin helpers moved there too (pure model+geom — their proper home).
+- `COMPRESS_TRIGGER_PT` / `ZIGZAG_GAP_MAX_PT` live once in `pdf/BreakSymbol.kt`; the
+  undercut composer's `UC_` aliases folded in.
+- `pdf/BodyRunDraw.kt` — `drawBodyRunsWithBreaks` is the ONE body-run pass both blend-aware
+  composers call. The mechanical diff of the two former copies found exactly one behavioral
+  divergence: the runout copy painted the right stub's shade fill AFTER the break edge, so
+  a shaded body's fill could cover part of the S-curve. Unified on the schematic's correct
+  order — that z-order slip is dead.
+- `pdf/SimpleShaftProfile.kt` — `drawSimpleShaftProfile`, the shared square-face
+  whole-shaft profile of the wear and undercut documents (~245 near-identical lines
+  collapsed; one thread-hatch implementation). The diff surfaced the second defect: the
+  undercut sheet had never received the wear sheet's line-thickness fix for secondary
+  strokes — its profile dim lines, detail-strip dim lines, and hatches ignored Settings →
+  "Line thickness". They now scale off the outline weight like everything else. The file's
+  KDoc records that the undercut document SHARES the wear document's no-machining-detail
+  posture — previously true in code, written nowhere; flagged for product ratification.
+  The page-geometry preambles were deliberately NOT extracted (no net saving; would couple
+  two sheets' private tuning knobs).
+- `pdf/SheetHeader.kt` — one blank-draft header for the wear/undercut pair (they were
+  near-byte-identical). The runout header stays its own smaller layout deliberately. The
+  schematic's thread-hatch divergence from the other three sheets is NOT touched — a
+  visible difference, recorded in TODO as an open product question.
+
+### feat(backup): the auto-mirror follows deletes and renames, and can catch a folder up
+
+The mirror shipped able to keep a folder current only *going forward*: a document deleted or
+renamed internally left its old copy sitting there under the old name, and a folder picked
+after the shafts were saved only ever received what happened to be saved since. Both bounds
+are closed, all three behaviours on the same posture as the save hook — fire-and-forget on
+`BackupMirror`'s own IO scope, after the internal operation and only when it succeeded, every
+provider call wrapped, the stored URI never cleared:
+
+- **Delete propagates.** `InternalStorage.delete(ctx, …)` calls `onDocumentDeleted`, which
+  removes the folder's copy. A folder that holds nothing by that name is a silent no-op — it
+  is allowed to be behind — and only a delete that actually removed the internal file
+  propagates: the folder copy of a document that is still here is a backup, not a leftover.
+- **Rename propagates**, as write-new-then-delete-old rather than SAF `renameDocument` (tree-URI
+  rename support varies by provider, and a rename that silently does nothing would leave the
+  same stale copy). The content is read back under the NEW name — the hook runs after the
+  internal rename — and the old copy is dropped **only once the new one is provably written**,
+  so a failed write can never take the only off-device copy with it.
+- **"Mirror all now"** (Settings → Data, shown only with a folder picked) copies every saved
+  document through the same per-document write and reports "Mirrored N of M" (plus a failure
+  count) in its own row, disabled while it runs. It deliberately keeps its own status line: the
+  folder row's line says what the last single save did, and driving it through forty documents
+  would just flicker.
+
+Write and delete now resolve a name through one matcher, `findMirrorEntry` (exact before
+case-insensitive) — a delete matching more strictly than the write would leave behind exactly
+the copy the write had been maintaining. `planMirrorDelete` joins `planMirrorWrite` in the pure
+layer with 9 new cases in `BackupMirrorPlanTest`.
 
 ### fix(keyway): only the keyway WINDOW resists compression — the body around it breaks freely
 
