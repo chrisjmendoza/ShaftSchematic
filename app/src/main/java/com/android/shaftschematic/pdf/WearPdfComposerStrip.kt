@@ -268,7 +268,8 @@ internal fun drawWearStripWindow(
     val radii = computeWearStripRadii(refDiaMm, aftDia, fwdDia, rCap)
     fun rOf(diaMm: Float): Float = (rCap * (diaMm / refDiaMm)).coerceIn(0f, rCap)
 
-    val dimPaint = Paint(outline).apply { strokeWidth = WEAR_DIM_PT }
+    // Ratio of the outline's (already thickness-scaled) weight — see WearPdfComposer's dimPaint.
+    val dimPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (WEAR_DIM_PT / WEAR_OUTLINE_PT) }
 
     // ── Silhouettes, segment by segment through the window's one mapping ──────
     window.segments.forEachIndexed { i, seg ->
@@ -468,7 +469,7 @@ internal fun drawWearStripWindow(
     // rows sit in the diaBand reserved by computeWearStripInnerLayout above. Same engine +
     // construction as the main-profile callouts and the overlay canvas.
     if (diaPlan != null) {
-        val tickPaint = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.6f; alpha = 160 }
+        val tickPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (WEAR_DIM_PT * 0.6f / WEAR_OUTLINE_PT); alpha = 160 }
         diaPlan.stations.forEach { s ->
             val r = rOf(stationDiaByKey[s.key] ?: refDiaMm)
             c.drawLine(
@@ -605,7 +606,7 @@ private const val WEAR_STRIP_THREAD_HATCH_PITCH_PT = 6f
  */
 private fun drawThreadStubHatch(c: Canvas, x0: Float, top: Float, x1: Float, bot: Float, outline: Paint) {
     if (x1 <= x0 || bot <= top) return
-    val hatch = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.6f; alpha = 160 }
+    val hatch = Paint(outline).apply { strokeWidth = outline.strokeWidth * (WEAR_DIM_PT * 0.6f / WEAR_OUTLINE_PT); alpha = 160 }
     val h = bot - top
     val saved = c.save()
     c.clipRect(x0, top, x1, bot)

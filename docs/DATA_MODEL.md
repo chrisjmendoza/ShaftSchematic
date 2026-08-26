@@ -435,7 +435,7 @@ Backfill missing UUIDs
 Normalize thread pitch/tpi relationships
 
 `couplerBoltSlots`, `keyways180Apart`, `keyways90Apart`, `keyways90Cw`, `autoBodyDiaMm`,
-`showAutoBodyDia`, `autoDiaOverrides`, and
+`showAutoBodyDia`, `autoDiaOverrides`, `autoBlends`, and
 every envelope record above round-trip automatically through `ShaftDocCodec` with no
 schema/version bump: each defaults empty/zero/false and decode uses `ignoreUnknownKeys`, so
 documents written before a field existed decode unchanged.

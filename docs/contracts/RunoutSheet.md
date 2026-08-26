@@ -950,16 +950,22 @@ Two rules make the difference between a printed keyway and a silent nothing:
    keyway fields and `bodyForPdf` builds none, so `resolved.filter { it.hasKeyway }` matches
    nothing, always. Stored spans also keep ONE slot per authored keyway where a liner trims the
    run into several drawn pieces, and put the slot at its physical position.
-2. **The keyway-bearing body pins at true width** (`keywayPinnedBodySpans`, same stored-spec
-   rule) — a slot drawn on a foreshortened body is not real geometry, and on this sheet a
-   compressed body can carry the S-break pair straight through where the slot belongs.
-3. **A keyed run never carries the S-break** — either composer's body pass
-   (`drawBodiesCompressedCenterBreak` / `drawBodiesForRunout`, `keyedBodyIds` off the stored
-   spec, base-id keyed so fragments inherit it). The pin already rules out the foreshortening
-   break; this gives up the LONG-SPAN glyph (`COMPRESS_TRIGGER_PT`) too, deliberately: a break
-   gap could land inside the slot, and the slot must read as real geometry end-to-end. The
-   schematic footer's compression note shares the exemption at its call site, so the note and
-   the drawn breaks cannot disagree. Pinned by `KeyedBodyNoBreakTest` (both draw sites).
+2. **The keyway WINDOW pins at true scale — never the whole host body.** The window is the
+   slot span padded by one keyway width, clamped to the body (`bodyKeywayProtectedSpansMm`,
+   stored spec; `keywayPinnedBodySpans` turns it into the `Float.MAX_VALUE` feature spans).
+   A slot drawn foreshortened is not real geometry — but pinning the whole body made a
+   95%-shaft body unrenderable (the height yielded to nothing), so the body around the
+   window stays free to compress (on-device direction). The slot draw derives its pt/mm
+   from the window's OWN mapped span (`drawKeywayNotchBodyPdf`) — a body-average scale
+   would shrink the slot inside the very window pinned to keep it real.
+3. **A keyed body still breaks; the gap steers clear of the window.** Both body passes
+   (`drawBodiesCompressedCenterBreak` / `drawBodiesForRunout`) place the S-break gap
+   through `breakGapCenter` (`pdf/BreakSymbol.kt`, pure): span midpoint by the hand-sheet
+   convention, shifted the minimal distance that clears every protected window, and only a
+   run with NO clear placement prints plain. The schematic footer's compression note keeps
+   the plain shared predicate — keyed bodies break like any other run, so no exemption.
+   Pinned by `BreakGapKeywayAvoidanceTest` (pure placement + both draw sites) and
+   `KeywayPinnedBodySpansTest` (window-not-body, long-shaft scale survival).
 
 Clocking is decided once per sheet from the authored spec (`keywayClocking`,
 `hiddenKeywayHostIds`, `secondaryKeywayHostIds`) and handed to both passes, so the two cannot

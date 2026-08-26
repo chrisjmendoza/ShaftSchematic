@@ -895,8 +895,8 @@ internal fun drawWornSections(
     /**
      * Set dual values as a two-line stack. Under rotation the stack lies ACROSS the shaft, so it
      * costs axial room and SAVES band height — the opposite of every other site
-     * (`docs/DualUnitStacking_PLAN.md` §6). Threaded from both draw sites so the printed sheet and
-     * the preview canvas can never disagree.
+     * (`docs/DualUnitStacking_PLAN.md` §6). The Runout tab's canvas deliberately draws no
+     * in-profile values (it authors runouts only), so the printed sheet is the sole consumer.
      */
     dualStacked: Boolean = false,
 ) {
@@ -1066,8 +1066,8 @@ internal fun drawDiaReadingsInProfile(
     /**
      * Set dual values as a two-line stack. Under rotation the stack lies ACROSS the shaft, so it
      * costs axial room and SAVES band height — the opposite of every other site
-     * (`docs/DualUnitStacking_PLAN.md` §6). Threaded from both draw sites so the printed sheet and
-     * the preview canvas can never disagree.
+     * (`docs/DualUnitStacking_PLAN.md` §6). The Runout tab's canvas deliberately draws no
+     * in-profile values (it authors runouts only), so the printed sheet is the sole consumer.
      */
     dualStacked: Boolean = false,
 ) {
@@ -1309,7 +1309,7 @@ internal fun drawShaftProfile(
     drawBodiesForRunout(
         c, spec.bodies, cy, xAt, rPx, outline, geomRect, truePtPerMm, breakMinFracOfTrue,
         fill = bodyFill, blends = blends,
-        keyedBodyIds = authoredSpec.bodies.filter { it.hasKeyway }.map { it.id }.toSet(),
+        keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(authoredSpec),
     )
     // Body keyways, from the SAME pass the schematic draws (`drawBodyKeywaysPdf`) so a slot
     // cannot print on one sheet and vanish from the other. Read off [authoredSpec]: [spec]
@@ -1381,16 +1381,21 @@ internal fun drawBodiesForRunout(
     /** Blended faces on these runs ([bodyBlends]); see `drawShaftProfile`'s parameter doc. */
     blends: List<BodyBlend> = emptyList(),
     /**
-     * Base ids of the STORED keyway-bearing bodies — a keyed run never carries the S-break
-     * (`drawBodiesCompressedCenterBreak` documents why); its span is already pinned at true
-     * width by `keywayPinnedBodySpans`, so this only gives up the long-span glyph.
+     * Protected body-keyway windows (`bodyKeywayProtectedSpansMm`, absolute mm) the break
+     * gap must never cut into — the slot window is pinned at true scale; the REST of a
+     * keyed body compresses and breaks like any other run (`drawBodiesCompressedCenterBreak`
+     * documents why). The gap shifts off the window (`breakGapCenter`); only a run with no
+     * clear placement prints plain.
      */
-    keyedBodyIds: Set<String> = emptySet(),
+    keywayAvoidSpansMm: List<KeywaySpan> = emptyList(),
 ) {
     val capPaint = Paint(outline)
+    val avoidX = keywayAvoidSpansMm.map {
+        val a = xAt(it.loMm); val b2 = xAt(it.hiMm)
+        minOf(a, b2)..maxOf(a, b2)
+    }
     bodies.forEach { b ->
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
-        val keyed = resolvedBodyBaseId(b.id) in keyedBodyIds
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r  = rPx(b.diaMm);          val top = cy - r; val bot = cy + r
 
@@ -1418,24 +1423,30 @@ internal fun drawBodiesForRunout(
         drawBlendCurvePdf(c, edges.aftCurve, cy, outline, fill)
         drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, fill)
 
-        if (keyed || (!foreshortened && lenPt < COMPRESS_TRIGGER_PT)) {
+        // Break layout first (same S-curve logic as the main schematic PDF), cut into the
+        // flat span — the curves at the faces stay whole, and the gap steers clear of any
+        // protected keyway window; a run with no clear placement prints plain.
+        val compress = foreshortened || lenPt >= COMPRESS_TRIGGER_PT
+        val flatLenPt = abs(fx1 - fx0)
+        val pair = if (compress) breakPairLayout(
+            runLenPt = flatLenPt,
+            desiredAmplitudePt = r * 0.6f,
+            classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * flatLenPt),
+            strokeWidthPt = capPaint.strokeWidth,
+        ) else null
+        val gapCenter = pair?.let {
+            breakGapCenter(minOf(fx0, fx1), maxOf(fx0, fx1), it.gapPt, avoidX)
+        }
+
+        if (pair == null || gapCenter == null) {
             if (fill != null) c.drawRect(fx0, top, fx1, bot, fill)
             c.drawLine(fx0, top, fx1, top, outline)
             c.drawLine(fx0, bot, fx1, bot, outline)
         } else {
-            // Centre break (same S-curve logic as the main schematic PDF), cut into the
-            // flat span — the curves at the faces stay whole.
-            val flatLenPt = abs(fx1 - fx0)
-            val mid   = (fx0 + fx1) * 0.5f
-            val (gap, amp) = breakPairLayout(
-                runLenPt = flatLenPt,
-                desiredAmplitudePt = r * 0.6f,
-                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * flatLenPt),
-                strokeWidthPt = capPaint.strokeWidth,
-            )
+            val (gap, amp) = pair
             val half  = gap * 0.5f
-            val lEnd  = (mid - half).coerceIn(geomRect.left, geomRect.right)
-            val rBeg  = (mid + half).coerceIn(geomRect.left, geomRect.right)
+            val lEnd  = (gapCenter - half).coerceIn(geomRect.left, geomRect.right)
+            val rBeg  = (gapCenter + half).coerceIn(geomRect.left, geomRect.right)
 
             if (fill != null) c.drawRect(fx0, top, lEnd, bot, fill)
             c.drawLine(fx0, top, lEnd, top, outline)

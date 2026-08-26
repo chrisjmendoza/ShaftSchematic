@@ -813,7 +813,9 @@ private fun drawWearShaftProfile(
         c.drawLine(x0, top0, x0, bot0, outline); c.drawLine(x1, top1, x1, bot1, outline)
     }
     // Liners
-    val dimPaint = Paint(outline).apply { strokeWidth = WEAR_DIM_PT }
+    // Ratio of the outline's (already thickness-scaled) weight, so Settings -> "Line
+    // thickness" reaches every stroke on the sheet, not just the silhouette.
+    val dimPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (WEAR_DIM_PT / WEAR_OUTLINE_PT) }
     spec.liners.forEach { ln ->
         if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
         val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
@@ -822,7 +824,7 @@ private fun drawWearShaftProfile(
         c.drawLine(x0, top, x0, bot, dimPaint); c.drawLine(x1, top, x1, bot, dimPaint)
     }
     // Threads — outline envelope + diagonal hatch so the machinist knows the zone is threaded
-    val hatchPaint = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.6f; alpha = 160 }
+    val hatchPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (WEAR_DIM_PT * 0.6f / WEAR_OUTLINE_PT); alpha = 160 }
     spec.threads.forEach { th ->
         if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
         val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
@@ -871,7 +873,7 @@ private fun drawWearBandsOnProfile(
     outline: Paint,
 ) {
     if (groups.isEmpty()) return
-    val bandLines = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * 0.5f; alpha = 120 }
+    val bandLines = Paint(outline).apply { strokeWidth = outline.strokeWidth * (WEAR_DIM_PT * 0.5f / WEAR_OUTLINE_PT); alpha = 120 }
     groups.forEach { g ->
         val ln = g.liner
         if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
@@ -1120,7 +1122,7 @@ private fun drawWearNotesArea(
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
 
-private const val WEAR_OUTLINE_PT = 2.0f
+internal const val WEAR_OUTLINE_PT = 2.0f
 internal const val WEAR_DIM_PT    = 1.2f
 private const val WEAR_TEXT_PT    = 10f
 private const val WEAR_MARGIN_PT  = 36f

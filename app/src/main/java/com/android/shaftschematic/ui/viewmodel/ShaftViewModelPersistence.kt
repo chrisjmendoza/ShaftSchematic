@@ -256,6 +256,11 @@ fun ShaftViewModel.importJson(raw: String) {
     val decoded = runCatching { ShaftDocCodec.decode(raw) }.getOrElse { throw it }
 
     clearEditHistory()
+    // Opening a document is an editor boundary like New/template-apply: without the bump,
+    // Compose-local editor state (pager page, field drafts, expanded sections) carries over
+    // into the newly loaded document. Draft restore deliberately does NOT bump — continuing
+    // a draft resumes the same editing session.
+    _editorResetNonce.update { it + 1 }
     // Each open is a fresh draft identity so this document's autosave upserts its own entry
     // and cannot touch another document's draft. markDocumentSaved() below reseats the
     // dirty-gate baseline to the just-loaded state (clean → no draft until edited).

@@ -133,9 +133,11 @@ display-only Distance metadata — canonical never moves on a reference switch).
 a **list** of typed measurements — stored verbatim in list order (golden rule); values ≤ 0
 never print. They draw on the **runout sheet**: boundary lines at the span ends and the
 values **inside the profile**, rotated 90°, each over a sheet-white halo so no profile
-line crosses a number. ONE draw implementation for both sites — `drawWornSections`
-(`pdf/RunoutPdfComposer.kt`), called by the PDF and by the `RunoutRoute` canvas via
-`nativeCanvas`; pure layout in `geom/WornSectionMath.kt`. No carousel card, no Add dialog
+line crosses a number. ONE draw implementation — `drawWornSections`
+(`pdf/RunoutPdfComposer.kt`); the `RunoutRoute` canvas deliberately draws no worn
+sections or in-profile values (that tab authors runouts only — the consolidated marks
+live on the Output tab's rasterized real-PDF preview); pure layout in
+`geom/WornSectionMath.kt`. No carousel card, no Add dialog
 (outside the add-dialog-parity invariant). **Consolidated-sheet z-order: marks first, text
 last** — wear-area bands and pit X's (migrated from the retired wear tab,
 `drawWearMarksOnRunoutProfile`), then worn-section boundaries, then ALL value text over
@@ -176,12 +178,16 @@ foreshortening ("why lock it in one way when different users may want different 
 `drawBodiesForRunout`, `showCompressionNote`), so the note and the drawn breaks can never
 disagree; there is no duplicate constant. The long-span trigger `COMPRESS_TRIGGER_PT` is
 deliberately NOT governed by the slider — a run eating 220 pt of paper at true scale is
-not hidden compression, so it breaks at every setting, Never included. **Keyway-bearing
-bodies never draw the S-break at all** (`keyedBodyIds`, stored-spec base ids, both body
-passes AND the footer note's predicate): their span is pinned at true width
-(`keywayPinnedBodySpans`) so foreshortening cannot reach them, and the long-span glyph is
-given up deliberately — a break gap could land inside the slot, which must read as real
-geometry end-to-end.
+not hidden compression, so it breaks at every setting, Never included. **A body keyway's
+WINDOW never compresses; the rest of its body compresses and breaks like any other run**
+(on-device direction: a 95%-shaft body must keep its break or a long shaft cannot render).
+The protected window — the slot span padded by one keyway width, clamped to the body
+(`bodyKeywayProtectedSpansMm`, STORED spec) — pins at true scale
+(`keywayPinnedBodySpans`), the break gap steers clear of it (`breakGapCenter`, both body
+passes; a run with no clear placement prints plain), and the slot draw derives pt/mm from
+its OWN mapped span so it stays true-size inside a compressed body
+(`drawKeywayNotchBodyPdf`). Pinning the whole host body, or suppressing its break
+outright, would be a regression on both sides.
 **Liners compress in SIZE only** (finite `PROFILE_MIN_LINER_PT` floor — proportional
 foreshortening, NEVER a body-style S-break cutout; the S-break glyph is a body-only draw
 path); the per-job **"Liner compression" pair** (`RunoutConfig.linersProportional` +

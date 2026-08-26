@@ -2,6 +2,7 @@ package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.model.Body
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.hasKeyway
 import com.android.shaftschematic.ui.resolved.ResolvedBody
@@ -12,17 +13,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * `keywayPinnedBodySpans` — the true-width pin behind a body keyway, and the reason it must
- * read STORED bodies.
+ * `keywayPinnedBodySpans` / `bodyKeywayProtectedSpansMm` — the true-scale pin behind a body
+ * keyway, and the two rules that make it usable:
  *
- * A resolved body carries no keyway fields at all ([ResolvedBody] has none, and `bodyForPdf`
- * builds a [Body] from geometry alone), so a pin filtered off the resolved list matches
- * nothing: the body compresses, and on the runout sheet the slot it was pinned for could land
- * inside the S-break gap. These pin that the source is the stored spec and that the pin really
- * does hold the body at true width.
+ * 1. The pin covers the KEYWAY WINDOW (slot span padded by one keyway width, clamped to the
+ *    body), never the whole host body — a 95%-shaft body pinned whole cannot render at all
+ *    (on-device report); the rest of the body stays free to compress and break.
+ * 2. It reads STORED bodies. A resolved body carries no keyway fields ([ResolvedBody] has
+ *    none, and `bodyForPdf` builds a [Body] from geometry alone), so a pin filtered off the
+ *    resolved list matches nothing, silently.
  */
 class KeywayPinnedBodySpansTest {
 
+    /** 300 mm body, 20 × 8 × 100 open AFT keyway → slot [0,100], window [0,120]. */
     private fun keyedBody(id: String = "b1", startMm: Float = 0f, lengthMm: Float = 300f) = Body(
         id = id,
         startFromAftMm = startMm,
@@ -46,13 +49,26 @@ class KeywayPinnedBodySpansTest {
     )
 
     @Test
-    fun `a keyed body pins its full span at true width`() {
+    fun `the pin covers the padded keyway window - never the whole body`() {
         val spec = ShaftSpec(overallLengthMm = 300f, bodies = listOf(keyedBody()))
         val spans = keywayPinnedBodySpans(spec)
         assertEquals(1, spans.size)
-        assertEquals(0f, spans[0].startMm, 1e-3f)
-        assertEquals(300f, spans[0].endMm, 1e-3f)
+        assertEquals(0f, spans[0].startMm, 1e-3f)      // pad clamps at the body's aft face
+        assertEquals(120f, spans[0].endMm, 1e-3f)      // slot end 100 + one keyway width
         assertEquals(Float.MAX_VALUE, spans[0].minWidthPt, 0f)
+        assertTrue("the rest of the body must stay free to compress", spans[0].endMm < 300f)
+    }
+
+    @Test
+    fun `a fwd keyway's window clamps at the fwd face`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 300f,
+            bodies = listOf(keyedBody().copy(keywayEnd = LinerAuthoredReference.FWD)),
+        )
+        val spans = keywayPinnedBodySpans(spec)
+        assertEquals(1, spans.size)
+        assertEquals(180f, spans[0].startMm, 1e-3f)    // slot [200,300] padded aft to 180
+        assertEquals(300f, spans[0].endMm, 1e-3f)
     }
 
     @Test
@@ -78,20 +94,39 @@ class KeywayPinnedBodySpansTest {
         assertEquals(1, keywayPinnedBodySpans(spec).size)
     }
 
-    /** A pinned span holds true width in the solve — the scale yields, never the body. */
+    /** The pinned window holds true scale in the solve — the scale yields, never the slot. */
     @Test
-    fun `the pin holds the body at true width and the scale yields`() {
+    fun `the pin holds the keyway window at true width and the scale yields`() {
         val spec = ShaftSpec(overallLengthMm = 300f, bodies = listOf(keyedBody()))
         val solved = solveMaxProfileScale(
             windowStartMm = 0f,
             windowEndMm = 300f,
             features = keywayPinnedBodySpans(spec),
-            contentWidth = 150f,
+            contentWidth = 100f,
             scaleHi = 1f,
         )
-        // 300 mm pinned into 150 pt of paper — the scale must drop to fit it at true width.
-        assertEquals(0.5f, solved, 1e-2f)
-        assertTrue("a pinned span may never draw compressed", 300f * solved <= 150f + 1e-2f)
+        assertTrue("the scale must drop for the pinned window", solved < 1f)
+        assertTrue(
+            "a pinned window may never draw compressed",
+            120f * solved <= 100f + 1e-2f,
+        )
+    }
+
+    /** Unlike the retired whole-body pin, a long keyed body no longer crushes the scale. */
+    @Test
+    fun `only the window demands true width - a long keyed body keeps a usable scale`() {
+        val longKeyed = keyedBody(lengthMm = 4500f)     // ~177 in, the on-device shaft
+        val spec = ShaftSpec(overallLengthMm = 4500f, bodies = listOf(longKeyed))
+        val solved = solveMaxProfileScale(
+            windowStartMm = 0f,
+            windowEndMm = 4500f,
+            features = keywayPinnedBodySpans(spec),
+            contentWidth = 700f,
+            scaleHi = 1f,
+        )
+        // Whole-body pinning would force 4500·s ≤ 700 (s ≈ 0.15); the window pin only needs
+        // its 120 mm plus the body-run floor, so the desired scale survives.
+        assertEquals(1f, solved, 1e-3f)
     }
 
     @Test

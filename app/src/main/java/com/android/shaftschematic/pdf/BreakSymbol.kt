@@ -133,6 +133,46 @@ internal fun breakForCompression(
 ): Boolean =
     truePtPerMm > 0f && minFracOfTrue > 0f && drawnPt < trueLenMm * truePtPerMm * minFracOfTrue
 
+/** Minimum stub a break gap must leave at each end of the flat span it cuts. */
+internal const val BREAK_GAP_MIN_STUB_PT = 6f
+
+/**
+ * Center x for a break gap on the flat span [flatX0]..[flatX1], steering the gap clear of
+ * [avoidRanges] — drawn x-spans that must stay unbroken (a body keyway's slot: the gap
+ * landing inside it would cut the one region the sheet promises at true scale). The span
+ * midpoint is preferred (the hand-sheet convention); a centered gap that would touch an
+ * avoid range shifts the minimal distance that clears every range while keeping
+ * [minStubPt] of stub at both ends. Returns null when no clear placement exists — the
+ * caller prints the run plain rather than break inside a protected span.
+ */
+internal fun breakGapCenter(
+    flatX0: Float,
+    flatX1: Float,
+    gapPt: Float,
+    avoidRanges: List<ClosedFloatingPointRange<Float>>,
+    minStubPt: Float = BREAK_GAP_MIN_STUB_PT,
+): Float? {
+    val half = gapPt / 2f
+    val lo = flatX0 + minStubPt + half
+    val hi = flatX1 - minStubPt - half
+    if (hi < lo) return null
+    val mid = ((flatX0 + flatX1) / 2f).coerceIn(lo, hi)
+    // Centers whose gap would touch a (run-clipped) avoid range.
+    val blocked = avoidRanges.mapNotNull { r ->
+        val s = maxOf(r.start, flatX0)
+        val e = minOf(r.endInclusive, flatX1)
+        if (e > s) (s - half)..(e + half) else null
+    }
+    fun clear(c: Float) = blocked.none { c in it }
+    if (clear(mid)) return mid
+    val eps = 0.01f
+    return blocked
+        .flatMap { listOf(it.start - eps, it.endInclusive + eps) }
+        .filter { it in lo..hi }
+        .sortedBy { kotlin.math.abs(it - mid) }
+        .firstOrNull { clear(it) }
+}
+
 internal data class BreakPairLayout(val gapPt: Float, val amplitudePt: Float)
 
 /**

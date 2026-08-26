@@ -618,12 +618,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // the (immediate) hasUnsavedChanges dirty flag.
         @Suppress("UNCHECKED_CAST")
         // Flow.combine overload for >5 flows returns Array<Any?>
+        // EVERY field of SessionSnapshot must have its flow in this combine — a field set by
+        // buildCurrentSnapshot() but missing here silently defaults in every WRITTEN draft
+        // (data loss on restore), goes un-dirty-tracked, and leaves the two builders producing
+        // permanently unequal snapshots (false-dirty + phantom draft on any document that uses
+        // the field). unit_overrides/dual_units were exactly that gap (on-device era report).
         val sessionSnapshotFlow = combine(
             spec, unit, shaftPosition, customer, vessel, jobNumber, notes,
             runoutConfig, unitLocked, overallIsManual, wearRecord, runoutReadings, undercutRecord,
-            runoutStationPlacements
+            runoutStationPlacements, unitOverrides, dualUnits
         ) { values: Array<Any?> ->
-            check(values.size == 14) { "Autosave combine expected 14 values, got ${values.size}" }
+            check(values.size == 16) { "Autosave combine expected 16 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -639,6 +644,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val readings = values[11] as RunoutReadings
             val undercuts = values[12] as UndercutRecord
             val stationPlacements = values[13] as RunoutStationPlacements
+            @Suppress("UNCHECKED_CAST")
+            val overrides = values[14] as Map<String, UnitSystem>
+            val dual = values[15] as Boolean
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -655,6 +663,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 runoutReadings = readings,
                 undercutRecord = undercuts,
                 runoutStationPlacements = stationPlacements,
+                unitOverrides = overrides,
+                dualUnits = dual,
             )
         }
 
@@ -1140,6 +1150,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // draft's unit, and overallIsManual so a manually-set OAL isn't auto-resized.
         _unitLocked.value = snapshot.unitLocked
         _overallIsManual.value = snapshot.overallIsManual
+        // Same courtesy as importJson/applyTemplate: the Add dialogs pre-fill from the
+        // restored drawing's dimensions, not a previous session's leftovers.
+        seedSessionAddDefaultsFromSpec(snapshot.shaftSpec)
     }
 
     /** Sets the UI unit (preview/labels only). Model remains canonical mm. */

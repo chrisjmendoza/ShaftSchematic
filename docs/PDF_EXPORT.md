@@ -46,7 +46,7 @@ Preview rendering (`ShaftLayout` + `ShaftRenderer`) and the PDF composers (`Shaf
 `ShaftRenderer`. This is an intentional architectural split, not a bug to unify — see
 `docs/archive/AUDIT.md` §4.4 for history.
 
-**Coupler bolt slots** are drawn on **all three PDF profiles** — the main schematic (`ShaftPdfComposer`), the runout sheet (`RunoutPdfComposer`), and the wear document (`WearPdfComposer`) — via a shared `drawCouplerBoltSlots` helper. Each cutout is a circle straddling the shaft outline (half in the shaft, half in the coupling), mirrored on the top and bottom edges, at each cutout position along the row. No dimension rail is drawn in v1 (the `showDimensionRail` toggle exists but is deferred).
+**Coupler bolt slots** are drawn via a shared `drawCouplerBoltSlots` helper on the main schematic (`ShaftPdfComposer`), the runout sheet (`RunoutPdfComposer`), the wear document (`WearPdfComposer`), and the undercut composer's whole-shaft fallback profile (`UndercutPdfComposer` — its strip pages print no slots). Each cutout is a circle straddling the shaft outline (half in the shaft, half in the coupling), mirrored on the top and bottom edges, at each cutout position along the row. No dimension rail is drawn in v1 (the `showDimensionRail` toggle exists but is deferred).
 
 ---
 

@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.pdf.keywayPinnedBodySpans
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.defaultVisualScale
@@ -40,7 +41,6 @@ import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.model.hasKeyway
 import com.android.shaftschematic.model.maxOuterDiaMm
 import com.android.shaftschematic.settings.PDF_ARROW_SIZES_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
@@ -899,9 +899,9 @@ internal fun estimatedLinerKeptFracOfTrue(
         spec.threads.forEach {
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_THREAD_PT))
         }
-        spec.bodies.filter { it.hasKeyway }.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE))
-        }
+        // The keyway WINDOW pins, never the whole host body — mirrors the composers'
+        // `keywayPinnedBodySpans` so the estimator's scale matches the printed sheet's.
+        addAll(keywayPinnedBodySpans(spec))
     }
     val solved = solveMaxProfileScale(
         windowStartMm = 0f, windowEndMm = windowEnd,

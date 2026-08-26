@@ -8,6 +8,75 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-25
 
+### fix(keyway): only the keyway WINDOW resists compression — the body around it breaks freely
+
+On-device correction to the same-day keyed-body rules: a 95%-shaft body (one ~170" run
+with an end keyway) NEEDS its compression and S-break or the sheet cannot render — pinning
+the whole host body at true width crushed the drawn height, and suppressing its break drew
+a long run wrong. What the shop actually needs protected is the slot, not the body:
+
+- `bodyKeywayProtectedSpansMm` defines the protected window — the slot span padded by one
+  keyway width (mill arc + spoon-bowl overhang), clamped to the body — and
+  `keywayPinnedBodySpans` now pins THAT at true scale instead of the whole body. A long
+  keyed body keeps its normal drawn height again (pinned by the new long-shaft case in
+  `KeywayPinnedBodySpansTest`).
+- Keyed bodies compress and break like any other run again; the S-break gap is placed by
+  the new pure `breakGapCenter` (`pdf/BreakSymbol.kt`) — span midpoint by convention,
+  shifted minimally off any protected window, plain-rect fallback only when nothing
+  clears. Both composers' body passes ride it; the footer compression note returns to the
+  plain shared predicate (no keyed exemption — keyed bodies break now).
+- `drawKeywayNotchBodyPdf` derives its scale from the slot's OWN mapped span rather than
+  the whole body's average, so the slot draws true-size inside a compressed body — the
+  body-average pt/mm would have shrunk the slot inside the very window pinned to keep it
+  real. Exact under the piecewise map because the pinned window maps linearly; a floating
+  slot re-anchors one offset back so its position holds too.
+
+`BreakGapKeywayAvoidanceTest` (11 cases: pure placement + both draw sites) replaces
+`KeyedBodyNoBreakTest`; `BodyKeywayDrawTest` gains the compressed-map true-scale case.
+
+### fix: audit-sweep wave — autosave completeness, wear stroke weights, dead compression note
+
+A four-agent cross-surface audit (draw-site parity, settings reach, dialog/card parity +
+field units, persistence round-trips) confirmed the parity and field-unit lanes fully clean
+and surfaced these, all fixed:
+
+- **Autosave/draft snapshots now carry `unit_overrides` + `dual_units`.** The live-session
+  combine built 14-field snapshots while `buildCurrentSnapshot` built 16, so per-component
+  unit chips, the keyway-unit chip, the metric-thread mm pin, and the dual-display flag were
+  absent from every WRITTEN draft (silently reverting on restore), never marked the document
+  dirty on their own, and left any document using them permanently "dirty" with a phantom
+  draft-ring entry. The combine now carries all 16 fields with a comment stating the
+  every-field rule.
+- **Settings → "Line thickness" now reaches every wear-document stroke.** Liner witness
+  lines, wear-band lines, thread hatch, strip gap dividers, and Ø-reading ticks rebuilt
+  their paints from raw constants; they now scale as a ratio of the (already-scaled)
+  outline weight, so one slider moves the whole sheet together.
+- **The compression footer note actually prints.** `FooterConfig.showCompressionNote` had
+  been computed, threaded, documented ("the note and the drawn breaks can never disagree"),
+  and never read by any draw site — the draw was a commented-out line in the flag's very
+  first commit. The footer's work-order column now prints "Not to scale: body sections
+  compressed for readability" when the flag is set, on the schematic and the consolidated
+  sheet alike.
+- **The taper "Rate:" footer line follows the taper's own unit** (`tpUnit`, like the
+  L.E.T./S.E.T./Length lines beside it) — a metric-overridden taper kept the document
+  unit's inch-per-foot notation against its own mm dimensions.
+- **Draft restore reseeds the Add-dialog defaults** from the restored spec (importJson and
+  applyTemplate already did), and **opening a document resets editor-local state**
+  (`importJson` now bumps the editor nonce like New/template-apply; continuing a draft
+  deliberately does not — that resumes the same session).
+- Doc corrections where code was right and docs stale: `PdfPrefs.arrowSizePt` reach (the
+  classic runout sheet's lone OAL line keeps a fixed head), the worn-sections canvas claim
+  in CLAUDE.md (the Runout tab canvas deliberately draws no in-profile values), two
+  matching composer KDocs, the coupler-slot composer list (four composers, not three, with
+  the undercut fallback-only caveat), and `autoBlends` added to `DATA_MODEL.md`'s
+  round-trip list.
+
+Audit findings deliberately NOT changed pending product review: per-component units on the
+wear/undercut authoring overlays and TIR bubble values, blends/seal grooves and liner
+shoulders and coupler slots on the undercut document's strip pages, nominal OD callouts on
+the consolidated sheet, wear-mark radii in blend transitions, theme-colored selection
+affordances on sheet canvases, and `newDocument()`'s hard-coded inch/locked unit.
+
 ### feat(keyway): keyed bodies never draw the S-break; new body keyways default to the free end
 
 Two on-device follow-ups to the body-keyway work, plus a unit bug found on the way:

@@ -322,7 +322,7 @@ fun composeShaftPdf(
         truePtPerMm = diaPtPerMm,
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
         blends = blendsForPdf,
-        keyedBodyIds = spec.bodies.filter { it.hasKeyway }.map { it.id }.toSet(),
+        keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(spec),
     )
     // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every other
     // host is a secondary. At 180° a secondary renders hidden (dashed, no fill); at 90° it renders
@@ -527,15 +527,12 @@ fun composeShaftPdf(
 
     if (effectiveOptions.showFooter) {
         // Test the same body list the geometry pass drew (resolved incl. auto-bodies),
-        // so the note and the drawn center breaks can't disagree — which is why the
-        // keyway exemption applies here too: a keyed run never draws the break.
-        val keyedFooterIds = spec.bodies.filter { it.hasKeyway }.map { it.id }.toSet()
+        // so the note and the drawn center breaks can't disagree. Keyed bodies break like
+        // any other run (only the slot's own window is protected), so no exemption here.
         val showCompressionNote = !bodyOnly && bodiesForPdf.any { b ->
             val drawnPt = abs(xAt(b.startFromAftMm + b.lengthMm) - xAt(b.startFromAftMm))
-            resolvedBodyBaseId(b.id) !in keyedFooterIds && (
-                breakForCompression(drawnPt, b.lengthMm, diaPtPerMm, pdfPrefs.sBreakThresholdFrac) ||
-                    drawnPt >= COMPRESS_TRIGGER_PT
-            )
+            breakForCompression(drawnPt, b.lengthMm, diaPtPerMm, pdfPrefs.sBreakThresholdFrac) ||
+                drawnPt >= COMPRESS_TRIGGER_PT
         }
 
         // Footer "Body:" diameters — authored bodies as actually drawn. Raw spec.bodies
@@ -811,20 +808,24 @@ internal fun drawBodiesCompressedCenterBreak(
      */
     blends: List<BodyBlend> = emptyList(),
     /**
-     * Base ids of the STORED bodies that host a keyway ([keywayPinnedBodySpans]' population).
-     * A keyway-bearing run never carries the S-break — its span is pinned at true width, so
-     * foreshortening cannot reach it, and the long-span glyph is given up deliberately: a
-     * break gap could land inside the slot, and the slot must read as real geometry
-     * end-to-end. Base ids because [bodies] may be resolved fragments.
+     * Protected body-keyway windows ([bodyKeywayProtectedSpansMm], absolute mm) the break
+     * gap must never cut into: the slot region is pinned at true scale and must read as
+     * real geometry, but the REST of a keyed body compresses and breaks like any other run —
+     * a 95%-shaft body with an end keyway still needs its break (on-device report). The gap
+     * shifts off the window ([breakGapCenter]); only a run with no clear placement at all
+     * prints plain.
      */
-    keyedBodyIds: Set<String> = emptySet(),
+    keywayAvoidSpansMm: List<KeywaySpan> = emptyList(),
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
+    val avoidX = keywayAvoidSpansMm.map {
+        val a = xAt(it.loMm); val b2 = xAt(it.hiMm)
+        minOf(a, b2)..maxOf(a, b2)
+    }
     bodies.forEach { b ->
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
-        val keyed = resolvedBodyBaseId(b.id) in keyedBodyIds
 
         val edges = bodyDrawEdges(
             runId = b.id,
@@ -843,29 +844,35 @@ internal fun drawBodiesCompressedCenterBreak(
         // detail, not a reason for the body to read as more or less compressed.
         val bodyLenPt = abs(x1 - x0)
         val foreshortened = breakForCompression(bodyLenPt, b.lengthMm, truePtPerMm, breakMinFracOfTrue)
-        val compress = !keyed && (foreshortened || bodyLenPt >= COMPRESS_TRIGGER_PT)
+        val compress = foreshortened || bodyLenPt >= COMPRESS_TRIGGER_PT
 
         drawBlendCurvePdf(c, edges.aftCurve, cy, outline, fill)
         drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, fill)
 
-        if (!compress) {
+        // Break layout first: the gap steers clear of any protected keyway window, and a
+        // run with no clear placement falls back to the plain rectangle.
+        val flatLenPt = abs(fx1 - fx0)
+        val pair = if (compress) breakPairLayout(
+            runLenPt = flatLenPt,
+            desiredAmplitudePt = r * 0.6f,
+            classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * flatLenPt),
+            strokeWidthPt = capPaint.strokeWidth,
+        ) else null
+        val gapCenter = pair?.let {
+            breakGapCenter(minOf(fx0, fx1), maxOf(fx0, fx1), it.gapPt, avoidX)
+        }
+
+        if (pair == null || gapCenter == null) {
             // classic rectangle body
             if (fill != null) c.drawRect(fx0, top, fx1, bot, fill)
             c.drawLine(fx0, top, fx1, top, outline)
             c.drawLine(fx0, bot, fx1, bot, outline)
         } else {
-            // centered break: two stubs, each with an S-curve end instead of a straight cap
-            val flatLenPt = abs(fx1 - fx0)
-            val mid = (fx0 + fx1) * 0.5f
-            val (gap, amp) = breakPairLayout(
-                runLenPt = flatLenPt,
-                desiredAmplitudePt = r * 0.6f,
-                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * flatLenPt),
-                strokeWidthPt = capPaint.strokeWidth,
-            )
+            // break pair: two stubs, each with an S-curve end instead of a straight cap
+            val (gap, amp) = pair
             val half = 0.5f * gap
-            val leftEnd  = (mid - half).coerceIn(geomRect.left, geomRect.right)
-            val rightBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
+            val leftEnd  = (gapCenter - half).coerceIn(geomRect.left, geomRect.right)
+            val rightBeg = (gapCenter + half).coerceIn(geomRect.left, geomRect.right)
 
             // Left stub — S-curve on right end
             if (fill != null) c.drawRect(fx0, top, leftEnd, bot, fill)
@@ -1134,16 +1141,35 @@ internal fun drawTaperKeywayPdf(
 }
 
 /**
- * True-width pins for the keyway-bearing bodies of [spec] — a slot drawn on a foreshortened
- * body is not real geometry, so the body demands its full width and the drawn HEIGHT yields
- * (`solveMaxProfileScale`). Built from **STORED** bodies for the reason in
- * [drawBodyKeywaysPdf]: filtering resolved bodies silently yields nothing, which pins the
- * width of no body at all. Shared by the schematic and the runout/consolidated sheet so the
- * span that pins is exactly the span the slot draws in.
+ * The protected axial window around each body keyway: the slot's own span
+ * ([keywayAbsSpanMm]) padded by one keyway width at each end (mill arc + spoon-bowl
+ * overhang), clamped to the host body. This window — NOT the whole body — is what pins at
+ * true scale and what the S-break gap must steer clear of: a 95%-shaft body must stay free
+ * to compress and break or a long shaft cannot render at all (on-device report), while the
+ * slot itself must never foreshorten.
+ */
+internal fun bodyKeywayProtectedSpansMm(spec: ShaftSpec): List<KeywaySpan> =
+    spec.bodies.mapNotNull { b ->
+        val span = b.keywayAbsSpanMm() ?: return@mapNotNull null
+        val pad = b.keywayWidthMm
+        KeywaySpan(
+            loMm = (span.loMm - pad).coerceAtLeast(b.startFromAftMm),
+            hiMm = (span.hiMm + pad).coerceAtMost(b.startFromAftMm + b.lengthMm),
+        )
+    }
+
+/**
+ * True-width pins for the body-keyway windows of [spec] — a slot drawn on a foreshortened
+ * body is not real geometry, so the slot's padded window ([bodyKeywayProtectedSpansMm])
+ * demands full width and the layout yields around it. Deliberately the WINDOW, never the
+ * whole host body (see that helper's doc). Built from **STORED** bodies for the reason in
+ * [drawBodyKeywaysPdf]: filtering resolved bodies silently yields nothing, which pins
+ * nothing at all. Shared by the schematic, the runout/consolidated sheet, and the UI's
+ * scale estimator so the span that pins is exactly the span the slot draws in.
  */
 internal fun keywayPinnedBodySpans(spec: ShaftSpec): List<ProfileFeatureSpan> =
-    spec.bodies.filter { it.hasKeyway }.map {
-        ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE)
+    bodyKeywayProtectedSpansMm(spec).map {
+        ProfileFeatureSpan(it.loMm, it.hiMm, Float.MAX_VALUE)
     }
 
 /**
@@ -1235,9 +1261,25 @@ internal fun drawKeywayNotchBodyPdf(
     val refX = if (aftRef) x0 else x1
     val farX = if (aftRef) x1 else x0
     val dir  = if (farX > refX) 1f else -1f
-    val ptPerMm = kotlin.math.abs(x1 - x0) / b.lengthMm
 
-    drawKeywaySlotPdf(c, refX, dir, ptPerMm, b.keywayWidthMm, b.keywayOffsetFromEndMm, b.keywayLengthMm, cy, outline, hidden, b.keywaySpooned)
+    // The slot's scale comes from ITS OWN mapped span, not the whole body's average: the
+    // keyway window is pinned at true scale while the rest of a long body compresses, so a
+    // body-average pt/mm would draw the slot shrunken inside the very window that was
+    // pinned to keep it real. Within the pinned window the map is linear, so this is exact;
+    // an anchor reconstructed one offset back keeps a floating slot at its mapped position.
+    val span = b.keywayAbsSpanMm()
+    val ptPerMm: Float
+    val anchorX: Float
+    if (span != null && span.hiMm > span.loMm) {
+        val sLo = xAt(span.loMm); val sHi = xAt(span.hiMm)
+        ptPerMm = kotlin.math.abs(sHi - sLo) / (span.hiMm - span.loMm)
+        anchorX = (if (aftRef) sLo else sHi) - dir * b.keywayOffsetFromEndMm * ptPerMm
+    } else {
+        ptPerMm = kotlin.math.abs(x1 - x0) / b.lengthMm
+        anchorX = refX
+    }
+
+    drawKeywaySlotPdf(c, anchorX, dir, ptPerMm, b.keywayWidthMm, b.keywayOffsetFromEndMm, b.keywayLengthMm, cy, outline, hidden, b.keywaySpooned)
 }
 
 /**
@@ -1561,6 +1603,7 @@ internal fun drawFooter(
             add("Customer:"); add("Vessel:"); add("Job #:"); add("Date:")
             if (cfg.bodyDiasMm.isNotEmpty()) add("Body: Ø")
             keywayClockingFooterNote(spec)?.let { add(it) }
+            if (cfg.showCompressionNote) add(COMPRESSION_FOOTER_NOTE)
             add("Side:")
         }
     } else {
@@ -1578,6 +1621,10 @@ internal fun drawFooter(
                 add("Body: $label")
             }
             keywayClockingFooterNote(spec)?.let { add(it) }
+            // The compression note the flag has always carried: the caller sets it off the
+            // very predicate that draws the S-breaks, so the note and the drawn breaks
+            // cannot disagree — a sheet with a break says so, a sheet without one never does.
+            if (cfg.showCompressionNote) add(COMPRESSION_FOOTER_NOTE)
         }
     }
 
@@ -1696,6 +1743,9 @@ internal data class FooterColumns(
  */
 internal const val SPOONED_KW_NOTE = "KW length to base of spoon (mill end)"
 
+/** Footer note printed when any body run draws the S-break pair ([FooterConfig.showCompressionNote]). */
+internal const val COMPRESSION_FOOTER_NOTE = "Not to scale: body sections compressed for readability"
+
 // Column headings of the footer's end columns. Named because [drawFooter] tests whether a column
 // leads with one to decide the middle column's first baseline — a literal there would drift.
 internal const val FOOTER_AFT_TAPER_HEADER = "AFT Taper"
@@ -1725,7 +1775,10 @@ internal fun buildFooterEndColumns(
     fun taperLines(tp: Taper): List<String> = buildList {
         val ls = letSet(tp)
         val tpUnit = displayUnits.unitFor(tp.id)
-        add(line("Rate:") { printedTaperRate(tp.taperRateText.trim().ifEmpty { rate1toN(tp) }, unit) })
+        // Rate notation follows the taper's OWN unit like the L.E.T./S.E.T./Length lines
+        // beside it — a metric-overridden taper keeps the ratio form ("/ft would clash with
+        // mm dimensions"), instead of borrowing the document unit's convention.
+        add(line("Rate:") { printedTaperRate(tp.taperRateText.trim().ifEmpty { rate1toN(tp) }, tpUnit) })
         // No face suffix on L.E.T./S.E.T. — the footer column already says which end of the
         // shaft this taper is, and "(FWD)" beside an AFT taper's L.E.T. read as if it were
         // asking about the FWD taper (on-device report).

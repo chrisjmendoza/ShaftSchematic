@@ -105,6 +105,31 @@ class BodyKeywayDrawTest {
         assertEquals(0, ink(bmp, 0, 0, 190, h))
     }
 
+    /**
+     * Under a compressed x-map the slot keeps TRUE scale: its pinned window maps linearly at
+     * the diameter scale, and the draw derives pt/mm from the slot's OWN mapped span — a
+     * body-average pt/mm would shrink the slot inside the very window pinned to keep it real.
+     */
+    @Test
+    fun `a compressed body still draws its keyway at true scale`() {
+        // FWD-open 100 mm keyway on a 300 mm body → slot [200,300]. The map compresses
+        // [0,200] to half scale and keeps [200,300] true: slot must draw exactly [100,200].
+        val map: (Float) -> Float = { mm -> if (mm <= 200f) mm * 0.5f else 100f + (mm - 200f) }
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        c.drawColor(Color.WHITE)
+        val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = 1.5f; color = Color.BLACK
+        }
+        drawBodyKeywaysPdf(
+            c, listOf(keyedBody(end = LinerAuthoredReference.FWD)), map, cy, 1f, outline,
+        )
+        assertTrue("slot inked over its true-scale mapped span", ink(bmp, 105, 85, 195, 115) > 0)
+        assertTrue("slot walls at TRUE half-width (±10), not the body average", ink(bmp, 105, 88, 195, 92) > 0)
+        assertEquals("no slot ink in the compressed region", 0, ink(bmp, 0, 0, 95, h))
+        assertEquals("no slot ink beyond the fwd face", 0, ink(bmp, 205, 0, w, h))
+    }
+
     /** A 180° secondary host is a far-side feature: dashed outline, no white void fill. */
     @Test
     fun `a hidden keyway still draws - dashed, and less ink than a near-side slot`() {

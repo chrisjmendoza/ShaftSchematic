@@ -80,8 +80,10 @@ component covers that position).
 
 Drawn everywhere the shaft is drawn:
 - Preview: overlay pass in `ui/drawing/render/ShaftRenderer.kt` (color: `RenderOptions.slotFillColor`).
-- PDFs: `drawCouplerBoltSlots()` in `pdf/ShaftPdfComposer.kt`, reused by `RunoutPdfComposer`
-  and `WearPdfComposer`.
+- PDFs: `drawCouplerBoltSlots()` in `pdf/ShaftPdfComposer.kt`, reused by `RunoutPdfComposer`,
+  `WearPdfComposer`, and `UndercutPdfComposer` (the undercut composer calls it only on its
+  whole-shaft fallback profile — a sheet with any detail strip prints no slots; see the
+  known-gap note in the tracking docs).
 
 **v1 deferrals:** no dimension rail is drawn (`showDimensionRail` persists but is unused);
 through vs blind render identically.
