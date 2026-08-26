@@ -164,6 +164,34 @@ fun ShaftSpec.keywayCount(): Int =
     tapers.count { it.hasKeyway } + bodies.count { it.hasKeyway }
 
 /**
+ * The end a NEW body keyway should default to, given the keyways already on the shaft:
+ * an aft-half keyway alone suggests FWD, a fwd-half keyway alone suggests AFT, and both /
+ * neither fall back to AFT (the model default). A default only — never applied to a stored
+ * keyway, and the user's explicit AFT/FWD choice always wins (on-device report: with an aft
+ * taper keyway already on the shaft, a new body keyway defaulting to AFT read as a second
+ * aft keyway).
+ *
+ * Sides come from [keywayAbsSpanMm] centers against the shaft's axial middle (manual OAL,
+ * else content end). [excludeBodyId] keeps the body being edited from voting with its own
+ * not-yet-real keyway.
+ */
+fun ShaftSpec.suggestedBodyKeywayEnd(excludeBodyId: String? = null): LinerAuthoredReference {
+    val endMm = if (overallLengthMm > 0f) overallLengthMm else coverageEndMm()
+    if (endMm <= 0f) return LinerAuthoredReference.AFT
+    val midMm = endMm / 2f
+    var aftTaken = false
+    var fwdTaken = false
+    fun vote(centerMm: Float) = if (centerMm <= midMm) aftTaken = true else fwdTaken = true
+    tapers.forEach { t -> t.keywayAbsSpanMm()?.let { vote(it.centerMm) } }
+    bodies.filter { it.id != excludeBodyId }.forEach { b -> b.keywayAbsSpanMm()?.let { vote(it.centerMm) } }
+    return when {
+        aftTaken && !fwdTaken -> LinerAuthoredReference.FWD
+        fwdTaken && !aftTaken -> LinerAuthoredReference.AFT
+        else -> LinerAuthoredReference.AFT
+    }
+}
+
+/**
  * Host component IDs whose keyway should render as **hidden lines** (far-side, dashed).
  *
  * The [KeywayClocking.DEG_180] slice of [secondaryKeywayHostIds]: a keyway clocked 180° away

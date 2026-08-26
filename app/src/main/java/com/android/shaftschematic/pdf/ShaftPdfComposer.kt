@@ -243,9 +243,7 @@ fun composeShaftPdf(
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, SCHEMATIC_MIN_THREAD_PT))
         }
         // A keyway-bearing body pins at true scale — its drawn slot geometry is real.
-        bodiesForPdf.filter { it.hasKeyway }.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE))
-        }
+        addAll(keywayPinnedBodySpans(spec))
     }
     // Pinned spans (tapers, keyway bodies) demand true width → when one needs the room,
     // the HEIGHT yields ("doesn't have to be perfectly proportional, just close" —
@@ -324,6 +322,7 @@ fun composeShaftPdf(
         truePtPerMm = diaPtPerMm,
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
         blends = blendsForPdf,
+        keyedBodyIds = spec.bodies.filter { it.hasKeyway }.map { it.id }.toSet(),
     )
     // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every other
     // host is a secondary. At 180° a secondary renders hidden (dashed, no fill); at 90° it renders
@@ -331,18 +330,12 @@ fun composeShaftPdf(
     val clocking = spec.keywayClocking()
     val hiddenKeywayIds = spec.hiddenKeywayHostIds()
     val secondaryKeywayIds = spec.secondaryKeywayHostIds()
-    val silhouetteKeyways = clocking == KeywayClocking.DEG_90_CW || clocking == KeywayClocking.DEG_90_CCW
     // Body keyways — drawn from model bodies (resolved fragments and center-break
     // compression keep true end faces, so the slot lands at its physical position).
-    spec.bodies.filter { it.hasKeyway }.forEach { b ->
-        if (silhouetteKeyways && b.id in secondaryKeywayIds) {
-            b.keywaySilhouetteNotch(clocking)?.let {
-                drawKeywaySilhouetteNotchPdf(c, it, ::xAt, diaPtPerMm, cy, outline)
-            }
-        } else {
-            drawKeywayNotchBodyPdf(c, b, ::xAt, cy, outline, hidden = b.id in hiddenKeywayIds)
-        }
-    }
+    drawBodyKeywaysPdf(
+        c, spec.bodies, ::xAt, cy, diaPtPerMm, outline,
+        clocking, hiddenKeywayIds, secondaryKeywayIds,
+    )
     drawTapers(
         c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill,
         hiddenKeywayIds, clocking, secondaryKeywayIds, diaPtPerMm,
@@ -534,11 +527,15 @@ fun composeShaftPdf(
 
     if (effectiveOptions.showFooter) {
         // Test the same body list the geometry pass drew (resolved incl. auto-bodies),
-        // so the note and the drawn center breaks can't disagree.
+        // so the note and the drawn center breaks can't disagree — which is why the
+        // keyway exemption applies here too: a keyed run never draws the break.
+        val keyedFooterIds = spec.bodies.filter { it.hasKeyway }.map { it.id }.toSet()
         val showCompressionNote = !bodyOnly && bodiesForPdf.any { b ->
             val drawnPt = abs(xAt(b.startFromAftMm + b.lengthMm) - xAt(b.startFromAftMm))
-            breakForCompression(drawnPt, b.lengthMm, diaPtPerMm, pdfPrefs.sBreakThresholdFrac) ||
-                drawnPt >= COMPRESS_TRIGGER_PT
+            resolvedBodyBaseId(b.id) !in keyedFooterIds && (
+                breakForCompression(drawnPt, b.lengthMm, diaPtPerMm, pdfPrefs.sBreakThresholdFrac) ||
+                    drawnPt >= COMPRESS_TRIGGER_PT
+            )
         }
 
         // Footer "Body:" diameters — authored bodies as actually drawn. Raw spec.bodies
@@ -790,7 +787,7 @@ private fun requireFinite(name: String, v: Float): Float {
 // Geometry — bodies with centered long-break compression
 // ──────────────────────────────────────────────────────────────────────────────
 
-private fun drawBodiesCompressedCenterBreak(
+internal fun drawBodiesCompressedCenterBreak(
     c: Canvas,
     bodies: List<Body>,
     cy: Float,
@@ -813,12 +810,21 @@ private fun drawBodiesCompressedCenterBreak(
      * compression treatment is otherwise untouched.
      */
     blends: List<BodyBlend> = emptyList(),
+    /**
+     * Base ids of the STORED bodies that host a keyway ([keywayPinnedBodySpans]' population).
+     * A keyway-bearing run never carries the S-break — its span is pinned at true width, so
+     * foreshortening cannot reach it, and the long-span glyph is given up deliberately: a
+     * break gap could land inside the slot, and the slot must read as real geometry
+     * end-to-end. Base ids because [bodies] may be resolved fragments.
+     */
+    keyedBodyIds: Set<String> = emptySet(),
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
     bodies.forEach { b ->
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
+        val keyed = resolvedBodyBaseId(b.id) in keyedBodyIds
 
         val edges = bodyDrawEdges(
             runId = b.id,
@@ -837,7 +843,7 @@ private fun drawBodiesCompressedCenterBreak(
         // detail, not a reason for the body to read as more or less compressed.
         val bodyLenPt = abs(x1 - x0)
         val foreshortened = breakForCompression(bodyLenPt, b.lengthMm, truePtPerMm, breakMinFracOfTrue)
-        val compress = foreshortened || bodyLenPt >= COMPRESS_TRIGGER_PT
+        val compress = !keyed && (foreshortened || bodyLenPt >= COMPRESS_TRIGGER_PT)
 
         drawBlendCurvePdf(c, edges.aftCurve, cy, outline, fill)
         drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, fill)
@@ -1037,7 +1043,6 @@ private fun drawTapers(
     secondaryKeywayIds: Set<String> = emptySet(),
     ptPerMm: Float = 1f,
 ) {
-    val silhouetteKeyways = clocking == KeywayClocking.DEG_90_CW || clocking == KeywayClocking.DEG_90_CCW
     tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
         val x0 = requireFinite("taper.x0", xAt(t.startFromAftMm))
@@ -1059,16 +1064,87 @@ private fun drawTapers(
         c.drawLine(x1, top1, x1, bot1, outline)
 
         if (t.hasKeyway) {
-            if (silhouetteKeyways && t.id in secondaryKeywayIds) {
-                t.keywaySilhouetteNotch(clocking)?.let {
-                    drawKeywaySilhouetteNotchPdf(c, it, xAt, ptPerMm, cy, outline)
-                }
-            } else {
-                drawKeywayNotchPdf(c, t, x0, x1, top0, top1, cy, outline, hidden = t.id in hiddenKeywayIds)
-            }
+            drawTaperKeywayPdf(
+                c, t, x0, x1, top0, top1, xAt, cy, ptPerMm, outline,
+                clocking, hiddenKeywayIds, secondaryKeywayIds,
+            )
         }
     }
 }
+
+/**
+ * Body keyway pass for a whole sheet: the clocking decision plus the slot (or silhouette
+ * notch) draw. The schematic and the runout/consolidated sheet both call this, so a keyway
+ * can never print on one sheet and go missing from the other.
+ *
+ * [bodies] must be the **STORED** bodies. Keyways are authored on stored bodies and
+ * [bodyForPdf] carries drawable geometry only — a resolved body's [hasKeyway] is always
+ * false, so a resolved list draws nothing at all. Stored spans also keep one slot per
+ * authored keyway where a liner trims the run into several drawn pieces, and put the slot at
+ * its physical position (fragments and the center-break pair keep true end faces).
+ */
+internal fun drawBodyKeywaysPdf(
+    c: Canvas,
+    bodies: List<Body>,
+    xAt: (Float) -> Float,
+    cy: Float,
+    ptPerMm: Float,
+    outline: Paint,
+    clocking: KeywayClocking = KeywayClocking.NONE,
+    hiddenKeywayIds: Set<String> = emptySet(),
+    secondaryKeywayIds: Set<String> = emptySet(),
+) {
+    val silhouetteKeyways = clocking == KeywayClocking.DEG_90_CW || clocking == KeywayClocking.DEG_90_CCW
+    bodies.filter { it.hasKeyway }.forEach { b ->
+        if (silhouetteKeyways && b.id in secondaryKeywayIds) {
+            b.keywaySilhouetteNotch(clocking)?.let {
+                drawKeywaySilhouetteNotchPdf(c, it, xAt, ptPerMm, cy, outline)
+            }
+        } else {
+            drawKeywayNotchBodyPdf(c, b, xAt, cy, outline, hidden = b.id in hiddenKeywayIds)
+        }
+    }
+}
+
+/**
+ * One taper's keyway, drawn after its outline — the same clocking decision as
+ * [drawBodyKeywaysPdf], shared by the schematic's taper pass and the runout sheet's so the
+ * two keyway passes on one sheet cannot disagree about which host is a secondary.
+ */
+internal fun drawTaperKeywayPdf(
+    c: Canvas,
+    t: Taper,
+    x0: Float, x1: Float, top0: Float, top1: Float,
+    xAt: (Float) -> Float,
+    cy: Float,
+    ptPerMm: Float,
+    outline: Paint,
+    clocking: KeywayClocking = KeywayClocking.NONE,
+    hiddenKeywayIds: Set<String> = emptySet(),
+    secondaryKeywayIds: Set<String> = emptySet(),
+) {
+    val silhouetteKeyways = clocking == KeywayClocking.DEG_90_CW || clocking == KeywayClocking.DEG_90_CCW
+    if (silhouetteKeyways && t.id in secondaryKeywayIds) {
+        t.keywaySilhouetteNotch(clocking)?.let {
+            drawKeywaySilhouetteNotchPdf(c, it, xAt, ptPerMm, cy, outline)
+        }
+    } else {
+        drawKeywayNotchPdf(c, t, x0, x1, top0, top1, cy, outline, hidden = t.id in hiddenKeywayIds)
+    }
+}
+
+/**
+ * True-width pins for the keyway-bearing bodies of [spec] — a slot drawn on a foreshortened
+ * body is not real geometry, so the body demands its full width and the drawn HEIGHT yields
+ * (`solveMaxProfileScale`). Built from **STORED** bodies for the reason in
+ * [drawBodyKeywaysPdf]: filtering resolved bodies silently yields nothing, which pins the
+ * width of no body at all. Shared by the schematic and the runout/consolidated sheet so the
+ * span that pins is exactly the span the slot draws in.
+ */
+internal fun keywayPinnedBodySpans(spec: ShaftSpec): List<ProfileFeatureSpan> =
+    spec.bodies.filter { it.hasKeyway }.map {
+        ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE)
+    }
 
 /**
  * Draw a 90°-clocked secondary keyway as a notch cut into the host's silhouette edge — the true
@@ -1878,6 +1954,12 @@ internal fun ShaftSpec.withResolvedBodies(resolved: List<ResolvedComponent>?): S
 /**
  * The drawable [Body] behind a [ResolvedBody] — start/length/Ø as resolved, plus the authored
  * Ø-callout visibility carried over from the spec.
+ *
+ * Deliberately carries **no keyway fields**: a keyway is authored against a stored body's own
+ * end face, and a run trimmed by a liner would otherwise repeat the slot on every drawn piece.
+ * So `hasKeyway` is false on everything this returns — anything keyway-driven (the slot pass,
+ * the true-width pin) reads the STORED bodies instead. See [drawBodyKeywaysPdf] and
+ * [keywayPinnedBodySpans]; filtering a resolved list for keyways silently matches nothing.
  *
  * Fragment ids must be stripped before the lookup: a body split by a liner or taper resolves
  * into several runs (`"<id>#2"`, …), and showing/hiding the body has to cover every one of

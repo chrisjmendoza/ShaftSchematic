@@ -51,6 +51,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.bodyDrawEdges
+import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualLabel
@@ -505,9 +506,7 @@ fun composeRunoutPdf(
         docSpec.threads.forEach {
             add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, PROFILE_MIN_THREAD_PT))
         }
-        docSpec.bodies.filter { it.hasKeyway }.forEach {
-            add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, Float.MAX_VALUE))
-        }
+        addAll(keywayPinnedBodySpans(spec))
     }
 
     val valueNeedScale: Float = run {
@@ -661,7 +660,7 @@ fun composeRunoutPdf(
     }
 
     // ── Draw shaft profile ────────────────────────────────────────────────────
-    drawShaftProfile(c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
+    drawShaftProfile(c, docSpec, spec, shaftCy, outline, geomRect, ::xAt, ::rPx,
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill,
         ptPerMm = diaPtPerMm, truePtPerMm = diaPtPerMm,
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
@@ -1249,9 +1248,15 @@ private fun drawOalSpanLine(
  * The shaft profile is intentionally simple — the runout sheet is a measurement form,
  * not a technical drawing. All dimensional detail lives on the schematic page.
  */
-private fun drawShaftProfile(
+internal fun drawShaftProfile(
     c: Canvas,
     spec: ShaftSpec,
+    /**
+     * The **stored** spec, for the passes that must read authored components rather than
+     * resolved runs — today the keyway passes, whose fields [spec] does not carry
+     * (`bodyForPdf`). Same geometry otherwise: keyway spans pin at true width.
+     */
+    authoredSpec: ShaftSpec,
     cy: Float,
     outline: Paint,
     geomRect: RectF,
@@ -1304,9 +1309,22 @@ private fun drawShaftProfile(
     drawBodiesForRunout(
         c, spec.bodies, cy, xAt, rPx, outline, geomRect, truePtPerMm, breakMinFracOfTrue,
         fill = bodyFill, blends = blends,
+        keyedBodyIds = authoredSpec.bodies.filter { it.hasKeyway }.map { it.id }.toSet(),
+    )
+    // Body keyways, from the SAME pass the schematic draws (`drawBodyKeywaysPdf`) so a slot
+    // cannot print on one sheet and vanish from the other. Read off [authoredSpec]: [spec]
+    // here carries resolved runs, whose `bodyForPdf` mapping holds no keyway fields. The
+    // keyway-bearing body pins at true width (`keywayPinnedBodySpans`), so the slot the
+    // machinist reads off this sheet is real geometry rather than a foreshortened cue.
+    val clocking = authoredSpec.keywayClocking()
+    val hiddenKeywayIds = authoredSpec.hiddenKeywayHostIds()
+    val secondaryKeywayIds = authoredSpec.secondaryKeywayHostIds()
+    drawBodyKeywaysPdf(
+        c, authoredSpec.bodies, xAt, cy, ptPerMm, outline,
+        clocking, hiddenKeywayIds, secondaryKeywayIds,
     )
     // Tapers
-    drawTapersForRunout(c, spec, xAt, rPx, cy, outline)
+    drawTapersForRunout(c, spec, xAt, rPx, cy, outline, ptPerMm, clocking, hiddenKeywayIds, secondaryKeywayIds)
     // Liners (elevated outline, thin end ticks)
     val dimPaint = Paint(outline).apply { strokeWidth = DIM_PT }
     spec.liners.forEach { ln ->
@@ -1347,7 +1365,7 @@ private fun drawShaftProfile(
  * any traditionally long span ([COMPRESS_TRIGGER_PT]) — the hand-sheet convention. Milder
  * foreshortening prints a plain outline.
  */
-private fun drawBodiesForRunout(
+internal fun drawBodiesForRunout(
     c: Canvas,
     bodies: List<Body>,
     cy: Float,
@@ -1362,10 +1380,17 @@ private fun drawBodiesForRunout(
     fill: Paint? = null,
     /** Blended faces on these runs ([bodyBlends]); see `drawShaftProfile`'s parameter doc. */
     blends: List<BodyBlend> = emptyList(),
+    /**
+     * Base ids of the STORED keyway-bearing bodies — a keyed run never carries the S-break
+     * (`drawBodiesCompressedCenterBreak` documents why); its span is already pinned at true
+     * width by `keywayPinnedBodySpans`, so this only gives up the long-span glyph.
+     */
+    keyedBodyIds: Set<String> = emptySet(),
 ) {
     val capPaint = Paint(outline)
     bodies.forEach { b ->
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
+        val keyed = resolvedBodyBaseId(b.id) in keyedBodyIds
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r  = rPx(b.diaMm);          val top = cy - r; val bot = cy + r
 
@@ -1393,7 +1418,7 @@ private fun drawBodiesForRunout(
         drawBlendCurvePdf(c, edges.aftCurve, cy, outline, fill)
         drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, fill)
 
-        if (!foreshortened && lenPt < COMPRESS_TRIGGER_PT) {
+        if (keyed || (!foreshortened && lenPt < COMPRESS_TRIGGER_PT)) {
             if (fill != null) c.drawRect(fx0, top, fx1, bot, fill)
             c.drawLine(fx0, top, fx1, top, outline)
             c.drawLine(fx0, bot, fx1, bot, outline)
@@ -1452,6 +1477,10 @@ private fun drawTapersForRunout(
     rPx: (Float) -> Float,
     cy: Float,
     outline: Paint,
+    ptPerMm: Float = 1f,
+    clocking: KeywayClocking = KeywayClocking.NONE,
+    hiddenKeywayIds: Set<String> = emptySet(),
+    secondaryKeywayIds: Set<String> = emptySet(),
 ) {
     spec.tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
@@ -1464,8 +1493,14 @@ private fun drawTapersForRunout(
         c.drawLine(x0, top0, x0, bot0, outline)
         c.drawLine(x1, top1, x1, bot1, outline)
 
-        // Draw keyway indicator on the taper if one exists (same convention as main schematic).
-        if (t.hasKeyway) drawKeywayNotchPdf(c, t, x0, x1, top0, top1, cy, outline)
+        // Keyway indicator, through the schematic's own pass — so a secondary host reads the
+        // same here as there (hidden at 180°, a silhouette notch at 90°).
+        if (t.hasKeyway) {
+            drawTaperKeywayPdf(
+                c, t, x0, x1, top0, top1, xAt, cy, ptPerMm, outline,
+                clocking, hiddenKeywayIds, secondaryKeywayIds,
+            )
+        }
     }
 }
 

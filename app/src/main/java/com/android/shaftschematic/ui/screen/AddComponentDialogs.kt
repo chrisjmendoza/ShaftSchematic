@@ -40,6 +40,7 @@ import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.keywayCount
+import com.android.shaftschematic.model.suggestedBodyKeywayEnd
 import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
 import com.android.shaftschematic.ui.input.oalAfterTaperAddMm
 import com.android.shaftschematic.ui.input.taperAddDiameterOrder
@@ -175,7 +176,11 @@ fun AddBodyDialog(
     var kwDepth   by remember { mutableStateOf("") }
     var kwLength  by remember { mutableStateOf("") }
     var kwOffset  by remember { mutableStateOf("") }
-    var kwFwd     by remember { mutableStateOf(false) }
+    // Default end = opposite the shaft's existing keyway when one side is taken
+    // (`suggestedBodyKeywayEnd`) — a new body keyway defaulting onto the side an aft taper
+    // keyway already holds reads as a second aft keyway (on-device report). The chips
+    // always win; this only seeds them. Same seed on the carousel card (parity rule).
+    var kwFwd     by remember { mutableStateOf(spec.suggestedBodyKeywayEnd() == LinerAuthoredReference.FWD) }
     var kwSpooned by remember { mutableStateOf(false) }
     // 180°/90° clocking are mutually exclusive; enforced locally here (mirrors the
     // ViewModel's clearing behavior) so the two switches never show both checked
@@ -1096,9 +1101,12 @@ fun AddTaperDialog(
                     )
                     val reference = if (isFwd) LinerAuthoredReference.FWD
                                     else       LinerAuthoredReference.AFT
-                    val kwW = toMmOrNull(kwWidth,  unit) ?: 0f
-                    val kwD = toMmOrNull(kwDepth,  unit) ?: 0f
-                    val kwL = toMmOrNull(kwLength, unit) ?: 0f
+                    // All four keyway numbers parse in `kwUnit` — the keyway-unit chip governs
+                    // what they MEAN; parsing W/D/L in the document unit stored a metric keyway
+                    // as inches while the offset (and the card) read it as millimetres.
+                    val kwW = toMmOrNull(kwWidth,  kwUnit) ?: 0f
+                    val kwD = toMmOrNull(kwDepth,  kwUnit) ?: 0f
+                    val kwL = toMmOrNull(kwLength, kwUnit) ?: 0f
                     val kwO = toMmOrNull(kwOffset, kwUnit) ?: 0f
                     val submitRateText = if (autoRate) computedRateText.orEmpty() else rateText
                     val action = {
