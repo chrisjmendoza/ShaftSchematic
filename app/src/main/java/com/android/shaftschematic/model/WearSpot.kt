@@ -208,6 +208,12 @@ data class WearDiaReading(
  *   `false` gives that vertical budget to the detail strips; the header, dye-pen row, and every
  *   elected strip still print. Layout-only, and per-document, so it lives here. Additive +
  *   defaulted, same no-version-bump rule as [pits].
+ * @property compactStrips Whether the detail strips print at the shaft's own page scale instead
+ *   of stretching toward the content width. The sheet keeps ONE shared strip scale either way —
+ *   this only lowers its ceiling to the main profile's pt/mm (floored at
+ *   `WEAR_STRIP_COMPACT_MIN_PT_PER_MM`), so a strip's drawn width matches its span on the
+ *   profile above it and the page reads denser. Layout-only, and per-document, so it lives here.
+ *   Additive + defaulted, same no-version-bump rule as [pits].
  */
 @Serializable
 data class WearRecord(
@@ -219,4 +225,5 @@ data class WearRecord(
     val dyePenResult: DyePenResult? = null,
     val stripComponentIds: List<String>? = null,
     val showShaftProfile: Boolean = true,
+    val compactStrips: Boolean = false,
 )

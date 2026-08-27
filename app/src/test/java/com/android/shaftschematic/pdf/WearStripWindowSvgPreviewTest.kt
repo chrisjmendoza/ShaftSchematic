@@ -601,9 +601,14 @@ class WearStripWindowSvgPreviewTest {
         val packNames = packSpec.liners.mapIndexed { i, ln -> ln.id to "Liner ${i + 1}" }.toMap()
 
         /** One packed sheet, drawn exactly as `composeWearPdf`'s GRID branch lays it out. */
-        fun page(showProfile: Boolean, file: String): WearStripPacking {
+        fun page(
+            showProfile: Boolean,
+            file: String,
+            maxPtPerMm: Float = WEAR_STRIP_MAX_PT_PER_MM,
+        ): WearStripPacking {
             val packing = packWearStripWindows(
                 packWindows, pageLeft, pageRight, maxRows = wearStripMaxRows(showProfile),
+                maxPtPerMm = maxPtPerMm,
             )
             val v = computeWearVerticalLayout(
                 bandTop, bandBottom, packing.rowCount,
@@ -670,6 +675,26 @@ class WearStripWindowSvgPreviewTest {
         )
         assertTrue(File(outDir, "h1-packed-page-profile-shown.svg").exists())
         assertTrue(File(outDir, "h2-packed-page-profile-hidden.svg").exists())
+
+        // H3) The same election in COMPACT mode (WearRecord.compactStrips): the ceiling drops to
+        // the main profile's own pt/mm — here a 4.2 m shaft across 720 pt, so the compact FLOOR
+        // takes over — and the strips stop stretching toward the page. Nothing else changes: the
+        // packer still solves rows-then-scale under the lower ceiling.
+        val profilePtPerMm = (pageRight - pageLeft) / packSpec.overallLengthMm
+        val compactCap = wearStripMaxPtPerMm(compactStrips = true, profilePtPerMm = profilePtPerMm)
+        assertEquals(
+            "a 4.2 m shaft draws too small to cap the strips at, so the floor holds",
+            WEAR_STRIP_COMPACT_MIN_PT_PER_MM, compactCap, 1e-6f,
+        )
+        val compact = page(
+            showProfile = true, file = "h3-packed-page-compact.svg", maxPtPerMm = compactCap,
+        )
+        assertTrue("compact must not exceed its ceiling", compact.ptPerMm <= compactCap + 1e-4f)
+        assertTrue(
+            "compact must draw smaller than the stretched page (${compact.ptPerMm} vs ${shown.ptPerMm})",
+            compact.ptPerMm < shown.ptPerMm,
+        )
+        assertTrue(File(outDir, "h3-packed-page-compact.svg").exists())
     }
 
     @Test

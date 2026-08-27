@@ -84,9 +84,11 @@ import kotlin.math.roundToInt
  *                below — liners, tapers, and bodies (explicit or auto), defaulting to **every
  *                drawable liner, with or without recorded wear** (the shop's normal operating
  *                procedure). An elected taper joins its nearest elected liner in one combined
- *                strip ([collectWearStripWindows]). Both fields are read from the passed record
- *                even in blank-draft mode: a write-in sheet blanks values, never the drawing's
- *                shape. The layout is picked by a [WearPdfMode] from
+ *                strip ([collectWearStripWindows]). [WearRecord.compactStrips] caps the sheet's
+ *                one shared strip scale at the profile's own pt/mm ([wearStripMaxPtPerMm]) so
+ *                the strips stop stretching toward the content width. These fields are read from
+ *                the passed record even in blank-draft mode: a write-in sheet blanks values,
+ *                never the drawing's shape. The layout is picked by a [WearPdfMode] from
  *                `determineWearPdfMode(collectWearStripWindows(...).size)`:
  *                - **0 strips** ([WearPdfMode.PROFILE_FORM]) — profile only (still shows any
  *                  recorded pits).
@@ -226,6 +228,11 @@ fun composeWearPdf(
     // write-in draft blanks the VALUES, never the sheet's shape — the machinist writes into the
     // same drawing the printed sheet has.
     val showProfile = wearRecord.showShaftProfile
+    // Compact mode caps the ONE shared strip scale at the profile's own pt/mm, so a strip draws
+    // the width its span has on the band above instead of stretching toward the content width.
+    // The cap is computed even when the profile is hidden: "the shaft's natural page scale" is
+    // what compact means, and that scale exists whether or not the band prints.
+    val stripMaxPtPerMm = wearStripMaxPtPerMm(wearRecord.compactStrips, ptPerMm)
     // Strip windows: one per elected component, except that an elected taper joins its nearest
     // elected liner in a combined window (see `collectWearStripWindows`). A liner-only election
     // — the default — makes one single-component window per liner, exactly the historical sheet.
@@ -245,6 +252,7 @@ fun composeWearPdf(
     // BEFORE the overflow note reserves its height. The single-column paths keep their fixed cap.
     val packing = if (wearMode == WearPdfMode.GRID) packWearStripWindows(
         windows, contentLeft, contentRight, maxRows = wearStripMaxRows(showProfile),
+        maxPtPerMm = stripMaxPtPerMm,
     ) else null
     val stripSelection = if (packing != null)
         WearStripWindowSelection(windows.take(packing.placedCount), windows.drop(packing.placedCount))
@@ -533,6 +541,7 @@ fun composeWearPdf(
     val stripPtPerMm = packing?.ptPerMm ?: sharedWearStripWindowPtPerMm(
         windows = onPage,
         innerWidthsPt = stripCells.map { it.right - it.left - 2f * WEAR_STRIP_STUB_WIDTH_PT },
+        maxPtPerMm = stripMaxPtPerMm,
     )
     val spotsByLinerId = effectiveRecord.spots.groupBy { it.linerId }
     onPage.forEachIndexed { i, window ->

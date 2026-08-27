@@ -13,6 +13,7 @@ import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.model.WearSpotReference
 import com.android.shaftschematic.model.WornSection
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -476,6 +477,24 @@ class WearRecordPersistenceTest {
 
         assertNull(decoded.wearRecord.stripComponentIds)
         assertTrue(decoded.wearRecord.showShaftProfile)
+        // Compact strips is additive + defaulted: a file written before it existed keeps the
+        // historical stretched strips.
+        assertFalse(decoded.wearRecord.compactStrips)
+    }
+
+    @Test
+    fun `the compact-strips toggle round trips through the envelope`() {
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(compactStrips = true),
+        )
+
+        val raw = ShaftDocCodec.encodeV1(doc)
+        assertTrue("expected compactStrips key in JSON", raw.contains("\"compactStrips\""))
+
+        val decoded = ShaftDocCodec.decode(raw)
+        assertEquals(ShaftDocCodec.Format.ENVELOPE_V1, decoded.format)
+        assertTrue(decoded.wearRecord.compactStrips)
     }
 
     @Test

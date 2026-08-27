@@ -203,6 +203,17 @@ fun ShaftViewModel.setWearShowShaftProfile(show: Boolean) {
 }
 
 /**
+ * Print the wear sheet's detail strips at the shaft's own page scale rather than stretched
+ * toward the content width ([WearRecord.compactStrips]). The sheet keeps ONE shared strip scale
+ * either way; this only lowers its ceiling. Layout-only, per document.
+ */
+fun ShaftViewModel.setWearCompactStrips(compact: Boolean) {
+    _wearRecord.update { rec ->
+        if (rec.compactStrips == compact) rec else rec.copy(compactStrips = compact)
+    }
+}
+
+/**
  * Record the dye penetrant inspection's outcome ([WearRecord.dyePenResult]) — printed as
  * an "X" in the matching PASS/FAIL checkbox on the wear sheet; `null` returns both boxes
  * to blank for hand-marking. Reference-only, no geometry effect.

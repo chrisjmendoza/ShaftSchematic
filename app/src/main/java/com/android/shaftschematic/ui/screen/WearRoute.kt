@@ -91,6 +91,7 @@ import com.android.shaftschematic.ui.viewmodel.removeWearDiaReading
 import com.android.shaftschematic.ui.viewmodel.removeWearPit
 import com.android.shaftschematic.ui.viewmodel.removeWearSpot
 import com.android.shaftschematic.ui.viewmodel.setDyePenResult
+import com.android.shaftschematic.ui.viewmodel.setWearCompactStrips
 import com.android.shaftschematic.ui.viewmodel.setWearShowShaftProfile
 import com.android.shaftschematic.ui.viewmodel.setWearStripComponents
 import com.android.shaftschematic.ui.viewmodel.updateWearDiaReading
@@ -546,6 +547,8 @@ fun WearRoute(
                 defaultIds = stripDefaultIds,
                 showShaftProfile = wearRecord.showShaftProfile,
                 onSetShowShaftProfile = { vm.setWearShowShaftProfile(it) },
+                compactStrips = wearRecord.compactStrips,
+                onSetCompactStrips = { vm.setWearCompactStrips(it) },
                 onSetSelection = { vm.setWearStripComponents(it) },
                 testTagPrefix = "wear_tab_strip",
             )
@@ -589,6 +592,7 @@ fun WearRoute(
                     wearStripSelection = wearRecord.stripComponentIds,
                     wearStripDefaultIds = stripDefaultIds,
                     wearShowShaftProfile = wearRecord.showShaftProfile,
+                    wearCompactStrips = wearRecord.compactStrips,
                 )
             },
             // The sheet reshapes this page, so it must not cover it: a full-screen sheet hid
@@ -669,8 +673,9 @@ internal fun toggleWearStripSelection(
 }
 
 /**
- * The wear sheet's "Components" section: the whole-shaft profile toggle, one checkbox per
- * strip-eligible component, and a quick-action row. [selection] is the job's authored election
+ * The wear sheet's "Components" section: the whole-shaft profile toggle, the compact-strips
+ * toggle, one checkbox per strip-eligible component, and a quick-action row. [selection] is the
+ * job's authored election
  * (`WearRecord.stripComponentIds`); `null` shows the default — every drawable liner ticked,
  * everything else clear. The first component toggle materializes [defaultIds] and then applies
  * the change, so a liner added later can never silently rewrite an authored sheet.
@@ -696,6 +701,9 @@ internal fun WearStripComponentChecks(
     defaultIds: List<String>,
     showShaftProfile: Boolean,
     onSetShowShaftProfile: (Boolean) -> Unit,
+    /** This job's `WearRecord.compactStrips` — the strips' scale ceiling, not an election. */
+    compactStrips: Boolean,
+    onSetCompactStrips: (Boolean) -> Unit,
     /** `null` restores the un-authored default election; a list is an authored set. */
     onSetSelection: (List<String>?) -> Unit,
     /** Test-tag namespace, so the tab body's rows and the sheet's rows stay distinguishable. */
@@ -719,6 +727,25 @@ internal fun WearStripComponentChecks(
             )
             Spacer(Modifier.width(8.dp))
             Text("Complete shaft", style = MaterialTheme.typography.bodyLarge)
+        }
+
+        // Sheet SHAPE, not an election, so it sits with the profile toggle rather than in the
+        // component list below: the strips still print, they just stop stretching.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = compactStrips,
+                onCheckedChange = onSetCompactStrips,
+                modifier = Modifier.testTag("${testTagPrefix}_compact"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("Compact strips", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Strips print at the shaft's own scale instead of stretching to the page.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         val elected = (selection ?: defaultIds).toSet()

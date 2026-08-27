@@ -347,6 +347,35 @@ const val WEAR_STRIP_STUB_WIDTH_PT = 34f
 const val WEAR_STRIP_MIN_PT_PER_MM = 0.15f
 const val WEAR_STRIP_MAX_PT_PER_MM = 3.0f
 
+/**
+ * The floor compact mode ([WearRecord.compactStrips]) puts under the main profile's own pt/mm
+ * before using it as the strip-scale ceiling.
+ *
+ * A very long shaft draws its profile at a tiny pt/mm — capping the strips there would print
+ * them at the size they already have on the profile band, which is exactly the illegible thing
+ * the strips exist to fix: their rails, titles, and Ø values still need room whatever the shaft's
+ * length. So compact mode never squeezes below this, and on a long shaft it simply stops being a
+ * squeeze at all.
+ */
+const val WEAR_STRIP_COMPACT_MIN_PT_PER_MM = 0.6f
+
+/**
+ * The ceiling on a wear sheet's ONE shared strip scale.
+ *
+ * Normally [WEAR_STRIP_MAX_PT_PER_MM] — the strips take as much of the page as the packing
+ * allows. In compact mode ([WearRecord.compactStrips]) the ceiling drops to the main profile's
+ * own [profilePtPerMm], floored at [WEAR_STRIP_COMPACT_MIN_PT_PER_MM], so a strip draws the same
+ * width its span has on the profile above it instead of stretching toward the content width.
+ *
+ * Only the CEILING moves: the packer still solves rows-then-scale under it, so a crowded page
+ * still tightens its spacing first and an extra row still has to earn its place. Both wear-sheet
+ * scale paths — the GRID packer and the single-column shared solve — take this same number, so a
+ * page of one strip behaves like a page of three.
+ */
+fun wearStripMaxPtPerMm(compactStrips: Boolean, profilePtPerMm: Float): Float =
+    if (!compactStrips) WEAR_STRIP_MAX_PT_PER_MM
+    else minOf(WEAR_STRIP_MAX_PT_PER_MM, maxOf(profilePtPerMm, WEAR_STRIP_COMPACT_MIN_PT_PER_MM))
+
 data class WearStripHorizontalLayout(
     val stubWidthPt: Float,
     val linerLeftPt: Float,

@@ -97,6 +97,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfWearBandShadeFrac
 import com.android.shaftschematic.ui.viewmodel.setPdfWearJoinGapMaxMm
 import com.android.shaftschematic.ui.viewmodel.setRunoutHeightScale
 import com.android.shaftschematic.ui.viewmodel.setShowCouplingFace
+import com.android.shaftschematic.ui.viewmodel.setWearCompactStrips
 import com.android.shaftschematic.ui.viewmodel.setWearShowShaftProfile
 import com.android.shaftschematic.ui.viewmodel.setWearStripComponents
 import com.android.shaftschematic.util.DualUnitLayout
@@ -409,6 +410,8 @@ internal fun RunoutWearOptionsSheet(
     wearStripDefaultIds: List<String> = emptyList(),
     /** This job's `WearRecord.showShaftProfile`; read only when [showWearControls]. */
     wearShowShaftProfile: Boolean = true,
+    /** This job's `WearRecord.compactStrips`; read only when [showWearControls]. */
+    wearCompactStrips: Boolean = false,
     /**
      * Shows the shared "Dimension arrows" size picker. On for the consolidated sheet, the only
      * document here that draws dimension rails; the classic runout/wear/undercut sheets draw
@@ -551,6 +554,8 @@ internal fun RunoutWearOptionsSheet(
                 defaultIds = wearStripDefaultIds,
                 showShaftProfile = wearShowShaftProfile,
                 onSetShowShaftProfile = { vm.setWearShowShaftProfile(it) },
+                compactStrips = wearCompactStrips,
+                onSetCompactStrips = { vm.setWearCompactStrips(it) },
                 // Nullable: the "Default (all liners)" quick action clears the election so the
                 // sheet follows the shaft again.
                 onSetSelection = { vm.setWearStripComponents(it) },

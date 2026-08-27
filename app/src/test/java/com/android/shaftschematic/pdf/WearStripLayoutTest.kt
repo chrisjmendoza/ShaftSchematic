@@ -1280,6 +1280,129 @@ class WearStripLayoutTest {
         assertEquals("a 720 pt page is wider than nothing", 720f, packWidth, 1e-6f)
     }
 
+    // ── Compact strips (WearRecord.compactStrips) — the scale CEILING only ────
+    //
+    // Compact mode never touches the packer's solve: it lowers the ceiling both scale paths
+    // already took as a parameter, so rows-then-scale, the spacing squeeze, and the overflow
+    // rule are all unchanged. These cases pin the cap arithmetic and its effect; the
+    // maximality assertion above is deliberately NOT reused, since a capped page is maximal
+    // for its ceiling rather than for WEAR_STRIP_MAX_PT_PER_MM.
+
+    @Test
+    fun `compact off keeps the historical ceiling whatever the profile draws at`() {
+        listOf(0.01f, 0.6f, 1.7f, 40f).forEach { profile ->
+            assertEquals(
+                "profile $profile",
+                WEAR_STRIP_MAX_PT_PER_MM,
+                wearStripMaxPtPerMm(compactStrips = false, profilePtPerMm = profile),
+                1e-6f,
+            )
+        }
+    }
+
+    @Test
+    fun `compact on caps the strips at the profile's own scale`() {
+        assertEquals(1.2f, wearStripMaxPtPerMm(compactStrips = true, profilePtPerMm = 1.2f), 1e-6f)
+    }
+
+    @Test
+    fun `the compact floor wins over a tiny profile scale`() {
+        // A 25 ft shaft draws its profile at a hair per millimetre; capping the strips there would
+        // print them the size they already are on the band, rails and titles included.
+        assertEquals(
+            WEAR_STRIP_COMPACT_MIN_PT_PER_MM,
+            wearStripMaxPtPerMm(compactStrips = true, profilePtPerMm = 0.02f),
+            1e-6f,
+        )
+        assertTrue(
+            "the floor must sit above the shared-scale floor to mean anything",
+            WEAR_STRIP_COMPACT_MIN_PT_PER_MM > WEAR_STRIP_MIN_PT_PER_MM,
+        )
+    }
+
+    @Test
+    fun `compact never RAISES the ceiling above the historical cap`() {
+        // A stubby shaft's profile can out-scale the strips' cap; compact is a squeeze, never a
+        // licence to blow the strips up past what the uncompacted sheet would draw.
+        assertEquals(
+            WEAR_STRIP_MAX_PT_PER_MM,
+            wearStripMaxPtPerMm(compactStrips = true, profilePtPerMm = 9f),
+            1e-6f,
+        )
+    }
+
+    @Test
+    fun `a compact cap below the stretch solve is exactly what the page packs at`() {
+        // Two short strips reach the 3.0 cap uncompacted; under a 1.0 ceiling they draw at 1.0 —
+        // a third of the stretched width, with the row layout still well formed.
+        val windows = packWindows(2, 100f)
+        val stretched = packWearStripWindows(windows, packLeft, packRight, maxRows = 2)
+        assertEquals(WEAR_STRIP_MAX_PT_PER_MM, stretched.ptPerMm, 1e-4f)
+
+        val cap = wearStripMaxPtPerMm(compactStrips = true, profilePtPerMm = 1.0f)
+        val compact = packWearStripWindows(
+            windows, packLeft, packRight, maxRows = 2, maxPtPerMm = cap,
+        )
+        assertEquals(cap, compact.ptPerMm, 1e-4f)
+        assertEquals(2, compact.placedCount)
+        assertCellsWellFormed(compact)
+        val stretchedW = windows[0].drawnWidthPt(stretched.ptPerMm)
+        val compactW = windows[0].drawnWidthPt(compact.ptPerMm)
+        assertTrue("compact must draw narrower", compactW < stretchedW)
+    }
+
+    @Test
+    fun `a compact cap above what the page allows changes nothing - page fit still binds`() {
+        // Six 700 mm components already pack far below any ceiling: the page, not the cap, is
+        // what limits them, so compact mode is a no-op on exactly the sheets that are full.
+        val windows = packWindows(6, 700f)
+        val plain = packWearStripWindows(windows, packLeft, packRight, maxRows = 2)
+        val capped = packWearStripWindows(
+            windows, packLeft, packRight, maxRows = 2,
+            maxPtPerMm = wearStripMaxPtPerMm(compactStrips = true, profilePtPerMm = 2.5f),
+        )
+        assertEquals(plain.ptPerMm, capped.ptPerMm, 1e-4f)
+        assertEquals(plain.rowCount, capped.rowCount)
+        assertEquals(plain.placedCount, capped.placedCount)
+        assertEquals(plain.cells.map { it.windowIndex }, capped.cells.map { it.windowIndex })
+    }
+
+    @Test
+    fun `the packer's default ceiling still reproduces today's sheet exactly`() {
+        // The undercut document and every uncompacted wear sheet call through the defaults; a
+        // compact-mode change that moved them would be silent.
+        listOf(packWindows(2, 100f), packWindows(4, 900f), packWindows(6, 700f)).forEach { windows ->
+            val byDefault = packWearStripWindows(windows, packLeft, packRight, maxRows = 2)
+            val explicit = packWearStripWindows(
+                windows, packLeft, packRight, maxRows = 2, maxPtPerMm = WEAR_STRIP_MAX_PT_PER_MM,
+            )
+            assertEquals(byDefault.ptPerMm, explicit.ptPerMm, 0f)
+            assertEquals(byDefault.rowCount, explicit.rowCount)
+            assertEquals(byDefault.placedCount, explicit.placedCount)
+            assertEquals(byDefault.spacing.stubWidthPt, explicit.spacing.stubWidthPt, 0f)
+            assertEquals(byDefault.spacing.colGapPt, explicit.spacing.colGapPt, 0f)
+            assertEquals(
+                byDefault.cells.map { it.left to it.right },
+                explicit.cells.map { it.left to it.right },
+            )
+        }
+    }
+
+    @Test
+    fun `the single-column path takes the same ceiling as the packed one`() {
+        // One liner must behave like three: composeWearPdf hands both scale paths the same cap.
+        val windows = listOf(linerWindow("solo", 0f, 120f))
+        val inner = listOf(packWidth - 2f * WEAR_STRIP_STUB_WIDTH_PT)
+        assertEquals(
+            "uncompacted, a short window stretches to the cap",
+            WEAR_STRIP_MAX_PT_PER_MM,
+            sharedWearStripWindowPtPerMm(windows, inner),
+            1e-4f,
+        )
+        val cap = wearStripMaxPtPerMm(compactStrips = true, profilePtPerMm = 0.9f)
+        assertEquals(cap, sharedWearStripWindowPtPerMm(windows, inner, maxPtPerMm = cap), 1e-4f)
+    }
+
     // ── spreadWearStripRowGutters — facing break curls get the gutter they need ──
 
     private fun cell(idx: Int, row: Int, left: Float, width: Float) =
