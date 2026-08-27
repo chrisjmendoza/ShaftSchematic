@@ -55,6 +55,8 @@ fun ShaftEditorRoute(
     // Standalone shop-floor tool, reachable from every tab; the dialog owns its own blank
     // state, so all the route holds is whether it is open.
     var keywayCalcOpen by rememberSaveable { mutableStateOf(false) }
+    // Same posture as the keyway calculator — a read-only tool, not a document surface.
+    var converterOpen by rememberSaveable { mutableStateOf(false) }
 
     val spec by vm.spec.collectAsState()
     val unit by vm.unit.collectAsState()
@@ -132,12 +134,20 @@ fun ShaftEditorRoute(
             onHome = onNavigateHome,
             onSettings = onOpenSettings,
             onKeywayCalculator = { keywayCalcOpen = true },
+            onUnitConverter = { converterOpen = true },
         )
 
         if (keywayCalcOpen) {
             BoreKeywayCalcDialog(
                 defaultUnit = unit,
                 onDismiss = { keywayCalcOpen = false },
+            )
+        }
+
+        if (converterOpen) {
+            UnitConverterDialog(
+                defaultUnit = unit,
+                onDismiss = { converterOpen = false },
             )
         }
     }

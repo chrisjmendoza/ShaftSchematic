@@ -337,9 +337,13 @@ private fun ScaleChipRow(denominator: Int, onSelect: (Int) -> Unit) {
     }
 }
 
-/** Same chip conventions as `BlendSection.ChipRow`: label above, outline on EVERY chip. */
+/**
+ * Same chip conventions as `BlendSection.ChipRow`: label above, outline on EVERY chip.
+ * Shared with [UnitConverterDialog] — the calculator's `in | mm` entry-unit chip is the
+ * identical control, so it is promoted to `internal` rather than duplicated.
+ */
 @Composable
-private fun UnitChipRow(unit: UnitSystem, onSelect: (UnitSystem) -> Unit) {
+internal fun UnitChipRow(unit: UnitSystem, onSelect: (UnitSystem) -> Unit) {
     val colors = FilterChipDefaults.filterChipColors(
         containerColor = MaterialTheme.colorScheme.surface,
         selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,

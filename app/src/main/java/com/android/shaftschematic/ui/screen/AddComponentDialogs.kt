@@ -11,9 +11,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -31,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -105,6 +110,30 @@ private fun toDisplayString(mm: Float, unit: UnitSystem, d: Int = 3): String {
     return if (s.isEmpty()) "0" else s
 }
 
+/**
+ * Title row shared by all five Add dialogs: the dialog's title text plus a launcher icon for
+ * the standalone [UnitConverterDialog] tool (a quick mm ↔ in read-only calculator). The
+ * launcher writes no component value, so it sits OUTSIDE the add-dialog-parity invariant — it
+ * never has to appear on a carousel card.
+ *
+ * Each host dialog keeps its own `converterOpen` state and shows [UnitConverterDialog] as a
+ * SIBLING `AlertDialog`, following this file's existing dialog-over-dialog pattern (the
+ * collision-warning `AlertDialog`s each Add dialog already emits above its main one) — never
+ * nested inside this title slot.
+ */
+@Composable
+private fun addDialogTitleWithConverter(title: String, onOpenConverter: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title)
+        IconButton(onClick = onOpenConverter, modifier = Modifier.testTag("add_dialog_converter")) {
+            Icon(Icons.Filled.Calculate, contentDescription = "Unit converter")
+        }
+    }
+}
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Body — Start, Length, Diameter (unit-aware)
@@ -210,9 +239,15 @@ fun AddBodyDialog(
 
     val scroll = rememberScrollState()
 
+    // Unit converter launcher — a pure read-only tool, see addDialogTitleWithConverter's KDoc.
+    var converterOpen by remember { mutableStateOf(false) }
+    if (converterOpen) {
+        UnitConverterDialog(defaultUnit = unit, onDismiss = { converterOpen = false })
+    }
+
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Add Body") },
+        title = { addDialogTitleWithConverter("Add Body") { converterOpen = true } },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
                 CommitNumField("Start (${abbr(unit)})", start) { start = it }
@@ -454,9 +489,15 @@ fun AddLinerDialog(
         )
     }
 
+    // Unit converter launcher — a pure read-only tool, see addDialogTitleWithConverter's KDoc.
+    var converterOpen by remember { mutableStateOf(false) }
+    if (converterOpen) {
+        UnitConverterDialog(defaultUnit = unit, onDismiss = { converterOpen = false })
+    }
+
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Add Liner") },
+        title = { addDialogTitleWithConverter("Add Liner") { converterOpen = true } },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
                 Row(
@@ -591,9 +632,15 @@ fun AddCouplerBoltSlotDialog(
             }
         } else null
 
+    // Unit converter launcher — a pure read-only tool, see addDialogTitleWithConverter's KDoc.
+    var converterOpen by remember { mutableStateOf(false) }
+    if (converterOpen) {
+        UnitConverterDialog(defaultUnit = unit, onDismiss = { converterOpen = false })
+    }
+
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Add Coupler Bolt Slot") },
+        title = { addDialogTitleWithConverter("Add Coupler Bolt Slot") { converterOpen = true } },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(rememberScrollState())) {
                 Row(
@@ -732,9 +779,15 @@ fun AddThreadDialog(
         )
     }
 
+    // Unit converter launcher — a pure read-only tool, see addDialogTitleWithConverter's KDoc.
+    var converterOpen by remember { mutableStateOf(false) }
+    if (converterOpen) {
+        UnitConverterDialog(defaultUnit = unit, onDismiss = { converterOpen = false })
+    }
+
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Add Thread") },
+        title = { addDialogTitleWithConverter("Add Thread") { converterOpen = true } },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
                 if (countInOal) {
@@ -943,9 +996,15 @@ fun AddTaperDialog(
 
     val scroll = rememberScrollState()
 
+    // Unit converter launcher — a pure read-only tool, see addDialogTitleWithConverter's KDoc.
+    var converterOpen by remember { mutableStateOf(false) }
+    if (converterOpen) {
+        UnitConverterDialog(defaultUnit = unit, onDismiss = { converterOpen = false })
+    }
+
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Add Taper") },
+        title = { addDialogTitleWithConverter("Add Taper") { converterOpen = true } },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
                 // Direction selector
