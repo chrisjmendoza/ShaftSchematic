@@ -1503,6 +1503,15 @@ re-expand whitespace.**
   draws half the width of a 44" one). On a `GRID` page `WearStripPacking.ptPerMm` replaces the
   `sharedWearStripWindowPtPerMm` solve; the `COMBINED` single full-width strip and the undercut
   sheet still call that function.
+- **Compact strips** (per-job, `WearRecord.compactStrips`, default off — a "Compact strips"
+  checkbox with the strip election on both wear surfaces) caps that one shared scale at the main
+  profile's own pt/mm, floored at `WEAR_STRIP_COMPACT_MIN_PT_PER_MM` so rails and titles stay
+  readable on a very long shaft: a strip then draws the width its span has on the band above
+  instead of stretching toward the content width. ONE pure resolver, `wearStripMaxPtPerMm`,
+  feeds both scale paths through the `maxPtPerMm` parameters they already carried — the packer's
+  rows-then-scale solve, the undercut sheet's default-argument behaviour, and the one-shared-scale
+  rule are all untouched; only the ceiling moves. The cap is computed even with the profile
+  hidden ("the shaft's natural page scale" exists whether or not the band prints).
 - **Cells** — each window's cell is exactly its own footprint wide, laid left to right a gutter
   apart, with the whole row **centered** in the content width (the fixed grid's "a partial row is
   centered" convention, now applied to every row). Leftover slack sits at the page margins —
@@ -1953,7 +1962,7 @@ owns (`blankDraft` + `onSetBlankDraft = { blankDraft = it }`), so the two surfac
 and either one re-renders the preview through the route's existing `blankDraft` render key.
 
 So, top to bottom: the **Wear** sheet shows Blank draft → Line thickness → Components (complete
-shaft + per-component checkboxes + the Default/All/None quick actions) → Trace depth
+shaft + Compact strips + per-component checkboxes + the Default/All/None quick actions) → Trace depth
 exaggeration → Wear area shade → Taper–liner join → Fractions → Shade in PDF → Dual units +
 layout; the **Undercut** sheet shows Blank draft → Line thickness → Fractions → Shade in PDF →
 Dual units + layout; the **Runout** sheet Blank draft → Coupling face → Line thickness →

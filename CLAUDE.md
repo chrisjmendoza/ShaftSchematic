@@ -174,7 +174,13 @@ Drawing → "Body S-break", default **half** (`PDF_SBREAK_THRESHOLD_DEFAULT`), 5
 **Never** (0) at the low end = compression stays entirely hidden, 100% = break on any
 foreshortening ("why lock it in one way when different users may want different outputs"
 — on-device request). ONE consumer, `drawBodyRunsWithBreaks` — the single body-run pass both
-composers call, `pdf/BodyRunDraw.kt`. **No footer compression note**: the S-break pair IS the
+composers call, `pdf/BodyRunDraw.kt`. **A broken run's shade fill ends ON the S curve**, never
+on a square rect at the break line: the stroked glyph and the stub-fill boundary build from the
+ONE cubic construction (`appendBreakEdgeS`/`breakEdgeSPath`/`breakStubFillPath`,
+`pdf/BreakSymbol.kt`), so they cannot drift — a straight-edged fill left an unfilled crescent
+inside the outline in one half of each stub and spilled grey into the paper gap in the other
+(on-device report). The wear/undercut document's `SimpleShaftProfile` derives its fill and
+outline breaks from the same decision (`simpleBodyBreak`), so its gap stays bare paper too. **No footer compression note**: the S-break pair IS the
 statement that a run is foreshortened, so prose repeating it is redundant (on-device direction)
 and cost a footer row on exactly the long shafts with the least room. Do not reintroduce
 `showCompressionNote`. The long-span trigger `COMPRESS_TRIGGER_PT` is

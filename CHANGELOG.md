@@ -155,6 +155,73 @@ normalize, the load-bearing identity no-op, copy-through — with names/signatur
 
 1912 green.
 
+### fix(pdf): a broken run's shade fill ends on the S curve, not a square edge
+
+On-device report: body filling doesn't fill cleanly at the S breaks. The cause was geometric:
+`drawBodyRunsWithBreaks` filled each stub with an axis-aligned rect ending on a straight
+vertical at the break line, while the stroked S deviates from that vertical by up to
+√3/6·amplitude with OPPOSITE sign in its two halves — so every shaded broken run showed an
+unfilled white crescent inside the outline in one half of each stub and grey spilling past the
+curve into the paper gap in the other (~9 pt of error on a tall shaft).
+
+The stroked glyph and the stub-fill boundary now build from ONE cubic construction in
+`pdf/BreakSymbol.kt` (`appendBreakEdgeS` / `breakEdgeSPath` / `breakStubFillPath`), so they
+cannot drift; a stub the gap has squeezed to nothing draws no fill rather than inverting. The
+wear/undercut document's `SimpleShaftProfile` had the sibling defect — its fill pre-pass
+square-filled the whole run, greying the gap — and now derives fill and outline breaks from the
+same `simpleBodyBreak` decision, keeping its pre-pass z-order (fills under all outlines). The
+eye's translucent wash is untouched (documented intent: it darkens shaded bodies like a
+shadow). Also: the schematic's `shadeFill()` gains `ANTI_ALIAS_FLAG` to match the runout
+composer and every stroke paint, and the Compose S-break port reads the shared
+`RETURN_SWEEP_FULLNESS` instead of a private copy.
+
+New coverage where none existed (every break test passed `fill = null` before): shaded bitmap
+cases in `BreakGapKeywayAvoidanceTest` sampling both sides of each curve,
+`BreakEdgeFillSeamTest` pinning stroke and fill to the same path point-for-point,
+`SimpleProfileBreakFillTest`, and a same-math SVG artifact suite
+(`app/build/reports/body-break-fill/`). Reverting the fix fails 5 of them.
+
+### feat(wear): "Compact strips" — detail strips at the shaft's own page scale
+
+The TODO's denser mode. A per-job checkbox (`WearRecord.compactStrips`, default off — additive
+and defaulted, the `showShaftProfile` posture) with the strip election on BOTH wear surfaces
+(tab body + preview options sheet, one shared construction). When on, the sheet's ONE shared
+strip scale is capped at the main profile's own pt/mm — a strip then draws the width its span
+has on the band above instead of stretching toward the content width — floored at the new
+`WEAR_STRIP_COMPACT_MIN_PT_PER_MM` (0.6) so rails and titles stay readable on a very long
+shaft. One pure resolver (`wearStripMaxPtPerMm`) feeds both scale paths through `maxPtPerMm`
+parameters they already carried: the packer's rows-then-scale solve, the one-shared-scale
+invariant, the undercut sheet's default-argument behavior, and every pinned packing verdict are
+untouched — only the ceiling moves. Full-stretch stays the default.
+
+### feat(ui): mm ↔ in converter — a tool dialog reachable from every Add dialog
+
+The backlog's quick inline calculator, in the `BoreKeywayCalcDialog` posture: reads nothing,
+writes nothing (the user reads the value and types it), stores nothing, recomputes live per
+keystroke — which is exactly what keeps it outside the add-dialog-parity invariant. One value
+field (fraction-tolerant: "15 1/2", "3/4", suffixes), an in | mm entry-unit chip row (the
+calculator's `UnitChipRow`, promoted to shared), and a live result: inches→mm to 3 decimals,
+mm→decimal inches plus the nearest shop fraction via `formatInchesSmart` with the snap
+tolerance opened to half the 1/64" grid. Launched from a calculator icon on all five Add-dialog
+title rows (dialog-over-dialog, the collision-warning pattern) and a "Unit converter" sidebar
+Tools entry. Pure result core unit-tested; no Compose test for the Add dialogs, per the
+standing decision.
+
+### chore(pdf): ShaftPdfComposer sheds its two shared clusters
+
+The TODO's split re-evaluation, answered: the entangled `composeShaftPdf` phases stay put (the
+original reasoning holds), but two cohesive clusters both composers consume moved out, in the
+`BodyRunDraw`/`SheetHeader` house pattern — the footer subsystem (drawFooter,
+buildFooterEndColumns, FooterConfig, end detection, taper/thread formatters) to
+`pdf/SheetFooter.kt` (661 lines), and the whole-sheet keyway draw cluster to
+`pdf/KeywayDraw.kt` (337 lines). `ShaftPdfComposer.kt`: 2015 → 1071 lines. Same package, so
+zero import churn anywhere — no test changed; the only visibility moves are
+`getAftEndTaper`/`getFwdEndTaper` to `internal` for `buildTaperLengthSpans`, each with the
+caller named. Dead imports the moves stranded were removed; `computeDetailPtPerMm` stays as-is
+(production-dead but test-referenced, per REFACTOR_CANDIDATES §6).
+
+1941 green.
+
 ## 2026-08-26
 
 ### fix(pdf): shaft-height paper band, spoons stop inflating, footer sits on the bottom margin

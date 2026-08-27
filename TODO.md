@@ -114,18 +114,10 @@ at most a pointer from here.
   width. Check the fraction stack against a condensed or slab face before shipping —
   `FractionTextRendererTest` exists to catch exactly that. Same pref posture as
   `PdfPrefs.fractionStyle`.
-- [ ] Compact wear-strip option — strips stretch the liner toward full content width for
-  readability; a denser mode (natural/shared scale) would ease crowded 3-strip pages.
-  Full-stretch reads well, so it stays the default.
 
 ### Tech debt
 
 - [ ] Controller owns all VM-side intents (composables stateless) — design work, not a pure move.
-- [ ] Re-evaluate splitting `ShaftPdfComposer.kt`. It was left whole because its complexity lives
-  in the long `composeShaftPdf` entry function rather than in file length, and because Wave-3
-  items 3–4 were expected to reshape what is composer-local vs shared. Those landed
-  (`pdf/BodyRunDraw.kt`, `pdf/SimpleShaftProfile.kt`), so the question is open again on the
-  current shape.
 
 ### Build tooling
 
@@ -160,7 +152,6 @@ androidTest) or the Add dialogs; their logic is pure and covered.
 - [ ] Selection → contextual "Add near selected" defaults.
 - [ ] Inline "Add here" buttons between components in the list.
 - [ ] Preset library (common tapers, common shoulder patterns).
-- [ ] Quick inline mm ↔ in calculator in dialogs.
 - [ ] Undo/redo follow-ups (not blocking v1.0): cross-session/persisted history (currently
   in-memory, cleared on process death and at every new/open/import boundary), and metadata
   (customer/vessel/job/notes/shaft position/unit) is deliberately excluded from undoable state —
