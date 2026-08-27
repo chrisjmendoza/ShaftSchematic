@@ -34,7 +34,8 @@ at most a pointer from here.
 | OAL window / excluded threads | ✅ Implemented & unit-tested |
 | Taper rate input, derivation, colon entry | ✅ Auto-by-default with manual override |
 | Keyways — taper, body, spooned, 180°/90° clocking | ✅ Shipped |
-| Liner shoulders | ✅ Shipped, capability-gated (default OFF) — see §2 for open follow-ups |
+| Liner shoulders | ✅ Shipped, capability-gated (default OFF) — schematic + runout/consolidated sheets, envelope-aware |
+| Diagnostics — breadcrumb log + Share logs, guarded Crashlytics | ✅ Shipped — activation steps open, see §2 |
 | Body blends + seal areas | ✅ Shipped on schematic and runout/consolidated sheets |
 | Undercut drawing (tab + PDF) | ✅ Shipped |
 | Wear document | ✅ Shipped — strips, pits, dia readings, blank template |
@@ -88,6 +89,14 @@ at most a pointer from here.
 
 ### Verification
 
+- [ ] **Crashlytics activation** (one-time, console + repo settings): add Crashlytics to the
+  existing Firebase app (the one behind `FIREBASE_APP_ID`), download `google-services.json`,
+  put its contents in a new `GOOGLE_SERVICES_JSON` GitHub Actions secret (and optionally drop
+  the file at `app/google-services.json` locally — it is gitignored), then force one test crash
+  from a distributed build to confirm the pipe. Until then everything builds green with crash
+  reporting simply inactive.
+- [ ] On-device: tap Settings → Data → "Share diagnostic logs" once — the FileProvider
+  attachment path is pinned by test only indirectly (Robolectric cannot resolve provider roots).
 - [ ] On-device pass on the recent tail — several features are shipped but unverified on
   hardware; `CHANGELOG.md` is the running record of which.
 - [ ] On-device visual pass of dark and high-contrast chrome (the Appearance schemes have only
@@ -95,9 +104,6 @@ at most a pointer from here.
 
 ### Rendering / components
 
-- [ ] **Liner shoulder follow-ups**: the runout/consolidated sheet's liner pass still draws
-  square ends (same rollout order blends took), and `SurfaceSegs` treats a shouldered liner as
-  full OD — so wear/undercut readings near a shoulder read the un-stepped surface.
 - [ ] **Mixed-unit follow-ups**: carousel numeric *entry* fields still take the document unit
   (the chip governs how a component PRINTS, not how its fields are typed), so a metric keyway is
   typed in inches and stored mm; and standard metric key-stock presets for keyways aren't built.
@@ -115,16 +121,11 @@ at most a pointer from here.
 ### Tech debt
 
 - [ ] Controller owns all VM-side intents (composables stateless) — design work, not a pure move.
-- [ ] `parseFractionOrDecimal` / `toMmOrNull` duplication — tracked in `NumberField.md`.
-- [ ] Optional narrow polish from the Wave-3 audit: collapse the 4 label + 2 `showDia` trivial
-  ViewModel setters (~70 lines) behind a lens-shaped private helper. The rest of the per-kind
-  update logic is load-bearing and deliberately stays.
 - [ ] Re-evaluate splitting `ShaftPdfComposer.kt`. It was left whole because its complexity lives
   in the long `composeShaftPdf` entry function rather than in file length, and because Wave-3
   items 3–4 were expected to reshape what is composer-local vs shared. Those landed
   (`pdf/BodyRunDraw.kt`, `pdf/SimpleShaftProfile.kt`), so the question is open again on the
   current shape.
-- [ ] Add an optional debug overlay showing tier origin and measurement reference (preview only).
 
 ### Build tooling
 

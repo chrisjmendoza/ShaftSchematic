@@ -474,8 +474,28 @@ liner already carrying shoulder values keeps its controls and always draws them:
 may hide empty entry fields, never authored work. The edge radius comes from the standard list
 (`LINER_SHOULDER_STD_RADII_IN`, provisional) and prints ONLY as a footer line ("Liner shoulder
 R: …") — no leader, no rail — which is what licenses the drawn clamps (blend-width floor,
-oversize clamped where DRAWN, values never rewritten). Known v1 bounds: the runout/consolidated
-sheet's liner pass draws square ends, and `SurfaceSegs` treats a shouldered liner as full OD.
+oversize clamped where DRAWN, values never rewritten). The runout/consolidated sheet draws
+shoulders too, through the ONE shared pass `pdf/LinerShoulderDraw.kt` (`linerShoulderSpecs` +
+fill/stroke decomposition — both composers map mm through their OWN `xAt`/`rPx`, so a shoulder
+inherits its liner's foreshortening; square liners keep their literal rect/line draws,
+byte-identical). The surface envelope sees the step: shoulders ride `ResolvedLiner` (copied
+verbatim at resolve — liners never fragment) and `linerSurfaceSegs` emits the reduced-OD end
+segs at TRUE stored mm spans, never drawn floors; the step is modelled square (the fillet is a
+corner treatment, not a diameter over a span), a shoulder OD at or above the liner OD
+contributes no step, and crossing shoulder lengths clamp aft-first. The wear document stays
+square by product decision.
+
+### Breadcrumbs log events, never content
+`util/AppLog` is the always-on diagnostic file (ring of two 256 KB files, shared via
+Settings → Data → "Share diagnostic logs"); `util/VerboseLog` stays the dev-options-gated
+logcat channel — do not merge them. A breadcrumb may say what happened and carry an exception;
+it may **never** carry a document field value, a geometry number, or any other thing the user
+typed into a drawing (document NAMES are allowed — the sharer owns them). `util/CrashReporter`
+is the ONE seam to Crashlytics: Firebase is optional configuration (`app/google-services.json`
+gitignored, plugins applied conditionally, CI materializes it from a secret), so nothing
+outside that file may call Firebase directly — a direct call throws on every build without the
+json. Collection stays ON in debug builds; the debug variant is what testers install.
+See `docs/contracts/Diagnostics.md`.
 
 ### Drawing profiles are app-wide, never per-document
 Named drawing preset profiles (`settings/DrawingProfile.kt`, Settings → Drawing → "Profiles")

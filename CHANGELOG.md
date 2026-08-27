@@ -67,6 +67,94 @@ to allow it.
 
 1874 green.
 
+### feat(diagnostics): always-on breadcrumb log, "Share diagnostic logs", and guarded Crashlytics
+
+Groundwork for distributing to outside testers: a failure on someone else's phone currently
+leaves no evidence anywhere. Two subsystems, both new:
+
+**`util/AppLog`** — an always-on ring-buffer log file (`log.0.txt` → `log.1.txt`, 256 KB each,
+bounded without a cleanup task), deliberately NOT gated by Developer Options: evidence has to
+already be on disk when somebody thinks to ask for it. Written from a single background thread,
+never throws, mirrors to logcat. **Privacy rule, stated at the definition: breadcrumbs record
+events, never content** — no field values, no geometry, no document text; document NAMES are
+allowed (the sharer owns them). Breadcrumb sites: every branch of `PdfSafExport` (the composer
+throw that draws the error page was previously swallowed whole), `InternalStorage`
+save/load/delete/rename/migrate, `BackupMirror` failures, both silently-swallowed autosave
+catches, `.shaft` import failure, backup-zip failure. A new `ShaftSchematicApp` Application
+class initializes it and installs a delegating uncaught-exception handler (crash written +
+flushed locally, then handed to whatever handler was already installed, so Crashlytics still
+gets it). Settings → Data → **"Share diagnostic logs"** (last in the section, per the
+rarely-used-options-sit-last rule) mails the files through the existing feedback machinery
+(`FeedbackIntentFactory.createDiagnostics`, FileProvider attachments).
+
+**Crashlytics as optional configuration** — the Firebase SDK is a plain dependency, but the two
+Google plugins apply only when `app/google-services.json` exists, so every clone builds with no
+Firebase project at all. `util/CrashReporter` is the ONE seam: `isActive` resolved once at
+Application init (`FirebaseApp.getApps` non-empty), every call a no-op without config — nothing
+else may talk to Firebase directly. Collection stays ON in debug builds, because the debug
+variant is what testers install. CI materializes the json from a new `GOOGLE_SERVICES_JSON`
+secret before `assembleDebug` (unset secret = builds green, just without crash reporting), and
+the file is now gitignored. `PdfSafExport`'s composer catch reports the throwable as a
+non-fatal. Firebase BOM 34.18.0 / google-services 4.5.0 / crashlytics plugin 3.0.8; AGP,
+Kotlin, compileSdk, Compose BOM all untouched.
+
+Activation is manual (recorded in TODO): add Crashlytics to the Firebase console app, set the
+GitHub secret, force one test crash to confirm the pipe.
+
+### fix(pdf): shouldered liners reach the runout/consolidated sheet and the surface envelope
+
+Closes both deliberate v1 bounds from the liner-shoulder rollout (the same order blends took).
+
+The runout/consolidated sheet's liner pass drew square ends; it now draws the stepped
+silhouette from the SAME `geom/LinerShoulderMath.linerTopSilhouette` as the schematic, through
+a new shared pass — `pdf/LinerShoulderDraw.kt` (`linerShoulderSpecs` + `drawLinerFillPdf` /
+`drawLinerOutlinePdf`). Spec construction (endpoint mapping through each sheet's own compressed
+`xAt`, so a shoulder inherits its liner's foreshortening; the radius-vs-diameter doubling;
+`MIN_BLEND_WIDTH_PT` floor and host cap) now has exactly one implementation —
+`ShaftPdfComposer.drawLiners` was refactored onto it and its private copy deleted. Fill and
+stroke are separate entry points because the two composers keep their own pass structure (the
+consolidated sheet shades every liner in a pre-pass under the outlines) — z-order unchanged,
+and square liners keep their literal `drawRect`/`drawLine` calls, byte-identical on both
+sheets.
+
+`SurfaceSegs` treated a shouldered liner as full OD, so a wear/undercut reading near a shoulder
+read the un-stepped surface. `ResolvedLiner` now carries the shoulders (copied verbatim at
+resolve — liners never fragment, so no call site can forget to pass them), and the new pure
+`linerSurfaceSegs` emits up to three constant-Ø segs at TRUE stored mm spans (the drawn-width
+floor is a drawing exaggeration and never reaches geometry, the blends rule). The step is
+modelled square — the fillet is a corner treatment, not a diameter the shaft holds over a span.
+Degenerate authoring clamps without rewriting: shoulder OD at or above the liner OD contributes
+no step (matching `shoulderDrawSpec`'s null), crossing shoulder lengths clamp aft-first.
+`UndercutPdfComposer`'s spec-based fallback routes through the same function, so the two
+envelope paths cannot disagree. New `SurfaceSegsTest` (8) + `LinerShoulderDrawTest` (6).
+
+### feat(dev): dimension debug overlay — tier origin + measurement reference, preview only
+
+The TODO's debug overlay: a new Developer Options switch ("Show Dim Debug Overlay") draws, on
+the Schematic preview only, a dashed tertiary-colored vertical at the tier origin
+(`tierOriginMmFor` — AFT = 0, FWD = OAL, AUTO = none) and a screen-space text block naming the
+tiering mode plus each liner's resolved measurement anchor (`mapToLinerDimsForPdf` —
+`L1 → AFT_SET +123.5mm`, capped at 6 with overflow). The two concerns the guardrail says must
+never conflate are now visible side by side. Pure text builder in `ui/drawing/DimDebugText.kt`
+(7 tests); gating, threading, and the reset-on-disable all follow the `showRenderOalMarkers`
+pattern; `ShaftThumbnail` structurally unaffected; no PDF composer touched.
+
+### chore: parser consolidation + trivial-setter lens
+
+The two tech-debt items that were ready without a decision. `util/Parsing.kt` is now the single
+numeric parser: `parseFractionOrDecimal` gained the colon-ratio branch (`1:12`) the
+`ShaftScreen` copy had, `toMmOrNull` (null on blank/invalid, for commit-on-blur handlers that
+must distinguish "no edit" from "typed zero") moved in beside `parseToMm` (0.0 on invalid), and
+the Float-based duplicates in `ShaftScreen.kt` were deleted with ~70 call sites across
+`ui/screen` re-pointed by import. Every pinned value in `UnitConversionTest` reproduced
+unchanged through the Double core (golden rule holds; only the test's import moved).
+`NumberField.md`'s "Known duplication" block now describes the consolidated state. And the six
+character-identical trivial setters in `ShaftViewModelComponents` (4 labels + 2 show-Ø) collapsed
+behind one lens-shaped `withItemField` helper that preserves the exact guard sequence — bounds,
+normalize, the load-bearing identity no-op, copy-through — with names/signatures unchanged.
+
+1912 green.
+
 ## 2026-08-26
 
 ### fix(pdf): shaft-height paper band, spoons stop inflating, footer sits on the bottom margin

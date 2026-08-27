@@ -28,11 +28,10 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 
 **In progress / next up:**
 
-- [ ] **Liner shoulders on the runout/consolidated sheet + surface envelope** — the base
-  feature shipped 2026-08-25 (per-end length + Ø + standard-list edge radius,
-  capability-gated, preview + schematic PDF from one `geom/LinerShoulderMath.kt` silhouette,
-  radius as a footer note). Still open, deliberately: the runout/consolidated sheet's liner
-  pass draws square ends, and `SurfaceSegs` treats a shouldered liner as full OD
+- [x] **Liner shoulders on the runout/consolidated sheet + surface envelope** — shipped
+  2026-08-27: both v1 bounds closed. The runout/consolidated sheet draws shoulders through the
+  shared `pdf/LinerShoulderDraw.kt` pass, and `SurfaceSegs` models the stepped OD at true mm
+  spans (shoulders ride `ResolvedLiner`). Base feature shipped 2026-08-25
 - [ ] **Fiberglass body support** — per-body flag with the usual dialog/card parity; styling
   (dark fill vs hatch vs label) is **undecided and blocked on a sketch or photographed sheet**,
   the same way the "indicated wear" squiggle convention is
