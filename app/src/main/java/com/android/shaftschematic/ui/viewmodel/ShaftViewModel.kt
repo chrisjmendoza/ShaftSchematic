@@ -23,6 +23,7 @@ import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.resolveComponents
+import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
@@ -403,6 +404,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _showRenderOalMarkers = MutableStateFlow(false)
     val showRenderOalMarkers: StateFlow<Boolean> = _showRenderOalMarkers.asStateFlow()
 
+    internal val _showDimDebugOverlay = MutableStateFlow(false)
+    val showDimDebugOverlay: StateFlow<Boolean> = _showDimDebugOverlay.asStateFlow()
+
     internal val _verboseLoggingEnabled = MutableStateFlow(false)
     val verboseLoggingEnabled: StateFlow<Boolean> = _verboseLoggingEnabled.asStateFlow()
 
@@ -607,7 +611,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     draftPersisted = true
                     // Session boundary: undo must not cross back into the pre-restore blank.
                     clearEditHistory()
-                } catch (_: Exception) {}
+                } catch (t: Exception) {
+                    // The session simply starts blank; the user sees a draft that silently
+                    // failed to come back, which is unreportable without this line.
+                    AppLog.e("Autosave", "draft restore failed", t)
+                }
             } else if (newest != null) {
                 VerboseLog.d(VerboseLog.Category.IO, "Autosave") {
                     "autosave restore skipped (session already initialized)"
@@ -711,9 +719,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                             _drafts.value = AutosaveManager.loadDrafts(getApplication())
                         }
                     } catch (_: CancellationException) {
-                        // ignore
-                    } catch (_: Exception) {
-                        // ignore
+                        // A newer snapshot superseded this one — not a failure.
+                    } catch (t: Exception) {
+                        // Autosave is silent by design, so a draft that stopped being written
+                        // looks exactly like one that was never dirty. Leave the trail.
+                        AppLog.e("Autosave", "draft write failed", t)
                     }
                 }
         }
@@ -1077,6 +1087,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             SettingsStore.showRenderOalMarkersFlow(getApplication()).collectLatest { persisted ->
                 _showRenderOalMarkers.value = persisted
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showDimDebugOverlayFlow(getApplication()).collectLatest { persisted ->
+                _showDimDebugOverlay.value = persisted
             }
         }
         viewModelScope.launch {

@@ -67,6 +67,7 @@ object SettingsStore {
     private val KEY_SHOW_COMPONENT_DEBUG_LABELS = booleanPreferencesKey("show_component_debug_labels")
     private val KEY_SHOW_RENDER_LAYOUT_DEBUG_OVERLAY = booleanPreferencesKey("show_render_layout_debug_overlay")
     private val KEY_SHOW_RENDER_OAL_MARKERS = booleanPreferencesKey("show_render_oal_markers")
+    private val KEY_SHOW_DIM_DEBUG_OVERLAY = booleanPreferencesKey("show_dim_debug_overlay")
     private val KEY_VERBOSE_LOGGING_ENABLED = booleanPreferencesKey("verbose_logging_enabled")
     private val KEY_VERBOSE_LOGGING_RENDER = booleanPreferencesKey("verbose_logging_render")
     private val KEY_VERBOSE_LOGGING_OAL = booleanPreferencesKey("verbose_logging_oal")
@@ -439,6 +440,9 @@ object SettingsStore {
     fun showRenderOalMarkersFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_RENDER_OAL_MARKERS] ?: false }
 
+    fun showDimDebugOverlayFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_DIM_DEBUG_OVERLAY] ?: false }
+
     fun verboseLoggingEnabledFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsDataStore.data.map { p -> p[KEY_VERBOSE_LOGGING_ENABLED] ?: false }
 
@@ -753,6 +757,10 @@ object SettingsStore {
         ctx.settingsDataStore.edit { it[KEY_SHOW_RENDER_OAL_MARKERS] = show }
     }
 
+    suspend fun setShowDimDebugOverlay(ctx: Context, show: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_SHOW_DIM_DEBUG_OVERLAY] = show }
+    }
+
     suspend fun setVerboseLoggingEnabled(ctx: Context, enabled: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_VERBOSE_LOGGING_ENABLED] = enabled }
     }
@@ -785,6 +793,7 @@ object SettingsStore {
             prefs[KEY_SHOW_COMPONENT_DEBUG_LABELS] = false
             prefs[KEY_SHOW_RENDER_LAYOUT_DEBUG_OVERLAY] = false
             prefs[KEY_SHOW_RENDER_OAL_MARKERS] = false
+            prefs[KEY_SHOW_DIM_DEBUG_OVERLAY] = false
             prefs[KEY_VERBOSE_LOGGING_ENABLED] = false
             prefs[KEY_VERBOSE_LOGGING_RENDER] = false
             prefs[KEY_VERBOSE_LOGGING_OAL] = false

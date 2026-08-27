@@ -43,6 +43,7 @@ fun DeveloperOptionsRoute(
     val showComponentDebugLabels by vm.showComponentDebugLabels.collectAsState()
     val showRenderLayoutDebugOverlay by vm.showRenderLayoutDebugOverlay.collectAsState()
     val showRenderOalMarkers by vm.showRenderOalMarkers.collectAsState()
+    val showDimDebugOverlay by vm.showDimDebugOverlay.collectAsState()
     val verboseLoggingEnabled by vm.verboseLoggingEnabled.collectAsState()
 
     val verboseLoggingRender by vm.verboseLoggingRender.collectAsState()
@@ -161,6 +162,18 @@ fun DeveloperOptionsRoute(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("Show Render OAL Markers")
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Switch(
+                    checked = showDimDebugOverlay,
+                    onCheckedChange = { vm.setShowDimDebugOverlay(it) }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Show Dim Debug Overlay")
             }
 
             Row(

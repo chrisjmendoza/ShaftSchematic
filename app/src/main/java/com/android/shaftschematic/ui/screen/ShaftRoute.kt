@@ -155,6 +155,8 @@ fun ShaftRoute(
     val showComponentDebugLabels by vm.showComponentDebugLabels.collectAsState()
     val showRenderLayoutDebugOverlay by vm.showRenderLayoutDebugOverlay.collectAsState()
     val showRenderOalMarkers by vm.showRenderOalMarkers.collectAsState()
+    val showDimDebugOverlay by vm.showDimDebugOverlay.collectAsState()
+    val pdfTieringMode by vm.pdfTieringMode.collectAsState()
 
     val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
     val editorResetNonce by vm.editorResetNonce.collectAsState()
@@ -210,6 +212,8 @@ fun ShaftRoute(
         showComponentDebugLabels = showComponentDebugLabels,
         showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
         showRenderOalMarkers = showRenderOalMarkers,
+        showDimDebugOverlay = showDimDebugOverlay,
+        pdfTieringMode = pdfTieringMode,
         showComponentArrows = showComponentArrows,
         componentArrowWidthDp = componentArrowWidthDp,
         showHighlightSelection = showHighlightSelection,

@@ -96,12 +96,14 @@ import com.android.shaftschematic.model.MM_PER_IN
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
+import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
+import com.android.shaftschematic.util.toMmOrNull
 import kotlinx.coroutines.launch
 
 /**
@@ -150,6 +152,8 @@ fun ShaftScreen(
     showComponentDebugLabels: Boolean,
     showRenderLayoutDebugOverlay: Boolean,
     showRenderOalMarkers: Boolean,
+    showDimDebugOverlay: Boolean = false,
+    pdfTieringMode: PdfTieringMode = PdfTieringMode.AUTO,
     showComponentArrows: Boolean,
     componentArrowWidthDp: Int,
     showHighlightSelection: Boolean = true,
@@ -450,6 +454,8 @@ fun ShaftScreen(
                 onTapComponentId = { onSelectComponentById(it) },
                 showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
                 showRenderOalMarkers = showRenderOalMarkers,
+                showDimDebugOverlay = showDimDebugOverlay,
+                pdfTieringMode = pdfTieringMode,
                 previewOutline = previewOutline,
                 previewBodyFill = previewBodyFill,
                 previewTaperFill = previewTaperFill,
@@ -1292,56 +1298,6 @@ internal fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String
 internal fun disp(mm: Float, unit: UnitSystem, d: Int = 3): String =
     formatDisplay(mm, unit, d)
 
-
-internal fun toMmOrNull(text: String, unit: UnitSystem): Float? {
-    val t = text.trim(); if (t.isEmpty()) return null
-    val num = parseFractionOrDecimal(t) ?: return null
-    return if (unit == UnitSystem.MILLIMETERS) num else (num.toDouble() * MM_PER_IN).toFloat()
-}
-
-
-/** Accepts "12", "3/4", "15 1/2", "1.5", or "1:12" (tolerates trailing unit suffixes). */
-internal fun parseFractionOrDecimal(input: String): Float? {
-    var t = input.replace(",", "").trim(); if (t.isEmpty()) return null
-
-    // Strip trailing unit-ish suffixes like "in", "mm", or quotes.
-    run {
-        val allowed = "0123456789./:+- "
-        var end = t.length - 1
-        while (end >= 0 && !allowed.contains(t[end])) end--
-        t = if (end >= 0) t.substring(0, end + 1).trim() else ""
-        t = t.replace(Regex("\\s+"), " ")
-        if (t.isEmpty()) return null
-    }
-
-    // Mixed fraction: W N/D
-    val parts = t.split(' ').filter { it.isNotBlank() }
-    if (parts.size == 2 && parts[1].contains('/')) {
-        val whole = parts[0].toFloatOrNull() ?: return null
-        val slash = parts[1].indexOf('/')
-        val a = parts[1].substring(0, slash).trim().toFloatOrNull() ?: return null
-        val b = parts[1].substring(slash + 1).trim().toFloatOrNull() ?: return null
-        if (b == 0f) return null
-        val frac = a / b
-        return if (whole < 0f) whole - frac else whole + frac
-    }
-
-    val colon = t.indexOf(':')
-    if (colon >= 0) {
-        val a = t.substring(0, colon).trim().toFloatOrNull() ?: return null
-        val b = t.substring(colon + 1).trim().toFloatOrNull() ?: return null
-        if (b == 0f) return null
-        return a / b
-    }
-    val slash = t.indexOf('/')
-    if (slash >= 0) {
-        val a = t.substring(0, slash).trim().toFloatOrNull() ?: return null
-        val b = t.substring(slash + 1).trim().toFloatOrNull() ?: return null
-        if (b == 0f) return null
-        return a / b
-    }
-    return t.toFloatOrNull()
-}
 
 private const val OAL_EPS_MM: Double = 1e-3
 

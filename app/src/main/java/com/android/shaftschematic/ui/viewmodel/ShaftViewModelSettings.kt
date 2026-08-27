@@ -423,6 +423,13 @@ fun ShaftViewModel.setShowRenderOalMarkers(show: Boolean, persist: Boolean = tru
     }
 }
 
+fun ShaftViewModel.setShowDimDebugOverlay(show: Boolean, persist: Boolean = true) {
+    _showDimDebugOverlay.value = show
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setShowDimDebugOverlay(getApplication(), show) }
+    }
+}
+
 // ── Verbose logging ───────────────────────────────────────────────────────────
 
 fun ShaftViewModel.setVerboseLoggingEnabled(enabled: Boolean, persist: Boolean = true) {

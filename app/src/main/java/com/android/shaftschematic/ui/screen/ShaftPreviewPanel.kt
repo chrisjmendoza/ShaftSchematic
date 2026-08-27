@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.lastOccupiedEndMm
+import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.freeToEndSignedMm
@@ -52,6 +53,8 @@ internal fun PreviewCard(
     onTapComponentId: ((String) -> Unit)?,
     showRenderLayoutDebugOverlay: Boolean,
     showRenderOalMarkers: Boolean,
+    showDimDebugOverlay: Boolean = false,
+    pdfTieringMode: PdfTieringMode = PdfTieringMode.AUTO,
     previewOutline: PreviewColorSetting,
     previewBodyFill: PreviewColorSetting,
     previewTaperFill: PreviewColorSetting,
@@ -86,7 +89,9 @@ internal fun PreviewCard(
                 highlightId = highlightId,
                 onTapComponentId = onTapComponentId,
                 showLayoutDebugOverlay = showRenderLayoutDebugOverlay,
-                showOalMarkers = showRenderOalMarkers
+                showOalMarkers = showRenderOalMarkers,
+                showDimDebugOverlay = showDimDebugOverlay,
+                pdfTieringMode = pdfTieringMode
             )
 
             Column(

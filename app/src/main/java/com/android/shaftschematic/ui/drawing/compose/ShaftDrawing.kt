@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -40,6 +41,10 @@ import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.pdf.mapToLinerDimsForPdf
+import com.android.shaftschematic.pdf.tierOriginMmFor
+import com.android.shaftschematic.settings.PdfTieringMode
+import com.android.shaftschematic.ui.drawing.dimDebugLines
 import com.android.shaftschematic.ui.drawing.render.GridRenderer.drawAdaptiveShaftGrid
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
@@ -95,6 +100,11 @@ fun ShaftDrawing(
     showGrid: Boolean,
     showLayoutDebugOverlay: Boolean = false,
     showOalMarkers: Boolean = false,
+    // Optional debug overlay (preview only, never in a PDF composer): shows the dimension-rail
+    // tier origin and each liner's measurement reference so a developer can see how
+    // `PdfTieringMode` resolves without cross-referencing ShaftPdfComposer.
+    showDimDebugOverlay: Boolean = false,
+    pdfTieringMode: PdfTieringMode = PdfTieringMode.AUTO,
     blackWhiteOnly: Boolean = false,
     previewOutline: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.STEEL),
     previewBodyFill: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT),
@@ -112,6 +122,7 @@ fun ShaftDrawing(
     // Theme-derived highlight glow color
     val themeGlow: Color = MaterialTheme.colorScheme.primary
     val debugMarkerColor: Color = MaterialTheme.colorScheme.error
+    val dimDebugColor: Color = MaterialTheme.colorScheme.tertiary
 
     val previewScheme = MaterialTheme.colorScheme
     val outlineColor = if (blackWhiteOnly) Color.Black else previewOutline.resolve(previewScheme)
@@ -274,6 +285,16 @@ fun ShaftDrawing(
             )
             latestLayoutRef.set(layout)
 
+            // Computed once per frame, only when the overlay is on — feeds both the
+            // world-space origin line (inside the transform) and the screen-space text
+            // block (outside it).
+            val dimDebugTierOriginMm = if (showDimDebugOverlay) {
+                tierOriginMmFor(pdfTieringMode, computeOalWindow(safeSpec).oalMm)
+            } else null
+            val dimDebugDims = if (showDimDebugOverlay) {
+                mapToLinerDimsForPdf(safeSpec, pdfTieringMode)
+            } else emptyList()
+
             // Build the debug string only when verbose rendering is on — this lambda
             // re-runs every pan/zoom frame, and dbg() formats six strings per call.
             if (VerboseLog.isEnabled(VerboseLog.Category.RENDER)) {
@@ -342,6 +363,18 @@ fun ShaftDrawing(
                         )
                     }
                 }
+
+                if (showDimDebugOverlay && dimDebugTierOriginMm != null) {
+                    val x = layout.xPx(dimDebugTierOriginMm.toFloat())
+                    val stroke = (2f / scale.value).coerceAtLeast(0.5f)
+                    drawLine(
+                        color = dimDebugColor,
+                        start = Offset(x, layout.contentTopPx),
+                        end = Offset(x, layout.contentBottomPx),
+                        strokeWidth = stroke,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
+                    )
+                }
             }
 
             if (showLayoutDebugOverlay) {
@@ -357,6 +390,20 @@ fun ShaftDrawing(
                     64f,
                     p
                 )
+            }
+
+            if (showDimDebugOverlay) {
+                val p = Paint().apply {
+                    isAntiAlias = true
+                    color = dimDebugColor.toArgb()
+                    textSize = 28f
+                }
+                val lines = dimDebugLines(pdfTieringMode, dimDebugTierOriginMm, dimDebugDims)
+                // Below the layout-debug block (lines at y=32/64) so both overlays read
+                // cleanly when both are on.
+                lines.forEachIndexed { index, line ->
+                    drawContext.canvas.nativeCanvas.drawText(line, 12f, 96f + index * 32f, p)
+                }
             }
         }
 
