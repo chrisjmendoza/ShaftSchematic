@@ -31,6 +31,7 @@ import com.android.shaftschematic.model.*
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.bodyBlends
+import com.android.shaftschematic.ui.resolved.linerSurfaceSegs
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
@@ -519,13 +520,24 @@ private fun drawUndercutDirectionRow(
 
 /**
  * Outer-surface segments derived straight from the drawn spec — the fallback used when the
- * caller supplied no resolved component list. Mirrors `surfaceSegsFrom`'s rules (bodies and
- * liners constant Ø, tapers linear, threads at their major-Ø envelope, coupler bolt slots
+ * caller supplied no resolved component list. Mirrors `surfaceSegsFrom`'s rules (bodies
+ * constant Ø, liners constant Ø or stepped through the SAME `linerSurfaceSegs` a shouldered
+ * liner resolves to, tapers linear, threads at their major-Ø envelope, coupler bolt slots
  * skipped as radial cutouts rather than surface material).
  */
 private fun surfaceSegsFromSpec(spec: ShaftSpec): List<SurfaceSeg> = buildList {
     spec.bodies.forEach { add(SurfaceSeg(it.startFromAftMm, it.startFromAftMm + it.lengthMm, it.diaMm, it.diaMm)) }
-    spec.liners.forEach { add(SurfaceSeg(it.startFromAftMm, it.startFromAftMm + it.lengthMm, it.odMm, it.odMm)) }
+    spec.liners.forEach {
+        addAll(
+            linerSurfaceSegs(
+                startMm = it.startFromAftMm,
+                endMm = it.startFromAftMm + it.lengthMm,
+                odMm = it.odMm,
+                aft = it.shoulderOn(LinerAuthoredReference.AFT),
+                fwd = it.shoulderOn(LinerAuthoredReference.FWD),
+            )
+        )
+    }
     spec.tapers.forEach { add(SurfaceSeg(it.startFromAftMm, it.startFromAftMm + it.lengthMm, it.startDiaMm, it.endDiaMm)) }
     spec.threads.forEach { add(SurfaceSeg(it.startFromAftMm, it.startFromAftMm + it.lengthMm, it.majorDiaMm, it.majorDiaMm)) }
 }.filter { it.endMm > it.startMm && (it.diaStartMm > 0f || it.diaEndMm > 0f) }

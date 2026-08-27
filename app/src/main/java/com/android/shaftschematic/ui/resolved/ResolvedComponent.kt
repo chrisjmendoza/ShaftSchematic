@@ -1,7 +1,10 @@
 package com.android.shaftschematic.ui.resolved
 
 import com.android.shaftschematic.model.AutoDiaOverride
+import com.android.shaftschematic.model.LinerAuthoredReference
+import com.android.shaftschematic.model.LinerShoulder
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.shoulderOn
 import com.android.shaftschematic.model.autoSectionDiaMmFor
 import com.android.shaftschematic.model.hasAutoSectionDia
 import com.android.shaftschematic.ui.config.AddDefaultsConfig
@@ -53,6 +56,12 @@ data class ResolvedThread(
     val pitchMm: Float,
 ) : ResolvedComponent()
 
+/**
+ * A resolved liner. Liners never fragment, so the resolved id is the stored id and the
+ * shoulders are copied straight off the stored [com.android.shaftschematic.model.Liner] —
+ * the surface envelope ([surfaceSegsFrom]) needs the stepped OD, and carrying it here means
+ * no call site can forget to supply it.
+ */
 data class ResolvedLiner(
     override val id: String,
     override val type: ResolvedComponentType = ResolvedComponentType.LINER,
@@ -60,6 +69,8 @@ data class ResolvedLiner(
     override val startMmPhysical: Float,
     override val endMmPhysical: Float,
     val odMm: Float,
+    val shoulderAft: LinerShoulder? = null,
+    val shoulderFwd: LinerShoulder? = null,
 ) : ResolvedComponent()
 
 /**
@@ -162,7 +173,9 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
                 id = ln.id,
                 startMmPhysical = ln.startFromAftMm,
                 endMmPhysical = ln.startFromAftMm + ln.lengthMm,
-                odMm = ln.odMm
+                odMm = ln.odMm,
+                shoulderAft = ln.shoulderOn(LinerAuthoredReference.AFT),
+                shoulderFwd = ln.shoulderOn(LinerAuthoredReference.FWD)
             )
         )
     }

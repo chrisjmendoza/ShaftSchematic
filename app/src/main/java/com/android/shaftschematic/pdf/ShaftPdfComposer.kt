@@ -38,15 +38,11 @@ import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_OFF
 import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_ON
-import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PT
 import com.android.shaftschematic.geom.MIN_KEYWAY_WIDTH_PT
 import com.android.shaftschematic.geom.drawnKeywayHalfWidthPx
 import com.android.shaftschematic.geom.minKeywaySlotLenPx
 import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
 import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
-import com.android.shaftschematic.geom.ShoulderDrawSpec
-import com.android.shaftschematic.geom.linerTopSilhouette
-import com.android.shaftschematic.geom.shoulderDrawSpec
 import com.android.shaftschematic.ui.resolved.BodyBlend
 import com.android.shaftschematic.ui.resolved.BodyEdgePoint
 import com.android.shaftschematic.ui.resolved.ResolvedBody
@@ -1330,68 +1326,14 @@ private fun drawLiners(
     liners.forEach { ln ->
         if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
         val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
-        val r = rPx(ln.odMm); val top = cy - r; val bot = cy + r
+        val r = rPx(ln.odMm)
 
-        val aftSpec = linerShoulderSpec(ln, LinerAuthoredReference.AFT, x0, x1, r, xAt, rPx)
-        val fwdSpec = linerShoulderSpec(ln, LinerAuthoredReference.FWD, x0, x1, r, xAt, rPx)
-        if (aftSpec == null && fwdSpec == null) {
-            if (fill != null) c.drawRect(x0, top, x1, bot, fill)
-            c.drawLine(x0, top, x1, top, outline)
-            c.drawLine(x0, bot, x1, bot, outline)
-            c.drawLine(x0, top, x0, bot, dim) // thin end ticks
-            c.drawLine(x1, top, x1, bot, dim)
-            return@forEach
-        }
-
-        // Shouldered: fill and stroke decompose the SAME silhouette (`linerTopSilhouette`),
-        // mirrored about the centerline; the step faces ride the point list, so they reach
-        // fill and stroke with no extra draw code. End caps keep the thin-tick paint at the
-        // reduced OD — the cap IS the shoulder's outer face.
-        val pts = linerTopSilhouette(x0, x1, r, aftSpec, fwdSpec)
-        if (fill != null) {
-            val path = Path()
-            path.moveTo(pts.first().xPx, cy - pts.first().rPx)
-            pts.drop(1).forEach { path.lineTo(it.xPx, cy - it.rPx) }
-            pts.reversed().forEach { path.lineTo(it.xPx, cy + it.rPx) }
-            path.close()
-            c.drawPath(path, fill)
-        }
-        for (i in 1 until pts.size) {
-            val a = pts[i - 1]; val b = pts[i]
-            c.drawLine(a.xPx, cy - a.rPx, b.xPx, cy - b.rPx, outline)
-            c.drawLine(a.xPx, cy + a.rPx, b.xPx, cy + b.rPx, outline)
-        }
-        c.drawLine(x0, cy - pts.first().rPx, x0, cy + pts.first().rPx, dim)
-        c.drawLine(x1, cy - pts.last().rPx, x1, cy + pts.last().rPx, dim)
+        // Shoulder specs, fill and stroke all come from the shared pass
+        // (`pdf/LinerShoulderDraw.kt`) the runout/consolidated sheet draws through too.
+        val specs = linerShoulderSpecs(ln, x0, x1, r, xAt, rPx)
+        if (fill != null) drawLinerFillPdf(c, cy, x0, x1, r, specs, fill)
+        drawLinerOutlinePdf(c, cy, x0, x1, r, specs, outline, dim)
     }
-}
-
-/**
- * One end's shoulder in drawn units, or null when that end draws square. The fillet radius is
- * a RADIUS in mm, so it maps through `rPx` at twice its value (`rPx` takes a diameter).
- */
-private fun linerShoulderSpec(
-    ln: Liner,
-    end: LinerAuthoredReference,
-    x0: Float,
-    x1: Float,
-    linerRPx: Float,
-    xAt: (Float) -> Float,
-    rPx: (Float) -> Float,
-): ShoulderDrawSpec? {
-    val s = ln.shoulderOn(end) ?: return null
-    val trueLenPx = when (end) {
-        LinerAuthoredReference.AFT -> abs(xAt(ln.startFromAftMm + s.lenMm) - x0)
-        LinerAuthoredReference.FWD -> abs(x1 - xAt(ln.startFromAftMm + ln.lengthMm - s.lenMm))
-    }
-    return shoulderDrawSpec(
-        trueLenPx = trueLenPx,
-        runWidthPx = abs(x1 - x0),
-        linerRPx = linerRPx,
-        shoulderRPx = rPx(s.odMm),
-        filletRPx = rPx(s.radiusMm * 2f),
-        minWidthPx = MIN_BLEND_WIDTH_PT,
-    )
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

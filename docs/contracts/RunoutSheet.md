@@ -757,6 +757,16 @@ Overnight wave (on-device request), three features on the Runout tab:
   height-yield solve now serves keyway-bearing bodies alone. Dimension labels still print
   TRUE lengths.
 
+- **Shouldered liners** (2026-08-27) — a liner carrying shoulder fields draws its stepped
+  silhouette here too, through the ONE shared pass `pdf/LinerShoulderDraw.kt`
+  (`linerShoulderSpecs` builds the per-end `ShoulderDrawSpec`s by mapping the shoulder's own mm
+  endpoints through THIS sheet's compressed `xAt`, so a foreshortened liner's shoulder
+  foreshortens with it; `drawLinerFillPdf`/`drawLinerOutlinePdf` decompose the same
+  `linerTopSilhouette` the schematic strokes). Fill stays in the shade pre-pass and stroke in
+  the outline pass, so the sheet's z-order is untouched; a square liner keeps its literal
+  rect/line draws, byte-identical. The end caps stand at the REDUCED OD on a shouldered end —
+  the cap IS the shoulder's outer face.
+
 ---
 
 ### Consolidation step 3 (2026-08-04) — the ONE-SHEET: schematic rails + footer join

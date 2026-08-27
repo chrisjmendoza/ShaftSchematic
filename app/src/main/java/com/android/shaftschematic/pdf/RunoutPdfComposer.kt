@@ -1277,11 +1277,14 @@ internal fun drawShaftProfile(
             c.drawPath(path, f)
         }
     }
+    // Liner shade, under the outlines. A shouldered liner fills its stepped silhouette rather
+    // than a square rectangle — same shared pass as the outline below, so the two agree.
     linerFill?.let { f ->
         spec.liners.forEach { ln ->
             if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
+            val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
             val r = rPx(ln.odMm)
-            c.drawRect(xAt(ln.startFromAftMm), cy - r, xAt(ln.startFromAftMm + ln.lengthMm), cy + r, f)
+            drawLinerFillPdf(c, cy, x0, x1, r, linerShoulderSpecs(ln, x0, x1, r, xAt, rPx), f)
         }
     }
     // Bodies — with compression breaks for foreshortened (and very long) sections
@@ -1307,16 +1310,16 @@ internal fun drawShaftProfile(
     )
     // Tapers
     drawTapersForRunout(c, spec, xAt, rPx, cy, outline, ptPerMm, clocking, hiddenKeywayIds, secondaryKeywayIds)
-    // Liners (elevated outline, thin end ticks)
+    // Liners (elevated outline, thin end ticks) — through the SAME shared pass the schematic
+    // strokes, so a shouldered liner's step reads identically on both sheets. [spec] carries
+    // the stored liners (only bodies are replaced by the resolve pass), so the shoulder fields
+    // are right here; a liner with no shoulder draws the plain rectangle it always did.
     val dimPaint = Paint(outline).apply { strokeWidth = DIM_PT }
     spec.liners.forEach { ln ->
         if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
         val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
-        val r = rPx(ln.odMm); val top = cy - r; val bot = cy + r
-        c.drawLine(x0, top, x1, top, outline)
-        c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, dimPaint)
-        c.drawLine(x1, top, x1, bot, dimPaint)
+        val r = rPx(ln.odMm)
+        drawLinerOutlinePdf(c, cy, x0, x1, r, linerShoulderSpecs(ln, x0, x1, r, xAt, rPx), outline, dimPaint)
     }
     // Threads — envelope outline + the ONE shared hatch (`drawThreadHatch`, same
     // pitch/paint recipe on every sheet).
