@@ -113,14 +113,21 @@ internal fun drawBodyRunsWithBreaks(
             val leftEnd  = (gapCenter - half).coerceIn(geomRect.left, geomRect.right)
             val rightBeg = (gapCenter + half).coerceIn(geomRect.left, geomRect.right)
 
-            // Left stub — S-curve on right end
-            if (fill != null) c.drawRect(fx0, top, leftEnd, bot, fill)
+            // Left stub — S-curve on right end. The shade fill ENDS ON that same S (a square
+            // fill to the break line left a white crescent inside the outline in one half of
+            // the stub and spilled grey past the curve into the paper gap in the other), and a
+            // stub the gap has squeezed to nothing fills not at all rather than invert.
+            if (fill != null && leftEnd > fx0) {
+                c.drawPath(breakStubFillPath(fx0, leftEnd, top, bot, amp), fill)
+            }
             c.drawLine(fx0, top, leftEnd, top, outline)
             c.drawLine(fx0, bot, leftEnd, bot, outline)
             drawBreakEdge(c, leftEnd, top, bot, amp, capPaint, eyeAtTop = false)
 
             // Right stub — same-direction S-curve on left end (curves match so edges appear to merge)
-            if (fill != null) c.drawRect(rightBeg, top, fx1, bot, fill)
+            if (fill != null && fx1 > rightBeg) {
+                c.drawPath(breakStubFillPath(fx1, rightBeg, top, bot, amp), fill)
+            }
             drawBreakEdge(c, rightBeg, top, bot, amp, capPaint, eyeAtTop = true)
             c.drawLine(rightBeg, top, fx1, top, outline)
             c.drawLine(rightBeg, bot, fx1, bot, outline)

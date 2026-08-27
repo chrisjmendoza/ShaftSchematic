@@ -9,6 +9,66 @@ import android.graphics.Path
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Append the break edge's main S — the curve from ([x], [yTop]) to ([x], [yBot]) when
+ * [downward], the identical curve traced the other way when not — onto [path], which must
+ * already have its current point on that start.
+ *
+ * ONE construction for the stroked glyph AND for the fill boundary of the stub it caps. The S
+ * leaves the break line by up to √3/6·[amplitude] with OPPOSITE sign in its two halves, so a
+ * stub filled to a straight vertical at [x] leaves an unfilled crescent inside the outline in
+ * one half and spills fill past the curve into the paper gap in the other (on-device report:
+ * body shading does not fill cleanly at the breaks). Sharing the curve is what makes those two
+ * boundaries incapable of drifting apart.
+ */
+internal fun appendBreakEdgeS(
+    path: Path,
+    x: Float,
+    yTop: Float,
+    yBot: Float,
+    amplitude: Float,
+    downward: Boolean,
+) {
+    val h = yBot - yTop
+    if (downward) {
+        path.cubicTo(x + amplitude, yTop + h / 3f, x - amplitude, yBot - h / 3f, x, yBot)
+    } else {
+        path.cubicTo(x - amplitude, yBot - h / 3f, x + amplitude, yTop + h / 3f, x, yTop)
+    }
+}
+
+/** The main S as a standalone path, top → bottom — what [drawBreakEdge] strokes. */
+internal fun breakEdgeSPath(x: Float, yTop: Float, yBot: Float, amplitude: Float): Path =
+    Path().apply {
+        moveTo(x, yTop)
+        appendBreakEdgeS(this, x, yTop, yBot, amplitude, downward = true)
+    }
+
+/**
+ * Closed shade-fill boundary for ONE stub of a broken body run: square at [outerX], ending on
+ * the very S that [drawBreakEdge] strokes at [breakX]. Serves either stub — the left one passes
+ * `outerX < breakX`, the right one `outerX > breakX` — because the curve at both edges of a
+ * pair is drawn with the same amplitude and the same sense, which is what makes the gap read
+ * as constant-width.
+ *
+ * Callers must skip a stub whose width has collapsed to nothing (a break gap clamped into the
+ * page band, or shifted off a protected keyway window, can reach a run's end): the path would
+ * otherwise invert and paint fill on the wrong side of the curve.
+ */
+internal fun breakStubFillPath(
+    outerX: Float,
+    breakX: Float,
+    yTop: Float,
+    yBot: Float,
+    amplitude: Float,
+): Path = Path().apply {
+    moveTo(outerX, yTop)
+    lineTo(breakX, yTop)
+    appendBreakEdgeS(this, breakX, yTop, yBot, amplitude, downward = true)
+    lineTo(outerX, yBot)
+    close()
+}
+
+/**
  * Draw one round-stock "S-break" edge at position [x], spanning the shaft from
  * [yTop] to [yBot].
  *
@@ -62,18 +122,16 @@ internal fun drawBreakEdge(
     }
     c.drawPath(eye, Paint(p).apply { style = Paint.Style.FILL; color = EYE_SHADE_COLOR })
 
-    c.drawPath(
-        Path().apply {
-            moveTo(x, yTop)
-            cubicTo(x + amplitude, yTop + h / 3f, x - amplitude, yBot - h / 3f, x, yBot)
-        },
-        stroke,
-    )
+    c.drawPath(breakEdgeSPath(x, yTop, yBot, amplitude), stroke)
     c.drawPath(sweep, stroke)
 }
 
-/** Return-sweep width relative to the S's own lobe; 1 = exact mirror. */
-private const val RETURN_SWEEP_FULLNESS = 1.5f
+/**
+ * Return-sweep width relative to the S's own lobe; 1 = exact mirror. Internal because the
+ * Compose port of this glyph (`ui/screen/LinerWearDetail.kt`'s `drawBreakEdgeCompose`) reads it
+ * rather than keeping a copy that can be tuned out of step.
+ */
+internal const val RETURN_SWEEP_FULLNESS = 1.5f
 
 /** Light translucent wash inside the eye (~18% black; matches shaded-body recipe). */
 private const val EYE_SHADE_COLOR = 0x2E000000

@@ -61,8 +61,22 @@ internal fun drawSimpleShaftProfile(
     bodyFill?.let { f ->
         spec.bodies.forEach { b ->
             if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
-            val r = rPx(b.diaMm)
-            c.drawRect(xAt(b.startFromAftMm), cy - r, xAt(b.startFromAftMm + b.lengthMm), cy + r, f)
+            val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
+            val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
+            // A broken run fills as two stubs, each ending on the very S the outline pass
+            // strokes. One rectangle across the whole run laid grey through the break gap —
+            // which reads as bare paper — and squared off the curves at both stub ends.
+            val brk = simpleBodyBreak(x0, x1, r, outline.strokeWidth, geomRect)
+            if (brk == null) {
+                c.drawRect(x0, top, x1, bot, f)
+            } else {
+                if (brk.leftEnd > x0) {
+                    c.drawPath(breakStubFillPath(x0, brk.leftEnd, top, bot, brk.amplitudePt), f)
+                }
+                if (x1 > brk.rightBeg) {
+                    c.drawPath(breakStubFillPath(x1, brk.rightBeg, top, bot, brk.amplitudePt), f)
+                }
+            }
         }
     }
     taperFill?.let { f ->
@@ -91,21 +105,12 @@ internal fun drawSimpleShaftProfile(
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
-        val lenPt = abs(x1 - x0)
-        if (lenPt < COMPRESS_TRIGGER_PT) {
+        val brk = simpleBodyBreak(x0, x1, r, capPaint.strokeWidth, geomRect)
+        if (brk == null) {
             c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
             c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
         } else {
-            val mid = (x0 + x1) * 0.5f
-            val (gap, amp) = breakPairLayout(
-                runLenPt = lenPt,
-                desiredAmplitudePt = r * 0.6f,
-                classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * lenPt),
-                strokeWidthPt = capPaint.strokeWidth,
-            )
-            val half = gap * 0.5f
-            val lEnd = (mid - half).coerceIn(geomRect.left, geomRect.right)
-            val rBeg = (mid + half).coerceIn(geomRect.left, geomRect.right)
+            val lEnd = brk.leftEnd; val rBeg = brk.rightBeg; val amp = brk.amplitudePt
             c.drawLine(x0, top, lEnd, top, outline); c.drawLine(x0, bot, lEnd, bot, outline)
             c.drawLine(x0, top, x0, bot, outline)
             drawBreakEdge(c, lEnd, top, bot, amp, capPaint, eyeAtTop = false)
@@ -146,6 +151,40 @@ internal fun drawSimpleShaftProfile(
     // Coupler bolt slots — reference cutouts, same as the main schematic.
     val slotFill = Paint(outline).apply { style = Paint.Style.FILL; alpha = 40 }
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, xAt, rPx, outline, slotFill)
+}
+
+/** Where a simple-profile body run's break pair lands; null when the run prints plain. */
+private data class SimpleBodyBreak(val leftEnd: Float, val rightBeg: Float, val amplitudePt: Float)
+
+/**
+ * The centre break for one body run of the simple profile — ONE derivation, read by the shade-fill
+ * pre-pass AND by the outline pass below it. The two passes are separated (all fills go under all
+ * outlines, so a liner's shade lands over a body's), which is exactly why the break geometry has to
+ * come from a single place: a stub's fill boundary and the S drawn on it cannot otherwise be kept
+ * in step. These sheets draw at one flat scale, so a run breaks on drawn length alone.
+ */
+private fun simpleBodyBreak(
+    x0: Float,
+    x1: Float,
+    r: Float,
+    strokeWidthPt: Float,
+    geomRect: RectF,
+): SimpleBodyBreak? {
+    val lenPt = abs(x1 - x0)
+    if (lenPt < COMPRESS_TRIGGER_PT) return null
+    val (gap, amp) = breakPairLayout(
+        runLenPt = lenPt,
+        desiredAmplitudePt = r * 0.6f,
+        classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * lenPt),
+        strokeWidthPt = strokeWidthPt,
+    )
+    val mid = (x0 + x1) * 0.5f
+    val half = gap * 0.5f
+    return SimpleBodyBreak(
+        leftEnd = (mid - half).coerceIn(geomRect.left, geomRect.right),
+        rightBeg = (mid + half).coerceIn(geomRect.left, geomRect.right),
+        amplitudePt = amp,
+    )
 }
 
 /**
