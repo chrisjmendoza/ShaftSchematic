@@ -538,7 +538,7 @@ fun composeRunoutPdf(
     // ("doesn't have to be perfectly proportional, just close").
     //
     // The "Shaft height" slider (config.heightScale) then multiplies the conventional
-    // scale — exaggerate or shrink the whole drawn shaft. The 1.5" ceiling is ABSOLUTE:
+    // scale — exaggerate or shrink the whole drawn shaft. The PROFILE_MAX_SHAFT_HEIGHT_PT ceiling is ABSOLUTE:
     // even a short shaft's width-fit is capped, keeping proportion without spanning the
     // page; the page budget caps everything (exaggeratedProfileScale, pure, unit-tested).
     val targetScale  = defaultVisualScale(maxOuterDiaMm, pdfPrefs.curveLoHeightPt, pdfPrefs.curveHiHeightPt)

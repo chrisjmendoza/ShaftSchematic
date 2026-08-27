@@ -205,11 +205,21 @@ can never consume the page and body-run relative lengths always read.
 The **"Shaft height" slider** (`RunoutConfig.heightScale`,
 per-job in the envelope — ONE value behind the runout/consolidated sheets AND the
 schematic, `composeShaftPdf(heightScale)`) multiplies the solved scale; the drawn shaft
-is hard-capped at **1.5" on paper** (`PROFILE_MAX_SHAFT_HEIGHT_PT`, an ABSOLUTE ceiling
-— a short shaft that would draw taller at width-fit is capped and simply doesn't span
-the page) and by the page budget (`exaggeratedProfileScale`, pure/unit-tested). The slider
-selects the drawn height by VALUE in paper inches — track ends at 1.5" or the shaft's
-300% height, whichever is less (`drawnShaftHeightPt`/`heightFracForDrawnHeight`);
+is clamped to an ABSOLUTE paper BAND — **1/2" to 1 1/2"** (`PROFILE_MIN_SHAFT_HEIGHT_PT` …
+`PROFILE_MAX_SHAFT_HEIGHT_PT`) — and by the page budget (`exaggeratedProfileScale`,
+pure/unit-tested). Both ends are paper measures, never multiples of this shaft's own curve
+height. The ceiling caps even a short shaft whose width-fit would draw taller (it then simply
+doesn't span the page); the floor is what lets a LARGE shaft — usually a long one, which cramps
+the schematic — be shrunk out of the way, and it **never raises a shaft above the sizing curve**
+(a shaft whose standard height is already under the floor keeps that standard, so the
+proportional hand-sheet rule is untouched at 100%). **Everything derives from those two
+constants** — the Settings anchor-height range (`PDF_CURVE_HEIGHT_MAX_IN`), the slider track and
+caption, the Settings blurb, the Help topics (`HEIGHT_CAP_LABEL`/`HEIGHT_FLOOR_LABEL_IN`) — so
+moving one moves the whole system; do not restate the figures. The multiplier bounds
+(`PROFILE_HEIGHT_SCALE_MIN`/`MAX` = 0.25–6.0) are deliberately wider than the band, since they
+only have to EXPRESS it on any shaft; the height clamp is what bounds the drawing. The slider
+selects the drawn height by VALUE in paper inches — the track spans the band
+(`drawnShaftHeightPt`/`heightFracForDrawnHeight`);
 commits near the standard height snap to exactly 100%. **A tuning-slider drag is a
 visual-only override** (`ui/screen/PreviewTuning.kt`): while the finger is on Line
 thickness / Body S-break / Shaft height / Liner compression the open preview re-renders
@@ -487,9 +497,14 @@ moves) and the compressed x map. A plan-view keyway straddles both — offset an
 **width and mill-arc radius are transverse and therefore ride `diaPtPerMm`**, so the slot stays
 proportional to the drawn shaft at every height. Sizing the width off the axial scale pins it to
 the page width (the x map always fills the content width), and raising the height then grows the
-shaft while the keyway stays the size it was (on-device report). The arcs stay **circles** at the
-transverse scale rather than becoming ellipses — the end radius is W/2 by definition and the round
-end is the shop glyph, the same posture the coupler bolt holes already take (`rPx`-sized). One
+shaft while the keyway stays the size it was (on-device report). **Every round part of the slot is
+an ELLIPSE** — x axial, y diametral — mill arcs and spoon bowl alike. True circles at the
+transverse scale are the tempting shortcut (the mill radius is W/2 by definition, and the coupler
+bolt holes ARE `rPx` circles), but a circle's AXIAL extent then grows with the height slider while
+the slot's length stays page-bound, and the spoon bowl at 2.4× the keyway width swells until it
+swallows its own slot (on-device report). The ellipse is free: `drawArc` sweeps a PARAMETRIC angle,
+so scaling y alone leaves every angle `geom/KeywaySpoonMath.kt` derives — wall tangent included —
+untouched; hand it the AXIAL half-width and stretch by `halfH / halfW`. One
 pure source for both draw sites, `geom/KeywaySlotMath.kt` (`ShaftRenderer.drawKeywaySlot` canvas /
 `ShaftPdfComposer.drawKeywaySlotPdf` PDF; the canvas's two terms coincide, the construction is
 shared anyway). The drawn width is **TRUE** — a keyway is a quarter of its shaft, not a blend's
@@ -502,8 +517,8 @@ rail**, only footer text off the stored W × D × L. `MAX_KEYWAY_FRAC_OF_HOST_DI
 only — never a true width: clamping true geometry there would silently narrow an authored keyway
 on a stubby taper end, and the only bound on a true width is the silhouette itself.
 `KeywayWidthFidelityTest` pins the reach — at default line weight every 2″–14″ shaft draws exactly
-true at 100% height and up. Because width now leads and length follows a compressed map, the drawn
-length floors at `minKeywaySlotLenPx` or a foreshortened short keyway runs its arcs past its own
+true at 100% height and up. The drawn length floors at `minKeywaySlotLenPx` (AXIAL arc radii),
+guarding authored geometry: a keyway shorter than half its own width would run its arcs past its
 walls. Untouched: the 90° silhouette notch was always radial, and the body-keyway window's
 true-scale pin (`keywayPinnedBodySpans`) still protects the axial term. See
 `docs/PDF_EXPORT.md` §5.2c.

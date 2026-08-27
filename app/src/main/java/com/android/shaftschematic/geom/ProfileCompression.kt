@@ -119,21 +119,43 @@ const val SCHEMATIC_MIN_THREAD_PT = 28f
 const val SCHEMATIC_MIN_BODY_RUN_PT = 40f
 const val SCHEMATIC_MIN_LINER_PT = 56f
 
-// "Shaft height" slider bounds (multiplier on the solved profile scale) and the absolute
-// cap on the drawn shaft height — grown to at most 1.5" on paper (on-device request).
-const val PROFILE_HEIGHT_SCALE_MIN = 0.5f
-const val PROFILE_HEIGHT_SCALE_MAX = 3.0f
+// Absolute bounds on the DRAWN shaft height — the band the "Shaft height" slider offers, in
+// paper inches, on every shaft: 1/2" to 1 1/2" (on-device request). The ceiling is flexibility
+// rather than a recommendation — a big shaft is usually a long one and drawing it tall really
+// cramps the schematic — but the room is worth keeping, not least to write into. The floor is
+// what lets exactly those big shafts be shrunk out of the way: without it a Ø11" shaft bottomed
+// out at 0.69", half its standard height, because the track was a multiple of the curve rather
+// than a paper measure.
+//
+// Every anchor height, slider track and settings range derives from these, so moving one moves
+// the whole system; do not restate the figures.
 const val PROFILE_MAX_SHAFT_HEIGHT_PT = 108f  // 1.5 in
+const val PROFILE_MIN_SHAFT_HEIGHT_PT = 36f   // 0.5 in
+
+// Multiplier bounds on the stored per-job `heightScale`. Deliberately wider than the band above
+// — the slider is VALUE-based, so these only have to be roomy enough to express the whole band
+// on any shaft: reaching 1/2" on a 14" shaft needs ~0.29, reaching 1 1/2" on a 2" shaft needs 6.
+// The drawn height is clamped to the band regardless ([exaggeratedProfileScale]), so a wide
+// multiplier range cannot produce a wide drawing.
+const val PROFILE_HEIGHT_SCALE_MIN = 0.25f
+const val PROFILE_HEIGHT_SCALE_MAX = 6.0f
 
 /**
  * Apply the "Shaft height" exaggeration slider to a solved base scale: multiply by
- * [heightFrac] (clamped to the slider bounds), then cap so the drawn shaft height
- * ([maxDiaMm] × scale) never exceeds [PROFILE_MAX_SHAFT_HEIGHT_PT] (1.5" on paper) or
- * the page budget ([budgetCapPt]).
+ * [heightFrac] (clamped to the multiplier bounds), then clamp so the drawn shaft height
+ * ([maxDiaMm] × scale) lands in the [PROFILE_MIN_SHAFT_HEIGHT_PT] … [PROFILE_MAX_SHAFT_HEIGHT_PT]
+ * band — and never past the page budget ([budgetCapPt]).
  *
  * The ceiling is ABSOLUTE (on-device direction): a short shaft whose width-fit would
  * draw taller is capped too — it then simply doesn't span the page width, keeping true
  * proportion and leaving room for the dimension rails and the rest of the sheet.
+ *
+ * The floor **never raises a shaft above the sizing curve**. A shaft whose standard height is
+ * already under the floor keeps that standard, so the proportional hand-sheet rule
+ * ([defaultShaftHeightPt] — 4" → 1/2") is untouched at 100% and a small shaft is never fattened
+ * into something it isn't. The floor exists so a LARGE shaft can be shrunk out of the way, which
+ * is the case that needed it.
+ *
  * Pure — the composer scale solve and any preview share this exact arithmetic.
  */
 fun exaggeratedProfileScale(
@@ -146,7 +168,8 @@ fun exaggeratedProfileScale(
     val frac = heightFrac.coerceIn(PROFILE_HEIGHT_SCALE_MIN, PROFILE_HEIGHT_SCALE_MAX)
     val capScale = (minOf(budgetCapPt, PROFILE_MAX_SHAFT_HEIGHT_PT) / maxDiaMm)
         .coerceAtLeast(1e-4f)
-    return (baseScale * frac).coerceAtMost(capScale)
+    val floorScale = minOf(PROFILE_MIN_SHAFT_HEIGHT_PT / maxDiaMm, baseScale, capScale)
+    return (baseScale * frac).coerceIn(floorScale, capScale)
 }
 
 /**
@@ -160,9 +183,9 @@ fun drawnShaftHeightPt(baseScale: Float, heightFrac: Float, maxDiaMm: Float): Fl
 
 /**
  * Inverse of [drawnShaftHeightPt]: the slider fraction that yields [targetHeightPt] for
- * this base solve, clamped to the slider bounds. The slider UIs select the height by
- * VALUE — the track runs to 1.5" on paper, or to the most this shaft can reach at 300%
- * ("select the height by value, not percentage" — on-device request); this converts the
+ * this base solve, clamped to the multiplier bounds. The slider UIs select the height by
+ * VALUE — the track spans the [PROFILE_MIN_SHAFT_HEIGHT_PT] … [PROFILE_MAX_SHAFT_HEIGHT_PT] band
+ * on paper ("select the height by value, not percentage" — on-device request); this converts the
  * picked value back to the stored per-job multiplier.
  */
 fun heightFracForDrawnHeight(baseScale: Float, targetHeightPt: Float, maxDiaMm: Float): Float {

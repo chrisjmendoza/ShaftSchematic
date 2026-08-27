@@ -112,7 +112,7 @@ fun composeShaftPdf(
     /**
      * "Shaft height" slider — the same per-job multiplier the runout/consolidated sheets
      * use (`RunoutConfig.heightScale`): exaggerate or shrink the drawn shaft, hard-capped
-     * at 1.5" on paper and by the page budget (`exaggeratedProfileScale`).
+     * at PROFILE_MAX_SHAFT_HEIGHT_PT on paper and by the page budget (`exaggeratedProfileScale`).
      */
     heightScale: Float = 1.0f,
     /**
@@ -222,7 +222,7 @@ fun composeShaftPdf(
     // the HEIGHT yields ("doesn't have to be perfectly proportional, just close" —
     // on-device rule). The per-job "Shaft height" slider multiplies the default sizing
     // curve (standard: proportional, 8" → 1.125"; anchor heights user-adjustable via
-    // Settings → Drawing); the 1.5" ceiling and the page budget cap the result
+    // Settings → Drawing); the absolute ceiling and the page budget cap the result
     // (exaggeratedProfileScale, pure, unit-tested).
     val desiredScale = exaggeratedProfileScale(
         baseScale = defaultVisualScale(maxDiaMm, pdfPrefs.curveLoHeightPt, pdfPrefs.curveHiHeightPt),
@@ -525,8 +525,8 @@ fun composeShaftPdf(
             showFwdTaper  = footerTapers.fwd != null,
         )
 
-        val infoTop = cy + halfHeightPx + INFO_GAP_PT
-        val infoBottom = min(infoTop + footerBlockPt, pageH - PAGE_MARGIN_PT)
+        val infoBottom = pageH - PAGE_MARGIN_PT
+        val infoTop = footerBandTop(pageH, PAGE_MARGIN_PT, footerBlockPt, cy + halfHeightPx)
         val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
 
         drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg, blankValues = blank, displayUnits = displayUnits)
@@ -573,7 +573,39 @@ private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
 
 // Component title labels (PDF only)
 private const val COMPONENT_LABEL_OFFSET_PT = 32f
+/**
+ * Air reserved between the drawing and the footer when the vertical budget is planned — the
+ * shaft is placed so at least this much survives once the bottom-anchored footer block is
+ * subtracted from the page.
+ */
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
+/**
+ * Hard floor on that air. Only reachable by a shaft too tall for the budget to have honoured
+ * [INFO_GAP_PT]; it keeps the block off the drawing and still leaves clearance for
+ * [FOOTER_GROWTH_MAX_PT] of upward growth.
+ */
+private const val INFO_GAP_MIN_PT = 56f
+
+/**
+ * Top of the footer band. The block **sits on the bottom margin** and grows upward from it
+ * ([drawFooter] lays its rows out from `rect.bottom`), so a page's slack is the air between the
+ * drawing and the footer rather than a dead strip below it (on-device direction: "bring the
+ * footer down a little bit and make better use of the white space"). A block that needs more
+ * room — dual-unit lines, wrapped columns — takes it from that air and moves closer to the
+ * shaft; the page's bottom edge never moves. The runout/consolidated sheet has always placed
+ * its footer this way, so this is also what makes the two documents agree.
+ *
+ * [shaftBottomY] only binds in the degenerate case: the shaft placement already reserves
+ * [INFO_GAP_PT] measured up from the margin, so the floor here is reachable only when the shaft
+ * was too tall for that reservation to hold. [INFO_GAP_MIN_PT] stays clear of
+ * [FOOTER_GROWTH_MAX_PT] so even a fully-grown band cannot climb into the drawing.
+ */
+internal fun footerBandTop(
+    pageH: Float,
+    marginPt: Float,
+    footerBlockPt: Float,
+    shaftBottomY: Float,
+): Float = max(pageH - marginPt - footerBlockPt, shaftBottomY + INFO_GAP_MIN_PT)
 internal const val FOOTER_BLOCK_PT = 96f
 // Blank drafts reserve a taller footer band: line spacing opens up for handwriting.
 // Sized for the fullest column (taper header + Rate/L.E.T./S.E.T./Length/KW + spooned note
@@ -1107,12 +1139,21 @@ private fun drawKeywaySlotPdf(
     hidden: Boolean = false,
     spooned: Boolean = false,
 ) {
-    val halfW       = drawnKeywayHalfWidthPx(
+    // Two half-widths, one per axis. [halfW] is the AXIAL term and drives every x: the slot's
+    // straight run, its arc centres, and the spoon bowl's reach. [halfH] is the TRANSVERSE term
+    // off the diameter scale, so the slot's drawn width tracks the drawn shaft height. Every
+    // round part is then an ellipse (halfW, halfH) — a true circle at the transverse scale grows
+    // axially with the height slider until the spoon bowl eats its own slot (on-device report).
+    val halfW       = (widthMm * axialPtPerMm) / 2f
+    val halfH       = drawnKeywayHalfWidthPx(
         trueHalfWidthPx = (widthMm * diaPtPerMm) / 2f,
         hostRadiusPx = hostRadiusPt,
         minWidthPx = MIN_KEYWAY_WIDTH_PT,
         strokeWidthPx = outline.strokeWidth,
     )
+    // Vertical stretch that turns each circular construction into its ellipse. `drawArc` sweeps a
+    // parametric angle, so every angle the bowl math derives survives it untouched.
+    val yScale      = if (halfW > 0f) halfH / halfW else 1f
     val isOpen      = offsetMm < 0.01f
     val kwSetX      = refX + dir * offsetMm * axialPtPerMm
     val kwLetX      = kwSetX + dir * maxOf(lengthMm * axialPtPerMm, minKeywaySlotLenPx(halfW, isOpen))
@@ -1120,15 +1161,16 @@ private fun drawKeywaySlotPdf(
     // Spooned (open keyways only): keep the normal keyway (full-length walls + mill semicircle) and
     // ADD an enlarged circle around the closed (LET) end — the mill end stays as an inner reference
     // line inside the bowl. Floating keyways ignore the flag. Mirrors the canvas renderer.
-    val bowl = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(kwLetX, dir, halfW) else null
+    val bowl        = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(kwLetX, dir, halfW) else null
+    val bowlRy      = bowl?.radius?.times(yScale) ?: 0f
 
     val letArcCx    = kwLetX - dir * halfW
     val letArcStart = if (dir > 0) 270f else 90f
-    val letOval     = android.graphics.RectF(letArcCx - halfW, cy - halfW, letArcCx + halfW, cy + halfW)
+    val letOval     = android.graphics.RectF(letArcCx - halfW, cy - halfH, letArcCx + halfW, cy + halfH)
 
     val setArcCx    = kwSetX + dir * halfW
     val setArcStart = if (dir > 0) 90f else 270f
-    val setOval     = android.graphics.RectF(setArcCx - halfW, cy - halfW, setArcCx + halfW, cy + halfW)
+    val setOval     = android.graphics.RectF(setArcCx - halfW, cy - halfH, setArcCx + halfW, cy + halfH)
 
     val lineNear  = if (isOpen) kwSetX else setArcCx
     val lineFar   = letArcCx
@@ -1148,11 +1190,18 @@ private fun drawKeywaySlotPdf(
             style = android.graphics.Paint.Style.FILL
             color = android.graphics.Color.WHITE
         }
-        c.drawRect(fillLeft, cy - halfW, fillRight, cy + halfW, whiteFill)
+        c.drawRect(fillLeft, cy - halfH, fillRight, cy + halfH, whiteFill)
         c.drawArc(letOval, letArcStart, 180f, false, whiteFill)
         if (!isOpen) c.drawArc(setOval, setArcStart, 180f, false, whiteFill)
         // Spoon bowl void: the enlarged disc around the LET end (its SET-side overlaps the slot).
-        if (bowl != null) c.drawCircle(bowl.cx, cy, bowl.radius, whiteFill)
+        if (bowl != null) {
+            c.drawOval(
+                android.graphics.RectF(
+                    bowl.cx - bowl.radius, cy - bowlRy, bowl.cx + bowl.radius, cy + bowlRy,
+                ),
+                whiteFill,
+            )
+        }
     }
 
     // ── Outline strokes on top (dashed for hidden far-side keyways) ──
@@ -1161,15 +1210,15 @@ private fun drawKeywaySlotPdf(
             pathEffect = android.graphics.DashPathEffect(floatArrayOf(HIDDEN_DASH_ON, HIDDEN_DASH_OFF), 0f)
         }
     } else outline
-    c.drawLine(lineLeft, cy - halfW, lineRight, cy - halfW, stroke)
-    c.drawLine(lineLeft, cy + halfW, lineRight, cy + halfW, stroke)
+    c.drawLine(lineLeft, cy - halfH, lineRight, cy - halfH, stroke)
+    c.drawLine(lineLeft, cy + halfH, lineRight, cy + halfH, stroke)
     // Inner mill semicircle — the standard rounded end (kept as a reference line inside the bowl).
     c.drawArc(letOval, letArcStart, 180f, false, stroke)
     if (!isOpen) c.drawArc(setOval, setArcStart, 180f, false, stroke)
-    // Spoon bowl: the enlarged circle's major arc around the far side.
+    // Spoon bowl: the enlarged ellipse's major arc around the far side.
     if (bowl != null) {
         val bowlOval = android.graphics.RectF(
-            bowl.cx - bowl.radius, cy - bowl.radius, bowl.cx + bowl.radius, cy + bowl.radius,
+            bowl.cx - bowl.radius, cy - bowlRy, bowl.cx + bowl.radius, cy + bowlRy,
         )
         c.drawArc(bowlOval, bowl.arcStartDeg, bowl.arcSweepDeg, false, stroke)
     }

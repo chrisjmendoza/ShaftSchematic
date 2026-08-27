@@ -265,22 +265,63 @@ class ProfileCompressionTest {
     }
 
     @Test
-    fun `small shafts top out below the cap`() {
-        // 2in shaft: even 300% draws only 60pt — the track's far end shows that value.
+    fun `even a small shaft can reach the ceiling`() {
+        // The track is a PAPER measure, so the whole 1/2in..1 1/2in band has to be offered on
+        // any shaft — which is what the deliberately wide multiplier bounds buy. A 2in shaft's
+        // standard height is a sliver, and it still reaches the cap.
         assertEquals(
-            50f * 0.4f * 3f,
+            PROFILE_MAX_SHAFT_HEIGHT_PT,
             drawnShaftHeightPt(baseScale = 0.4f, heightFrac = PROFILE_HEIGHT_SCALE_MAX, maxDiaMm = 50f),
             1e-3f,
         )
     }
 
     @Test
+    fun `a large shaft shrinks all the way to the floor`() {
+        // On-device report: a O11in shaft bottomed out at 0_69in — half its sizing-curve height
+        // — because the track was a multiple of the curve rather than a paper measure. A big
+        // shaft is usually a long one, and shrinking it is how the schematic stops cramping.
+        val dia = 11f * 25.4f
+        val base = defaultVisualScale(dia)
+        assertEquals(
+            PROFILE_MIN_SHAFT_HEIGHT_PT,
+            drawnShaftHeightPt(base, PROFILE_HEIGHT_SCALE_MIN, dia),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun `the floor never raises a shaft above its own sizing-curve height`() {
+        // A 2in shaft's standard height (18pt) is UNDER the floor. It keeps that standard at
+        // 100% — flooring it would fatten a small shaft off the proportional hand-sheet rule,
+        // and the floor exists for the opposite case (shrinking a large shaft).
+        val dia = 2f * 25.4f
+        val base = defaultVisualScale(dia)
+        val standard = base * dia
+        assertTrue("premise: standard height is under the floor", standard < PROFILE_MIN_SHAFT_HEIGHT_PT)
+        assertEquals(standard, drawnShaftHeightPt(base, 1f, dia), 1e-3f)
+        // …and it cannot be dragged below that standard either.
+        assertEquals(standard, drawnShaftHeightPt(base, PROFILE_HEIGHT_SCALE_MIN, dia), 1e-3f)
+    }
+
+    @Test
+    fun `the floor yields to a page budget that cannot afford it`() {
+        // Budget below the floor: the budget wins — the drawing must fit the paper first.
+        val scale = exaggeratedProfileScale(
+            baseScale = 1.0f, heightFrac = PROFILE_HEIGHT_SCALE_MIN, budgetCapPt = 20f, maxDiaMm = 50f,
+        )
+        assertEquals(20f / 50f, scale, 1e-6f)
+    }
+
+    @Test
     fun `picked height round-trips to the stored multiplier and back`() {
-        // The slider selects by VALUE (on-device request): picking 108pt on an 8in shaft
-        // stores frac 108/(203_2 x 0_4) ≈ 1_329, which draws exactly 108pt again.
-        val frac = heightFracForDrawnHeight(baseScale = 0.4f, targetHeightPt = 108f, maxDiaMm = 203.2f)
-        assertEquals(108f / (203.2f * 0.4f), frac, 1e-4f)
-        assertEquals(108f, drawnShaftHeightPt(0.4f, frac, 203.2f), 1e-2f)
+        // The slider selects by VALUE (on-device request): picking the top of the track on an
+        // 8in shaft stores frac cap/(203_2 x 0_4), which draws exactly that height again. Read
+        // off the constant — the cap has moved once and a spelled figure would drift with it.
+        val target = PROFILE_MAX_SHAFT_HEIGHT_PT
+        val frac = heightFracForDrawnHeight(baseScale = 0.4f, targetHeightPt = target, maxDiaMm = 203.2f)
+        assertEquals(target / (203.2f * 0.4f), frac, 1e-4f)
+        assertEquals(target, drawnShaftHeightPt(0.4f, frac, 203.2f), 1e-2f)
     }
 
     @Test

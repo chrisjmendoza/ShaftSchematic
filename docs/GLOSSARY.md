@@ -171,14 +171,19 @@ The 100% base for drawn shaft height (`defaultShaftHeightPt` / `defaultVisualSca
 anchors, continuing past both until the 1.5" ceiling. The STANDARD anchors are
 **proportional** — 4" → 0.5" and 8" → 1" on paper (6" → 3/4"), a line through the origin,
 so the ceiling is met at 12". The anchor **heights** are user settings (Settings →
-Drawing → "Default drawing size"); the anchor diameters stay fixed at 4"/8".
+Drawing → "Default drawing size"); the anchor diameters stay fixed at 4"/8" and the top of
+the settable range IS the absolute ceiling, derived from it rather than restated.
 
 ### Shaft height slider
-The per-job multiplier (`RunoutConfig.heightScale`, 50–300%) applied to the solved profile
-scale on the runout/consolidated sheets **and** the schematic — one value behind every
-drawing output. Selected by drawn-height **value in paper inches**; commits near the
-standard height snap to exactly 100%. The drawn shaft is hard-capped at 1.5" on paper
-(`PROFILE_MAX_SHAFT_HEIGHT_PT`, an absolute ceiling).
+The per-job multiplier (`RunoutConfig.heightScale`) applied to the solved profile scale on
+the runout/consolidated sheets **and** the schematic — one value behind every drawing
+output. Selected by drawn-height **value in paper inches**; commits near the standard
+height snap to exactly 100%. The drawn shaft is clamped to an absolute paper **band**,
+1/2" … 1 1/2" (`PROFILE_MIN_SHAFT_HEIGHT_PT` / `PROFILE_MAX_SHAFT_HEIGHT_PT`) — the floor
+lets a long shaft be shrunk to uncramp the sheet, the ceiling leaves room to write in, and
+neither end is a multiple of this shaft's own curve height. The floor never raises a shaft
+above the sizing curve. The stored multiplier's own bounds (0.25–6.0) are wider than the
+band on purpose: they only have to express it on any diameter.
 
 ### Liner compression
 The per-job pair (`RunoutConfig.linersProportional` / `linerCompression`) controlling how
@@ -223,10 +228,12 @@ Current state:
   clears the other). Renders as an edge notch in the silhouette — bottom edge for CW, top edge
   for CCW — not a hidden dashed line; the spoon bowl is not drawn at 90°.
 - **Drawn across two scales.** A plan-view slot's offset and length ride the compressed axial
-  map; its WIDTH and mill-arc radius ride the DIAMETER scale, so the slot stays proportional to
-  the drawn shaft at every "Shaft height" setting. The drawn width is true — a visibility floor
-  and a host ceiling exist (`geom/KeywaySlotMath.kt`) but reach only the smallest shafts at the
-  lowest settings. See `docs/PDF_EXPORT.md` §5.2c.
+  map; its WIDTH rides the DIAMETER scale, so the slot stays proportional to the drawn shaft at
+  every "Shaft height" setting. Every round part — mill arcs, spoon bowl — is the ellipse those
+  two terms make, never a circle: a circle's axial extent grows with the height slider while the
+  slot's length stays page-bound. The drawn width is true — a visibility floor and a host ceiling
+  exist (`geom/KeywaySlotMath.kt`) but reach only the smallest shafts at the lowest settings.
+  See `docs/PDF_EXPORT.md` §5.2c.
 
 Non-goal:
 - Keyways will never exist as standalone components.

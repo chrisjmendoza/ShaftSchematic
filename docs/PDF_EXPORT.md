@@ -79,6 +79,25 @@ PDF uses its own fixed black-and-white styling inside `ShaftPdfComposer`.
    `ShaftRenderer`.
 4. Draw title block.
 
+### Where the footer block sits
+
+**On the bottom margin, growing upward** (`footerBandTop`, pure + unit-tested). Its bottom edge
+is `pageH − PAGE_MARGIN_PT` and `drawFooter` lays its rows out from that edge, so a block that
+needs more room — dual-unit lines, wrapped columns, a blank draft's open pitch — takes it from
+the air between the drawing and the footer and moves *closer to the shaft*. The page's bottom
+edge never moves.
+
+Anchoring the band's TOP to the shaft instead (a fixed `INFO_GAP_PT` below it, bottom floating)
+left the footer parked mid-page with the waste stranded underneath — on-device direction: "bring
+the footer down a little bit and make better use of the white space. If the footer needs more
+room because it's taller … it can be moved up tighter to the shaft." The runout/consolidated
+sheet has always placed its footer this way, so this is also what makes the two documents agree.
+
+Two clearances keep the growth off the drawing. The shaft's own placement (`maxCy`) reserves
+`footerBlockPt + INFO_GAP_PT` measured up from the margin, so the gap is normally ≥ 72 pt; and
+`footerBandTop`'s floor, `INFO_GAP_MIN_PT` (56 pt), stays clear of `FOOTER_GROWTH_MAX_PT`
+(48 pt) for the degenerate case where a shaft is too tall for that reservation to have held.
+
 ---
 
 # 4. Title Block Specification
@@ -255,10 +274,19 @@ dimension belongs to exactly one of them, and a plan-view keyway straddles both:
 Width is a transverse dimension, so it rides the diameter scale and stays proportional to the
 drawn shaft at every height. Sizing it off the axial scale instead pins it to the page width —
 the x map always fills the content width, so raising the height grew the shaft and left the
-keyway the size it was (on-device report). The arcs stay **circles** at the transverse scale
-rather than becoming ellipses: the end radius is W/2 by definition and the round end is the shop
-glyph, so it keeps its shape and takes the axial over-extent — the same posture the coupler bolt
-holes already take on this sheet (`rPx`-sized).
+keyway the size it was (on-device report).
+
+**Every round part of the slot is an ELLIPSE** — x from the axial scale, y from the diameter
+scale — the mill arcs and the spoon bowl alike. Drawing them as true circles at the *transverse*
+scale is the tempting shortcut (the mill radius is W/2 by definition, and the coupler bolt holes
+are `rPx`-sized circles on this same sheet), but a circle's AXIAL extent then grows with the
+height slider while the slot's length stays page-bound: the spoon bowl, at
+`SPOON_BOWL_WIDTH_RATIO` (2.4) times the keyway width, swells until it swallows its own slot
+(on-device report — "they get too large when the shaft height increases"). The ellipse costs
+nothing: `drawArc` sweeps a **parametric** angle on its oval, so scaling y alone leaves every
+angle the bowl math derives — the wall tangent included — exactly where the circle put it, and
+`geom/KeywaySpoonMath.kt` needs no anisotropic term. Pass it the AXIAL half-width and stretch the
+result by `halfH / halfW`.
 
 Both draw sites build the slot from one place, `geom/KeywaySlotMath.kt` (pure) —
 `ShaftPdfComposer.drawKeywaySlotPdf` and `ShaftRenderer.drawKeywaySlot`. The canvas has a single
@@ -288,10 +316,10 @@ thickness every shaft draws **exactly true** at 100% height and above; the floor
 3″-and-under shafts at the 50% height floor, and only sub-4″ shafts at 200% line thickness. The
 ceiling bounds any lift at 1.6× for a standard key, by construction (0.40 ÷ 0.25).
 
-Because the width now leads and the length follows a compressed map, the drawn length takes a
-minimum of `minKeywaySlotLenPx` — one arc radius for a slot open at its referenced face, two for
-a floating one — or a heavily foreshortened short keyway would run its arcs past its own walls
-and invert the slot.
+The drawn length takes a minimum of `minKeywaySlotLenPx` — one AXIAL arc radius for a slot open
+at its referenced face, two for a floating one. That guards authored geometry, not the scale
+split: a keyway shorter than half its own width would run its arcs past its straight walls and
+invert the slot.
 
 Unaffected: the 90°-clocked **silhouette** notch (`drawKeywaySilhouetteNotchPdf`) was always
 radial and always used the diameter scale; and the true-scale pin on a body keyway's window
@@ -620,7 +648,9 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
   `VISUAL_DIA_SCALE_PT_PER_MM` remains only as the degenerate-diameter fallback.
 - **The anchor heights are settings** (Settings → Drawing → "Default drawing size";
   `PdfPrefs.curveLoHeightIn`/`curveHiHeightIn`, persisted app-wide, standard
-  0.5"/1.0", settable 0.25"–1.5" in 1/16" steps): change what a 4" and an 8"
+  0.5"/1.0", settable 0.25" up to the absolute ceiling in 1/16" steps — the top of that
+  range IS `PROFILE_MAX_SHAFT_HEIGHT_PT`, derived not restated, so the slider can never
+  promise a height no sheet will draw): change what a 4" and an 8"
   shaft draw and the whole line re-derives — no code edit (a taller pair like
   0.75"/1.25" is a deliberate choice here). The anchor DIAMETERS stay fixed at 4"/8".
   An inverted pair (8" set below 4") flattens the line at the 4" value in the
@@ -656,17 +686,35 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
 - **Keyways scale with the height** — a keyway's width and mill-arc radius ride the diameter
   scale, not the compressed x map, so the slot stays proportional to the drawn shaft at every
   slider position. Floors and the host cap in §5.2c.
-- The **1.5" ceiling is absolute** (`PROFILE_MAX_SHAFT_HEIGHT_PT` = 108 pt): the drawn
-  shaft never exceeds 1.5" on paper at any slider position — a short shaft whose
-  width-fit would draw taller is capped too, keeps true proportion, and simply doesn't
-  span the page (room for the dimension rails). The page budget caps everything.
-  Pure arithmetic: `exaggeratedProfileScale` (`geom/ProfileCompression.kt`).
-- Slider UX: selects the drawn height **by value in paper inches** — the track runs
-  from the 50% height to 1.5" (or the shaft's 300% height when less), and the picked
-  value converts back to the stored multiplier
-  (`drawnShaftHeightPt`/`heightFracForDrawnHeight`, pure). Commits near the standard
-  height snap to exactly 100% (`snappedHeightScale`); a "Standard (X″)" button restores
-  the default.
+- **The drawn height is a paper BAND: 1/2" … 1 1/2"** (`PROFILE_MIN_SHAFT_HEIGHT_PT` 36 pt
+  … `PROFILE_MAX_SHAFT_HEIGHT_PT` 108 pt). Both ends are absolute paper measures, not
+  multiples of this shaft's own curve height, and the slider offers the whole band on any
+  ordinary shaft.
+  - The **ceiling** caps a short shaft whose width-fit would draw taller too: it keeps true
+    proportion and simply doesn't span the page (room for the dimension rails). It is
+    flexibility rather than a recommendation — a big shaft is usually a long one and drawing
+    it tall really cramps the schematic — but the room is worth having, not least to write
+    into (on-device call, after a trial at 1.25" was reverted).
+  - The **floor** is what lets exactly those big shafts be shrunk out of the way. Without it
+    the track's near end was 50% of the curve height, so a Ø11" shaft bottomed out at 0.69"
+    (on-device report). It **never raises a shaft above the sizing curve**: a shaft whose
+    standard height is already under the floor keeps that standard, so the proportional
+    hand-sheet rule is untouched at 100% and a small shaft is never fattened into something
+    it isn't. The page budget still wins over both ends.
+  - Pure arithmetic: `exaggeratedProfileScale` (`geom/ProfileCompression.kt`).
+    **Everything derives from these two numbers** — the Settings anchor-height range
+    (`PDF_CURVE_HEIGHT_MAX_IN`), the slider track, its caption, the Settings blurb and the
+    Help topics (via `HEIGHT_CAP_LABEL` / `HEIGHT_FLOOR_LABEL_IN`) all quote them rather
+    than spelling a figure. The ceiling has moved twice; a hard-coded "1.5 in" left in a
+    help topic is a lie the build cannot catch.
+- Slider UX: selects the drawn height **by value in paper inches** — the track spans the
+  band, and the picked value converts back to the stored multiplier
+  (`drawnShaftHeightPt`/`heightFracForDrawnHeight`, pure). The multiplier bounds
+  (`PROFILE_HEIGHT_SCALE_MIN`/`MAX`, 0.25–6.0) are deliberately wider than the band: they
+  only have to be roomy enough to *express* it on any shaft — 1/2" on a 14" shaft needs
+  ~0.29, 1 1/2" on a 2" shaft needs 6 — and the height clamp above means a wide multiplier
+  range cannot produce a wide drawing. Commits near the standard height snap to exactly
+  100% (`snappedHeightScale`); a "Standard (X″)" button restores the default.
 - **Liner compression (per-job pair, same two surfaces)**: the measured components —
   tapers and liners — are what the sheets are about, so liners can be held proportional
   lengthwise. **The drawing height takes precedence; liner compression is secondary**

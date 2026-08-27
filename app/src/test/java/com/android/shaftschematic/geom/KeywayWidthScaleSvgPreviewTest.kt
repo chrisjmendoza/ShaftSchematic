@@ -59,8 +59,11 @@ class KeywayWidthScaleSvgPreviewTest {
         fun rect(x0: Float, y0: Float, x1: Float, y1: Float, fill: String) {
             sb.append("""<rect x="$x0" y="$y0" width="${x1 - x0}" height="${y1 - y0}" fill="$fill"/>""").append('\n')
         }
-        fun arc(x0: Float, y0: Float, r: Float, x1: Float, y1: Float, sweep: Int, w: Float, color: String = "black") {
-            sb.append("""<path d="M $x0 $y0 A $r $r 0 0 $sweep $x1 $y1" stroke="$color" stroke-width="$w" fill="none"/>""").append('\n')
+        fun ellipseArc(x0: Float, y0: Float, rx: Float, ry: Float, x1: Float, y1: Float, sweep: Int, w: Float, color: String = "black") {
+            sb.append("""<path d="M $x0 $y0 A $rx $ry 0 0 $sweep $x1 $y1" stroke="$color" stroke-width="$w" fill="none"/>""").append('\n')
+        }
+        fun ellipse(cx: Float, cy: Float, rx: Float, ry: Float, fill: String = "none", stroke: String = "none", w: Float = 1f) {
+            sb.append("""<ellipse cx="$cx" cy="$cy" rx="$rx" ry="$ry" fill="$fill" stroke="$stroke" stroke-width="$w"/>""").append('\n')
         }
         fun text(x: Float, y: Float, s: String, size: Float = 11f, color: String = "black") {
             sb.append("""<text x="$x" y="$y" font-size="$size" font-family="Helvetica, Arial, sans-serif" fill="$color">$s</text>""").append('\n')
@@ -100,36 +103,45 @@ class KeywayWidthScaleSvgPreviewTest {
     }
 
     /**
-     * One plan-view slot, built exactly as `drawKeywaySlotPdf` builds it. [widthScale] is the
-     * scale the WIDTH and the mill arc ride: the diameter scale (current) or the local axial
-     * scale (what pinned the slot to the page width).
+     * One plan-view slot, built exactly as `drawKeywaySlotPdf` builds it: x from the AXIAL
+     * scale, y from [widthScale] — the diameter scale (current) or, for the comparison row, the
+     * axial scale again (what pinned the slot's width to the page). Every round part is the
+     * ellipse those two terms make.
      */
     private fun Svg.slot(
         refX: Float, dir: Float, axialPtPerMm: Float, widthScale: Float, hostRadiusPt: Float,
         widthMm: Float, offsetMm: Float, lengthMm: Float, cy: Float, color: String,
+        spooned: Boolean = false,
     ): Float {
-        val halfW = drawnKeywayHalfWidthPx(
+        val halfW = widthMm * axialPtPerMm / 2f
+        val halfH = drawnKeywayHalfWidthPx(
             trueHalfWidthPx = widthMm * widthScale / 2f,
             hostRadiusPx = hostRadiusPt,
             minWidthPx = MIN_KEYWAY_WIDTH_PT,
             strokeWidthPx = strokePt,
         )
+        val yScale = if (halfW > 0f) halfH / halfW else 1f
         val isOpen = offsetMm < 0.01f
         val setX = refX + dir * offsetMm * axialPtPerMm
         val letX = setX + dir * maxOf(lengthMm * axialPtPerMm, minKeywaySlotLenPx(halfW, isOpen))
         val letArcCx = letX - dir * halfW
         val lineLeft = minOf(setX, letArcCx)
         val lineRight = maxOf(setX, letArcCx)
+        val bowl = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(letX, dir, halfW) else null
 
-        rect(lineLeft, cy - halfW, lineRight, cy + halfW, "white")
-        line(lineLeft, cy - halfW, lineRight, cy - halfW, w = strokePt, color = color)
-        line(lineLeft, cy + halfW, lineRight, cy + halfW, w = strokePt, color = color)
-        // Mill semicircle at the closed (LET) end — the half on the LET side of its centre.
-        arc(
-            letArcCx, cy - halfW, halfW, letArcCx, cy + halfW,
+        rect(lineLeft, cy - halfH, lineRight, cy + halfH, "white")
+        if (bowl != null) ellipse(bowl.cx, cy, bowl.radius, bowl.radius * yScale, fill = "white")
+        line(lineLeft, cy - halfH, lineRight, cy - halfH, w = strokePt, color = color)
+        line(lineLeft, cy + halfH, lineRight, cy + halfH, w = strokePt, color = color)
+        // Mill arc at the closed (LET) end — the half on the LET side of its centre.
+        ellipseArc(
+            letArcCx, cy - halfH, halfW, halfH, letArcCx, cy + halfH,
             sweep = if (dir > 0f) 1 else 0, w = strokePt, color = color,
         )
-        return halfW
+        if (bowl != null) {
+            ellipse(bowl.cx, cy, bowl.radius, bowl.radius * yScale, stroke = color, w = strokePt)
+        }
+        return halfH
     }
 
     private fun Svg.outline(L: Layout, cy: Float) {
@@ -144,8 +156,15 @@ class KeywayWidthScaleSvgPreviewTest {
         line(contentLeft - 8f, cy, contentRight + 8f, cy, w = 0.4f, color = "#999")
     }
 
-    /** Draws one scene and returns the taper slot's drawn fraction of the shaft height. */
-    private fun Svg.scene(L: Layout, cy: Float, useDiaScale: Boolean, title: String): Float {
+    /**
+     * What one scene measured: the taper slot's drawn WIDTH as a fraction of the drawn shaft
+     * height, and the spoon bowl's drawn AXIAL half-extent. The first must hold true proportion
+     * across the slider; the second must not grow with it.
+     */
+    private data class Measured(val widthFracOfShaft: Float, val bowlRadiusPt: Float)
+
+    /** Draws one scene and returns what it measured. */
+    private fun Svg.scene(L: Layout, cy: Float, useDiaScale: Boolean, title: String): Measured {
         outline(L, cy)
         val color = if (useDiaScale) "black" else "#c0392b"
 
@@ -158,6 +177,7 @@ class KeywayWidthScaleSvgPreviewTest {
             hostRadiusPt = minOf(L.rPt(taper.startDiaMm), L.rPt(taper.endDiaMm)),
             widthMm = taper.keywayWidthMm, offsetMm = taper.keywayOffsetFromSetMm,
             lengthMm = taper.keywayLengthMm, cy = cy, color = color,
+            spooned = true,
         )
 
         // Fwd body keyway: open at the FWD face, running aft. Its window pins at true scale, so
@@ -174,15 +194,16 @@ class KeywayWidthScaleSvgPreviewTest {
         )
 
         val frac = taperHalf * 2f / L.shaftHeightPt
+        val bowlRadius = keywaySpoonBowl(tx0, 1f, taper.keywayWidthMm * taperAxial / 2f).radius
         text(contentLeft, cy - L.shaftHeightPt / 2f - 14f, title, size = 12f)
         text(
             contentLeft, cy + L.shaftHeightPt / 2f + 16f,
             "shaft ${"%.0f".format(L.shaftHeightPt)} pt tall · taper keyway drawn " +
                 "${"%.1f".format(taperHalf * 2f)} pt = ${"%.1f".format(frac * 100f)}% of it " +
-                "(true 18.8%)",
+                "(true 18.8%) · spoon bowl ${"%.1f".format(bowlRadius * 2f)} pt along the axis",
             size = 10f, color = "#555",
         )
-        return frac
+        return Measured(frac, bowlRadius)
     }
 
     @Test
@@ -190,26 +211,33 @@ class KeywayWidthScaleSvgPreviewTest {
         val outDir = File("build/reports/keyway-width-scale-preview").apply { mkdirs() }
         val svg = Svg()
         var cy = 90f
-        val fracs = mutableMapOf<String, Float>()
+        val m = mutableMapOf<String, Measured>()
 
         listOf("100%" to 1.0f, "200%" to 2.0f).forEach { (label, frac) ->
             val L = Layout(spec, frac, contentLeft, contentRight)
-            fracs["axial-$label"] = svg.scene(L, cy, useDiaScale = false, title = "Shaft height $label — width off the AXIAL scale (red)")
+            m["axial-$label"] = svg.scene(L, cy, useDiaScale = false, title = "Shaft height $label — width off the AXIAL scale (red)")
             cy += 150f
-            fracs["dia-$label"] = svg.scene(L, cy, useDiaScale = true, title = "Shaft height $label — width off the DIAMETER scale (current)")
-            cy += 170f
+            m["dia-$label"] = svg.scene(L, cy, useDiaScale = true, title = "Shaft height $label — width off the DIAMETER scale (current)")
+            cy += 190f
         }
 
         File(outDir, "keyway-width-scale.svg").writeText(svg.wrap(contentRight + 40f, cy))
 
         // The diameter-scaled slot holds true proportion at every slider position …
         val trueFrac = taper.keywayWidthMm / spec.maxOuterDiaMm()
-        assertTrue(abs(fracs.getValue("dia-100%") - trueFrac) < 0.01f)
-        assertTrue(abs(fracs.getValue("dia-200%") - trueFrac) < 0.01f)
+        assertTrue(abs(m.getValue("dia-100%").widthFracOfShaft - trueFrac) < 0.01f)
+        assertTrue(abs(m.getValue("dia-200%").widthFracOfShaft - trueFrac) < 0.01f)
         // … while the axial-scaled one shrinks against the shaft as the height grows.
         assertTrue(
             "an axial-scaled slot loses ground when the height slider moves",
-            fracs.getValue("axial-200%") < fracs.getValue("axial-100%") - 0.01f,
+            m.getValue("axial-200%").widthFracOfShaft < m.getValue("axial-100%").widthFracOfShaft - 0.01f,
+        )
+        // The spoon bowl rides the AXIAL scale, so raising the height must never inflate it
+        // along the shaft — drawn as a true circle at the transverse scale it grew until it
+        // swallowed its own slot (on-device report).
+        assertTrue(
+            "the spoon bowl must not grow along the axis with the height slider",
+            m.getValue("dia-200%").bowlRadiusPt <= m.getValue("dia-100%").bowlRadiusPt + 1e-3f,
         )
         assertTrue(File(outDir, "keyway-width-scale.svg").length() > 0)
     }

@@ -659,8 +659,11 @@ Same-day review feedback on step 4; supersedes step 4's picker placement:
   taller is capped and simply doesn't span the page — "we still need room for the
   dimensional rails". Slider UX: shared `ShaftHeightSlider` — selects the drawn height
   **by value in paper inches** ("select the height by value, not percentage"): the track
-  runs to 1.5" (or the shaft's 300% height when less), the picked value converts back to
-  the stored multiplier (`drawnShaftHeightPt`/`heightFracForDrawnHeight`, pure), commits
+  spans the absolute 1/2"–1 1/2" paper band (`PROFILE_MIN_SHAFT_HEIGHT_PT` …
+  `PROFILE_MAX_SHAFT_HEIGHT_PT`) — the floor added later so a large, long shaft can be
+  shrunk out of the way rather than bottoming out at half its own curve height — the picked
+  value converts back to the stored multiplier
+  (`drawnShaftHeightPt`/`heightFracForDrawnHeight`, pure), commits
   near the standard height snap to exactly 100% (`snappedHeightScale` — "don't want to
   fight the slider"), and a "Standard (X″)" button restores the default.
 - **Export hardening unified** ("please unify"): every SAF export (schematic, runout,

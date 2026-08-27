@@ -125,7 +125,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   knockout halos), and **Export all** — the checked documents batch-written to one picked
   folder. The classic standalone runout sheet stays on the Runout tab
 - Profile sizing round — per-job value-based "Shaft height" slider (in paper inches, hard
-  capped at 1.5"), a proportional default sizing curve (4" → 0.5", 8" → 1") with
+  capped at 1.5", floor 0.5"), a proportional default sizing curve (4" → 0.5", 8" → 1") with
   user-adjustable anchors in Settings → Drawing → "Default drawing size", the
   liner-compression control with height precedence (it never lowers the drawn height), an
   S-break pair minimum gap with a user-set compression threshold (Settings → Drawing →

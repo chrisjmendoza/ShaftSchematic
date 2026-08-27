@@ -55,7 +55,7 @@ fun ShaftViewModel.setTirDirection(direction: TirDirection) {
 /**
  * "Shaft height" slider — exaggerate or shrink the drawn shaft on every drawing
  * output: schematic, runout, and consolidated sheets (one per-job value). Clamped to
- * the geom slider bounds; the composer additionally hard-caps the drawn height at 1.5"
+ * the geom slider bounds; the composer additionally hard-caps the drawn height at PROFILE_MAX_SHAFT_HEIGHT_PT
  * and the page budget.
  */
 fun ShaftViewModel.setRunoutHeightScale(scale: Float) {

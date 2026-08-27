@@ -1,5 +1,6 @@
 package com.android.shaftschematic.settings
 
+import com.android.shaftschematic.geom.PROFILE_MAX_SHAFT_HEIGHT_PT
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.util.DualUnitLayout
@@ -20,10 +21,12 @@ enum class PdfTieringMode {
     }
 }
 
-// Bounds for the sizing-curve anchor heights (paper inches). The ceiling matches the
-// absolute drawn-height cap (PROFILE_MAX_SHAFT_HEIGHT_PT = 108 pt = 1.5").
+// Bounds for the sizing-curve anchor heights (paper inches). The ceiling IS the absolute
+// drawn-height cap, derived rather than restated — an anchor above it would be silently
+// coerced by `defaultShaftHeightPt` anyway, leaving the Settings slider promising a height
+// no sheet can draw.
 const val PDF_CURVE_HEIGHT_MIN_IN = 0.25f
-const val PDF_CURVE_HEIGHT_MAX_IN = 1.5f
+const val PDF_CURVE_HEIGHT_MAX_IN = PROFILE_MAX_SHAFT_HEIGHT_PT / 72f
 
 /**
  * Default body S-break threshold: a body run breaks once it draws below HALF its true

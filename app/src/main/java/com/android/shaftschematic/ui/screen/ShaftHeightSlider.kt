@@ -35,6 +35,7 @@ import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MAX
 import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MIN
 import com.android.shaftschematic.geom.PROFILE_MAX_SHAFT_HEIGHT_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
+import com.android.shaftschematic.geom.PROFILE_MIN_SHAFT_HEIGHT_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
 import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
@@ -633,10 +634,9 @@ internal fun ShadeInPdfChecks(
  * preview's, the consolidated preview's. ONE `RunoutConfig.heightScale` behind all of them.
  *
  * The slider selects the drawn shaft height by VALUE, in inches on paper (on-device
- * request: "the end of the slider would be 1.5\" and I can select the height by value,
- * not percentage") — paper inches regardless of the document's display unit, because the
- * cap is a paper measure. The track runs from the 50% height to 1.5"
- * ([PROFILE_MAX_SHAFT_HEIGHT_PT]) — or to the most this shaft can reach at 300% when
+ * request: select the height by value, not percentage) — paper inches regardless of the
+ * document's display unit, because the cap is a paper measure. The track runs from the 50%
+ * height to [PROFILE_MAX_SHAFT_HEIGHT_PT] — or to the most this shaft can reach at 300% when
  * that is less — and the picked value converts back to the stored per-job multiplier
  * ([heightFracForDrawnHeight]). [baseScale] is the surface's conventional solve (pt/mm):
  * the sizing-curve scale at the configured anchor heights on the schematic;
@@ -702,8 +702,12 @@ internal fun ShaftHeightSlider(
         }
         Text(
             if (maxIn >= PROFILE_MAX_SHAFT_HEIGHT_PT / 72f - 1e-3f) {
-                "Drawn height of the shaft on paper. 1.5 in is the cap; the drawing keeps " +
-                    "true proportion and narrows instead of overflowing."
+                // Both ends are quoted from the constants, never spelled: the cap has moved
+                // once already and a hard-coded figure here would quietly start lying.
+                "Drawn height of the shaft on paper, ${fmtIn(PROFILE_MIN_SHAFT_HEIGHT_PT / 72f)} " +
+                    "to ${fmtIn(PROFILE_MAX_SHAFT_HEIGHT_PT / 72f)}. The drawing keeps true " +
+                    "proportion and narrows instead of overflowing — shrink a long shaft to " +
+                    "uncramp the sheet, or grow it for room to write in."
             } else {
                 "Drawn height of the shaft on paper. This shaft reaches ${fmtIn(maxIn)} at most."
             },

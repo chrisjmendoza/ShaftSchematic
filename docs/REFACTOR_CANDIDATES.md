@@ -136,7 +136,7 @@ collector, and setter were all removed. Old installs keep a harmless orphaned
 ## 5c. Height-slider track vs pinned-span ceiling (known drift)
 
 **What:** The "Shaft height" slider's track and readout come from
-`drawnShaftHeightPt`, which knows the sizing curve and the 1.5" cap but NOT the
+`drawnShaftHeightPt`, which knows the sizing curve and the absolute height cap but NOT the
 pinned spans (keyway-bearing bodies — tapers no longer pin; their frac floors don't
 touch the height). On a keyway-body-heavy shaft the composer's `solveMaxProfileScale`
 stops the real height below what the slider offers. The

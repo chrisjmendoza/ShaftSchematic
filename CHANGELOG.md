@@ -8,6 +8,65 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-26
 
+### fix(pdf): shaft-height paper band, spoons stop inflating, footer sits on the bottom margin
+
+Three on-device notes on the schematic sheet.
+
+**The drawn shaft height becomes an absolute paper BAND, 1/2" … 1 1/2"** — new
+`PROFILE_MIN_SHAFT_HEIGHT_PT` (36 pt) beside the existing 108 pt ceiling. Both ends are paper
+measures now, not multiples of this shaft's own curve height, and the slider offers the whole
+band on any ordinary shaft.
+
+The floor is the substantive part. The track's near end used to be 50% of the sizing-curve
+height, so a Ø11" shaft bottomed out at 0.69" — and a big shaft is usually a long one, which is
+exactly the drawing that needs shrinking to stop cramping the schematic. It **never raises** a
+shaft above the curve: a shaft whose standard height is already under the floor keeps that
+standard, so the proportional hand-sheet rule is untouched at 100% and a 2" shaft is never
+fattened into something it isn't. The page budget still wins over both ends.
+
+`PROFILE_HEIGHT_SCALE_MIN`/`MAX` widen to 0.25–6.0. They are not a second opinion on drawing
+size — the height clamp bounds that — they only have to be roomy enough to *express* the band on
+any diameter: 1/2" on a 14" shaft needs ~0.29, 1 1/2" on a 2" shaft needs 6. Saved jobs' values
+all sit inside the wider range.
+
+The ceiling itself briefly went to 1.25" ("I keep looking at larger drawings and they just look
+weird") and came back — the height is worth keeping as flexibility, and as room to write in.
+What survives from that round is that nothing restates the figures any more: the Settings
+anchor-height range (`PDF_CURVE_HEIGHT_MAX_IN`, previously a separate literal `1.5f` that would
+have quietly promised a height no sheet could draw), the slider caption, the Settings blurb and
+three Help topics all derive from the constants via the new `HEIGHT_CAP_LABEL` /
+`HEIGHT_FLOOR_LABEL_IN`. The ceiling has moved twice now; a hard-coded "1.5 in" left in a help
+topic is a lie the build cannot catch.
+
+**Spoon bowls stop inflating with the height slider.** Regression from the keyway-width fix
+below, and its own fault: that change drew the slot's round parts as true CIRCLES at the
+transverse scale. A circle's axial extent then grows with the height while the slot's length
+stays page-bound, and the bowl — `SPOON_BOWL_WIDTH_RATIO` (2.4) times the keyway width — swelled
+until it swallowed its own slot ("they look alright when the shaft is smaller but they get too
+large when the shaft height increases"). Every round part of the slot is now the ELLIPSE its two
+scales make: x axial, y diametral, mill arcs and bowl alike. It costs nothing — `drawArc` sweeps
+a PARAMETRIC angle on its oval, so scaling y alone leaves every angle `geom/KeywaySpoonMath.kt`
+derives, wall tangent included, exactly where the circle put it; that file needed no change.
+Measured on the same-math preview for a 20ft × 8" shaft: the bowl's axial reach now goes
+19.7 pt → 18.7 pt across 100% → 200% height instead of 32 pt → 41 pt, while the keyway width
+still holds true proportion at both. `KeywayWidthScaleSvgPreviewTest` gained the assertion.
+
+**The footer sits on the bottom margin and grows upward.** It was anchored to the shaft (a fixed
+`INFO_GAP_PT` below it) with its bottom left floating, which parked it mid-page and stranded the
+white space underneath. Now its bottom edge IS `pageH − PAGE_MARGIN_PT` and `drawFooter` lays
+rows out from there, so a taller block — dual-unit lines, wrapped columns, a blank draft's open
+pitch — takes the room from the air above and moves closer to the shaft, exactly as asked ("if
+the footer needs more room because it's taller … it can be moved up tighter to the shaft"). The
+runout/consolidated sheet has always placed its footer this way, so the two documents now agree.
+Placement extracted to the pure `footerBandTop` and pinned by `FooterBandPlacementTest` rather
+than replicated in a layout test. Two clearances keep the growth off the drawing: the shaft
+placement still reserves `footerBlockPt + INFO_GAP_PT` up from the margin, and the new
+`INFO_GAP_MIN_PT` (56 pt) floor stays clear of `FOOTER_GROWTH_MAX_PT` (48 pt) for the degenerate
+case where a shaft is too tall for that reservation to have held.
+
+1868 green. Docs: `docs/PDF_EXPORT.md` §3 (new footer-placement section), §5.2c, §5.7;
+CLAUDE.md; `docs/GLOSSARY.md`; `docs/contracts/RunoutSheet.md`; ROADMAP; TODO.
+
 ### fix(pdf): drop the footer's compression note — the S-break already says it
 
 On-device direction: an S-break pair IS the drawing's statement that a body run is

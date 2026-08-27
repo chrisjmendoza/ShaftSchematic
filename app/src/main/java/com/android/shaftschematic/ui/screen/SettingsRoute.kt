@@ -285,7 +285,7 @@ fun SettingsRoute(
                     Text(
                         "Drawn shaft height on paper at 100% “Shaft height”. Set what a " +
                             "4″ and an 8″ shaft draw; sizes between and beyond follow " +
-                            "the line, capped at 1.5″ on paper.",
+                            "the line, capped at $HEIGHT_CAP_LABEL on paper.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

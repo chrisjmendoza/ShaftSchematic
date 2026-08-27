@@ -7,13 +7,17 @@ package com.android.shaftschematic.geom
  * A sheet carries two scales: the diameter scale (vertical — the drawn shaft height, what the
  * "Shaft height" slider moves) and the compressed axial map (horizontal). A keyway's WIDTH is a
  * transverse dimension, so it rides the DIAMETER scale and stays proportional to the drawn shaft
- * at every height; only its offset and length ride the axial map. Sizing the width off the axial
+ * at every height; its offset and length ride the axial map. Sizing the width off the axial
  * scale instead pins it to the page width, and raising the height then grows the shaft while the
  * keyway stays put (on-device report).
  *
- * The mill arcs stay CIRCLES at the transverse scale — the posture the coupler bolt holes already
- * take on the same sheet (`rPx`-sized): the end radius is W/2 by definition and the round end is
- * the shop glyph, so the arc keeps its shape and takes its axial over-extent.
+ * **Every round part of the slot is an ELLIPSE, x from the axial scale and y from the diameter
+ * scale** — the mill arcs and the spoon bowl alike. Drawing them as true circles at the
+ * transverse scale instead makes their AXIAL extent grow with the height slider while the slot's
+ * length stays page-bound, and the spoon bowl (2.4× the keyway width) blows up until it swallows
+ * its own slot (on-device report). An ellipse costs nothing to draw: `drawArc` sweeps a
+ * PARAMETRIC angle on its oval, and scaling y alone leaves every angle — the wall tangent
+ * included — exactly where the circle put it, so the shared bowl math needs no anisotropic term.
  *
  * Pure and android-free (`geom` posture) so both draw sites build the slot from one place:
  * - canvas: `ShaftRenderer.drawKeywaySlot`,
@@ -72,12 +76,12 @@ fun drawnKeywayHalfWidthPx(
 }
 
 /**
- * Minimum drawn axial length for a slot with end arcs of radius [halfWidthPx] — one arc when the
- * slot is open at its referenced face (that face closes the other end), two when it floats.
+ * Minimum drawn axial length for a slot whose end arcs reach [halfWidthPx] inward along the axis —
+ * one arc when the slot is open at its referenced face (that face closes the other end), two when
+ * it floats. Pass the AXIAL half-width: the arcs are ellipses, and this is the x term.
  *
- * The width comes off the diameter scale while the length comes off the compressed axial map, so
- * a heavily foreshortened short keyway would otherwise run its arcs past its own straight walls
- * and invert the slot.
+ * Guards authored geometry, not the scale split: a keyway shorter than half its own width would
+ * otherwise run its arcs past its straight walls and invert the slot.
  */
 fun minKeywaySlotLenPx(halfWidthPx: Float, openEnd: Boolean): Float =
     halfWidthPx * (if (openEnd) 1f else 2f)

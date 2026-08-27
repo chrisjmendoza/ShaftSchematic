@@ -1,6 +1,9 @@
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MAX
+import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MIN
 import com.android.shaftschematic.geom.PROFILE_MAX_SHAFT_HEIGHT_PT
+import com.android.shaftschematic.geom.PROFILE_MIN_SHAFT_HEIGHT_PT
 import com.android.shaftschematic.geom.drawnShaftHeightPt
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
@@ -54,9 +57,34 @@ class HeightSliderBaseTest {
     }
 
     @Test
-    fun `the 1_5 inch ceiling caps the top of the track`() {
+    fun `the ceiling caps the top of the track`() {
         val base = schematicHeightSliderBase(dia, loIn, hiIn)
-        assertEquals(PROFILE_MAX_SHAFT_HEIGHT_PT, drawnShaftHeightPt(base, 3f, dia), 0.01f)
+        assertEquals(
+            PROFILE_MAX_SHAFT_HEIGHT_PT,
+            drawnShaftHeightPt(base, PROFILE_HEIGHT_SCALE_MAX, dia),
+            0.01f,
+        )
+    }
+
+    /**
+     * The track is stated in PAPER inches, so both its ends are paper measures — the near end is
+     * the 1/2" floor, not a fraction of this shaft's own curve height. That is what lets a large
+     * shaft (usually a long one, which cramps the schematic) be shrunk out of the way.
+     */
+    @Test
+    fun `the track spans the full paper band on an ordinary shaft`() {
+        listOf(6f, 8f, 11f, 14f).forEach { diaIn ->
+            val d = diaIn * 25.4f
+            val base = schematicHeightSliderBase(d, loIn, hiIn)
+            assertEquals(
+                "Ø${diaIn}in track floor",
+                PROFILE_MIN_SHAFT_HEIGHT_PT, drawnShaftHeightPt(base, PROFILE_HEIGHT_SCALE_MIN, d), 0.01f,
+            )
+            assertEquals(
+                "Ø${diaIn}in track ceiling",
+                PROFILE_MAX_SHAFT_HEIGHT_PT, drawnShaftHeightPt(base, PROFILE_HEIGHT_SCALE_MAX, d), 0.01f,
+            )
+        }
     }
 
     @Test

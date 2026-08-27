@@ -288,7 +288,7 @@ private val helpSections: List<HelpSection> = listOf(
                     "are added on this tab. Export all writes every checked document to one " +
                     "folder in a single step. The Shaft height slider sets the drawn shaft's " +
                     "height on paper directly, in inches, on the schematic and " +
-                    "consolidated/runout sheets — up to 1.5 in at most — and the Standard " +
+                    "consolidated/runout sheets — $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — and the Standard " +
                     "button restores the default size. That default follows a sizing curve " +
                     "you can adjust in Settings → Drawing → Default drawing size: set " +
                     "what a 4 in and an 8 in shaft draw, and sizes in between follow. " +
@@ -344,12 +344,12 @@ private val helpSections: List<HelpSection> = listOf(
                 "Drawing — Default drawing size",
                 "Settings → Drawing. How tall the shaft prints on paper before any per-job " +
                     "adjustment. Two sliders set the sizing line, each adjustable from 0.25 " +
-                    "in to 1.5 in in 1/16 in steps:\n\n" +
+                    "in to $HEIGHT_CAP_LABEL_IN in 1/16 in steps:\n\n" +
                     "• \"4″ shaft draws\" — default 0.5 in.\n" +
                     "• \"8″ shaft draws\" — default 1 in.\n\n" +
                     "Every other diameter follows the straight line through those two points, " +
                     "so a 6 in shaft lands halfway; the line under the sliders shows that " +
-                    "result live. No drawing ever exceeds 1.5 in of shaft height on paper. " +
+                    "result live. No drawing ever exceeds $HEIGHT_CAP_LABEL_IN of shaft height on paper. " +
                     "\"Standard (0.5″ / 1″)\" restores the shipped pair, which is the " +
                     "proportional hand-sheet rule. If you set the 8 in value below the 4 in " +
                     "value a warning appears and drawings simply flatten at the 4 in height — " +
@@ -483,7 +483,9 @@ private val helpSections: List<HelpSection> = listOf(
                     "prints exactly as it did.\n\n" +
                     "• \"Shaft height\" — on the Consolidated Output tab and in the " +
                     "schematic's PDF Options sheet. Sets the drawn shaft height on paper by " +
-                    "value in inches, up to the 1.5 in cap; \"Standard (…)\" returns to the " +
+                    "value in inches, anywhere from $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — shrink " +
+                    "a long shaft to uncramp the sheet, or grow it for room to write in; " +
+                    "\"Standard (…)\" returns to the " +
                     "size the Default drawing size setting picks. One value behind the " +
                     "schematic, runout, and consolidated sheets.\n" +
                     "• \"Keep liners proportional lengthwise\" and \"Liner compression\" — same " +

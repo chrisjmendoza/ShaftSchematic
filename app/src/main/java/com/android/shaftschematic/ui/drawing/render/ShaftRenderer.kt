@@ -743,15 +743,19 @@ private fun DrawScope.drawKeywaySlot(
 ) {
     val cy   = L.centerlineYPx
 
-    // Width and mill-arc radius ride the diameter scale (here the canvas's single uniform
-    // scale), floored for visibility and capped against the host — `geom/KeywaySlotMath.kt`,
-    // the same construction the PDF slot uses, where the two scales genuinely differ.
-    val halfW    = drawnKeywayHalfWidthPx(
+    // Two half-widths, one per axis — the PDF slot's construction (`geom/KeywaySlotMath.kt`).
+    // [halfW] is the AXIAL term driving every x; [halfH] is the TRANSVERSE term off the diameter
+    // scale, floored for visibility and capped against the host. This canvas has ONE uniform
+    // scale, so the two coincide here and every ellipse comes out round; the shared construction
+    // is what keeps the sheet — where they genuinely differ — from drifting away from it.
+    val halfW    = (widthMm * L.pxPerMm) / 2f
+    val halfH    = drawnKeywayHalfWidthPx(
         trueHalfWidthPx = (widthMm * L.pxPerMm) / 2f,
         hostRadiusPx = hostRadiusPx,
         minWidthPx = MIN_KEYWAY_WIDTH_PX,
         strokeWidthPx = outlineW,
     )
+    val yScale   = if (halfW > 0f) halfH / halfW else 1f
     val offsetPx = offsetMm * L.pxPerMm
     val isOpen   = offsetMm < 0.01f
     val kwLenPx  = maxOf(lengthMm * L.pxPerMm, minKeywaySlotLenPx(halfW, isOpen))
@@ -762,11 +766,12 @@ private fun DrawScope.drawKeywaySlot(
     // ADD an enlarged circle around the closed (LET) end — the mill end stays as an inner reference
     // line inside the bowl. Floating keyways ignore the flag.
     val bowl = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(kwLetX, dir, halfW) else null
+    val bowlRy = (bowl?.radius ?: 0f) * yScale
 
     // Arc center is halfW inward from the LET face (concave mill-cut profile).
     val letArcCx    = kwLetX - dir * halfW
     val letArcStart = if (dir > 0) 270f else 90f
-    val letArcBox   = androidx.compose.ui.geometry.Size(halfW * 2f, halfW * 2f)
+    val letArcBox   = androidx.compose.ui.geometry.Size(halfW * 2f, halfH * 2f)
 
     val setArcCx    = kwSetX + dir * halfW
     val setArcStart = if (dir > 0) 90f else 270f
@@ -787,55 +792,59 @@ private fun DrawScope.drawKeywaySlot(
         val fillRight = max(fillNear, letArcCx)
         drawRect(
             color = Color.White,
-            topLeft = Offset(fillLeft, cy - halfW),
-            size = androidx.compose.ui.geometry.Size(fillRight - fillLeft, halfW * 2f)
+            topLeft = Offset(fillLeft, cy - halfH),
+            size = androidx.compose.ui.geometry.Size(fillRight - fillLeft, halfH * 2f)
         )
         drawArc(
             color = Color.White,
             startAngle = letArcStart, sweepAngle = 180f, useCenter = false,
-            topLeft = Offset(letArcCx - halfW, cy - halfW), size = letArcBox
+            topLeft = Offset(letArcCx - halfW, cy - halfH), size = letArcBox
         )
         if (!isOpen) {
             drawArc(
                 color = Color.White,
                 startAngle = setArcStart, sweepAngle = 180f, useCenter = false,
-                topLeft = Offset(setArcCx - halfW, cy - halfW), size = letArcBox
+                topLeft = Offset(setArcCx - halfW, cy - halfH), size = letArcBox
             )
         }
         // Spoon bowl void: the enlarged disc around the LET end (its SET-side overlaps the slot).
         if (bowl != null) {
-            drawCircle(color = Color.White, radius = bowl.radius, center = Offset(bowl.cx, cy))
+            drawOval(
+                color = Color.White,
+                topLeft = Offset(bowl.cx - bowl.radius, cy - bowlRy),
+                size = androidx.compose.ui.geometry.Size(bowl.radius * 2f, bowlRy * 2f),
+            )
         }
     }
 
     // ── Outline strokes on top (dashed for hidden far-side keyways) ──
     val dash = if (hidden) PathEffect.dashPathEffect(floatArrayOf(HIDDEN_DASH_ON, HIDDEN_DASH_OFF), 0f) else null
-    drawLine(outline, Offset(lineLeft, cy - halfW), Offset(lineRight, cy - halfW), strokeWidth = outlineW, pathEffect = dash)
-    drawLine(outline, Offset(lineLeft, cy + halfW), Offset(lineRight, cy + halfW), strokeWidth = outlineW, pathEffect = dash)
+    drawLine(outline, Offset(lineLeft, cy - halfH), Offset(lineRight, cy - halfH), strokeWidth = outlineW, pathEffect = dash)
+    drawLine(outline, Offset(lineLeft, cy + halfH), Offset(lineRight, cy + halfH), strokeWidth = outlineW, pathEffect = dash)
 
     // Inner mill semicircle — the standard rounded end (kept as a reference line inside the bowl).
     drawArc(
         color = outline,
         startAngle = letArcStart, sweepAngle = 180f, useCenter = false,
-        topLeft = Offset(letArcCx - halfW, cy - halfW), size = letArcBox,
+        topLeft = Offset(letArcCx - halfW, cy - halfH), size = letArcBox,
         style = Stroke(width = outlineW, pathEffect = dash)
     )
     if (!isOpen) {
         drawArc(
             color = outline,
             startAngle = setArcStart, sweepAngle = 180f, useCenter = false,
-            topLeft = Offset(setArcCx - halfW, cy - halfW), size = letArcBox,
+            topLeft = Offset(setArcCx - halfW, cy - halfH), size = letArcBox,
             style = Stroke(width = outlineW, pathEffect = dash)
         )
     }
-    // Spoon bowl: the enlarged circle's major arc around the far side (the walls run through
+    // Spoon bowl: the enlarged ellipse's major arc around the far side (the walls run through
     // its SET-facing mouth to the inner mill end).
     if (bowl != null) {
         drawArc(
             color = outline,
             startAngle = bowl.arcStartDeg, sweepAngle = bowl.arcSweepDeg, useCenter = false,
-            topLeft = Offset(bowl.cx - bowl.radius, cy - bowl.radius),
-            size = androidx.compose.ui.geometry.Size(bowl.radius * 2f, bowl.radius * 2f),
+            topLeft = Offset(bowl.cx - bowl.radius, cy - bowlRy),
+            size = androidx.compose.ui.geometry.Size(bowl.radius * 2f, bowlRy * 2f),
             style = Stroke(width = outlineW, pathEffect = dash)
         )
     }
