@@ -19,6 +19,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
+import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 
 // ─────────────────────────────────────────────────────────────────────────────

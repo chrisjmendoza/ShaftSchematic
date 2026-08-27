@@ -1,6 +1,7 @@
 package com.android.shaftschematic.ui.screen
 
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.toMmOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

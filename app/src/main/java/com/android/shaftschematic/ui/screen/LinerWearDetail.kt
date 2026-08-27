@@ -109,6 +109,8 @@ import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.drawRichText
+import com.android.shaftschematic.util.parseFractionOrDecimal
+import com.android.shaftschematic.util.toMmOrNull
 
 /**
  * ComponentWearDetail

@@ -47,6 +47,7 @@ import com.android.shaftschematic.util.autoTaperRateText
 import com.android.shaftschematic.util.manualTaperRateBlockingMessage
 import com.android.shaftschematic.util.manualTaperRateWarning
 import com.android.shaftschematic.util.parseTaperRateText
+import com.android.shaftschematic.util.toMmOrNull
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TaperPagerCard — the `ResolvedTaper` arm of [ComponentPagerCard]

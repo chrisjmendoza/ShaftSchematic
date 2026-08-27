@@ -46,6 +46,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.util.bodyWarningMessages
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 
 // ─────────────────────────────────────────────────────────────────────────────

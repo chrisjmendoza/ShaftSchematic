@@ -71,6 +71,8 @@ import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.ThreadDesignation
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.parseFractionOrDecimal
+import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
 

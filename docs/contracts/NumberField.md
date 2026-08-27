@@ -80,14 +80,21 @@ rejecting the edit:
   select-all.
 
 **Parsing (`util/Parsing.kt`)** — pure, side-effect-free, neutral by design (no
-clamping, no range enforcement — ViewModel setters layer validation on top):
-- `parseFractionOrDecimal(raw): Double?` — decimal, `N/D`, or `W N/D` in entered
-  units; tolerates trailing unit suffixes; `null` on invalid. Returns `Double?`.
-- `parseToMm(raw, unit): Double` — converts to mm for inches; returns `0.0` (not
-  null) on invalid input. There is **no `toMmOrNull` in this file**.
-
-**Known duplication (consolidation candidate):** `ui/screen/ShaftScreen.kt`
-(~lines 1289–1305) defines its own internal, Float-based `toMmOrNull` and
-`parseFractionOrDecimal`, and most inline commit paths in that screen use them
-instead of `util.parseToMm`. Near-identical parsing logic in two layers —
-consolidate onto one convention if touching either.
+clamping, no range enforcement — ViewModel setters layer validation on top). All
+three parsers live here; there is no second copy elsewhere:
+- `parseFractionOrDecimal(raw): Double?` — decimal, `N/D`, `W N/D`, or a `N:D`
+  ratio (e.g. a typed taper rate like `1:12`) in entered units; tolerates trailing
+  unit suffixes; `null` on invalid. Explicit-import callers include
+  `BoreKeywayCalcDialog.kt` (ratio input is harmless there) and the `ui/screen`
+  commit paths listed below.
+- `parseToMm(raw, unit): Double` — converts to mm for inches; returns **`0.0`**
+  (not null) on invalid input. For callers that always need a number and treat
+  "couldn't parse" the same as "zero".
+- `toMmOrNull(text, unit): Float?` — converts to mm for inches, but returns
+  **`null`** on blank or invalid input instead of `0.0`. For commit-on-blur field
+  handlers (the `CommitNum` pattern above) that must distinguish "no edit" from
+  "typed zero" — a `null` result means the handler skips the commit entirely
+  rather than writing a zero the user never typed. Used across `ui/screen`
+  (`ShaftScreen.kt`, `AddComponentDialogs.kt`, the per-kind `*PagerCard.kt` files,
+  `ComponentCarousel.kt`, `LinerWearDetail.kt`, `UndercutDetail.kt`,
+  `WornSectionEditor.kt`).

@@ -50,8 +50,10 @@ import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.autoTaperRateText
 import com.android.shaftschematic.util.manualTaperRateBlockingMessage
 import com.android.shaftschematic.util.manualTaperRateWarning
+import com.android.shaftschematic.util.parseFractionOrDecimal
 import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.ThreadDesignation
+import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.max
 
@@ -695,7 +697,7 @@ fun AddThreadDialog(
     val lengthMm = toMmOrNull(length, unit) ?: -1f
     val majorMmImperial = toMmOrNull(major, unit) ?: -1f
     val majorMm = if (metricMode) (parsedDesignation?.majorDiaMm ?: -1f) else majorMmImperial
-    val tpi = parseFractionOrDecimal(tpiText) ?: -1f   // allow e.g., "20", "10", "32"
+    val tpi = parseFractionOrDecimal(tpiText)?.toFloat() ?: -1f   // allow e.g., "20", "10", "32"
     // Pitch omitted from a coarse designation (e.g. "M20") reads as 0 — not "unset" — so a
     // metric thread never blocks on a pitch the designation deliberately left out.
     val pitchMm = if (metricMode) (parsedDesignation?.pitchMm ?: 0f) else tpiToPitchMm(tpi)

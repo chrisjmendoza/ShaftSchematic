@@ -11,6 +11,7 @@ import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.model.mergeBodiesAround
+import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.splitBodiesAround
 import com.android.shaftschematic.model.syncExcludedThreadPositions
 import com.android.shaftschematic.model.withAutoBlend
@@ -637,47 +638,64 @@ fun ShaftViewModel.updateLinerAuthoredReference(index: Int, reference: LinerAuth
     }
 }
 
+/**
+ * Lens-shaped helper behind the six trivial per-kind setters below (label ×4, show-Ø ×2):
+ * bounds-guard [index] against [list], normalize the incoming [newValue], then no-op when the
+ * normalized value already matches the stored one — LOAD-BEARING: keeps a recomposition that
+ * hands back the same value from ever marking the document dirty or churning the undo recorder.
+ * Otherwise builds the item's replacement via [copyField] and threads the updated list back into
+ * the spec via [withList] (the per-kind `s.copy(bodies = …)` / `s.copy(liners = …)` / etc.).
+ */
+private inline fun <T, V> ShaftSpec.withItemField(
+    list: List<T>,
+    index: Int,
+    newValue: V,
+    normalize: (V) -> V = { it },
+    get: (T) -> V,
+    copyField: (T, V) -> T,
+    withList: (List<T>) -> ShaftSpec,
+): ShaftSpec {
+    if (index !in list.indices) return this
+    val old = list[index]
+    val normalized = normalize(newValue)
+    if (get(old) == normalized) return this
+    return withList(list.toMutableList().also { it[index] = copyField(old, normalized) })
+}
+
+private fun normalizeLabel(label: String?): String? = label?.trim()?.takeIf { it.isNotEmpty() }
+
 fun ShaftViewModel.updateLinerLabel(index: Int, label: String?) = _spec.update { s ->
-    if (index !in s.liners.indices) s else {
-        val old = s.liners[index]
-        val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
-        if (old.label == normalized) return@update s
-        s.copy(
-            liners = s.liners.toMutableList().also { l ->
-                l[index] = old.copy(label = normalized)
-            }
-        )
-    }
+    s.withItemField(
+        list = s.liners, index = index, newValue = label,
+        normalize = ::normalizeLabel,
+        get = { it.label },
+        copyField = { old, v -> old.copy(label = v) },
+        withList = { s.copy(liners = it) },
+    )
 }
 
 fun ShaftViewModel.updateBodyLabel(index: Int, label: String?) = _spec.update { s ->
-    if (index !in s.bodies.indices) s else {
-        val old = s.bodies[index]
-        val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
-        if (old.label == normalized) return@update s
-        s.copy(
-            bodies = s.bodies.toMutableList().also { l ->
-                l[index] = old.copy(label = normalized)
-            }
-        )
-    }
+    s.withItemField(
+        list = s.bodies, index = index, newValue = label,
+        normalize = ::normalizeLabel,
+        get = { it.label },
+        copyField = { old, v -> old.copy(label = v) },
+        withList = { s.copy(bodies = it) },
+    )
 }
 
 /**
  * Show/hide this body's Ø callout on the schematic. Draw-only — no geometry, no value
- * rewrite. No-ops when the flag already matches so a recomposition can never mark the
- * document dirty.
+ * rewrite. Routed through [withItemField], whose identity guard no-ops when the flag
+ * already matches so a recomposition can never mark the document dirty.
  */
 fun ShaftViewModel.updateBodyShowDia(index: Int, show: Boolean) = _spec.update { s ->
-    if (index !in s.bodies.indices) s else {
-        val old = s.bodies[index]
-        if (old.showDiaOnDrawing == show) return@update s
-        s.copy(
-            bodies = s.bodies.toMutableList().also { l ->
-                l[index] = old.copy(showDiaOnDrawing = show)
-            }
-        )
-    }
+    s.withItemField(
+        list = s.bodies, index = index, newValue = show,
+        get = { it.showDiaOnDrawing },
+        copyField = { old, v -> old.copy(showDiaOnDrawing = v) },
+        withList = { s.copy(bodies = it) },
+    )
 }
 
 /**
@@ -738,15 +756,12 @@ fun ShaftViewModel.setAutoBlend(
 
 /** Liner mirror of [updateBodyShowDia]. */
 fun ShaftViewModel.updateLinerShowDia(index: Int, show: Boolean) = _spec.update { s ->
-    if (index !in s.liners.indices) s else {
-        val old = s.liners[index]
-        if (old.showDiaOnDrawing == show) return@update s
-        s.copy(
-            liners = s.liners.toMutableList().also { l ->
-                l[index] = old.copy(showDiaOnDrawing = show)
-            }
-        )
-    }
+    s.withItemField(
+        list = s.liners, index = index, newValue = show,
+        get = { it.showDiaOnDrawing },
+        copyField = { old, v -> old.copy(showDiaOnDrawing = v) },
+        withList = { s.copy(liners = it) },
+    )
 }
 
 /**
@@ -783,29 +798,23 @@ fun ShaftViewModel.setShowAutoBodyDia(show: Boolean) = _spec.update { s ->
 }
 
 fun ShaftViewModel.updateTaperLabel(index: Int, label: String?) = _spec.update { s ->
-    if (index !in s.tapers.indices) s else {
-        val old = s.tapers[index]
-        val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
-        if (old.label == normalized) return@update s
-        s.copy(
-            tapers = s.tapers.toMutableList().also { l ->
-                l[index] = old.copy(label = normalized)
-            }
-        )
-    }
+    s.withItemField(
+        list = s.tapers, index = index, newValue = label,
+        normalize = ::normalizeLabel,
+        get = { it.label },
+        copyField = { old, v -> old.copy(label = v) },
+        withList = { s.copy(tapers = it) },
+    )
 }
 
 fun ShaftViewModel.updateThreadLabel(index: Int, label: String?) = _spec.update { s ->
-    if (index !in s.threads.indices) s else {
-        val old = s.threads[index]
-        val normalized = label?.trim()?.takeIf { it.isNotEmpty() }
-        if (old.label == normalized) return@update s
-        s.copy(
-            threads = s.threads.toMutableList().also { l ->
-                l[index] = old.copy(label = normalized)
-            }
-        )
-    }
+    s.withItemField(
+        list = s.threads, index = index, newValue = label,
+        normalize = ::normalizeLabel,
+        get = { it.label },
+        copyField = { old, v -> old.copy(label = v) },
+        withList = { s.copy(threads = it) },
+    )
 }
 
 /** Remove a [Liner] by id. Recoverable via [undoEdit] (spec + order restored together). */

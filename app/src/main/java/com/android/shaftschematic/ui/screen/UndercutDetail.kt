@@ -112,6 +112,7 @@ import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.buildLinerTitleById
+import com.android.shaftschematic.util.toMmOrNull
 import kotlin.math.max
 import kotlin.math.min
 

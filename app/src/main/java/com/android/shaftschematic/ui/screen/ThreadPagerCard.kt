@@ -38,7 +38,9 @@ import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.threadWarningMessages
+import com.android.shaftschematic.util.parseFractionOrDecimal
 import com.android.shaftschematic.util.ThreadDesignation
+import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -190,7 +192,7 @@ internal fun ThreadPagerCard(
                 toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, th.lengthMm, it, th.pitchMm, th.metricDesignation) }
             }
             CommitNum("TPI", tpiDisplay) { s ->
-                parseFractionOrDecimal(s)?.takeIf { it > 0f }?.let { tpi ->
+                parseFractionOrDecimal(s)?.toFloat()?.takeIf { it > 0f }?.let { tpi ->
                     onUpdateThread(idx, th.startFromAftMm, th.lengthMm, th.majorDiaMm, tpiToPitchMm(tpi), th.metricDesignation)
                 }
             }

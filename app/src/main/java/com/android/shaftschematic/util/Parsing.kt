@@ -19,12 +19,13 @@ fun parseToMm(raw: String, unit: UnitSystem): Double {
 }
 
 /**
- * Parses a user-entered number that may be decimal or a shop fraction.
+ * Parses a user-entered number that may be decimal, a shop fraction, or a taper-rate ratio.
  *
  * Supported:
  * - Decimal: "12", "1.25"
  * - Fraction: "3/4"
  * - Mixed fraction: "15 1/2"
+ * - Ratio: "1:12" (a colon-separated N:D, e.g. a taper rate)
  *
  * Also tolerates trailing unit suffixes like "in", "mm", or quotes.
  */
@@ -39,6 +40,9 @@ fun parseFractionOrDecimal(raw: String): Double? {
         val frac = parseSimpleFraction(parts[1]) ?: return null
         return if (whole < 0) whole - frac else whole + frac
     }
+
+    // Ratio: N:D
+    if (t.contains(':')) return parseSimpleRatio(t)
 
     // Simple fraction: N/D
     if (t.contains('/')) return parseSimpleFraction(t)
@@ -56,12 +60,22 @@ private fun parseSimpleFraction(text: String): Double? {
     return a / b
 }
 
+private fun parseSimpleRatio(text: String): Double? {
+    val s = text.trim()
+    val colon = s.indexOf(':')
+    if (colon <= 0 || colon >= s.lastIndex) return null
+    val a = s.substring(0, colon).trim().toDoubleOrNull() ?: return null
+    val b = s.substring(colon + 1).trim().toDoubleOrNull() ?: return null
+    if (abs(b) < 1e-12) return null
+    return a / b
+}
+
 private fun normalizeNumericText(raw: String): String {
     var s = raw.replace(",", "").trim()
     if (s.isEmpty()) return ""
 
     // Strip trailing unit-ish suffixes (letters/quotes/etc) while keeping numeric grammar.
-    val allowed = "0123456789./+- "
+    val allowed = "0123456789./:+- "
     var end = s.length - 1
     while (end >= 0 && !allowed.contains(s[end])) end--
     if (end < 0) return ""
@@ -69,4 +83,17 @@ private fun normalizeNumericText(raw: String): String {
 
     // Normalize internal whitespace.
     return s.replace(Regex("\\s+"), " ")
+}
+
+/**
+ * Parses user input text (decimal, shop fraction, or ratio — see [parseFractionOrDecimal]) and
+ * converts to millimeters, returning `null` on blank or unparseable input. Unlike [parseToMm]
+ * (which yields 0.0 on invalid input, for callers that always need a number), this is for
+ * commit-on-blur field handlers that must distinguish "no edit" from "typed zero".
+ */
+fun toMmOrNull(text: String, unit: UnitSystem): Float? {
+    val t = text.trim()
+    if (t.isEmpty()) return null
+    val num = parseFractionOrDecimal(t) ?: return null
+    return if (unit == UnitSystem.MILLIMETERS) num.toFloat() else (num * MM_PER_IN).toFloat()
 }

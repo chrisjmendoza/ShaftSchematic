@@ -28,6 +28,7 @@ import com.android.shaftschematic.geom.canonicalToUndercutStartMm
 import com.android.shaftschematic.geom.undercutStartToCanonicalMm
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.WornSection
+import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 
 /**

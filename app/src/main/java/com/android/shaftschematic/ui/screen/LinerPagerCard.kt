@@ -38,6 +38,7 @@ import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.util.linerWarningMessages
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
+import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 
 // ─────────────────────────────────────────────────────────────────────────────
