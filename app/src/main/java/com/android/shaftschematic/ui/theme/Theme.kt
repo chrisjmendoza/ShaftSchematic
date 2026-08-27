@@ -8,22 +8,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.android.shaftschematic.settings.AppThemeMode
 
-private val LightColorScheme = lightColorScheme(
+// `tertiaryContainer` is the app's CAUTION tier (see Color.kt) — assigned here in every scheme
+// rather than left to M3's baseline pink. `tertiary` stays as it was: it is the preview-color
+// "Bronze" preset, not part of the severity ladder.
+internal val LightColorScheme = lightColorScheme(
     primary = Purple40,
     secondary = PurpleGrey40,
-    tertiary = Pink40
+    tertiary = Pink40,
+    tertiaryContainer = WarnAmberLight,
+    onTertiaryContainer = OnWarnAmberLight,
 )
 
-private val DarkColorScheme = darkColorScheme(
+internal val DarkColorScheme = darkColorScheme(
     primary = Purple80,
     secondary = PurpleGrey80,
-    tertiary = Pink80
+    tertiary = Pink80,
+    tertiaryContainer = WarnAmberDark,
+    onTertiaryContainer = OnWarnAmberDark,
 )
 
 // High-contrast schemes: pure black/white grounds, near-zero mid-grey usage, and bold
 // container colors so selected/unselected states separate without relying on tint subtlety.
 // Accessibility posture: aim for WCAG AAA-level figure/ground on every text role.
-private val HighContrastLightColorScheme = lightColorScheme(
+internal val HighContrastLightColorScheme = lightColorScheme(
     primary = HcBlue,
     onPrimary = Color.White,
     primaryContainer = HcBlue,
@@ -34,6 +41,8 @@ private val HighContrastLightColorScheme = lightColorScheme(
     onSecondaryContainer = Color.White,
     tertiary = HcBronzeDark,
     onTertiary = Color.White,
+    tertiaryContainer = HcBronzeDark,
+    onTertiaryContainer = Color.White,
     background = Color.White,
     onBackground = Color.Black,
     surface = Color.White,
@@ -48,7 +57,7 @@ private val HighContrastLightColorScheme = lightColorScheme(
     onErrorContainer = Color.White,
 )
 
-private val HighContrastDarkColorScheme = darkColorScheme(
+internal val HighContrastDarkColorScheme = darkColorScheme(
     primary = HcAmber,
     onPrimary = Color.Black,
     primaryContainer = HcAmber,
@@ -59,6 +68,8 @@ private val HighContrastDarkColorScheme = darkColorScheme(
     onSecondaryContainer = Color.Black,
     tertiary = HcBronzeBright,
     onTertiary = Color.Black,
+    tertiaryContainer = HcBronzeBright,
+    onTertiaryContainer = Color.Black,
     background = Color.Black,
     onBackground = Color.White,
     surface = Color.Black,
@@ -79,7 +90,11 @@ private val HighContrastDarkColorScheme = darkColorScheme(
  * Contract
  * - [AppThemeMode.LIGHT] + `highContrast = false` must reproduce the app's historical
  *   presentation (the pre-Appearance bare `MaterialTheme` look) — it is the default, so an
- *   update changes nothing until the user opts in.
+ *   update changes nothing until the user opts in. **One deliberate exception**: the caution
+ *   tier (`tertiaryContainer`/`onTertiaryContainer`) was never assigned by anyone, so its
+ *   historical value was simply M3's baseline pink — a default that leaked into a semantic
+ *   role, not a chosen look. It is amber now (Color.kt). The clause guards against drift in
+ *   what was DECIDED; it does not freeze what was never decided.
  * - Paper-sheet canvases (undercut / wear / runout drawing surfaces) and PDF output are
  *   theme-independent: white sheet, fixed black ink. The theme must never be consulted for
  *   sheet ink — see `docs/contracts/Appearance.md`.

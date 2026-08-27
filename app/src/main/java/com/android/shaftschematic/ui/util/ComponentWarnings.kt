@@ -158,21 +158,23 @@ private fun linerOdBelowUnderlyingBody(spec: ShaftSpec, liner: Liner): Boolean {
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Whole-spec advisory warnings (§4.3):
- * - a count of tiny segments (length in (0, [SHORT_SEGMENT_MM]] mm) across bodies, tapers,
- *   liners, and non-excluded threads;
- * - a "no explicit bodies" note when the spec has no stored bodies yet has at least one
- *   taper/liner/non-excluded thread (auto-fill covers the body region).
+ * Whole-spec advisory warnings (§4.3): a count of tiny segments (length in
+ * (0, [SHORT_SEGMENT_MM]] mm) across bodies, tapers, liners, and non-excluded threads.
  *
- * Pure — not consulted for export gating and not (yet) surfaced in the UI.
+ * **Every message here must be a PROBLEM the user can act on.** The banner that surfaces these
+ * is styled as an advisory, so anything routed through it reads as something being wrong; a line
+ * describing normal behaviour spends that attention for nothing and makes the real anomalies
+ * easier to ignore. A "no explicit bodies" note lived here and was removed on that ground —
+ * auto-fill IS the design, not a deviation from it, the carousel card underneath already reads
+ * "Body (auto)", and the note fired on every perfectly ordinary taper-and-liner shaft
+ * (on-device report: it "looks like an error message rather than a notice").
+ *
+ * Pure — not consulted for export gating.
  */
 fun specWarningMessages(spec: ShaftSpec): List<String> {
     val out = mutableListOf<String>()
     val tiny = countTinySegments(spec)
     if (tiny > 0) out += "$tiny segments shorter than 1 mm"
-    if (spec.bodies.isEmpty() && hasAnyNonBodyComponent(spec)) {
-        out += "No explicit bodies — shaft body is all auto-fill"
-    }
     return out
 }
 
@@ -185,9 +187,3 @@ private fun countTinySegments(spec: ShaftSpec): Int {
     spec.threads.forEach { if (!it.excludeFromOAL && isShortSegment(it.lengthMm)) n++ }
     return n
 }
-
-/** True when at least one taper, liner, or non-excluded thread is present. */
-private fun hasAnyNonBodyComponent(spec: ShaftSpec): Boolean =
-    spec.tapers.isNotEmpty() ||
-        spec.liners.isNotEmpty() ||
-        spec.threads.any { !it.excludeFromOAL }

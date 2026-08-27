@@ -6,8 +6,16 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Pure show/dismiss coverage for the Schematic tab's spec-level warning banner. */
+/**
+ * Pure show/dismiss coverage for the Schematic tab's spec-level warning banner.
+ *
+ * The logic is message-AGNOSTIC — it keys off the set, never the text — so multi-message cases
+ * use plainly synthetic strings rather than inventing a second real warning. Today
+ * `specWarningMessages` produces exactly one.
+ */
 class SpecWarningVisibilityTest {
+
+    private val realMessage = "2 segments shorter than 1 mm"
 
     @Test
     fun `banner hidden when there are no messages`() {
@@ -16,8 +24,7 @@ class SpecWarningVisibilityTest {
 
     @Test
     fun `banner visible with messages and nothing dismissed yet`() {
-        val messages = listOf("No explicit bodies — shaft body is all auto-fill")
-        assertTrue(bannerVisible(messages, dismissedKey = null))
+        assertTrue(bannerVisible(listOf(realMessage), dismissedKey = null))
     }
 
     @Test
@@ -35,16 +42,16 @@ class SpecWarningVisibilityTest {
         val grown = listOf("3 segments shorter than 1 mm")
         assertTrue(bannerVisible(grown, dismissedKey))
 
-        val extra = original + "No explicit bodies — shaft body is all auto-fill"
+        val extra = original + "some later warning"
         assertTrue(bannerVisible(extra, dismissedKey))
     }
 
     @Test
     fun `banner stays hidden when the same set recomputes in the same order`() {
-        val messages = listOf("2 segments shorter than 1 mm", "No explicit bodies — shaft body is all auto-fill")
+        val messages = listOf(realMessage, "some later warning")
         val dismissedKey = warningSetKey(messages)
         // A fresh, structurally-identical list from a later recompute — not the same instance.
-        val recomputed = listOf("2 segments shorter than 1 mm", "No explicit bodies — shaft body is all auto-fill")
+        val recomputed = listOf(realMessage, "some later warning")
         assertFalse(bannerVisible(recomputed, dismissedKey))
     }
 

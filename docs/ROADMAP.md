@@ -69,7 +69,9 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Runout bubble leader dogleg-dip rework (2026-08-25) — dogleg diagonals dip for slope
   (≈26.6° target) so leaders read as pointers on crowded sheets; pure-engine change, both draw
   sites inherit it
-- Spec-level warnings banner (2026-08-25) + implausibly-large value warnings (2026-08-24)
+- Spec-level warnings banner (2026-08-25; scope narrowed to real problems only and the caution
+  colour tier given a real amber value across all four schemes, 2026-08-27) +
+  implausibly-large value warnings (2026-08-24)
 - Bore keyway rough-cutter depth calculator (2026-08-24/25) — sidebar tool, up to 2 cutters,
   nearest-fraction scale check with a 64|32|16 grid chip
 - Blends and seal areas on the runout/consolidated sheet (2026-08-24); taper overlaps block

@@ -19,7 +19,6 @@ class ComponentWarningsTest {
     private val STEP = "Large Ø step vs adjacent body"
     private val LINER_UNDER = "Liner OD smaller than shaft Ø beneath it"
     private val SHORT = "Very short segment (< 1 mm)"
-    private val NO_BODIES = "No explicit bodies — shaft body is all auto-fill"
     private val LENGTH_SANITY = "Length exceeds 15 m — check for a typo"
     private val DIA_SANITY = "Diameter exceeds 1 m — check for a typo"
 
@@ -321,41 +320,37 @@ class ComponentWarningsTest {
         assertTrue(specWarningMessages(spec).none { it.contains("shorter than 1 mm") })
     }
 
-    /* ── §4.3 Zero-body coverage ────────────────────────────────────────────── */
+    /* ── §4.3 The banner carries PROBLEMS only ──────────────────────────────── */
 
+    /**
+     * A shaft with no explicit bodies is perfectly ordinary — auto-fill IS the design — and used
+     * to raise "No explicit bodies — shaft body is all auto-fill" here. Routed through an
+     * advisory-styled banner it read as something being wrong (on-device report), so it is gone.
+     * Nothing describing normal behaviour may take its place: the banner's whole value is that
+     * seeing it means something needs attention.
+     */
     @Test
-    fun `spec warns on zero-body coverage with a taper present`() {
+    fun `a spec with no explicit bodies raises nothing`() {
         val spec = ShaftSpec(
             overallLengthMm = 1000f,
             tapers = listOf(Taper(startFromAftMm = 0f, lengthMm = 200f, startDiaMm = 80f, endDiaMm = 60f)),
+            liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 200f, odMm = 60f)),
         )
-        assertTrue(specWarningMessages(spec).contains(NO_BODIES))
-    }
-
-    @Test
-    fun `spec silent on zero-body coverage when only excluded thread exists`() {
-        val spec = ShaftSpec(
-            overallLengthMm = 1000f,
-            threads = listOf(
-                Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = 40f, pitchMm = 2f, excludeFromOAL = true),
-            ),
-        )
-        assertFalse(specWarningMessages(spec).contains(NO_BODIES))
-    }
-
-    @Test
-    fun `spec silent on zero-body coverage for fully empty spec`() {
-        val spec = ShaftSpec(overallLengthMm = 1000f)
         assertTrue(specWarningMessages(spec).isEmpty())
     }
 
     @Test
-    fun `spec silent on zero-body coverage when bodies present`() {
+    fun `a fully empty spec raises nothing`() {
+        assertTrue(specWarningMessages(ShaftSpec(overallLengthMm = 1000f)).isEmpty())
+    }
+
+    /** The one surviving message still fires — removing the note must not silence the banner. */
+    @Test
+    fun `a genuine anomaly still raises`() {
         val spec = ShaftSpec(
             overallLengthMm = 1000f,
-            bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = 50f)),
-            tapers = listOf(Taper(startFromAftMm = 500f, lengthMm = 200f, startDiaMm = 80f, endDiaMm = 60f)),
+            tapers = listOf(Taper(startFromAftMm = 0f, lengthMm = 0.5f, startDiaMm = 80f, endDiaMm = 60f)),
         )
-        assertFalse(specWarningMessages(spec).contains(NO_BODIES))
+        assertEquals(listOf("1 segments shorter than 1 mm"), specWarningMessages(spec))
     }
 }

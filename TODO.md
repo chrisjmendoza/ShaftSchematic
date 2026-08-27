@@ -88,7 +88,10 @@ keep this readable — full detail lives in `CHANGELOG.md` and git history.
 - [x] Spec-level warnings (`specWarningMessages`) now show as a dismissable banner above the
   carousel on the Schematic tab, 2026-08-25 (`ui/screen/SpecWarningBanner.kt`,
   `ui/util/SpecWarningVisibility.kt`). Dismissal keys off the message set and is Compose view
-  state only (not persisted, not in `EditState`/undo).
+  state only (not persisted, not in `EditState`/undo). **Scope narrowed 2026-08-27**: the
+  banner carries PROBLEMS the user can act on and nothing else — the "No explicit bodies"
+  note was removed (auto-fill is the design, not a deviation) after it read as an error
+  on-device. Same day the caution colour tier it uses got a real value; see §Appearance.
 - [ ] Review the warning thresholds picked during the 2026-07-24 loop (1.5× adjacent-body
   step, 0.5 mm adjacency eps in `ui/util/ComponentWarnings.kt`) — chosen without shop input;
   sanity-check against real drawings. (Taper-mismatch 10% threshold is moot — that rule was

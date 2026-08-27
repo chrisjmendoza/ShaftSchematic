@@ -130,7 +130,11 @@ Input field clears only when committed value is zero.
 Prevents save/export.
 
 ### Warning (Non-Blocking)
-Allows continued operations but signals risk.
+Allows continued operations but signals risk. The **caution** rung of the chrome severity
+ladder (error → caution → neutral), drawn on `tertiaryContainer` — amber in every scheme.
+A warning must name a PROBLEM the user can act on: a line describing normal behaviour reads
+as an error in that styling and cheapens the ones that matter (the "No explicit bodies" note
+was removed on those grounds, 2026-08-27). See `docs/contracts/Appearance.md`.
 
 ---
 

@@ -3,10 +3,15 @@ package com.android.shaftschematic.ui.screen
 /**
  * SpecWarningBanner — Schematic tab document-level advisory line.
  *
- * Surfaces `specWarningMessages(spec)` (tiny-segment count, zero-body coverage — see
- * `ui/util/ComponentWarnings.kt`) as a dismissable line above the component carousel. It reads
- * as belonging to the document rather than to any one component card, mirroring the warning
- * color already used per-card in `ComponentCarousel.kt`.
+ * Surfaces `specWarningMessages(spec)` (see `ui/util/ComponentWarnings.kt`) as a dismissable
+ * line above the component carousel. It reads as belonging to the document rather than to any
+ * one component card, mirroring the warning color already used per-card in
+ * `ComponentCarousel.kt`.
+ *
+ * The advisory styling is the contract: **only messages describing a PROBLEM the user can act
+ * on may reach this banner.** A line stating normal behaviour reads as an error here (on-device
+ * report) and cheapens the ones that matter — see `specWarningMessages` for the note that was
+ * removed on those grounds.
  *
  * Dismissal is keyed to the current warning set ([bannerVisible]/[warningSetKey]): dismissing
  * hides the banner for that exact set of messages only, and a changed set (a new or different

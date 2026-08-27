@@ -6,6 +6,67 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-27
+
+### fix(ui): the spec banner carries problems only — "No explicit bodies" removed
+
+On-device report: "No explicit bodies — shaft body is all auto-fill" *"looks like an error
+message rather than a notice"*. It was mis-categorized rather than miscolored. The banner
+correctly uses the app's warning tier (`tertiaryContainer`, the same one `ComponentCarousel`
+uses per card, distinct from `errorContainer` for errors) — but the message isn't a warning.
+Auto-fill IS the design, so a shaft that's taper + liners with auto-fill between is entirely
+correct: nothing to know, nothing to act on, nothing that breaks if ignored. It fired on every
+ordinary shaft, said what the carousel card right underneath already says ("Body (auto)"), and
+sat next to a genuine anomaly (`"N segments shorter than 1 mm"`) in the same visual treatment —
+where the louder reading wins and the real one gets cheaper.
+
+`specWarningMessages` now emits the tiny-segment count alone, and `hasAnyNonBodyComponent` goes
+with it. **The banner's contract is now explicit in both files: only a problem the user can act
+on may reach it.** Two tests pin it — a no-explicit-bodies spec raises nothing, and the
+surviving message still fires so the removal can't silence the banner. `VALIDATION_RULES.md`
+§4.3 keeps the rule struck through with the reasoning, and notes that if the underlying concern
+is ever "the bare-shaft Ø is DERIVED rather than authored", that is a *different* message that
+should fire only when the derivation is ambiguous.
+
+1867 green.
+
+### fix(theme): the caution rung gets a colour of its own — amber, not baseline pink
+
+Follow-on from the banner above, taken at the user's discretion. The app runs a **three-rung**
+severity ladder in chrome — most visibly on the Free-to-End badge, which steps `errorContainer`
+(oversized) → `tertiaryContainer` (snug) → `surface` (fine); per-card warnings and the spec
+banner use the same caution rung. `tertiaryContainer`/`onTertiaryContainer` was the **one
+container role no scheme assigned** — including both high-contrast schemes, which set
+`primaryContainer`, `secondaryContainer` and `errorContainer` and stop the tertiary family after
+`onTertiary`. So all four inherited M3's baseline `#FFD8E4`: a pale pink a few degrees of hue
+from the error rung, which put "snug" and "oversized" at nearly the same colour **on the same
+badge**, and made an advisory read as an error.
+
+Now assigned everywhere — amber (`WarnAmber*` in `Color.kt`) for light/dark, and for the
+high-contrast schemes their own `HcBronzeDark`/`HcBronzeBright` accent, which simply completes
+the `X` / `onX` / `XContainer` / `onXContainer` pattern the other three families already follow
+there. Contrast comes out 8.9:1 light, 8.1:1 dark, 10:1 and 12:1 high-contrast — the last two
+clearing the AAA bar those schemes state as their posture and previously missed on this role.
+
+**`tertiary` itself is deliberately untouched.** It is not part of the ladder: it is the
+preview-color **Bronze** preset (`PreviewColorPreset.BRONZE` → `scheme.tertiary`), and its
+historical light value is pinned as `SheetInk.LinerTint`. Recolouring it to match would have
+changed the Bronze fill under every saved document and made that pin's comment silently false.
+
+This is the first deliberate exception to the Appearance contract's "LIGHT + high-contrast-off
+must reproduce the historical look" clause, and both the clause and
+`docs/contracts/Appearance.md` now record why: the historical value here was a baseline default
+that leaked into a semantic role, not a chosen look. The clause guards drift in what was
+DECIDED; it does not freeze what was never decided.
+
+New `SeverityLadderTest` (7 cases) pins it across all four schemes — the assignment itself
+(an unset role is exactly what a test can catch, and it would have caught this one), caution ≠
+error, per-scheme WCAG contrast bars, the high-contrast accent reuse, three distinct rungs, and
+that `tertiary` still equals `SheetInk.LinerTint`. The four schemes moved `private` → `internal`
+to allow it.
+
+1874 green.
+
 ## 2026-08-26
 
 ### fix(pdf): shaft-height paper band, spoons stop inflating, footer sits on the bottom margin

@@ -328,12 +328,16 @@ Coupler bolt slots are **excluded from all collision detection** (`collisionGrou
   `specWarningMessages` is pure and unit-tested and renders as a dismissable banner above the
   component carousel on the Schematic tab (`ui/screen/SpecWarningBanner.kt`), 2026-08-25.
 - Free-to-end space < 10 mm *(implemented)*
-- Zero-body coverage (no explicit bodies in `ShaftSpec`; auto bodies are derived and do not
-  satisfy this warning) *(implemented, 2026-07-24 — surfaced 2026-08-25)* —
-  `specWarningMessages(spec)` emits `"No explicit bodies — shaft body is all auto-fill"` when
-  `spec.bodies` is empty and at least one taper, liner, or non-excluded thread exists
-  (`hasAnyNonBodyComponent`). Like the tiny-segment count above, this is pure and unit-tested
-  and shares the same Schematic-tab banner, 2026-08-25.
+- ~~Zero-body coverage~~ *(implemented 2026-07-24, surfaced 2026-08-25, **removed
+  2026-08-27**)* — `specWarningMessages` used to emit `"No explicit bodies — shaft body is all
+  auto-fill"` when `spec.bodies` was empty. It was not a problem: auto-fill IS the design
+  (§ *Bodies are fillers*), so the note fired on every ordinary taper-and-liner shaft, said what
+  the carousel card underneath already says ("Body (auto)"), and — routed through an
+  advisory-styled banner — read as an error (on-device report). **The banner carries problems the
+  user can act on, nothing else**; a line describing normal behaviour spends that attention for
+  nothing and makes the real anomalies easier to ignore. Do not reinstate it. If the underlying
+  concern is ever "the bare-shaft Ø is DERIVED rather than authored", that is a different
+  message, and it should fire only when the derivation is ambiguous.
 
 ---
 

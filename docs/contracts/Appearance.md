@@ -16,11 +16,33 @@ Version: v1.0 (2026-08-04)
 - **Default is `LIGHT` + high contrast off**, and that combination must reproduce the app's
   historical presentation (the pre-Appearance bare `MaterialTheme` look). An app update must
   never change the app's look until the user opts in. `AppThemeMode.fromName` falls back to
-  `LIGHT` on missing/corrupt values for the same reason.
+  `LIGHT` on missing/corrupt values for the same reason. **One deliberate exception**, the
+  caution tier below: its historical value was a baseline default nobody chose, and this clause
+  guards what was DECIDED rather than freezing what was never decided.
 - Four schemes: Light, Dark, High-contrast Light, High-contrast Dark (`Theme.kt`).
   High contrast = pure black/white grounds, bold containers, one strong accent per scheme
   (`HcBlue` light / `HcAmber` dark) chosen to read on that scheme's surfaces **and** on the
   white sheet canvases.
+
+### The severity ladder: error → caution → neutral
+
+The app runs a **three-rung** severity ladder in chrome, most visibly on the Free-to-End badge
+(`ShaftPreviewPanel`): `errorContainer` when oversized → `tertiaryContainer` when snug →
+`surface` when fine. Per-card component warnings (`ComponentCarousel`) and the spec-level banner
+(`SpecWarningBanner`) use the same caution rung, and errors on a card use `errorContainer`.
+
+`tertiaryContainer`/`onTertiaryContainer` therefore mean **caution**, and every scheme assigns
+them (`Color.kt` → `WarnAmber*`; the high-contrast schemes reuse their own `HcBronze*` accent,
+completing the `X`/`onX`/`XContainer`/`onXContainer` pattern the other three families already
+follow). Before that they were the only container role left unset — including in the
+high-contrast schemes, which set `primaryContainer`, `secondaryContainer` and `errorContainer`
+and skipped this one — so all four schemes inherited M3's baseline `#FFD8E4`. A pale pink a few
+degrees of hue from the error rung put "snug" and "oversized" at nearly the same colour on one
+badge, and made an advisory banner read as an error (on-device report).
+
+`tertiary` itself is **not** part of this ladder and must not be recoloured to match: it is the
+preview-color **Bronze** preset (`PreviewColorPreset.BRONZE` → `scheme.tertiary`), and its
+historical light value is pinned as `SheetInk.LinerTint`.
 - **No dynamic (Material You) color.** Schemes are fixed so the preview-color presets
   (Stainless/Steel/Bronze — theme-lerped) resolve predictably. Revisit deliberately, never
   as a side effect.

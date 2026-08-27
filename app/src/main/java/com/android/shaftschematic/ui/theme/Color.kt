@@ -10,6 +10,23 @@ val Purple40 = Color(0xFF6650a4)
 val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
+// ── Advisory (caution) tier ──────────────────────────────────────────────────
+// The app runs a three-rung severity ladder — error / caution / neutral — and maps the caution
+// rung onto `tertiaryContainer` (the Free-to-End badge steps errorContainer → tertiaryContainer
+// → surface; per-card warnings and the spec banner use the same role). That role was never
+// assigned, so every scheme inherited M3's baseline `#FFD8E4` — a pale PINK sitting a few
+// degrees of hue from `errorContainer`, which put "snug" and "oversized" at almost the same
+// colour on one badge and made an advisory banner read as an error (on-device report).
+//
+// Amber instead: unmistakably caution, unmistakably not danger, and far from the app's purple
+// primary. `tertiary` itself is deliberately NOT touched — it is the preview-color "Bronze"
+// preset (`PreviewColorPreset.BRONZE` → `scheme.tertiary`) and its light value is pinned in
+// `SheetInk.LinerTint`.
+val WarnAmberLight = Color(0xFFFFE2A9)
+val OnWarnAmberLight = Color(0xFF4A3200)
+val WarnAmberDark = Color(0xFF4A3800)
+val OnWarnAmberDark = Color(0xFFFFDFA0)
+
 // ── High-contrast palette ────────────────────────────────────────────────────
 // Pure black/white grounds with one strong accent per scheme. The accents must read
 // on BOTH the scheme's own surfaces and the paper-white sheet canvases (undercut /

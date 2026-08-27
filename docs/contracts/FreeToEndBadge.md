@@ -15,10 +15,24 @@ state. (`spec.freeToEndMm()` in the model clamps ≥ 0 and is not what the badge
 
 ## Display
 - Overlay location: **Top Start** of preview; `padding(8.dp)`.
-- Style: `Surface` with `shape = RoundedCornerShape(8.dp)`,
-  `color = surface.copy(alpha = 0.85)`, `tonalElevation = 2.dp`.
-- Text: `typography.labelSmall`, color `onSurface`.
+- Style: `Surface` with `shape = RoundedCornerShape(8.dp)`, `tonalElevation = 2.dp`
+  (3.dp when oversized).
 - Label format: `Free to end: {value} {unit}` using current UI unit.
+
+### Three colour rungs (the app's severity ladder)
+
+The badge is where the whole ladder is visible at once, so it is the canonical example of it:
+
+| State | Container | Text |
+|---|---|---|
+| Oversized | `errorContainer` | `onErrorContainer` |
+| Snug | `tertiaryContainer` — the **caution** rung | `onTertiaryContainer` |
+| Fine | `surface.copy(alpha = 0.85)` | `onSurface` |
+
+The caution rung is **amber**, and every scheme assigns it. It used to be unassigned and fell
+back to M3's baseline pale pink, which sat a few degrees of hue from the error rung — so "snug"
+and "oversized" read as nearly the same badge. Do not let that role go unassigned again; see
+`docs/contracts/Appearance.md` § *The severity ladder* and `SeverityLadderTest`.
 
 ## Invariants
 - No layout-dependent math in computation.
