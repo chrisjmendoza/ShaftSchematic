@@ -17,6 +17,9 @@ material = "1.13.0"
 navigationCompose = "2.9.8"
 datastore = "1.2.1"
 robolectric = "4.16.1"        # runs Compose UI tests on the JVM (no device)
+firebaseBom = "34.18.0"       # BOM pins firebase-crashlytics; ktx is merged into the main artifact
+googleServices = "4.5.0"
+firebaseCrashlyticsPlugin = "3.0.8"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -50,8 +53,15 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 
+# Firebase BOM controls the Firebase artifact versions below; they carry no explicit version.
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+# Applied only when app/google-services.json exists — see app/build.gradle.kts.
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPlugin" }

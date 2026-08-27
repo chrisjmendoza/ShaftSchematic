@@ -38,6 +38,20 @@ jobs:
         # builds reach Firebase (on-device direction).
         run: ./gradlew testDebugUnitTest --no-daemon
 
+      - name: Materialize google-services.json
+        # Crashlytics is optional configuration: the two Google plugins apply only when this
+        # file exists (app/build.gradle.kts). An unset secret must therefore still build — it
+        # just distributes a build with no crash reporting rather than failing the workflow.
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo "google-services.json written — Crashlytics enabled for this build"
+          else
+            echo "GOOGLE_SERVICES_JSON is unset — building without Crashlytics"
+          fi
+
       - name: Build debug APK
         # The shared debug.keystore is committed to the repo so the APK is
         # signed consistently — Android treats each CI build as an update, not a reinstall.

@@ -16,6 +16,10 @@ import android.provider.DocumentsContract
  * the exception line) and still finished/written, so the output always opens and shows
  * what failed. Callers get `false` back to skip success-only follow-ups (achievements,
  * auto-open).
+ *
+ * That recovery is also why every branch here leaves a breadcrumb: the user is shown a page
+ * saying the export failed, and the throwable behind it would otherwise be swallowed whole. It
+ * goes to [AppLog] (evidence a tester can mail back) and to [CrashReporter] as a non-fatal.
  */
 
 /** US Letter landscape, in PDF points — the app's single page format. */
@@ -33,7 +37,11 @@ fun writeShaftPdfToUri(
     uri: Uri,
     composePage: (PdfDocument.Page) -> Unit,
 ): Boolean {
+    // Breadcrumbs name the document only by its last path segment: enough to line an export up
+    // with what the user was doing, without carrying the rest of a provider URI into a shared log.
+    val label = uri.lastPathSegment ?: "(unnamed)"
     var composed = false
+    AppLog.i(PDF_EXPORT_TAG, "export start $label")
     runCatching {
         context.contentResolver.openOutputStream(uri)?.use { out ->
             val doc = PdfDocument()
@@ -44,6 +52,10 @@ fun writeShaftPdfToUri(
                     composePage(page)
                     true
                 } catch (t: Throwable) {
+                    // The error page is all the user sees; without these two lines the throw that
+                    // caused it leaves no trace anywhere.
+                    AppLog.e(PDF_EXPORT_TAG, "composer threw, error page written for $label", t)
+                    CrashReporter.recordNonFatal(t)
                     drawPdfErrorPage(page, t)
                     false
                 }
@@ -53,10 +65,19 @@ fun writeShaftPdfToUri(
                 try { out.flush() } catch (_: Throwable) {}
                 doc.close()
             }
-        } ?: return false
-    }.onFailure { return false }
+        } ?: run {
+            AppLog.e(PDF_EXPORT_TAG, "export failed, no output stream for $label")
+            return false
+        }
+    }.onFailure { t ->
+        AppLog.e(PDF_EXPORT_TAG, "export write failed for $label", t)
+        return false
+    }
+    if (composed) AppLog.i(PDF_EXPORT_TAG, "export ok $label")
     return composed
 }
+
+private const val PDF_EXPORT_TAG = "PdfExport"
 
 /** Paint the never-truncated error page: the file opens and says what failed. */
 fun drawPdfErrorPage(page: PdfDocument.Page, t: Throwable) {
@@ -76,11 +97,19 @@ fun drawPdfErrorPage(page: PdfDocument.Page, t: Throwable) {
  * may uniquify [displayName] (e.g. append "(1)") when a file already exists; the returned
  * uri is the actual document. Null when creation fails.
  */
-fun createPdfInTree(context: Context, treeUri: Uri, displayName: String): Uri? = runCatching {
-    val parentDoc = DocumentsContract.buildDocumentUriUsingTree(
-        treeUri, DocumentsContract.getTreeDocumentId(treeUri),
-    )
-    DocumentsContract.createDocument(
-        context.contentResolver, parentDoc, "application/pdf", displayName,
-    )
-}.getOrNull()
+fun createPdfInTree(context: Context, treeUri: Uri, displayName: String): Uri? {
+    val created = runCatching {
+        val parentDoc = DocumentsContract.buildDocumentUriUsingTree(
+            treeUri, DocumentsContract.getTreeDocumentId(treeUri),
+        )
+        DocumentsContract.createDocument(
+            context.contentResolver, parentDoc, "application/pdf", displayName,
+        )
+    }.onFailure { t ->
+        AppLog.e(PDF_EXPORT_TAG, "could not create $displayName in the picked folder", t)
+        return null
+    }.getOrNull()
+
+    if (created == null) AppLog.e(PDF_EXPORT_TAG, "the folder refused to create $displayName")
+    return created
+}

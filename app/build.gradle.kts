@@ -5,6 +5,17 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Firebase is optional configuration. `app/google-services.json` belongs to the Firebase project
+// and is deliberately not in the repo (see .gitignore); CI materializes it from a secret. Applying
+// the two Google plugins unconditionally would fail every build that has no json — including every
+// clone anybody makes — so they are applied only when the file is actually here. The Crashlytics
+// SDK itself is a plain dependency: without a json, FirebaseApp never initializes and
+// `util/CrashReporter` no-ops.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+}
+
 val gitSha: String = try {
     providers.exec {
         commandLine("git", "rev-parse", "--short", "HEAD")
@@ -135,6 +146,11 @@ dependencies {
 
     // Material (View system) — only if you actually use Views; otherwise you can remove
     implementation(libs.material)
+
+    // --- Crash reporting. Unconditional: the classes must compile and link on every build.
+    // Whether they do anything is decided at runtime by CrashReporter (Firebase initialized or not).
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.crashlytics)
 
     // --- Debug / Tooling
     debugImplementation(libs.androidx.compose.ui.tooling)

@@ -16,6 +16,7 @@ import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.oalIsManualOnLoad
 import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.Dispatchers
@@ -96,6 +97,7 @@ fun ShaftViewModel.backupAllShaftsTo(uri: Uri) {
             },
             onFailure = {
                 VerboseLog.e(VerboseLog.Category.IO, "ShaftBackup") { "backup failed: ${it.message}" }
+                AppLog.e("ShaftBackup", "backup failed", it)
                 "Backup failed — could not write the file"
             },
         )
@@ -139,6 +141,7 @@ fun ShaftViewModel.restoreShaftsFromBackup(uri: Uri) {
             },
             onFailure = {
                 VerboseLog.e(VerboseLog.Category.IO, "ShaftBackup") { "restore failed: ${it.message}" }
+                AppLog.e("ShaftBackup", "restore failed", it)
                 "Restore failed — could not read the file"
             },
         )

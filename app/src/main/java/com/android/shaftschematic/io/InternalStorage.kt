@@ -10,6 +10,7 @@ import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.doc.isSeededSampleNotes
 import com.android.shaftschematic.doc.isLegacyExtension
 import com.android.shaftschematic.doc.stripShaftDocExtension
+import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +44,14 @@ import java.io.File
  */
 
 object InternalStorage {
+    /**
+     * Breadcrumb tag. The document-level operations log through [AppLog] as well as
+     * [VerboseLog]: the dev-gated logcat lines are unreachable on a tester's device, and a lost
+     * or unopenable save is exactly the report that arrives with nothing to look at. Names and
+     * sizes only — never document content.
+     */
+    private const val TAG = "Storage"
+
     private fun dir(ctx: Context): File = dir(ctx.filesDir)
 
     internal fun dir(filesDir: File): File = File(filesDir, "shafts").apply { mkdirs() }
@@ -107,7 +116,13 @@ object InternalStorage {
     fun save(ctx: Context, name: String, content: String) {
         require(name.endsWith(SHAFT_DOT_EXT, ignoreCase = true)) { "Name must end with $SHAFT_DOT_EXT" }
         VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") { "save name=$name chars=${content.length}" }
-        save(dir(ctx), name, content)
+        try {
+            save(dir(ctx), name, content)
+        } catch (t: Throwable) {
+            AppLog.e(TAG, "save failed name=$name chars=${content.length}", t)
+            throw t
+        }
+        AppLog.i(TAG, "saved name=$name chars=${content.length}")
 
         // Strictly after the internal write, and fire-and-forget: [BackupMirror] queues the copy
         // on its own IO scope and swallows every failure, so a missing/revoked mirror folder can
@@ -147,10 +162,17 @@ object InternalStorage {
         }
     }
 
-    fun load(ctx: Context, name: String): String =
-        File(dir(ctx), name).readText().also { content ->
-            VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") { "load name=$name chars=${content.length}" }
+    fun load(ctx: Context, name: String): String {
+        val content = try {
+            File(dir(ctx), name).readText()
+        } catch (t: Throwable) {
+            AppLog.e(TAG, "load failed name=$name", t)
+            throw t
         }
+        VerboseLog.d(VerboseLog.Category.IO, "InternalStorage") { "load name=$name chars=${content.length}" }
+        AppLog.i(TAG, "loaded name=$name chars=${content.length}")
+        return content
+    }
 
     /**
      * Returns true when the file was actually deleted.
@@ -161,7 +183,12 @@ object InternalStorage {
      */
     fun delete(ctx: Context, name: String): Boolean {
         val deleted = delete(dir(ctx), name)
-        if (deleted) BackupMirror.onDocumentDeleted(ctx, name)
+        if (deleted) {
+            AppLog.i(TAG, "deleted name=$name")
+            BackupMirror.onDocumentDeleted(ctx, name)
+        } else {
+            AppLog.w(TAG, "delete did nothing name=$name")
+        }
         return deleted
     }
 
@@ -180,7 +207,12 @@ object InternalStorage {
      */
     fun rename(ctx: Context, fromName: String, toName: String): Boolean {
         val renamed = rename(dir(ctx), fromName, toName)
-        if (renamed) BackupMirror.onDocumentRenamed(ctx, fromName, toName)
+        if (renamed) {
+            AppLog.i(TAG, "renamed $fromName -> $toName")
+            BackupMirror.onDocumentRenamed(ctx, fromName, toName)
+        } else {
+            AppLog.w(TAG, "rename refused $fromName -> $toName")
+        }
         return renamed
     }
 
@@ -210,7 +242,12 @@ object InternalStorage {
      *
      * If a target name already exists, appends " (Migrated)" / " (Migrated N)" to avoid overwrites.
      */
-    suspend fun migrateLegacyJsonToShaft(ctx: Context): MigrationReport = migrateLegacyJsonToShaft(dir(ctx))
+    suspend fun migrateLegacyJsonToShaft(ctx: Context): MigrationReport =
+        migrateLegacyJsonToShaft(dir(ctx)).also { report ->
+            if (report.migratedCount > 0 || report.skippedCount > 0) {
+                AppLog.i(TAG, "migrated=${report.migratedCount} skipped=${report.skippedCount}")
+            }
+        }
 
     internal fun migrateLegacyJsonToShaft(dir: File): MigrationReport {
         val legacy = dir.listFiles()?.filter { f ->

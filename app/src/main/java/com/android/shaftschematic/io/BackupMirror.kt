@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
 import com.android.shaftschematic.data.SettingsStore
+import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +43,9 @@ import kotlinx.coroutines.sync.withLock
  */
 object BackupMirror {
 
+    // Only failures reach AppLog. A working mirror writes on every save, and a breadcrumb per
+    // save would push everything else out of the ring; successes stay on the dev-gated
+    // VerboseLog channel, where they cost nothing unless somebody asked for them.
     private const val TAG = "BackupMirror"
 
     /** What the last mirror attempt did. Session state — nothing here is persisted. */
@@ -136,6 +140,7 @@ object BackupMirror {
             },
             onFailure = { t ->
                 VerboseLog.e(VerboseLog.Category.IO, TAG) { "mirror failed name=$name: ${t.message}" }
+                AppLog.e(TAG, "mirror failed name=$name", t)
                 _lastOutcome.value = Outcome(Status.FAILED, name, detail = failureDetail(t))
                 false
             },
@@ -165,6 +170,7 @@ object BackupMirror {
             },
             onFailure = { t ->
                 VerboseLog.e(VerboseLog.Category.IO, TAG) { "unmirror failed name=$name: ${t.message}" }
+                AppLog.e(TAG, "unmirror failed name=$name", t)
                 _lastOutcome.value = Outcome(Status.FAILED, name, detail = failureDetail(t))
                 false
             },
@@ -193,6 +199,7 @@ object BackupMirror {
         val content = runCatching { InternalStorage.load(app, toName) }.getOrNull()
         if (content == null) {
             VerboseLog.e(VerboseLog.Category.IO, TAG) { "rename mirror skipped: $toName is not readable" }
+            AppLog.e(TAG, "rename mirror skipped: $toName is not readable")
             return
         }
 
@@ -200,6 +207,7 @@ object BackupMirror {
             VerboseLog.e(VerboseLog.Category.IO, TAG) {
                 "rename mirror kept the copy of $fromName: $toName could not be written"
             }
+            AppLog.e(TAG, "rename mirror kept the copy of $fromName: $toName could not be written")
             return
         }
 
@@ -208,6 +216,7 @@ object BackupMirror {
                 VerboseLog.e(VerboseLog.Category.IO, TAG) {
                     "rename mirror left a stale copy of $fromName: ${t.message}"
                 }
+                AppLog.e(TAG, "rename mirror left a stale copy of $fromName", t)
             }
         }
         _lastOutcome.value = Outcome(Status.RENAMED, toName, previousName = fromName)
@@ -241,6 +250,7 @@ object BackupMirror {
                 writeMirrorCopy(app, treeUri, name, content)
                     .onFailure { t ->
                         VerboseLog.e(VerboseLog.Category.IO, TAG) { "catch-up failed name=$name: ${t.message}" }
+                        AppLog.e(TAG, "catch-up failed name=$name", t)
                     }
                     .isSuccess
             if (ok) mirrored++ else failed++
@@ -270,6 +280,7 @@ object BackupMirror {
 
         if (!taken) {
             VerboseLog.e(VerboseLog.Category.IO, TAG) { "could not persist permission for $treeUri" }
+            AppLog.e(TAG, "could not persist permission for the picked mirror folder")
             return false
         }
 
@@ -336,6 +347,7 @@ object BackupMirror {
             runCatching { work(app) }
                 .onFailure { t ->
                     VerboseLog.e(VerboseLog.Category.IO, TAG) { "$what mirror dispatch failed: ${t.message}" }
+                    AppLog.e(TAG, "$what mirror dispatch failed", t)
                 }
         }
     }

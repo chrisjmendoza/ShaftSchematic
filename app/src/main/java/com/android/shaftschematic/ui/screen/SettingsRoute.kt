@@ -5,6 +5,8 @@ import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.pdf.PdfExportMode
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/SettingsRoute.kt
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -79,6 +81,8 @@ import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_DEFAULT_MM
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.util.AppLog
+import com.android.shaftschematic.util.FeedbackIntentFactory
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
@@ -580,6 +584,42 @@ fun SettingsRoute(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { vm.restoreSampleShafts() }
+                    )
+
+                    // Last in the section: reached only after something has already gone wrong,
+                    // which is where a rarely-used option belongs. The file list is read on the
+                    // tap rather than at composition — the log grows while this screen is open.
+                    ListItem(
+                        headlineContent = { Text("Share diagnostic logs") },
+                        supportingContent = {
+                            Text("Email the app's own event log — what the app did, never what you drew")
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val logs = AppLog.logFiles()
+                                val uris = logs.mapNotNull { file ->
+                                    runCatching { FeedbackIntentFactory.uriForFile(ctx, file) }.getOrNull()
+                                }
+                                when {
+                                    logs.isEmpty() ->
+                                        scope.launch { snackbarHostState.showSnackbar("No logs recorded yet.") }
+                                    uris.isEmpty() ->
+                                        scope.launch { snackbarHostState.showSnackbar("Could not attach the logs.") }
+                                    else -> {
+                                        val intent = FeedbackIntentFactory.createDiagnostics(
+                                            context = ctx,
+                                            attachedFileNames = logs.map { it.name },
+                                            attachments = uris,
+                                        )
+                                        try {
+                                            ctx.startActivity(Intent.createChooser(intent, "Share diagnostic logs"))
+                                        } catch (_: ActivityNotFoundException) {
+                                            scope.launch { snackbarHostState.showSnackbar("No email app found.") }
+                                        }
+                                    }
+                                }
+                            }
                     )
 
                     HorizontalDivider()

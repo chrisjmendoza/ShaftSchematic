@@ -44,6 +44,7 @@ import com.android.shaftschematic.ui.viewmodel.exportJson
 import com.android.shaftschematic.ui.viewmodel.exportTemplateJson
 import com.android.shaftschematic.ui.viewmodel.importJson
 import com.android.shaftschematic.ui.viewmodel.unlockAchievement
+import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.DocumentNaming
@@ -136,7 +137,12 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                             "Already saved — an identical copy exists"
                         else -> "That file isn’t a readable shaft document."
                     }
-                }.getOrElse { "Could not import that file." }
+                }.getOrElse { t ->
+                    // The snackbar says only "could not"; the reason (unreadable stream, a
+                    // decode throw, a provider that revoked the grant) lives here.
+                    AppLog.e("Import", "import failed", t)
+                    "Could not import that file."
+                }
             }
             files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
             snackbarHostState.showSnackbar(message)

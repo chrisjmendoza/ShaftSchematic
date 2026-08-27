@@ -15,6 +15,9 @@ object FeedbackIntentFactory {
 
     const val SUBJECT: String = "ShaftSchematic Feedback"
 
+    /** Settings → Data → "Share diagnostic logs". */
+    const val DIAGNOSTICS_SUBJECT: String = "ShaftSchematic Diagnostic Logs"
+
     fun buildBody(
         context: Context,
         unit: UnitSystem,
@@ -62,6 +65,40 @@ object FeedbackIntentFactory {
         val body = buildBody(context = context, unit = unit, screen = screen, selectedSaveName = selectedSaveName)
         return createRaw(toEmail = FEEDBACK_EMAIL, subject = SUBJECT, body = body, attachments = attachments)
     }
+
+    /**
+     * The mail body that rides the diagnostic logs: which build and which device wrote them.
+     * The lines a log is useless without, and nothing more — the evidence is in the attachments,
+     * and this is not a place to restate it.
+     */
+    fun buildDiagnosticsBody(context: Context, attachedFileNames: List<String>): String {
+        val (versionName, versionCode) = appVersion(context)
+        val device = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
+
+        return buildString {
+            appendLine("ShaftSchematic diagnostic logs")
+            appendLine()
+            appendLine("App Version: $versionName ($versionCode)")
+            appendLine("Device: $device")
+            appendLine("Android: ${Build.VERSION.SDK_INT}")
+            appendLine("Attached: ${attachedFileNames.joinToString(", ").ifBlank { "(none)" }}")
+            appendLine()
+            appendLine("What went wrong:")
+            appendLine()
+        }
+    }
+
+    /** The share intent for [attachments], the app's log files. */
+    fun createDiagnostics(
+        context: Context,
+        attachedFileNames: List<String>,
+        attachments: List<Uri>,
+    ): Intent = createRaw(
+        toEmail = FEEDBACK_EMAIL,
+        subject = DIAGNOSTICS_SUBJECT,
+        body = buildDiagnosticsBody(context, attachedFileNames),
+        attachments = attachments,
+    )
 
     fun createRaw(
         toEmail: String,
