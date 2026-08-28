@@ -70,7 +70,15 @@ object DocumentNaming {
         return suggested
     }
 
-    private fun sanitizePart(raw: String): String {
+    /**
+     * Collapses whitespace and neutralises the characters a filename cannot carry.
+     *
+     * Public because it is the ONE sanitizer every name a user types passes through — the
+     * generated suggestions here, the Open screen's rename, and the Templates browser's rename
+     * alike. A second copy is how one surface ends up letting `*?:` through into a filename while
+     * its neighbour strips them.
+     */
+    fun sanitizePart(raw: String): String {
         val collapsed = raw.trim().replace(Regex("\\s+"), " ")
         if (collapsed.isEmpty()) return ""
 

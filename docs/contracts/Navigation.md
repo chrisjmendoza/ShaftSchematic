@@ -40,6 +40,10 @@ Route graph (AppNav.kt NavHost)
 - `developerOptions` → DeveloperOptionsRoute
 - `achievements` → AchievementsRoute
 - `openLocal` / `saveLocal` → internal-storage document pickers (InternalDocRoutes.kt)
+- `templates` → TemplatesRoute (`docs/contracts/Templates.md`) — the template browser,
+  entered from Start's "Start from Template". Browsing is unguarded; **choosing** a template
+  is session-replacing, so `onUseTemplate` runs through the same `runGuarded` unsaved-changes
+  gate as New / Open before `vm.applyTemplate` + navigate to `editor`.
 - `pdfPreview` → PdfPreviewScreen
 - `exportPdf` → PdfExportRoute (SAF export flow)
 

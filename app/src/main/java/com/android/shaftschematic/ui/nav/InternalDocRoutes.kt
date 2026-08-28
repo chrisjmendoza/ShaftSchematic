@@ -35,10 +35,9 @@ import androidx.navigation.NavController
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.io.TemplateStorage
 import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.template.TemplateLinerCount
-import com.android.shaftschematic.template.TemplateSizeBucket
-import com.android.shaftschematic.template.templateLinerCount
-import com.android.shaftschematic.template.templateSizeBucket
+import com.android.shaftschematic.template.dedupeTemplateName
+import com.android.shaftschematic.template.suggestedTemplateName
+import com.android.shaftschematic.template.templateBucketPath
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.exportJson
 import com.android.shaftschematic.ui.viewmodel.exportTemplateJson
@@ -48,6 +47,7 @@ import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.util.relativeOpenDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -95,16 +95,6 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
     var searchQuery by remember { mutableStateOf("") }
     var sortColumn by remember { mutableStateOf(OpenSortColumn.DATE) }
     var sortDir    by remember { mutableStateOf(OpenSortDir.DESC) }
-
-    fun sanitizeUserBaseName(raw: String): String {
-        val collapsed = raw.trim().replace(Regex("\\s+"), " ")
-        if (collapsed.isEmpty()) return ""
-
-        return collapsed
-            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
-            .replace(Regex("[\\u0000-\\u001F]"), "")
-            .trim()
-    }
 
     LaunchedEffect(Unit) {
         files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
@@ -217,7 +207,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val sanitizedBase = sanitizeUserBaseName(value.text)
+                        val sanitizedBase = DocumentNaming.sanitizePart(value.text)
                         val toName = InternalStorage.normalizeShaftDocName(sanitizedBase)
                         if (toName == null) {
                             scope.launch { snackbarHostState.showSnackbar("Name cannot be blank.") }
@@ -500,18 +490,6 @@ internal fun openFailureMessage(name: String, e: Throwable): String = when (e) {
     else -> "Could not open ‘${stripShaftDocExtension(name)}’ — the file may be damaged."
 }
 
-private fun relativeOpenDate(lastModifiedMs: Long): String {
-    val nowMs = System.currentTimeMillis()
-    val days = ((nowMs - lastModifiedMs) / (1000L * 60 * 60 * 24)).toInt()
-    return when {
-        days == 0 -> "Today"
-        days == 1 -> "Yesterday"
-        days < 7  -> "$days days ago"
-        days < 30 -> "${days / 7}w ago"
-        else      -> "${days / 30}mo ago"
-    }
-}
-
 /* ───────────────────── SAVE (to app storage) ───────────────────── */
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -553,6 +531,9 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
 
     val spec by vm.spec.collectAsState()
     var showTemplateDialog by remember { mutableStateOf(false) }
+    // Scanned when the dialog is opened, not at route entry: the seed is deduped against it, and
+    // a stale list would seed a name whose only outcome is an overwrite prompt.
+    var existingTemplates by remember { mutableStateOf(listOf<String>()) }
 
     var existingFiles by remember { mutableStateOf(listOf<String>()) }
     LaunchedEffect(Unit) { existingFiles = InternalStorage.list(ctx) }
@@ -705,7 +686,12 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
             }) { Text("Save a copy to device…") }
 
             OutlinedButton(
-                onClick = { showTemplateDialog = true },
+                onClick = {
+                    scope.launch {
+                        existingTemplates = withContext(Dispatchers.IO) { TemplateStorage.list(ctx) }
+                        showTemplateDialog = true
+                    }
+                },
                 modifier = Modifier.testTag("save_as_template_button"),
             ) { Text("Save as template…") }
 
@@ -737,7 +723,9 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
     if (showTemplateDialog) {
         SaveAsTemplateDialog(
             spec = spec,
-            suggestedName = suggestedTemplateName(spec, name.text),
+            // A derived seed describes a SHAPE, so two templates of one shape seed the same name.
+            // The ordinal keeps the dialog from opening pre-loaded with a guaranteed collision.
+            suggestedName = dedupeTemplateName(suggestedTemplateName(spec, name.text), existingTemplates),
             onDismiss = { showTemplateDialog = false },
             onSave = { templateName ->
                 scope.launch {
@@ -779,23 +767,6 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
 }
 
 /**
- * Names a new template after what it IS — its liner size and count — rather than after the job
- * it came from, since job identity is exactly what a template drops. Falls back to the document
- * name the user was already typing when the shaft has no liners to describe.
- */
-internal fun suggestedTemplateName(spec: ShaftSpec, documentName: String): String {
-    val size = templateSizeBucket(spec)
-    val count = templateLinerCount(spec)
-    return when {
-        size is TemplateSizeBucket.Inches ->
-            "${size.inches}in ${count.label.lowercase()}"
-        count == TemplateLinerCount.NONE ->
-            stripShaftDocExtension(documentName.trim()).ifBlank { "Straight shaft" }
-        else -> stripShaftDocExtension(documentName.trim()).ifBlank { "Shaft template" }
-    }
-}
-
-/**
  * Confirms the template's name and shows the bucket it will file under, so the user knows
  * where to find it before committing. The bucket is derived, never chosen — it always matches
  * what the browser computes from the same spec.
@@ -808,8 +779,7 @@ private fun SaveAsTemplateDialog(
     onSave: (String) -> Unit,
 ) {
     var text by remember { mutableStateOf(TextFieldValue(suggestedName, TextRange(suggestedName.length))) }
-    val sizeLabel = remember(spec) { templateSizeBucket(spec).label }
-    val countLabel = remember(spec) { templateLinerCount(spec).label }
+    val bucketPath = remember(spec) { templateBucketPath(spec) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -824,7 +794,7 @@ private fun SaveAsTemplateDialog(
                     modifier = Modifier.fillMaxWidth().testTag("template_name_field"),
                 )
                 Text(
-                    "Files under: $sizeLabel · $countLabel",
+                    "Files under: $bucketPath",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

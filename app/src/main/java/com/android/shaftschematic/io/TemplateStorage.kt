@@ -68,8 +68,6 @@ object TemplateStorage {
 
     fun list(ctx: Context): List<String> = list(dir(ctx))
 
-    fun exists(ctx: Context, name: String): Boolean = File(dir(ctx), name).exists()
-
     /** Same normalization as saved documents — templates share the `.shaft` extension. */
     fun normalizeTemplateName(raw: String): String? =
         InternalStorage.normalizeShaftDocName(raw)

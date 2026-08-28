@@ -1,8 +1,10 @@
 package com.android.shaftschematic.persistence
 
 import com.android.shaftschematic.doc.ShaftDocCodec
+import com.android.shaftschematic.doc.encodeTemplateJson
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -12,8 +14,11 @@ import org.junit.Test
  * station counts from one authored after. Without it the legacy-count freeze cannot distinguish
  * the two — neither carries an override — and would pin new documents to the old flat defaults.
  *
- * Both writers must stamp it. `ShaftViewModel` is an `AndroidViewModel` and is not instantiated
- * in this JVM suite, so these mirror `exportJson`/`exportTemplateJson`'s envelopes.
+ * Both writers must stamp it, and neither passes it — [ShaftDocCodec.encodeV1] owning the stamp is
+ * what makes a forgetful caller safe instead of a corruption vector. The template writer is checked
+ * through its REAL envelope (`doc/TemplateEnvelope.kt`); the job writer lives on `ShaftViewModel`,
+ * an `AndroidViewModel` this JVM suite does not instantiate, so it is checked at the encoder it
+ * calls.
  */
 class StationIntervalVersionStampTest {
 
@@ -45,6 +50,23 @@ class StationIntervalVersionStampTest {
         )
         assertTrue(
             "the stamp must be the current version",
+            json.contains("\"station_interval_version\": ${ShaftDocCodec.CURRENT_STATION_INTERVAL_VERSION}"),
+        )
+    }
+
+    @Test
+    fun `a saved template carries the stamp`() {
+        // Through the real template envelope, not a copy of it: a template written without the
+        // stamp would read as pre-interval and have its station counts frozen to the old flat
+        // defaults on the first drawing made from it.
+        val json = encodeTemplateJson(
+            spec = spec,
+            preferredUnit = UnitSystem.INCHES,
+            unitLocked = true,
+        )
+
+        assertTrue(
+            "a template envelope must carry station_interval_version",
             json.contains("\"station_interval_version\": ${ShaftDocCodec.CURRENT_STATION_INTERVAL_VERSION}"),
         )
     }

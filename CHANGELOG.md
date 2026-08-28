@@ -233,6 +233,50 @@ sidebar Tools entry stays available regardless, so the feature always has a home
 gates stay excluded from drawing-profile capture, this one included. One DataStore round-trip
 test; 1942 green.
 
+### feat(templates): position-aware descriptors, matching name seeds, independent buckets
+
+On-device request: two templates with the same liner size and count but different liner
+POSITIONS were only distinguishable by whatever name the user thought to type. The browser now
+derives it. Every card's caption is `templateDescriptor` (new pure
+`template/TemplateDescriptor.kt`): OAL, canonical max Ø, liner count, and a zone string — each
+liner's center mapped into aft/mid/fwd thirds, AFT→FWD, so `Ø6" max · 3 liners (A·M·F)` and
+`(A·A·F)` read apart at a glance whatever they're named. Along the way the old caption's three
+latent inconsistencies were fixed: max Ø now uses `ShaftSpec.maxOuterDiaMm()` (it ignored
+tapers and threads), formatting follows the shop convention (`formatDiaWithUnit` — `6"`, not
+"6 in"), and a linerless shaft says "No liners" once (the save dialog's bucket line doubled
+it). The save-dialog name seed speaks the same language — `6in 3 liners A-M-F`, filename-safe —
+moved out of the nav layer into the pure file with tests, and deduped against the existing
+store (" (2)", " (3)"…) so two same-shape templates stop colliding into the overwrite dialog.
+
+The diameter buckets now open **independently** (on-device report: opening one closed the
+other, making cross-bucket comparison impossible): per-group Set state, count sections keyed
+per parent size, `rememberSaveable` so rotation keeps what was open, ExpandLess/ExpandMore
+chevrons, and header testTags. Consistency pass alongside: template rename now sanitizes
+through the one shared `DocumentNaming.sanitizePart` (the Open screen's private copy deleted;
+`*?:` no longer survive into template filenames), pre-selects the name, and no-ops a same-name
+rename; the card menu gains leading icons matching the Open screen; the loading state shows a
+spinner instead of a blank page. 26 new tests; 1968 green.
+
+### feat(templates): search, sort, row dates, refresh-on-resume; housekeeping
+
+Second wave, same evening. The browser gains the Open screen's controls: a search field
+(non-blank query swaps the accordion for a flat filtered list — matching over names AND the
+derived descriptors with zone separators folded, so `A-A-F` finds a layout however the card
+spells it) and Name | Date sort chips (re-tap flips direction; Date ↓ default), applied to
+search results and within each open count group. Cards show a relative date via the promoted
+shared `util/RelativeDate.kt` (the Open screen's private copy deleted; a future timestamp now
+reads "Today" instead of "-1 days ago"). The route rescans on resume, so a template saved
+while the browser sat on the back stack appears on return; starter-seeding failures surface
+as a snackbar + AppLog event instead of vanishing.
+
+Housekeeping: dead `TemplateStorage.exists()` and `ShaftThumbnail`'s dead `unit` parameter
+removed; the template envelope extracted to the pure `doc/TemplateEnvelope.kt` so
+`TemplateScrubTest` calls the REAL writer instead of a hand-kept mirror — which promptly
+caught the mirror's drift (it had omitted `unitOverrides`, so a leak through that field would
+have passed the scrub test). Two rulings recorded in `Templates.md`: size buckets key off
+liner OD (decided — that's the number sizing starts from), and per-component labels travel
+into templates unscrubbed (authoring data, golden-rule posture). 17 new tests; 1985 green.
+
 ## 2026-08-26
 
 ### fix(pdf): shaft-height paper band, spoons stop inflating, footer sits on the bottom margin

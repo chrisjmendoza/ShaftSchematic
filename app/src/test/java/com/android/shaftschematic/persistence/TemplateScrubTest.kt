@@ -1,6 +1,7 @@
 package com.android.shaftschematic.persistence
 
 import com.android.shaftschematic.doc.ShaftDocCodec
+import com.android.shaftschematic.doc.encodeTemplateJson
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.RunoutReading
@@ -22,9 +23,13 @@ import org.junit.Test
  *
  * Job identity and measurement records are dropped at WRITE time, not merely ignored on load:
  * a template that still contained a customer name would carry it into every drawing built from
- * it, and into any copy of that file. `ShaftViewModel` is an `AndroidViewModel` and is not
- * instantiated in this JVM suite (the convention `ShaftViewModelUnsavedWorkTest` follows), so
- * this mirrors `exportTemplateJson`'s exact envelope and checks what a saved template holds.
+ * it, and into any copy of that file.
+ *
+ * These call the REAL envelope, `doc/TemplateEnvelope.kt`'s [encodeTemplateJson], which
+ * `ShaftViewModel.exportTemplateJson` delegates to — `ShaftViewModel` is an `AndroidViewModel`
+ * and is not instantiated in this JVM suite (the convention `ShaftViewModelUnsavedWorkTest`
+ * follows), and a hand-copied mirror of the envelope stayed green precisely when it mattered:
+ * a new job-shaped field added to the writer would never reach this test.
  */
 class TemplateScrubTest {
 
@@ -48,21 +53,19 @@ class TemplateScrubTest {
         wearRecord = WearRecord(spots = listOf(WearSpot(linerId = "l1"))),
         runoutReadings = RunoutReadings(listOf(RunoutReading(componentId = "b1", stationIndex = 0, valueMm = 0.05f))),
         undercutRecord = UndercutRecord(),
+        unitOverrides = mapOf("l1" to UnitSystem.MILLIMETERS),
     )
 
     /**
-     * Exact mirror of ShaftViewModel.exportTemplateJson(). Nothing else may appear here: any
-     * envelope field this mirror sets that the real function does not (or vice versa) is
-     * scrub-coverage drift. `station_interval_version` is stamped inside `encodeV1` itself,
-     * so neither function carries it.
+     * The production envelope, fed the same way the ViewModel feeds it: the loaded job's spec
+     * and authoring unit go in, and whatever the real function chooses to carry comes out.
      */
     private fun exportTemplateJson(doc: ShaftDocCodec.ShaftDocV1): String =
-        ShaftDocCodec.encodeV1(
-            ShaftDocCodec.ShaftDocV1(
-                preferredUnit = doc.preferredUnit,
-                unitLocked = doc.unitLocked,
-                spec = doc.spec,
-            )
+        encodeTemplateJson(
+            spec = doc.spec,
+            preferredUnit = doc.preferredUnit,
+            unitLocked = doc.unitLocked,
+            unitOverrides = doc.unitOverrides,
         )
 
     @Test
@@ -105,6 +108,15 @@ class TemplateScrubTest {
         assertEquals(152.4f, decoded.spec.liners.single().odMm, 0.001f)
         assertEquals(UnitSystem.INCHES, decoded.preferredUnit)
         assertTrue(decoded.unitLocked)
+    }
+
+    @Test
+    fun `per-component unit overrides travel with the geometry`() {
+        // Which features are metric is an authoring fact about the shaft, not about the job —
+        // and it is exactly the field the old hand-copied mirror of this envelope omitted.
+        val decoded = ShaftDocCodec.decode(exportTemplateJson(fullJobDoc()))
+
+        assertEquals(mapOf("l1" to UnitSystem.MILLIMETERS), decoded.unitOverrides)
     }
 
     @Test

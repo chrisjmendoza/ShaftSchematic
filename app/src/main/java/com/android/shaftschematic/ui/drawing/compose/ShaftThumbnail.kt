@@ -17,7 +17,6 @@ import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorSetting
-import com.android.shaftschematic.util.UnitSystem
 
 /**
  * ShaftThumbnail — a small, static rendering of a shaft.
@@ -34,7 +33,6 @@ import com.android.shaftschematic.util.UnitSystem
 fun ShaftThumbnail(
     spec: ShaftSpec,
     resolvedComponents: List<ResolvedComponent>,
-    unit: UnitSystem,
     modifier: Modifier = Modifier.fillMaxSize(),
     outline: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.STEEL),
     bodyFill: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT),
@@ -53,7 +51,9 @@ fun ShaftThumbnail(
         PreviewColorPreset.CUSTOM -> fallback
     }
 
-    val options = remember(unit, scheme, outline, bodyFill, taperFill, linerFill, threadFill, threadHatch) {
+    // No unit key: a thumbnail draws geometry only — no dimensions, no callouts, nothing the
+    // display unit could change — so the render options do not depend on it.
+    val options = remember(scheme, outline, bodyFill, taperFill, linerFill, threadFill, threadHatch) {
         RenderOptions(
             paddingPx = 8,
             outlineColor = outline.resolve(scheme).toArgb(),

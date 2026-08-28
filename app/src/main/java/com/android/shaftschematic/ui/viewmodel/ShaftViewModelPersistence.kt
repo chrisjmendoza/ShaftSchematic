@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.BuildConfig
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.doc.ShaftDocCodec
+import com.android.shaftschematic.doc.encodeTemplateJson
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.model.RunoutReadings
@@ -185,14 +186,16 @@ fun ShaftViewModel.exportJson(): String = ShaftDocCodec.encodeV1(
  * The unit and unit-lock DO travel: they describe how the geometry is authored, not whose
  * job it is. Per-component unit overrides travel for the same reason (which features are
  * metric is an authoring fact); the per-job dual-display flag does not.
+ *
+ * The envelope itself lives in [encodeTemplateJson] (`doc/TemplateEnvelope.kt`) so the scrub
+ * test can call the real construction instead of hand-copying it — a mirrored envelope stays
+ * green when a new job-shaped field is added to the writer here.
  */
-fun ShaftViewModel.exportTemplateJson(): String = ShaftDocCodec.encodeV1(
-    ShaftDocCodec.ShaftDocV1(
-        preferredUnit = _unit.value,
-        unitLocked = _unitLocked.value,
-        spec = _spec.value,
-        unitOverrides = _unitOverrides.value,
-    )
+fun ShaftViewModel.exportTemplateJson(): String = encodeTemplateJson(
+    spec = _spec.value,
+    preferredUnit = _unit.value,
+    unitLocked = _unitLocked.value,
+    unitOverrides = _unitOverrides.value,
 )
 
 /**
