@@ -105,6 +105,11 @@ object SettingsStore {
     // keeps its controls visible whatever this says: a device pref may hide empty entry
     // fields, never authored work.
     private val KEY_LINER_SHOULDERS_ENABLED = booleanPreferencesKey("liner_shoulders_enabled")
+    // Add-dialog unit converter icon. Capability gate for the title-row calculator button on
+    // the five Add dialogs only — most shops work in one unit, so the icon is noise on every
+    // add (on-device request). The sidebar "Unit converter" Tools entry is a separate, always-
+    // available launcher and is not gated by this pref.
+    private val KEY_DIALOG_UNIT_CONVERTER_ENABLED = booleanPreferencesKey("dialog_unit_converter_enabled")
     private val KEY_PDF_SHADED_BODIES  = booleanPreferencesKey("pdf_shaded_bodies")
     private val KEY_PDF_SHADED_TAPERS  = booleanPreferencesKey("pdf_shaded_tapers")
     private val KEY_PDF_SHADED_LINERS  = booleanPreferencesKey("pdf_shaded_liners")
@@ -150,6 +155,16 @@ object SettingsStore {
         ctx.settingsDataStore.data.map { p -> p[KEY_LINER_SHOULDERS_ENABLED] ?: false }
     suspend fun setLinerShouldersEnabled(ctx: Context, v: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_LINER_SHOULDERS_ENABLED] = v }
+    }
+
+    /**
+     * Capability: show the unit-converter calculator icon in the title row of the five Add
+     * dialogs. The sidebar Tools entry stays available regardless of this flag.
+     */
+    fun dialogUnitConverterEnabledFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p -> p[KEY_DIALOG_UNIT_CONVERTER_ENABLED] ?: false }
+    suspend fun setDialogUnitConverterEnabled(ctx: Context, v: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_DIALOG_UNIT_CONVERTER_ENABLED] = v }
     }
 
     /** Global default for new documents' inline dual-unit display. */

@@ -238,13 +238,17 @@ third carve-out, recorded in `CLAUDE.md`):
 Anything that moves a value or a component stays under the parity rule above. See
 `docs/PDF_EXPORT.md` §5.3 for what the Ø toggle does to the callout pass.
 
-**Unit-converter launcher — a TOOL, outside parity entirely.** The calculator icon on every Add
-dialog's title row opens `UnitConverterDialog` (`ui/screen/UnitConverterDialog.kt`), which is the
+**Unit-converter launcher — a TOOL, outside parity entirely.** The calculator icon on the Add
+dialogs' title rows opens `UnitConverterDialog` (`ui/screen/UnitConverterDialog.kt`), which is the
 `BoreKeywayCalcDialog` posture: reads nothing from the shaft, writes nothing back (the user reads
 the converted value and types it), stores nothing, marks nothing dirty. A control that writes no
 component value is neither under the parity rule nor a carve-out from it — the same reasoning
-that keeps the sidebar's keyway calculator off this contract. The converter is also reachable
-from the sidebar Tools group, so its absence from carousel cards costs nothing.
+that keeps the sidebar's keyway calculator off this contract. The icon is **capability-gated**
+(Settings → Drawing → "Unit converter in Add dialogs", `dialogUnitConverterEnabled`, default
+OFF — most shops work in one unit, so the icon is noise for them; the `linerShouldersEnabled`
+posture): off means the dialogs render their plain titles. The converter stays reachable from
+the sidebar Tools group at every setting, so its absence from dialogs and carousel cards costs
+nothing.
 
 **Body blend — under the parity rule, NOT a carve-out.** A blend changes the drawn silhouette,
 so it fails test 1 above. `AddBodyDialog` and the explicit-body carousel card must both expose

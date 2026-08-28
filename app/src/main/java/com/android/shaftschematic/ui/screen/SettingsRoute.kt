@@ -165,6 +165,7 @@ fun SettingsRoute(
     val perComponentUnits by SettingsStore.perComponentUnitsFlow(ctx).collectAsState(initial = false)
     val dualUnitsDefault by SettingsStore.dualUnitsDefaultFlow(ctx).collectAsState(initial = false)
     val linerShoulders by SettingsStore.linerShouldersEnabledFlow(ctx).collectAsState(initial = false)
+    val dialogUnitConverter by SettingsStore.dialogUnitConverterEnabledFlow(ctx).collectAsState(initial = false)
     // Named drawing-look presets. App-wide device preferences, read the same way.
     val drawingProfiles by SettingsStore.drawingProfilesFlow(ctx)
         .collectAsState(initial = emptyMap())
@@ -436,6 +437,27 @@ fun SettingsRoute(
                             Text("Liner shoulders")
                             Text(
                                 "Stepped shoulder fields on liners (length, Ø, edge radius)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    // Most shops work in one unit, so the calculator icon on every Add dialog
+                    // is noise for them (on-device request). The sidebar "Unit converter" Tools
+                    // entry is unaffected — it stays available either way.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = dialogUnitConverter,
+                            onCheckedChange = { checked ->
+                                scope.launch { SettingsStore.setDialogUnitConverterEnabled(ctx, checked) }
+                            },
+                            modifier = Modifier.testTag("settings_dialog_unit_converter"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Unit converter in Add dialogs")
+                            Text(
+                                "Adds a mm ↔ in converter button to every Add dialog. The sidebar Tools entry is always available.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

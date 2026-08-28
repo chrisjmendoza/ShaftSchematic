@@ -222,6 +222,17 @@ caller named. Dead imports the moves stranded were removed; `computeDetailPtPerM
 
 1941 green.
 
+### feat(settings): the Add-dialog converter icon becomes a capability gate, default off
+
+On-device follow-up to the converter, same day: most shops work in one unit, so a calculator
+icon on every Add dialog is noise for them. New Settings → Drawing toggle "Unit converter in
+Add dialogs" (`dialogUnitConverterEnabled`, default OFF — the `linerShouldersEnabled`
+capability-gate posture and wiring, a row directly below that gate). When off, the five Add
+dialogs render their plain titles, visually identical to before the converter existed. The
+sidebar Tools entry stays available regardless, so the feature always has a home. Capability
+gates stay excluded from drawing-profile capture, this one included. One DataStore round-trip
+test; 1942 green.
+
 ## 2026-08-26
 
 ### fix(pdf): shaft-height paper band, spoons stop inflating, footer sits on the bottom margin

@@ -226,6 +226,8 @@ fun ShaftScreen(
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     linerShouldersEnabled: Boolean = false,
+    /** Settings → Drawing → "Unit converter in Add dialogs": gates the calculator icon on the five Add dialogs. */
+    dialogUnitConverterEnabled: Boolean = false,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
@@ -782,6 +784,7 @@ fun ShaftScreen(
                         initialLengthMm = sessionAddDefaults.threadLenMm,
                         initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
                         initialPitchMm = sessionAddDefaults.threadPitchMm,
+                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
                         onSubmit = { startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL, isAftEnd, metricDesignation ->
                             addThreadOpen = false
                             // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL,
@@ -811,6 +814,7 @@ fun ShaftScreen(
                         initialCount = sessionAddDefaults.slotCount,
                         initialSpacingMm = sessionAddDefaults.slotSpacingMm,
                         initialDepthMm = sessionAddDefaults.slotDepthMm,
+                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
                         onSubmit = { startMm, holeDiaMm, count, spacingMm, through, depthMm, ref ->
                             addSlotOpen = false
                             onAddCouplerBoltSlot(startMm, holeDiaMm, count, spacingMm, through, depthMm, ref)
@@ -826,6 +830,7 @@ fun ShaftScreen(
                         initialStartMm = addStartMm,
                         initialLengthMm = addLengthMm,
                         perComponentUnitsEnabled = perComponentUnitsEnabled,
+                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
                         onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd ->
                             addBodyOpen = false
                             onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd)
@@ -845,6 +850,7 @@ fun ShaftScreen(
                         initialStartMm = addStartMm,
                         initialLengthMm = addLengthMm,
                         linerShouldersEnabled = linerShouldersEnabled,
+                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
                         onSubmit = { s, l, od, ref, shoulders ->
                             addLinerOpen = false
                             onAddLiner(s, l, od, ref, shoulders)
@@ -861,6 +867,7 @@ fun ShaftScreen(
                         initialStartMm = addStartMm,
                         initialLengthMm = addLengthMm,
                         perComponentUnitsEnabled = perComponentUnitsEnabled,
+                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
                         onSubmit = { s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90, kwUnit ->
                             addTaperOpen = false
                             onAddTaper(s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, kwUnit)

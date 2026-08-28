@@ -176,6 +176,9 @@ fun ShaftRoute(
     // Liner shoulders: same capability posture — the gate hides the authoring UI only;
     // a liner already carrying shoulders keeps its controls (decided in the carousel).
     val linerShouldersEnabled by SettingsStore.linerShouldersEnabledFlow(ctx).collectAsState(initial = false)
+    // Add-dialog unit converter icon: gates only the title-row launcher on the five Add
+    // dialogs. The sidebar Tools entry is unconditional and reads nothing from this flag.
+    val dialogUnitConverterEnabled by SettingsStore.dialogUnitConverterEnabledFlow(ctx).collectAsState(initial = false)
 
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
@@ -275,6 +278,7 @@ fun ShaftRoute(
         onUpdateLinerShowDia = { i, show   -> vm.updateLinerShowDia(i, show) },
         onUpdateLinerShoulder = { i, end, len, od, r -> vm.updateLinerShoulder(i, end, len, od, r) },
         linerShouldersEnabled = linerShouldersEnabled,
+        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
         onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
         onUpdateCouplerBoltSlot = { i, s, dia, cnt, sp, thru, dep -> vm.updateCouplerBoltSlot(i, s, dia, cnt, sp, thru, dep) },

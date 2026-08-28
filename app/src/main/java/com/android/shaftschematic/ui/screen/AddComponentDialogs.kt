@@ -176,6 +176,8 @@ fun AddBodyDialog(
     initialLengthMm: Float? = null,
     /** Settings → Drawing → "Per-component units": gates the keyway's own unit chip. */
     perComponentUnitsEnabled: Boolean = false,
+    /** Settings → Drawing → "Unit converter in Add dialogs": gates the title-row calculator icon. */
+    dialogUnitConverterEnabled: Boolean = false,
     onSubmit: (startMm: Float, lengthMm: Float, diaMm: Float,
                keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
@@ -247,7 +249,13 @@ fun AddBodyDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { addDialogTitleWithConverter("Add Body") { converterOpen = true } },
+        title = {
+            if (dialogUnitConverterEnabled) {
+                addDialogTitleWithConverter("Add Body") { converterOpen = true }
+            } else {
+                Text("Add Body")
+            }
+        },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
                 CommitNumField("Start (${abbr(unit)})", start) { start = it }
@@ -420,6 +428,8 @@ fun AddLinerDialog(
     initialLengthMm: Float? = null,
     /** The "Liner shoulders" Settings capability — parity with the liner card's gate. */
     linerShouldersEnabled: Boolean = false,
+    /** Settings → Drawing → "Unit converter in Add dialogs": gates the title-row calculator icon. */
+    dialogUnitConverterEnabled: Boolean = false,
     onSubmit: (
         startMm: Float, lengthMm: Float, odMm: Float, reference: LinerAuthoredReference,
         shoulders: LinerShoulderDraft,
@@ -497,7 +507,13 @@ fun AddLinerDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { addDialogTitleWithConverter("Add Liner") { converterOpen = true } },
+        title = {
+            if (dialogUnitConverterEnabled) {
+                addDialogTitleWithConverter("Add Liner") { converterOpen = true }
+            } else {
+                Text("Add Liner")
+            }
+        },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
                 Row(
@@ -584,6 +600,8 @@ fun AddCouplerBoltSlotDialog(
     initialCount: Int,
     initialSpacingMm: Float,
     initialDepthMm: Float,
+    /** Settings → Drawing → "Unit converter in Add dialogs": gates the title-row calculator icon. */
+    dialogUnitConverterEnabled: Boolean = false,
     onSubmit: (
         startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float,
         through: Boolean, depthMm: Float, reference: SlotAuthoredReference,
@@ -640,7 +658,13 @@ fun AddCouplerBoltSlotDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { addDialogTitleWithConverter("Add Coupler Bolt Slot") { converterOpen = true } },
+        title = {
+            if (dialogUnitConverterEnabled) {
+                addDialogTitleWithConverter("Add Coupler Bolt Slot") { converterOpen = true }
+            } else {
+                Text("Add Coupler Bolt Slot")
+            }
+        },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(rememberScrollState())) {
                 Row(
@@ -714,6 +738,8 @@ fun AddThreadDialog(
     initialLengthMm: Float,
     initialMajorDiaMm: Float,
     initialPitchMm: Float,
+    /** Settings → Drawing → "Unit converter in Add dialogs": gates the title-row calculator icon. */
+    dialogUnitConverterEnabled: Boolean = false,
     onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean,
                isAftEnd: Boolean, metricDesignation: String?) -> Unit,
     onCancel: () -> Unit,
@@ -787,7 +813,13 @@ fun AddThreadDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { addDialogTitleWithConverter("Add Thread") { converterOpen = true } },
+        title = {
+            if (dialogUnitConverterEnabled) {
+                addDialogTitleWithConverter("Add Thread") { converterOpen = true }
+            } else {
+                Text("Add Thread")
+            }
+        },
         text = {
             Column(Modifier.padding(top = 4.dp)) {
                 if (countInOal) {
@@ -875,6 +907,8 @@ fun AddTaperDialog(
     initialLengthMm: Float? = null,
     /** Settings → Drawing → "Per-component units": gates the keyway's own unit chip. */
     perComponentUnitsEnabled: Boolean = false,
+    /** Settings → Drawing → "Unit converter in Add dialogs": gates the title-row calculator icon. */
+    dialogUnitConverterEnabled: Boolean = false,
     onSubmit: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float, rateText: String,
                reference: LinerAuthoredReference,
                keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
@@ -1004,7 +1038,13 @@ fun AddTaperDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { addDialogTitleWithConverter("Add Taper") { converterOpen = true } },
+        title = {
+            if (dialogUnitConverterEnabled) {
+                addDialogTitleWithConverter("Add Taper") { converterOpen = true }
+            } else {
+                Text("Add Taper")
+            }
+        },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
                 // Direction selector
