@@ -78,5 +78,6 @@ fun AutosaveManager.SessionSnapshot.isDefaultSession(): Boolean {
         customer.isBlank() &&
         vessel.isBlank() &&
         jobNumber.isBlank() &&
+        item.isBlank() &&
         notes.isBlank()
 }

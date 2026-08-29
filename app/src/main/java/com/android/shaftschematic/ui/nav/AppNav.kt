@@ -35,7 +35,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.android.shaftschematic.ui.screen.AchievementsRoute
 import com.android.shaftschematic.ui.screen.AboutRoute
+import com.android.shaftschematic.doc.stripShaftDocExtension
 import com.android.shaftschematic.ui.screen.DeveloperOptionsRoute
+import com.android.shaftschematic.ui.screen.DuplicateForMateDialog
 import com.android.shaftschematic.ui.screen.HelpRoute
 import com.android.shaftschematic.ui.screen.PdfPreviewScreen
 import com.android.shaftschematic.ui.screen.SettingsRoute
@@ -46,6 +48,7 @@ import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.applyTemplate
 import com.android.shaftschematic.ui.viewmodel.exportJson
+import com.android.shaftschematic.ui.viewmodel.exportMateJson
 import com.android.shaftschematic.ui.viewmodel.importJson
 import com.android.shaftschematic.ui.viewmodel.newDocument
 import com.android.shaftschematic.util.DocumentNaming
@@ -214,6 +217,13 @@ fun AppNav(vm: ShaftViewModel) {
             // and are offered again.
             val offeredRenames = remember { mutableSetOf<String>() }
 
+            // "Duplicate for mate": names and writes a sibling document from the live session.
+            // Opened only after the store has been listed, since the dialog refuses a name that
+            // is already taken. Deliberately NOT guarded for unsaved work and deliberately not a
+            // session boundary — the open document is only read.
+            var mateDialogOpen by remember { mutableStateOf(false) }
+            var mateExistingBases by remember { mutableStateOf(emptyList<String>()) }
+
             val goHome: () -> Unit = {
                 nav.navigate("start") {
                     launchSingleTop = true
@@ -253,6 +263,14 @@ fun AppNav(vm: ShaftViewModel) {
                         }
                     },
                     onSaveAs = { nav.navigate("saveLocal") },
+                    onDuplicateForMate = {
+                        scope.launch {
+                            mateExistingBases = withContext(Dispatchers.IO) {
+                                InternalStorage.list(ctx).map(::stripShaftDocExtension)
+                            }
+                            mateDialogOpen = true
+                        }
+                    },
                     // Close = reset to a blank doc and return home. Guarded so unsaved work prompts
                     // Save/Don't save/Cancel first (the draft ring keeps the work either way).
                     onCloseDocument = {
@@ -266,6 +284,39 @@ fun AppNav(vm: ShaftViewModel) {
                     // PDF EXPORT = show preview first, then SAF
                     onExportPdf = { nav.navigate("pdfPreview") }
                 )
+
+                if (mateDialogOpen) {
+                    DuplicateForMateDialog(
+                        sourceBaseName = currentDocumentName?.let(::stripShaftDocExtension)
+                            ?: "Shaft",
+                        jobNumber = jobNumber,
+                        customer = customer,
+                        vessel = vessel,
+                        position = shaftPosition,
+                        existingBaseNames = mateExistingBases,
+                        onDismiss = { mateDialogOpen = false },
+                        onCreate = { fileName, job, cust, ves, side ->
+                            mateDialogOpen = false
+                            scope.launch {
+                                // The envelope is built on the main thread (it reads the
+                                // session's flows); only the write goes to IO.
+                                val json = vm.exportMateJson(
+                                    jobNumber = job,
+                                    customer = cust,
+                                    vessel = ves,
+                                    position = side,
+                                )
+                                val ok = withContext(Dispatchers.IO) {
+                                    runCatching { InternalStorage.save(ctx, fileName, json) }.isSuccess
+                                }
+                                editorSnackbarHostState.showSnackbar(
+                                    if (ok) "Created ‘${stripShaftDocExtension(fileName)}’"
+                                    else "Could not create ‘${stripShaftDocExtension(fileName)}’."
+                                )
+                            }
+                        },
+                    )
+                }
 
                 // The tabs own their own insets, so the host needs only the navigation bar's.
                 SnackbarHost(

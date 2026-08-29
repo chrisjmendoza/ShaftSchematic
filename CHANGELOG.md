@@ -6,6 +6,100 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-28
+
+### fix(resolve): an explicit body never absorbs the auto fill beside it
+
+On-device report: a 12″ explicit body named "SKF" at the aft end of a 150¾″ shaft had no
+visible 12″ section — its selection highlight covered the whole shaft, the dimension rail
+measured the merged extent (45 3/16″ to the next component), and the remainder's auto-body
+card vanished. `normalizeBodies` was absorbing adjacent auto spans into an explicit body's
+run ("merging is for auto spans flowing into an explicit body"), which meant shortening an
+explicit body had no visible effect at all: the freed gap flowed straight back into the run.
+
+Explicit bodies now never fuse with anything — the rule that already protected two abutting
+explicit bodies extends to auto fill in both directions. Only auto spans merge with each
+other. The auto run beside an explicit body still inherits its Ø for continuity, so a same-Ø
+neighbour draws at the same diameter with just the component face line between — which is the
+point: an explicit body is an authored section and reads as one, with its own card, highlight,
+face lines, and rail dimension.
+
+Contract consequences, documented in `COMPONENT_CONTRACT.md` and CLAUDE.md: every bare-shaft
+gap now survives as its own auto run, so `AutoDiaOverride`/`AutoBlend` anchors inside such a
+gap are live rather than dormant, and a blend authored on an explicit face that meets a same-Ø
+surviving gap draws no blend there (no step at that face; the gap run's far face is the step,
+which an `AutoBlend` anchor covers). A body previously merged with its gap loses the merged
+run's extra runout stations; readings keyed to them orphan harmlessly (render-skipped, never
+pruned).
+
+### fix(pdf): a liner sitting on its S.E.T. prints no zero-length datum dimension
+
+On-device report: a liner starting at the shaft's aft end printed a floating `0.000"` beside
+the S.E.T. `buildLinerSpans` always emitted the SET→near-edge datum span; at offset zero
+there is nothing to dimension, so the span is now skipped (both anchors, forced references
+included). `LinerSpanBuilderTest` pins it.
+
+### feat(pdf): per-component "Show name on drawing" toggles
+
+The schematic's component-name labels were all-or-nothing (`PdfPrefs.showComponentTitles`).
+Every explicit Body/Taper/Thread/Liner now carries `showLabelOnDrawing` (default true — the
+golden default keeps existing documents printing identically), gated per entry in the label
+pass and AND-composed with the global switch, the `showDiaOnDrawing` shape exactly. Card-only
+toggles (the post-hoc display-toggle carve-out), testTags `*_show_label_toggle`. The label
+pass's entry building moved to a pure `componentLabelSpans` so the filter is testable; hiding
+a label never renumbers the positional fallback names of the others.
+
+### feat(ui): card titles show their rename affordance
+
+On-device report: the tap-to-rename card title was not discoverable ("I can't name any body
+component" — the mechanism existed but nothing indicated it). The four copy-pasted
+inline-rename title blocks are now one shared `EditableCardTitle` with a low-emphasis pencil
+icon beside the title; commit semantics unchanged (Done or focus-loss commits trimmed text,
+blank clears to the positional default).
+
+### feat(project): optional "Item" field — tail shaft / line shaft designation
+
+Project details gain an optional free-text **Item** field (envelope key `item`, autosave
+snapshot, draft-ring default gate, project-info sheet between Vessel and Shaft position).
+Prints as `Item: …` after `Job #:` on the schematic/consolidated footer and both shared
+headers — skipped entirely when blank (unlike the always-printed identity rows: an optional
+field must not print an orphan label), with a write-in `Item:` rule on blank drafts.
+Deliberately scrubbed from templates (job identity) and absent from filename seeds. A blank
+Item leaves every sheet and every persisted byte identical to before the field existed.
+
+### feat(doc): "Duplicate for mate" — copy a shaft for its twin
+
+A twin-screw job is two near-identical shafts. "Duplicate for mate…" (Open-screen row menu,
+and the editor overflow next to Save As) opens a dialog seeded from the source — name (the
+standard job–customer–vessel seed with the mate's side suffix, deduped), job number, customer,
+vessel, and shaft side defaulting to the OPPOSITE side (PORT↔STBD; CENTER/OTHER unchanged,
+and always overridable) — and writes a sibling `.shaft` file. The open session is untouched.
+
+The transform (`doc/MateDuplicate.kt`, pure + tested) copies everything that describes the
+shaft — spec verbatim (golden rule), unit preference/lock, per-component unit overrides,
+dual-units, the per-job `RunoutConfig` fit, Item, Notes — and RESETS every measurement record
+(wear record, runout readings, dragged station placements, undercut record): those are
+measurements of one physical shaft, keyed by component ids the mate shares, so copying them
+would present fabricated inspection data as measured. The editor path builds from the live
+session through the same envelope builder `exportJson` uses (one field list, one scrub).
+
+### fix(pdf): mate exports no longer collide on filenames
+
+`buildOutputFilename` (runout/wear/undercut/consolidated exports) omitted the shaft side while
+the schematic export included it — two mates on one job overwrote each other's PDFs. The side
+now joins the base name exactly as the schematic does (omitted when unset; no-position output
+byte-identical to before). The Wear and Undercut routes' private copies of the builder were
+deleted in favor of the one in `OutputDoc`.
+
+### fix(ui): the OAL field keeps a typed fraction
+
+On-device report: typing `150 3/4` into Overall Length echoed back as `150.75`. The field's
+text was keyed on the model value, and the OAL field commits per keystroke (deliberate — live
+preview), so each commit's echo reformatted the user's own text. The display now re-derives
+from the model only when the field is unfocused AND its text no longer explains the model
+value (auto-mode recompute, undo, an edit from elsewhere) — so `150 3/4` stays `150 3/4`,
+while auto-mode and external changes still refresh the display. Entry parsing is unchanged.
+
 ## 2026-08-27
 
 ### fix(ui): the spec banner carries problems only — "No explicit bodies" removed

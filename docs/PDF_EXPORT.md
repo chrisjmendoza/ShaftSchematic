@@ -393,6 +393,19 @@ preference and never re-derive it.
 
 ---
 
+# 5.3b Component Name Labels (per-component visibility)
+
+The schematic's below-shaft component-name labels (`drawComponentLabelsPdf`, entries built by
+the pure `componentLabelSpans`) are gated per component: `showLabelOnDrawing` on `Body` /
+`Taper` / `Threads` / `Liner`, **default `true`** so existing documents print identically.
+The gates AND-compose with the global Settings switch (`PdfPrefs.showComponentTitles`) and
+`PdfExportOptions.showLabels` — the §5.3 shape. Auto spans are never labelled, so they carry
+no flag. Hiding a label never renumbers the positional fallback names of the remaining
+components ("Body #2" stays #2). Card-only toggles (`*_show_label_toggle`), the same
+carve-out as "Show Ø on drawing"; draw-only in every respect.
+
+---
+
 # 5.4 Inline Dimension Text (value seated in the line break)
 
 Dimension values on the schematic's horizontal dimension lines

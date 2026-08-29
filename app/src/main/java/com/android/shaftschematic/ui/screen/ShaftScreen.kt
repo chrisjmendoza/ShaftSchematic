@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FolderOpen
@@ -143,6 +144,7 @@ fun ShaftScreen(
     customer: String,
     vessel: String,
     jobNumber: String,
+    item: String,
     shaftPosition: ShaftPosition,
     notes: String,
     showGrid: Boolean,
@@ -183,6 +185,7 @@ fun ShaftScreen(
     onSetCustomer: (String) -> Unit,
     onSetVessel: (String) -> Unit,
     onSetJobNumber: (String) -> Unit,
+    onSetItem: (String) -> Unit,
     onSetShaftPosition: (ShaftPosition) -> Unit,
     onSetNotes: (String) -> Unit,
     onSetOverallLengthRaw: (String) -> Unit,
@@ -213,17 +216,21 @@ fun ShaftScreen(
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
+    onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
+    onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
+    onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     linerShouldersEnabled: Boolean = false,
     /** Settings → Drawing → "Unit converter in Add dialogs": gates the calculator icon on the five Add dialogs. */
@@ -260,6 +267,8 @@ fun ShaftScreen(
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onSaveAs: () -> Unit = {},
+    /** Open "Duplicate for mate" — writes a sibling document; the session is untouched. */
+    onDuplicateForMate: () -> Unit = {},
     /** Close the current document (guarded for unsaved work) and return to Start. */
     onCloseDocument: () -> Unit = {},
     onExportPdf: () -> Unit,
@@ -421,6 +430,7 @@ fun ShaftScreen(
 
                     OverflowMenu(
                         onSaveAs = onSaveAs,
+                        onDuplicateForMate = onDuplicateForMate,
                         onCloseDocument = onCloseDocument,
                         onOpenSettings = onOpenSettings,
                         onSendFeedback = onSendFeedback,
@@ -495,8 +505,22 @@ fun ShaftScreen(
 
                 val effectiveOalDisplayMm = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec).oalMm.toFloat() }
                 val displayMm = if (overallIsManual) spec.overallLengthMm else effectiveOalDisplayMm
-                var lengthText by remember(unit, displayMm, overallIsManual) {
+                var lengthText by remember(unit, overallIsManual) {
                     mutableStateOf(formatDisplay(displayMm, unit))
+                }
+                // The field echoes the user's own text — a typed "150 3/4" stays a fraction
+                // instead of being rewritten to "150.75" (on-device report). The model was
+                // previously a remember key, so its per-keystroke echo reformatted the text
+                // mid-typing. Now the display only re-derives from the model when the field
+                // is unfocused AND its text no longer explains the model value (auto-mode
+                // recompute, undo, an edit from elsewhere).
+                LaunchedEffect(displayMm, unit, overallIsManual, hasLenFocus) {
+                    if (!hasLenFocus) {
+                        val parsed = toMmOrNull(lengthText, unit)
+                        if (parsed == null || kotlin.math.abs(parsed - displayMm) > 0.01f) {
+                            lengthText = formatDisplay(displayMm, unit)
+                        }
+                    }
                 }
 
                 val isOversized = spec.overallLengthMm < lastOccupiedEndMm(spec)
@@ -697,17 +721,21 @@ fun ShaftScreen(
                     onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
+                    onUpdateBodyShowLabel = onUpdateBodyShowLabel,
                     onUpdateBodyBlend = onUpdateBodyBlend,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
                     onUpdateTaper = onUpdateTaper,
                     onUpdateTaperLabel = onUpdateTaperLabel,
+                    onUpdateTaperShowLabel = onUpdateTaperShowLabel,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateTaperReference = onUpdateTaperReference,
                     onUpdateThread = onUpdateThread,
                     onUpdateThreadLabel = onUpdateThreadLabel,
+                    onUpdateThreadShowLabel = onUpdateThreadShowLabel,
                     onUpdateLiner = onUpdateLiner,
                     onUpdateLinerShowDia = onUpdateLinerShowDia,
+                    onUpdateLinerShowLabel = onUpdateLinerShowLabel,
                     onUpdateLinerShoulder = onUpdateLinerShoulder,
                     linerShouldersEnabled = linerShouldersEnabled,
                     onUpdateLinerLabel = onUpdateLinerLabel,
@@ -884,11 +912,13 @@ fun ShaftScreen(
                         customer = customer,
                         vessel = vessel,
                         jobNumber = jobNumber,
+                        item = item,
                         shaftPosition = shaftPosition,
                         notes = notes,
                         onSetCustomer = onSetCustomer,
                         onSetVessel = onSetVessel,
                         onSetJobNumber = onSetJobNumber,
+                        onSetItem = onSetItem,
                         onSetShaftPosition = onSetShaftPosition,
                         onSetNotes = onSetNotes,
                         onDismiss = { projectInfoOpen = false }
@@ -951,6 +981,7 @@ private fun HistoryMenu(
 @Composable
 private fun OverflowMenu(
     onSaveAs: () -> Unit,
+    onDuplicateForMate: () -> Unit,
     onCloseDocument: () -> Unit,
     onOpenSettings: () -> Unit,
     onSendFeedback: () -> Unit,
@@ -978,6 +1009,15 @@ private fun OverflowMenu(
                 onClick = {
                     expanded = false
                     onSaveAs()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Duplicate for mate…") },
+                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                modifier = Modifier.testTag("overflow_duplicate_for_mate"),
+                onClick = {
+                    expanded = false
+                    onDuplicateForMate()
                 }
             )
             DropdownMenuItem(
@@ -1023,7 +1063,7 @@ private fun OverflowMenu(
 }
 
 @Composable
-private fun ShaftPositionDropdown(
+internal fun ShaftPositionDropdown(
     selected: ShaftPosition,
     onSelected: (ShaftPosition) -> Unit,
     modifier: Modifier = Modifier
@@ -1077,11 +1117,13 @@ internal fun ProjectInfoBottomSheet(
     customer: String,
     vessel: String,
     jobNumber: String,
+    item: String,
     shaftPosition: ShaftPosition,
     notes: String,
     onSetCustomer: (String) -> Unit,
     onSetVessel: (String) -> Unit,
     onSetJobNumber: (String) -> Unit,
+    onSetItem: (String) -> Unit,
     onSetShaftPosition: (ShaftPosition) -> Unit,
     onSetNotes: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -1092,6 +1134,7 @@ internal fun ProjectInfoBottomSheet(
     var draftJobNumber by rememberSaveable { mutableStateOf(jobNumber) }
     var draftCustomer by rememberSaveable { mutableStateOf(customer) }
     var draftVessel by rememberSaveable { mutableStateOf(vessel) }
+    var draftItem by rememberSaveable { mutableStateOf(item) }
     var draftPosition by rememberSaveable { mutableStateOf(shaftPosition) }
     var draftNotes by rememberSaveable { mutableStateOf(notes) }
 
@@ -1100,6 +1143,7 @@ internal fun ProjectInfoBottomSheet(
     val dirty = draftJobNumber != jobNumber ||
         draftCustomer != customer ||
         draftVessel != vessel ||
+        draftItem != item ||
         draftPosition != shaftPosition ||
         draftNotes != notes
     // The sheet state is created once, so its gate must read the LIVE dirty flag rather
@@ -1129,6 +1173,7 @@ internal fun ProjectInfoBottomSheet(
         if (draftJobNumber != jobNumber) onSetJobNumber(draftJobNumber)
         if (draftCustomer != customer) onSetCustomer(draftCustomer)
         if (draftVessel != vessel) onSetVessel(draftVessel)
+        if (draftItem != item) onSetItem(draftItem)
         if (draftPosition != shaftPosition) onSetShaftPosition(draftPosition)
         if (draftNotes != notes) onSetNotes(draftNotes)
         onDismiss()
@@ -1173,6 +1218,13 @@ internal fun ProjectInfoBottomSheet(
                 value = draftVessel,
                 onValueChange = { draftVessel = it },
                 modifier = Modifier.fillMaxWidth().testTag("project_info_vessel")
+            )
+            // Optional shaft designation ("Tail shaft", "Line shaft"); blank prints nothing.
+            DraftTextField(
+                label = "Item (optional)",
+                value = draftItem,
+                onValueChange = { draftItem = it },
+                modifier = Modifier.fillMaxWidth().testTag("project_info_item")
             )
             ShaftPositionDropdown(
                 selected = draftPosition,

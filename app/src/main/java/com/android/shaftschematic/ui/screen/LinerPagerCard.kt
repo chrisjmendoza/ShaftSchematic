@@ -2,32 +2,21 @@ package com.android.shaftschematic.ui.screen
 
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.LinerAuthoredReference
@@ -52,8 +41,8 @@ import com.android.shaftschematic.util.UnitSystem
  * The shoulder controls appear when [linerShouldersEnabled] is on OR the liner already carries
  * shoulder values — a device pref may hide empty entry fields, never authored work. The
  * reference chips and every value control are mirrored in `AddLinerDialog` by the
- * add-dialog-parity invariant; "Show Ø on drawing" and the "Prints in: in | mm" chip are the
- * documented card-only carve-outs.
+ * add-dialog-parity invariant; "Show Ø on drawing", "Show name on drawing", and the
+ * "Prints in: in | mm" chip are the documented card-only carve-outs.
  *
  * [f1] is supplied by [ComponentPagerCard] because every card's debug line uses it.
  */
@@ -70,6 +59,7 @@ internal fun LinerPagerCard(
     f1: (Float) -> String,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
+    onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit,
     linerShouldersEnabled: Boolean,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -83,9 +73,6 @@ internal fun LinerPagerCard(
     val idx            = explicitIndex ?: return
     val ln             = spec.liners.getOrNull(idx) ?: return
     val computedTitle  = linerTitleById[ln.id] ?: "Liner"
-    var editingTitle   by rememberSaveable(ln.id) { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
-    var hasFocusedOnce by remember(ln.id) { mutableStateOf(false) }
     val isFwdRef       = ln.authoredReference == LinerAuthoredReference.FWD
     val authoredStartMm = if (isFwdRef) {
         spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
@@ -96,36 +83,12 @@ internal fun LinerPagerCard(
     ComponentCard(
         title = computedTitle,
         titleContent = {
-            if (!editingTitle) {
-                Text(
-                    computedTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.fillMaxWidth().clickable { editingTitle = true },
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-            } else {
-                var text by remember(ln.id, ln.label) { mutableStateOf(ln.label.orEmpty()) }
-                LaunchedEffect(ln.id) { focusRequester.requestFocus() }
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    singleLine = true,
-                    placeholder = { Text(computedTitle) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        onUpdateLinerLabel(idx, text.trim().takeIf { it.isNotEmpty() })
-                        editingTitle = false
-                    }),
-                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
-                        .onFocusChanged { f ->
-                            if (f.isFocused) hasFocusedOnce = true
-                            if (hasFocusedOnce && !f.isFocused) {
-                                onUpdateLinerLabel(idx, text.trim().takeIf { it.isNotEmpty() })
-                                editingTitle = false
-                            }
-                        }
-                )
-            }
+            EditableCardTitle(
+                componentId = ln.id,
+                title = computedTitle,
+                label = ln.label,
+                onCommitLabel = { onUpdateLinerLabel(idx, it) },
+            )
         },
         debugText = if (showComponentDebugLabels) "id=${ln.id} • startMm=${f1(ln.startFromAftMm)} • endMm=${f1(ln.startFromAftMm + ln.lengthMm)}" else null,
         errorMessage = startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm)
@@ -188,6 +151,12 @@ internal fun LinerPagerCard(
             checked = ln.showDiaOnDrawing,
             testTag = "liner_show_dia_toggle",
             onCheckedChange = { onUpdateLinerShowDia(idx, it) },
+        )
+        ShowDiaToggleRow(
+            label = "Show name on drawing",
+            checked = ln.showLabelOnDrawing,
+            testTag = "liner_show_label_toggle",
+            onCheckedChange = { onUpdateLinerShowLabel(idx, it) },
         )
 
         // Shoulders: capability-gated entry, but authored work always keeps its

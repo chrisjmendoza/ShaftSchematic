@@ -120,11 +120,10 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
 
                 // The face is the OUTER edge of the body's drawn extent, not its stored
                 // position. A split body draws as several runs, so only the aft-most (or
-                // fwd-most) one carries that face; and an absorbed bare-shaft gap moves the
-                // edge outward, which is exactly where the drawn step then is. Matching the
-                // stored value instead would silently drop the blend the moment a neighbour
-                // shortened — the template case, where liner and shaft sizes move under a
-                // saved layout.
+                // fwd-most) one carries that face. An explicit body never absorbs the auto
+                // gap beside it, so its drawn extent matches its stored span; a face that
+                // meets a same-Ø surviving gap has no step and draws no blend there — the
+                // step is the gap run's far face, which an [AutoBlend] anchor covers.
                 val run = (
                     if (end == LinerAuthoredReference.AFT) runs.minByOrNull { it.startMmPhysical }
                     else runs.maxByOrNull { it.endMmPhysical }
@@ -143,8 +142,8 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
  * Resolve one face of one drawn run into a [BodyBlend], or null when there is no step to blend.
  *
  * Shared by the explicit and auto paths so the two can never disagree about what a face steps
- * to. The face is the run's own outer edge — its DRAWN extent, which an absorbed bare-shaft gap
- * may have moved outward from the stored value.
+ * to. The face is the run's own outer edge — its DRAWN extent (for an explicit body, its
+ * stored span; body fragmentation still trims it).
  */
 private fun blendAt(
     components: List<ResolvedComponent>,

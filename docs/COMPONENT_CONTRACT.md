@@ -111,23 +111,31 @@ promotes it.
 `ShaftSpec.withAutoSectionDia`), so bare-shaft sections may differ without any of them
 becoming explicit. The override is keyed in shaft space by an anchor at the span midpoint,
 beats the legacy shaft-wide `ShaftSpec.autoBodyDiaMm` and neighbor derivation, and changes the
-drawn diameter only — span boundaries stay derived. Anchors under a component (or inside a gap
-absorbed into an explicit-body run) are dormant, never pruned, and resurrect when their span
-does. When a separator is deleted and two differing sections remerge, the joined run takes the
-**more aftward** section's Ø — aft is authored first. See DATA_MODEL.md §`AutoDiaOverride`.
+drawn diameter only — span boundaries stay derived. Anchors under a component are dormant,
+never pruned, and resurrect when their span does. When a separator is deleted and two differing
+sections remerge, the joined run takes the **more aftward** section's Ø — aft is authored
+first. See DATA_MODEL.md §`AutoDiaOverride`.
 
-### Two explicit bodies never fuse
+### An explicit body never fuses with anything
 
-`normalizeBodies` (resolve) merges contiguous body spans into one drawn run so a bare-shaft gap
-flows into the explicit body beside it and inherits its Ø. That merge stops at an **explicit**
-body: one never gets absorbed into a run that already carries an explicit body.
+`normalizeBodies` (resolve) merges contiguous **auto** spans into one drawn run. An **explicit**
+body never joins that merge, in either direction: it never absorbs the bare-shaft gap beside it,
+and it is never absorbed into another run.
 
-Without that stop, a stepped shaft built from two abutting bodies resolved to a **single run at
-the aft-most diameter**, with one carousel card instead of two — the second body's Ø and card
-silently discarded. It hides well, because any taper/thread/liner between the bodies flushes the
-accumulator, and on a marine shaft there usually is one; a shaft that is simply Ø6 stepping up to
-Ø8 is what exposes it. Auto spans still merge into an explicit body for continuity — that is what
-the pass is for.
+Both directions were learned the hard way:
+
+- Two abutting explicit bodies fused resolved to a **single run at the aft-most diameter**, with
+  one carousel card instead of two — the second body's Ø and card silently discarded. It hides
+  well, because any taper/thread/liner between the bodies flushes the accumulator; a shaft that
+  is simply Ø6 stepping up to Ø8 is what exposes it.
+- An explicit body absorbing its neighbouring gap made a **shortened explicit body span the
+  whole run again** (on-device report: a 12″ named section on a 150″ shaft). The typed length
+  had no visible effect, the selection highlight covered the merged run, the dimension rail
+  measured the merged extent, and the remainder's auto card vanished.
+
+An auto run beside an explicit body inherits its Ø for continuity (`lastMergedDia`), so a same-Ø
+neighbour still draws at the same diameter — with the component face line between, which is the
+point: an explicit body is an authored section and reads as one.
 
 ### A body face can be blended
 
@@ -166,17 +174,18 @@ material.
   stays on the run's full drawn width (a blend is a face detail, not a reason to read as more or
   less compressed). The **wear document deliberately keeps square faces**: it omits machining
   detail by product decision, the same posture as its keyway omission.
-- The face is the run's **DRAWN outer edge**, not the stored position. A bare-shaft gap absorbed
-  into a body's run moves that edge outward, and the drawn step moves with it; matching the stored
-  value dropped the blend whenever a neighbour shortened.
+- The face is the run's **DRAWN outer edge**, not the stored position. For an explicit body the
+  two coincide (an explicit body never absorbs the gap beside it); fragmentation by a
+  taper/thread/liner still trims the drawn extent, and the outermost fragment carries the face.
 - Explicit bodies store their blends as fields; **auto spans anchor them in shaft space**
   (`AutoBlend` / `ShaftSpec.autoBlends`, the `AutoDiaOverride` posture — anchor at the span
   midpoint, aft-most wins per face, dormant under a component, never pruned). A saved template
   therefore keeps its seal areas when liners or the overall length move under it. Both kinds
   resolve to the same `BodyBlend`.
-- An anchor only applies where the auto span survives as its **own AUTO run** — bounded by
-  non-bodies, e.g. bare shaft between two liners. A gap flanked by an explicit body is absorbed
-  into that body's run, where the body's own blend already covers the face.
+- An anchor applies wherever the auto span resolves as its **own AUTO run** — which every
+  bare-shaft gap now does, an explicit body beside it included. An explicit face that meets a
+  same-Ø surviving gap has no step and draws no blend; the gap-side step is the auto run's far
+  face, covered by an `AutoBlend` anchor.
 - A split body blends on the run holding the **stored** face, never an interior fragment edge.
 
 Geometry: `ui/resolved/BodyBlends.kt`; curve math `geom/BlendProfileMath.kt` (a general

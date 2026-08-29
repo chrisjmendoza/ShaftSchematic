@@ -149,6 +149,7 @@ fun WearRoute(
     val customer           by vm.customer.collectAsState()
     val vessel             by vm.vessel.collectAsState()
     val jobNumber          by vm.jobNumber.collectAsState()
+    val item               by vm.item.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -213,7 +214,7 @@ fun WearRoute(
                 composeWearPdf(
                     page = page, spec = spec,
                     project = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition),
+                        jobNumber = jobNumber, side = shaftPosition, item = item),
                     unit = unit,
                     displayUnits = vm.currentDisplayUnits(),
                     pdfPrefs = vm.currentPdfPrefs,
@@ -249,7 +250,7 @@ fun WearRoute(
         val thicknessSnapshot = lineThicknessScale
         val displayUnitsSnapshot = DisplayUnits(unit, unitOverrides, dualUnits)
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-            jobNumber = jobNumber, side = shaftPosition)
+            jobNumber = jobNumber, side = shaftPosition, item = item)
         // The ink band is measured off the raw raster, on the same IO pass that produced it.
         val (bmp, band) = withContext(Dispatchers.IO) {
             val raster = renderPdfPageBitmap(ctx) { page ->
@@ -453,12 +454,12 @@ fun WearRoute(
             // ── Print button ──────────────────────────────────────────────────
             OutlinedButton(
                 onClick = {
-                    val jobName = buildWearFilename(customer, vessel, jobNumber, blankDraft)
+                    val jobName = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft)
                         .removeSuffix(".pdf")
                     // Snapshot state on the UI thread; onWrite runs on a binder thread.
                     val specSnapshot = spec
                     val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition)
+                        jobNumber = jobNumber, side = shaftPosition, item = item)
                     val unitSnapshot = unit
                     val prefsSnapshot = vm.currentPdfPrefs
                     val resolvedSnapshot = resolvedComponents
@@ -490,7 +491,7 @@ fun WearRoute(
             }
 
             Button(
-                onClick = { launcher.launch(buildWearFilename(customer, vessel, jobNumber, blankDraft)) },
+                onClick = { launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft)) },
                 enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -564,7 +565,7 @@ fun WearRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(buildWearFilename(customer, vessel, jobNumber, blankDraft))
+                launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft))
             },
             optionsSheet = {
                 // The sheet tunes the drawing being looked at (on-device request): the same
@@ -792,17 +793,6 @@ internal fun WearStripComponentChecks(
             ) { Text("None") }
         }
     }
-}
-
-private fun buildWearFilename(
-    customer: String,
-    vessel: String,
-    jobNumber: String,
-    blankDraft: Boolean = false,
-): String {
-    val parts = listOf(customer, vessel, jobNumber).filter { it.isNotBlank() }
-    val blankSuffix = if (blankDraft) "_BlankDraft" else ""
-    return "${if (parts.isNotEmpty()) parts.joinToString("_") else "WearDocument"}_wear$blankSuffix.pdf"
 }
 
 private fun openWearPdf(context: Context, uri: Uri) {

@@ -161,6 +161,7 @@ fun UndercutRoute(
     val customer           by vm.customer.collectAsState()
     val vessel             by vm.vessel.collectAsState()
     val jobNumber          by vm.jobNumber.collectAsState()
+    val item               by vm.item.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -268,7 +269,7 @@ fun UndercutRoute(
                 composeUndercutPdf(
                     page = page, spec = spec,
                     project = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition),
+                        jobNumber = jobNumber, side = shaftPosition, item = item),
                     unit = unit,
                     displayUnits = vm.currentDisplayUnits(),
                     pdfPrefs = vm.currentPdfPrefs,
@@ -299,7 +300,7 @@ fun UndercutRoute(
         val thicknessSnapshot = lineThicknessScale
         val displayUnitsSnapshot = DisplayUnits(unit, unitOverrides, dualUnits)
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-            jobNumber = jobNumber, side = shaftPosition)
+            jobNumber = jobNumber, side = shaftPosition, item = item)
         val bmp = withContext(Dispatchers.IO) {
             renderPdfPageBitmap(ctx) { page ->
                 composeUndercutPdf(
@@ -627,12 +628,12 @@ fun UndercutRoute(
             // ── Print button ──────────────────────────────────────────────────
             OutlinedButton(
                 onClick = {
-                    val jobName = buildUndercutFilename(customer, vessel, jobNumber, blankDraft)
+                    val jobName = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft)
                         .removeSuffix(".pdf")
                     // Snapshot state on the UI thread; onWrite runs on a binder thread.
                     val specSnapshot = spec
                     val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition)
+                        jobNumber = jobNumber, side = shaftPosition, item = item)
                     val unitSnapshot = unit
                     val prefsSnapshot = vm.currentPdfPrefs
                     val resolvedSnapshot = resolvedComponents
@@ -662,7 +663,7 @@ fun UndercutRoute(
             }
 
             Button(
-                onClick = { launcher.launch(buildUndercutFilename(customer, vessel, jobNumber, blankDraft)) },
+                onClick = { launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft)) },
                 enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -682,7 +683,7 @@ fun UndercutRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(buildUndercutFilename(customer, vessel, jobNumber, blankDraft))
+                launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft))
             },
             optionsSheet = {
                 // Same blank-draft state as the tab body's switch — ONE state behind both, so
@@ -740,17 +741,6 @@ fun UndercutRoute(
 
 /** Default length of a newly added undercut (1 in), clamped to the remaining shaft extent. */
 internal const val DEFAULT_UNDERCUT_LENGTH_MM = 25.4f
-
-private fun buildUndercutFilename(
-    customer: String,
-    vessel: String,
-    jobNumber: String,
-    blankDraft: Boolean = false,
-): String {
-    val parts = listOf(customer, vessel, jobNumber).filter { it.isNotBlank() }
-    val blankSuffix = if (blankDraft) "_BlankDraft" else ""
-    return "${if (parts.isNotEmpty()) parts.joinToString("_") else "Undercuts"}_undercuts$blankSuffix.pdf"
-}
 
 private fun openUndercutPdf(context: Context, uri: Uri) {
     val intent = buildOpenPdfIntent(context, uri)

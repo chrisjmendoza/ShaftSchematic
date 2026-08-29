@@ -180,6 +180,7 @@ fun OutputRoute(
     val customer           by vm.customer.collectAsState()
     val vessel             by vm.vessel.collectAsState()
     val jobNumber          by vm.jobNumber.collectAsState()
+    val item               by vm.item.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -278,7 +279,8 @@ fun OutputRoute(
         )
     }
 
-    val outputFilename = buildOutputFilename(customer, vessel, jobNumber, OutputDoc.CONSOLIDATED, blankDraft)
+    val outputFilename =
+        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.CONSOLIDATED, blankDraft)
 
     /**
      * The consolidated sheet with the elected content. Everything arrives as a parameter
@@ -326,7 +328,7 @@ fun OutputRoute(
                 composeConsolidated(
                     page, variant, spec, runoutConfig,
                     ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition),
+                        jobNumber = jobNumber, side = shaftPosition, item = item),
                     unit, vm.currentPdfPrefs, resolvedComponents,
                     lineThicknessScale, runoutReadings, stationPlacements, wearRecord, blankDraft,
                     vm.currentDisplayUnits(),
@@ -347,7 +349,7 @@ fun OutputRoute(
     ) { treeUri ->
         if (treeUri != null) {
             val project = ProjectInfo(customer = customer, vessel = vessel,
-                jobNumber = jobNumber, side = shaftPosition)
+                jobNumber = jobNumber, side = shaftPosition, item = item)
             val prefs = vm.currentPdfPrefs
             val displayUnits = vm.currentDisplayUnits()
             var attempted = 0
@@ -355,7 +357,7 @@ fun OutputRoute(
             OutputDoc.entries.forEachIndexed { i, doc ->
                 if (!batchChecked.getOrElse(i) { true }) return@forEachIndexed
                 attempted++
-                val name = buildOutputFilename(customer, vessel, jobNumber, doc, blankDraft)
+                val name = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, doc, blankDraft)
                 // A null uri means the provider refused to create the file — counted as a
                 // failure, but there is no document to carry an error page.
                 val docUri = createPdfInTree(ctx, treeUri, name) ?: return@forEachIndexed
@@ -438,7 +440,7 @@ fun OutputRoute(
                 spec = spec,
                 config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression),
                 project = ProjectInfo(customer = customer, vessel = vessel,
-                    jobNumber = jobNumber, side = shaftPosition),
+                    jobNumber = jobNumber, side = shaftPosition, item = item),
                 unit = unit,
                 resolved = resolvedComponents,
                 lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
@@ -604,7 +606,7 @@ fun OutputRoute(
                     val specSnapshot = spec
                     val configSnapshot = runoutConfig
                     val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition)
+                        jobNumber = jobNumber, side = shaftPosition, item = item)
                     val unitSnapshot = unit
                     val prefsSnapshot = vm.currentPdfPrefs
                     val resolvedSnapshot = resolvedComponents

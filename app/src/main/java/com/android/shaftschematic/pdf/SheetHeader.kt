@@ -19,10 +19,38 @@ import java.util.Locale
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
+ * The blank-draft job-info labels, in print order — one writing rule per label.
+ *
+ * ONE list for every sheet's blank header (this one and the classic runout sheet's), so a field
+ * added to one draft cannot go missing from another.
+ */
+internal val JOB_INFO_BLANK_LABELS =
+    listOf("Customer:", "Vessel:", "Job #:", "Item:", "Date:", "Side:")
+
+/**
+ * The printed job-info line: whichever identity fields the document actually carries, then the
+ * date and (when the shaft has one) its side.
+ *
+ * ONE construction for every sheet header, the counterpart to [JOB_INFO_BLANK_LABELS]. A blank
+ * field prints no label at all — a label with nothing after it is an orphan on a finished
+ * drawing — which is exactly why Item can be optional without an "Item:" ever printing bare.
+ */
+internal fun jobInfoHeaderLine(project: ProjectInfo, date: String): String {
+    val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
+    return buildString {
+        if (project.customer.isNotBlank())  append("Customer: ${project.customer}   ")
+        if (project.vessel.isNotBlank())    append("Vessel: ${project.vessel}   ")
+        if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
+        if (project.item.isNotBlank())      append("Item: ${project.item}   ")
+        append("Date: $date$side")
+    }
+}
+
+/**
  * Job info on line 1, the document's [title] centred on line 2, and a hairline rule under
  * the block.
  *
- * Blank-draft mode spreads the five job-info fields edge-to-edge across the full content
+ * Blank-draft mode spreads the job-info fields edge-to-edge across the full content
  * width with equal writing rules — handwriting room. The OAL belongs to the drawing's
  * end-to-end span (each sheet's own OAL line), so it is never printed here in either mode.
  *
@@ -52,7 +80,7 @@ internal fun drawSheetHeader(
     if (blankValues) {
         val line1Y = top + ts + 4f
         val line2Y = line1Y + blankLineGapPt
-        val labels = listOf("Customer:", "Vessel:", "Job #:", "Date:", "Side:")
+        val labels = JOB_INFO_BLANK_LABELS
         val labelsW = labels.map { text.measureText(it) }.sum()
         // drawLabelWithRule inserts 4f label→rule and returns ruleEnd + 14f (inter-field gap).
         val ruleW = ((right - left - labelsW - labels.size * 4f - (labels.size - 1) * 14f) / labels.size)
@@ -63,14 +91,7 @@ internal fun drawSheetHeader(
         c.drawText(title, centeredX(title), line2Y, text)
     } else {
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
-
-        val line1 = buildString {
-            if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
-            if (project.vessel.isNotBlank())   append("Vessel: ${project.vessel}   ")
-            if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
-            append("Date: $date$side")
-        }
+        val line1 = jobInfoHeaderLine(project, date)
 
         val line1Fit = ellipsizeToWidth(line1, text, right - left)
         val line2Fit = ellipsizeToWidth(title, text, right - left)

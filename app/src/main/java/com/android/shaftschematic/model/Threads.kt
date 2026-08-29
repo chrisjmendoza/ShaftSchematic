@@ -35,6 +35,11 @@ import java.util.UUID
  *                             mm. Canonical geometry stays in [majorDiaMm]/[pitchMm] (parsed
  *                             from the designation at entry, never re-derived here — golden rule).
  *                             See [com.android.shaftschematic.util.ThreadDesignation].
+ * @property showLabelOnDrawing Whether this thread's name prints as a component label under the
+ *                             schematic. Draw-only flag — mirrors
+ *                             [com.android.shaftschematic.model.Body.showLabelOnDrawing]; it never
+ *                             rewrites [label] and never touches geometry. Defaults true so a
+ *                             document saved before the flag existed prints exactly as it did.
  *
  * Invariants:
  * - All distances are ≥ 0.
@@ -56,6 +61,7 @@ data class Threads(
     val metricDesignation: String? = null,
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
+    val showLabelOnDrawing: Boolean = true,
 ) : Segment {
 
     /**

@@ -2,22 +2,17 @@ package com.android.shaftschematic.ui.screen
 
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,13 +20,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.LinerAuthoredReference
@@ -60,7 +50,8 @@ import com.android.shaftschematic.util.toMmOrNull
  * Rate mode is user-owned state seeded once per taper — it must not be re-derived from the
  * stored text, which would discard an explicit Auto/Manual choice. Every control that changes
  * geometry, position, or a value is mirrored in `AddTaperDialog` by the add-dialog-parity
- * invariant; the "Prints in: in | mm" chip at the card's foot is the documented carve-out.
+ * invariant; "Show name on drawing" and the "Prints in: in | mm" chip at the card's foot are the
+ * documented carve-outs.
  *
  * [f1] is supplied by [ComponentPagerCard] because every card's debug line uses it.
  */
@@ -77,6 +68,7 @@ internal fun TaperPagerCard(
     f1: (Float) -> String,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
+    onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onSetKeyways180Apart: (Boolean) -> Unit,
@@ -99,42 +91,15 @@ internal fun TaperPagerCard(
         t.startFromAftMm
     }
     val computedTaperTitle = taperTitleById[t.id] ?: "Taper"
-    var editingTaperTitle by rememberSaveable(t.id) { mutableStateOf(false) }
-    val taperFocusRequester = remember { FocusRequester() }
-    var taperHasFocusedOnce by remember(t.id) { mutableStateOf(false) }
     ComponentCard(
         title = computedTaperTitle,
         titleContent = {
-            if (!editingTaperTitle) {
-                Text(
-                    computedTaperTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.fillMaxWidth().clickable { editingTaperTitle = true },
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-            } else {
-                var text by remember(t.id, t.label) { mutableStateOf(t.label.orEmpty()) }
-                LaunchedEffect(t.id) { taperFocusRequester.requestFocus() }
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    singleLine = true,
-                    placeholder = { Text(computedTaperTitle) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        onUpdateTaperLabel(idx, text.trim().takeIf { it.isNotEmpty() })
-                        editingTaperTitle = false
-                    }),
-                    modifier = Modifier.fillMaxWidth().focusRequester(taperFocusRequester)
-                        .onFocusChanged { f ->
-                            if (f.isFocused) taperHasFocusedOnce = true
-                            if (taperHasFocusedOnce && !f.isFocused) {
-                                onUpdateTaperLabel(idx, text.trim().takeIf { it.isNotEmpty() })
-                                editingTaperTitle = false
-                            }
-                        }
-                )
-            }
+            EditableCardTitle(
+                componentId = t.id,
+                title = computedTaperTitle,
+                label = t.label,
+                onCommitLabel = { onUpdateTaperLabel(idx, it) },
+            )
         },
         debugText = if (showComponentDebugLabels) "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}" else null,
         errorMessage = if (t.id in collidingComponentIds) "Overlaps another component" else null,
@@ -332,6 +297,13 @@ internal fun TaperPagerCard(
         }
 
         KeywayClockingSection(spec, onSetKeyways180Apart, onSetKeyways90Apart, onSetKeyways90Cw)
+
+        ShowDiaToggleRow(
+            label = "Show name on drawing",
+            checked = t.showLabelOnDrawing,
+            testTag = "taper_show_label_toggle",
+            onCheckedChange = { onUpdateTaperShowLabel(idx, it) },
+        )
 
         if (perComponentUnitsEnabled) {
             ComponentUnitChip(t.id, unit, unitOverrides, onSetComponentUnit)

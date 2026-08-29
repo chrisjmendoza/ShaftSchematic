@@ -1105,7 +1105,9 @@ internal fun drawDiaReadingsInProfile(
 /**
  * Draw the job-info header strip at the top of the classic runout page.
  *
- * Format (single line):  Customer: ___  |  Vessel: ___  |  Job #: ___  |  Date  |  STBD/PORT
+ * The line's TEXT comes from the shared [jobInfoHeaderLine] / [JOB_INFO_BLANK_LABELS] pair, so
+ * this sheet and the wear/undercut header carry the same fields; only the LAYOUT is local
+ * (left-aligned, no title line, default rule width).
  * (The OAL is drawn separately by the OAL span line, not in this header.)
  */
 private fun drawRunoutHeader(
@@ -1124,19 +1126,12 @@ private fun drawRunoutHeader(
         // Blank draft: every job-info label prints with a writing rule, regardless of what
         // the current document holds — the draft may be used on a different shaft.
         var x = left
-        listOf("Customer:", "Vessel:", "Job #:", "Date:", "Side:").forEach { label ->
+        JOB_INFO_BLANK_LABELS.forEach { label ->
             x = drawLabelWithRule(c, label, x, y, text, maxRight = right)
         }
     } else {
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
-
-        val headerText = buildString {
-            if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
-            if (project.vessel.isNotBlank())   append("Vessel: ${project.vessel}   ")
-            if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
-            append("Date: $date$side")
-        }
+        val headerText = jobInfoHeaderLine(project, date)
         c.drawText(ellipsizeToWidth(headerText, text, right - left), left, y, text)
     }
 

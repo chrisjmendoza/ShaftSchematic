@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.BuildConfig
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.doc.ShaftDocCodec
+import com.android.shaftschematic.doc.mateDuplicate
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.model.RunoutReadings
@@ -149,25 +150,54 @@ fun ShaftViewModel.restoreShaftsFromBackup(uri: Uri) {
     }
 }
 
+/**
+ * The current session as a document envelope — the ONE place the live state is mapped onto
+ * [ShaftDocCodec.ShaftDocV1]. Both writers below build on it, so a field added to the envelope
+ * cannot reach the save path while silently missing from the mate copy.
+ */
+private fun ShaftViewModel.currentEnvelope(): ShaftDocCodec.ShaftDocV1 = ShaftDocCodec.ShaftDocV1(
+    preferredUnit = _unit.value,
+    unitLocked = _unitLocked.value,
+    jobNumber = _jobNumber.value,
+    customer = _customer.value,
+    vessel = _vessel.value,
+    item = _item.value,
+    shaftPosition = _shaftPosition.value,
+    notes = _notes.value,
+    spec = _spec.value,
+    runoutConfig = _runoutConfig.value,
+    wearRecord = _wearRecord.value,
+    runoutReadings = _runoutReadings.value,
+    runoutStationPlacements = _runoutStationPlacements.value,
+    undercutRecord = _undercutRecord.value,
+    unitOverrides = _unitOverrides.value,
+    dualUnits = _dualUnits.value,
+    // station_interval_version is stamped by encodeV1 itself — see its KDoc.
+)
+
 /** Export the current state as a JSON string (mm spec + unit metadata + runout config). */
-fun ShaftViewModel.exportJson(): String = ShaftDocCodec.encodeV1(
-    ShaftDocCodec.ShaftDocV1(
-        preferredUnit = _unit.value,
-        unitLocked = _unitLocked.value,
-        jobNumber = _jobNumber.value,
-        customer = _customer.value,
-        vessel = _vessel.value,
-        shaftPosition = _shaftPosition.value,
-        notes = _notes.value,
-        spec = _spec.value,
-        runoutConfig = _runoutConfig.value,
-        wearRecord = _wearRecord.value,
-        runoutReadings = _runoutReadings.value,
-        runoutStationPlacements = _runoutStationPlacements.value,
-        undercutRecord = _undercutRecord.value,
-        unitOverrides = _unitOverrides.value,
-        dualUnits = _dualUnits.value,
-        // station_interval_version is stamped by encodeV1 itself — see its KDoc.
+fun ShaftViewModel.exportJson(): String = ShaftDocCodec.encodeV1(currentEnvelope())
+
+/**
+ * Encode the current drawing as its **mate's** document: this shaft's geometry and drawing
+ * decisions under a new identity, with every measurement record reset. See [mateDuplicate] for
+ * what travels and why the records do not.
+ *
+ * Read-only on the session — the caller writes the returned JSON to a new file; the open
+ * document keeps its own name, identity and dirty state.
+ */
+fun ShaftViewModel.exportMateJson(
+    jobNumber: String,
+    customer: String,
+    vessel: String,
+    position: ShaftPosition,
+): String = ShaftDocCodec.encodeV1(
+    mateDuplicate(
+        source = currentEnvelope(),
+        jobNumber = jobNumber,
+        customer = customer,
+        vessel = vessel,
+        position = position,
     )
 )
 
@@ -175,10 +205,10 @@ fun ShaftViewModel.exportJson(): String = ShaftDocCodec.encodeV1(
  * Encode the current drawing as a reusable **template**: geometry only.
  *
  * Everything that identifies a job or records a measurement is dropped here, at WRITE
- * time, so the stored file itself is clean — job number, customer, vessel, shaft position,
- * notes, and the wear / runout / undercut records. Scrubbing only on load would leave a
- * customer's name sitting in the template file, to be carried into every drawing built
- * from it (and into any copy of that file). The per-job sheet tuning in [RunoutConfig]
+ * time, so the stored file itself is clean — job number, customer, vessel, item, shaft
+ * position, notes, and the wear / runout / undercut records. Scrubbing only on load would
+ * leave a customer's name sitting in the template file, to be carried into every drawing
+ * built from it (and into any copy of that file). The per-job sheet tuning in [RunoutConfig]
  * (shaft height, liner compression) resets too — it is tuned per document, not per shaft
  * family.
  *
@@ -232,6 +262,7 @@ fun ShaftViewModel.applyTemplate(raw: String) {
     _jobNumber.value = ""
     _customer.value = ""
     _vessel.value = ""
+    _item.value = ""
     _shaftPosition.value = ShaftPosition.OTHER
     _notes.value = ""
     _runoutConfig.value = RunoutConfig()
@@ -281,6 +312,7 @@ fun ShaftViewModel.importJson(raw: String) {
     _jobNumber.value = decoded.jobNumber
     _customer.value = decoded.customer
     _vessel.value = decoded.vessel
+    _item.value = decoded.item
     _shaftPosition.value = decoded.shaftPosition
     _notes.value = decoded.notes
     _runoutConfig.value = decoded.runoutConfig
@@ -332,6 +364,7 @@ fun ShaftViewModel.newDocument() {
     _jobNumber.value = ""
     _customer.value = ""
     _vessel.value = ""
+    _item.value = ""
     _shaftPosition.value = ShaftPosition.OTHER
     _runoutConfig.value = RunoutConfig()
     _wearRecord.value = WearRecord()

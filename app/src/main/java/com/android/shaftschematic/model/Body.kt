@@ -30,6 +30,11 @@ import java.util.UUID
  *   callouts are opt-in per card, so the schematic stays clean unless a Ø is deliberately
  *   shown — the footer's "Body:" list still always carries every Ø. When several shown
  *   bodies share a Ø, the callout anchors at the longest of them.
+ * @property showLabelOnDrawing Whether this body's name prints as a component label under the
+ *   schematic. Draw-only flag: it changes nothing in the model, resolve, OAL, collision, or
+ *   footer geometry, and never rewrites [label]. Defaults true so a document saved before the
+ *   flag existed prints exactly as it did. The global Settings switch and the per-sheet export
+ *   option still gate the whole label pass — this narrows it to one component.
  * @property blendAftMm Axial length of a machined **blend** cut into this body's AFT face
  *   (0 = a square face). The blend runs INWARD from the face, easing from the neighbouring
  *   component's diameter at the face to [diaMm] this far in, so it is machined entirely out
@@ -57,6 +62,7 @@ data class Body(
     val keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val keywaySpooned: Boolean = false,
     val showDiaOnDrawing: Boolean = false,
+    val showLabelOnDrawing: Boolean = true,
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,
     val blendAftSeal: Boolean = false,

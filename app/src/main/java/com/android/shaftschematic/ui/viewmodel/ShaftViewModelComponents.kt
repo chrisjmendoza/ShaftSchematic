@@ -639,7 +639,7 @@ fun ShaftViewModel.updateLinerAuthoredReference(index: Int, reference: LinerAuth
 }
 
 /**
- * Lens-shaped helper behind the six trivial per-kind setters below (label ×4, show-Ø ×2):
+ * Lens-shaped helper behind the trivial per-kind setters below (label ×4, show-Ø ×2, show-name ×4):
  * bounds-guard [index] against [list], normalize the incoming [newValue], then no-op when the
  * normalized value already matches the stored one — LOAD-BEARING: keeps a recomposition that
  * hands back the same value from ever marking the document dirty or churning the undo recorder.
@@ -695,6 +695,49 @@ fun ShaftViewModel.updateBodyShowDia(index: Int, show: Boolean) = _spec.update {
         get = { it.showDiaOnDrawing },
         copyField = { old, v -> old.copy(showDiaOnDrawing = v) },
         withList = { s.copy(bodies = it) },
+    )
+}
+
+/**
+ * Show/hide this body's NAME label on the schematic. Draw-only, and the same identity-guarded
+ * [withItemField] path as [updateBodyShowDia] — the label text itself is never rewritten.
+ */
+fun ShaftViewModel.updateBodyShowLabel(index: Int, show: Boolean) = _spec.update { s ->
+    s.withItemField(
+        list = s.bodies, index = index, newValue = show,
+        get = { it.showLabelOnDrawing },
+        copyField = { old, v -> old.copy(showLabelOnDrawing = v) },
+        withList = { s.copy(bodies = it) },
+    )
+}
+
+/** Taper mirror of [updateBodyShowLabel]. */
+fun ShaftViewModel.updateTaperShowLabel(index: Int, show: Boolean) = _spec.update { s ->
+    s.withItemField(
+        list = s.tapers, index = index, newValue = show,
+        get = { it.showLabelOnDrawing },
+        copyField = { old, v -> old.copy(showLabelOnDrawing = v) },
+        withList = { s.copy(tapers = it) },
+    )
+}
+
+/** Thread mirror of [updateBodyShowLabel]. */
+fun ShaftViewModel.updateThreadShowLabel(index: Int, show: Boolean) = _spec.update { s ->
+    s.withItemField(
+        list = s.threads, index = index, newValue = show,
+        get = { it.showLabelOnDrawing },
+        copyField = { old, v -> old.copy(showLabelOnDrawing = v) },
+        withList = { s.copy(threads = it) },
+    )
+}
+
+/** Liner mirror of [updateBodyShowLabel]. */
+fun ShaftViewModel.updateLinerShowLabel(index: Int, show: Boolean) = _spec.update { s ->
+    s.withItemField(
+        list = s.liners, index = index, newValue = show,
+        get = { it.showLabelOnDrawing },
+        copyField = { old, v -> old.copy(showLabelOnDrawing = v) },
+        withList = { s.copy(liners = it) },
     )
 }
 

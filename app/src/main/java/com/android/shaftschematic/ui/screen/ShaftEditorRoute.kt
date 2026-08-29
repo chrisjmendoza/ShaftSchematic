@@ -43,6 +43,8 @@ fun ShaftEditorRoute(
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onSaveAs: () -> Unit = {},
+    /** Open "Duplicate for mate" — writes a sibling document; the session is untouched. */
+    onDuplicateForMate: () -> Unit = {},
     /** Close the current document (guarded for unsaved work) and return to Start. */
     onCloseDocument: () -> Unit = {},
     onOpenSettings: () -> Unit,
@@ -88,6 +90,7 @@ fun ShaftEditorRoute(
                 onOpen = onOpen,
                 onSave = onSave,
                 onSaveAs = onSaveAs,
+                onDuplicateForMate = onDuplicateForMate,
                 onCloseDocument = onCloseDocument,
                 onExportPdf = onExportPdf,
                 onOpenSettings = onOpenSettings,

@@ -14,8 +14,9 @@ import kotlinx.serialization.Serializable
  * contains the anchor — the half-open interval `[startMm, endMm)` — draws at [diaMm].
  *
  * ## Dormancy — nothing is ever pruned
- * An override whose anchor lands inside a component, or inside an auto gap absorbed into an
- * explicit-body run, is **dormant**: not applied, but kept in the list. There are no orphans
+ * An override whose anchor lands inside a component is **dormant**: not applied, but kept in
+ * the list. (An explicit body never absorbs the auto gap beside it, so a gap's anchors stay
+ * live for as long as the gap exists.) There are no orphans
  * by construction, and nothing is pruned at decode — the same rule as runout readings and
  * wear pits (skip at the use site, never delete). A dormant override resurrects unchanged
  * when the span that contains it reappears.
@@ -71,8 +72,8 @@ fun List<AutoDiaOverride>.hasAutoSectionDia(startMm: Float, endMm: Float): Boole
  * midpoint. [valueMm] ≤ 0 is a clear: removal only, so the section falls back to
  * [ShaftSpec.autoBodyDiaMm] and then to neighbor derivation.
  *
- * Overrides anchored outside the span — including dormant ones under a component or inside a
- * gap absorbed into an explicit-body run — are left alone, so they resurrect unchanged if
+ * Overrides anchored outside the span — including dormant ones under a component — are left
+ * alone, so they resurrect unchanged if
  * their span reappears. Returns `this` when nothing moves, so a no-op set never emits new
  * state or marks the document dirty.
  */

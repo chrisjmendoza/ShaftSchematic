@@ -69,6 +69,12 @@ object ShaftDocCodec {
         val jobNumber: String = "",
         val customer: String = "",
         val vessel: String = "",
+        /**
+         * Optional shaft designation ("Tail shaft", "Line shaft", …). Absent in older files →
+         * blank, which prints nothing anywhere. Additive + defaulted: no version bump needed.
+         */
+        @SerialName("item")
+        val item: String = "",
         @SerialName("shaft_position")
         val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
         val notes: String = "",
@@ -143,6 +149,7 @@ object ShaftDocCodec {
         val jobNumber: String,
         val customer: String,
         val vessel: String,
+        val item: String,
         val shaftPosition: ShaftPosition,
         val notes: String,
         val spec: ShaftSpec,
@@ -232,6 +239,42 @@ object ShaftDocCodec {
         return config.copy(componentOverrides = config.componentOverrides + frozen)
     }
 
+    /**
+     * Decodes a stored document back into the **envelope** it was written from.
+     *
+     * The seam for whole-document work that never opens a session — duplicating a document
+     * for its mate, inspecting one on the Open screen. [decode] answers "what does the editor
+     * load?" and flattens the envelope into [Decoded] on the way; this answers "what is in the
+     * file?", in the one shape [encodeV1] takes back.
+     *
+     * Built on [decode], so a duplicate inherits the same normalization and orphan policy an
+     * open does (thread normalization, legacy station-count freeze, wear spots pruned against
+     * the spec's liners), and a legacy spec-only file arrives as an envelope carrying just
+     * its spec. [stationIntervalVersion] is stamped by [encodeV1] on the way out.
+     */
+    fun decodeEnvelope(raw: String): ShaftDocV1 {
+        val d = decode(raw)
+        return ShaftDocV1(
+            preferredUnit = d.preferredUnit ?: UnitSystem.INCHES,
+            unitLocked = d.unitLocked,
+            jobNumber = d.jobNumber,
+            customer = d.customer,
+            vessel = d.vessel,
+            item = d.item,
+            shaftPosition = d.shaftPosition,
+            notes = d.notes,
+            spec = d.spec,
+            runoutConfig = d.runoutConfig,
+            wearRecord = d.wearRecord,
+            runoutReadings = d.runoutReadings,
+            runoutStationPlacements = d.runoutStationPlacements,
+            undercutRecord = d.undercutRecord,
+            stationIntervalVersion = CURRENT_STATION_INTERVAL_VERSION,
+            unitOverrides = d.unitOverrides,
+            dualUnits = d.dualUnits,
+        )
+    }
+
     fun decode(raw: String): Decoded {
         // Try envelope first.
         runCatching { json.decodeFromString(ShaftDocV1.serializer(), raw) }
@@ -247,6 +290,7 @@ object ShaftDocCodec {
                     jobNumber = doc.jobNumber,
                     customer = doc.customer,
                     vessel = doc.vessel,
+                    item = doc.item,
                     shaftPosition = doc.shaftPosition,
                     notes = doc.notes,
                     spec = normalizedSpec,
@@ -296,6 +340,7 @@ object ShaftDocCodec {
             jobNumber = "",
             customer = "",
             vessel = "",
+            item = "",
             shaftPosition = ShaftPosition.OTHER,
             notes = "",
             spec = legacy,

@@ -34,7 +34,11 @@ Invariants
   **physical position order** along the shaft. See `ComponentsOrdering.md` (v1.2).  
 - Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.
   **Exception:** the OAL field commits on every keystroke in manual mode (intentional —
-  the preview updates live; see CLAUDE.md).  
+  the preview updates live; see CLAUDE.md). The OAL field's **display never rewrites the
+  user's own text**: a typed `150 3/4` stays a fraction rather than echoing back as
+  `150.75` (on-device report). The text re-derives from the model only when the field is
+  unfocused AND no longer parses to the model value (auto-mode recompute, undo, an edit
+  from elsewhere).  
 - IME padding is applied **only to the scrollable region**, not the entire screen, and is
   chained **before** `verticalScroll` so it shrinks the scroll viewport (not just the
   content) — this lets Compose's focused-child-in-view behavior auto-scroll a focused
@@ -99,8 +103,10 @@ Responsibilities
 
 - **Scrollable Form Area:**  
   - Overall length field (unit-aware; commits per keystroke in manual mode)  
-  - Project information sheet (Job Number, Customer, Vessel, Shaft Position, Notes) —
-    opened from the toolbar, **Save/Cancel**, not commit-on-blur (see Notes)  
+  - Project information sheet (Job Number, Customer, Vessel, Item, Shaft Position, Notes) —
+    opened from the toolbar, **Save/Cancel**, not commit-on-blur (see Notes). **Item** is an
+    optional shaft designation ("Tail shaft", "Line shaft"); blank is the default and prints
+    nothing anywhere.  
   - Component carousel for **Body**, **Taper**, **Thread**, **Liner**, and
     **Coupler Bolt Slot** (see `ComponentCarousel.kt`)
 

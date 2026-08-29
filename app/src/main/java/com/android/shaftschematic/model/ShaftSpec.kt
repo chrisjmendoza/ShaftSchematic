@@ -44,7 +44,7 @@ import kotlinx.serialization.Serializable
  *           shaft space by anchor. An auto span containing an anchor draws at that
  *           [AutoDiaOverride.diaMm], beating [autoBodyDiaMm] and neighbor derivation;
  *           aft-most anchor wins when a span holds several. Anchors that land inside a
- *           component or inside an absorbed gap are dormant, never pruned. Draw-only and
+ *           component are dormant, never pruned. Draw-only and
  *           additive/defaulted — see [AutoDiaOverride].
  * @property showAutoBodyDia Whether bare-shaft Ø values print as below-shaft callouts on the
  *           schematic. ONE flag for ALL auto spans — the bare shaft is one piece of stock, so

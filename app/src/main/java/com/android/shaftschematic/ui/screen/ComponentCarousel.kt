@@ -14,15 +14,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -38,13 +42,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.BlendProfile
@@ -144,17 +153,21 @@ internal fun ComponentCarouselPager(
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
+    onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
+    onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
+    onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     linerShouldersEnabled: Boolean = false,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -292,17 +305,21 @@ internal fun ComponentCarouselPager(
                     onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
+                    onUpdateBodyShowLabel = onUpdateBodyShowLabel,
                     onUpdateBodyBlend = onUpdateBodyBlend,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
                     onUpdateTaper = onUpdateTaper,
                     onUpdateTaperLabel = onUpdateTaperLabel,
+                    onUpdateTaperShowLabel = onUpdateTaperShowLabel,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateTaperReference = onUpdateTaperReference,
                     onUpdateThread = onUpdateThread,
                     onUpdateThreadLabel = onUpdateThreadLabel,
+                    onUpdateThreadShowLabel = onUpdateThreadShowLabel,
                     onUpdateLiner = onUpdateLiner,
                     onUpdateLinerShowDia = onUpdateLinerShowDia,
+                    onUpdateLinerShowLabel = onUpdateLinerShowLabel,
                     onUpdateLinerShoulder = onUpdateLinerShoulder,
                     linerShouldersEnabled = linerShouldersEnabled,
                     onUpdateLinerLabel = onUpdateLinerLabel,
@@ -549,17 +566,21 @@ internal fun ComponentPagerCard(
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
+    onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
+    onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
+    onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     linerShouldersEnabled: Boolean = false,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -620,6 +641,7 @@ internal fun ComponentPagerCard(
             onSetShowAutoBodyDia = onSetShowAutoBodyDia,
             onUpdateBody = onUpdateBody,
             onUpdateBodyShowDia = onUpdateBodyShowDia,
+            onUpdateBodyShowLabel = onUpdateBodyShowLabel,
             onUpdateBodyBlend = onUpdateBodyBlend,
             onUpdateBodyLabel = onUpdateBodyLabel,
             onUpdateBodyKeyway = onUpdateBodyKeyway,
@@ -647,6 +669,7 @@ internal fun ComponentPagerCard(
             f1 = ::f1,
             onUpdateTaper = onUpdateTaper,
             onUpdateTaperLabel = onUpdateTaperLabel,
+            onUpdateTaperShowLabel = onUpdateTaperShowLabel,
             onUpdateTaperKeyway = onUpdateTaperKeyway,
             onUpdateTaperReference = onUpdateTaperReference,
             onSetKeyways180Apart = onSetKeyways180Apart,
@@ -674,6 +697,7 @@ internal fun ComponentPagerCard(
             startValidator = ::startValidator,
             onUpdateThread = onUpdateThread,
             onUpdateThreadLabel = onUpdateThreadLabel,
+            onUpdateThreadShowLabel = onUpdateThreadShowLabel,
             onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
             onSetThreadEndPosition = onSetThreadEndPosition,
             onRemoveThread = onRemoveThread,
@@ -696,6 +720,7 @@ internal fun ComponentPagerCard(
             f1 = ::f1,
             onUpdateLiner = onUpdateLiner,
             onUpdateLinerShowDia = onUpdateLinerShowDia,
+            onUpdateLinerShowLabel = onUpdateLinerShowLabel,
             onUpdateLinerShoulder = onUpdateLinerShoulder,
             linerShouldersEnabled = linerShouldersEnabled,
             onUpdateLinerLabel = onUpdateLinerLabel,
@@ -725,16 +750,17 @@ internal fun ComponentPagerCard(
 }
 
 /**
- * "Show Ø on drawing" row — the per-component schematic Ø-callout switch, sitting directly
- * under the Ø field it modifies.
+ * Switch row for a per-component schematic display flag — "Show Ø on drawing" (sitting directly
+ * under the Ø field it modifies) and "Show name on drawing".
  *
- * Draw-only: it never touches the stored diameter. Hiding is for a surface whose Ø could not
- * be measured where the callout would land (a body under fiberglass, a sleeved run) — the
- * printed anchor then moves to the longest still-visible component sharing that Ø.
+ * Draw-only: neither switch touches a stored value. Hiding a Ø is for a surface whose diameter
+ * could not be measured where the callout would land (a body under fiberglass, a sleeved run) —
+ * the printed anchor then moves to the longest still-visible component sharing that Ø. Hiding a
+ * name drops that component's label from the schematic's label pass and nothing else.
  *
  * Deliberately card-only, with no Add-dialog counterpart: like the coupler slot's
- * "Show dimension rail" it is a post-hoc display choice made after seeing a printed sheet,
- * not a property of the component being added. See `docs/contracts/AddComponentDialogs.md`.
+ * "Show dimension rail" these are post-hoc display choices made after seeing a printed sheet,
+ * not properties of the component being added. See `docs/contracts/AddComponentDialogs.md`.
  */
 @Composable
 internal fun ShowDiaToggleRow(
@@ -754,6 +780,78 @@ internal fun ShowDiaToggleRow(
             checked = checked,
             onCheckedChange = onCheckedChange,
             modifier = Modifier.testTag(testTag),
+        )
+    }
+}
+
+/**
+ * The card title, renamed in place — the one implementation behind every component card's
+ * [ComponentCard.titleContent].
+ *
+ * Tapping the title swaps it for a text field seeded with the stored [label] (the computed
+ * [title] shows as the placeholder, so clearing the field restores the derived name). The edit
+ * commits the TRIMMED text — blank meaning "no custom label", i.e. `null` — on IME Done and on
+ * focus loss, the latter only once the field has actually held focus: Compose delivers an
+ * initial unfocused callback on attach, and committing on it would write a label with no user
+ * edit (the [com.android.shaftschematic.ui.input.shouldCommitOnBlur] baseline rule).
+ *
+ * The trailing pencil is discoverability only — it opens the same editor as the title tap. Tapping
+ * the title alone was not discoverable (on-device report).
+ */
+@Composable
+internal fun EditableCardTitle(
+    componentId: String,
+    title: String,
+    label: String?,
+    onCommitLabel: (String?) -> Unit,
+) {
+    var editing by rememberSaveable(componentId) { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    var hasFocusedOnce by remember(componentId) { mutableStateOf(false) }
+
+    if (!editing) {
+        Row(
+            // The card's Remove button floats over the title row's trailing edge, so the
+            // pencil keeps clear of it.
+            modifier = Modifier.fillMaxWidth().padding(end = 40.dp)
+                .clickable { editing = true },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f, fill = false),
+                maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+            Icon(
+                Icons.Filled.Edit,
+                contentDescription = "Rename",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp).testTag("card_title_edit"),
+            )
+        }
+    } else {
+        var text by remember(componentId, label) { mutableStateOf(label.orEmpty()) }
+        LaunchedEffect(componentId) { focusRequester.requestFocus() }
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            singleLine = true,
+            placeholder = { Text(title) },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                onCommitLabel(text.trim().takeIf { it.isNotEmpty() })
+                editing = false
+            }),
+            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
+                .onFocusChanged { f ->
+                    if (f.isFocused) hasFocusedOnce = true
+                    if (hasFocusedOnce && !f.isFocused) {
+                        onCommitLabel(text.trim().takeIf { it.isNotEmpty() })
+                        editing = false
+                    }
+                }
         )
     }
 }

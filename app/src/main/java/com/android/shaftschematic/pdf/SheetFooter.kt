@@ -120,6 +120,50 @@ internal fun selectFooterTapers(spec: ShaftSpec): FooterTapers {
 // Footer (3 columns; center column is work-order info)
 // ──────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The middle (work-order info) column's lines, in print order.
+ *
+ * Built as a list so the line count is known BEFORE [drawFooter] picks its pitch — the end
+ * columns already arrive as lists. A blank draft's lines end in `:` (or a bare `Ø`), which is
+ * what tells [drawFooter] to draw a writing rule after the label instead of a value.
+ *
+ * **Item is optional.** A blank draft always rules a line for it, but a printed sheet omits the
+ * line entirely when it is blank — a label with nothing after it is an orphan on a finished
+ * drawing. Every other field here is unconditional.
+ */
+internal fun buildFooterMidColumn(
+    spec: ShaftSpec,
+    project: ProjectInfo,
+    cfg: FooterConfig,
+    date: String,
+    blankValues: Boolean = false,
+    displayUnits: DisplayUnits = DisplayUnits.single(UnitSystem.INCHES),
+): List<String> = if (blankValues) {
+    buildList {
+        add("Customer:"); add("Vessel:"); add("Job #:"); add("Item:"); add("Date:")
+        if (cfg.bodyDiasMm.isNotEmpty()) add("Body: Ø")
+        keywayClockingFooterNote(spec)?.let { add(it) }
+        add("Side:")
+    }
+} else {
+    buildList {
+        add("Customer: ${project.customer}")
+        add("Vessel: ${project.vessel}")
+        add("Job #: ${project.jobNumber}")
+        if (project.item.isNotBlank()) add("Item: ${project.item}")
+        add("Date: $date")
+        if (cfg.bodyDiasMm.isNotEmpty()) {
+            // No single component backs this line (it's the distinct set across every body),
+            // so it prints in the document unit — the same posture as the OAL rail.
+            val label = cfg.bodyDiasMm.joinToString(", ") {
+                "Ø ${formatDiaWithUnitDual(it.toDouble(), displayUnits.documentUnit, displayUnits.dual)}"
+            }
+            add("Body: $label")
+        }
+        keywayClockingFooterNote(spec)?.let { add(it) }
+    }
+}
+
 // Internal (not private): the consolidated runout sheet prints the SAME footer block —
 // one footer implementation for both documents, so the spec lines can never drift apart.
 internal fun drawFooter(
@@ -171,34 +215,8 @@ internal fun drawFooter(
     // blank draft pads it like the others so all three rules come out the same length.
     val rightMaxW = rect.right - rightX - (if (blankValues) colPad else 0f)
 
-    // The middle column's content, built as a list so its line count is known BEFORE the pitch is
-    // chosen — the end columns already arrive as lists. A `null` value means "label only": on a
-    // blank draft it draws a writing rule, on a printed sheet it is simply skipped.
     val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-    val midLines: List<String> = if (blankValues) {
-        buildList {
-            add("Customer:"); add("Vessel:"); add("Job #:"); add("Date:")
-            if (cfg.bodyDiasMm.isNotEmpty()) add("Body: Ø")
-            keywayClockingFooterNote(spec)?.let { add(it) }
-            add("Side:")
-        }
-    } else {
-        buildList {
-            add("Customer: ${project.customer}")
-            add("Vessel: ${project.vessel}")
-            add("Job #: ${project.jobNumber}")
-            add("Date: $date")
-            if (cfg.bodyDiasMm.isNotEmpty()) {
-                // No single component backs this line (it's the distinct set across every body),
-                // so it prints in the document unit — the same posture as the OAL rail.
-                val label = cfg.bodyDiasMm.joinToString(", ") {
-                    "Ø ${formatDiaWithUnitDual(it.toDouble(), displayUnits.documentUnit, displayUnits.dual)}"
-                }
-                add("Body: $label")
-            }
-            keywayClockingFooterNote(spec)?.let { add(it) }
-        }
-    }
+    val midLines = buildFooterMidColumn(spec, project, cfg, date, blankValues, displayUnits)
 
     // WRAPPING, not ellipsizing. A dual-unit spec line is roughly twice as wide as a single-unit
     // one, and the old `…` truncation dropped the very figure the sheet exists to carry

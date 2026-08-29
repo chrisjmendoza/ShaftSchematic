@@ -2,37 +2,26 @@ package com.android.shaftschematic.ui.screen
 
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.BlendProfile
@@ -60,8 +49,8 @@ import com.android.shaftschematic.util.UnitSystem
  * editable Ø (a per-section bare-shaft override) and the "Explicit body" checkbox that promotes
  * it; an explicit body shows the editable Start/Length/Ø, the blend/seal faces, and the keyway
  * section. Every control here that changes geometry, position, or a value is mirrored in
- * `AddBodyDialog` by the add-dialog-parity invariant; "Show Ø on drawing" and the
- * "Prints in: in | mm" chip are the documented card-only carve-outs.
+ * `AddBodyDialog` by the add-dialog-parity invariant; "Show Ø on drawing", "Show name on
+ * drawing", and the "Prints in: in | mm" chip are the documented card-only carve-outs.
  *
  * [f1] and [startValidator] are supplied by [ComponentPagerCard] because the thread card shares
  * them; [startValidator] closes over the spec and document unit that validate an overlap.
@@ -84,6 +73,7 @@ internal fun BodyPagerCard(
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
@@ -227,43 +217,16 @@ internal fun BodyPagerCard(
     val idx = explicitIndex ?: return
     val b   = spec.bodies.getOrNull(idx) ?: return
     val computedBodyTitle = bodyTitleById[b.id] ?: "Body"
-    var editingBodyTitle by rememberSaveable(b.id) { mutableStateOf(false) }
-    val bodyFocusRequester = remember { FocusRequester() }
-    var bodyHasFocusedOnce by remember(b.id) { mutableStateOf(false) }
     var showDemoteDialog by remember(b.id) { mutableStateOf(false) }
     ComponentCard(
         title = computedBodyTitle,
         titleContent = {
-            if (!editingBodyTitle) {
-                Text(
-                    computedBodyTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.fillMaxWidth().clickable { editingBodyTitle = true },
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-            } else {
-                var text by remember(b.id, b.label) { mutableStateOf(b.label.orEmpty()) }
-                LaunchedEffect(b.id) { bodyFocusRequester.requestFocus() }
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    singleLine = true,
-                    placeholder = { Text(computedBodyTitle) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        onUpdateBodyLabel(idx, text.trim().takeIf { it.isNotEmpty() })
-                        editingBodyTitle = false
-                    }),
-                    modifier = Modifier.fillMaxWidth().focusRequester(bodyFocusRequester)
-                        .onFocusChanged { f ->
-                            if (f.isFocused) bodyHasFocusedOnce = true
-                            if (bodyHasFocusedOnce && !f.isFocused) {
-                                onUpdateBodyLabel(idx, text.trim().takeIf { it.isNotEmpty() })
-                                editingBodyTitle = false
-                            }
-                        }
-                )
-            }
+            EditableCardTitle(
+                componentId = b.id,
+                title = computedBodyTitle,
+                label = b.label,
+                onCommitLabel = { onUpdateBodyLabel(idx, it) },
+            )
         },
         debugText = if (showComponentDebugLabels) "id=${b.id} • startMm=${f1(b.startFromAftMm)} • endMm=${f1(b.startFromAftMm + b.lengthMm)}" else null,
         errorMessage = if (b.id in collidingComponentIds) "Overlaps another component" else null,
@@ -331,6 +294,12 @@ internal fun BodyPagerCard(
             checked = b.showDiaOnDrawing,
             testTag = "body_show_dia_toggle",
             onCheckedChange = { onUpdateBodyShowDia(idx, it) },
+        )
+        ShowDiaToggleRow(
+            label = "Show name on drawing",
+            checked = b.showLabelOnDrawing,
+            testTag = "body_show_label_toggle",
+            onCheckedChange = { onUpdateBodyShowLabel(idx, it) },
         )
 
         // Blend — a machined smooth transition into whatever the face steps to.

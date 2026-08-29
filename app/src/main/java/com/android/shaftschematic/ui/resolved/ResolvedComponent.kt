@@ -443,8 +443,9 @@ private fun normalizeBodies(
             result.add(it.toResolved())
             // A section-authored auto run states one section's Ø, so it seeds no continuity:
             // the next auto run falls back to the shaft-wide Ø or neighbor derivation rather
-            // than inheriting a value that was only ever true of the run before it. A run that
-            // absorbed an explicit body carries that body's Ø forward as before.
+            // than inheriting a value that was only ever true of the run before it. An
+            // explicit body's run seeds continuity, so the auto fill beyond it keeps
+            // drawing at the body's Ø.
             lastMergedDia = if (it.sectionAuthored && !it.hasExplicit) null else it.diaMm
             current = null
         }
@@ -456,23 +457,22 @@ private fun normalizeBodies(
                 if (current == null) {
                     current = startAccum(comp)
                 } else if (
-                    comp.source == ResolvedComponentSource.EXPLICIT && current!!.hasExplicit
+                    comp.source == ResolvedComponentSource.EXPLICIT || current!!.hasExplicit
                 ) {
-                    // Two explicit bodies never fuse. Absorbing one into a run that already
-                    // carries an explicit body would drop its Ø and its carousel card — a
-                    // stepped shaft built from abutting bodies would draw as a single run at
-                    // the aft-most diameter. Merging is for auto spans flowing into an
-                    // explicit body, not for two authored bodies meeting.
+                    // An explicit body's span is AUTHORED: it never fuses with another
+                    // explicit body and never absorbs neighbouring auto fill in either
+                    // direction. Absorbing the adjacent gap would make a shortened explicit
+                    // body span the whole run again — the typed length would have no visible
+                    // effect, its selection highlight would cover the merged run, and the
+                    // remainder's auto card would vanish (on-device report). Only auto
+                    // spans merge with each other; an auto run that follows an explicit
+                    // body still inherits its Ø via [lastMergedDia], so a same-Ø neighbour
+                    // draws at the same diameter with only the component face line between.
                     flush()
                     current = startAccum(comp)
                 } else if (comp.startMmPhysical <= current!!.end + eps) {
                     current!!.start = kotlin.math.min(current!!.start, comp.startMmPhysical)
                     current!!.end = kotlin.math.max(current!!.end, comp.endMmPhysical)
-                    if (comp.source == ResolvedComponentSource.EXPLICIT && !current!!.hasExplicit) {
-                        current!!.hasExplicit = true
-                        current!!.explicitId = comp.id
-                        current!!.diaMm = comp.diaMm
-                    }
                 } else {
                     flush()
                     current = startAccum(comp)

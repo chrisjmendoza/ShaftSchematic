@@ -561,6 +561,54 @@ private const val COMPONENT_LABEL_OFFSET_PT = 32f
  */
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
 
+/** One component-name label, as the axial span it centers over. */
+internal data class ComponentLabelSpan(val text: String, val startMm: Float, val endMm: Float)
+
+/**
+ * The component-name labels a sheet prints, AFT→FWD within each kind.
+ *
+ * Per-component visibility (`showLabelOnDrawing`) is applied here; the global
+ * [com.android.shaftschematic.settings.PdfPrefs.showComponentTitles] switch and the per-sheet
+ * [PdfExportOptions.showLabels] option gate the whole pass at the call site, so the three
+ * compose as an AND — the same shape as the Ø-callout controls.
+ *
+ * A hidden component still takes its place in the fallback numbering ("Body #2" stays #2 when
+ * #1 is hidden), so turning one label off never renumbers the rest.
+ */
+internal fun componentLabelSpans(spec: ShaftSpec): List<ComponentLabelSpan> = buildList {
+    fun emit(shown: Boolean, label: String, startMm: Float, lengthMm: Float) {
+        if (!shown) return
+        val trimmed = label.trim()
+        if (trimmed.isEmpty()) return
+        add(ComponentLabelSpan(trimmed, startMm, startMm + lengthMm))
+    }
+
+    val bodyTitleById = buildBodyTitleById(spec)
+    spec.bodies.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, b ->
+            emit(b.showLabelOnDrawing, bodyTitleById[b.id] ?: "Body #${i + 1}", b.startFromAftMm, b.lengthMm)
+        }
+
+    val taperTitleById = buildTaperTitleById(spec)
+    spec.tapers.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, t ->
+            emit(t.showLabelOnDrawing, taperTitleById[t.id] ?: "Taper #${i + 1}", t.startFromAftMm, t.lengthMm)
+        }
+
+    val threadTitleById = buildThreadTitleById(spec)
+    spec.threads.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, th ->
+            emit(th.showLabelOnDrawing, threadTitleById[th.id] ?: "Thread #${i + 1}", th.startFromAftMm, th.lengthMm)
+        }
+
+    val linerTitleById = buildLinerTitleById(spec)
+    spec.liners.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, ln ->
+            val label = ln.label?.trim()?.ifEmpty { null } ?: linerTitleById[ln.id] ?: "Liner ${i + 1}"
+            emit(ln.showLabelOnDrawing, label, ln.startFromAftMm, ln.lengthMm)
+        }
+}
+
 private fun drawComponentLabelsPdf(
     canvas: Canvas,
     spec: ShaftSpec,
@@ -570,7 +618,8 @@ private fun drawComponentLabelsPdf(
     xAt: (Float) -> Float,
     textPaint: Paint,
 ) {
-    if (spec.bodies.isEmpty() && spec.tapers.isEmpty() && spec.threads.isEmpty() && spec.liners.isEmpty()) return
+    val spans = componentLabelSpans(spec)
+    if (spans.isEmpty()) return
 
     val labelPaint = Paint(textPaint).apply {
         textSize = (textSize - 2f).coerceAtLeast(8f)
@@ -581,36 +630,14 @@ private fun drawComponentLabelsPdf(
     val rowStep  = labelPaint.textSize * 1.4f
     val padX     = 3f  // minimum horizontal gap between adjacent labels on the same row
 
-    // Collect every label as a placed x-interval + text, then assign rows.
+    // Place every label as an x-interval + text, then assign rows.
     data class Entry(val xLeft: Float, val xRight: Float, val text: String)
 
-    fun entry(label: String, startMm: Float, endMm: Float): Entry? {
-        val trimmed = label.trim().ifEmpty { return null }
-        val cx = (xAt(startMm) + xAt(endMm)) * 0.5f
-        val w  = labelPaint.measureText(trimmed)
+    val entries = spans.map { span ->
+        val cx = (xAt(span.startMm) + xAt(span.endMm)) * 0.5f
+        val w  = labelPaint.measureText(span.text)
         val xL = (cx - w * 0.5f).coerceIn(geomRect.left, geomRect.right - w)
-        return Entry(xL, xL + w, trimmed)
-    }
-
-    val entries = buildList {
-        val bodyTitleById = buildBodyTitleById(spec)
-        spec.bodies.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-            .forEachIndexed { i, b -> entry(bodyTitleById[b.id] ?: "Body #${i+1}", b.startFromAftMm, b.startFromAftMm + b.lengthMm)?.let(::add) }
-
-        val taperTitleById = buildTaperTitleById(spec)
-        spec.tapers.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-            .forEachIndexed { i, t -> entry(taperTitleById[t.id] ?: "Taper #${i+1}", t.startFromAftMm, t.startFromAftMm + t.lengthMm)?.let(::add) }
-
-        val threadTitleById = buildThreadTitleById(spec)
-        spec.threads.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-            .forEachIndexed { i, th -> entry(threadTitleById[th.id] ?: "Thread #${i+1}", th.startFromAftMm, th.startFromAftMm + th.lengthMm)?.let(::add) }
-
-        val linerTitleById = buildLinerTitleById(spec)
-        spec.liners.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-            .forEachIndexed { i, ln ->
-                val label = ln.label?.trim()?.ifEmpty { null } ?: linerTitleById[ln.id] ?: "Liner ${i+1}"
-                entry(label, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm)?.let(::add)
-            }
+        Entry(xL, xL + w, span.text)
     }.sortedBy { it.xLeft }
 
     // Greedy row assignment: place each label on the first row where it doesn't overlap.

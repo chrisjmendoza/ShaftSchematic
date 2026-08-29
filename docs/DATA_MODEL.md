@@ -117,9 +117,9 @@ the half-open interval `[startMm, endMm)` — draws at that `diaMm`.
   section is authored first. The fwd one lies dormant.
 - **Shaft-space keying, no orphans:** auto spans have no stored row and their ids are
   position-derived, so anchors are stored in shaft space (the `Undercut` / `WornSection`
-  posture). An anchor that lands inside a component, or inside a gap absorbed into an
-  explicit-body run, is **dormant** — not applied, never pruned at decode — and resurrects
-  unchanged if its span reappears.
+  posture). An anchor that lands inside a component is **dormant** — not applied, never
+  pruned at decode — and resurrects unchanged if its span reappears. (A gap beside an
+  explicit body survives as its own run, so its anchors stay live while the gap exists.)
 - **Draw-only:** never affects OAL/coverage, span positioning, body resolution, collision, or
   the Free-to-End badge. Written by `ShaftSpec.withAutoSectionDia` (upsert; `≤ 0` clears).
 
@@ -155,6 +155,7 @@ data class Body(
     val keywaySpooned: Boolean = false,
     val label: String? = null,  // optional user-defined display label; not used for geometry
     val showDiaOnDrawing: Boolean = false,  // below-shaft Ø callout visibility; OPT-IN for bodies
+    val showLabelOnDrawing: Boolean = true,  // schematic name-label visibility; default ON (all four component kinds carry this flag)
     // Blended faces (draw-only): curve length inward from each face, 0 = square.
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,
@@ -279,6 +280,7 @@ data class Liner(
     val odMm: Float = 0f,
     val label: String? = null,  // optional user-defined display label; not used for geometry
     val showDiaOnDrawing: Boolean = true,  // below-shaft Ø callout visibility; defaults true (unlike Body)
+    val showLabelOnDrawing: Boolean = true,  // schematic name-label visibility; default ON
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val endMmPhysical: Float = 0f,  // kept in sync with start + length by Liner.normalized()
 ) : Segment
@@ -361,6 +363,7 @@ data class ShaftDocV1(
     val jobNumber: String = "", val customer: String = "", val vessel: String = "",
     val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
     val notes: String = "",
+    val item: String = "",   // optional shaft designation ("Tail shaft"); blank prints nothing, scrubbed from templates
     val spec: ShaftSpec,
     val runoutConfig: RunoutConfig = RunoutConfig(),     // @SerialName("runout_config")
     val wearRecord: WearRecord = WearRecord(),           // @SerialName("wear_record")

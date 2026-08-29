@@ -42,6 +42,7 @@ import com.android.shaftschematic.ui.viewmodel.updateBodyBlend
 import com.android.shaftschematic.ui.viewmodel.updateBodyKeyway
 import com.android.shaftschematic.ui.viewmodel.updateBodyLabel
 import com.android.shaftschematic.ui.viewmodel.updateBodyShowDia
+import com.android.shaftschematic.ui.viewmodel.updateBodyShowLabel
 import com.android.shaftschematic.ui.viewmodel.updateCouplerBoltSlot
 import com.android.shaftschematic.ui.viewmodel.updateCouplerBoltSlotReference
 import com.android.shaftschematic.ui.viewmodel.updateCouplerBoltSlotShowRail
@@ -50,12 +51,15 @@ import com.android.shaftschematic.ui.viewmodel.updateLinerAuthoredReference
 import com.android.shaftschematic.ui.viewmodel.updateLinerLabel
 import com.android.shaftschematic.ui.viewmodel.updateLinerShoulder
 import com.android.shaftschematic.ui.viewmodel.updateLinerShowDia
+import com.android.shaftschematic.ui.viewmodel.updateLinerShowLabel
 import com.android.shaftschematic.ui.viewmodel.updateTaper
 import com.android.shaftschematic.ui.viewmodel.updateTaperAuthoredReference
 import com.android.shaftschematic.ui.viewmodel.updateTaperKeyway
 import com.android.shaftschematic.ui.viewmodel.updateTaperLabel
+import com.android.shaftschematic.ui.viewmodel.updateTaperShowLabel
 import com.android.shaftschematic.ui.viewmodel.updateThread
 import com.android.shaftschematic.ui.viewmodel.updateThreadLabel
+import com.android.shaftschematic.ui.viewmodel.updateThreadShowLabel
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import kotlinx.coroutines.launch
 
@@ -77,6 +81,8 @@ fun ShaftRoute(
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onSaveAs: () -> Unit = {},
+    /** Open "Duplicate for mate" — writes a sibling document; the session is untouched. */
+    onDuplicateForMate: () -> Unit = {},
     /** Close the current document (guarded for unsaved work) and return to Start. */
     onCloseDocument: () -> Unit = {},
     onExportPdf: () -> Unit,
@@ -146,6 +152,7 @@ fun ShaftRoute(
     val customer        by vm.customer.collectAsState()
     val vessel          by vm.vessel.collectAsState()
     val jobNumber       by vm.jobNumber.collectAsState()
+    val item            by vm.item.collectAsState()
     val shaftPosition   by vm.shaftPosition.collectAsState()
     val notes           by vm.notes.collectAsState()
     val overallIsManual by vm.overallIsManual.collectAsState()
@@ -206,6 +213,7 @@ fun ShaftRoute(
         customer = customer,
         vessel = vessel,
         jobNumber = jobNumber,
+        item = item,
         shaftPosition = shaftPosition,
         notes = notes,
         showGrid = showGrid,
@@ -235,6 +243,7 @@ fun ShaftRoute(
         onSetCustomer = vm::setCustomer,
         onSetVessel = vm::setVessel,
         onSetJobNumber = vm::setJobNumber,
+        onSetItem = vm::setItem,
         onSetShaftPosition = vm::setShaftPosition,
         onSetNotes = vm::setNotes,
         onSetOverallLengthRaw = vm::setOverallLength,
@@ -265,17 +274,21 @@ fun ShaftRoute(
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateBodyShowDia = { i, show    -> vm.updateBodyShowDia(i, show) },
+        onUpdateBodyShowLabel = { i, show  -> vm.updateBodyShowLabel(i, show) },
         onUpdateBodyBlend = { i, aft, fwd, p, sAft, sFwd -> vm.updateBodyBlend(i, aft, fwd, p, sAft, sFwd) },
         onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label) },
         onUpdateBodyKeyway = { i, w, d, l, offset, end, spooned -> vm.updateBodyKeyway(i, w, d, l, offset, end, spooned) },
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },
         onUpdateTaperLabel = { i, label    -> vm.updateTaperLabel(i, label) },
+        onUpdateTaperShowLabel = { i, show -> vm.updateTaperShowLabel(i, show) },
         onUpdateTaperKeyway = { i, w, d, l, offset, spooned -> vm.updateTaperKeyway(i, w, d, l, offset, spooned) },
         onUpdateTaperReference = { i, ref -> vm.updateTaperAuthoredReference(i, ref) },
         onUpdateThread = { i, s, l, maj, p, desig -> vm.updateThread(i, s, l, maj, p, desig) },
         onUpdateThreadLabel = { i, label   -> vm.updateThreadLabel(i, label) },
+        onUpdateThreadShowLabel = { i, show -> vm.updateThreadShowLabel(i, show) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
         onUpdateLinerShowDia = { i, show   -> vm.updateLinerShowDia(i, show) },
+        onUpdateLinerShowLabel = { i, show -> vm.updateLinerShowLabel(i, show) },
         onUpdateLinerShoulder = { i, end, len, od, r -> vm.updateLinerShoulder(i, end, len, od, r) },
         linerShouldersEnabled = linerShouldersEnabled,
         dialogUnitConverterEnabled = dialogUnitConverterEnabled,
@@ -304,6 +317,7 @@ fun ShaftRoute(
         onOpen = onOpen,
         onSave = onSave,
         onSaveAs = onSaveAs,
+        onDuplicateForMate = onDuplicateForMate,
         onCloseDocument = onCloseDocument,
         onExportPdf = onExportPdf,
         onOpenSettings = onOpenSettings,

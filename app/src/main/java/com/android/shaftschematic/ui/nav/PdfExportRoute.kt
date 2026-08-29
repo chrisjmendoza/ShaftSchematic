@@ -67,6 +67,7 @@ fun PdfExportRoute(
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
     val jobNumber by vm.jobNumber.collectAsState()
+    val item by vm.item.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
 
     val launcher = rememberLauncherForActivityResult(
@@ -87,7 +88,8 @@ fun PdfExportRoute(
                 customer = customer,
                 vessel = vessel,
                 side = shaftPosition,
-                jobNumber = jobNumber
+                jobNumber = jobNumber,
+                item = item
             )
 
             VerboseLog.d(VerboseLog.Category.PDF, "PdfExport") {

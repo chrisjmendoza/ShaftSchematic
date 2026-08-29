@@ -318,24 +318,24 @@ class BodyBlendsTest {
     }
 
     /**
-     * An absorbed bare-shaft gap moves a body's DRAWN edge outward. The blend follows the drawn
-     * face, because that is where the step actually is; matching the stored position instead
-     * dropped the blend the moment a neighbour shortened.
+     * An explicit body never absorbs the bare-shaft gap beside it (the gap survives as its
+     * own auto run — see [normalizeBodies]), so the run's drawn edge IS the stored face and
+     * the blend curves from there, stepping to whatever the surviving gap run draws at.
      */
     @Test
-    fun `a blend follows its drawn face when a gap is absorbed into the run`() {
+    fun `a blend curves from the stored face when a gap survives beside the run`() {
         val spec = ShaftSpec(
             overallLengthMm = 600f,
             tapers = listOf(
                 Taper(id = "t", startFromAftMm = 0f, lengthMm = 160f, startDiaMm = 120f, endDiaMm = 150f),
             ),
             bodies = listOf(
-                // Stored start 200, but the [160, 200) gap merges into this run.
+                // Stored start 200; the [160, 200) gap stays its own auto run.
                 Body(id = "big", startFromAftMm = 200f, lengthMm = 400f, diaMm = 200f, blendAftMm = 25.4f),
             ),
         )
         val b = blendsOf(spec).single()
-        assertEquals(160f, b.faceMm, eps)   // the drawn edge, not the stored 200
+        assertEquals(200f, b.faceMm, eps)   // the stored face — the gap is not absorbed
         assertEquals(200f, b.bodyDiaMm, eps)
     }
 

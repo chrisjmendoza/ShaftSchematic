@@ -100,9 +100,11 @@ class AutoSectionDiaOverrideTest {
     }
 
     @Test
-    fun `an anchor in a gap absorbed into an explicit-body run is never applied`() {
-        // Body 0..400 abuts the 400..500 auto gap, so normalizeBodies merges them into one
-        // explicit run at the body's Ø. The override anchored in that gap stays dormant.
+    fun `an explicit body keeps its authored span and the gap beside it stays its own run`() {
+        // Body 0..400 abuts the 400..500 auto gap. The body's span is authored, so the gap
+        // is never absorbed into its run (an absorbed gap made a shortened body span the
+        // whole run again — on-device report): the gap survives as an auto run, and the
+        // override anchored inside it applies there.
         val spec = ShaftSpec(
             overallLengthMm = 1000f,
             bodies = listOf(Body(id = "b1", startFromAftMm = 0f, lengthMm = 400f, diaMm = 178f)),
@@ -112,10 +114,13 @@ class AutoSectionDiaOverrideTest {
 
         val bodies = resolved(spec).filterIsInstance<ResolvedBody>()
 
-        assertTrue(bodies.none { it.diaMm == 150f })
-        val merged = bodies.single { it.startMmPhysical == 0f }
-        assertEquals(178f, merged.diaMm)
-        assertEquals(500f, merged.endMmPhysical)
+        val explicit = bodies.single { it.id == "b1" }
+        assertEquals(0f, explicit.startMmPhysical)
+        assertEquals(400f, explicit.endMmPhysical)
+        assertEquals(178f, explicit.diaMm)
+        val gapRun = bodies.single { it.startMmPhysical == 400f }
+        assertEquals(500f, gapRun.endMmPhysical)
+        assertEquals(150f, gapRun.diaMm)
         assertEquals(1, spec.autoDiaOverrides.size)
     }
 

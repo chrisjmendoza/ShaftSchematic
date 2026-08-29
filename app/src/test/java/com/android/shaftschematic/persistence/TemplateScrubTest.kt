@@ -41,6 +41,7 @@ class TemplateScrubTest {
         jobNumber = "814201",
         customer = "NorthSound Marine",
         vessel = "FV Tern Point",
+        item = "Tail shaft",
         shaftPosition = ShaftPosition.PORT,
         notes = "Cut liner off at the aft end.",
         spec = spec,
@@ -72,6 +73,8 @@ class TemplateScrubTest {
         assertEquals("", decoded.jobNumber)
         assertEquals("", decoded.customer)
         assertEquals("", decoded.vessel)
+        // Item designates THIS shaft on THIS job, not the shaft family the template describes.
+        assertEquals("", decoded.item)
         assertEquals("", decoded.notes)
         assertEquals(ShaftPosition.OTHER, decoded.shaftPosition)
     }

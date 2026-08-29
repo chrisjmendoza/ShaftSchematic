@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
@@ -59,7 +60,9 @@ import java.io.File
 import com.android.shaftschematic.doc.SHAFT_DOT_EXT
 import com.android.shaftschematic.doc.SHAFT_MIME
 import com.android.shaftschematic.doc.ShaftDocCodec
+import com.android.shaftschematic.doc.mateDuplicate
 import com.android.shaftschematic.doc.stripShaftDocExtension
+import com.android.shaftschematic.ui.screen.DuplicateForMateDialog
 import com.android.shaftschematic.io.ShaftBackup
 
 /**
@@ -74,6 +77,12 @@ import com.android.shaftschematic.io.ShaftBackup
 
 private enum class OpenSortColumn { NAME, DATE }
 private enum class OpenSortDir    { ASC, DESC }
+
+/** A saved document read off disk for "Duplicate for mate", with the filename it came from. */
+private data class MateSource(
+    val fileName: String,
+    val doc: ShaftDocCodec.ShaftDocV1,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,6 +100,9 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
     var pendingRename by remember { mutableStateOf<String?>(null) }
+    // Set once the source document has been read off disk — the dialog seeds from the
+    // envelope, so there is nothing to show until it decodes.
+    var pendingMate by remember { mutableStateOf<MateSource?>(null) }
 
     var searchQuery by remember { mutableStateOf("") }
     var sortColumn by remember { mutableStateOf(OpenSortColumn.DATE) }
@@ -253,6 +265,47 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
             dismissButton = {
                 TextButton(onClick = { pendingRename = null }) { Text("Cancel") }
             }
+        )
+    }
+
+    // Duplicate for mate: a copy of a saved document, never a session. The source is read and
+    // written here, so no ViewModel state moves and no unsaved-changes guard applies.
+    pendingMate?.let { source ->
+        DuplicateForMateDialog(
+            sourceBaseName = stripShaftDocExtension(source.fileName),
+            jobNumber = source.doc.jobNumber,
+            customer = source.doc.customer,
+            vessel = source.doc.vessel,
+            position = source.doc.shaftPosition,
+            existingBaseNames = files.map { stripShaftDocExtension(it.first) },
+            onDismiss = { pendingMate = null },
+            onCreate = { fileName, job, cust, ves, side ->
+                pendingMate = null
+                scope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        runCatching {
+                            InternalStorage.save(
+                                ctx,
+                                fileName,
+                                ShaftDocCodec.encodeV1(
+                                    mateDuplicate(
+                                        source = source.doc,
+                                        jobNumber = job,
+                                        customer = cust,
+                                        vessel = ves,
+                                        position = side,
+                                    )
+                                ),
+                            )
+                        }.isSuccess
+                    }
+                    files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
+                    snackbarHostState.showSnackbar(
+                        if (ok) "Created ‘${stripShaftDocExtension(fileName)}’"
+                        else "Could not create ‘${stripShaftDocExtension(fileName)}’."
+                    )
+                }
+            },
         )
     }
 
@@ -431,6 +484,31 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                         },
                                         leadingIcon = {
                                             Icon(Icons.Filled.Edit, contentDescription = null)
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Duplicate for mate…") },
+                                        onClick = {
+                                            menuOpen = false
+                                            scope.launch {
+                                                val decoded = withContext(Dispatchers.IO) {
+                                                    runCatching {
+                                                        ShaftDocCodec.decodeEnvelope(
+                                                            InternalStorage.load(ctx, name)
+                                                        )
+                                                    }
+                                                }
+                                                decoded
+                                                    .onSuccess { pendingMate = MateSource(name, it) }
+                                                    .onFailure { e ->
+                                                        snackbarHostState.showSnackbar(
+                                                            openFailureMessage(name, e)
+                                                        )
+                                                    }
+                                            }
+                                        },
+                                        leadingIcon = {
+                                            Icon(Icons.Filled.ContentCopy, contentDescription = null)
                                         }
                                     )
                                     DropdownMenuItem(

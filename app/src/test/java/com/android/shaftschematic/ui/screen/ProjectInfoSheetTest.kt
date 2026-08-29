@@ -37,6 +37,7 @@ class ProjectInfoSheetTest {
         customer: String = "",
         vessel: String = "",
         jobNumber: String = "",
+        item: String = "",
         notes: String = "",
     ) {
         rule.setContent {
@@ -45,17 +46,29 @@ class ProjectInfoSheetTest {
                     customer = customer,
                     vessel = vessel,
                     jobNumber = jobNumber,
+                    item = item,
                     shaftPosition = ShaftPosition.OTHER,
                     notes = notes,
                     onSetCustomer = { commits += "customer" to it },
                     onSetVessel = { commits += "vessel" to it },
                     onSetJobNumber = { commits += "job" to it },
+                    onSetItem = { commits += "item" to it },
                     onSetShaftPosition = { commits += "position" to it.name },
                     onSetNotes = { commits += "notes" to it },
                     onDismiss = { dismissed = true },
                 )
             }
         }
+    }
+
+    @Test
+    fun `item field commits through save`() {
+        host()
+
+        rule.onNodeWithTag("project_info_item").performTextReplacement("Tail shaft")
+        rule.onNodeWithTag("project_info_save").performClick()
+
+        assertEquals(listOf("item" to "Tail shaft"), commits)
     }
 
     @Test

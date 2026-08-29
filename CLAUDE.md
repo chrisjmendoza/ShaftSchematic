@@ -55,9 +55,12 @@ Specifically:
 **Carve-out — post-hoc display toggles are card-only.** A control that only exists to change
 how an *already-drawn* component prints, has a stable default, and is reached for after
 looking at a printed sheet is not a property of the component being added; in an Add dialog
-it would be a permanently-preset box adding noise to every add. Exactly three qualify: the
+it would be a permanently-preset box adding noise to every add. Exactly four qualify: the
 coupler slot's "show dimension rail", **"Show Ø on drawing"** (`Body`/`Liner`/auto-body
-cards), and the per-component **"Prints in: in | mm"** unit chip (explicit `Body`/`Taper`/
+cards), **"Show name on drawing"** (`showLabelOnDrawing`, all four explicit component cards —
+gates the schematic's name label per component, AND-composed with the global
+`showComponentTitles` pref), and the per-component **"Prints in: in | mm"** unit chip (explicit
+`Body`/`Taper`/
 `Thread`/`Liner` cards, at the FOOT of the card — an override also has nothing to key to before the
 component has a resolved id). Anything that changes geometry, position, or a value stays under the
 parity rule above — including the Add Thread dialog's Imperial/Metric mode (value entry, mirrored on
@@ -419,12 +422,12 @@ Explicit bodies carry blends as stored fields; **auto spans carry them as shaft-
 (`AutoBlend`, `ShaftSpec.autoBlends` — the `AutoDiaOverride` posture: anchor at the span midpoint,
 aft-most wins, dormant under a component, NEVER pruned), so a saved template keeps its seal areas
 when the liners or the overall length move under it. Both resolve to the same `BodyBlend`, and the
-draw sites cannot tell them apart. The face a blend curves from is the run's **DRAWN outer edge**,
-never the stored position — an absorbed bare-shaft gap moves that edge outward, which is exactly
-where the step then is, and matching the stored value silently dropped the blend the moment a
-neighbour shortened. A gap absorbed into an explicit body is therefore covered by that body's own
-blend; an anchor only comes into play where the auto span survives as its own run (bounded by
-non-bodies, e.g. bare shaft between two liners). A blended face may carry a **seal area** (`Body.blendAftSeal`/`blendFwdSeal`, `AutoBlend.seal`) —
+draw sites cannot tell them apart. The face a blend curves from is the run's **DRAWN outer edge**
+(for an explicit body that is its stored span, since an explicit body never absorbs the gap
+beside it — see the normalize rule below; body fragmentation still trims it). Every bare-shaft
+gap survives as its own auto run, so gap-side steps are the auto run's own faces and carry
+`AutoBlend` anchors; an explicit face that meets a same-Ø surviving gap has no step and draws
+no blend there. A blended face may carry a **seal area** (`Body.blendAftSeal`/`blendFwdSeal`, `AutoBlend.seal`) —
 the radius cuts the fiberglass seats into, a fixed `SEAL_GROOVE_COUNT` (3) at `sealGrooveFracs`
 stations (evenly spaced, margin at each end). Each cut draws as a **V notch in both silhouette
 edges plus a DASHED line across seated on the notch floors** (`sealNotchGeom` — depth rides the
@@ -462,9 +465,14 @@ both carousel cards and in `AddBodyDialog`, as one chip row per face —
 its blend (the cuts are machined across the blended section), and the stored model keeps length and
 seal flag independent — `blendFaceMode`/`blendLenForMode` are the only projection, and switching
 Blend ↔ Seal keeps the typed length. Do not restore the nested Blend-checkbox-reveals-Seal-checkbox
-layout: it hid the seal behind a control nobody thinks to tick first (on-device report). Related: `normalizeBodies` must never fuse two **explicit** bodies
-— absorbing one into a run that already has an explicit body drops its Ø and its carousel card, so
-a Ø6-to-Ø8 stepped shaft drew as one run. Auto spans still merge in for continuity. See
+layout: it hid the seal behind a control nobody thinks to tick first (on-device report). Related: `normalizeBodies` never fuses an **explicit** body with
+anything — not with another explicit body (absorbing one drops its Ø and its carousel card, so a
+Ø6-to-Ø8 stepped shaft drew as one run) and not with adjacent auto fill (absorbing the gap made a
+shortened explicit body span the whole run again: the typed length had no visible effect, its
+selection highlight covered the merged run, its dimension rail span measured the merged extent,
+and the remainder's auto card vanished — on-device report). Only auto spans merge with each
+other; an auto run beside an explicit body inherits its Ø for continuity, so a same-Ø neighbour
+draws at the same diameter with just the component face line between. See
 `docs/COMPONENT_CONTRACT.md`.
 
 ### Liner shoulders are capability-gated, drawn from one silhouette
@@ -786,8 +794,9 @@ When a separator's deletion merges two differing sections, the merged span takes
 aftward** override (aft is authored first); the FWD one lies **dormant — never pruned** (no
 orphans by construction, same posture as runout readings/wear pits), so re-splitting the run
 resurrects it as authored. Clearing the field (≤ 0) drops that section's override only.
-Overrides never affect auto-span positioning and do **not** promote the card; a gap absorbed
-into an explicit-body run keeps the explicit Ø (its anchors stay dormant).
+Overrides never affect auto-span positioning and do **not** promote the card. A gap beside an
+explicit body survives as its own run (never absorbed), so its anchors stay live while the gap
+exists.
 Promotion to a real body happens only on an **explicit user action**: ticking the
 **"Explicit body"** checkbox (relabeled from "Make editable body"). Checking it calls
 `onAddBody` with the auto-body's current derived Start/Length/Ø, guarded by a `promoted`

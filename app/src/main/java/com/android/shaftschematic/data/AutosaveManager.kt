@@ -71,6 +71,9 @@ object AutosaveManager {
         // sheet-wide dual flag. Absent in older drafts; defaults reproduce single-unit output.
         val unitOverrides: Map<String, UnitSystem> = emptyMap(),
         val dualUnits: Boolean = false,
+        // Added (Item project field): optional shaft designation. Absent in older drafts;
+        // blank prints nothing anywhere.
+        val item: String = "",
     )
 
     /**

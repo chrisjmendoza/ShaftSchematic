@@ -148,6 +148,7 @@ fun PdfPreviewScreen(
     val customer by vm.customer.collectAsState()
     val vessel by vm.vessel.collectAsState()
     val jobNumber by vm.jobNumber.collectAsState()
+    val item by vm.item.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
     val pdfShowComponentTitles by vm.pdfShowComponentTitles.collectAsState()
@@ -175,8 +176,11 @@ fun PdfPreviewScreen(
     val unitOverrides by vm.unitOverrides.collectAsState()
     val dualUnits by vm.dualUnits.collectAsState()
 
-    val project = remember(customer, vessel, shaftPosition, jobNumber) {
-        ProjectInfo(customer = customer, vessel = vessel, side = shaftPosition, jobNumber = jobNumber)
+    val project = remember(customer, vessel, shaftPosition, jobNumber, item) {
+        ProjectInfo(
+            customer = customer, vessel = vessel, side = shaftPosition,
+            jobNumber = jobNumber, item = item,
+        )
     }
     val options = remember(pdfExportMode, pdfBlankDraft, pdfBlankDiaCallouts) {
         PdfExportOptions(
@@ -211,7 +215,7 @@ fun PdfPreviewScreen(
                 unit = unit,
                 project = ProjectInfo(
                     customer = customer, vessel = vessel,
-                    side = shaftPosition, jobNumber = jobNumber,
+                    side = shaftPosition, jobNumber = jobNumber, item = item,
                 ),
                 options = PdfExportOptions(
                     mode = pdfExportMode,

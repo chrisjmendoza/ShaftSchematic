@@ -21,8 +21,9 @@ import kotlinx.serialization.Serializable
  * interval `[startMm, endMm)` — blends the face named by [end].
  *
  * ## Dormancy — nothing is ever pruned
- * A blend whose anchor lands inside a component, or inside an auto gap absorbed into an
- * explicit-body run, is **dormant**: not drawn, but kept. No orphans by construction and
+ * A blend whose anchor lands inside a component is **dormant**: not drawn, but kept. (An
+ * explicit body never absorbs the auto gap beside it, so a gap's anchors stay live for as
+ * long as the gap exists.) No orphans by construction and
  * nothing pruned at decode — the rule shared with runout readings, wear pits and
  * [AutoDiaOverride]. A dormant blend resurrects unchanged when its span reappears.
  *

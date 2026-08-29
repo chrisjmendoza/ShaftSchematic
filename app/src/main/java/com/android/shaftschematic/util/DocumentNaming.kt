@@ -70,6 +70,29 @@ object DocumentNaming {
         return suggested
     }
 
+    /**
+     * Returns [desired] if no name in [existing] takes it, otherwise the first free
+     * "desired (2)", "desired (3)", … .
+     *
+     * [existing] is base names (no extension); the comparison is case-insensitive, because
+     * the document store treats "Job 12" and "job 12" as one file — a match that only
+     * differed in case would still overwrite.
+     *
+     * [desired] is returned verbatim when it is free: this suffixes a name, it never
+     * sanitizes one. Callers normalize first (see `InternalStorage.normalizeShaftDocName`).
+     */
+    fun uniqueBaseName(existing: Collection<String>, desired: String): String {
+        val taken = existing.mapTo(mutableSetOf()) { it.lowercase() }
+        if (desired.lowercase() !in taken) return desired
+
+        var n = 2
+        while (true) {
+            val candidate = "$desired ($n)"
+            if (candidate.lowercase() !in taken) return candidate
+            n++
+        }
+    }
+
     private fun sanitizePart(raw: String): String {
         val collapsed = raw.trim().replace(Regex("\\s+"), " ")
         if (collapsed.isEmpty()) return ""

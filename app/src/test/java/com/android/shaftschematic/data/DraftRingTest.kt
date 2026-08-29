@@ -187,6 +187,7 @@ class DraftRingTest {
         assertFalse(blankSnap().copy(customer = "acme").isDefaultSession())
         assertFalse(blankSnap().copy(vessel = "MV Test").isDefaultSession())
         assertFalse(blankSnap().copy(jobNumber = "814318").isDefaultSession())
+        assertFalse(blankSnap().copy(item = "Tail shaft").isDefaultSession())
         assertFalse(blankSnap().copy(notes = "n").isDefaultSession())
         assertFalse(blankSnap().copy(shaftPosition = ShaftPosition.STBD).isDefaultSession())
     }

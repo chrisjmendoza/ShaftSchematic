@@ -105,6 +105,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             customer = _customer.value,
             vessel = _vessel.value,
             jobNumber = _jobNumber.value,
+            item = _item.value,
             notes = _notes.value,
             runoutConfig = _runoutConfig.value,
             unitLocked = _unitLocked.value,
@@ -437,6 +438,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _jobNumber = MutableStateFlow("")
     val jobNumber: StateFlow<String> = _jobNumber.asStateFlow()
 
+    /** Optional shaft designation ("Tail shaft", "Line shaft", …). Blank prints nothing. */
+    internal val _item = MutableStateFlow("")
+    val item: StateFlow<String> = _item.asStateFlow()
+
     internal val _notes = MutableStateFlow("")
     val notes: StateFlow<String> = _notes.asStateFlow()
 
@@ -634,9 +639,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val sessionSnapshotFlow = combine(
             spec, unit, shaftPosition, customer, vessel, jobNumber, notes,
             runoutConfig, unitLocked, overallIsManual, wearRecord, runoutReadings, undercutRecord,
-            runoutStationPlacements, unitOverrides, dualUnits
+            runoutStationPlacements, unitOverrides, dualUnits, item
         ) { values: Array<Any?> ->
-            check(values.size == 16) { "Autosave combine expected 16 values, got ${values.size}" }
+            check(values.size == 17) { "Autosave combine expected 17 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -655,6 +660,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             @Suppress("UNCHECKED_CAST")
             val overrides = values[14] as Map<String, UnitSystem>
             val dual = values[15] as Boolean
+            val itm = values[16] as String
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -663,6 +669,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 customer = cust,
                 vessel = ves,
                 jobNumber = job,
+                item = itm,
                 notes = n,
                 runoutConfig = runout,
                 unitLocked = locked,
@@ -1153,6 +1160,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _customer.value = snapshot.customer
         _vessel.value = snapshot.vessel
         _jobNumber.value = snapshot.jobNumber
+        _item.value = snapshot.item
         _notes.value = snapshot.notes
         _runoutConfig.value = snapshot.runoutConfig
         _wearRecord.value = snapshot.wearRecord
@@ -1200,6 +1208,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun setCustomer(value: String) { _customer.value = value.trim() }
     fun setVessel(value: String)   { _vessel.value = value.trim() }
     fun setJobNumber(value: String){ _jobNumber.value = value.trim() }
+    fun setItem(value: String)     { _item.value = value.trim() }
     fun setNotes(value: String)    { _notes.value = value }
     fun setShaftPosition(value: ShaftPosition) { _shaftPosition.value = value }
 

@@ -145,6 +145,7 @@ fun RunoutRoute(
     val customer           by vm.customer.collectAsState()
     val vessel             by vm.vessel.collectAsState()
     val jobNumber          by vm.jobNumber.collectAsState()
+    val item               by vm.item.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -221,7 +222,8 @@ fun RunoutRoute(
     val collidingIds = remember(spec) { spec.collidingIds() }
     val gate = remember(spec, collidingIds) { exportPdfGate(spec, collidingIds) }
 
-    val outputFilename = buildOutputFilename(customer, vessel, jobNumber, OutputDoc.RUNOUT, blankDraft)
+    val outputFilename =
+        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.RUNOUT, blankDraft)
 
     // "Shaft height" / "Liner compression" slider inputs. The classic sheet honors both
     // (`config.heightScale`, `config.linerMinFracOfTrue`) exactly as the consolidated one
@@ -268,7 +270,7 @@ fun RunoutRoute(
                 composeClassicRunout(
                     page, spec, runoutConfig,
                     ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition),
+                        jobNumber = jobNumber, side = shaftPosition, item = item),
                     unit, vm.currentPdfPrefs, resolvedComponents,
                     lineThicknessScale, runoutReadings, stationPlacements, blankDraft,
                     vm.currentDisplayUnits(),
@@ -291,7 +293,7 @@ fun RunoutRoute(
                 spec = spec,
                 config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression),
                 project = ProjectInfo(customer = customer, vessel = vessel,
-                    jobNumber = jobNumber, side = shaftPosition),
+                    jobNumber = jobNumber, side = shaftPosition, item = item),
                 unit = unit,
                 resolved = resolvedComponents,
                 lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
@@ -760,7 +762,7 @@ fun RunoutRoute(
                     val specSnapshot = spec
                     val configSnapshot = runoutConfig
                     val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition)
+                        jobNumber = jobNumber, side = shaftPosition, item = item)
                     val unitSnapshot = unit
                     val prefsSnapshot = vm.currentPdfPrefs
                     val resolvedSnapshot = resolvedComponents
