@@ -7,6 +7,7 @@ import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -140,13 +141,15 @@ class ComponentWarningsTest {
     @Test
     fun `thread zero pitch warns`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = 40f, pitchMm = 0f)
-        assertTrue(threadWarningMessages(th).contains("Zero pitch — thread renders flat"))
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
+        assertTrue(threadWarningMessages(spec, th).contains("Zero pitch — thread renders flat"))
     }
 
     @Test
     fun `thread short segment warns`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 0.5f, majorDiaMm = 40f, pitchMm = 2f)
-        assertTrue(threadWarningMessages(th).contains(SHORT))
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
+        assertTrue(threadWarningMessages(spec, th).contains(SHORT))
     }
 
     /* ── §2.1 Implausible length/diameter sanity checks ────────────────────── */
@@ -258,31 +261,36 @@ class ComponentWarningsTest {
     @Test
     fun `thread warns on implausible length`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = MAX_LEN + 1f, majorDiaMm = 40f, pitchMm = 2f)
-        assertTrue(threadWarningMessages(th).contains(LENGTH_SANITY))
+        val spec = ShaftSpec(overallLengthMm = MAX_LEN + 1000f, threads = listOf(th))
+        assertTrue(threadWarningMessages(spec, th).contains(LENGTH_SANITY))
     }
 
     @Test
     fun `thread silent on length exactly at threshold`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = MAX_LEN, majorDiaMm = 40f, pitchMm = 2f)
-        assertFalse(threadWarningMessages(th).contains(LENGTH_SANITY))
+        val spec = ShaftSpec(overallLengthMm = MAX_LEN, threads = listOf(th))
+        assertFalse(threadWarningMessages(spec, th).contains(LENGTH_SANITY))
     }
 
     @Test
     fun `thread warns on implausible major diameter`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = MAX_DIA + 1f, pitchMm = 2f)
-        assertTrue(threadWarningMessages(th).contains(DIA_SANITY))
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
+        assertTrue(threadWarningMessages(spec, th).contains(DIA_SANITY))
     }
 
     @Test
     fun `thread silent on major diameter exactly at threshold`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = MAX_DIA, pitchMm = 2f)
-        assertFalse(threadWarningMessages(th).contains(DIA_SANITY))
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
+        assertFalse(threadWarningMessages(spec, th).contains(DIA_SANITY))
     }
 
     @Test
     fun `thread implausible dia produces sanity warning plus legitimate zero-pitch warning only`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = MAX_DIA + 1f, pitchMm = 0f)
-        val warnings = threadWarningMessages(th)
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
+        val warnings = threadWarningMessages(spec, th)
         assertEquals(setOf(DIA_SANITY, "Zero pitch — thread renders flat"), warnings.toSet())
     }
 
@@ -352,5 +360,146 @@ class ComponentWarningsTest {
             tapers = listOf(Taper(startFromAftMm = 0f, lengthMm = 0.5f, startDiaMm = 80f, endDiaMm = 60f)),
         )
         assertEquals(listOf("1 segments shorter than 1 mm"), specWarningMessages(spec))
+    }
+
+    /* ── Past-OAL bounds advisory (shared predicate) ────────────────────────── */
+
+    @Test
+    fun `a span inside the shaft is not outside`() {
+        val spec = ShaftSpec(overallLengthMm = 1000f)
+        assertFalse(outsideShaftSpan(spec, 100f, 200f))
+        assertNull(pastShaftEndMessage(spec, 100f, 200f))
+    }
+
+    @Test
+    fun `a span running past the end is outside`() {
+        val spec = ShaftSpec(overallLengthMm = 1000f)
+        assertTrue(outsideShaftSpan(spec, 900f, 200f))
+        assertEquals(
+            "Extends past shaft length (OAL 1000 mm)",
+            pastShaftEndMessage(spec, 900f, 200f),
+        )
+    }
+
+    @Test
+    fun `a negative start is outside`() {
+        val spec = ShaftSpec(overallLengthMm = 1000f)
+        assertTrue(outsideShaftSpan(spec, -10f, 100f))
+    }
+
+    /** OAL 0 means "not typed yet" — there is no span to fall outside of. */
+    @Test
+    fun `a not-yet-set overall length has no bounds`() {
+        val spec = ShaftSpec(overallLengthMm = 0f)
+        assertFalse(outsideShaftSpan(spec, 900f, 500f))
+        assertNull(pastShaftEndMessage(spec, 900f, 500f))
+    }
+
+    @Test
+    fun `a span ending exactly at the shaft end is inside`() {
+        val spec = ShaftSpec(overallLengthMm = 1000f)
+        assertFalse(outsideShaftSpan(spec, 800f, 200f))
+    }
+
+    /** The eps absorbs float round-trip noise; a real overrun still fires. */
+    @Test
+    fun `bounds honor the eps at the boundary`() {
+        val spec = ShaftSpec(overallLengthMm = 1000f)
+        assertFalse(outsideShaftSpan(spec, 800f, 200.0005f))
+        assertTrue(outsideShaftSpan(spec, 800f, 200.01f))
+        assertFalse(outsideShaftSpan(spec, -0.0005f, 100f))
+        assertTrue(outsideShaftSpan(spec, -0.01f, 100f))
+    }
+
+    /** Both surfaces read the ONE comparison; only the wording differs. */
+    @Test
+    fun `dialog and card messages agree on when but not on wording`() {
+        val spec = ShaftSpec(overallLengthMm = 500f)
+        assertEquals("Falls outside shaft span (OAL 500 mm)", outsideShaftSpanMessage(spec, 400f, 200f))
+        assertEquals("Extends past shaft length (OAL 500 mm)", pastShaftEndMessage(spec, 400f, 200f))
+        assertNull(outsideShaftSpanMessage(spec, 100f, 200f))
+        assertNull(pastShaftEndMessage(spec, 100f, 200f))
+    }
+
+    @Test
+    fun `body past the shaft end gets the card chip`() {
+        val b = Body(startFromAftMm = 900f, lengthMm = 200f, diaMm = 50f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(b))
+        assertTrue(bodyWarningMessages(spec, b).contains(PAST_OAL_1000))
+    }
+
+    @Test
+    fun `taper past the shaft end gets the card chip`() {
+        val t = Taper(startFromAftMm = 900f, lengthMm = 200f, startDiaMm = 80f, endDiaMm = 60f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, tapers = listOf(t))
+        assertTrue(taperWarningMessages(spec, t).contains(PAST_OAL_1000))
+    }
+
+    @Test
+    fun `liner past the shaft end gets the card chip`() {
+        val ln = Liner(startFromAftMm = 900f, lengthMm = 200f, odMm = 80f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, liners = listOf(ln))
+        assertTrue(linerWarningMessages(spec, ln).contains(PAST_OAL_1000))
+    }
+
+    @Test
+    fun `included thread past the shaft end gets the card chip`() {
+        val th = Threads(startFromAftMm = 900f, lengthMm = 200f, majorDiaMm = 40f, pitchMm = 2f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
+        assertTrue(threadWarningMessages(spec, th).contains(PAST_OAL_1000))
+    }
+
+    /** An excluded thread sits outside the envelope by design — flagging it would fire always. */
+    @Test
+    fun `excluded thread past the shaft end is never flagged`() {
+        val th = Threads(
+            startFromAftMm = 1000f, lengthMm = 200f, majorDiaMm = 40f, pitchMm = 2f,
+            excludeFromOAL = true, isAftEnd = false,
+        )
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
+        assertFalse(threadWarningMessages(spec, th).any { it.contains("past shaft length") })
+    }
+
+    @Test
+    fun `banner counts one past-OAL component in the singular`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            bodies = listOf(Body(startFromAftMm = 900f, lengthMm = 200f, diaMm = 50f)),
+        )
+        assertTrue(specWarningMessages(spec).contains("1 component extends past shaft length"))
+    }
+
+    @Test
+    fun `banner counts several past-OAL components in the plural`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            bodies = listOf(Body(startFromAftMm = 900f, lengthMm = 200f, diaMm = 50f)),
+            liners = listOf(Liner(startFromAftMm = 950f, lengthMm = 200f, odMm = 80f)),
+            threads = listOf(
+                // The excluded one must not be counted.
+                Threads(startFromAftMm = 1000f, lengthMm = 50f, majorDiaMm = 40f, pitchMm = 2f,
+                        excludeFromOAL = true),
+            ),
+        )
+        assertTrue(specWarningMessages(spec).contains("2 components extend past shaft length"))
+    }
+
+    /**
+     * The banner message depends on `overallLengthMm`, not only on the component lists —
+     * the pure half of the `remember`-key fix in `SpecWarningBanner`. Shortening the shaft
+     * under an unchanged component must flip the message on.
+     */
+    @Test
+    fun `shortening the OAL alone raises the banner line`() {
+        val body = Body(startFromAftMm = 0f, lengthMm = 900f, diaMm = 50f)
+        val roomy = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body))
+        assertTrue(specWarningMessages(roomy).none { it.contains("past shaft length") })
+
+        val tight = roomy.copy(overallLengthMm = 500f)
+        assertTrue(specWarningMessages(tight).contains("1 component extends past shaft length"))
+    }
+
+    private companion object {
+        const val PAST_OAL_1000 = "Extends past shaft length (OAL 1000 mm)"
     }
 }

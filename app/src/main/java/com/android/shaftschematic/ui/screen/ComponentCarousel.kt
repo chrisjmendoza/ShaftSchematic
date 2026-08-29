@@ -37,6 +37,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -916,6 +918,9 @@ internal fun ComponentCard(
     onRemove: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    // One dirty registry per card identity — a page swipe or a card recycled onto a different
+    // component starts clean rather than inheriting the previous component's pending edits.
+    val dirtyState = remember(componentId ?: title) { CardDirtyState() }
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = outerPaddingHorizontal),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -963,36 +968,59 @@ internal fun ComponentCard(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                     }
                 }
-                content()
-
-                // Explicit commit affordance for the card's numeric fields. Fields commit on
-                // blur and on IME Done, but chips, toggles, and checkboxes never TAKE focus —
-                // so a value typed and followed by a chip tap sits uncommitted in a still-
-                // focused field with nothing visible wrong (on-device report: a body keyway
-                // length that never landed). Save force-clears focus, which drives the one
-                // existing commit path (`shouldCommitOnBlur`); it adds no second commit
-                // pipeline, and with nothing focused it is a no-op. Card-only by design —
-                // the Add dialogs commit through their own Add button.
-                run {
-                    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        androidx.compose.material3.TextButton(
-                            onClick = { focusManager.clearFocus(force = true) },
-                            modifier = Modifier.testTag("card_save_button"),
-                        ) { Text("Save") }
-                    }
+                // The card's numeric fields register their uncommitted state here, which is
+                // what the Save button below reads. Only `content` is wrapped: the title row's
+                // rename editor is a bespoke field with its own commit, outside this registry.
+                CompositionLocalProvider(LocalCardDirtyState provides dirtyState) {
+                    content()
                 }
+
+                CardSaveButton(dirtyState)
             }
 
         }
     }
 }
 
+/**
+ * Explicit commit affordance for the card's numeric fields.
+ *
+ * Fields commit on blur and on IME Done, but chips, toggles, and checkboxes never TAKE focus —
+ * so a value typed and followed by a chip tap sits uncommitted in a still-focused field with
+ * nothing visible wrong (on-device report: a body keyway length that never landed). Save
+ * force-clears focus, which drives the one existing commit path (`shouldCommitOnBlur`); it
+ * adds no second commit pipeline. Card-only by design — the Add dialogs commit through their
+ * own Add button.
+ *
+ * It is **disabled while nothing is pending** (on-device request), so a greyed-out Save reads
+ * as "everything on this card is saved" and a filled one is the visible thing to press. The
+ * accepted trade: with nothing pending it is no longer a tap-anywhere way to dismiss the
+ * keyboard — IME back and Done still do that.
+ *
+ * Read inside its own composable so that flipping enabled recomposes the button rather than
+ * the whole card.
+ */
+@Composable
+private fun CardSaveButton(dirtyState: CardDirtyState) {
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    androidx.compose.material3.Button(
+        onClick = { focusManager.clearFocus(force = true) },
+        enabled = dirtyState.hasPendingEdits,
+        modifier = Modifier.fillMaxWidth().testTag("card_save_button"),
+    ) { Text("Save") }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Carousel-private helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Numeric input field with commit-on-blur, fraction support, and optional inline validator. */
+/**
+ * Numeric input field with commit-on-blur, fraction support, and optional inline validator.
+ *
+ * Registers itself with the enclosing card's [CardDirtyState] (if any) so the card's Save
+ * button lights up while this field holds an uncommitted edit — no per-call-site wiring, so a
+ * newly added field cannot forget to report.
+ */
 @Composable
 internal fun CommitNum(
     label: String,
@@ -1008,6 +1036,13 @@ internal fun CommitNum(
     validator: ((String) -> String?)? = null,
     onCommit: (String) -> Unit
 ) {
+    val dirtyState = LocalCardDirtyState.current
+    // Identity token, not a name: one per field instance, stable across recomposition, and
+    // unique without any call site having to invent a key.
+    val fieldToken = remember { Any() }
+    DisposableEffect(dirtyState, fieldToken) {
+        onDispose { dirtyState?.forget(fieldToken) }
+    }
     NumericInputField(
         label = label,
         initialText = initialDisplay,
@@ -1020,6 +1055,7 @@ internal fun CommitNum(
         showValidationErrors = showValidationErrors,
         keyboardType = keyboardType,
         validator = validator,
+        onDirtyChange = { dirty -> dirtyState?.setDirty(fieldToken, dirty) },
         parseValid = parseValid,
         onCommit = onCommit
     )
@@ -1030,6 +1066,9 @@ internal fun CommitNum(
  * Unlike [CommitNum] this does not filter input to numeric characters — a designation
  * carries a leading "M" and a "×"/"x" separator — so it commits the raw typed text
  * verbatim and lets the caller parse it (`ThreadDesignation.parse`).
+ *
+ * Reports to the card's [CardDirtyState] like [CommitNum] — it is the same commit-on-blur
+ * shape, so a half-typed designation must light Save up too.
  */
 @Composable
 internal fun CommitDesignationField(
@@ -1039,6 +1078,17 @@ internal fun CommitDesignationField(
 ) {
     var text by remember(initialText) { mutableStateOf(initialText) }
     var textWhenFocused by remember(initialText) { mutableStateOf<String?>(null) }
+    // The text a walk-away would leave behind. The caller drops a designation that does not
+    // parse, so the model may not move on commit; tracking the settled text here keeps the
+    // field from reporting itself dirty forever after one.
+    var settledText by remember(initialText) { mutableStateOf(initialText) }
+    val dirtyState = LocalCardDirtyState.current
+    val fieldToken = remember { Any() }
+    DisposableEffect(dirtyState, fieldToken) {
+        onDispose { dirtyState?.forget(fieldToken) }
+    }
+    val isDirty = text != settledText
+    LaunchedEffect(isDirty) { dirtyState?.setDirty(fieldToken, isDirty) }
     val isValid = ThreadDesignation.parse(text) != null
     OutlinedTextField(
         value = text,
@@ -1052,6 +1102,7 @@ internal fun CommitDesignationField(
                 if (f.isFocused) {
                     textWhenFocused = text
                 } else if (shouldCommitOnBlur(textWhenFocused, text)) {
+                    settledText = text
                     onCommit(text)
                     textWhenFocused = null
                 }

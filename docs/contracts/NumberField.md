@@ -6,9 +6,10 @@ File: `ui/input/NumericInputField.kt` (composable `NumericInputField`; wrapped b
 `CommitNum` in `ComponentCarousel.kt` and `CommitNumField` in `AddComponentDialogs.kt`)  
 Purpose: Single-line numeric field that holds local text; commits on blur/IME Done via callback.
 
-Version: v0.3 (2026-07-26; adds the focus-baseline rule and test coverage. v0.2 2026-07-18
-superseded v0.1 "NumberField" — the composable was renamed `NumericInputField`, contract
-filename kept for link stability)
+Version: v0.4 (2026-08-29; adds the `onDirtyChange` contract behind the carousel card's Save
+button, and the Length "> 0" validator convention. v0.3 2026-07-26 added the focus-baseline
+rule and test coverage. v0.2 2026-07-18 superseded v0.1 "NumberField" — the composable was
+renamed `NumericInputField`, contract filename kept for link stability)
 
 Invariants
 - No live writes while typing; commit-on-blur discipline.
@@ -33,12 +34,37 @@ Invariants
 - Field displays formatted text; callback receives raw text.
 - **IME Done commits unconditionally**, even with no edit — a deliberate asymmetry with
   blur. Done is an explicit "I mean this" gesture; blur is passive. Pinned by test.
+- **`onDirtyChange` reports, it never commits.** The optional
+  `onDirtyChange: ((Boolean) -> Unit)?` says whether the field currently holds an edit that has
+  not landed — its text against the *settled* text, meaning the text a walk-away would leave
+  behind: the incoming `initialText`, then whatever a commit or a revert settled on. It fires
+  `true` the first time the text diverges and `false` again on a successful commit, on a revert
+  (failed parse or failed `validator`), and when an external model update refreshes the field.
+  It is **edge-triggered** (a `LaunchedEffect` keyed on the flag), so a run of keystrokes past
+  the first reports nothing. The listener is read through `rememberUpdatedState`, so a caller
+  handing over a fresh lambda or a fresh registry is never left writing into the previous one.
+  Adding a report must never add a commit — the blur/IME/Save paths above stay the only writers.
+
+Length validator convention
+- Every carousel card's **Length** field carries
+  `validator = { positiveLengthErrorMm(toMmOrNull(raw, unit)) }`
+  (`ui/util/StartOverlapValidation.kt`) — one shared helper on all four cards, message
+  "Must be > 0". A rejected value takes the standard validator path: the field shows the
+  error, reverts, and **does not commit**, so a zero length stops at the card instead of
+  silently landing a component with no span (the short-segment advisory starts *above* 0, so
+  nothing downstream would have said a word). This is a gate on an *entry*, not a rewrite of a
+  stored value — the golden rule is untouched.
+- Deliberately **not** applied to diameter fields (an auto-body Ø of `≤ 0` clears that
+  section's override, a documented feature), not to keyway fields (blank/0 clears a keyway),
+  and not to the Add dialogs, whose Submit gates already require a positive length.
 
 Test coverage
 - `ui/input/BlurCommitPolicyTest` — the predicate, pure JVM.
 - `ui/input/NumericInputFieldBlurTest` — the predicate actually wired into the field:
-  real focus/blur/IME events, re-focus baseline, invalid-input revert. Runs on the JVM
-  under Robolectric.
+  real focus/blur/IME events, re-focus baseline, invalid-input revert, and the
+  `onDirtyChange` edges (clean on compose, dirty on divergence, clean again after a commit,
+  a revert, and a validator rejection). Runs on the JVM under Robolectric.
+- `ui/util/StartOverlapValidationTest` — `positiveLengthErrorMm`, pure JVM.
 
 Responsibilities
 - Maintain internal `text` state; select-all on focus for quick overwrite.
@@ -50,6 +76,17 @@ Responsibilities
   which drives this field's blur commit; it adds no second commit pipeline, and the
   no-change rule above still applies (Save after tap-without-edit is a no-op). Pinned by
   `ComponentCardSaveButtonTest`.
+- **Save is enabled off the aggregate of `onDirtyChange`.** A `CommitNum` inside a
+  `ComponentCard` registers itself with that card's `CardDirtyState`
+  (`ui/screen/CardDirtyState.kt`) through the `LocalCardDirtyState` composition local, keyed
+  by an identity token the field instance owns and dropped on dispose. There is deliberately
+  **no per-call-site key list**: a card carries dozens of fields across four kinds, and a
+  hand-maintained list is a second place for the button and the fields to drift — the first
+  field added without a key would silently stop lighting Save up. `CommitDesignationField`
+  (the metric thread designation) registers the same way. The card title's rename editor does
+  not: only `content` is wrapped, and that editor is a bespoke field with its own commit.
+  Instant-commit controls (chips, checkboxes, switches, sliders) never register — they have no
+  uncommitted state.
 - Support decimals and shop fractions in display.
 - Optional `validator` and `externalIssueText` parameters surface inline field issues.
 

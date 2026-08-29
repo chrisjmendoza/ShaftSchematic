@@ -29,6 +29,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
+import com.android.shaftschematic.ui.util.positiveLengthErrorMm
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.taperWarningMessages
 import com.android.shaftschematic.util.DisplayUnits
@@ -190,7 +191,10 @@ internal fun TaperPagerCard(
             val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
             onUpdateTaper(idx, physStart, t.lengthMm, t.startDiaMm, t.endDiaMm, nextRateText(t.lengthMm, t.startDiaMm, t.endDiaMm))
         }
-        CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
+        CommitNum(
+            "Length (${abbr(unit)})", disp(t.lengthMm, unit),
+            validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+        ) { s ->
             val newLen = toMmOrNull(s, unit) ?: return@CommitNum
             val physStart = if (isFwdRef) {
                 val authored = spec.overallLengthMm - t.startFromAftMm - t.lengthMm

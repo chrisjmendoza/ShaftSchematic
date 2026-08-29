@@ -34,6 +34,7 @@ import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.util.bodyWarningMessages
+import com.android.shaftschematic.ui.util.positiveLengthErrorMm
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
@@ -289,7 +290,10 @@ internal fun BodyPagerCard(
         CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit), validator = startValidator(b.id, ComponentKind.BODY, b.lengthMm)) { s ->
             toMmOrNull(s, unit)?.let { onUpdateBody(idx, it, b.lengthMm, b.diaMm) }
         }
-        CommitNum("Length (${abbr(unit)})", disp(b.lengthMm, unit)) { s ->
+        CommitNum(
+            "Length (${abbr(unit)})", disp(b.lengthMm, unit),
+            validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+        ) { s ->
             toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, it, b.diaMm) }
         }
         CommitNum("Ø (${abbr(unit)})", disp(b.diaMm, unit)) { s ->

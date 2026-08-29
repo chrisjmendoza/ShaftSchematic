@@ -7,7 +7,10 @@ import com.android.shaftschematic.model.ShaftSpec
  *
  * Checks existing tapers, non-excluded threads, and liners.
  * Bodies are intentionally skipped — they auto-split to accommodate any new component.
- * Once the shaft has an overall length, also warns if the component falls outside the span.
+ * Once the shaft has an overall length, also warns if the component falls outside the span —
+ * through `outsideShaftSpanMessage` (`ui/util/ComponentWarnings.kt`), the ONE bounds
+ * comparison this and the carousel cards' past-OAL chip share. The two messages differ in
+ * wording only; do not fork the comparison back out into either surface.
  *
  * Returns an empty list when everything is clean.  Callers should present the warnings and offer
  * an "Add Anyway" path rather than blocking the add.
@@ -28,12 +31,7 @@ fun collectAddWarnings(
         return startMm < bEnd - eps && proposedEnd > bStart + eps
     }
 
-    if (spec.overallLengthMm > 0f) {
-        if (startMm < -eps || proposedEnd > spec.overallLengthMm + eps) {
-            val oalStr = "%.3f".format(spec.overallLengthMm).trimEnd('0').trimEnd('.')
-            warnings.add("Falls outside shaft span (OAL $oalStr mm)")
-        }
-    }
+    outsideShaftSpanMessage(spec, startMm, lengthMm)?.let { warnings.add(it) }
 
     spec.tapers.forEachIndexed { i, t ->
         if (overlaps(t.startFromAftMm, t.lengthMm))

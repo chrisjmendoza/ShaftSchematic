@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedThread
+import com.android.shaftschematic.ui.util.positiveLengthErrorMm
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.threadWarningMessages
 import com.android.shaftschematic.util.parseFractionOrDecimal
@@ -87,7 +88,7 @@ internal fun ThreadPagerCard(
             startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)
                 ?: if (th.id in collidingComponentIds) "Overlaps another component" else null
         ),
-        warningMessage = threadWarningMessages(th).joinToString("; ").ifEmpty { null },
+        warningMessage = threadWarningMessages(spec, th).joinToString("; ").ifEmpty { null },
         componentId = th.id, componentKind = ComponentKind.THREAD,
         outerPaddingHorizontal = outerPaddingHorizontal,
         onRemove = {
@@ -158,7 +159,10 @@ internal fun ThreadPagerCard(
                 }
             }
         }
-        CommitNum("Length (${abbr(unit)})", disp(th.lengthMm, unit)) { s ->
+        CommitNum(
+            "Length (${abbr(unit)})", disp(th.lengthMm, unit),
+            validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+        ) { s ->
             toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm, th.metricDesignation) }
         }
 

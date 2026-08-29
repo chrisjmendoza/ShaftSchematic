@@ -8,6 +8,58 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-29
 
+### feat(ui): carousel length validation + a Save button that says whether anything is pending
+
+Two on-device requests on the component carousel.
+
+**A component past the shaft end now says so.** A card edit that pushed a component past
+`overallLengthMm` committed silently — only the OAL field went red, with nothing naming the
+culprit. Each card now carries the amber advisory chip "Extends past shaft length (OAL *n* mm)"
+and `SpecWarningBanner` gains a count line ("1 component extends past shaft length" /
+"*n* components extend past shaft length"). Bodies are included (a **stored** body span past the
+OAL is authored geometry); excluded threads are skipped, since their derived position sits
+outside the envelope by design; reference features are outside it entirely.
+
+It is **advisory, never blocking and never clamping**. Oversize is a legal state
+(`docs/contracts/OverallLength.md`): the edit commits verbatim under the golden rule, and
+`collidingIds()`, the export gate, and the OAL field's own `isError` are untouched.
+
+The comparison is now **one implementation** — `outsideShaftSpan`
+(`ui/util/ComponentWarnings.kt`) — read by both the add dialogs' pre-submit "Falls outside shaft
+span" warning (`outsideShaftSpanMessage`, via a refactored `collectAddWarnings`, whose message
+text and behavior are byte-identical: `CollisionWarningsTest` passes unchanged) and the cards'
+chip (`pastShaftEndMessage`). The two differ in wording only; forking the comparison back out is
+now a documented Do Not. `threadWarningMessages` takes the spec for it.
+`SpecWarningBanner`'s `remember` key became the whole spec — the new message depends on
+`overallLengthMm`, which the component-list key did not cover, so an OAL edit alone left the
+banner stale.
+
+**A Length of 0 stops at the card.** All four cards' Length fields now validate with
+`positiveLengthErrorMm` ("Must be > 0"), so `NumericInputField`'s existing validator path shows
+the error, reverts, and skips the commit. Previously a zero committed silently and nothing
+downstream noticed — the short-segment advisory starts *above* 0. This gates an entry, not a
+stored value; Ø fields are untouched (an auto-body Ø of ≤ 0 clearing its override is a feature),
+as are keyway fields and the Add dialogs.
+
+**The card's Save button is now a full-width filled button, disabled when nothing is pending.**
+Greyed out is a solid statement that every field on the card is committed; filled means an edit
+is waiting. Commit-on-blur is completely unchanged — Save still just force-clears focus, and the
+blur pipeline does the writing. `NumericInputField` gained an optional edge-triggered
+`onDirtyChange`, and fields register themselves with the card's `CardDirtyState` through the
+`LocalCardDirtyState` composition local rather than through a hand-maintained per-field key list
+— a card carries dozens of fields, and a list is a second place for the button and the fields to
+drift apart. `CommitDesignationField` registers the same way; the card title's rename editor
+does not (bespoke field, own commit), and instant-commit controls never do. Accepted trade:
+with nothing pending, Save is no longer a tap-anywhere keyboard dismissal — IME back and Done
+still are.
+
+New/changed: `ui/screen/CardDirtyState.kt`, `ui/input/NumericInputField.kt`,
+`ui/util/ComponentWarnings.kt`, `ui/util/CollisionWarnings.kt`,
+`ui/util/StartOverlapValidation.kt`, `ui/screen/ComponentCarousel.kt`,
+`ui/screen/SpecWarningBanner.kt`, the four `*PagerCard.kt` files. Docs:
+`docs/VALIDATION_RULES.md` (new §3.1a), `docs/contracts/NumberField.md`,
+`docs/contracts/ShaftScreen.md`, `docs/contracts/AddComponentDialogs.md`.
+
 ### feat(ui)!: Free-to-End badge removed
 
 On-device direction: auto-bodies fill the gap to the OAL automatically, so the "Free to end"

@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.8, 2026-08-18)
+# AddComponentDialogs Contract (v1.9, 2026-08-29)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -27,6 +27,21 @@ remove it.
 Corollary: if you add a control to a carousel card, add it to the Add dialog too, and
 vice versa. Parity is checked per-condition (e.g. "only when excluded from OAL"), not
 just per field.
+
+### The bounds warning is shared, not mirrored
+
+The dialogs' pre-submit "Falls outside shaft span (OAL *n* mm)" warning and the carousel
+cards' "Extends past shaft length (OAL *n* mm)" chip are **two wordings of ONE predicate** —
+`outsideShaftSpan` in `ui/util/ComponentWarnings.kt`, reached through
+`outsideShaftSpanMessage` (dialogs, via `collectAddWarnings`) and `pastShaftEndMessage`
+(cards). Parity here is enforced by construction rather than by duplication: **do not fork the
+comparison back out into either surface**, and do not "fix" one side's eps, its
+`overallLengthMm > 0` guard, or its excluded-thread skip in isolation. Both are advisory —
+neither blocks the add, the commit, or export (`VALIDATION_RULES.md` §3.1a).
+
+This is not a parity carve-out: nothing new was added to either surface's controls. The Save
+button on a card is card chrome, not a component property control, and is likewise outside the
+parity rule — the dialogs commit through their own Add button.
 
 Failure mode: the AFT/FWD thread-end selector was present in the carousel card but
 missing from `AddThreadDialog` for several versions (restored 2026-06-23).
@@ -162,8 +177,8 @@ Submit ordering (SET/LET → the stored pair):
 - The model stores `startDiaMm`/`endDiaMm` x-ordered AFT → FWD, and SET faces the nearer
   shaft end. The submit handler therefore orders the typed values by the taper's **physical
   half** — `taperAddDiameterOrder` over `classifyTaperSideByMidpoint`
-  (`ui/input/TaperSetLetMapping.kt`) — judged against `oalAfterTaperAddMm(…)`, the OAL the
-  shaft will carry once the taper exists.
+  (`ui/input/TaperSetLetMapping.kt`) — judged against `spec.overallLengthMm`, the shaft's
+  authored OAL.
 - **Not** by the Measure From chip. The chip only resolves the Start (`FWD → OAL − start −
   length`); a taper measured from AFT can still be placed in the FWD half, and keying the
   swap on the chip stores SET at the wrong face — drawn small-end-inboard, card labels
@@ -283,10 +298,19 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
   `syncExcludedThreadPositions()`.
 - Do **not** add collision/overlap checks for coupler bolt slots — they are reference
   cutouts that overlay other components by design.
+- Do **not** reimplement the shaft-span bounds comparison in a dialog or a card; both read
+  `outsideShaftSpan` (see *The bounds warning is shared, not mirrored*).
 
 ---
 
 ## Change log
+**v1.9 (2026-08-29)**
+- The dialogs' bounds warning and the carousel cards' new past-OAL chip now share ONE
+  predicate (`outsideShaftSpan`); `collectAddWarnings` was refactored onto it and the dialog's
+  message text is byte-identical (pinned by an unchanged `CollisionWarningsTest`). Recorded the
+  no-forking rule. The card Save button's new disabled/enabled state is card chrome and stays
+  outside the parity rule.
+
 **v1.8 (2026-08-18)**
 - Add Thread dialog gains the **Imperial (TPI) | Metric (M-designation)** spec-mode chips: a
   metric thread stores a designation (`Threads.metricDesignation`, e.g. `M20×2.5`) with major Ø

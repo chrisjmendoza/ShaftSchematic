@@ -787,7 +787,7 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
 ## Contracts & Invariants
 
 - **Reference-only, sixth of its kind**: never affects `coverageEndMm`/OAL, body
-  resolution/split/merge, `collidingIds()`, `maxOuterDiaMm`, the Free-to-End badge, or
+  resolution/split/merge, `collidingIds()`, `maxOuterDiaMm`, or
   `ExportPdfGate.hasComponents`. Lives outside `ShaftSpec`, in `UndercutRecord`
   (`undercut_record` envelope field).
 - **No carousel card, no Add dialog anywhere** — undercuts are authored only on the Undercut

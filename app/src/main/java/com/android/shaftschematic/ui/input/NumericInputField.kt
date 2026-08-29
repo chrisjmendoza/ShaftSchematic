@@ -5,9 +5,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -23,6 +25,13 @@ import com.android.shaftschematic.util.filterNumericInput
  * NOTE:
  * - Numeric input is filtered and reverted at the UI boundary.
  * - Future numeric fields must use this composable (filter + parser) before committing.
+ *
+ * [onDirtyChange] reports whether the field currently holds an **uncommitted** edit — its text
+ * against the baseline a blur-with-no-edit would keep. It fires `true` the moment the text
+ * diverges and `false` again on a successful commit, on a revert, and when an external model
+ * update refreshes the text; it is edge-triggered, so typing does not spam it. It reports
+ * state and never drives a commit — the blur/IME pipeline above is still the only writer. The
+ * carousel card's Save button is enabled off the aggregate of these reports.
  */
 @Composable
 fun NumericInputField(
@@ -39,6 +48,7 @@ fun NumericInputField(
     maxLines: Int = if (singleLine) 1 else 5,
     keyboardType: KeyboardType = KeyboardType.Decimal,
     validator: ((String) -> String?)? = null,
+    onDirtyChange: ((Boolean) -> Unit)? = null,
     parseValid: (String) -> Boolean,
     onCommit: (String) -> Unit
 ) {
@@ -68,16 +78,31 @@ fun NumericInputField(
     // Used to skip commits when the user tapped a field but didn't change its value.
     var textWhenFocused by remember(initialText) { mutableStateOf<String?>(null) }
 
+    // The text the field would be left holding if the user walked away right now: the
+    // incoming value, then whatever a commit or a revert settled on. Anything else in the
+    // box is an edit that has not landed yet.
+    var settledText by remember(initialText) { mutableStateOf(initialText) }
+
     fun commitOrRevert() {
         val ok = validate(text.text, updateError = true)
         if (ok) {
             showError = false
+            settledText = text.text
             onCommit(text.text)
         } else {
             if (showValidationErrors) showError = true
             text = TextFieldValue(lastValidText)
+            settledText = lastValidText
         }
     }
+
+    // Edge-triggered: LaunchedEffect only re-runs when the flag itself flips, so a run of
+    // keystrokes past the first reports nothing. The listener is read through
+    // rememberUpdatedState so a caller that hands over a fresh lambda (or a fresh dirty
+    // registry) is not left writing into the previous one.
+    val dirtyListener by rememberUpdatedState(onDirtyChange)
+    val isDirty = text.text != settledText
+    LaunchedEffect(isDirty) { dirtyListener?.invoke(isDirty) }
 
     OutlinedTextField(
         value = text,

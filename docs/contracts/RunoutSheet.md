@@ -172,8 +172,7 @@ is an authored value in the golden-rule sense: no derivation may move it again.
 
 `RunoutStationPlacements` rides the envelope as `runout_stations` (additive + defaulted;
 absent → every station derives as before). **Pure reference feature**, same posture as runout
-readings: never touches `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End
-badge.
+readings: never touches `coverageEndMm`/OAL, body resolution, or collision.
 
 - **`axialMm` is component-local**, from the AFT edge of the component's aft-most run — the
   `WearPit.axialMm` convention. Not px, not drawn-x: the canvas maps mm linearly while the sheet
@@ -1091,7 +1090,7 @@ in the bore, and the note that it was taken *looking forward*. That sketch is no
   component-keyed prune pass anywhere in the app), and the render layer only *skips* what it
   cannot place. Same posture as wear pits and dia readings.
 - **Reference-only**, like every other mark on this sheet: the face never touches
-  `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End badge.
+  `coverageEndMm`/OAL, body resolution, or collision.
 - **Visibility is a per-job election** — `RunoutConfig.showCouplingFace`, additive and defaulted
   **`false`** (on-device request: not every inspection measures the coupling, and a document
   written before the field existed reprints byte-identically until the face is elected).
@@ -2056,7 +2055,7 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
   leader that starts at the station's x on the shaft surface and ends on the bubble's rim —
   nothing suppresses or shortens a leader because the bubble happens to sit near its station.
 - Keyway reference cutout — an **open-topped keyway slot** at 12-o'clock (the top arc is broken across the slot mouth; two walls descend into the circle with a bottom connector), replacing the older protruding square notch. Nothing extends past the rim. Drawn identically in BOTH the PDF (`drawRunoutBubbleRingPdf`) and the canvas preview (`drawRunoutBubbleRing`).
-- **Runout readings are reference-only** (like coupler bolt slots / wear spots): a per-station TIR value + high-spot marker that never affect OAL/`coverageEndMm`, body resolution, collision, or the Free-to-End badge. Both are optional and independent; a sheet exports fine with neither. See "Runout Bubble Editor".
+- **Runout readings are reference-only** (like coupler bolt slots / wear spots): a per-station TIR value + high-spot marker that never affect OAL/`coverageEndMm`, body resolution, or collision. Both are optional and independent; a sheet exports fine with neither. See "Runout Bubble Editor".
 - Any recorded value/marker is drawn identically in BOTH draw sites (the two must stay in lockstep — `RunoutRoute.drawRunoutMarkers` ⇔ `RunoutPdfComposer.drawPlacedBubbles`).
 - OAL arrows bracket the SET-to-SET span, not the full `overallLengthMm`.
 - Every tab's preview bitmap comes from the ONE shared raster helper

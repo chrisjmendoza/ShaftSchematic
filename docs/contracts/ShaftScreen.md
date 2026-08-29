@@ -4,7 +4,10 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.15 (2026-08-17)
+Version: v0.17 (2026-08-29 — carousel: the card Save button becomes a full-width filled button
+that is DISABLED while every field is committed and enabled while any holds a pending edit; the
+cards gain the advisory past-OAL warning chip and a "Must be > 0" gate on the Length field.
+v0.16 2026-08-29)
 
 ---
 
@@ -33,12 +36,13 @@ Invariants
 - Component carousel shows the **resolved** component list (auto-bodies included) in
   **physical position order** along the shaft. See `ComponentsOrdering.md` (v1.2).  
 - Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.
-  **Exception:** the OAL field commits on every keystroke in manual mode (intentional —
-  the preview updates live; see CLAUDE.md). The OAL field's **display never rewrites the
+  **Exception:** the OAL field commits on every keystroke (intentional — the preview
+  updates live; see CLAUDE.md). The OAL field's **display never rewrites the
   user's own text**: a typed `150 3/4` stays a fraction rather than echoing back as
   `150.75` (on-device report). The text re-derives from the model only when the field is
-  unfocused AND no longer parses to the model value (auto-mode recompute, undo, an edit
-  from elsewhere).  
+  unfocused AND no longer parses to the model value (undo, an edit from elsewhere, a
+  reverted empty commit). An **empty** field on Done/blur commits nothing and reverts to
+  the stored value — it never zeroes the shaft. See `OverallLength.md`.  
 - IME padding is applied **only to the scrollable region**, not the entire screen, and is
   chained **before** `verticalScroll` so it shrinks the scroll viewport (not just the
   content) — this lets Compose's focused-child-in-view behavior auto-scroll a focused
@@ -68,8 +72,8 @@ Responsibilities
   - Hamburger icon → opens the editor sidebar (Schematic / Runout / Wear tabs)
   - Undo/Redo history menu (`HistoryMenu`) — general session-scoped undo/redo
     (`ShaftViewModel.undoEdit`/`redoEdit`, `canUndo`/`canRedo`), not delete-only;
-    covers every drawing edit (spec, wear, runout readings, component order, OAL
-    mode). See `ShaftViewModel.md`.
+    covers every drawing edit (spec, wear, runout readings, component order). See
+    `ShaftViewModel.md`.
   - Project-Info icon
   - New / Open / Save / Export-PDF action icons. Export-PDF is gated by
     `ui/util/ExportPdfGate.kt` (pure, JVM-tested in `ExportPdfGateTest`): enabled only
@@ -79,14 +83,12 @@ Responsibilities
     `overflow_close_document`; clean → closes to Start, dirty → shared unsaved-changes
     guard — see `Navigation.md`), Settings, Clear All, etc.
 
-- **Preview Card:** (`PreviewCard`, `PreviewOalBadge`, `FreeToEndBadge` — all in
+- **Preview Card:** (`PreviewCard`, `PreviewOalBadge` — both in
   `ui/screen/ShaftPreviewPanel.kt`, extracted from `ShaftScreen.kt` 2026-07-24, pure
   code move, no behavior change)
   - Fixed preview area rendering the shaft via `ShaftDrawing(...)`  
   - Optional grid overlay (user setting)  
   - Transparent or theme-color background (user selectable)  
-  - “Free to end” badge aligned **TopStart**, shown only in manual OAL mode
-    (see `FreeToEndBadge.md`)
   - Style (`PreviewCard`): `RectangleShape`, transparent container and inner Box —
     the preview draws on the screen background; colors come from preview color
     settings, not the card. Sizing: `heightIn(120–200 dp)`, `aspectRatio(3.0)`.
@@ -135,16 +137,33 @@ Do Nots
 
 Notes
 ------
-- `spec.freeToEndMm()` provides mm; `formatDisplay(mm, unit)` converts and formats it once for display.  
-- `formatDisplay()` always expects mm input.  
-- Free-to-End badge text includes the unit abbreviation (e.g. “Free to end: 100 in” or “2540 mm”).  
+- `formatDisplay(mm, unit)` converts and formats a value once for display; it always expects
+  mm input.  
 - `ComponentCard` handles its own remove button; callers simply supply `onRemove = { … }`.  
-- `ComponentCard` also ends every card with a **Save** button (`card_save_button`). Fields
-  commit on blur and IME Done, but chips/toggles/checkboxes never TAKE focus, so a typed
-  value followed by a chip tap sat uncommitted (on-device report). Save force-clears focus,
-  driving the one existing commit-on-blur path — no second commit pipeline, and a no-op
-  when nothing is focused or nothing changed. Card-only: the Add dialogs commit through
-  their own Add button. See `NumberField.md`.  
+- `ComponentCard` also ends every card with a **Save** button (`card_save_button`) — a
+  full-width, centered, filled `Button`. Fields commit on blur and IME Done, but
+  chips/toggles/checkboxes never TAKE focus, so a typed value followed by a chip tap sat
+  uncommitted (on-device report). Save force-clears focus, driving the one existing
+  commit-on-blur path — no second commit pipeline. Card-only: the Add dialogs commit through
+  their own Add button.
+  **It is DISABLED while nothing is pending** (on-device request): greyed out is a solid
+  statement that every field on this card is saved, and filled is the visible thing to press.
+  The state is the aggregate of the fields' own `onDirtyChange` reports, collected by the
+  card's `CardDirtyState` through the `LocalCardDirtyState` composition local — fields
+  register themselves, there is no per-call-site key list to keep in sync. Commit-on-blur is
+  otherwise **completely unchanged**; the button only reflects and flushes it. Accepted
+  trade-off: with nothing pending it is no longer a tap-anywhere keyboard dismissal — IME
+  back and Done still are. See `NumberField.md`.  
+- **Card fields carry two card-level validations, and neither rewrites a stored value.**
+  A card whose component runs past `spec.overallLengthMm` shows the amber advisory chip
+  "Extends past shaft length (OAL *n* mm)" — the SAME `outsideShaftSpan` predicate the add
+  dialogs' bounds warning uses (`ui/util/ComponentWarnings.kt`; excluded threads skipped,
+  bodies included). It is advisory, not the error chip: oversize is legal (`OverallLength.md`),
+  the edit still commits verbatim, and neither `collidingIds()`, the export gate, nor the OAL
+  field's own red state is touched. Above the carousel, `SpecWarningBanner` adds a count line
+  for the same condition. Separately, the **Length** field rejects `≤ 0` ("Must be > 0",
+  `positiveLengthErrorMm`) through the standard validator path — the field errors, reverts,
+  and does not commit, so a zero length stops at the card. See `VALIDATION_RULES.md` §3.1a.  
 - Persistence, serialization, and other business logic live strictly in the ViewModel.  
 - Scaffold uses system-bar insets only; FAB uses `WindowInsets.ime.union(WindowInsets.navigationBars)`.
 - `computeAddDefaults()` lives in `ui/screen/ShaftScreenController.kt`. Shared format
@@ -203,6 +222,14 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.16 (2026-08-29)**
+- **Free-to-End badge removed.** The preview overlay is gone, along with
+  `ui/util/FreeToEndBadgeMath.kt`, `ShaftSpec.freeToEndMm()` and the `FreeToEndBadge.md`
+  contract (on-device direction: auto-bodies fill the gap to the OAL, so the number
+  misleads). The preview card now carries only the OAL badge. Oversize is signalled by the
+  OAL field's error state and the add-dialog "falls outside shaft span" warning — both
+  unchanged. See `OverallLength.md` (v2.1).
+
 **v0.15 (2026-08-17)**
 - **Tap-to-add removed.** The preview canvas tap is selection only. The add-at-tapped-position
   chooser fired unintentionally and was never used on purpose (on-device report), so the

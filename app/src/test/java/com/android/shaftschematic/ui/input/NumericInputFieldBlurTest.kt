@@ -38,9 +38,13 @@ class NumericInputFieldBlurTest {
     val rule = createComposeRule()
 
     private val commits = mutableListOf<String>()
+    private val dirtyReports = mutableListOf<Boolean>()
 
     @Composable
-    private fun Host(initialText: String = "12.5") {
+    private fun Host(
+        initialText: String = "12.5",
+        validator: ((String) -> String?)? = null,
+    ) {
         val focusManager = LocalFocusManager.current
         MaterialTheme {
             Column {
@@ -48,6 +52,8 @@ class NumericInputFieldBlurTest {
                     label = "Length",
                     initialText = initialText,
                     modifier = Modifier.testTag(FIELD),
+                    validator = validator,
+                    onDirtyChange = { dirtyReports += it },
                     parseValid = { it.toFloatOrNull() != null },
                     onCommit = { commits += it }
                 )
@@ -146,6 +152,75 @@ class NumericInputFieldBlurTest {
         rule.onNodeWithTag(FIELD).performImeAction()
 
         assertEquals(listOf("12.5"), commits)
+    }
+
+    /* ── onDirtyChange — what the carousel card's Save button is enabled off ──── */
+
+    @Test
+    fun `a freshly composed field reports itself clean`() {
+        rule.setContent { Host() }
+        rule.waitForIdle()
+
+        assertEquals(listOf(false), dirtyReports)
+    }
+
+    @Test
+    fun `diverging from the committed value reports dirty once`() {
+        rule.setContent { Host() }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("13")
+        rule.waitForIdle()
+
+        assertEquals("first divergence reports true", listOf(false, true), dirtyReports)
+    }
+
+    @Test
+    fun `committing on blur reports clean again`() {
+        rule.setContent { Host() }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("13")
+        blurField()
+        rule.waitForIdle()
+
+        assertEquals(listOf("13"), commits)
+        assertEquals("last report after a commit must be clean", false, dirtyReports.last())
+    }
+
+    @Test
+    fun `reverting an invalid edit reports clean again`() {
+        // The field reverts to its last valid text instead of committing, so nothing is
+        // pending afterwards — Save must grey back out rather than stay lit forever.
+        rule.setContent { Host() }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("abc")
+        blurField()
+        rule.waitForIdle()
+
+        assertEquals(emptyList<String>(), commits)
+        assertEquals("last report after a revert must be clean", false, dirtyReports.last())
+    }
+
+    @Test
+    fun `a validator rejection reverts and reports clean again`() {
+        rule.setContent { Host(validator = { raw -> if (raw.toFloatOrNull() == 0f) "Must be > 0" else null }) }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("0")
+        blurField()
+        rule.waitForIdle()
+
+        assertEquals("a rejected value must not reach the model", emptyList<String>(), commits)
+        assertEquals(false, dirtyReports.last())
+    }
+
+    @Test
+    fun `typing the value back to the committed one reports clean`() {
+        rule.setContent { Host() }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("99")
+        rule.onNodeWithTag(FIELD).performTextReplacement("12.5")
+        rule.waitForIdle()
+
+        assertEquals(listOf(false, true, false), dirtyReports)
     }
 
     private companion object {

@@ -26,6 +26,7 @@ import com.android.shaftschematic.model.shoulderOn
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.util.linerWarningMessages
+import com.android.shaftschematic.ui.util.positiveLengthErrorMm
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
@@ -136,7 +137,10 @@ internal fun LinerPagerCard(
             val physStart  = if (isFwdRef) spec.overallLengthMm - authoredMm - ln.lengthMm else authoredMm
             onUpdateLiner(idx, physStart, ln.lengthMm, ln.odMm)
         }
-        CommitNum("Length (${abbr(unit)})", disp(ln.lengthMm, unit)) { s ->
+        CommitNum(
+            "Length (${abbr(unit)})", disp(ln.lengthMm, unit),
+            validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+        ) { s ->
             val newLen    = toMmOrNull(s, unit) ?: return@CommitNum
             val physStart = if (isFwdRef) {
                 val authored = spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm

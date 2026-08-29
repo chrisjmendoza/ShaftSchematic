@@ -1,6 +1,18 @@
 # Validation Rules  
-Version: v0.5.x
-Last updated: 2026-08-25 — §5.2/§6: `blockingExportError()` now runs the whole `collidingIds()`
+Version: v0.6
+Last updated: 2026-08-29 — §3.1/§3.2/§3.3/§3.4/§3.5/§4.3/§5.3: the **end-vs-OAL bounds check is
+now implemented on the carousel cards too**, not only in the add dialogs. One shared predicate,
+`outsideShaftSpan` (`ui/util/ComponentWarnings.kt`), backs both surfaces — the dialogs' "Falls
+outside shaft span" pre-submit warning (`outsideShaftSpanMessage`, via `collectAddWarnings`) and
+the cards' new "Extends past shaft length" amber chip (`pastShaftEndMessage`, folded into all
+four per-component predicates), plus a spec-level count on the advisory banner. It is
+**advisory** — oversize is a legal state, the edit commits verbatim, and nothing clamps, blocks a
+commit, or gates export. Separately, a carousel card's **Length field now rejects `≤ 0`**
+(`positiveLengthErrorMm`, `ui/util/StartOverlapValidation.kt`) through the standard validator
+path — the field errors, reverts, and does not commit. Corrected the long-standing claim that
+`collectAddWarnings` lives in `StartOverlapValidation.kt`; it is in
+`ui/util/CollisionWarnings.kt`.
+2026-08-25 — §5.2/§6: `blockingExportError()` now runs the whole `collidingIds()`
 set, closing the last known gap (Thread↔Liner was flagged by the badge and `exportPdfGate()`
 but not by the schematic export gate itself). §6 rewritten as the gate's two passes.
 2026-08-24 — §5/§5.2/§6: the export gate now checks taper overlaps
@@ -26,7 +38,9 @@ Validation ensures data consistency, machining plausibility, and clean export co
 
 Validation is **not** performed only in the ViewModel. The ViewModel owns numeric parsing and
 per-field clamping (e.g. length/diameter ≥ 0), but overlap/bounds validation lives in
-`ui/util/StartOverlapValidation.kt` (`startOverlapErrorMm`, `collectAddWarnings`) and is called
+`ui/util/StartOverlapValidation.kt` (`startOverlapErrorMm`, `positiveLengthErrorMm`),
+`ui/util/CollisionWarnings.kt` (`collectAddWarnings`) and `ui/util/ComponentWarnings.kt`
+(`outsideShaftSpan` and the per-component warning predicates), and is called
 directly from Compose UI code — `AddComponentDialogs.kt`, `ComponentCarousel.kt` and its
 per-kind cards (`TaperPagerCard.kt`, `ThreadPagerCard.kt`, `LinerPagerCard.kt`),
 `ShaftScreen.kt`. This is a deliberate exception to the general "UI performs no validation
@@ -78,7 +92,6 @@ Examples:
 - Zero-pitch threads
 - Large diameter discontinuities between components
 - Liner OD ≤ shaft body diameter
-- Small free-to-end space (<10 mm)
 
 Warnings appear in the component list or via icons; they do **not** block workflow.
 
@@ -161,7 +174,43 @@ a hard block today:
   one via the carousel.
 - `endFromAftMm <= overallLengthMm` is not enforced as a hard commit-time block either; see the
   overlap/bounds checks in §5 for what actually runs (`startOverlapErrorMm` in
-  `ui/util/StartOverlapValidation.kt`).
+  `ui/util/StartOverlapValidation.kt`). It **is** surfaced, as of 2026-08-29: the same
+  comparison the add dialogs use now also runs on the carousel cards and raises an advisory
+  chip and a banner count (see below). Surfaced, never enforced — the edit commits verbatim.
+- `lengthMm > 0` **is** gated at the carousel card's Length field (2026-08-29):
+  `positiveLengthErrorMm` (`ui/util/StartOverlapValidation.kt`) returns "Must be > 0" for
+  `≤ 0`, and `NumericInputField`'s validator path shows the error, reverts the text, and skips
+  `onCommit`. This gates an *entry*; the ViewModel/model clamps described above are unchanged,
+  and no stored value is rewritten.
+
+### 3.1a The shaft-span bounds check (`outsideShaftSpan`) — ONE predicate, two surfaces
+
+`outsideShaftSpan(spec, startMm, lengthMm)` (`ui/util/ComponentWarnings.kt`) is the **only**
+implementation of the end-vs-OAL comparison:
+
+```
+overallLengthMm > 0 && (startMm < −eps || startMm + lengthMm > overallLengthMm + eps)   // eps = 1e-3 mm
+```
+
+An `overallLengthMm` of 0 means "not typed yet", not "zero-length shaft" — there is no span to
+fall outside of, so the check stays silent until a length is authored.
+
+Two message wrappers read it, and nothing else may re-derive the comparison:
+
+| Wrapper | Surface | Text |
+|---------|---------|------|
+| `outsideShaftSpanMessage` | Add dialogs, via `collectAddWarnings` (§5.3) | "Falls outside shaft span (OAL *n* mm)" |
+| `pastShaftEndMessage` | Carousel cards, via the four per-component predicates | "Extends past shaft length (OAL *n* mm)" |
+
+Both are **advisory**: they ride the amber warning chip / advisory banner
+(`tertiaryContainer`), never the error chip, because oversize is a legal state
+(`docs/contracts/OverallLength.md`). They do not touch `collidingIds()`, the export gate, or the
+OAL field's own red `isError` state, and they never clamp or rewrite a stored value.
+
+Excluded threads (`excludeFromOAL`) are skipped — they sit outside the envelope by design, so
+flagging them would fire on every correctly authored one. Coupler bolt slots and the other
+reference features (wear spots/pits/readings, undercuts, worn sections, runout stations) are
+outside this check entirely.
 - `model/ShaftSpec.kt` does define `fun ShaftSpec.validate(): Boolean` implementing the fuller
   bounds check described in this document. No production caller invokes it — it is **test-only**,
   exercised by `ShaftSpecTest` and `SampleShaftAssetsTest` (bundled-sample sanity checks) — and is
@@ -175,6 +224,9 @@ a hard block today:
 
 Non-blocking warning:
 - Zero-length body *(implemented)*
+- Extends past shaft length *(implemented, 2026-08-29)* — §3.1a's shared predicate, folded into
+  `bodyWarningMessages`. Bodies are included even though they are fillers: a **stored** body
+  span past the OAL is authored geometry, not an auto-fill artifact.
 - Diameter discontinuity vs neighbors *(implemented, 2026-07-24)* — `bodyWarningMessages(spec, body)`
   in `ui/util/ComponentWarnings.kt`. Fires when a stored body's face abuts another stored body's
   face within `ADJACENCY_EPS_MM = 0.5f` mm (either end, either direction), both diameters are
@@ -229,6 +281,9 @@ Non-blocking warnings:
 - Extremely steep tapers *(planned — not yet implemented)*
 - Very short segment (< 1 mm) — `taperWarningMessages(spec, taper)` in
   `ui/util/ComponentWarnings.kt`.
+- Extends past shaft length *(implemented, 2026-08-29)* — §3.1a's shared predicate, folded into
+  `taperWarningMessages`. Measured on the **stored** (physical, AFT-referenced) span, so a
+  FWD-referenced taper is judged by where it actually sits.
 - **Removed (2026-07-26): taper-vs-body Ø mismatch advisory** ("Ø differs from adjacent
   body by >10%", implemented 2026-07-24, orientation-fixed 2026-07-25). Removed by user
   request: the mismatch is directly visible in the drawing, and the rule kept misfiring on
@@ -260,6 +315,10 @@ degenerate input that produced NaN/Infinity would pass through uncaught.
 
 Non-blocking warnings:
 - pitchMm = 0 (thread rendered flat, allowed)
+- Extends past shaft length *(implemented, 2026-08-29)* — §3.1a's shared predicate, folded into
+  `threadWarningMessages(spec, thread)`, which took the spec parameter for it. **Skipped for
+  `excludeFromOAL` threads**: an excluded thread's position is derived to sit outside the
+  envelope, so the check would fire on every one of them.
 
 ---
 
@@ -277,6 +336,10 @@ Non-blocking warnings:
   same sense as the ratio/fraction thresholds elsewhere). Auto-bodies are not considered (stored
   `spec.bodies` only). Message: "Liner OD smaller than shaft Ø beneath it", shown on the liner's
   carousel card (joined with any other warning for that card via `"; "`).
+- Extends past shaft length *(implemented, 2026-08-29)* — §3.1a's shared predicate, folded into
+  `linerWarningMessages`. This is the **advisory** counterpart of the "blocking"
+  `endFromAftMm ≤ overallLengthMm` rule listed above, which §3.1 records as never actually
+  enforced on an edit.
 - Very thin liner vs body diameter *(planned — not yet implemented)*
 
 ---
@@ -327,7 +390,16 @@ Coupler bolt slots are **excluded from all collision detection** (`collisionGrou
   every applicable warning surfaces on the card).
   `specWarningMessages` is pure and unit-tested and renders as a dismissable banner above the
   component carousel on the Schematic tab (`ui/screen/SpecWarningBanner.kt`), 2026-08-25.
-- Free-to-end space < 10 mm *(implemented)*
+- Components past the shaft end *(implemented, 2026-08-29 — spec-level count)* —
+  `specWarningMessages` counts stored bodies, tapers, liners, and non-excluded threads failing
+  §3.1a's `outsideShaftSpan`, emitting `"1 component extends past shaft length"` /
+  `"$n components extend past shaft length"`. It qualifies for the banner because it names a
+  problem the user can act on — either the component or the overall length is wrong — and
+  because the offending card can be several swipes away in the carousel, so its own chip may
+  not be on screen. Still advisory: the state is legal and commits verbatim.
+  **The banner's `remember` key is the whole `spec`**, not the component lists: this message
+  also depends on `overallLengthMm`, and a list-only key left the banner stale when the OAL
+  alone moved.
 - ~~Zero-body coverage~~ *(implemented 2026-07-24, surfaced 2026-08-25, **removed
   2026-08-27**)* — `specWarningMessages` used to emit `"No explicit bodies — shaft body is all
   auto-fill"` when `spec.bodies` was empty. It was not a problem: auto-fill IS the design
@@ -384,19 +456,22 @@ Reasoning: marine machining workflows often use stacked geometry and nested regi
 ### 5.3 Add-time pre-submit warnings (`collectAddWarnings`)
 
 When the user taps **Add** in the Taper, Liner, or Thread dialog, `collectAddWarnings()`
-(`ui/util/StartOverlapValidation.kt`) runs before the component is committed. If
+(`ui/util/CollisionWarnings.kt`) runs before the component is committed. If
 collisions or bounds violations are found, a confirmation dialog appears
 ("Add Anyway?" / "Cancel") — the add is **never silently blocked**.
 
 | Check | Condition | Applies when |
 |-------|-----------|--------------|
-| Bounds | `start < 0` or `end > OAL` | OAL is manual (not auto) |
+| Bounds | `outsideShaftSpan` (§3.1a) — `start < 0` or `end > OAL` | `overallLengthMm > 0` (a not-yet-set OAL has no span to fall outside of) |
 | Taper collision | overlaps any existing Taper | always |
 | Thread collision | overlaps any existing non-excluded Thread | always |
 | Liner collision | overlaps any existing Liner | always |
 | Body overlap | — | **never** — a body is fluid base material; a sacred add over a plain body just splits it (`splitBodiesAround`) |
 | Excluded thread | — | **skipped** (outside shaft span by design) |
 | Coupler bolt slot | — | **never** (`collisionGroup()` → null) |
+
+The bounds row is the SAME predicate the carousel cards' past-OAL chip reads (§3.1a). The two
+differ in wording only — do not fork the comparison back out into either surface.
 
 ---
 
@@ -438,11 +513,12 @@ PDF export does not interpret warnings; UI handles presentation.
 
 1. Validation occurs **only** before state update or export.
 2. Renderer/Layout must never throw validation errors.
-3. UI performs overlap/bounds validation directly (`ui/util/StartOverlapValidation.kt`, called
-   from `AddComponentDialogs.kt`/`ComponentCarousel.kt`/`ShaftScreen.kt` and the per-kind
-   cards `TaperPagerCard.kt`/`ThreadPagerCard.kt`/`LinerPagerCard.kt`) in addition to string
-   formatting — this is a deliberate, documented exception (see the Purpose section and §3.1),
-   not a violation to fix.
+3. UI performs overlap/bounds validation directly (`ui/util/StartOverlapValidation.kt`,
+   `ui/util/CollisionWarnings.kt`, `ui/util/ComponentWarnings.kt` — called from
+   `AddComponentDialogs.kt`/`ComponentCarousel.kt`/`ShaftScreen.kt` and the per-kind cards
+   `BodyPagerCard.kt`/`TaperPagerCard.kt`/`ThreadPagerCard.kt`/`LinerPagerCard.kt`) in addition
+   to string formatting — this is a deliberate, documented exception (see the Purpose section
+   and §3.1), not a violation to fix.
 4. Warnings do not affect behavior, only UI hints.
 5. Blocking errors from `startOverlapErrorMm` prevent the Add dialog's Submit and PDF export
    (§6); they do not retroactively block edits made after a component already exists (§3.1).

@@ -44,9 +44,52 @@ private const val SANITY_MAX_COMPONENT_LENGTH_MM = 15_000f
  */
 private const val SANITY_MAX_DIA_MM = 1_000f
 
+/** Axial slop absorbing float round-trip noise in the shaft-span bounds comparison. */
+private const val BOUNDS_EPS_MM = 1e-3f
+
 private const val SHORT_SEGMENT_MSG = "Very short segment (< 1 mm)"
 private const val LENGTH_SANITY_MSG = "Length exceeds 15 m — check for a typo"
 private const val DIA_SANITY_MSG = "Diameter exceeds 1 m — check for a typo"
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Shaft-span bounds — ONE comparison behind two surfaces
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * True when the span [startMm] … [startMm] + [lengthMm] leaves the authored shaft span.
+ *
+ * This is the **only** implementation of that comparison. The add dialogs' pre-submit warning
+ * ([outsideShaftSpanMessage], reached through `collectAddWarnings`) and the carousel cards'
+ * past-OAL chip ([pastShaftEndMessage]) both read it, so the two surfaces cannot drift apart
+ * on what counts as outside.
+ *
+ * An `overallLengthMm` of 0 means "not typed yet", not "zero-length shaft" — there is no span
+ * to fall outside of, so the check stays silent until a length is authored.
+ *
+ * Advisory only. Oversize is a legal state (`docs/contracts/OverallLength.md`): nothing here
+ * clamps a stored value, blocks a commit, or gates export.
+ */
+fun outsideShaftSpan(spec: ShaftSpec, startMm: Float, lengthMm: Float): Boolean =
+    spec.overallLengthMm > 0f &&
+        (startMm < -BOUNDS_EPS_MM || startMm + lengthMm > spec.overallLengthMm + BOUNDS_EPS_MM)
+
+/** The overall length rendered the way both bounds messages print it. */
+private fun oalText(spec: ShaftSpec): String =
+    "%.3f".format(spec.overallLengthMm).trimEnd('0').trimEnd('.')
+
+/** Add-dialog phrasing of [outsideShaftSpan] — a component that is not placed yet. */
+fun outsideShaftSpanMessage(spec: ShaftSpec, startMm: Float, lengthMm: Float): String? =
+    if (outsideShaftSpan(spec, startMm, lengthMm)) "Falls outside shaft span (OAL ${oalText(spec)} mm)"
+    else null
+
+/**
+ * Carousel-card phrasing of [outsideShaftSpan] — a component that already exists and whose
+ * edit committed verbatim. The wording names the shaft END because that is what a card edit
+ * usually runs past; the comparison is the same one the dialog uses.
+ */
+fun pastShaftEndMessage(spec: ShaftSpec, startMm: Float, lengthMm: Float): String? =
+    if (outsideShaftSpan(spec, startMm, lengthMm)) "Extends past shaft length (OAL ${oalText(spec)} mm)"
+    else null
 
 /** True for a positive length at or below the short-segment threshold (0 excluded). */
 private fun isShortSegment(lengthMm: Float): Boolean =
@@ -72,21 +115,23 @@ private fun facesAbut(aStart: Float, aEnd: Float, bStart: Float, bEnd: Float): B
 
 /**
  * Advisory warnings for a stored [body]. Includes the very-short-segment check, the
- * implausible length/diameter sanity checks (§2.1), plus §3.2 Ø-discontinuity vs an
- * adjacent stored body.
+ * implausible length/diameter sanity checks (§2.1), the past-OAL bounds advisory, plus §3.2
+ * Ø-discontinuity vs an adjacent stored body.
  */
 fun bodyWarningMessages(spec: ShaftSpec, body: Body): List<String> {
     val out = mutableListOf<String>()
     if (isShortSegment(body.lengthMm)) out += SHORT_SEGMENT_MSG
     if (isImplausiblyLong(body.lengthMm)) out += LENGTH_SANITY_MSG
     if (isImplausiblyLargeDia(body.diaMm)) out += DIA_SANITY_MSG
+    pastShaftEndMessage(spec, body.startFromAftMm, body.lengthMm)?.let { out += it }
     if (hasAdjacentBodyStep(spec, body)) out += "Large Ø step vs adjacent body"
     return out
 }
 
 /**
- * Advisory warnings for a stored [taper]: the very-short-segment check plus the implausible
- * length/diameter sanity checks (§2.1), checked against the larger of SET/LET diameter.
+ * Advisory warnings for a stored [taper]: the very-short-segment check, the implausible
+ * length/diameter sanity checks (§2.1) — checked against the larger of SET/LET diameter — and
+ * the past-OAL bounds advisory.
  *
  * A taper-vs-body Ø mismatch advisory is intentionally not included: the mismatch is
  * already visible in the drawing itself, and the two storage paths (Add dialog vs carousel
@@ -98,33 +143,42 @@ fun taperWarningMessages(spec: ShaftSpec, taper: Taper): List<String> {
     if (isShortSegment(taper.lengthMm)) out += SHORT_SEGMENT_MSG
     if (isImplausiblyLong(taper.lengthMm)) out += LENGTH_SANITY_MSG
     if (isImplausiblyLargeDia(taper.maxDiaMm)) out += DIA_SANITY_MSG
+    pastShaftEndMessage(spec, taper.startFromAftMm, taper.lengthMm)?.let { out += it }
     return out
 }
 
 /**
  * Advisory warnings for a stored [liner]. Includes the very-short-segment check, the
- * implausible length/diameter sanity checks (§2.1), plus §3.5 liner OD below the diameter
- * of a body it overlaps.
+ * implausible length/diameter sanity checks (§2.1), the past-OAL bounds advisory, plus §3.5
+ * liner OD below the diameter of a body it overlaps.
  */
 fun linerWarningMessages(spec: ShaftSpec, liner: Liner): List<String> {
     val out = mutableListOf<String>()
     if (isShortSegment(liner.lengthMm)) out += SHORT_SEGMENT_MSG
     if (isImplausiblyLong(liner.lengthMm)) out += LENGTH_SANITY_MSG
     if (isImplausiblyLargeDia(liner.odMm)) out += DIA_SANITY_MSG
+    pastShaftEndMessage(spec, liner.startFromAftMm, liner.lengthMm)?.let { out += it }
     if (linerOdBelowUnderlyingBody(spec, liner)) out += "Liner OD smaller than shaft Ø beneath it"
     return out
 }
 
 /**
- * Advisory warnings for a [thread]: zero pitch, very short segment, or the implausible
- * length/major-diameter sanity checks (§2.1). No spec context needed.
+ * Advisory warnings for a [thread]: zero pitch, very short segment, the implausible
+ * length/major-diameter sanity checks (§2.1), and the past-OAL bounds advisory.
+ *
+ * An **excluded** thread (`excludeFromOAL`) is skipped by the bounds advisory: it sits outside
+ * the shaft envelope by design, at a negative or past-OAL start the resolve layer derives, so
+ * flagging it would fire on every correctly authored one.
  */
-fun threadWarningMessages(thread: Threads): List<String> {
+fun threadWarningMessages(spec: ShaftSpec, thread: Threads): List<String> {
     val out = mutableListOf<String>()
     if (thread.pitchMm == 0f) out += "Zero pitch — thread renders flat"
     if (isShortSegment(thread.lengthMm)) out += SHORT_SEGMENT_MSG
     if (isImplausiblyLong(thread.lengthMm)) out += LENGTH_SANITY_MSG
     if (isImplausiblyLargeDia(thread.majorDiaMm)) out += DIA_SANITY_MSG
+    if (!thread.excludeFromOAL) {
+        pastShaftEndMessage(spec, thread.startFromAftMm, thread.lengthMm)?.let { out += it }
+    }
     return out
 }
 
@@ -159,7 +213,13 @@ private fun linerOdBelowUnderlyingBody(spec: ShaftSpec, liner: Liner): Boolean {
 
 /**
  * Whole-spec advisory warnings (§4.3): a count of tiny segments (length in
- * (0, [SHORT_SEGMENT_MM]] mm) across bodies, tapers, liners, and non-excluded threads.
+ * (0, [SHORT_SEGMENT_MM]] mm) and a count of components running past the authored overall
+ * length, both across bodies, tapers, liners, and non-excluded threads.
+ *
+ * The past-OAL line qualifies for the banner because it names a problem the user can act on —
+ * either the component or the overall length is wrong — and because the offending card can be
+ * several swipes away in the carousel, so its own chip may not be on screen. It stays advisory:
+ * the state is legal, commits verbatim, and never blocks export.
  *
  * **Every message here must be a PROBLEM the user can act on.** The banner that surfaces these
  * is styled as an advisory, so anything routed through it reads as something being wrong; a line
@@ -175,6 +235,9 @@ fun specWarningMessages(spec: ShaftSpec): List<String> {
     val out = mutableListOf<String>()
     val tiny = countTinySegments(spec)
     if (tiny > 0) out += "$tiny segments shorter than 1 mm"
+    val past = countPastShaftEnd(spec)
+    if (past == 1) out += "1 component extends past shaft length"
+    else if (past > 1) out += "$past components extend past shaft length"
     return out
 }
 
@@ -185,5 +248,22 @@ private fun countTinySegments(spec: ShaftSpec): Int {
     spec.tapers.forEach { if (isShortSegment(it.lengthMm)) n++ }
     spec.liners.forEach { if (isShortSegment(it.lengthMm)) n++ }
     spec.threads.forEach { if (!it.excludeFromOAL && isShortSegment(it.lengthMm)) n++ }
+    return n
+}
+
+/**
+ * Count of stored components whose span leaves the authored shaft span ([outsideShaftSpan]).
+ * Excluded threads are skipped — they live outside the envelope by design. Reference features
+ * (coupler bolt slots, wear/runout marks, undercuts) are not components here and never count.
+ */
+private fun countPastShaftEnd(spec: ShaftSpec): Int {
+    if (spec.overallLengthMm <= 0f) return 0
+    var n = 0
+    spec.bodies.forEach { if (outsideShaftSpan(spec, it.startFromAftMm, it.lengthMm)) n++ }
+    spec.tapers.forEach { if (outsideShaftSpan(spec, it.startFromAftMm, it.lengthMm)) n++ }
+    spec.liners.forEach { if (outsideShaftSpan(spec, it.startFromAftMm, it.lengthMm)) n++ }
+    spec.threads.forEach {
+        if (!it.excludeFromOAL && outsideShaftSpan(spec, it.startFromAftMm, it.lengthMm)) n++
+    }
     return n
 }

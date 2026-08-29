@@ -26,10 +26,10 @@ Version: v1.0 (2026-08-04)
 
 ### The severity ladder: error → caution → neutral
 
-The app runs a **three-rung** severity ladder in chrome, most visibly on the Free-to-End badge
-(`ShaftPreviewPanel`): `errorContainer` when oversized → `tertiaryContainer` when snug →
-`surface` when fine. Per-card component warnings (`ComponentCarousel`) and the spec-level banner
-(`SpecWarningBanner`) use the same caution rung, and errors on a card use `errorContainer`.
+The app runs a **three-rung** severity ladder in chrome — `errorContainer` for an error →
+`tertiaryContainer` for a caution → `surface` when fine — most visibly on the per-card component
+warnings (`ComponentCarousel`) and the spec-level banner (`SpecWarningBanner`), which share the
+caution rung; errors on a card use `errorContainer`.
 
 `tertiaryContainer`/`onTertiaryContainer` therefore mean **caution**, and every scheme assigns
 them (`Color.kt` → `WarnAmber*`; the high-contrast schemes reuse their own `HcBronze*` accent,
