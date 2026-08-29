@@ -67,7 +67,11 @@ pure `unshadedBodyRunIds`/`unshadedTaperIds`/`unshadedLinerIds`
 (`ui/resolved/ResolvedComponent.kt`) and threaded as id sets into the fill passes, which now
 always receive a paint; the consolidated sheet's in-profile-values liner lock and the
 wear/undercut documents' one-fill-per-kind `SimpleShaftProfile` boundary both stand above the
-per-component flag), **"Show name on drawing"** (`showNameOnDrawing`, all four explicit component cards —
+per-component flag. The EDITOR PREVIEW BOX mirrors the same effective decision — the positive
+complement `shadedComponentIds` rides `RenderOptions.shadedComponentIds` as an
+onSurface-tinted overlay on the preview fills (a print-decision marker, not print fidelity;
+on-device report: a checked Shade toggle changed nothing in the preview box), so the box and
+the composers can never disagree about what shades), **"Show name on drawing"** (`showNameOnDrawing`, all four explicit component cards —
 TRI-STATE per-component gate on the schematic's name label: unset follows the global
 `showComponentTitles` pref, an explicit ON prints even with that pref off, an explicit OFF
 hides even with it on — the pref is the default, never a master gate over an authored

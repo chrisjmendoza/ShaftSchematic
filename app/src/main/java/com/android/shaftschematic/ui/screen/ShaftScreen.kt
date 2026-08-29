@@ -173,6 +173,8 @@ fun ShaftScreen(
     previewThreadHatch: PreviewColorSetting,
     previewBlackWhiteOnly: Boolean,
     lineThicknessScale: Float = 1.0f,
+    /** PDF-shade mirror for the preview box — components the PDF will print shaded. */
+    shadedComponentIds: Set<String> = emptySet(),
 
     sessionAddDefaults: SessionAddDefaults,
 
@@ -484,6 +486,7 @@ fun ShaftScreen(
                 previewThreadHatch = previewThreadHatch,
                 previewBlackWhiteOnly = previewBlackWhiteOnly,
                 lineThicknessScale = lineThicknessScale,
+                shadedComponentIds = shadedComponentIds,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = 200.dp)

@@ -113,6 +113,12 @@ fun ShaftDrawing(
     previewThreadFill: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT),
     previewThreadHatch: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.STEEL),
     lineThicknessScale: Float = 1.0f,
+    /**
+     * PDF-shade mirror: the components the PDF will print shaded (the composers' effective
+     * decision, `shadedComponentIds` in `ui/resolved/ResolvedComponent.kt`). Overlaid on the
+     * preview fills so the box answers "what prints shaded" live; empty draws as before.
+     */
+    shadedComponentIds: Set<String> = emptySet(),
     // Highlight bridge (safe defaults)
     highlightEnabled: Boolean = false,
     highlightId: Any? = null,
@@ -143,11 +149,17 @@ fun ShaftDrawing(
     // RenderOptions (keep most defaults; set only what we actively control here)
     // NOTE: legacy color fields in RenderOptions are ARGB Ints → use toArgb().
     //       highlight colors are Color → pass Color directly.
+    // The shade marker must read on both themes: onSurface at low alpha darkens a light
+    // canvas and lightens a dark one — a print-decision marker, not print fidelity.
+    val shadeOverlayColor =
+        (if (blackWhiteOnly) Color.Black else previewScheme.onSurface).copy(alpha = 0.16f)
+
     val options = remember(
         unit, lineThicknessScale, outlineColor,
         bodyFill, previewBodyFill, linerFill, previewLinerFill,
         taperFill, previewTaperFill, threadFill, previewThreadFill, threadHatch,
         highlightEnabled, highlightId, themeGlow,
+        shadedComponentIds, shadeOverlayColor,
     ) { RenderOptions(
         // Visual tuning
         paddingPx = 16,
@@ -160,6 +172,10 @@ fun ShaftDrawing(
         // Threads (legacy hatch look)
         threadFillColor = threadFill.copy(alpha = fillAlpha(previewThreadFill.preset, fallback = 0.10f)).toArgb(),
         threadHatchColor = threadHatch.toArgb(),
+
+        // PDF-shade mirror
+        shadedComponentIds = shadedComponentIds,
+        shadeOverlayColor = shadeOverlayColor.toArgb(),
 
         // Highlight preset (obvious: colored glow)
         highlightEnabled = highlightEnabled,

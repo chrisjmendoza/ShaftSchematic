@@ -148,6 +148,10 @@ object ShaftRenderer {
         val linerFill    = Color(opts.linerFillColor)
         val threadFill   = Color(opts.threadFillColor)
         val flankColor   = Color(opts.threadHatchColor)
+        // PDF-shade mirror: components the PDF will print shaded get this overlay on top of
+        // their normal preview fill, so the box answers "what prints shaded" live.
+        val shadedIds    = opts.shadedComponentIds
+        val shadeOverlay = Color(opts.shadeOverlayColor)
 
         // ───────── Highlight (resolved; no-ops if disabled) ─────────
         val hiEnabled  = opts.highlightEnabled
@@ -181,6 +185,7 @@ object ShaftRenderer {
                 )
 
                 drawPath(path, color = bodyFill)
+                if (b.id in shadedIds) drawPath(path, color = shadeOverlay)
 
                 // Highlight under-stroke
                 if (isHighlighted(hiEnabled, hiId, b.id)) {
@@ -218,6 +223,7 @@ object ShaftRenderer {
             val topLeft = Offset(x0, top)
 
             drawRect(color = bodyFill, topLeft = topLeft, size = size)
+            if (b.id in shadedIds) drawRect(color = shadeOverlay, topLeft = topLeft, size = size)
 
             // Highlight under-stroke
             if (isHighlighted(hiEnabled, hiId, b.id)) {
@@ -271,6 +277,7 @@ object ShaftRenderer {
                 }
 
                 drawPath(path, color = taperFill)
+                if (t.id in shadedIds) drawPath(path, color = shadeOverlay)
 
                 // Highlight under-stroke
                 if (isHighlighted(hiEnabled, hiId, t.id)) {
@@ -311,6 +318,7 @@ object ShaftRenderer {
             }
 
             drawPath(path, color = taperFill)
+            if (t.id in shadedIds) drawPath(path, color = shadeOverlay)
 
             // Highlight under-stroke
             if (isHighlighted(hiEnabled, hiId, t.id)) {
@@ -464,6 +472,7 @@ object ShaftRenderer {
             val fwdSpec = spec(LinerAuthoredReference.FWD)
             if (aftSpec == null && fwdSpec == null) {
                 drawRect(color = linerFill, topLeft = topLeft, size = size)
+                if (storedId in shadedIds) drawRect(color = shadeOverlay, topLeft = topLeft, size = size)
                 if (isHighlighted(hiEnabled, hiId, storedId)) {
                     drawHighlightStrokeRect(
                         topLeft = topLeft,
@@ -484,6 +493,7 @@ object ShaftRenderer {
                 close()
             }
             drawPath(path, color = linerFill)
+            if (storedId in shadedIds) drawPath(path, color = shadeOverlay)
             if (isHighlighted(hiEnabled, hiId, storedId)) {
                 drawHighlightStrokeRect(
                     topLeft = topLeft,

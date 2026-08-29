@@ -8,6 +8,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-29
 
+### feat(ui): the editor preview box mirrors the shade decision
+
+Same-day follow-up to the per-component shading below (on-device report: "the shading does
+not appear in the preview box for the new toggle — it does work in the pdf preview"). The
+editor's preview canvas draws its own theme-styled fills and had never heard of PDF shading.
+It now overlays the SAME effective decision the composers make — the positive complement
+`shadedComponentIds` (pure, `ui/resolved/ResolvedComponent.kt`) threads through
+`RenderOptions.shadedComponentIds` and each fill pass paints an onSurface-tinted overlay
+(16% alpha — visible on light and dark canvases; a print-decision marker, not print
+fidelity) over every component that will print shaded. Ticking "Shade on drawing" on a card
+now colors that section in the preview box immediately, and the kind checkboxes show there
+too. An empty set draws exactly as before, so nothing changes until something shades.
+
 ### feat(pdf): per-component "Shade on drawing" — tri-state, on the explicit cards
 
 On-device request: shade one component — a named "SKF" body — without switching shading on

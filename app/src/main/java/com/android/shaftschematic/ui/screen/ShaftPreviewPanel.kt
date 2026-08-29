@@ -63,6 +63,8 @@ internal fun PreviewCard(
     previewThreadHatch: PreviewColorSetting,
     previewBlackWhiteOnly: Boolean,
     lineThicknessScale: Float = 1.0f,
+    /** PDF-shade mirror: components the PDF will print shaded — see [ShaftDrawing]. */
+    shadedComponentIds: Set<String> = emptySet(),
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -85,6 +87,7 @@ internal fun PreviewCard(
                 previewThreadFill = previewThreadFill,
                 previewThreadHatch = previewThreadHatch,
                 lineThicknessScale = lineThicknessScale,
+                shadedComponentIds = shadedComponentIds,
                 highlightEnabled = highlightEnabled && (highlightId != null),
                 highlightId = highlightId,
                 onTapComponentId = onTapComponentId,

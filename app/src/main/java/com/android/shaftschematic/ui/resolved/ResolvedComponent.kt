@@ -397,6 +397,34 @@ fun unshadedTaperIds(spec: ShaftSpec, shadedTapers: Boolean): Set<String> =
 fun unshadedLinerIds(spec: ShaftSpec, shadedLiners: Boolean): Set<String> =
     spec.liners.filterNot { it.shadeOnDrawing ?: shadedLiners }.map { it.id }.toSet()
 
+/**
+ * The components a sheet will print SHADED — the positive complement of
+ * [unshadedBodyRunIds]/[unshadedTaperIds]/[unshadedLinerIds] over the ids a sheet actually
+ * draws (resolved body runs, stored tapers/liners). The editor preview's PDF-shade mirror
+ * consumes this, so the preview box and the composers can never disagree about what shades.
+ * (The consolidated sheet's in-profile-values liner lock is per-SHEET and deliberately not
+ * folded in here — the mirror answers for the schematic.)
+ */
+fun shadedComponentIds(
+    spec: ShaftSpec,
+    resolved: List<ResolvedComponent>?,
+    shadedBodies: Boolean,
+    shadedTapers: Boolean,
+    shadedLiners: Boolean,
+    shadeExplicitBodiesOnly: Boolean,
+): Set<String> {
+    val bodyIds = resolved?.filterIsInstance<ResolvedBody>()?.map { it.id }
+        ?: spec.bodies.map { it.id }
+    val unshadedBodies = unshadedBodyRunIds(spec, resolved, shadedBodies, shadeExplicitBodiesOnly)
+    val unshadedTapers = unshadedTaperIds(spec, shadedTapers)
+    val unshadedLiners = unshadedLinerIds(spec, shadedLiners)
+    return buildSet {
+        bodyIds.filterNotTo(this) { it in unshadedBodies }
+        spec.tapers.mapNotNullTo(this) { t -> t.id.takeUnless { it in unshadedTapers } }
+        spec.liners.mapNotNullTo(this) { ln -> ln.id.takeUnless { it in unshadedLiners } }
+    }
+}
+
 private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>): List<ResolvedComponent> {
     if (components.isEmpty()) return components
 
