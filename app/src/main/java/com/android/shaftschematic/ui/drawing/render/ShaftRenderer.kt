@@ -755,7 +755,6 @@ private fun DrawScope.drawKeywaySlot(
         minWidthPx = MIN_KEYWAY_WIDTH_PX,
         strokeWidthPx = outlineW,
     )
-    val yScale   = if (halfW > 0f) halfH / halfW else 1f
     val offsetPx = offsetMm * L.pxPerMm
     val isOpen   = offsetMm < 0.01f
     val kwLenPx  = maxOf(lengthMm * L.pxPerMm, minKeywaySlotLenPx(halfW, isOpen))
@@ -763,10 +762,11 @@ private fun DrawScope.drawKeywaySlot(
     val kwLetX   = kwSetX + dir * kwLenPx
 
     // Spooned (open keyways only): keep the normal keyway (full-length walls + mill semicircle) and
-    // ADD an enlarged circle around the closed (LET) end — the mill end stays as an inner reference
-    // line inside the bowl. Floating keyways ignore the flag.
-    val bowl = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(kwLetX, dir, halfW) else null
-    val bowlRy = (bowl?.radius ?: 0f) * yScale
+    // ADD an enlarged bowl around the closed (LET) end — the mill end stays as an inner reference
+    // line inside the bowl. The bowl's y-semi comes from the shared math (uniform drawn
+    // clearance), matching the PDF site. Floating keyways ignore the flag.
+    val bowl = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(kwLetX, dir, halfW, halfH) else null
+    val bowlRy = bowl?.ry ?: 0f
 
     // Arc center is halfW inward from the LET face (concave mill-cut profile).
     val letArcCx    = kwLetX - dir * halfW

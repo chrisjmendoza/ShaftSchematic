@@ -480,6 +480,23 @@ class WearRecordPersistenceTest {
         // Compact strips is additive + defaulted: a file written before it existed keeps the
         // historical stretched strips.
         assertFalse(decoded.wearRecord.compactStrips)
+        // Strip size, same posture: an untouched file draws at the page's own row height.
+        assertEquals(1f, decoded.wearRecord.stripSizeFrac, 1e-6f)
+    }
+
+    @Test
+    fun `the strip-size multiplier round trips through the envelope`() {
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(stripSizeFrac = 1.4f),
+        )
+
+        val raw = ShaftDocCodec.encodeV1(doc)
+        assertTrue("expected stripSizeFrac key in JSON", raw.contains("\"stripSizeFrac\""))
+
+        val decoded = ShaftDocCodec.decode(raw)
+        assertEquals(ShaftDocCodec.Format.ENVELOPE_V1, decoded.format)
+        assertEquals(1.4f, decoded.wearRecord.stripSizeFrac, 1e-6f)
     }
 
     @Test

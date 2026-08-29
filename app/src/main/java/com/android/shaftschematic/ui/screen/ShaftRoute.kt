@@ -41,6 +41,7 @@ import com.android.shaftschematic.ui.viewmodel.updateBody
 import com.android.shaftschematic.ui.viewmodel.updateBodyBlend
 import com.android.shaftschematic.ui.viewmodel.updateBodyKeyway
 import com.android.shaftschematic.ui.viewmodel.updateBodyLabel
+import com.android.shaftschematic.ui.viewmodel.updateBodyCompressOnDrawing
 import com.android.shaftschematic.ui.viewmodel.updateBodyShowDia
 import com.android.shaftschematic.ui.viewmodel.updateBodyShowLabel
 import com.android.shaftschematic.ui.viewmodel.updateCouplerBoltSlot
@@ -164,6 +165,7 @@ fun ShaftRoute(
     val showRenderOalMarkers by vm.showRenderOalMarkers.collectAsState()
     val showDimDebugOverlay by vm.showDimDebugOverlay.collectAsState()
     val pdfTieringMode by vm.pdfTieringMode.collectAsState()
+    val pdfShowComponentTitles by vm.pdfShowComponentTitles.collectAsState()
 
     val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
     val editorResetNonce by vm.editorResetNonce.collectAsState()
@@ -225,6 +227,7 @@ fun ShaftRoute(
         showRenderOalMarkers = showRenderOalMarkers,
         showDimDebugOverlay = showDimDebugOverlay,
         pdfTieringMode = pdfTieringMode,
+        componentTitlesDefault = pdfShowComponentTitles,
         showComponentArrows = showComponentArrows,
         componentArrowWidthDp = componentArrowWidthDp,
         showHighlightSelection = showHighlightSelection,
@@ -275,6 +278,7 @@ fun ShaftRoute(
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateBodyShowDia = { i, show    -> vm.updateBodyShowDia(i, show) },
         onUpdateBodyShowLabel = { i, show  -> vm.updateBodyShowLabel(i, show) },
+        onUpdateBodyCompressOnDrawing = { i, on -> vm.updateBodyCompressOnDrawing(i, on) },
         onUpdateBodyBlend = { i, aft, fwd, p, sAft, sFwd -> vm.updateBodyBlend(i, aft, fwd, p, sAft, sFwd) },
         onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label) },
         onUpdateBodyKeyway = { i, w, d, l, offset, end, spooned -> vm.updateBodyKeyway(i, w, d, l, offset, end, spooned) },

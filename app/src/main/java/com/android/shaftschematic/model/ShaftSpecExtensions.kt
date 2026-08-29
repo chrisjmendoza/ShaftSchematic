@@ -334,6 +334,23 @@ internal fun carryBodyKeyway(from: Body, to: Body): Body {
 }
 
 /**
+ * Carries [from]'s **draw-only** decisions — name, Ø/name visibility, and the compression
+ * opt-out — onto [to] (a fragment/merge/expansion of the same physical material). Nothing
+ * here is geometry, so unlike the keyway there is no fit test: every piece of one authored
+ * body prints the way that body was authored to print.
+ *
+ * The one-sided expansions in [mergeBodiesAround] already `copy()` the source and so keep
+ * these implicitly; the fragment and two-sided-merge paths build a fresh [Body] and need
+ * this. A merge takes the AFT fragment's values — aft is authored first.
+ */
+internal fun carryBodyDisplay(from: Body, to: Body): Body = to.copy(
+    label = from.label,
+    showDiaOnDrawing = from.showDiaOnDrawing,
+    showLabelOnDrawing = from.showLabelOnDrawing,
+    compressOnDrawing = from.compressOnDrawing,
+)
+
+/**
  * Splits any body whose axial span overlaps [compStart, compEnd] into up to two
  * fragments, one on each side of the component.  Call this before inserting a new
  * taper / liner / thread so the carousel reflects independent body sections.
@@ -373,7 +390,10 @@ fun ShaftSpec.splitBodiesAround(
             addedIds  += id
             newBodies += carryBodyKeyway(
                 from = body,
-                to = Body(id = id, startFromAftMm = bodyStart, lengthMm = compStart - bodyStart, diaMm = body.diaMm)
+                to = carryBodyDisplay(
+                    body,
+                    Body(id = id, startFromAftMm = bodyStart, lengthMm = compStart - bodyStart, diaMm = body.diaMm),
+                )
             )
         }
         // Right fragment: from where the component ends to body end
@@ -382,7 +402,10 @@ fun ShaftSpec.splitBodiesAround(
             addedIds  += id
             newBodies += carryBodyKeyway(
                 from = body,
-                to = Body(id = id, startFromAftMm = compEnd, lengthMm = bodyEnd - compEnd, diaMm = body.diaMm)
+                to = carryBodyDisplay(
+                    body,
+                    Body(id = id, startFromAftMm = compEnd, lengthMm = bodyEnd - compEnd, diaMm = body.diaMm),
+                )
             )
         }
     }
@@ -449,11 +472,16 @@ fun ShaftSpec.mergeBodiesAround(
         removedIds += listOf(bodyA.id, bodyB.id)
         val id = genId()
         addedIds += id
-        var merged = Body(
-            id             = id,
-            startFromAftMm = bodyA.startFromAftMm,
-            lengthMm       = (bodyB.startFromAftMm + bodyB.lengthMm) - bodyA.startFromAftMm,
-            diaMm          = bodyA.diaMm,   // == bodyB.diaMm, guaranteed by the guard above
+        // Draw-only decisions come from A: aft is authored first, so its name and its
+        // visibility/compression flags are the ones the user set on the original body.
+        var merged = carryBodyDisplay(
+            bodyA,
+            Body(
+                id             = id,
+                startFromAftMm = bodyA.startFromAftMm,
+                lengthMm       = (bodyB.startFromAftMm + bodyB.lengthMm) - bodyA.startFromAftMm,
+                diaMm          = bodyA.diaMm,   // == bodyB.diaMm, guaranteed by the guard above
+            ),
         )
         // A merged body has one keyway slot; prefer A's, fall back to B's.
         merged = carryBodyKeyway(bodyA, merged)

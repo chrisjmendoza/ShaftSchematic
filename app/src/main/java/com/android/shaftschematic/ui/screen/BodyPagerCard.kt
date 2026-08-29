@@ -50,7 +50,9 @@ import com.android.shaftschematic.util.UnitSystem
  * it; an explicit body shows the editable Start/Length/Ø, the blend/seal faces, and the keyway
  * section. Every control here that changes geometry, position, or a value is mirrored in
  * `AddBodyDialog` by the add-dialog-parity invariant; "Show Ø on drawing", "Show name on
- * drawing", and the "Prints in: in | mm" chip are the documented card-only carve-outs.
+ * drawing", "Compress on drawing", and the "Prints in: in | mm" chip are the documented
+ * card-only carve-outs — each changes only how an already-drawn body prints and is reached
+ * for after looking at a printed sheet, and this one's default is set at creation.
  *
  * [f1] and [startValidator] are supplied by [ComponentPagerCard] because the thread card shares
  * them; [startValidator] closes over the spec and document unit that validate an overlap.
@@ -64,6 +66,7 @@ internal fun BodyPagerCard(
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
+    componentTitlesDefault: Boolean = true,
     bodyTitleById: Map<String, String>,
     f1: (Float) -> String,
     startValidator: (String, ComponentKind, Float) -> (String) -> String?,
@@ -74,6 +77,7 @@ internal fun BodyPagerCard(
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
+    onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
@@ -297,9 +301,19 @@ internal fun BodyPagerCard(
         )
         ShowDiaToggleRow(
             label = "Show name on drawing",
-            checked = b.showLabelOnDrawing,
+            checked = b.showLabelOnDrawing ?: componentTitlesDefault,
             testTag = "body_show_label_toggle",
             onCheckedChange = { onUpdateBodyShowLabel(idx, it) },
+        )
+        // Off by default on a newly authored body: a named section reads at TRUE
+        // proportion. Ticking it lets this body foreshorten and carry the S-break again —
+        // the escape hatch for a body long enough that pinning it starves the drawn height
+        // of the rest of the shaft.
+        ShowDiaToggleRow(
+            label = "Compress on drawing",
+            checked = b.compressOnDrawing,
+            testTag = "body_compress_toggle",
+            onCheckedChange = { onUpdateBodyCompressOnDrawing(idx, it) },
         )
 
         // Blend — a machined smooth transition into whatever the face steps to.

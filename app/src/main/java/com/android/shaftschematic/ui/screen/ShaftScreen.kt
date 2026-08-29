@@ -156,6 +156,8 @@ fun ShaftScreen(
     showRenderOalMarkers: Boolean,
     showDimDebugOverlay: Boolean = false,
     pdfTieringMode: PdfTieringMode = PdfTieringMode.AUTO,
+    /** The Settings "Show component titles" switch — the default a card's unset name toggle follows. */
+    componentTitlesDefault: Boolean = true,
     showComponentArrows: Boolean,
     componentArrowWidthDp: Int,
     showHighlightSelection: Boolean = true,
@@ -217,6 +219,7 @@ fun ShaftScreen(
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
+    onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
@@ -707,6 +710,7 @@ fun ShaftScreen(
                     showEdgeArrows = showComponentArrows,
                     edgeArrowWidthDp = componentArrowWidthDp,
                     showComponentDebugLabels = showComponentDebugLabels,
+                    componentTitlesDefault = componentTitlesDefault,
                     selectedComponentId = selectedComponentId,
                     // Auto-body promotion adds a plain body; keyways and blends are added
                     // later via the promoted card's own fields.
@@ -722,6 +726,7 @@ fun ShaftScreen(
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
                     onUpdateBodyShowLabel = onUpdateBodyShowLabel,
+                    onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
                     onUpdateBodyBlend = onUpdateBodyBlend,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,

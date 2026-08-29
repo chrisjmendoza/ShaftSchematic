@@ -570,7 +570,8 @@ fun WearRoute(
             optionsSheet = {
                 // The sheet tunes the drawing being looked at (on-device request): the same
                 // blank-draft switch as the tab body (ONE state, so the two always agree) and
-                // the wear block — contents, trace depth, wear-area shade, taper–liner join.
+                // the wear block — contents, strip size, trace depth, wear-area shade,
+                // taper–liner join.
                 RunoutWearOptionsSheet(
                     dualUnits = dualUnits,
                     onDualUnitsChange = { vm.setDualUnits(it) },
@@ -594,6 +595,7 @@ fun WearRoute(
                     wearStripDefaultIds = stripDefaultIds,
                     wearShowShaftProfile = wearRecord.showShaftProfile,
                     wearCompactStrips = wearRecord.compactStrips,
+                    wearStripSizeFrac = wearRecord.stripSizeFrac,
                 )
             },
             // The sheet reshapes this page, so it must not cover it: a full-screen sheet hid

@@ -39,15 +39,21 @@ the S.E.T. `buildLinerSpans` always emitted the SET→near-edge datum span; at o
 there is nothing to dimension, so the span is now skipped (both anchors, forced references
 included). `LinerSpanBuilderTest` pins it.
 
-### feat(pdf): per-component "Show name on drawing" toggles
+### feat(pdf): per-component "Show name on drawing" toggles (tri-state)
 
 The schematic's component-name labels were all-or-nothing (`PdfPrefs.showComponentTitles`).
-Every explicit Body/Taper/Thread/Liner now carries `showLabelOnDrawing` (default true — the
-golden default keeps existing documents printing identically), gated per entry in the label
-pass and AND-composed with the global switch, the `showDiaOnDrawing` shape exactly. Card-only
-toggles (the post-hoc display-toggle carve-out), testTags `*_show_label_toggle`. The label
-pass's entry building moved to a pure `componentLabelSpans` so the filter is testable; hiding
-a label never renumbers the positional fallback names of the others.
+Every explicit Body/Taper/Thread/Liner now carries `showLabelOnDrawing` — **tri-state**:
+unset (the default, and what every pre-flag document decodes to) follows the global Settings
+switch, so untouched documents print exactly as their setting says; an explicit ON prints
+that one name even with the global switch off; an explicit OFF hides it even with the switch
+on. The first cut AND-composed the card flag under the global switch, which made a freshly
+checked toggle print nothing on a device whose global titles switch was off (on-device
+report, same day) — the global is now the flags' DEFAULT, not a master gate; only template
+mode still drops the pass whole. The card toggle displays the resolved state (its flag, else
+the global). Card-only toggles (the post-hoc display-toggle carve-out), testTags
+`*_show_label_toggle`. The label pass's entry building moved to a pure `componentLabelSpans`
+so the rule is testable; hiding a label never renumbers the positional fallback names of the
+others.
 
 ### feat(ui): card titles show their rename affordance
 
@@ -90,6 +96,76 @@ the schematic export included it — two mates on one job overwrote each other's
 now joins the base name exactly as the schematic does (omitted when unset; no-position output
 byte-identical to before). The Wear and Undercut routes' private copies of the builder were
 deleted in favor of the one in `OutputDoc`.
+
+### fix(pdf): the spoon bowl tightens — uniform drawn clearance on both axes
+
+On-device report: on a compressed sheet the spooned keyway's bowl drew tall — "the distance
+from the keyway arch to the keyway horizontally is good, let's get the vertical to be
+similar." The bowl was a shaft-space circle stretched by the sheet's scale ratio, so its
+clearance rode each axis's own scale: the horizontal gap took the (small) axial scale while
+the vertical gap took the (large) diameter scale. The bowl's two semi-axes are now
+independent in `keywaySpoonBowl` itself: x stays `SPOON_BOWL_WIDTH_RATIO × halfW`, and the
+y-semi (`KeywaySpoonBowl.ry`) is the slot's drawn half-height plus the bowl's axial poke past
+the LET tip — one clearance number all around. The wall-tangent angle derives from
+`halfH / ry` on the drawn ellipse, so the bowl still meets the slot walls exactly; both draw
+sites (canvas + PDF) and the Help figure take `ry` from the one pure function. On an
+uncompressed drawing the bowl barely changes (2.2× vs 2.4× the width tall); the tightening
+bites exactly where the scales diverge.
+
+### feat(pdf): explicit bodies opt out of compression — "Compress on drawing" checkbox
+
+On-device report: a newly authored explicit body (a named 12″ section) printed with an
+S-break like any body run. Explicit bodies now carry `Body.compressOnDrawing`: when false,
+the body's whole stored span is pinned at TRUE scale through the same mechanism as keyway
+windows (`compressOptOutBodySpans`, contributed inside the one `profileFeatureSpans` builder
+so the schematic, the runout/consolidated sheet, and the height-slider estimator all agree)
+and its S-break is suppressed — the 220 pt long-span trigger included. The drawn height
+yields to the pin, so the card's "Compress on drawing" checkbox (explicit cards only, the
+fifth card-only carve-out) re-enables compression for a body big enough to need its break.
+**New explicit bodies are created opted-out** (Add dialog and auto-body promotion alike);
+the serialization default keeps compression ON, so bodies in already-saved documents render
+exactly as before until their checkbox is unticked — flipping a saved long-shaft body to
+pinned-true silently could make that sheet unrenderable.
+
+### fix(model): body split/merge fragments keep their display choices
+
+Pre-existing drop surfaced by the work above: `splitBodiesAround`/`mergeBodiesAround`
+constructed fragments fresh and discarded `label`, "Show Ø", and "Show name" (only the keyway
+was carried), so adding a liner over a named body silently reset its authored display
+choices. Fragments now carry all of them plus `compressOnDrawing` (`carryBodyDisplay`; a
+merge takes the AFT fragment's values — aft is authored first).
+
+### fix(pdf): a checked "Show name" toggle prints under a global titles switch turned off
+
+Same-day on-device follow-up to the label toggles below: the per-component flag was
+AND-composed under Settings → "Show component titles in PDF", so on a device with that switch
+off the new card toggle silently did nothing. The flag is now tri-state — see the revised
+entry below.
+
+### fix(pdf): a lone wear strip stops filling the page — and gets a "Strip size" slider
+
+On-device report: with the shaft profile hidden, a single detail strip drew across the entire
+wear page (the single-column path's height cap lifted entirely, and a lone strip's drawn
+radius fills whatever band it gets). Both layout paths now take their per-row ceiling from ONE
+rule, `wearRowHeightCapPt`: with the profile shown the flat cap holds as before; with it
+hidden a multi-row page keeps owning the band (capping those rows stranded half the page —
+the earlier on-device report), and a LONE row now caps at the height a traditional full
+3-row page would give it. The single-column path gains the packed path's lift, so the
+reclaimed height lands as bottom margin rather than a white hole under the header.
+
+The cap is scaled by a new per-job **"Strip size"** slider (50–200%, default 100% = the
+traditional size) in the wear preview's options sheet, right after the component election —
+commit-on-release like the sheet's other controls (`WearRecord.stripSizeFrac`, additive,
+display-only; a document that never touches it prints identically at every path the cap
+doesn't newly bite).
+
+### fix(ui): the card's delete button sits in the title row
+
+On-device report: the trash icon floated transparently over the carousel card's content —
+it was overlaid on the card's top-end corner while the content scrolled beneath it, so on a
+scrolled card it sat on top of whatever field happened to be there. It now lives in the
+title row and scrolls with the card. The shared `EditableCardTitle` drops its end-padding
+workaround (nothing floats over the trailing edge any more).
 
 ### fix(ui): the OAL field keeps a typed fraction
 

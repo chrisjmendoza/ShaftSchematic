@@ -64,6 +64,7 @@ internal fun TaperPagerCard(
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
+    componentTitlesDefault: Boolean = true,
     taperTitleById: Map<String, String>,
     f1: (Float) -> String,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -300,7 +301,7 @@ internal fun TaperPagerCard(
 
         ShowDiaToggleRow(
             label = "Show name on drawing",
-            checked = t.showLabelOnDrawing,
+            checked = t.showLabelOnDrawing ?: componentTitlesDefault,
             testTag = "taper_show_label_toggle",
             onCheckedChange = { onUpdateTaperShowLabel(idx, it) },
         )

@@ -11,9 +11,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The resolved→drawable mapping must carry each body's authored Ø-callout visibility, keyed
- * off the BASE id: a body split by a liner or taper draws as several fragments
- * (`"<id>#2"`, …), and hiding the body has to hide every one of them.
+ * The resolved→drawable mapping must carry each body's authored Ø-callout visibility and its
+ * compression opt-out, both keyed off the BASE id: a body split by a liner or taper draws as
+ * several fragments (`"<id>#2"`, …), and a decision made on the card has to reach every one
+ * of them — the body pass reads the flag off the run it is drawing.
  */
 class BodyForPdfVisibilityTest {
 
@@ -81,6 +82,35 @@ class BodyForPdfVisibilityTest {
     @Test
     fun `a resolved id with no stored match follows the hidden-by-default posture`() {
         assertFalse(ShaftSpec().bodyForPdf(resolved("gone", 0f, 100f)).showDiaOnDrawing)
+    }
+
+    // ── The compression opt-out rides the same lookup ─────────────────────────
+
+    @Test
+    fun `every fragment of an opted-out body keeps the opt-out`() {
+        val spec = ShaftSpec(bodies = listOf(Body(id = "b1", compressOnDrawing = false)))
+        val fragments = listOf(resolved("b1", 0f, 200f), resolved("b1#2", 300f, 500f))
+        assertTrue(fragments.map { spec.bodyForPdf(it) }.none { it.compressOnDrawing })
+    }
+
+    @Test
+    fun `a body that still compresses maps through as compressible`() {
+        val spec = ShaftSpec(bodies = listOf(Body(id = "b1", compressOnDrawing = true)))
+        assertTrue(spec.bodyForPdf(resolved("b1#2", 300f, 500f)).compressOnDrawing)
+    }
+
+    @Test
+    fun `auto spans always compress`() {
+        // Bare-shaft fill is the give that funds every other span's proportion, so it is
+        // never opted out — not even beside an explicit body that was.
+        val spec = ShaftSpec(bodies = listOf(Body(id = "b1", compressOnDrawing = false)))
+        val auto = resolved("auto_body_600.000_900.000", 600f, 900f, source = ResolvedComponentSource.AUTO)
+        assertTrue(spec.bodyForPdf(auto).compressOnDrawing)
+    }
+
+    @Test
+    fun `a resolved id with no stored match compresses`() {
+        assertTrue(ShaftSpec().bodyForPdf(resolved("gone", 0f, 100f)).compressOnDrawing)
     }
 
     @Test

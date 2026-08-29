@@ -83,7 +83,13 @@ internal fun drawBodyRunsWithBreaks(
         // detail, not a reason for the body to read as more or less compressed.
         val bodyLenPt = abs(x1 - x0)
         val foreshortened = breakForCompression(bodyLenPt, b.lengthMm, truePtPerMm, breakMinFracOfTrue)
-        val compress = foreshortened || bodyLenPt >= COMPRESS_TRIGGER_PT
+        // A body whose author turned compression off pins at true width, so
+        // `foreshortened` is already false for it — but the long-span trigger fires on
+        // drawn length alone, and 220 pt of true-scale paper is exactly what an opted-out
+        // body is asking to keep. For every compressible body the trigger still fires at
+        // EVERY S-break slider setting, "Never" included: a run eating that much paper is
+        // not hidden compression.
+        val compress = foreshortened || (b.compressOnDrawing && bodyLenPt >= COMPRESS_TRIGGER_PT)
 
         drawBlendCurvePdf(c, edges.aftCurve, cy, outline, fill)
         drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, fill)

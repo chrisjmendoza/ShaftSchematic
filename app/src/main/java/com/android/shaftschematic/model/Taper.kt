@@ -23,9 +23,9 @@ import kotlin.math.max
  *   circle drawn around the mill end (which stays as an inner reference line).
  *   Ignored when [keywayOffsetFromSetMm] > 0 (floating keyways have no open end to reference).
  * @property showLabelOnDrawing Whether this taper's name prints as a component label under the
- *   schematic. Draw-only flag — mirrors [com.android.shaftschematic.model.Body.showLabelOnDrawing];
- *   it never rewrites [label] and never touches geometry. Defaults true so a document saved
- *   before the flag existed prints exactly as it did.
+ *   schematic. Tri-state, draw-only — mirrors [com.android.shaftschematic.model.Body.showLabelOnDrawing]:
+ *   `null` (default) follows the Settings switch, explicit `true`/`false` overrides it either
+ *   way; never rewrites [label], never touches geometry.
  */
 @Serializable
 data class Taper(
@@ -43,7 +43,7 @@ data class Taper(
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
-    val showLabelOnDrawing: Boolean = true,
+    val showLabelOnDrawing: Boolean? = null,
 ) : Segment
 
 /** Basic invariants for a Taper. */

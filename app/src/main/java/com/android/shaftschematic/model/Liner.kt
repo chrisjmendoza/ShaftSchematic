@@ -24,9 +24,9 @@ enum class LinerAuthoredReference { AFT, FWD }
  *   schematic. Draw-only flag — mirrors [com.android.shaftschematic.model.Body.showDiaOnDrawing];
  *   it never rewrites [odMm] and never touches geometry. Defaults true for back-compat.
  * @property showLabelOnDrawing Whether this liner's name prints as a component label under the
- *   schematic. Draw-only flag — mirrors [com.android.shaftschematic.model.Body.showLabelOnDrawing];
- *   it never rewrites [label] and never touches geometry. Defaults true so a document saved
- *   before the flag existed prints exactly as it did.
+ *   schematic. Tri-state, draw-only — mirrors [com.android.shaftschematic.model.Body.showLabelOnDrawing]:
+ *   `null` (default) follows the Settings switch, explicit `true`/`false` overrides it either
+ *   way; never rewrites [label] and never touches geometry.
  *
  * Shoulders: a machined step at a liner end — the OD drops to a reduced diameter over the
  * outermost [shoulderAftLenMm]/[shoulderFwdLenMm] of the liner's OWN span (cut into the liner,
@@ -51,7 +51,7 @@ data class Liner(
     @JsonNames("endFromAftMm", "endMmPhysical")
     val endMmPhysical: Float = 0f,
     val showDiaOnDrawing: Boolean = true,
-    val showLabelOnDrawing: Boolean = true,
+    val showLabelOnDrawing: Boolean? = null,
     val shoulderAftLenMm: Float = 0f,
     val shoulderAftOdMm: Float = 0f,
     val shoulderAftRadiusMm: Float = 0f,

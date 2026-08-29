@@ -269,7 +269,8 @@ dimension belongs to exactly one of them, and a plan-view keyway straddles both:
 | Offset from the referenced face | axial (`xAt`'s local pt/mm) |
 | Length | axial |
 | **Width** | **diameter** |
-| **Mill-arc radius** (and the spoon bowl) | **diameter** |
+| **Mill-arc radius** | **diameter** |
+| Spoon-bowl y-semi | diameter term + axial clearance (`KeywaySpoonBowl.ry`, below) |
 
 Width is a transverse dimension, so it rides the diameter scale and stays proportional to the
 drawn shaft at every height. Sizing it off the axial scale instead pins it to the page width —
@@ -283,10 +284,17 @@ are `rPx`-sized circles on this same sheet), but a circle's AXIAL extent then gr
 height slider while the slot's length stays page-bound: the spoon bowl, at
 `SPOON_BOWL_WIDTH_RATIO` (2.4) times the keyway width, swells until it swallows its own slot
 (on-device report — "they get too large when the shaft height increases"). The ellipse costs
-nothing: `drawArc` sweeps a **parametric** angle on its oval, so scaling y alone leaves every
-angle the bowl math derives — the wall tangent included — exactly where the circle put it, and
-`geom/KeywaySpoonMath.kt` needs no anisotropic term. Pass it the AXIAL half-width and stretch the
-result by `halfH / halfW`.
+nothing: `drawArc` sweeps a **parametric** angle on its oval, so the wall-tangent angle the bowl
+math derives holds exactly on the drawn ellipse.
+
+The spoon bowl's two semi-axes are **independent** (`geom/KeywaySpoonMath.kt`): the x-semi is
+`SPOON_BOWL_WIDTH_RATIO × halfW` (axial), and the y-semi — `KeywaySpoonBowl.ry` — is the slot's
+drawn half-height plus the bowl's axial poke past the LET tip, so the drawn clearance around the
+slot reads uniform. Deriving y by stretching the x-radius by `halfH / halfW` instead gave each
+axis its own scale's clearance: on a compressed sheet the bowl drew tall, with several times
+more daylight above the slot walls than past the mill arc (on-device report — "the horizontal
+is good, get the vertical similar"). Both draw sites take `ry` from the math; the wall-tangent
+angle derives from `halfH / ry`, never from the mm-space ratio.
 
 Both draw sites build the slot from one place, `geom/KeywaySlotMath.kt` (pure) —
 `ShaftPdfComposer.drawKeywaySlotPdf` and `ShaftRenderer.drawKeywaySlot`. The canvas has a single
@@ -397,12 +405,17 @@ preference and never re-derive it.
 
 The schematic's below-shaft component-name labels (`drawComponentLabelsPdf`, entries built by
 the pure `componentLabelSpans`) are gated per component: `showLabelOnDrawing` on `Body` /
-`Taper` / `Threads` / `Liner`, **default `true`** so existing documents print identically.
-The gates AND-compose with the global Settings switch (`PdfPrefs.showComponentTitles`) and
-`PdfExportOptions.showLabels` — the §5.3 shape. Auto spans are never labelled, so they carry
-no flag. Hiding a label never renumbers the positional fallback names of the remaining
-components ("Body #2" stays #2). Card-only toggles (`*_show_label_toggle`), the same
-carve-out as "Show Ø on drawing"; draw-only in every respect.
+`Taper` / `Threads` / `Liner`, **tri-state**. Unset (the default — what every pre-flag
+document decodes to) follows the global Settings switch (`PdfPrefs.showComponentTitles`), so
+untouched documents print exactly as their setting says; an explicit `true` prints that one
+name even with the switch off (a checked card toggle must never be silently dead under a
+forgotten global off — on-device report); an explicit `false` hides it even with the switch
+on. The global is the flags' DEFAULT, never a master gate; only `PdfExportOptions.showLabels`
+(template mode) still drops the pass whole. The card toggle displays the resolved state. Auto
+spans are never labelled, so they carry no flag. Hiding a label never renumbers the
+positional fallback names of the remaining components ("Body #2" stays #2). Card-only
+toggles (`*_show_label_toggle`), the same carve-out as "Show Ø on drawing"; draw-only in
+every respect.
 
 ---
 
@@ -769,7 +782,13 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
    and 100% breaks on any foreshortening at all ("why lock it in one way when different users
    may want different outputs" — on-device request). `COMPRESS_TRIGGER_PT` is deliberately
    NOT governed by the slider: a run that eats 220 pt of paper at true scale is not hidden
-   compression, so it breaks at every setting. At the default half, milder foreshortening
+   compression, so a compressible body breaks at every setting. An explicit body with
+   `Body.compressOnDrawing` false is outside all of this: its whole stored span pins at true
+   scale (`compressOptOutBodySpans` inside the one `profileFeatureSpans` builder — both
+   composers and the height-slider estimator agree) and no break draws, the long-span trigger
+   included; new explicit bodies are created opted-out, saved documents keep compressing until
+   the card's "Compress on drawing" checkbox is unticked, and the drawn height yields to the
+   pin — which is why that checkbox exists. At the default half, milder foreshortening
    prints a plain outline — a run kept at half scale or better still reads honestly, and
    a break pair on a barely-squeezed run was noise (on-device report: a 6" run at ~74% of
    true carried the pair); the rails print true lengths either way. Whichever trigger

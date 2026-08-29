@@ -55,6 +55,7 @@ internal fun LinerPagerCard(
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
+    componentTitlesDefault: Boolean = true,
     linerTitleById: Map<String, String>,
     f1: (Float) -> String,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
@@ -154,7 +155,7 @@ internal fun LinerPagerCard(
         )
         ShowDiaToggleRow(
             label = "Show name on drawing",
-            checked = ln.showLabelOnDrawing,
+            checked = ln.showLabelOnDrawing ?: componentTitlesDefault,
             testTag = "liner_show_label_toggle",
             onCheckedChange = { onUpdateLinerShowLabel(idx, it) },
         )

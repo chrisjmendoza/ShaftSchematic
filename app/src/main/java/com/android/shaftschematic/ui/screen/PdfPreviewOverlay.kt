@@ -76,6 +76,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_DEFAULT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
@@ -100,6 +101,7 @@ import com.android.shaftschematic.ui.viewmodel.setShowCouplingFace
 import com.android.shaftschematic.ui.viewmodel.setWearCompactStrips
 import com.android.shaftschematic.ui.viewmodel.setWearShowShaftProfile
 import com.android.shaftschematic.ui.viewmodel.setWearStripComponents
+import com.android.shaftschematic.ui.viewmodel.setWearStripSizeFrac
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
@@ -377,9 +379,9 @@ internal fun RunoutWearOptionsSheet(
     /** The app-wide `PdfPrefs.sBreakThresholdFrac`; read only when [showSBreak]. */
     sBreakThresholdFrac: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
     /**
-     * Shows the wear-document tuning block: the Components election, the "Trace depth
-     * exaggeration" row (the Wear tab's own control, shared construction), the "Wear area shade"
-     * slider, and the "Taper–liner join" threshold. On only for the wear
+     * Shows the wear-document tuning block: the Components election, the "Strip size" slider, the
+     * "Trace depth exaggeration" row (the Wear tab's own control, shared construction), the
+     * "Wear area shade" slider, and the "Taper–liner join" threshold. On only for the wear
      * preview — the sheet exists so the drawing being looked at can be tuned against itself
      * (on-device request) — and inert on every other document, which draws no wear strips.
      */
@@ -412,6 +414,8 @@ internal fun RunoutWearOptionsSheet(
     wearShowShaftProfile: Boolean = true,
     /** This job's `WearRecord.compactStrips`; read only when [showWearControls]. */
     wearCompactStrips: Boolean = false,
+    /** This job's `WearRecord.stripSizeFrac` — the strips' height ceiling multiplier. */
+    wearStripSizeFrac: Float = WEAR_STRIP_SIZE_FRAC_DEFAULT,
     /**
      * Shows the shared "Dimension arrows" size picker. On for the consolidated sheet, the only
      * document here that draws dimension rails; the classic runout/wear/undercut sheets draw
@@ -540,9 +544,9 @@ internal fun RunoutWearOptionsSheet(
         Spacer(Modifier.height(12.dp))
 
         // ── Wear drawing (wear document only) ────────────────────────────────
-        // The same controls the Wear tab and Settings → Drawing carry — here so the trace
-        // depth, the band's grey, and the join threshold can be judged against the sheet
-        // they print on.
+        // The same controls the Wear tab and Settings → Drawing carry — here so the strip
+        // height, the trace depth, the band's grey, and the join threshold can be judged
+        // against the sheet they print on.
         // Commit-on-release, like every slider on this sheet; the wear preview re-renders
         // from its own keys rather than a live tuning channel.
         if (showWearControls) {
@@ -559,6 +563,15 @@ internal fun RunoutWearOptionsSheet(
                 // Nullable: the "Default (all liners)" quick action clears the election so the
                 // sheet follows the shaft again.
                 onSetSelection = { vm.setWearStripComponents(it) },
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // A primary layout control — how tall the elected strips draw — so it sits with the
+            // election rather than with the restyling sliders below.
+            WearStripSizeSlider(
+                frac = wearStripSizeFrac,
+                onCommit = { vm.setWearStripSizeFrac(it) },
             )
 
             Spacer(Modifier.height(12.dp))

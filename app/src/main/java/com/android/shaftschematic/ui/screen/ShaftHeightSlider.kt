@@ -42,7 +42,10 @@ import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.maxOuterDiaMm
+import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_MAX
+import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_MIN
 import com.android.shaftschematic.settings.PDF_ARROW_SIZES_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_MEDIUM_PT
@@ -340,6 +343,55 @@ internal fun WearBandShadeSlider(
             )
             Text(fmtWholePct(PDF_WEAR_BAND_SHADE_MAX), style = MaterialTheme.typography.bodySmall)
         }
+    }
+}
+
+/**
+ * The wear document's "Strip size" slider — this job's [WearRecord.stripSizeFrac], a multiplier on
+ * the height ceiling the page's own row budget gives a detail strip (`wearRowHeightCapPt`).
+ *
+ * [WEAR_STRIP_SIZE_FRAC_MIN]..[WEAR_STRIP_SIZE_FRAC_MAX] in 10% steps, 100% = the traditional
+ * full-page row height. Layout-only: it changes how tall a strip draws, never a printed value.
+ * Drag is tracked locally and committed once on release — the wear sheet has no live-tuning
+ * channel, so the page re-renders from the committed record.
+ */
+@Composable
+internal fun WearStripSizeSlider(
+    frac: Float,
+    onCommit: (Float) -> Unit,
+) {
+    var sizeDrag by remember { mutableStateOf<Float?>(null) }
+    val shown = (sizeDrag ?: frac).coerceIn(WEAR_STRIP_SIZE_FRAC_MIN, WEAR_STRIP_SIZE_FRAC_MAX)
+    // 10% steps across the range, minus the two endpoints Slider places itself.
+    val steps = ((WEAR_STRIP_SIZE_FRAC_MAX - WEAR_STRIP_SIZE_FRAC_MIN) / 0.1f).roundToInt() - 1
+    Column {
+        Text(
+            "Strip size  ${fmtWholePct(shown)}",
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(fmtWholePct(WEAR_STRIP_SIZE_FRAC_MIN), style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { sizeDrag = it },
+                onValueChangeFinished = {
+                    sizeDrag?.let(onCommit)
+                    sizeDrag = null
+                },
+                valueRange = WEAR_STRIP_SIZE_FRAC_MIN..WEAR_STRIP_SIZE_FRAC_MAX,
+                steps = steps.coerceAtLeast(0),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .testTag("wear_strip_size_slider"),
+            )
+            Text(fmtWholePct(WEAR_STRIP_SIZE_FRAC_MAX), style = MaterialTheme.typography.bodySmall)
+        }
+        Text(
+            "How tall the detail strips draw. 100% is the height a full page of strips gives one.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -867,7 +919,7 @@ internal fun LinerCompressionControl(
  * (the solve ignores the liner raises entirely, so the drawn height never moves with
  * this control). Same feature construction the composers use, over an approximate
  * window (0..OAL, standard content width): tapers/threads/liners at their kind floors,
- * keyway-bearing bodies pinned. An estimate — the composers' exact windows differ by
+ * keyway windows and compression-opted-out bodies pinned. An estimate — the composers' exact windows differ by
  * hairs — but it moves exactly when the page starts shorting the request, which is what
  * the readout is for.
  */

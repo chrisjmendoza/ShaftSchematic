@@ -301,10 +301,14 @@ fun composeShaftPdf(
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill(), bodies = bodiesForPdf)
     c.restore()
 
-    if (effectiveOptions.showLabels && pdfPrefs.showComponentTitles) {
+    // The global titles switch is the per-component flags' DEFAULT, not a master gate — an
+    // explicitly-shown component prints under a global off (see componentLabelSpans). Only the
+    // per-sheet option (template mode) drops the pass whole.
+    if (effectiveOptions.showLabels) {
         drawComponentLabelsPdf(
             canvas = c,
             spec = spec,
+            titlesDefault = pdfPrefs.showComponentTitles,
             geomRect = geomRect,
             cy = cy,
             halfHeightPx = halfHeightPx,
@@ -567,17 +571,21 @@ internal data class ComponentLabelSpan(val text: String, val startMm: Float, val
 /**
  * The component-name labels a sheet prints, AFT→FWD within each kind.
  *
- * Per-component visibility (`showLabelOnDrawing`) is applied here; the global
- * [com.android.shaftschematic.settings.PdfPrefs.showComponentTitles] switch and the per-sheet
- * [PdfExportOptions.showLabels] option gate the whole pass at the call site, so the three
- * compose as an AND — the same shape as the Ø-callout controls.
+ * Per-component visibility (`showLabelOnDrawing`) is TRI-STATE: `null` follows
+ * [titlesDefault] — the global
+ * [com.android.shaftschematic.settings.PdfPrefs.showComponentTitles] switch — while an
+ * explicit `true`/`false` overrides it for that one component in either direction. Gating the
+ * whole pass on the global switch made a freshly checked card toggle print nothing under a
+ * global switch turned off long before (on-device report), so the global is a DEFAULT here,
+ * not a master gate; only the per-sheet [PdfExportOptions.showLabels] option (template mode)
+ * still drops the pass whole at the call site.
  *
  * A hidden component still takes its place in the fallback numbering ("Body #2" stays #2 when
  * #1 is hidden), so turning one label off never renumbers the rest.
  */
-internal fun componentLabelSpans(spec: ShaftSpec): List<ComponentLabelSpan> = buildList {
-    fun emit(shown: Boolean, label: String, startMm: Float, lengthMm: Float) {
-        if (!shown) return
+internal fun componentLabelSpans(spec: ShaftSpec, titlesDefault: Boolean): List<ComponentLabelSpan> = buildList {
+    fun emit(shown: Boolean?, label: String, startMm: Float, lengthMm: Float) {
+        if (!(shown ?: titlesDefault)) return
         val trimmed = label.trim()
         if (trimmed.isEmpty()) return
         add(ComponentLabelSpan(trimmed, startMm, startMm + lengthMm))
@@ -612,13 +620,14 @@ internal fun componentLabelSpans(spec: ShaftSpec): List<ComponentLabelSpan> = bu
 private fun drawComponentLabelsPdf(
     canvas: Canvas,
     spec: ShaftSpec,
+    titlesDefault: Boolean,
     geomRect: RectF,
     cy: Float,
     halfHeightPx: Float,
     xAt: (Float) -> Float,
     textPaint: Paint,
 ) {
-    val spans = componentLabelSpans(spec)
+    val spans = componentLabelSpans(spec, titlesDefault)
     if (spans.isEmpty()) return
 
     val labelPaint = Paint(textPaint).apply {
@@ -1056,18 +1065,31 @@ internal fun ShaftSpec.withResolvedBodies(resolved: List<ResolvedComponent>?): S
  * them. AUTO spans share the single bare-shaft flag ([ShaftSpec.showAutoBodyDia]), matching
  * the single Ø they already share. A resolved id with no stored match (never expected)
  * follows the model default — hidden, the opt-in posture.
+ *
+ * [Body.compressOnDrawing] rides the same fragment-stripped lookup, so every run of a split
+ * body keeps its author's decision and [drawBodyRunsWithBreaks] can read it off the run it
+ * is drawing. AUTO spans always compress: bare-shaft fill is the give that funds every other
+ * span's proportion, so it is never opted out.
  */
-internal fun ShaftSpec.bodyForPdf(b: ResolvedBody): Body = Body(
-    id = b.id,
-    startFromAftMm = b.startMmPhysical,
-    lengthMm = b.endMmPhysical - b.startMmPhysical,
-    diaMm = b.diaMm,
-    showDiaOnDrawing = if (b.source == ResolvedComponentSource.AUTO) {
-        showAutoBodyDia
+internal fun ShaftSpec.bodyForPdf(b: ResolvedBody): Body {
+    val stored = if (b.source == ResolvedComponentSource.AUTO) {
+        null
     } else {
-        bodies.firstOrNull { it.id == resolvedBodyBaseId(b.id) }?.showDiaOnDrawing ?: false
-    },
-)
+        bodies.firstOrNull { it.id == resolvedBodyBaseId(b.id) }
+    }
+    return Body(
+        id = b.id,
+        startFromAftMm = b.startMmPhysical,
+        lengthMm = b.endMmPhysical - b.startMmPhysical,
+        diaMm = b.diaMm,
+        showDiaOnDrawing = if (b.source == ResolvedComponentSource.AUTO) {
+            showAutoBodyDia
+        } else {
+            stored?.showDiaOnDrawing ?: false
+        },
+        compressOnDrawing = stored?.compressOnDrawing ?: true,
+    )
+}
 
 /**
  * Truncates [text] with an ellipsis so it fits within [maxWidth] points. Footer columns sit

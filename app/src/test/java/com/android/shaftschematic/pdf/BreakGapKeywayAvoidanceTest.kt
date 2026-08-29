@@ -138,6 +138,59 @@ class BreakGapKeywayAvoidanceTest {
         assertTrue("centered gap", topLineInk(bmp, 195, 205) < 5)
     }
 
+    // ── The compression opt-out silences the long-span trigger ────────────────
+    //
+    // A body whose author turned "Compress on drawing" off pins at true width, so
+    // `breakForCompression` is already false for it — but the long-span trigger fires on
+    // drawn length alone, and 400 pt of TRUE-scale paper is exactly what such a body is
+    // asking to keep. Suppressing the trigger for it is what makes the opt-out visible on
+    // the sheet; every compressible body still breaks past 220 pt at every slider setting.
+
+    private fun renderBody(b: Body): Bitmap {
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        c.drawColor(Color.WHITE)
+        val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = strokePt; color = Color.BLACK
+        }
+        drawBodyRunsWithBreaks(
+            c, listOf(b), cy, { it }, { dia -> dia / 2f }, outline,
+            RectF(0f, 0f, w.toFloat(), h.toFloat()),
+            truePtPerMm = 1f,
+        )
+        return bmp
+    }
+
+    @Test
+    fun `an opted-out long run prints plain at true width`() {
+        val bmp = renderBody(longBody().copy(compressOnDrawing = false))
+        assertEquals("no break may cut an opted-out body", 390, topLineInk(bmp, 5, 395))
+    }
+
+    @Test
+    fun `the same run still breaks while it may compress`() {
+        val bmp = renderBody(longBody())
+        assertTrue("the long-span trigger still fires", topLineInk(bmp, 5, 395) < 388)
+    }
+
+    @Test
+    fun `an opted-out run stays plain even at the break-on-anything setting`() {
+        // Threshold 1 breaks on any shortfall; a pinned body has none, and the trigger it
+        // would otherwise hit on length is suppressed.
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        c.drawColor(Color.WHITE)
+        val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = strokePt; color = Color.BLACK
+        }
+        drawBodyRunsWithBreaks(
+            c, listOf(longBody().copy(compressOnDrawing = false)), cy, { it }, { dia -> dia / 2f },
+            outline, RectF(0f, 0f, w.toFloat(), h.toFloat()),
+            truePtPerMm = 1f, breakMinFracOfTrue = 1f,
+        )
+        assertEquals(390, topLineInk(bmp, 5, 395))
+    }
+
     // ── A SHADED broken run fills to the S, not to the break line ─────────────
     //
     // The stubs used to fill as axis-aligned rectangles terminating on a straight vertical at

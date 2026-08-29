@@ -55,11 +55,15 @@ Specifically:
 **Carve-out — post-hoc display toggles are card-only.** A control that only exists to change
 how an *already-drawn* component prints, has a stable default, and is reached for after
 looking at a printed sheet is not a property of the component being added; in an Add dialog
-it would be a permanently-preset box adding noise to every add. Exactly four qualify: the
+it would be a permanently-preset box adding noise to every add. Exactly five qualify: the
 coupler slot's "show dimension rail", **"Show Ø on drawing"** (`Body`/`Liner`/auto-body
 cards), **"Show name on drawing"** (`showLabelOnDrawing`, all four explicit component cards —
-gates the schematic's name label per component, AND-composed with the global
-`showComponentTitles` pref), and the per-component **"Prints in: in | mm"** unit chip (explicit
+TRI-STATE per-component gate on the schematic's name label: unset follows the global
+`showComponentTitles` pref, an explicit ON prints even with that pref off, an explicit OFF
+hides even with it on — the pref is the default, never a master gate over an authored
+choice), **"Compress on drawing"** (`Body.compressOnDrawing`, explicit-body cards — see the
+compression invariant below; its authoring default is set at creation, so the dialog would
+be a preset box), and the per-component **"Prints in: in | mm"** unit chip (explicit
 `Body`/`Taper`/
 `Thread`/`Liner` cards, at the FOOT of the card — an override also has nothing to key to before the
 component has a resolved id). Anything that changes geometry, position, or a value stays under the
@@ -188,16 +192,29 @@ statement that a run is foreshortened, so prose repeating it is redundant (on-de
 and cost a footer row on exactly the long shafts with the least room. Do not reintroduce
 `showCompressionNote`. The long-span trigger `COMPRESS_TRIGGER_PT` is
 deliberately NOT governed by the slider — a run eating 220 pt of paper at true scale is
-not hidden compression, so it breaks at every setting, Never included. **A body keyway's
-WINDOW never compresses; the rest of its body compresses and breaks like any other run**
-(on-device direction: a 95%-shaft body must keep its break or a long shaft cannot render).
-The protected window — the slot span padded by one keyway width, clamped to the body
+not hidden compression, so a compressible body breaks at every setting, Never included. **A
+body keyway's WINDOW never compresses; the rest of its body compresses and breaks like any
+other run** (on-device direction: a 95%-shaft body must keep its break or a long shaft cannot
+render). The protected window — the slot span padded by one keyway width, clamped to the body
 (`bodyKeywayProtectedSpansMm`, STORED spec) — pins at true scale
 (`keywayPinnedBodySpans`), the break gap steers clear of it (`breakGapCenter`, both body
 passes; a run with no clear placement prints plain), and the slot draw derives pt/mm from
 its OWN mapped span so it stays true-size inside a compressed body
-(`drawKeywayNotchBodyPdf`). Pinning the whole host body, or suppressing its break
-outright, would be a regression on both sides.
+(`drawKeywayNotchBodyPdf`). Pinning the whole host body BECAUSE of its keyway, or suppressing
+its break outright, would be a regression on both sides. Separately, **an explicit body can
+opt out of compression wholesale** — `Body.compressOnDrawing` false pins its WHOLE stored
+span at true scale (`compressOptOutBodySpans`, added in the ONE builder `profileFeatureSpans`
+so both composers and the height-slider estimator agree) and suppresses its S-break, the
+long-span trigger included (`drawBodyRunsWithBreaks` guards the trigger on the flag; the
+foreshortening predicate self-disables at true width). New explicit bodies are created
+opted-OUT (`addBodyAt` — an authored section reads at true proportion, on-device request: a
+named 12″ section printed with an S-break); the SERIALIZATION default is `true`, so bodies in
+already-saved documents keep compressing until their card's "Compress on drawing" checkbox —
+the escape hatch that keeps a huge explicit body renderable — is unticked. The drawn height
+yields to the pin (`solveMaxProfileScale`), which is exactly why the checkbox exists. Auto
+spans never opt out — bare shaft is the compression give. Split/merge fragments carry
+`label`, both show-flags, and `compressOnDrawing` (`carryBodyDisplay` — merge takes the AFT
+fragment's values; dropping them silently reset authored display choices).
 **Liners compress in SIZE only** (finite `PROFILE_MIN_LINER_PT` floor — proportional
 foreshortening, NEVER a body-style S-break cutout; the S-break glyph is a body-only draw
 path); the per-job **"Liner compression" pair** (`RunoutConfig.linersProportional` +
@@ -536,9 +553,14 @@ an ELLIPSE** — x axial, y diametral — mill arcs and spoon bowl alike. True c
 transverse scale are the tempting shortcut (the mill radius is W/2 by definition, and the coupler
 bolt holes ARE `rPx` circles), but a circle's AXIAL extent then grows with the height slider while
 the slot's length stays page-bound, and the spoon bowl at 2.4× the keyway width swells until it
-swallows its own slot (on-device report). The ellipse is free: `drawArc` sweeps a PARAMETRIC angle,
-so scaling y alone leaves every angle `geom/KeywaySpoonMath.kt` derives — wall tangent included —
-untouched; hand it the AXIAL half-width and stretch by `halfH / halfW`. One
+swallows its own slot (on-device report). The ellipse is free: `drawArc` sweeps a PARAMETRIC
+angle, so the wall-tangent angle `geom/KeywaySpoonMath.kt` derives holds on the drawn ellipse.
+The bowl's two semi-axes are INDEPENDENT: x rides the axial slot width
+(`SPOON_BOWL_WIDTH_RATIO`), and y is the slot's drawn half-height plus the bowl's axial
+poke-past distance (`KeywaySpoonBowl.ry` — uniform drawn clearance). Deriving y by stretching
+the x-radius by `halfH / halfW` gave each axis its own scale's clearance, so the bowl drew tall
+on every compressed sheet — several times more daylight above the slot walls than past the mill
+arc (on-device report). Both draw sites take `ry` from the math; neither re-derives it. One
 pure source for both draw sites, `geom/KeywaySlotMath.kt` (`ShaftRenderer.drawKeywaySlot` canvas /
 `ShaftPdfComposer.drawKeywaySlotPdf` PDF; the canvas's two terms coincide, the construction is
 shared anyway). The drawn width is **TRUE** — a keyway is a quarter of its shaft, not a blend's
@@ -567,8 +589,9 @@ enlarged circle around the closed (LET) end — the mill semicircle stays as an 
 inside the bowl. It is **ignored for floating keyways** (offset > 0) — the UI disables the toggle
 there. The bowl must be drawn **identically in both keyway draw sites** —
 `ShaftRenderer.drawKeywaySlot` (canvas) and `ShaftPdfComposer.drawKeywaySlotPdf` (PDF). Pure bowl
-math (radius, wall tangent, major-arc sweep) lives in `geom/KeywaySpoonMath.kt` (shared, no
-`pdf → ui` dep); the single `SPOON_BOWL_WIDTH_RATIO` constant sizes it. Same posture as the wear-pit
+math (radius, y-semi, wall tangent, major-arc sweep) lives in `geom/KeywaySpoonMath.kt` (shared,
+no `pdf → ui` dep); `SPOON_BOWL_WIDTH_RATIO` sizes its axial term and the y-semi is the slot
+half-height plus the poke-past clearance (see the keyway-scale invariant above). Same posture as the wear-pit
 "X" and runout-marker draw-both-sites rules.
 
 ### Diameter callouts are BELOW-only, tiered, and footer-formatted

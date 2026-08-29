@@ -12,16 +12,18 @@ import org.junit.Test
 
 /**
  * Per-component name-label visibility (`showLabelOnDrawing`) as the schematic's label pass sees
- * it. The global Settings switch and the per-sheet export option gate the whole pass at the call
- * site, so only the per-component filter is exercised here.
+ * it. The flag is TRI-STATE: `null` follows the global titles default handed to
+ * [componentLabelSpans], an explicit value overrides it in either direction — a checked card
+ * toggle must print its one name even under a global switch turned off (on-device report). Only
+ * the per-sheet export option (template mode) still drops the pass whole at the call site.
  */
 class ComponentLabelVisibilityTest {
 
     private fun spec(
-        body: Boolean = true,
-        taper: Boolean = true,
-        thread: Boolean = true,
-        liner: Boolean = true,
+        body: Boolean? = null,
+        taper: Boolean? = null,
+        thread: Boolean? = null,
+        liner: Boolean? = null,
     ) = ShaftSpec(
         overallLengthMm = 2000f,
         bodies = listOf(
@@ -42,7 +44,8 @@ class ComponentLabelVisibilityTest {
         ),
     )
 
-    private fun texts(s: ShaftSpec) = componentLabelSpans(s).map { it.text }
+    private fun texts(s: ShaftSpec, titlesDefault: Boolean = true) =
+        componentLabelSpans(s, titlesDefault).map { it.text }
 
     @Test
     fun `every component labelled by default`() {
@@ -62,12 +65,32 @@ class ComponentLabelVisibilityTest {
 
     @Test
     fun `hiding every component leaves nothing to draw`() {
-        assertTrue(componentLabelSpans(spec(false, false, false, false)).isEmpty())
+        assertTrue(componentLabelSpans(spec(false, false, false, false), titlesDefault = true).isEmpty())
+    }
+
+    @Test
+    fun `an unset flag follows the global default`() {
+        assertTrue(texts(spec(), titlesDefault = false).isEmpty())
+        assertEquals(4, texts(spec(), titlesDefault = true).size)
+    }
+
+    @Test
+    fun `an explicitly shown component prints under a global default of off`() {
+        // The on-device case: the card toggle checked, the Settings switch off for years.
+        assertEquals(listOf("Coupling end"), texts(spec(body = true), titlesDefault = false))
+    }
+
+    @Test
+    fun `an explicitly hidden component stays hidden under a global default of on`() {
+        assertEquals(
+            listOf("Prop taper", "Nut thread", "Fwd sleeve"),
+            texts(spec(body = false), titlesDefault = true)
+        )
     }
 
     @Test
     fun `a label spans its component`() {
-        val span = componentLabelSpans(spec()).single { it.text == "Prop taper" }
+        val span = componentLabelSpans(spec(), titlesDefault = true).single { it.text == "Prop taper" }
         assertEquals(400f, span.startMm, 0.001f)
         assertEquals(700f, span.endMm, 0.001f)
     }

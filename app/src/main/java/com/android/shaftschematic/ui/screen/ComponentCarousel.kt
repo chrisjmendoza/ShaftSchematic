@@ -146,6 +146,8 @@ internal fun ComponentCarouselPager(
     showEdgeArrows: Boolean,
     edgeArrowWidthDp: Int,
     showComponentDebugLabels: Boolean,
+    /** The Settings "Show component titles" switch — what an UNSET per-component name toggle follows. */
+    componentTitlesDefault: Boolean = true,
     selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
@@ -154,6 +156,7 @@ internal fun ComponentCarouselPager(
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
+    onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
@@ -299,6 +302,7 @@ internal fun ComponentCarouselPager(
                     spec = spec, unit = unit, row = row, physicalIndex = page,
                     outerPaddingHorizontal = componentCardPadding,
                     showComponentDebugLabels = showComponentDebugLabels,
+                    componentTitlesDefault = componentTitlesDefault,
                     onAddBody = onAddBody,
                     onSetAutoSectionDia = onSetAutoSectionDia,
                     onSetAutoBlend = onSetAutoBlend,
@@ -306,6 +310,7 @@ internal fun ComponentCarouselPager(
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
                     onUpdateBodyShowLabel = onUpdateBodyShowLabel,
+                    onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
                     onUpdateBodyBlend = onUpdateBodyBlend,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
@@ -560,6 +565,7 @@ internal fun ComponentPagerCard(
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
+    componentTitlesDefault: Boolean = true,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean) -> Unit,
@@ -567,6 +573,7 @@ internal fun ComponentPagerCard(
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
+    onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
@@ -632,6 +639,7 @@ internal fun ComponentPagerCard(
             physicalIndex = physicalIndex,
             outerPaddingHorizontal = outerPaddingHorizontal,
             showComponentDebugLabels = showComponentDebugLabels,
+            componentTitlesDefault = componentTitlesDefault,
             bodyTitleById = bodyTitleById,
             f1 = ::f1,
             startValidator = ::startValidator,
@@ -642,6 +650,7 @@ internal fun ComponentPagerCard(
             onUpdateBody = onUpdateBody,
             onUpdateBodyShowDia = onUpdateBodyShowDia,
             onUpdateBodyShowLabel = onUpdateBodyShowLabel,
+            onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
             onUpdateBodyBlend = onUpdateBodyBlend,
             onUpdateBodyLabel = onUpdateBodyLabel,
             onUpdateBodyKeyway = onUpdateBodyKeyway,
@@ -665,6 +674,7 @@ internal fun ComponentPagerCard(
             physicalIndex = physicalIndex,
             outerPaddingHorizontal = outerPaddingHorizontal,
             showComponentDebugLabels = showComponentDebugLabels,
+            componentTitlesDefault = componentTitlesDefault,
             taperTitleById = taperTitleById,
             f1 = ::f1,
             onUpdateTaper = onUpdateTaper,
@@ -692,6 +702,7 @@ internal fun ComponentPagerCard(
             physicalIndex = physicalIndex,
             outerPaddingHorizontal = outerPaddingHorizontal,
             showComponentDebugLabels = showComponentDebugLabels,
+            componentTitlesDefault = componentTitlesDefault,
             threadTitleById = threadTitleById,
             f1 = ::f1,
             startValidator = ::startValidator,
@@ -716,6 +727,7 @@ internal fun ComponentPagerCard(
             physicalIndex = physicalIndex,
             outerPaddingHorizontal = outerPaddingHorizontal,
             showComponentDebugLabels = showComponentDebugLabels,
+            componentTitlesDefault = componentTitlesDefault,
             linerTitleById = linerTitleById,
             f1 = ::f1,
             onUpdateLiner = onUpdateLiner,
@@ -811,10 +823,7 @@ internal fun EditableCardTitle(
 
     if (!editing) {
         Row(
-            // The card's Remove button floats over the title row's trailing edge, so the
-            // pencil keeps clear of it.
-            modifier = Modifier.fillMaxWidth().padding(end = 40.dp)
-                .clickable { editing = true },
+            modifier = Modifier.fillMaxWidth().clickable { editing = true },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -883,8 +892,27 @@ internal fun ComponentCard(
                 modifier = Modifier.align(Alignment.TopStart).padding(16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (titleContent != null) titleContent()
-                else Text(title, style = MaterialTheme.typography.titleMedium)
+                // The Remove button lives IN the title row so it scrolls with the card —
+                // floated over the Box it would sit transparently on top of whatever the
+                // card content scrolled beneath it (on-device report).
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) {
+                        if (titleContent != null) titleContent()
+                        else Text(title, style = MaterialTheme.typography.titleMedium)
+                    }
+                    if (onRemove != null) {
+                        IconButton(
+                            onClick = onRemove,
+                            modifier = Modifier.testTag("card_remove_button")
+                        ) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = "Remove",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
 
                 if (debugText != null) {
                     Text(debugText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -922,14 +950,6 @@ internal fun ComponentCard(
                 }
             }
 
-            if (onRemove != null) {
-                IconButton(
-                    onClick = onRemove,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp)
-                ) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
-                }
-            }
         }
     }
 }

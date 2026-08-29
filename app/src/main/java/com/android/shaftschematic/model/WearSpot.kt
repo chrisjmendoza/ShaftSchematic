@@ -214,6 +214,14 @@ data class WearDiaReading(
  *   `WEAR_STRIP_COMPACT_MIN_PT_PER_MM`), so a strip's drawn width matches its span on the
  *   profile above it and the page reads denser. Layout-only, and per-document, so it lives here.
  *   Additive + defaulted, same no-version-bump rule as [pits].
+ * @property stripSizeFrac Multiplier on the detail strips' height ceiling — the page's own row
+ *   budget scaled up or down. `1` (the default) is the traditional height a full page of rows
+ *   gives a strip; the settable range and the base cap live with the layout math
+ *   (`WEAR_STRIP_SIZE_FRAC_MIN`/`_MAX`/`_DEFAULT` and `wearRowHeightCapPt`,
+ *   `pdf/WearStripLayout.kt` — the model stays free of any `pdf` import, so the literal `1f` is
+ *   repeated here rather than referenced). Display-only, and per-document, so it lives here: it
+ *   changes how tall a strip draws, never a stored or printed measurement. Additive + defaulted,
+ *   same no-version-bump rule as [pits].
  */
 @Serializable
 data class WearRecord(
@@ -226,4 +234,5 @@ data class WearRecord(
     val stripComponentIds: List<String>? = null,
     val showShaftProfile: Boolean = true,
     val compactStrips: Boolean = false,
+    val stripSizeFrac: Float = 1f,
 )

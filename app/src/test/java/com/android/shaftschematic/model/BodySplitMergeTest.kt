@@ -294,6 +294,72 @@ class BodySplitMergeTest {
         assertEquals("drift-tolerant merge succeeded", 1, result.spec.bodies.size)
     }
 
+    // ── Draw-only decisions survive fragmentation ─────────────────────────────
+    //
+    // A fragment is the same physical material as the body it came from, so it must print
+    // the way that body was authored to print. The fresh-`Body` paths (split fragments, the
+    // two-sided merge) used to carry only the keyway and silently reset the name and every
+    // display flag; the one-sided expansions `copy()` the source and always kept them.
+
+    private fun flagged(id: String, startMm: Float, lengthMm: Float) = Body(
+        id = id, startFromAftMm = startMm, lengthMm = lengthMm, diaMm = 60f,
+        label = "SKF", showDiaOnDrawing = true, showLabelOnDrawing = false,
+        compressOnDrawing = false,
+    )
+
+    private fun assertCarried(b: Body, where: String) {
+        assertEquals("$where keeps the name", "SKF", b.label)
+        assertTrue("$where keeps Ø visibility", b.showDiaOnDrawing)
+        assertEquals("$where keeps name visibility", false, b.showLabelOnDrawing)
+        assertFalse("$where keeps the compression opt-out", b.compressOnDrawing)
+    }
+
+    @Test
+    fun `split - both fragments keep the source body's draw-only decisions`() {
+        resetIds()
+        val spec = ShaftSpec(overallLengthMm = 600f, bodies = listOf(flagged("b1", 0f, 600f)))
+
+        val result = spec.splitBodiesAround(200f, 350f, ::nextId)
+
+        assertEquals(2, result.spec.bodies.size)
+        assertCarried(result.spec.bodies.first { it.startFromAftMm == 0f }, "the aft fragment")
+        assertCarried(result.spec.bodies.first { it.startFromAftMm == 350f }, "the fwd fragment")
+    }
+
+    @Test
+    fun `merge - the fused body takes the AFT fragment's decisions`() {
+        resetIds()
+        val left  = flagged("bl", 0f, 200f)
+        val right = Body(id = "br", startFromAftMm = 350f, lengthMm = 250f, diaMm = 60f, label = "other")
+        val spec = ShaftSpec(overallLengthMm = 600f, bodies = listOf(left, right))
+
+        val result = spec.mergeBodiesAround(200f, 350f, ::nextId)
+
+        // Aft is authored first, so its decisions are the ones the user set on the original.
+        assertCarried(result.spec.bodies.single(), "the merged body")
+    }
+
+    @Test
+    fun `merge - a one-sided expansion keeps them too`() {
+        resetIds()
+        val spec = ShaftSpec(overallLengthMm = 500f, bodies = listOf(flagged("bl", 0f, 300f)))
+
+        val result = spec.mergeBodiesAround(300f, 500f, ::nextId)
+
+        assertCarried(result.spec.bodies.single(), "the expanded body")
+    }
+
+    @Test
+    fun `split then merge round-trips the draw-only decisions`() {
+        resetIds()
+        val spec = ShaftSpec(overallLengthMm = 600f, bodies = listOf(flagged("b1", 0f, 600f)))
+
+        val split = spec.splitBodiesAround(200f, 350f, ::nextId)
+        val merged = split.spec.mergeBodiesAround(200f, 350f, ::nextId)
+
+        assertCarried(merged.spec.bodies.single(), "the round-tripped body")
+    }
+
     // ── Split then merge round-trip ───────────────────────────────────────────
 
     @Test

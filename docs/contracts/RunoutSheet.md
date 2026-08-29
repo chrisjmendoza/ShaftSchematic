@@ -851,7 +851,11 @@ On-device request following the worn-sections review:
     from the resolved runs: `ResolvedBody` has no keyway fields and `bodyForPdf` builds
     none, so a filter over resolved bodies matches nothing and the pin quietly dies.
     Same rule for the keyway DRAW (see "Keyways on the profile" below) — the span that
-    pins is exactly the span the slot draws in.
+    pins is exactly the span the slot draws in. A second pin source shares the builder:
+    an explicit body opted out of compression (`Body.compressOnDrawing` false,
+    `compressOptOutBodySpans` — the whole stored span, no S-break, long-span trigger
+    included; new explicit bodies are created opted-out, saved documents keep
+    compressing until the card's checkbox is unticked).
     **Tapers may shrink but never equalize**: no flat floor (a flat floor equalizes
     unequal tapers when both clamp to it — on-device report) — a ratio-preserving
     fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` 0.7, λ-fit, never

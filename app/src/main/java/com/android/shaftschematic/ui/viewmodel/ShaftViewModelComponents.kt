@@ -84,6 +84,12 @@ fun ShaftViewModel.addBodyAt(
                     keywayOffsetFromEndMm = max(0f, keywayOffsetFromEndMm),
                     keywayEnd = keywayEnd,
                     keywaySpooned = keywaySpooned,
+                    // A newly authored explicit body draws at TRUE scale: an authored
+                    // section is a named piece of the shaft and reads at its real
+                    // proportion unless its card re-enables compression. Only creation
+                    // takes this default — a stored document keeps its decoded value,
+                    // which is `true` for everything saved before the flag existed.
+                    compressOnDrawing = false,
                     blendAftMm = max(0f, blendAftMm),
                     blendFwdMm = max(0f, blendFwdMm),
                     blendProfile = blendProfile,
@@ -694,6 +700,22 @@ fun ShaftViewModel.updateBodyShowDia(index: Int, show: Boolean) = _spec.update {
         list = s.bodies, index = index, newValue = show,
         get = { it.showDiaOnDrawing },
         copyField = { old, v -> old.copy(showDiaOnDrawing = v) },
+        withList = { s.copy(bodies = it) },
+    )
+}
+
+/**
+ * Allow/forbid this body foreshortening on a sheet. Draw-only — no geometry, no value
+ * rewrite — and the same identity-guarded [withItemField] path as [updateBodyShowDia].
+ * Turning it OFF pins the body's stored span at true width and the drawn height yields
+ * around it; turning it back ON is the escape hatch for a body long enough that pinning it
+ * would starve the rest of the shaft.
+ */
+fun ShaftViewModel.updateBodyCompressOnDrawing(index: Int, compress: Boolean) = _spec.update { s ->
+    s.withItemField(
+        list = s.bodies, index = index, newValue = compress,
+        get = { it.compressOnDrawing },
+        copyField = { old, v -> old.copy(compressOnDrawing = v) },
         withList = { s.copy(bodies = it) },
     )
 }

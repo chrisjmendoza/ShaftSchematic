@@ -53,6 +53,7 @@ internal fun ThreadPagerCard(
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
+    componentTitlesDefault: Boolean = true,
     threadTitleById: Map<String, String>,
     f1: (Float) -> String,
     startValidator: (String, ComponentKind, Float) -> (String) -> String?,
@@ -163,7 +164,7 @@ internal fun ThreadPagerCard(
 
         ShowDiaToggleRow(
             label = "Show name on drawing",
-            checked = th.showLabelOnDrawing,
+            checked = th.showLabelOnDrawing ?: componentTitlesDefault,
             testTag = "thread_show_label_toggle",
             onCheckedChange = { onUpdateThreadShowLabel(idx, it) },
         )
