@@ -32,7 +32,7 @@ import kotlinx.serialization.Serializable
  * value was committed on — and carries no authored meaning.
  *
  * Draw-only: an override changes a span's drawn diameter and nothing else. Auto-span
- * positioning, OAL/coverage, collision, and the Free-to-End badge are untouched.
+ * positioning, OAL/coverage, and collision are untouched.
  *
  * Units: mm.
  */

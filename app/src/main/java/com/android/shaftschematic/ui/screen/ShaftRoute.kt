@@ -151,7 +151,6 @@ fun ShaftRoute(
     val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
     val showHighlightSelection by vm.showHighlightSelection.collectAsState()
     val showOalDebugLabel by vm.showOalDebugLabel.collectAsState()
-    val showOalHelperLine by vm.showOalHelperLine.collectAsState()
     val showOalInPreviewBox by vm.showOalInPreviewBox.collectAsState()
     val customer        by vm.customer.collectAsState()
     val vessel          by vm.vessel.collectAsState()
@@ -159,7 +158,6 @@ fun ShaftRoute(
     val item            by vm.item.collectAsState()
     val shaftPosition   by vm.shaftPosition.collectAsState()
     val notes           by vm.notes.collectAsState()
-    val overallIsManual by vm.overallIsManual.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
     val selectedComponentId by vm.selectedComponentId.collectAsState()
 
@@ -220,7 +218,6 @@ fun ShaftRoute(
         hasUnsavedChanges = hasUnsavedChanges,
         resolvedComponents = resolvedComponents,
         unit = unit,
-        overallIsManual = overallIsManual,
         customer = customer,
         vessel = vessel,
         jobNumber = jobNumber,
@@ -229,7 +226,6 @@ fun ShaftRoute(
         notes = notes,
         showGrid = showGrid,
         showOalDebugLabel = showOalDebugLabel,
-        showOalHelperLine = showOalHelperLine,
         showOalInPreviewBox = showOalInPreviewBox,
         showComponentDebugLabels = showComponentDebugLabels,
         showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
@@ -263,7 +259,6 @@ fun ShaftRoute(
         onSetNotes = vm::setNotes,
         onSetOverallLengthRaw = vm::setOverallLength,
         onSetOverallLengthMm = vm::onSetOverallLengthMm,
-        onSetOverallIsManual = vm::setOverallIsManual,
         onSelectComponentById = vm::selectComponentById,
 
         onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd ->

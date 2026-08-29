@@ -433,13 +433,6 @@ fun ShaftViewModel.setShowOalDebugLabel(show: Boolean, persist: Boolean = true) 
     }
 }
 
-fun ShaftViewModel.setShowOalHelperLine(show: Boolean, persist: Boolean = true) {
-    _showOalHelperLine.value = show
-    if (persist) {
-        viewModelScope.launch { SettingsStore.setShowOalHelperLine(getApplication(), show) }
-    }
-}
-
 fun ShaftViewModel.setShowOalInPreviewBox(show: Boolean, persist: Boolean = true) {
     _showOalInPreviewBox.value = show
     if (persist) {

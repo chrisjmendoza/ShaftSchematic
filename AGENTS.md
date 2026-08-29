@@ -1,4 +1,4 @@
-# ShaftSchematic – Claude Code Instructions
+# ShaftSchematic – Codex Instructions
 
 ## Project overview
 Android app (Kotlin / Jetpack Compose) for designing marine propulsion shafts.

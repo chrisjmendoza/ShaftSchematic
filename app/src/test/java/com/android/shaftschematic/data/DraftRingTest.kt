@@ -173,7 +173,7 @@ class DraftRingTest {
 
     @Test
     fun `unit-lock and OAL-mode flips alone keep a blank session default`() {
-        assertTrue(blankSnap().copy(unitLocked = true, overallIsManual = true).isDefaultSession())
+        assertTrue(blankSnap().copy(unitLocked = true).isDefaultSession())
     }
 
     @Test

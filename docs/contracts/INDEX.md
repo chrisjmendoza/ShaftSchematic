@@ -30,13 +30,13 @@ work ships they move to `docs/archive/`; each is listed under the contract it be
   parameter-order contract (thread major-Ø before pitch!)
 - **ComponentsOrdering.md** — carousel display order (resolved/physical, v1.2 —
   supersedes the locked newest-on-top rule; open product question)
-- **FreeToEndBadge.md** — badge computation, placement, and visibility invariants
 
 ## Model & geometry
 
 - **Model_Conventions.md** — model-layer rules: mm-only, pitch/TPI dual storage,
   component conventions
-- **OverallLength.md** — OAL semantics: auto vs manual, coverage, excluded threads
+- **OverallLength.md** — OAL semantics: always user-typed (no auto mode), 0 = not set yet,
+  coverage, excluded threads
 - **TaperRate.md** — auto/manual taper-rate engine (`util/TaperRateAuto.kt`), 3% snap
   tolerance (confirmed product decision), sentinel guards
 - **CouplerBoltSlot.md** — reference-only cutouts: never affect OAL, never collide,

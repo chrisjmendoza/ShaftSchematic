@@ -64,7 +64,6 @@ object SettingsStore {
     // Developer options (hidden behind About taps)
     private val KEY_DEV_OPTIONS_ENABLED = booleanPreferencesKey("dev_options_enabled")
     private val KEY_SHOW_OAL_DEBUG_LABEL = booleanPreferencesKey("show_oal_debug_label")
-    private val KEY_SHOW_OAL_HELPER_LINE = booleanPreferencesKey("show_oal_helper_line")
     private val KEY_SHOW_OAL_IN_PREVIEW_BOX = booleanPreferencesKey("show_oal_in_preview_box")
 
     // Developer options (debug tooling)
@@ -485,9 +484,6 @@ object SettingsStore {
     fun showOalDebugLabelFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_OAL_DEBUG_LABEL] ?: false }
 
-    fun showOalHelperLineFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_OAL_HELPER_LINE] ?: false }
-
     fun showOalInPreviewBoxFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_OAL_IN_PREVIEW_BOX] ?: false }
 
@@ -797,10 +793,6 @@ object SettingsStore {
         ctx.settingsDataStore.edit { it[KEY_SHOW_OAL_DEBUG_LABEL] = show }
     }
 
-    suspend fun setShowOalHelperLine(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_SHOW_OAL_HELPER_LINE] = show }
-    }
-
     suspend fun setShowOalInPreviewBox(ctx: Context, show: Boolean) {
         ctx.settingsDataStore.edit { it[KEY_SHOW_OAL_IN_PREVIEW_BOX] = show }
     }
@@ -848,7 +840,6 @@ object SettingsStore {
         if (devEnabled) return
         ctx.settingsDataStore.edit { prefs ->
             prefs[KEY_SHOW_OAL_DEBUG_LABEL] = false
-            prefs[KEY_SHOW_OAL_HELPER_LINE] = false
             prefs[KEY_SHOW_OAL_IN_PREVIEW_BOX] = false
             prefs[KEY_SHOW_COMPONENT_DEBUG_LABELS] = false
             prefs[KEY_SHOW_RENDER_LAYOUT_DEBUG_OVERLAY] = false

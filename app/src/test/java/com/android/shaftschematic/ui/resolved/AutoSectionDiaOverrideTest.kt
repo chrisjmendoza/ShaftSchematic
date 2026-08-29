@@ -16,7 +16,7 @@ import org.junit.Test
  */
 class AutoSectionDiaOverrideTest {
 
-    private fun resolved(spec: ShaftSpec) = resolveComponents(spec, overallIsManual = true)
+    private fun resolved(spec: ShaftSpec) = resolveComponents(spec)
 
     private fun autoBodies(spec: ShaftSpec) =
         resolved(spec)

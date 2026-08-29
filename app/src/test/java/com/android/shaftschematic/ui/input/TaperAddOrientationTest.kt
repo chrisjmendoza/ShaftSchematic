@@ -17,8 +17,8 @@ import org.junit.Test
  *
  * These tests drive the pieces `AddTaperDialog` and `ShaftViewModel.addTaperAt` wire together:
  * the dialog's FWD start arithmetic, [taperAddDiameterOrder] over [classifyTaperSideByMidpoint]
- * against [oalAfterTaperAddMm], and [ShaftViewModel.deriveTaperDiameters]. Same convention as
- * `ShaftViewModelUpdateTest` — the AndroidViewModel is not instantiated in this JVM suite.
+ * against the shaft's authored OAL, and [ShaftViewModel.deriveTaperDiameters]. Same convention
+ * as `ShaftViewModelUpdateTest` — the AndroidViewModel is not instantiated in this JVM suite.
  */
 class TaperAddOrientationTest {
 
@@ -39,13 +39,12 @@ class TaperAddOrientationTest {
         enteredStartMm: Float,
         measureFromFwd: Boolean,
         currentOalMm: Float = oalMm,
-        overallIsManual: Boolean = true,
     ): Taper {
         val start = physStartMm(enteredStartMm, measureFromFwd)
         val side = classifyTaperSideByMidpoint(
             startFromAftMm = start,
             lengthMm = lengthMm,
-            overallLengthMm = oalAfterTaperAddMm(currentOalMm, overallIsManual, start, lengthMm),
+            overallLengthMm = currentOalMm,
         )
         val (startDia, endDia) = taperAddDiameterOrder(setDiaMm, letDiaMm, side)
         return Taper(
@@ -150,40 +149,25 @@ class TaperAddOrientationTest {
         assertEquals("LET derived at the FWD face", setDiaMm + lengthMm / 12f, resolvedEnd, 0.001f)
     }
 
-    // ── The half is judged against the OAL the add itself produces ──────────────
+    // ── The half is judged against the authored OAL ─────────────────────────────
 
     @Test
-    fun `auto OAL growth counts when classifying the taper half`() {
-        // Blank shaft in auto-OAL mode: the pre-add OAL is 0, so the half can only be read
-        // from the OAL the add produces (2032 + 381 = 2413).
+    fun `an overhanging taper is classified against the authored OAL`() {
+        // The OAL stands as authored, so a taper running past the FWD end is still read as a
+        // FWD-half taper against that length — nothing grows the shaft around it.
+        val t = storedTaper(enteredStartMm = oalMm - 100f, measureFromFwd = false)
+        assertSetFacesFwd(t)
+    }
+
+    @Test
+    fun `a taper on a not-yet-set OAL falls back to the AFT half`() {
+        // OAL 0 = not typed yet; [classifyTaperSideByMidpoint] has no frame and defaults AFT.
         val t = storedTaper(
             enteredStartMm = fwdHalfStartMm,
             measureFromFwd = false,
             currentOalMm = 0f,
-            overallIsManual = false,
         )
-        val grownOalMm = fwdHalfStartMm + lengthMm
-
-        assertEquals("LET stored at the AFT face", letDiaMm, t.startDiaMm, 0.001f)
-        assertEquals("SET stored at the FWD tip", setDiaMm, t.endDiaMm, 0.001f)
-        assertEquals(
-            "card agrees once the shaft has grown around the taper",
-            setDiaMm, setDiaShownOnCard(t, grownOalMm), 0.001f
-        )
-    }
-
-    @Test
-    fun `a manual OAL is not grown by an overhanging taper`() {
-        // Manual OAL stands as authored, so an overhanging taper is classified against it.
-        assertEquals(
-            oalMm,
-            oalAfterTaperAddMm(
-                currentOalMm = oalMm,
-                overallIsManual = true,
-                startFromAftMm = oalMm - 100f,
-                lengthMm = lengthMm,
-            ),
-            0.001f
-        )
+        assertEquals("SET stored at the AFT face", setDiaMm, t.startDiaMm, 0.001f)
+        assertEquals("LET stored at the FWD face", letDiaMm, t.endDiaMm, 0.001f)
     }
 }

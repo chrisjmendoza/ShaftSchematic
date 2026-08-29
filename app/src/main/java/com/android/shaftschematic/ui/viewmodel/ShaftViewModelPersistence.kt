@@ -15,7 +15,6 @@ import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
-import com.android.shaftschematic.model.oalIsManualOnLoad
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.UnitSystem
@@ -274,8 +273,6 @@ fun ShaftViewModel.applyTemplate(raw: String) {
     _unitOverrides.value = decoded.unitOverrides
     _dualUnits.value = false
 
-    _overallIsManual.value = decoded.spec.oalIsManualOnLoad()
-
     // Deliberately NOT markDocumentSaved() — see the KDoc. The baseline stays where it
     // was, so the session reads as unsaved work and autosave keeps a draft of it.
     _currentDocumentName.value = null
@@ -324,12 +321,6 @@ fun ShaftViewModel.importJson(raw: String) {
     _unitOverrides.value = decoded.unitOverrides
     _dualUnits.value = decoded.dualUnits
 
-    // Derive OAL mode from the document instead of leaking the previous session's
-    // flag: an authored OAL must be treated as manual, or the auto path would snap it
-    // back down to the content end on open — and with it drop a leading auto span.
-    // See [oalIsManualOnLoad] for the two signals.
-    _overallIsManual.value = decoded.spec.oalIsManualOnLoad()
-
     markDocumentSaved()
 }
 
@@ -374,7 +365,6 @@ fun ShaftViewModel.newDocument() {
     _unitOverrides.value = emptyMap()
     _dualUnits.value = false
     _notes.value = ""
-    _overallIsManual.value = false
 
     _currentDocumentName.value = null
     markDocumentSaved()

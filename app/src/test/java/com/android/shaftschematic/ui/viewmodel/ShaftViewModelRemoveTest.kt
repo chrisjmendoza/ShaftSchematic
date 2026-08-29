@@ -117,7 +117,6 @@ class ShaftViewModelRemoveTest {
         runoutStationPlacements = RunoutStationPlacements(),
         stationCountOverrides = emptyMap(),
         undercutRecord = UndercutRecord(),
-        overallIsManual = false,
     )
 
     @Test

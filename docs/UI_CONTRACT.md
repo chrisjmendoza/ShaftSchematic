@@ -210,8 +210,8 @@ Length/SET/LET/rate text and submits it; all derivation happens in the ViewModel
 also surfaces `pitchMm` alongside TPI; UI must never compute pitch↔TPI conversion — the
 ViewModel handles it (`Threads.normalized()`).
 
-**3.4 Liner Dialog** — See `AddLinerDialog` there for fields. Not covered there: the dialog
-displays `freeToEndMm`, which is always ViewModel-computed; UI cannot calculate mm values itself.
+**3.4 Liner Dialog** — See `AddLinerDialog` there for fields. Not covered there: any derived mm
+value the dialog shows is ViewModel-computed; UI cannot calculate mm values itself.
 
 **3.5 Liner Authored Reference (AFT/FWD)** — not restated in the contracts pack; kept here as
 the canonical statement:

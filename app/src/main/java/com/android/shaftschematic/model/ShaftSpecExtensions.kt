@@ -13,13 +13,11 @@ import kotlin.math.max
  * Design Principles
  *  • All inputs/outputs are **millimeters** only; never depend on UI/layout/pixels.
  *  • No side effects; these are safe to use from ViewModel, UI, or tests.
- *  • Keep names literal to what they return (end positions and free length).
+ *  • Keep names literal to what they return (end positions).
  *
  * Functions
  *  • lastOccupiedEndMm(): Float
  *      Returns the furthest axial end (mm from aft face, x=0) occupied by any component.
- *  • freeToEndMm(): Float
- *      Returns remaining length (≥ 0) from the last occupied end to overallLengthMm.
  */
 
 /** Returns max of all component end positions in mm (≥ 0). */

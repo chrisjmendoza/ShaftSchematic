@@ -37,7 +37,7 @@ import kotlinx.serialization.Serializable
  * carries no authored meaning.
  *
  * Draw-only: it changes a span's drawn silhouette and nothing else. Auto-span positioning,
- * OAL/coverage, resolve, collision, and the Free-to-End badge are untouched.
+ * OAL/coverage, resolve, and collision are untouched.
  *
  * Units: mm.
  */

@@ -47,7 +47,6 @@ import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.keywayCount
 import com.android.shaftschematic.model.suggestedBodyKeywayEnd
 import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
-import com.android.shaftschematic.ui.input.oalAfterTaperAddMm
 import com.android.shaftschematic.ui.input.taperAddDiameterOrder
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.util.collectAddWarnings
@@ -423,7 +422,6 @@ data class LinerShoulderDraft(val aft: ShoulderEndDraft? = null, val fwd: Should
 fun AddLinerDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
-    overallIsManual: Boolean = false,
     initialStartMm: Float? = null,
     initialLengthMm: Float? = null,
     /** The "Liner shoulders" Settings capability — parity with the liner card's gate. */
@@ -578,7 +576,7 @@ fun AddLinerDialog(
                     fwd = end(shFwdOn, shFwdLen, shFwdOd, shFwdRadiusMm),
                 )
                 val action = { onSubmit(physStartMm, lengthMm, odMm, ref, shoulders) }
-                val warnings = collectAddWarnings(spec, physStartMm, lengthMm, overallIsManual)
+                val warnings = collectAddWarnings(spec, physStartMm, lengthMm)
                 if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
             }) { Text("Add") }
         },
@@ -733,7 +731,6 @@ fun AddCouplerBoltSlotDialog(
 fun AddThreadDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
-    overallIsManual: Boolean = false,
     initialStartMm: Float,
     initialLengthMm: Float,
     initialMajorDiaMm: Float,
@@ -885,7 +882,7 @@ fun AddThreadDialog(
                 val action = { onSubmit(startMm, lengthMm, majorMm, pitchMm, excludeFromOAL, isAftEnd, designation) }
                 // Excluded threads don't live on the shaft span, so skip collision for them.
                 val warnings = if (excludeFromOAL) emptyList()
-                               else collectAddWarnings(spec, startMm, lengthMm, overallIsManual)
+                               else collectAddWarnings(spec, startMm, lengthMm)
                 if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
             }) { Text("Add") }
         },
@@ -902,7 +899,6 @@ fun AddThreadDialog(
 fun AddTaperDialog(
     unit: UnitSystem,
     spec: ShaftSpec,
-    overallIsManual: Boolean = false,
     initialStartMm: Float? = null,
     initialLengthMm: Float? = null,
     /** Settings → Drawing → "Per-component units": gates the keyway's own unit chip. */
@@ -1184,16 +1180,11 @@ fun AddTaperDialog(
                     // Which face SET lands on follows the taper's PHYSICAL half — the chip
                     // above only says which end the start was measured from, and a taper
                     // measured from one end can be placed in the other half. The half is
-                    // judged against the OAL the shaft will have once this taper exists.
+                    // judged against the shaft's authored OAL.
                     val addSide = classifyTaperSideByMidpoint(
                         startFromAftMm = physStartMm,
                         lengthMm = lengthMm,
-                        overallLengthMm = oalAfterTaperAddMm(
-                            currentOalMm = spec.overallLengthMm,
-                            overallIsManual = overallIsManual,
-                            startFromAftMm = physStartMm,
-                            lengthMm = lengthMm,
-                        ),
+                        overallLengthMm = spec.overallLengthMm,
                     )
                     val (startDia, endDia) = taperAddDiameterOrder(
                         setDiaMm = if (setMm > 0f) setMm else -1f,
@@ -1219,7 +1210,7 @@ fun AddTaperDialog(
                                  if (showClockingToggle) cw90 else spec.keyways90Cw,
                                  if (kwDefined) kwUnitOverride else null)
                     }
-                    val warnings = collectAddWarnings(spec, physStartMm, lengthMm, overallIsManual)
+                    val warnings = collectAddWarnings(spec, physStartMm, lengthMm)
                     if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
                 }
             ) { Text("Add") }

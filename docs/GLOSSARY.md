@@ -38,9 +38,6 @@ Total envelope of the shaft; bounds all components.
 ### coverageEndMm
 Farthest end point of any component.
 
-### freeToEndMm
-Remaining length from coverageEnd to overallLength.
-
 ---
 
 # 2. Component Terms
@@ -255,7 +252,7 @@ collision warnings on normal drafts.)
 
 ### Reference-only feature
 A record that is drawn on the shaft but never participates in geometry: it does not affect
-OAL/`coverageEndMm`, body resolution, collision, or the Free-to-End badge. Seven kinds:
+OAL/`coverageEndMm`, body resolution, or collision. Seven kinds:
 coupler bolt slots (in `ShaftSpec`), and — in the document envelope — wear spots, wear pits,
 measured-Ø readings, worn sections, runout readings, and undercuts.
 

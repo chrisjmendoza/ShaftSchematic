@@ -169,7 +169,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Keyways 180° apart — spec-level clocking note; renders the far-side (non-aft-most) keyway as hidden dashed lines and prints a footer note; aft-most keyway stays solid as the measurement datum
 - Shared signing config — single debug.keystore, all machines update-install without data wipe
 - Selection highlight — single thin ring, seeded on file load
-- Warning badge system — yellow per-component chips, 3-state free-to-end badge
+- Warning badge system — yellow per-component chips
 - ShaftScreen.kt carousel extracted to `ComponentCarousel.kt`
 - Sidebar nav (5 tabs: Schematic / Runout Sheet / Wear Document / Undercut Drawing /
   Consolidated Output)

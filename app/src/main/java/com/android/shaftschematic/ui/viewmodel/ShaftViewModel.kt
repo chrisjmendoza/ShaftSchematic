@@ -56,7 +56,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
-import kotlin.math.max
 
 /**
  * File: ShaftViewModel.kt
@@ -109,7 +108,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             notes = _notes.value,
             runoutConfig = _runoutConfig.value,
             unitLocked = _unitLocked.value,
-            overallIsManual = _overallIsManual.value,
             wearRecord = _wearRecord.value,
             runoutReadings = _runoutReadings.value,
             undercutRecord = _undercutRecord.value,
@@ -203,7 +201,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Whether the session differs from the last saved/loaded state. Uses the SAME full-snapshot
      * comparison as the autosave dirty gate ([shouldWriteDraft]) so *every* tracked field —
-     * spec, metadata, position, unit-lock, OAL mode, wear record, runout readings/config —
+     * spec, metadata, position, unit-lock, wear record, runout readings/config —
      * counts as unsaved work; a partial comparison risks missing wear/runout edits and letting
      * unsaved work slip past the dirty gate. See docs/archive/Autosave_Incident_2026-07-25.md.
      */
@@ -405,9 +403,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _showOalDebugLabel = MutableStateFlow(false)
     val showOalDebugLabel: StateFlow<Boolean> = _showOalDebugLabel.asStateFlow()
 
-    internal val _showOalHelperLine = MutableStateFlow(false)
-    val showOalHelperLine: StateFlow<Boolean> = _showOalHelperLine.asStateFlow()
-
     internal val _showOalInPreviewBox = MutableStateFlow(false)
     val showOalInPreviewBox: StateFlow<Boolean> = _showOalInPreviewBox.asStateFlow()
 
@@ -463,10 +458,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _shaftPosition = MutableStateFlow(ShaftPosition.OTHER)
     val shaftPosition: StateFlow<ShaftPosition> = _shaftPosition.asStateFlow()
 
-    internal val _overallIsManual = MutableStateFlow(false)
-    val overallIsManual: StateFlow<Boolean> = _overallIsManual.asStateFlow()
-    fun setOverallIsManual(v: Boolean) { _overallIsManual.value = v }
-
     // Session-scoped "last used" add defaults (mm). Reset on new/open/import.
     private val _sessionAddDefaults = MutableStateFlow(SessionAddDefaults.initial())
     val sessionAddDefaults: StateFlow<SessionAddDefaults> = _sessionAddDefaults.asStateFlow()
@@ -501,14 +492,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ── Liner wear inspection record ──────────────────────────────────────────
     // Persisted alongside the spec in the .shaft file, same as runoutConfig above.
     // Reference-only data: plain state updates, no geometry side effects, no
-    // ensureOverall/auto-body interaction. See docs/archive/LinerWearAreas_Proposal.md §5, §7.
+    // auto-body interaction. See docs/archive/LinerWearAreas_Proposal.md §5, §7.
 
     internal val _wearRecord = MutableStateFlow(WearRecord())
     val wearRecord: StateFlow<WearRecord> = _wearRecord.asStateFlow()
 
     // ── Undercut drawing record ────────────────────────────────────────────────
     // Reference-only data, same posture as _wearRecord/_runoutReadings above: plain state
-    // updates, no geometry side effects, no ensureOverall/auto-body interaction. Undercuts
+    // updates, no geometry side effects, no auto-body interaction. Undercuts
     // have no component key, so there is no orphan concept here. See
     // docs/archive/UndercutDrawing_PLAN.md §2, §6.
 
@@ -531,8 +522,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ────────────────────────────────────────────────────────────────────────────
     // Session-scoped Undo / Redo (v2) — covers ALL drawing-state edits, not just deletes.
     //
-    // A single [SessionHistory] over [EditState] snapshots (spec + wear + runout + undercuts +
-    // OAL mode). Snapshots are recorded centrally by a collector over those flows (see init),
+    // A single [SessionHistory] over [EditState] snapshots (spec + wear + runout + undercuts).
+    // Snapshots are recorded centrally by a collector over those flows (see init),
     // with time-based coalescing living in SessionHistory (a typing burst = one undo step).
     // Undo/redo apply a restored EditState back onto the flows; the collector's re-emission
     // is a no-op because SessionHistory.record ignores states equal to its current head
@@ -561,7 +552,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         runoutStationPlacements = _runoutStationPlacements.value,
         stationCountOverrides = _runoutConfig.value.componentOverrides,
         undercutRecord = _undercutRecord.value,
-        overallIsManual = _overallIsManual.value,
     )
 
     private fun updateHistoryFlags() {
@@ -587,13 +577,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             // undoable state and keep whatever the user last set them to.
             _runoutConfig.update { it.copy(componentOverrides = e.stationCountOverrides) }
             _undercutRecord.value = e.undercutRecord
-            _overallIsManual.value = e.overallIsManual
         } finally {
             isRestoringHistory = false
         }
     }
 
-    /** Undo the most recent edit step (spec / wear / runout / undercuts / OAL mode). */
+    /** Undo the most recent edit step (spec / wear / runout / undercuts). */
     fun undoEdit() {
         val restored = editHistory.undo(currentEditState()) ?: return
         applyEditState(restored)
@@ -653,10 +642,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // the field). unit_overrides/dual_units were exactly that gap (on-device era report).
         val sessionSnapshotFlow = combine(
             spec, unit, shaftPosition, customer, vessel, jobNumber, notes,
-            runoutConfig, unitLocked, overallIsManual, wearRecord, runoutReadings, undercutRecord,
+            runoutConfig, unitLocked, wearRecord, runoutReadings, undercutRecord,
             runoutStationPlacements, unitOverrides, dualUnits, item
         ) { values: Array<Any?> ->
-            check(values.size == 17) { "Autosave combine expected 17 values, got ${values.size}" }
+            check(values.size == 16) { "Autosave combine expected 16 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -667,15 +656,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val n = values[6] as String
             val runout = values[7] as RunoutConfig
             val locked = values[8] as Boolean
-            val manual = values[9] as Boolean
-            val wear = values[10] as WearRecord
-            val readings = values[11] as RunoutReadings
-            val undercuts = values[12] as UndercutRecord
-            val stationPlacements = values[13] as RunoutStationPlacements
+            val wear = values[9] as WearRecord
+            val readings = values[10] as RunoutReadings
+            val undercuts = values[11] as UndercutRecord
+            val stationPlacements = values[12] as RunoutStationPlacements
             @Suppress("UNCHECKED_CAST")
-            val overrides = values[14] as Map<String, UnitSystem>
-            val dual = values[15] as Boolean
-            val itm = values[16] as String
+            val overrides = values[13] as Map<String, UnitSystem>
+            val dual = values[14] as Boolean
+            val itm = values[15] as String
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -688,7 +676,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 notes = n,
                 runoutConfig = runout,
                 unitLocked = locked,
-                overallIsManual = manual,
                 wearRecord = wear,
                 runoutReadings = readings,
                 undercutRecord = undercuts,
@@ -751,9 +738,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            combine(spec, overallIsManual) { s, isManual ->
-                resolveComponents(s, isManual)
-            }.collectLatest { resolved ->
+            spec.map { s -> resolveComponents(s) }.collectLatest { resolved ->
                 _resolvedComponents.value = resolved
             }
         }
@@ -770,18 +755,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // produces an identical snapshot, and SessionHistory.record no-ops it.
         viewModelScope.launch {
             combine(
-                spec, wearRecord, runoutReadings, undercutRecord, overallIsManual,
+                spec, wearRecord, runoutReadings, undercutRecord,
                 runoutStationPlacements, runoutConfig
             ) { values: Array<Any?> ->
-                check(values.size == 7) { "Undo combine expected 7 values, got ${values.size}" }
+                check(values.size == 6) { "Undo combine expected 6 values, got ${values.size}" }
                 EditState(
                     spec = values[0] as ShaftSpec,
                     wearRecord = values[1] as WearRecord,
                     runoutReadings = values[2] as RunoutReadings,
-                    runoutStationPlacements = values[5] as RunoutStationPlacements,
-                    stationCountOverrides = (values[6] as RunoutConfig).componentOverrides,
+                    runoutStationPlacements = values[4] as RunoutStationPlacements,
+                    stationCountOverrides = (values[5] as RunoutConfig).componentOverrides,
                     undercutRecord = values[3] as UndercutRecord,
-                    overallIsManual = values[4] as Boolean,
                 )
             }.collect { edit ->
                 if (isRestoringHistory) return@collect
@@ -1105,11 +1089,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            SettingsStore.showOalHelperLineFlow(getApplication()).collectLatest { persisted ->
-                _showOalHelperLine.value = persisted
-            }
-        }
-        viewModelScope.launch {
             SettingsStore.showOalInPreviewBoxFlow(getApplication()).collectLatest { persisted ->
                 _showOalInPreviewBox.value = persisted
             }
@@ -1203,9 +1182,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _unitOverrides.value = snapshot.unitOverrides
         _dualUnits.value = snapshot.dualUnits
         // Restore unitLocked before any defaultUnitFlow emission can overwrite the
-        // draft's unit, and overallIsManual so a manually-set OAL isn't auto-resized.
+        // draft's unit.
         _unitLocked.value = snapshot.unitLocked
-        _overallIsManual.value = snapshot.overallIsManual
         // Same courtesy as importJson/applyTemplate: the Add dialogs pre-fill from the
         // restored drawing's dimensions, not a previous session's leftovers.
         seedSessionAddDefaultsFromSpec(snapshot.shaftSpec)
@@ -1258,17 +1236,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun setOverallLength(raw: String) {
         val mm = parseToMm(raw, _unit.value).toFloat()
         onSetOverallLengthMm(mm)
-    }
-
-    /**
-     * Ensure overall length covers all components (plus optional free space).
-     * No-op when user has explicitly set overall (manual mode).
-     */
-    fun ensureOverall(minFreeMm: Float = 0f) = _spec.update { s ->
-        if (_overallIsManual.value) return@update s
-        val end = s.coverageEndMm()
-        val minOverall = end + max(0f, minFreeMm)
-        if (s.overallLengthMm < minOverall) s.withNewOal(minOverall) else s
     }
 
     /**

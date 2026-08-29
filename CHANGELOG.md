@@ -8,6 +8,59 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-29
 
+### feat(ui)!: Free-to-End badge removed
+
+On-device direction: auto-bodies fill the gap to the OAL automatically, so the "Free to end"
+number the preview overlay printed described a stretch of shaft that is already drawn as
+covered. The badge misled rather than warned, so it is gone rather than re-tuned.
+
+Removed: the `FreeToEndBadge` overlay from the preview card (`ui/screen/ShaftPreviewPanel.kt`),
+its value helper `ui/util/FreeToEndBadgeMath.kt` (`freeToEndSignedMm`) with
+`FreeToEndBadgeMathTest`, the unused `ShaftSpec.freeToEndMm()` model helper with its three
+`ShaftSpecTest` cases, the "Why is the Free-to-End badge missing?" Help topic, and the
+`docs/contracts/FreeToEndBadge.md` contract.
+
+**Oversize is unchanged and is now the only signal**: the OAL field's red `isError` state
+(`ShaftScreen.kt`, off `lastOccupiedEndMm` — which stays) and the add dialogs' "falls outside
+shaft span" warning (`ui/util/CollisionWarnings.kt`). Neither was touched. The chrome severity
+ladder (`errorContainer` → `tertiaryContainer` → `surface`) also stays as-is; it still carries
+the per-card warning chips and the advisory banner, which is what its comments now cite.
+
+### feat(ui)!: auto OAL mode removed — the overall length is always user-typed
+
+The Auto/Manual chips beside the Overall Length field are gone, and with them the whole
+automatic mode. The OAL is a user-typed value under the golden rule: nothing derives it,
+grows it, or snaps it back to the content end. The surviving behavior everywhere is what
+"manual" used to do, so a document that already carried an authored length prints and
+resolves exactly as before.
+
+What changed at the edges:
+
+- **Empty field** on IME-Done or blur commits **nothing** — the field text reverts to the
+  stored length. It no longer flips a mode and no longer zeroes the shaft. Per-keystroke
+  commit stays (the preview updates live).
+- **`overallLengthMm == 0` means "not typed yet"**, not an error. The field draws no red
+  state at 0, and the renderer's existing `safeSpec` fallback — mirrored in the thumbnail
+  and now in the preview OAL badge — draws such a shaft to its coverage end. Nothing
+  backfills it: not a document load, not the first component added.
+- **Free-to-End badge** is no longer mode-gated; its own suppression math (the
+  no-precision-components rule) is the only gate.
+- **Add-dialog bounds warning** ("falls outside shaft span") now fires whenever `OAL > 0`,
+  where it previously required manual mode.
+- **Add Body** pre-fills Length with the remaining OAL whenever `OAL > startMm`.
+
+Internals: the session-only `overallIsManual` flag is deleted from the ViewModel,
+`EditState`, and the autosave draft snapshot (older drafts still decode — the field is simply
+ignored). `ShaftViewModel.ensureOverall()` is deleted wholesale along with its 14 call sites;
+it was a no-op in the surviving mode, so no add/update/remove path changes behavior.
+`resolveComponents(spec)` lost its mode parameter and always passes the spec's OAL to
+`deriveAutoBodies`, whose `<= 0f` branches are now the genuine 0-OAL guards.
+`ShaftSpec.oalIsManualOnLoad()` (with `envelopeStartMm` / `OAL_MODE_EPS_MM`) and
+`oalAfterTaperAddMm` are gone — taper-half classification reads the stored OAL directly. The
+`showOalHelperLine` developer option is deleted too: its gate became unconditional, so the
+"Dimensioned OAL:" helper line now shows whenever an excluded end thread makes the dimensioned
+span differ from the physical length.
+
 ### feat(pdf): per-component "Shade on drawing" — tri-state, on the explicit cards
 
 On-device request: shade one component — a named "SKF" body — without switching shading on

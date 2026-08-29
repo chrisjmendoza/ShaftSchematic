@@ -131,7 +131,7 @@ class BlendSvgPreviewTest {
             }
             val cy = y + rowH / 2f
             val s = spec(r)
-            val comps = resolveComponents(s, overallIsManual = true)
+            val comps = resolveComponents(s)
             val blends = bodyBlends(s, comps)
             if (r.blendMm > 0f && blends.isEmpty()) missing++
 
@@ -226,7 +226,7 @@ class BlendSvgPreviewTest {
             ),
             liners = listOf(Liner(startFromAftMm = 5596f, lengthMm = 500f, odMm = 203.2f)),
         )
-        val comps = resolveComponents(s, overallIsManual = true)
+        val comps = resolveComponents(s)
         val blends = bodyBlends(s, comps)
         assertEquals("both faces should blend (taper step aft, liner seal fwd)", 2, blends.size)
 

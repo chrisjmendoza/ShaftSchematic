@@ -54,7 +54,6 @@ object AutosaveManager {
         // Absent in older drafts; defaults keep them decodable.
         val runoutConfig: RunoutConfig = RunoutConfig(),
         val unitLocked: Boolean = false,
-        val overallIsManual: Boolean = false,
         // Added (liner wear areas Phase 1): absent in older drafts; default
         // empty record keeps them decodable.
         val wearRecord: WearRecord = WearRecord(),

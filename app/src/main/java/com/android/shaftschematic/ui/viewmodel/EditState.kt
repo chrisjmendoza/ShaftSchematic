@@ -27,7 +27,6 @@ import com.android.shaftschematic.model.WearRecord
  *   recorder but produce an identical [EditState], which [SessionHistory.record] no-ops — so
  *   the history still cannot flood.
  * - [undercutRecord]: reference-only recorded undercut sections.
- * - [overallIsManual]: the OAL manual/auto mode.
  *
  * Carousel row order is NOT part of the snapshot: rows are derived from the spec (resolved
  * components in physical order), so restoring the spec restores the order with it.
@@ -44,5 +43,4 @@ data class EditState(
     val runoutStationPlacements: RunoutStationPlacements,
     val stationCountOverrides: Map<String, Int>,
     val undercutRecord: UndercutRecord,
-    val overallIsManual: Boolean,
 )

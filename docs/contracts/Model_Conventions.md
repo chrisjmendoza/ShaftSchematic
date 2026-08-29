@@ -39,7 +39,7 @@ Taper `startDiaMm`/`endDiaMm` are **x-ordered, SET faces the nearer shaft end**
 - Storage is positional: `startDiaMm` is the diameter at the AFT-most face, `endDiaMm` at the FWD-most face. SET/LET are display labels.
 - Which face carries the Small End is decided by the taper's **physical half** — `classifyTaperSideByMidpoint` (`ui/input/TaperSetLetMapping.kt`), midpoint ≤ OAL/2 → SET at the start face. Every writer and reader shares that one rule: the Add dialog's submit order (`taperAddDiameterOrder`), rate derivation (`ShaftViewModel.taperSmallEndAtStart` → same function), the carousel's labels (`taperSetLetMapping`), the renderer's trapezoid, and the keyway's SET-face reference.
 - The measure-from chip is **not** that signal — it says where the Start was measured from, nothing about which half the taper lands in. Keying the swap on it stores SET at the wrong face whenever the two disagree.
-- At add/edit time the half is judged against `oalAfterTaperAddMm(…)`: the OAL the shaft carries **after** the change (auto-OAL grows to cover the span; a manual OAL stands). The pre-add OAL is stale — on a blank shaft it is 0.
+- At add/edit time the half is judged against `spec.overallLengthMm`, the shaft's authored OAL. Nothing grows it around an overhanging taper; a not-yet-set OAL (0) gives `classifyTaperSideByMidpoint` no frame and falls back to AFT.
 - Documents written before this rule are **not** repaired on decode: a stored reversed pair loads exactly as saved (golden rule).
 
 `CouplerBoltSlot` — reference-only feature (see `CouplerBoltSlot.md`)
@@ -59,12 +59,19 @@ Do Nots
 - Do not clamp or mutate an excluded thread's `startFromAftMm` to keep it within 0..OAL — that would destroy the intended rendering position.
 
 Notes
-- `ShaftSpec` hosts aggregate helpers: `coverageEndMm`, `freeToEndMm`, `maxOuterDiaMm`,
-  `oalIsManualOnLoad` (the single load-time OAL-mode predicate — see
-  `docs/contracts/OverallLength.md`).
+- `ShaftSpec` hosts aggregate helpers: `coverageEndMm`, `maxOuterDiaMm`.
+  `overallLengthMm` is always user-typed and `0` means "not set yet" — see
+  `docs/contracts/OverallLength.md`.
 - `syncExcludedThreadPositions()` must be called after any OAL change or excluded-thread topology change.
 
 Change Log
+
+**v0.7 (2026-08-29)**
+- Auto OAL mode removed: `oalIsManualOnLoad` (and its private `envelopeStartMm` /
+  `OAL_MODE_EPS_MM`) deleted from the aggregate-helper list; taper-half classification now
+  reads the stored OAL directly. See `docs/contracts/OverallLength.md` v2.0.
+- Free-to-End badge removed: `freeToEndMm` deleted from the aggregate-helper list along with
+  the badge it served. See `docs/contracts/OverallLength.md` v2.1.
 
 **v0.6 (2026-08-24)**
 - Added `oalIsManualOnLoad` to the aggregate-helper list (single load-time OAL-mode predicate).

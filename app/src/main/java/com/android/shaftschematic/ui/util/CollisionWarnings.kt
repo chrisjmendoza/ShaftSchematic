@@ -7,7 +7,7 @@ import com.android.shaftschematic.model.ShaftSpec
  *
  * Checks existing tapers, non-excluded threads, and liners.
  * Bodies are intentionally skipped — they auto-split to accommodate any new component.
- * When [overallIsManual] is true, also warns if the component falls outside the shaft span.
+ * Once the shaft has an overall length, also warns if the component falls outside the span.
  *
  * Returns an empty list when everything is clean.  Callers should present the warnings and offer
  * an "Add Anyway" path rather than blocking the add.
@@ -16,7 +16,6 @@ fun collectAddWarnings(
     spec: ShaftSpec,
     startMm: Float,
     lengthMm: Float,
-    overallIsManual: Boolean,
 ): List<String> {
     if (startMm < 0f || lengthMm <= 0f) return emptyList()
 
@@ -29,7 +28,7 @@ fun collectAddWarnings(
         return startMm < bEnd - eps && proposedEnd > bStart + eps
     }
 
-    if (overallIsManual && spec.overallLengthMm > 0f) {
+    if (spec.overallLengthMm > 0f) {
         if (startMm < -eps || proposedEnd > spec.overallLengthMm + eps) {
             val oalStr = "%.3f".format(spec.overallLengthMm).trimEnd('0').trimEnd('.')
             warnings.add("Falls outside shaft span (OAL $oalStr mm)")

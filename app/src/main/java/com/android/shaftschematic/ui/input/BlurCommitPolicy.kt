@@ -12,7 +12,7 @@ package com.android.shaftschematic.ui.input
  * Whether an unfocused-state callback should trigger a commit.
  *
  * A tap-and-leave with no edit must be a no-op: `onCommit` has side effects downstream
- * (ViewModel writes, `ensureOverall`, `rememberBodyDefaults`), so re-committing an unchanged
+ * (ViewModel writes, `rememberBodyDefaults`), so re-committing an unchanged
  * value is not merely wasteful.
  *
  * Commits require a focus baseline to compare against. A null baseline means focus was never

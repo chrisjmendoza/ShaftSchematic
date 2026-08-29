@@ -3,7 +3,7 @@ package com.android.shaftschematic.ui.screen
 /**
  * ShaftPreviewPanel — preview drawing card + overlay badges.
  *
- * Houses the preview `Card`, the OAL badge, and the Free-to-End badge overlays.
+ * Houses the preview `Card` and the OAL badge overlay.
  * Extracted verbatim from ShaftScreen.kt — pure code move, no behavior change.
  */
 
@@ -32,7 +32,6 @@ import com.android.shaftschematic.model.lastOccupiedEndMm
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
-import com.android.shaftschematic.ui.util.freeToEndSignedMm
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UnitSystem
 
@@ -44,7 +43,6 @@ internal fun PreviewCard(
     spec: ShaftSpec,
     resolvedComponents: List<ResolvedComponent>,
     unit: UnitSystem,
-    overallIsManual: Boolean,
     devOptionsEnabled: Boolean,
     showOalInPreviewBox: Boolean,
     // NEW: explicit preview controls
@@ -102,14 +100,6 @@ internal fun PreviewCard(
                     PreviewOalBadge(
                         spec = spec,
                         unit = unit,
-                        overallIsManual = overallIsManual,
-                    )
-                }
-
-                if (overallIsManual) {
-                    FreeToEndBadge(
-                        spec = spec,
-                        unit = unit,
                     )
                 }
             }
@@ -121,11 +111,11 @@ internal fun PreviewCard(
 private fun PreviewOalBadge(
     spec: ShaftSpec,
     unit: UnitSystem,
-    overallIsManual: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val effectiveOalMm = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec).oalMm.toFloat() }
-    val displayOalMm = if (overallIsManual) spec.overallLengthMm else effectiveOalMm
+    // Mirrors the renderer's 0-OAL fallback: a not-yet-set length shows the drawn extent.
+    val displayOalMm = if (spec.overallLengthMm > 0f) spec.overallLengthMm else effectiveOalMm
 
     Surface(
         tonalElevation = 2.dp,
@@ -144,49 +134,3 @@ private fun PreviewOalBadge(
 
 /** Latest occupied end position along the shaft (mm) from all components. */
 internal fun lastOccupiedEndMm(spec: ShaftSpec): Float = spec.lastOccupiedEndMm()
-
-/* ───────────────── Free-to-End badge ───────────────── */
-
-@Composable
-private fun FreeToEndBadge(
-    spec: ShaftSpec,
-    unit: UnitSystem,
-    modifier: Modifier = Modifier
-) {
-    val freeSignedMm = freeToEndSignedMm(spec)
-    val isOversized = freeSignedMm < 0f
-    val isSnug = !isOversized && freeSignedMm < 10f
-
-    // When there are no precision components (tapers/liners/threads), auto-bodies always fill
-    // visually to OAL, so the badge would mislead the user into thinking there's uncovered
-    // shaft. Only suppress in the non-oversized case — oversized is always a red warning.
-    val hasPrecisionComponents = spec.tapers.isNotEmpty() ||
-        spec.threads.any { !it.excludeFromOAL } ||
-        spec.liners.isNotEmpty()
-    if (!isOversized && !hasPrecisionComponents) return
-
-    val bg = when {
-        isOversized -> MaterialTheme.colorScheme.errorContainer
-        isSnug      -> MaterialTheme.colorScheme.tertiaryContainer
-        else        -> MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-    }
-    val fg = when {
-        isOversized -> MaterialTheme.colorScheme.onErrorContainer
-        isSnug      -> MaterialTheme.colorScheme.onTertiaryContainer
-        else        -> MaterialTheme.colorScheme.onSurface
-    }
-
-    Surface(
-        tonalElevation = if (isOversized) 3.dp else 2.dp,
-        shape = RoundedCornerShape(8.dp),
-        color = bg,
-        modifier = modifier
-    ) {
-        Text(
-            text = "Free to end: ${formatDisplay(freeSignedMm, unit)} ${abbr(unit)}",
-            style = MaterialTheme.typography.labelSmall,
-            color = fg,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
-}

@@ -11,8 +11,8 @@ import java.util.UUID
  * written between them.
  *
  * A **pure reference feature**, same contract as [Undercut] / [WearPit] / [WearDiaReading]:
- * never affects `coverageEndMm`, `ensureOverall`, body resolution, collision/overlap
- * validation, or the Free-to-End badge, and lives outside [ShaftSpec] (in [WearRecord],
+ * never affects `coverageEndMm`, body resolution, or collision/overlap
+ * validation, and lives outside [ShaftSpec] (in [WearRecord],
  * rides the existing `wear_record` envelope field — additive, no codec change).
  *
  * ## Coordinate rule

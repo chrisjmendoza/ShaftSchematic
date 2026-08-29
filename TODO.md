@@ -28,7 +28,7 @@ at most a pointer from here.
 | ShaftLayout & ShaftRenderer | ✅ Contract-locked |
 | PDF export — one-page, landscape | ✅ Stable |
 | Validation — blocking errors | ✅ Add dialogs, carousel badges, export gate |
-| Validation — non-blocking warnings | ✅ Carousel badges, spec banner, 3-state Free-to-End badge |
+| Validation — non-blocking warnings | ✅ Carousel badges, spec banner |
 | Snapping engine | ❌ Removed with tap-to-add — nothing snaps a position (golden rule) |
 | Tap-to-add pipeline | ❌ Removed — canvas tap is selection-only; add via the FAB chooser |
 | OAL window / excluded threads | ✅ Implemented & unit-tested |

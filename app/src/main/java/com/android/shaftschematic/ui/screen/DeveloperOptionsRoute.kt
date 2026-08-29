@@ -37,7 +37,6 @@ fun DeveloperOptionsRoute(
 ) {
     val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
     val showOalDebugLabel by vm.showOalDebugLabel.collectAsState()
-    val showOalHelperLine by vm.showOalHelperLine.collectAsState()
     val showOalInPreviewBox by vm.showOalInPreviewBox.collectAsState()
 
     val showComponentDebugLabels by vm.showComponentDebugLabels.collectAsState()
@@ -102,18 +101,6 @@ fun DeveloperOptionsRoute(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("Show OAL Debug Label")
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Switch(
-                    checked = showOalHelperLine,
-                    onCheckedChange = { vm.setShowOalHelperLine(it) }
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("Show OAL Helper Line")
             }
 
             Row(

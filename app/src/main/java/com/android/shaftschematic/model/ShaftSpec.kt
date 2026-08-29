@@ -226,48 +226,6 @@ fun ShaftSpec.coverageEndMm(): Float {
     return maxOf(bodyEnd, taperEnd, linerEnd, threadEnd)
 }
 
-/** Remaining free axial distance from coverage end to [overallLengthMm] (≥ 0). */
-fun ShaftSpec.freeToEndMm(): Float =
-    (overallLengthMm - coverageEndMm()).coerceAtLeast(0f)
-
-/** Tolerance for the load-time OAL mode decision (mm). */
-private const val OAL_MODE_EPS_MM = 1e-3f
-
-/**
- * Aft-most component start inside the dimensioned envelope (mm); `null` when the spec holds no
- * such component. Mirrors [coverageEndMm]'s membership: threads excluded from OAL sit outside
- * the envelope (a negative start or `overallLengthMm`, see [syncExcludedThreadPositions]) and
- * are skipped on both ends.
- */
-private fun ShaftSpec.envelopeStartMm(): Float? = listOfNotNull(
-    bodies.minOfOrNull { it.startFromAftMm },
-    tapers.minOfOrNull { it.startFromAftMm },
-    liners.minOfOrNull { it.startFromAftMm },
-    threads.filter { !it.excludeFromOAL }.minOfOrNull { it.startFromAftMm },
-).minOrNull()
-
-/**
- * Whether a stored [overallLengthMm] must be treated as **manually set** when the document is
- * loaded — opened from a file, applied from a template, or previewed as one. The single
- * authority for that decision; every load path reads it so a preview can never disagree with
- * the drawing it turns into.
- *
- * Manual on either signal, each meaning the length was authored rather than derived:
- * - The length reaches past the last component ([coverageEndMm]) — free length to the FWD end.
- * - The aft-most component starts past 0 — a leading bare-shaft span. Auto mode derives no
- *   leading span (`deriveAutoBodies` adds one only when a manual OAL is in play), so a document
- *   whose length happens to equal its coverage end would open with that span silently gone.
- *
- * A spec with no components in the envelope is never manual by the leading-gap rule, and a spec
- * whose first component starts at 0 is decided by the coverage-end rule alone.
- */
-fun ShaftSpec.oalIsManualOnLoad(): Boolean {
-    if (overallLengthMm > coverageEndMm() + OAL_MODE_EPS_MM) return true
-    if (overallLengthMm <= 0f) return false
-    val firstStart = envelopeStartMm() ?: return false
-    return firstStart > OAL_MODE_EPS_MM
-}
-
 /**
  * Returns a copy where every excluded thread's [Threads.startFromAftMm] is placed
  * immediately outside the shaft span so it renders adjacent to — but never overlapping —

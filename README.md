@@ -20,7 +20,7 @@ Editing Workflow
 - Component carousel with edit cards; Add dialogs mirror the carousel cards control-for-control
 - Templates: save the current drawing as a template, then start from it in a browser that buckets by liner size and count (geometry only — job metadata is scrubbed on write)
 - Unit switching (mm / inch) at the UI edge only — the model is always canonical millimeters
-- Validation: blocking errors (dialogs, badges, export gate) and non-blocking warnings (overlaps among sacred components, free-to-end badge). Bodies are fillers and never collide
+- Validation: blocking errors (dialogs, badges, export gate) and non-blocking warnings (overlaps among sacred components). Bodies are fillers and never collide
 - Delete with multi-step Undo; undo/redo history menu
 - Per-component "Show Ø on drawing" toggle — keep a measured diameter off the part of the schematic where it could not have been measured
 

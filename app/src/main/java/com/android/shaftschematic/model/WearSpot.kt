@@ -24,8 +24,8 @@ enum class WearSpotReference { LINER_AFT, LINER_FWD, AFT_SET, FWD_SET }
  *
  * This is a **pure reference feature** — same contract class as [CouplerBoltSlot]
  * (see `CLAUDE.md` and `docs/archive/LinerWearAreas_Proposal.md` §7):
- * - It never affects `coverageEndMm`, `ensureOverall`, body resolution, collision/overlap
- *   validation, or the Free-to-End badge.
+ * - It never affects `coverageEndMm`, body resolution, or collision/overlap
+ *   validation.
  * - It lives outside [ShaftSpec] entirely (flat list in [WearRecord], stored beside
  *   `RunoutConfig` in the document envelope) so geometry resolution never has to know
  *   about it.
@@ -96,7 +96,7 @@ enum class DyePenResult { PASS, FAIL }
  *
  * A **pure reference feature**, the same contract class as [WearSpot] / [CouplerBoltSlot] /
  * [com.android.shaftschematic.model.RunoutReading]: it never affects `coverageEndMm`,
- * `ensureOverall`, body resolution, collision/overlap validation, or the Free-to-End badge,
+ * body resolution, or collision/overlap validation,
  * and it lives outside [ShaftSpec] entirely (in [WearRecord], the document envelope).
  *
  * Unlike [WearSpot] (which is liner-only), a pit may sit on **any** pit-eligible component —
@@ -138,7 +138,7 @@ data class WearPit(
  *
  * A **pure reference feature**, the same contract class as [WearSpot] / [WearPit] /
  * [com.android.shaftschematic.model.RunoutReading]: it never affects `coverageEndMm`,
- * `ensureOverall`, body resolution, collision/overlap validation, or the Free-to-End badge,
+ * body resolution, or collision/overlap validation,
  * and it lives outside [ShaftSpec] entirely (in [WearRecord], the document envelope).
  *
  * Like [WearPit], a reading may sit on **any** liner, taper, or body (explicit or auto) and

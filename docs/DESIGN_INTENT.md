@@ -32,7 +32,7 @@ These are binding and live in `CLAUDE.md` — listed here only so this document 
 complete:
 
 - **Golden rule**: typed values are sacred; no system rewrites them.
-- **Reference features** never move geometry, OAL, collision, or the Free-to-End badge.
+- **Reference features** never move geometry, OAL, or collision.
 - **Draw-both-sites**: a mark that appears on canvas and PDF renders identically from one
   pure construction.
 - **Unit edge**: conversion only at display/input; canonical mm everywhere else.

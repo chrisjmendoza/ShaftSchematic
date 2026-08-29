@@ -19,8 +19,8 @@ const val COUPLING_PILOT_COMPONENT_ID = "coupling_pilot"
  * A recorded runout (TIR) reading for one measurement station (bubble) on the runout sheet.
  *
  * **Pure reference feature** — same contract class as [WearSpot]/[CouplerBoltSlot] (see
- * `CLAUDE.md`): it never affects `coverageEndMm`/OAL, body resolution, collision/overlap
- * validation, or the Free-to-End badge. It lives outside [ShaftSpec] entirely, in
+ * `CLAUDE.md`): it never affects `coverageEndMm`/OAL, body resolution, or collision/overlap
+ * validation. It lives outside [ShaftSpec] entirely, in
  * [RunoutReadings], stored beside `RunoutConfig`/`WearRecord` in the document envelope so
  * geometry resolution never has to know about it.
  *

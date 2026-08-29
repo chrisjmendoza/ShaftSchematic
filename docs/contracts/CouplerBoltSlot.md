@@ -48,14 +48,14 @@ edges are checked, not just the centers.
 ## Core invariant — reference-only feature
 
 A coupler bolt slot **never**:
-- affects overall length — excluded from `coverageEndMm()` / `ensureOverall()`;
+- affects overall length — excluded from `coverageEndMm()`;
 - splits or merges bodies (no `splitBodiesAround` on add, no merge on remove);
 - collides — `ComponentKind.COUPLER_BOLT_SLOT.collisionGroup()` returns `null`.
 
 It is resolved as `ResolvedCouplerBoltSlot` **after** body resolution and appended by
 position, so it never enters auto-body derivation or body subtraction.
 
-Do **not** add slots to `coverageEndMm`, `ensureOverall`, body split/merge, overlap
+Do **not** add slots to `coverageEndMm`, body split/merge, overlap
 validation, or `maxOuterDiaMm` (a slot's `maxDiaMm()` is 0 — it does not define shaft OD).
 
 ---
@@ -93,7 +93,7 @@ through vs blind render identically.
 ## ViewModel API (`ShaftViewModel`)
 
 - `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through, depthMm, reference = FWD)`
-  — newest-on-top; remembers session defaults; **no `ensureOverall()`**.
+  — newest-on-top; remembers session defaults; never touches OAL.
 - `updateCouplerBoltSlot(index, startMm, holeDiaMm, count, spacingMm, through, depthMm)`
 - `updateCouplerBoltSlotReference / updateCouplerBoltSlotShowRail`
   (`updateCouplerBoltSlotLabel` was deleted 2026-07-26 — dead end-to-end; the slot card

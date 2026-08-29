@@ -16,7 +16,7 @@ import org.junit.Test
 class AutoBodyDiaOverrideTest {
 
     private fun autoBodies(spec: ShaftSpec) =
-        resolveComponents(spec, overallIsManual = true)
+        resolveComponents(spec)
             .filterIsInstance<ResolvedBody>()
             .filter { it.source == ResolvedComponentSource.AUTO }
 

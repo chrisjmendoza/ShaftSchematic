@@ -20,7 +20,6 @@ import com.android.shaftschematic.model.withKeyways180Apart
 import com.android.shaftschematic.model.withKeyways90Apart
 import com.android.shaftschematic.model.withKeyways90Cw
 import com.android.shaftschematic.model.withPhysical
-import com.android.shaftschematic.ui.input.oalAfterTaperAddMm
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel.Companion.deriveTaperDiameters
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel.Companion.taperSmallEndAtStart
@@ -101,7 +100,6 @@ fun ShaftViewModel.addBodyAt(
     }
     applyKeywayUnit(id, keywayUnit)
     rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
-    ensureOverall()
     _selectedComponentId.value = id
 }
 
@@ -110,7 +108,6 @@ fun ShaftViewModel.updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm
     if (index in _spec.value.bodies.indices) {
         rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
     }
-    ensureOverall()
 }
 
 /** Edit a body's keyway in place (mirrors [updateTaperKeyway]). All params in mm. */
@@ -185,7 +182,6 @@ fun ShaftViewModel.removeBody(id: String) {
     }
 
     if (removed) {
-        ensureOverall()
         emitDeletedSnack(ComponentKind.BODY)
     }
 }
@@ -217,18 +213,12 @@ fun ShaftViewModel.addTaperAt(
     keywayUnit: UnitSystem? = null,
 ) {
     val id = newId()
-    // Which end is the Small End follows the taper's physical half, judged against the OAL
-    // the shaft carries once this taper exists — in auto-OAL mode the add itself can grow
-    // the shaft, and the pre-add OAL would derive the missing diameter for the wrong face.
+    // Which end is the Small End follows the taper's physical half, judged against the
+    // shaft's authored OAL — the same frame the carousel labels and the keyway math read.
     val smallEndAtStart = taperSmallEndAtStart(
         startMm = startMm,
         lengthMm = lengthMm,
-        overallLengthMm = oalAfterTaperAddMm(
-            currentOalMm = _spec.value.overallLengthMm,
-            overallIsManual = _overallIsManual.value,
-            startFromAftMm = startMm,
-            lengthMm = lengthMm,
-        ),
+        overallLengthMm = _spec.value.overallLengthMm,
     )
     _spec.update { s ->
         val split = s.splitBodiesAround(startMm, startMm + lengthMm) { newId() }
@@ -265,7 +255,6 @@ fun ShaftViewModel.addTaperAt(
         setDiaMm = if (smallEndAtStart) startDiaMm else endDiaMm,
         letDiaMm = if (smallEndAtStart) endDiaMm else startDiaMm,
     )
-    ensureOverall()
     _selectedComponentId.value = id
 }
 
@@ -281,21 +270,15 @@ fun ShaftViewModel.updateTaper(
         val old = s.tapers[index]
         val effectiveRate = rateText.ifBlank { old.taperRateText }
 
-        // Same frame as the add path: the half is judged against the OAL that will cover
-        // the edited span, so an edit that pushes the taper past the current end derives
-        // the missing diameter for the face the card will label.
+        // Same frame as the add path: the half is judged against the shaft's authored OAL,
+        // so the missing diameter is derived for the face the card will label.
         val (resolvedStartDia, resolvedEndDia) = deriveTaperDiameters(
             startDiaMm = startDiaMm, endDiaMm = endDiaMm,
             lengthMm = lengthMm, rateText = effectiveRate,
             smallEndAtStart = taperSmallEndAtStart(
                 startMm = startMm,
                 lengthMm = lengthMm,
-                overallLengthMm = oalAfterTaperAddMm(
-                    currentOalMm = s.overallLengthMm,
-                    overallIsManual = _overallIsManual.value,
-                    startFromAftMm = startMm,
-                    lengthMm = lengthMm,
-                ),
+                overallLengthMm = s.overallLengthMm,
             )
         )
 
@@ -318,12 +301,7 @@ fun ShaftViewModel.updateTaper(
         val smallEndAtStart = taperSmallEndAtStart(
             startMm = startMm,
             lengthMm = lengthMm,
-            overallLengthMm = oalAfterTaperAddMm(
-                currentOalMm = _spec.value.overallLengthMm,
-                overallIsManual = _overallIsManual.value,
-                startFromAftMm = startMm,
-                lengthMm = lengthMm,
-            ),
+            overallLengthMm = _spec.value.overallLengthMm,
         )
         rememberTaperDefaults(
             lengthMm = lengthMm,
@@ -331,7 +309,6 @@ fun ShaftViewModel.updateTaper(
             letDiaMm = if (smallEndAtStart) endDiaMm else startDiaMm,
         )
     }
-    ensureOverall()
 }
 
 fun ShaftViewModel.updateTaperKeyway(
@@ -394,7 +371,6 @@ fun ShaftViewModel.removeTaper(id: String) {
     }
 
     if (removed) {
-        ensureOverall()
         emitDeletedSnack(ComponentKind.TAPER)
     }
 }
@@ -446,7 +422,6 @@ fun ShaftViewModel.addThreadAt(
     // so every formatting site resolves it to mm uniformly (see DisplayUnits).
     applyMetricThreadUnit(id, metricDesignation)
     rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
-    ensureOverall()
     _selectedComponentId.value = id
 }
 
@@ -464,8 +439,7 @@ fun ShaftViewModel.updateThread(
 
         // For excluded threads the start position is always derived from isAftEnd + OAL,
         // never from a user-authored startMm. Use the same formula as syncExcludedThreadPositions()
-        // so the position is correct inside this single _spec.update call, avoiding a transient
-        // wrong position when manual OAL mode prevents ensureOverall() from re-syncing.
+        // so the position is correct inside this single _spec.update call.
         val effectiveStart = if (old.excludeFromOAL) {
             if (old.isAftEnd) -newLength else s.overallLengthMm
         } else startMm
@@ -487,7 +461,6 @@ fun ShaftViewModel.updateThread(
         applyMetricThreadUnit(_spec.value.threads[index].id, metricDesignation)
         rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
     }
-    ensureOverall()
 }
 
 /**
@@ -529,7 +502,7 @@ fun ShaftViewModel.setThreadExcludeFromOal(id: String, excludeFromOAL: Boolean) 
             l[idx] = old.copy(excludeFromOAL = excludeFromOAL)
         }
     ).syncExcludedThreadPositions()
-}.also { ensureOverall() }
+}
 
 fun ShaftViewModel.setThreadEndPosition(id: String, isAft: Boolean) = _spec.update { s ->
     val idx = s.threads.indexOfFirst { it.id == id }
@@ -568,8 +541,6 @@ fun ShaftViewModel.removeThread(id: String) {
     }
 
     if (removed) {
-        // Maintain coverage and show the undo snackbar.
-        ensureOverall()
         emitDeletedSnack(ComponentKind.THREAD)
     }
 }
@@ -610,7 +581,6 @@ fun ShaftViewModel.addLinerAt(
         split.spec.copy(liners = listOf(liner) + split.spec.liners)
     }
     rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
-    ensureOverall()
     _selectedComponentId.value = id
 }
 
@@ -629,7 +599,6 @@ fun ShaftViewModel.updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm
     if (index in _spec.value.liners.indices) {
         rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
     }
-    ensureOverall()
 }
 
 fun ShaftViewModel.updateLinerAuthoredReference(index: Int, reference: LinerAuthoredReference) = _spec.update { s ->
@@ -944,7 +913,6 @@ fun ShaftViewModel.removeLiner(id: String) {
     }
 
     if (removed) {
-        ensureOverall()
         emitDeletedSnack(ComponentKind.LINER)
     }
 }
@@ -979,7 +947,6 @@ fun ShaftViewModel.addCouplerBoltSlotAt(
         s.copy(couplerBoltSlots = listOf(slot) + s.couplerBoltSlots)
     }
     rememberSlotDefaults(holeDiaMm = holeDiaMm, spacingMm = spacingMm, depthMm = depthMm, count = count)
-    // NOTE: deliberately no ensureOverall() — slots never drive OAL.
     _selectedComponentId.value = id
 }
 
@@ -1050,7 +1017,6 @@ fun ShaftViewModel.removeCouplerBoltSlot(id: String) {
     }
 
     if (removed) {
-        // Slots never affect OAL, so no ensureOverall() here.
         emitDeletedSnack(ComponentKind.COUPLER_BOLT_SLOT)
     }
 }

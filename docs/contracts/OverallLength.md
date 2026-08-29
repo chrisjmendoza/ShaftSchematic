@@ -1,37 +1,60 @@
-# Overall Length — Auto vs Manual (v1.2, 2026-07-18)
+# Overall Length (v2.1, 2026-08-29)
 
 ## Scope
-Defines how the **Overall Length** field behaves, how it interacts with components, and how the UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
+Defines how the **Overall Length** field behaves, how it interacts with components, and how the
+UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
 
 ---
 
 ## UX Summary
-- **Default**: Overall starts at **0** with a **ghost “0”** placeholder in the input.
-- **Auto mode** (default): Overall automatically grows to the **last occupied end** of all components.
-- **Manual lock**: When the user types a value and commits (IME Done or blur), Overall switches to **manual** and holds that exact value.
-- **Unlock**: Clearing the field (empty) switches back to **auto** and snaps Overall to the current last occupied end.
-- **Oversize**: If components extend past a **manual** Overall, the input shows an **error** and the Free-to-End badge turns **red** with a **negative** value.
+- **The OAL is always user-typed.** There is no automatic mode: nothing derives, grows or
+  shrinks `ShaftSpec.overallLengthMm` on the user's behalf. It is a component value under the
+  golden rule (`CLAUDE.md`) — a typed length stands exactly as typed.
+- **Default**: Overall starts at **0** — "not set yet", not "a zero-length shaft". The field
+  shows `0`, and focusing it clears that ghost so the user can type without a leading zero.
+- **Commit on every keystroke**: `onSetOverallLengthMm` fires on every parseable keystroke so
+  the preview updates live. This is deliberate; do **not** narrow it to commit-on-blur.
+- **Empty field**: an IME-Done or a blur on an empty field commits **nothing**. The field text
+  re-derives from the stored value (a revert). It never zeroes the shaft.
+- **Blur discipline**: a commit on blur also requires the text to have changed since focus
+  (`ui/input/BlurCommitPolicy.kt`) — a tap-and-leave is a no-op.
+- **Oversize**: if components extend past a **set** Overall (`> 0`), the input shows an
+  **error**. A not-yet-set Overall (`0`) is never an error.
 
 ---
 
 ## Business Rules
-- Canonical units are **millimeters** (mm). All computations are in mm; formatting happens at the UI edge.
-- Auto growth is **one-way**: It never shrinks below the last occupied end while in auto mode.
-- Manual mode **disables auto growth** completely until the user clears the field or edits it again.
+- Canonical units are **millimeters** (mm). All computations are in mm; formatting happens at
+  the UI edge.
 - Oversize is allowed but surfaced as an error state (no automatic correction).
+- **0 means "not yet authored".** Nothing backfills it — not a document load, not the first
+  component added. The renderer's 0-OAL fallback (`safeSpec` in
+  `ui/drawing/compose/ShaftDrawing.kt`, mirrored in `ShaftThumbnail.kt`) draws such a shaft to
+  its coverage end, and it is the only guard. The preview OAL badge mirrors the same fallback.
+- Consumers that need a span from a 0-OAL spec fall back themselves; they never write one back.
+  `resolveComponents` passes `spec.overallLengthMm` straight into `deriveAutoBodies`, whose
+  `<= 0f` branches are the genuine 0-OAL guards.
+- The collision/add "falls outside shaft span" warning is gated on `overallLengthMm > 0f`
+  alone (`ui/util/CollisionWarnings.kt`).
 
 ---
 
 ## PDF OAL Dimension Span
 
-The OAL label always shows the user's typed value (`spec.overallLengthMm`). It never changes when threads are included or excluded. Only the **bracket position** moves:
+The OAL label always shows the user's typed value (`spec.overallLengthMm`). It never changes
+when threads are included or excluded. Only the **bracket position** moves:
 
-- **Excluded** (`excludeFromOAL = true`): bracket spans **AFT SET → FWD SET**. The threads are drawn outside the bracket.
-- **Included** (`excludeFromOAL = false`): bracket spans **shaft AFT end (0.0) → FWD SET**, visually grouping the AFT thread inside the OAL arrow.
+- **Excluded** (`excludeFromOAL = true`): bracket spans **AFT SET → FWD SET**. The threads are
+  drawn outside the bracket.
+- **Included** (`excludeFromOAL = false`): bracket spans **shaft AFT end (0.0) → FWD SET**,
+  visually grouping the AFT thread inside the OAL arrow.
 
-Symmetrically for FWD end threads. Label is passed explicitly to `oalSpan(..., labelMm = spec.overallLengthMm)` so it is always the typed OAL regardless of bracket width.
+Symmetrically for FWD end threads. Label is passed explicitly to
+`oalSpan(..., labelMm = spec.overallLengthMm)` so it is always the typed OAL regardless of
+bracket width.
 
-Component dimension rails (liners, taper lengths) always reference SET positions and are unaffected by this toggle.
+Component dimension rails (liners, taper lengths) always reference SET positions and are
+unaffected by this toggle.
 
 ---
 
@@ -43,7 +66,7 @@ Excluded threads (`excludeFromOAL = true`) live outside the 0..OAL span by desig
 an AFT excluded thread's negative start or a FWD excluded thread's `OAL`-anchored end would
 corrupt the result. Both real implementations filter first:
 `ShaftSpecExtensions.kt` `ShaftSpec.lastOccupiedEndMm()` and `ShaftSpec.coverageEndMm()`
-(`model/ShaftSpec.kt`), which the ViewModel now calls rather than duplicating.
+(`model/ShaftSpec.kt`), which the ViewModel calls rather than duplicating.
 ```
 /** Latest occupied end (in mm) from all components. */
 fun ShaftSpec.lastOccupiedEndMm(): Float {
@@ -57,29 +80,28 @@ fun ShaftSpec.lastOccupiedEndMm(): Float {
 }
 ```
 
-### Load-time mode (open, template apply, template preview)
-
-`overallIsManual` is **derived from the document**, never inherited from the previous session.
-One pure predicate decides it — `ShaftSpec.oalIsManualOnLoad()` (`model/ShaftSpec.kt`) — and it
-is manual on either signal:
-
-- `overallLengthMm > coverageEndMm() + 1e-3` — free length to the FWD end.
-- `overallLengthMm > 0` **and** the aft-most component starts past 0 — a leading bare-shaft
-  span. Auto mode passes `overallLengthMm = 0f` to `deriveAutoBodies`, which derives leading and
-  trailing spans only when a manual OAL is in play, so loading such a document as auto drops
-  that span from the drawing.
-
-Membership mirrors `coverageEndMm`: threads excluded from OAL sit outside the 0..OAL span and
-are skipped on both ends. A spec with no components in the envelope is never manual by the
-leading-gap rule.
-
-All three load paths read the one predicate — `ShaftViewModel.importJson`,
-`ShaftViewModel.applyTemplate`, and the template card's preview resolve in `TemplatesRoute`.
-A private predicate at any of them lets a preview disagree with the drawing it becomes.
+### Load (open, template apply, template preview)
+There is nothing to decide. A document's stored `overallLengthMm` is restored verbatim and
+every load path resolves through the same one-argument `resolveComponents(spec)`, so a
+template card's preview can never disagree with the drawing it becomes.
 
 ---
 
 ## Change Log
+**v2.1 (2026-08-29)** — **Free-to-End badge removed entirely** (on-device direction: auto-bodies
+fill the gap to the OAL automatically, so the number misleads). The preview overlay, its value
+helper (`ui/util/FreeToEndBadgeMath.kt`), `ShaftSpec.freeToEndMm()` and the `FreeToEndBadge.md`
+contract are all gone. Oversize is signalled by the OAL field's error state and the add-dialog
+"falls outside shaft span" warning; both are unchanged.
+**v2.0 (2026-08-29)** — **Auto OAL mode removed** (on-device direction). The OAL is always
+user-typed; the Auto/Manual chips, the auto-sync `LaunchedEffect`, the session-only
+`overallIsManual` flag (autosave draft field included), `ShaftSpec.oalIsManualOnLoad()` /
+`envelopeStartMm()`, `ShaftViewModel.ensureOverall()` (a no-op in the surviving mode) and
+`oalAfterTaperAddMm` are all gone, along with the `showOalHelperLine` dev option (its gate
+became always-true). `resolveComponents(spec)` lost its mode parameter and always passes the
+spec's OAL to `deriveAutoBodies`. New behavior: an empty field reverts instead of switching
+mode; a 0 OAL renders no error and draws to coverage; the bounds warning fires whenever
+`OAL > 0`; the Free-to-End badge is no longer mode-gated.
 **v1.3 (2026-08-24)** — Added the "Load-time mode" section: `ShaftSpec.oalIsManualOnLoad()` is
 the single load-time OAL-mode predicate (adds the leading-gap clause); the ViewModel's private
 `coverageEndMm` duplicate is gone.

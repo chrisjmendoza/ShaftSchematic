@@ -144,7 +144,7 @@ Unit tests live in `app/src/test/`:
 
 | Test file | Covers |
 |---|---|
-| `ShaftSpecTest` | Spec helpers: coverage, freeToEnd, maxOD |
+| `ShaftSpecTest` | Spec helpers: coverage, maxOD |
 | `ShaftSpecSnapExtensionsTest` | Snap engine edge cases |
 | `SegmentTest` | Segment validity |
 | `ShaftPositionTest` | Position enum logic |

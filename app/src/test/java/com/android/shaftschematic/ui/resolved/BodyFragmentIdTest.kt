@@ -50,7 +50,7 @@ class BodyFragmentIdTest {
 
     @Test
     fun `a body spanning a liner resolves into two fragments with unique ids`() {
-        val resolved = resolveComponents(spannedSpec(), overallIsManual = false)
+        val resolved = resolveComponents(spannedSpec())
         val fragments = explicitBodies(resolved).sortedBy { it.startMmPhysical }
 
         assertEquals(2, fragments.size)
@@ -67,18 +67,16 @@ class BodyFragmentIdTest {
 
     @Test
     fun `no two resolved components share an id`() {
-        // With a manual OAL there are auto spans too — the whole list must still be key-safe,
+        // Auto spans sit alongside the explicit fragments — the whole list must be key-safe,
         // because the carousel pager keys its pages by resolved id.
-        listOf(false, true).forEach { manual ->
-            val ids = resolveComponents(spannedSpec(), overallIsManual = manual).map { it.id }
-            assertEquals("duplicate resolved ids (overallIsManual=$manual): $ids", ids.size, ids.toSet().size)
-        }
+        val ids = resolveComponents(spannedSpec()).map { it.id }
+        assertEquals("duplicate resolved ids: $ids", ids.size, ids.toSet().size)
     }
 
     @Test
     fun `every fragment maps back to the stored body through its base id`() {
         val spec = spannedSpec()
-        val fragments = explicitBodies(resolveComponents(spec, overallIsManual = false))
+        val fragments = explicitBodies(resolveComponents(spec))
 
         assertTrue(fragments.isNotEmpty())
         fragments.forEach { frag ->
@@ -93,7 +91,7 @@ class BodyFragmentIdTest {
             overallLengthMm = 600f,
             bodies = listOf(Body(id = "body-1", startFromAftMm = 0f, lengthMm = 400f, diaMm = 150f)),
         )
-        val body = explicitBodies(resolveComponents(spec, overallIsManual = false)).single()
+        val body = explicitBodies(resolveComponents(spec)).single()
 
         assertEquals("body-1", body.id)
         assertFalse("no suffix when nothing was trimmed", body.id.contains('#'))
@@ -109,7 +107,7 @@ class BodyFragmentIdTest {
                 Liner(id = "liner-2", startFromAftMm = 500f, lengthMm = 100f, odMm = 200f),
             ),
         )
-        val ids = explicitBodies(resolveComponents(spec, overallIsManual = false))
+        val ids = explicitBodies(resolveComponents(spec))
             .sortedBy { it.startMmPhysical }
             .map { it.id }
 

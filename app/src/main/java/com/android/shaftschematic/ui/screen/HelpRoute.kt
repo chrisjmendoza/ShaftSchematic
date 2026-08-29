@@ -543,12 +543,6 @@ private val helpSections: List<HelpSection> = listOf(
                     "values (auto OAL, auto-body spans, auto taper rate text) move on their own."
             ),
             HelpTopic(
-                "Why is the Free-to-End badge missing?",
-                "The badge hides when the shaft has no precision components (tapers, liners, " +
-                    "counted threads) and isn't oversized. With only bodies, the auto-fill " +
-                    "always runs to the end, so a free-to-end number would be meaningless."
-            ),
-            HelpTopic(
                 "Why don't wear marks, runout readings, or undercuts change my shaft?",
                 "They are reference features: notes on top of the drawing, like pencil marks " +
                     "on a print. They never affect overall length, component positions, or " +

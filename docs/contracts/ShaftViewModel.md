@@ -4,7 +4,7 @@ ShaftViewModel Contract
 Layer: UI → ViewModel  
 Purpose: Owns editable ShaftSpec state, unit selection, grid toggle, and routes all commits from the UI to the model/persistence.
 
-Version: v0.9 (2026-08-10)
+Version: v1.0 (2026-08-29)
 
 Invariants
 - All stored geometry is **canonical millimeters (mm)**.  
@@ -14,7 +14,7 @@ Invariants
 Responsibilities
 - Hold `ShaftSpec`, `UnitSystem`, `showGrid`, and project meta fields.  
 - Commit APIs accept raw text (e.g., `onSetOverallLengthRaw`), parse, convert, clamp, and update.  
-- Expose derived values (e.g., `freeToEndMm`) from the model.  
+- Expose derived values (e.g., `coverageEndMm`) from the model.  
 - `updateBodyBlend(index, blendAftMm, blendFwdMm, profile)` — sets a body's blended faces.
   Drawing-only: it changes the silhouette and nothing else (not OAL, resolve, collision, or any
   other component's span). Lengths are stored **verbatim**; a length longer than the body is
@@ -59,7 +59,7 @@ Responsibilities
     (`ShaftScreen` title strip, `testTag("editor_document_title")`).
   - `hasUnsavedWork()` — returns `shouldWriteDraft(buildCurrentSnapshot(),
     savedSnapshot)`, the **same** full-snapshot comparison as the autosave dirty gate,
-    so spec, metadata, position, unit-lock, OAL mode, wear record, and runout
+    so spec, metadata, position, unit-lock, wear record, and runout
     readings/config all count as unsaved work. The legacy per-field
     `_savedSpec`/`_savedJobNumber`/`_savedCustomer`/`_savedVessel`/`_savedNotes`
     fields are gone; `markDocumentSaved()` now sets only `savedSnapshot`. Backs the
@@ -80,7 +80,7 @@ Responsibilities
   deletes:
   - `EditState` (`ui/viewmodel/EditState.kt`) is the undoable slice: `spec`,
     `wearRecord`, `runoutReadings`, `runoutStationPlacements`, `stationCountOverrides`,
-    `undercutRecord`, `overallIsManual`. Metadata
+    `undercutRecord`. Metadata
     (customer/vessel/job number/notes/shaft position/unit) is deliberately **not**
     undoable, and neither is carousel row order — rows are derived from the spec
     (resolved components in physical order), so restoring the spec restores them.
@@ -93,7 +93,7 @@ Responsibilities
     history cannot flood. `applyEditState` restores only the override slice via
     `_runoutConfig.update { it.copy(componentOverrides = …) }`, never the whole config.
   - A central collector (`combine(spec, wearRecord, runoutReadings, undercutRecord,
-    overallIsManual, runoutStationPlacements, runoutConfig)` in `init`) records an
+    runoutStationPlacements, runoutConfig)` in `init`) records an
     `EditState` on every emission via
     `editHistory.record(edit, System.currentTimeMillis())`. `SessionHistory` owns the
     policy: edits within 600 ms of the previous record coalesce into one undo step (a
@@ -119,8 +119,8 @@ Responsibilities
 
 Add APIs
 - `addLinerAt(startMm, lengthMm, odMm, reference: LinerAuthoredReference = AFT)` — the `reference` parameter records which end the user measured from; stored on `Liner.authoredReference` for the carousel edit card to display correctly. The default is `AFT` for the quick-add path which does not ask for a reference.
-- `addTaperAt(startMm, lengthMm, startDiaMm, endDiaMm, rateText, reference: LinerAuthoredReference = AFT, keyway…)` — `startDiaMm`/`endDiaMm` arrive **x-ordered AFT → FWD** (the Add dialog orders the typed S.E.T./L.E.T. by the taper's physical half, `ui/input/TaperSetLetMapping.kt`); `reference` records the measured-from end and is stored on `Taper.authoredReference` so the carousel card reopens in that frame. Which end is the Small End — used to derive a missing diameter from the rate and to seed the next dialog's SET/LET defaults — comes from `taperSmallEndAtStart` against `oalAfterTaperAddMm(…)`, the OAL the shaft carries **after** the add (auto-OAL mode grows to cover the new span; a manual OAL stands).
-- `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through = true, depthMm = 0f, reference: SlotAuthoredReference = FWD)` — adds a coupler bolt-slot row. **Does not** call `ensureOverall()` (slots never drive OAL); no body split. Paired with `updateCouplerBoltSlot(index, …)`, `updateCouplerBoltSlotReference/Label/ShowRail`, and `removeCouplerBoltSlot(id)` (recoverable via the general `undoEdit()` session history; no body merge). See `CouplerBoltSlot.md`.
+- `addTaperAt(startMm, lengthMm, startDiaMm, endDiaMm, rateText, reference: LinerAuthoredReference = AFT, keyway…)` — `startDiaMm`/`endDiaMm` arrive **x-ordered AFT → FWD** (the Add dialog orders the typed S.E.T./L.E.T. by the taper's physical half, `ui/input/TaperSetLetMapping.kt`); `reference` records the measured-from end and is stored on `Taper.authoredReference` so the carousel card reopens in that frame. Which end is the Small End — used to derive a missing diameter from the rate and to seed the next dialog's SET/LET defaults — comes from `taperSmallEndAtStart` against `spec.overallLengthMm`, the shaft's authored OAL (nothing grows it around an overhanging taper; a 0 OAL has no frame and classifies AFT).
+- `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through = true, depthMm = 0f, reference: SlotAuthoredReference = FWD)` — adds a coupler bolt-slot row. Slots never drive OAL; no body split. Paired with `updateCouplerBoltSlot(index, …)`, `updateCouplerBoltSlotReference/Label/ShowRail`, and `removeCouplerBoltSlot(id)` (recoverable via the general `undoEdit()` session history; no body merge). See `CouplerBoltSlot.md`.
 
 Do Nots
 - Do not format values for display (UI edge only).  
@@ -138,6 +138,17 @@ Future Enhancements
 
 Change Log
 ----------
+**v1.0 (2026-08-29)**
+- **Auto OAL mode removed** (on-device direction). `_overallIsManual` / `overallIsManual` /
+  `setOverallIsManual` are gone from the ViewModel, from `EditState`, and from
+  `AutosaveManager.SessionSnapshot` (the autosave combine is now 16-wide, the undo combine
+  6-wide). `ensureOverall()` is deleted along with its 14 call sites — it was a no-op in the
+  surviving mode, so no add/update/remove path changes behavior. `resolveComponents(spec)`
+  lost its mode parameter; the load paths (`importJson`, `applyTemplate`, `newDocument`) no
+  longer derive or reset a mode, and `ShaftSpec.oalIsManualOnLoad()` is gone with them.
+  Taper-half classification now reads `spec.overallLengthMm` directly (`oalAfterTaperAddMm`
+  deleted). See `OverallLength.md` v2.0.
+
 **v0.9 (2026-08-10)**
 - `updateBody()` — the inline list edit moved to the pure, tested model function
   `ShaftSpec.withBodyAt(index, startMm, lengthMm, diaMm)` (`ShaftSpecExtensions.kt`; same

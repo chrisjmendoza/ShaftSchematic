@@ -70,7 +70,7 @@ never touches geometry resolution, so it lives beside the spec in the document e
   ("Shaft height", liner compression) behind the runout/consolidated sheets and the schematic.
 
 All are additive/defaulted (no envelope version bumps) and share one contract: they never
-affect `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End badge. The
+affect `coverageEndMm`/OAL, body resolution, or collision. The
 authoritative invariants live in `CLAUDE.md` and
 `docs/contracts/RunoutSheet.md`.
 
@@ -96,15 +96,16 @@ Responsibilities:
 - File import/export
 
 Resolved component pipeline (shipped):
-- `ui/resolved/ResolvedComponent.kt` implements `resolveComponents(spec, overallIsManual)`,
+- `ui/resolved/ResolvedComponent.kt` implements `resolveComponents(spec)`,
   which resolves explicit components and calls `deriveAutoBodies()` to fill the gaps.
 - Auto bodies (`ResolvedComponentSource.AUTO`, `ResolvedComponentType.BODY_AUTO`) are **not**
   persisted in `ShaftSpec` — they are regenerated deterministically on every resolve.
 - Auto bodies are downstream of OAL + explicit components and never overlap them
   (`subtractBodiesAgainstNonBodies()` carves body spans around sacred components for rendering).
 - Auto bodies must never define measurement references or snapping anchors.
-- Manual OAL seeds a base auto body spanning 0 → OAL; derived OAL does not
-  (`deriveAutoBodies(overallLengthMm = if (overallIsManual) spec.overallLengthMm else 0f, …)`).
+- An OAL seeds a base auto body spanning 0 → OAL
+  (`deriveAutoBodies(overallLengthMm = spec.overallLengthMm, …)`); a not-yet-set OAL (0)
+  seeds none — `deriveAutoBodies`' `<= 0f` branches are the 0-OAL guard.
 - **Explicit vs auto bodies (reverted 2026-07-21):** both stored `ShaftSpec.bodies` (explicit)
   and derived auto-bodies are fluid base material / fillers. Bodies **do not** collide —
   `collidingIds()` checks only taper/thread/liner pairs (sacred-vs-sacred). There is no

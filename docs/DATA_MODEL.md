@@ -120,8 +120,8 @@ the half-open interval `[startMm, endMm)` — draws at that `diaMm`.
   posture). An anchor that lands inside a component is **dormant** — not applied, never
   pruned at decode — and resurrects unchanged if its span reappears. (A gap beside an
   explicit body survives as its own run, so its anchors stay live while the gap exists.)
-- **Draw-only:** never affects OAL/coverage, span positioning, body resolution, collision, or
-  the Free-to-End badge. Written by `ShaftSpec.withAutoSectionDia` (upsert; `≤ 0` clears).
+- **Draw-only:** never affects OAL/coverage, span positioning, body resolution, or collision.
+  Written by `ShaftSpec.withAutoSectionDia` (upsert; `≤ 0` clears).
 
 #### Body Split / Merge
 
@@ -344,16 +344,8 @@ These conditions are handled at UI/UX level, not model layer.
 Helpers
 coverageEndMm
 fun ShaftSpec.coverageEndMm(): Float = ...
-freeToEndMm
-freeToEndMm
-fun ShaftSpec.freeToEndMm(): Float =
-    (overallLengthMm - coverageEndMm()).coerceAtLeast(0f)
 maxOuterDiaMm
 Used by layout engine for vertical fit.
-oalIsManualOnLoad
-fun ShaftSpec.oalIsManualOnLoad(): Boolean = ...
-Load-time OAL mode: manual when the stored length reaches past `coverageEndMm()`, or when a
-leading gap precedes the aft-most component. See `docs/contracts/OverallLength.md`.
 
 Serialization & Migration
 Format (the **document envelope**, `doc/ShaftDocCodec.ShaftDocV1` — abridged):

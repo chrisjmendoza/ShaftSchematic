@@ -12,11 +12,11 @@ val Pink40 = Color(0xFF7D5260)
 
 // ── Advisory (caution) tier ──────────────────────────────────────────────────
 // The app runs a three-rung severity ladder — error / caution / neutral — and maps the caution
-// rung onto `tertiaryContainer` (the Free-to-End badge steps errorContainer → tertiaryContainer
-// → surface; per-card warnings and the spec banner use the same role). That role was never
-// assigned, so every scheme inherited M3's baseline `#FFD8E4` — a pale PINK sitting a few
-// degrees of hue from `errorContainer`, which put "snug" and "oversized" at almost the same
-// colour on one badge and made an advisory banner read as an error (on-device report).
+// rung onto `tertiaryContainer` (per-card warning chips and the advisory warnings banner step
+// errorContainer → tertiaryContainer → surface). Leaving that role unassigned makes every scheme
+// inherit M3's baseline `#FFD8E4` — a pale PINK sitting a few degrees of hue from
+// `errorContainer`, which puts caution and error at almost the same colour and makes an advisory
+// banner read as an error (on-device report).
 //
 // Amber instead: unmistakably caution, unmistakably not danger, and far from the app's purple
 // primary. `tertiary` itself is deliberately NOT touched — it is the preview-color "Bronze"

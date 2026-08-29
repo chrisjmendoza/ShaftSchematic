@@ -42,7 +42,7 @@ class BodyBlendsTest {
     )
 
     private fun blendsOf(spec: ShaftSpec) =
-        bodyBlends(spec, resolveComponents(spec, overallIsManual = true))
+        bodyBlends(spec, resolveComponents(spec))
 
     @Test
     fun `a shaft with no blend fields yields no blends`() {
@@ -195,7 +195,7 @@ class BodyBlendsTest {
             ),
             liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 300f, odMm = 260f)),
         )
-        val comps = resolveComponents(spec, overallIsManual = true)
+        val comps = resolveComponents(spec)
         assertNull(
             "a fully covered body should not draw",
             comps.filterIsInstance<ResolvedBody>().firstOrNull { it.id == "seat" },
@@ -228,8 +228,8 @@ class BodyBlendsTest {
     /** A blend is machined out of its own body — no other component span may move. */
     @Test
     fun `a blend moves no other component`() {
-        val plain = resolveComponents(steppedSpec(), overallIsManual = true)
-        val blended = resolveComponents(steppedSpec(blendAftMm = 50f), overallIsManual = true)
+        val plain = resolveComponents(steppedSpec())
+        val blended = resolveComponents(steppedSpec(blendAftMm = 50f))
         assertEquals(plain.size, blended.size)
         plain.zip(blended).forEach { (a, b) ->
             assertEquals(a.startMmPhysical, b.startMmPhysical, eps)
@@ -353,7 +353,7 @@ class BodyBlendsTest {
             ),
             liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 400f, odMm = 240f)),
         )
-        val comps = resolveComponents(spec, overallIsManual = true)
+        val comps = resolveComponents(spec)
         val run = comps.filterIsInstance<ResolvedBody>().single { it.id == "run" }
         val e = bodyDrawEdges(
             runId = run.id,
@@ -415,7 +415,7 @@ class BodyBlendsTest {
             ),
             liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 400f, odMm = 240f)),
         )
-        val comps = resolveComponents(spec, overallIsManual = true)
+        val comps = resolveComponents(spec)
         val run = comps.filterIsInstance<ResolvedBody>().single { it.id == "run" }
         return bodyDrawEdges(
             runId = run.id,
@@ -447,7 +447,7 @@ class BodyBlendsTest {
     // ───────── bodyDrawEdges ─────────
 
     private fun edges(spec: ShaftSpec, runId: String, minWidthPx: Float = 7f): BodyDrawEdges {
-        val comps = resolveComponents(spec, overallIsManual = true)
+        val comps = resolveComponents(spec)
         val run = comps.filterIsInstance<ResolvedBody>().single { it.id == runId }
         return bodyDrawEdges(
             runId = runId,
@@ -529,7 +529,7 @@ class BodyBlendsTest {
             ),
             liners = listOf(Liner(startFromAftMm = 250f, lengthMm = 80f, odMm = 260f)),
         )
-        val comps = resolveComponents(spec, overallIsManual = true)
+        val comps = resolveComponents(spec)
         val runs = comps.filterIsInstance<ResolvedBody>().filter { resolvedBodyBaseId(it.id) == "big" }
         assertTrue("expected the liner to split the body", runs.size > 1)
 

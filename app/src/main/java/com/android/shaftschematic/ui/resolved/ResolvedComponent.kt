@@ -91,10 +91,10 @@ data class ResolvedCouplerBoltSlot(
     val depthMm: Float,
 ) : ResolvedComponent()
 
-fun resolveComponents(spec: ShaftSpec, overallIsManual: Boolean): List<ResolvedComponent> {
+fun resolveComponents(spec: ShaftSpec): List<ResolvedComponent> {
     val explicit = resolveExplicitComponents(spec)
     val autoBodies = deriveAutoBodies(
-        overallLengthMm = if (overallIsManual) spec.overallLengthMm else 0f,
+        overallLengthMm = spec.overallLengthMm,
         explicitComponents = explicit,
         overrideDiaMm = spec.autoBodyDiaMm,
         sectionOverrides = spec.autoDiaOverrides

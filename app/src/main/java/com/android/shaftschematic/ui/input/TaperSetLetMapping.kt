@@ -1,7 +1,6 @@
 package com.android.shaftschematic.ui.input
 
 import com.android.shaftschematic.model.Taper
-import kotlin.math.max
 
 /**
  * UI-only mapping for taper end labels.
@@ -72,24 +71,6 @@ internal fun classifyTaperSideByMidpoint(
     val midMm = startFromAftMm + lengthMm * 0.5f
     return if (midMm <= overallLengthMm * 0.5f) TaperSide.AFT else TaperSide.FWD
 }
-
-/**
- * The OAL the shaft carries once a taper spanning [startFromAftMm] … + [lengthMm] exists —
- * the frame the carousel labels, the renderer and the keyway math read for that taper.
- *
- * In auto-OAL mode the shaft grows to cover a component that runs past the current end; a
- * manual OAL stands as authored. Classifying the taper's half against the *pre-add* OAL
- * would seat SET on the wrong face whenever the add itself grows the shaft (on a blank
- * shaft the pre-add OAL is 0, so every taper would classify AFT).
- */
-internal fun oalAfterTaperAddMm(
-    currentOalMm: Float,
-    overallIsManual: Boolean,
-    startFromAftMm: Float,
-    lengthMm: Float,
-): Float =
-    if (overallIsManual) currentOalMm
-    else max(currentOalMm, startFromAftMm + max(0f, lengthMm))
 
 /**
  * The diameter pair to STORE for a taper being added, x-ordered AFT → FWD, from the semantic

@@ -113,7 +113,6 @@ import kotlinx.coroutines.launch
  * Responsibilities
  * • Header row (unit selector + grid toggle; unit selector disables when locked)
  * • Preview drawing (white square; optional grid; fixed-height band)
- * • Free-to-End badge overlay (top-start of preview; red on oversize)
  * • Overall length input (ghost “0”; commits on blur/Done; auto when not manual)
  * • Project fields (commit-on-blur / IME Done)
  * • Component carousel (edit & remove) — rows in physical order along the shaft
@@ -140,7 +139,6 @@ fun ShaftScreen(
     hasUnsavedChanges: Boolean = false,
     resolvedComponents: List<ResolvedComponent> = emptyList(),
     unit: UnitSystem,
-    overallIsManual: Boolean,
     customer: String,
     vessel: String,
     jobNumber: String,
@@ -149,7 +147,6 @@ fun ShaftScreen(
     notes: String,
     showGrid: Boolean,
     showOalDebugLabel: Boolean,
-    showOalHelperLine: Boolean,
     showOalInPreviewBox: Boolean,
     showComponentDebugLabels: Boolean,
     showRenderLayoutDebugOverlay: Boolean,
@@ -194,7 +191,6 @@ fun ShaftScreen(
     onSetNotes: (String) -> Unit,
     onSetOverallLengthRaw: (String) -> Unit,
     onSetOverallLengthMm: (Float) -> Unit,
-    onSetOverallIsManual: (Boolean) -> Unit,
     onSelectComponentById: (String?) -> Unit,
 
     // Adds (all mm)
@@ -327,14 +323,6 @@ fun ShaftScreen(
     // edit. Snapping belongs to coarse gestures (tap-to-add) only; typed values are exact.
     // See the golden rule (user inputs are sacred) in CLAUDE.md.
 
-    // Auto-sync overall when not manual
-    LaunchedEffect(overallIsManual, spec.bodies, spec.tapers, spec.threads, spec.liners) {
-        if (!overallIsManual) {
-            val end = lastOccupiedEndMm(spec)
-            if (end != spec.overallLengthMm) onSetOverallLengthMm(end)
-        }
-    }
-
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets.systemBars.only(
@@ -466,7 +454,6 @@ fun ShaftScreen(
                 spec = spec,
                 resolvedComponents = resolvedComponents,
                 unit = unit,
-                overallIsManual = overallIsManual,
                 devOptionsEnabled = devOptionsEnabled,
                 showOalInPreviewBox = showOalInPreviewBox,
                 highlightEnabled = showHighlightSelection,
@@ -507,22 +494,21 @@ fun ShaftScreen(
                     ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Overall Length (auto vs manual — always show a value)
+                // Overall Length — always the authored value; 0 until the user types one.
                 var hasLenFocus by remember { mutableStateOf(false) }
                 var lenTextOnFocus by remember { mutableStateOf<String?>(null) }
 
-                val effectiveOalDisplayMm = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec).oalMm.toFloat() }
-                val displayMm = if (overallIsManual) spec.overallLengthMm else effectiveOalDisplayMm
-                var lengthText by remember(unit, overallIsManual) {
+                val displayMm = spec.overallLengthMm
+                var lengthText by remember(unit) {
                     mutableStateOf(formatDisplay(displayMm, unit))
                 }
                 // The field echoes the user's own text — a typed "150 3/4" stays a fraction
-                // instead of being rewritten to "150.75" (on-device report). The model was
-                // previously a remember key, so its per-keystroke echo reformatted the text
-                // mid-typing. Now the display only re-derives from the model when the field
-                // is unfocused AND its text no longer explains the model value (auto-mode
-                // recompute, undo, an edit from elsewhere).
-                LaunchedEffect(displayMm, unit, overallIsManual, hasLenFocus) {
+                // instead of being rewritten to "150.75" (on-device report). The model is
+                // deliberately not a remember key, or its per-keystroke echo would reformat
+                // the text mid-typing. The display only re-derives from the model when the
+                // field is unfocused AND its text no longer explains the model value (undo,
+                // an edit from elsewhere, a reverted empty commit).
+                LaunchedEffect(displayMm, unit, hasLenFocus) {
                     if (!hasLenFocus) {
                         val parsed = toMmOrNull(lengthText, unit)
                         if (parsed == null || kotlin.math.abs(parsed - displayMm) > 0.01f) {
@@ -531,123 +517,75 @@ fun ShaftScreen(
                     }
                 }
 
-                val isOversized = spec.overallLengthMm < lastOccupiedEndMm(spec)
+                // A not-yet-set OAL (0) is not an error — the renderer draws to the coverage
+                // end until a length is typed.
+                val isOversized = spec.overallLengthMm > 0f &&
+                    spec.overallLengthMm < lastOccupiedEndMm(spec)
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = lengthText,
-                        onValueChange = { input ->
-                            // Default to Auto until the user types.
-                            if (!overallIsManual && input != lengthText) {
-                                onSetOverallIsManual(true)
+                OutlinedTextField(
+                    value = lengthText,
+                    onValueChange = { input ->
+                        lengthText = input
+                        toMmOrNull(input, unit)?.let { mm ->
+                            onSetOverallLengthMm(mm)
+                        }
+                    },
+                    label = { Text("Overall Length (${abbr(unit)})") },
+                    singleLine = true,
+                    enabled = true,
+                    isError = isOversized,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = {
+                        val t = lengthText.trim()
+                        if (t.isEmpty()) {
+                            // An empty field commits nothing: the text reverts to the stored
+                            // length rather than zeroing the shaft.
+                            lengthText = formatDisplay(spec.overallLengthMm, unit)
+                        } else {
+                            toMmOrNull(t, unit)?.let { mm ->
+                                onSetOverallLengthMm(mm)
+                                onSetOverallLengthRaw(t) // keep user’s display text
+                            }
+                        }
+                    }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { f ->
+                            val wasFocused = hasLenFocus
+                            hasLenFocus = f.isFocused
+
+                            if (!wasFocused && f.isFocused) {
+                                // Baseline for the commit-on-change rule.
+                                lenTextOnFocus = lengthText
+                                // A not-yet-set length reads "0"; clear it so the user can
+                                // type without a leading zero. Leaving without typing reverts.
+                                if (lengthText.trim() == "0") lengthText = ""
                             }
 
-                            lengthText = input
-                            if (overallIsManual) {
-                                toMmOrNull(input, unit)?.let { mm ->
-                                    onSetOverallLengthMm(mm)
-                                }
-                            }
-                        },
-                        label = { Text("Overall Length (${abbr(unit)})") },
-                        singleLine = true,
-                        enabled = true,
-                        isError = isOversized,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(onDone = {
-                            val t = lengthText.trim()
-                            if (t.isEmpty()) {
-                                onSetOverallIsManual(false)
-                                val end = lastOccupiedEndMm(spec)
-                                onSetOverallLengthMm(end)
-                                val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
-                                lengthText = formatDisplay(effective, unit)
-                            } else {
-                                toMmOrNull(t, unit)?.let { mm ->
-                                    onSetOverallLengthMm(mm)
-                                    onSetOverallIsManual(true)
-                                    onSetOverallLengthRaw(t) // keep user’s display text
-                                }
-                            }
-                        }),
-                        modifier = Modifier
-                            .weight(1f)
-                            .onFocusChanged { f ->
-                                val wasFocused = hasLenFocus
-                                hasLenFocus = f.isFocused
+                            if (wasFocused && !f.isFocused) {
+                                val baseline = lenTextOnFocus
+                                lenTextOnFocus = null
+                                val t = lengthText.trim()
 
-                                if (!wasFocused && f.isFocused) {
-                                    // Capture initial text so tapping the field in Auto doesn't
-                                    // accidentally flip us into Manual when the user didn't edit.
-                                    lenTextOnFocus = lengthText
-                                    // Clear "0" so the user can type without a leading zero.
-                                    if (lengthText.trim() == "0") lengthText = ""
+                                // Commit only what changed since focus (BlurCommitPolicy).
+                                if (baseline != null && lengthText == baseline) {
+                                    return@onFocusChanged
                                 }
 
-                                if (wasFocused && !f.isFocused) {
-                                    val baseline = lenTextOnFocus
-                                    lenTextOnFocus = null
-                                    val t = lengthText.trim()
-
-                                    // If we were in Auto and the user didn't change anything,
-                                    // don't flip into Manual.
-                                    if (!overallIsManual && baseline != null && lengthText == baseline) {
-                                        return@onFocusChanged
-                                    }
-
-                                    if (t.isEmpty()) {
-                                        onSetOverallIsManual(false)
-                                        val end = lastOccupiedEndMm(spec)
-                                        onSetOverallLengthMm(end)
-                                        val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
-                                        lengthText = formatDisplay(effective, unit)
-                                    } else {
-                                        toMmOrNull(t, unit)?.let { mm ->
-                                            onSetOverallLengthMm(mm)
-                                            onSetOverallIsManual(true)
-                                            onSetOverallLengthRaw(t)
-                                        }
+                                if (t.isEmpty()) {
+                                    lengthText = formatDisplay(spec.overallLengthMm, unit)
+                                } else {
+                                    toMmOrNull(t, unit)?.let { mm ->
+                                        onSetOverallLengthMm(mm)
+                                        onSetOverallLengthRaw(t)
                                     }
                                 }
                             }
-                    )
-
-                    Spacer(Modifier.width(12.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        FilterChip(
-                            selected = !overallIsManual,
-                            onClick = {
-                                if (overallIsManual) {
-                                    onSetOverallIsManual(false)
-                                    val end = lastOccupiedEndMm(spec)
-                                    onSetOverallLengthMm(end)
-                                    val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
-                                    lengthText = formatDisplay(effective, unit)
-                                }
-                            },
-                            label = { Text("Auto") }
-                        )
-                        FilterChip(
-                            selected = overallIsManual,
-                            onClick = {
-                                if (!overallIsManual) {
-                                    onSetOverallIsManual(true)
-                                }
-                            },
-                            label = { Text("Manual") }
-                        )
-                    }
-                }
+                        }
+                )
 
                 // Read-only: computed OAL in measurement space (less excluded end threads)
                 val win = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec) }
@@ -655,9 +593,9 @@ fun ShaftScreen(
                 val effectiveOalWindowMm = win.oalMm
                 val excluded = kotlin.math.abs(effectiveOalWindowMm - physicalOalMm) > OAL_EPS_MM
 
-                // Normally only show in Manual mode; Auto already displays effective OAL.
-                // Developer option can force it on for debugging.
-                if (excluded && (overallIsManual || showOalHelperLine)) {
+                // Only meaningful when an excluded end thread makes the dimensioned span
+                // differ from the physical length.
+                if (excluded) {
                     Text(
                         text = "Dimensioned OAL: ${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)}",
                         style = MaterialTheme.typography.bodySmall,
@@ -785,7 +723,7 @@ fun ShaftScreen(
                         onAddBody = {
                             chooserOpen = false
                             addStartMm = d.startMm
-                            addLengthMm = if (overallIsManual && spec.overallLengthMm > d.startMm) {
+                            addLengthMm = if (spec.overallLengthMm > d.startMm) {
                                 spec.overallLengthMm - d.startMm
                             } else {
                                 sessionAddDefaults.bodyLenMm
@@ -821,7 +759,6 @@ fun ShaftScreen(
                     AddThreadDialog(
                         unit = unit,
                         spec = spec,
-                        overallIsManual = overallIsManual,
                         initialStartMm = addThreadStartMm,
                         initialLengthMm = sessionAddDefaults.threadLenMm,
                         initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
@@ -888,7 +825,6 @@ fun ShaftScreen(
                     AddLinerDialog(
                         unit = unit,
                         spec = spec,
-                        overallIsManual = overallIsManual,
                         initialStartMm = addStartMm,
                         initialLengthMm = addLengthMm,
                         linerShouldersEnabled = linerShouldersEnabled,
@@ -905,7 +841,6 @@ fun ShaftScreen(
                     AddTaperDialog(
                         unit = unit,
                         spec = spec,
-                        overallIsManual = overallIsManual,
                         initialStartMm = addStartMm,
                         initialLengthMm = addLengthMm,
                         perComponentUnitsEnabled = perComponentUnitsEnabled,

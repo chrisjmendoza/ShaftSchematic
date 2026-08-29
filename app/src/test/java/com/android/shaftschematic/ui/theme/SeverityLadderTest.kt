@@ -11,11 +11,11 @@ import kotlin.math.pow
 /**
  * The chrome severity ladder — error → caution → neutral — across all four schemes.
  *
- * The caution rung is `tertiaryContainer`. It was the ONE container role no scheme assigned
- * (the high-contrast schemes set `primaryContainer`, `secondaryContainer` and `errorContainer`
- * and skipped it), so every scheme silently inherited M3's baseline pale pink — a few degrees
- * of hue from the error rung, which put "snug" and "oversized" at nearly the same colour on the
- * Free-to-End badge and made an advisory banner read as an error (on-device report).
+ * The caution rung is `tertiaryContainer` — the role the per-card warning chips and the advisory
+ * warnings banner sit on. It is easily left unassigned (the high-contrast schemes set
+ * `primaryContainer`, `secondaryContainer` and `errorContainer` and once skipped it), and a
+ * scheme that skips it silently inherits M3's baseline pale pink — a few degrees of hue from the
+ * error rung, which makes an advisory banner read as an error (on-device report).
  *
  * An unset role is exactly what a test can catch, so these assert the assignment itself rather
  * than a fuzzy colour-distance metric.
