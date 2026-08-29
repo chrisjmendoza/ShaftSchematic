@@ -620,13 +620,26 @@ first).
 
 **Shade explicit bodies only** (`PdfPrefs.shadeExplicitBodiesOnly`, default `false`): with
 "Bodies" shading on, this narrows the fill to explicit bodies only — auto (bare-shaft) runs
-draw unfilled. Decided by the pure `unshadedAutoBodyRunIds` (`ui/resolved/ResolvedComponent.kt`)
-and consumed as an `unfilledBodyIds` set inside the single shared `drawBodyRunsWithBreaks`
-pass (`pdf/BodyRunDraw.kt`), so the fill-then-outline order within one run is untouched — no
-second pass, no re-layering against liners/tapers. The narrowing never reaches the wear and
+draw unfilled. The narrowing never reaches the wear and
 undercut documents — their `SimpleShaftProfile` body pass takes one fill for every run — so
 those two sheets HIDE the sub-checkbox (`showShadeExplicitBodiesOnly = false`) rather than
 offering one the page would visibly ignore.
+
+**Per-component "Shade on drawing"** (`shadeOnDrawing: Boolean? = null` on
+`Body`/`Taper`/`Liner`, explicit cards only — the sixth card-only carve-out): TRI-STATE.
+Unset follows the kind's checkbox above (auto body runs additionally follow "Explicit bodies
+only"); an explicit ON shades that one component even with the kind off (on-device request:
+shade a named SKF section alone); an explicit OFF keeps it unshaded with the kind on. All
+shading decisions — kind checkboxes, the explicit-only narrowing, and the per-component
+flags — resolve in three pure builders, `unshadedBodyRunIds` / `unshadedTaperIds` /
+`unshadedLinerIds` (`ui/resolved/ResolvedComponent.kt`), consumed as unfilled-id sets by the
+fill passes, which always receive a paint: bodies inside the single shared
+`drawBodyRunsWithBreaks` pass (`pdf/BodyRunDraw.kt` — fill-then-outline order within a run
+untouched, S-break stub fills and blend curves follow their run's decision), tapers and
+liners per item in each composer's fill loop. Two boundaries stand above the flag: the
+consolidated sheet's in-profile-values liner lock, and the wear/undercut
+`SimpleShaftProfile` one-fill-per-kind pass (the paragraph above; DESIGN_INTENT §5 debt).
+Threads carry no shade flag — they hatch.
 
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
 `PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print

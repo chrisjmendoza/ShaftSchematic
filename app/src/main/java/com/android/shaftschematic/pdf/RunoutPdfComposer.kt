@@ -54,7 +54,9 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
-import com.android.shaftschematic.ui.resolved.unshadedAutoBodyRunIds
+import com.android.shaftschematic.ui.resolved.unshadedBodyRunIds
+import com.android.shaftschematic.ui.resolved.unshadedLinerIds
+import com.android.shaftschematic.ui.resolved.unshadedTaperIds
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualLabel
@@ -247,8 +249,15 @@ fun composeRunoutPdf(
         style = Paint.Style.FILL
         color = Color.argb(40, 0, 0, 0)
     }
-    val bodyFill : Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
-    val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
+    // The fill paints exist unconditionally; WHICH components use them is one decision per
+    // component, made by the unshaded-id builders — a kind's checkbox turned off simply names
+    // every component of that kind, leaving room for a per-component override to beat it.
+    val bodyFill : Paint = shadeFill()
+    val taperFill: Paint = shadeFill()
+    val unfilledBodyIds = unshadedBodyRunIds(
+        spec, resolvedComponents, pdfPrefs.shadedBodies, pdfPrefs.shadeExplicitBodiesOnly,
+    )
+    val unfilledTaperIds = unshadedTaperIds(spec, pdfPrefs.shadedTapers)
     // Liners follow `shadedLiners` like bodies and tapers, EXCEPT on a sheet that prints
     // measured Ø values INSIDE the profile: those values sit on sheet-white knockout halos,
     // and shading the liner under them would turn every halo into a pasted white box
@@ -261,7 +270,14 @@ fun composeRunoutPdf(
         includeWearInfo = drawWear,
         blankValues = blankValues,
     )
-    val linerFill: Paint? = if (pdfPrefs.shadedLiners && !inProfileValues) shadeFill() else null
+    val linerFill: Paint = shadeFill()
+    // The in-profile-values rule outranks every per-liner override: it names EVERY liner, so
+    // an explicit `shadeOnDrawing = true` cannot put grey back under a knockout halo.
+    val unfilledLinerIds = if (inProfileValues) {
+        spec.liners.map { it.id }.toSet()
+    } else {
+        unshadedLinerIds(spec, pdfPrefs.shadedLiners)
+    }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         textSize = TEXT_PT
@@ -652,9 +668,9 @@ fun composeRunoutPdf(
         ptPerMm = diaPtPerMm, truePtPerMm = diaPtPerMm,
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
         blends = bodyBlendsForSheet,
-        unfilledBodyIds = unshadedAutoBodyRunIds(
-            resolvedComponents, pdfPrefs.shadedBodies, pdfPrefs.shadeExplicitBodiesOnly,
-        ))
+        unfilledBodyIds = unfilledBodyIds,
+        unfilledTaperIds = unfilledTaperIds,
+        unfilledLinerIds = unfilledLinerIds)
 
     // ── Wear marks + worn sections + in-profile values (consolidated sheet) ───
     // Z-order (on-device request): marks first — wear-area bands and pit X's — then the
@@ -1265,10 +1281,19 @@ internal fun drawShaftProfile(
      */
     blends: List<BodyBlend> = emptyList(),
     /**
-     * Body runs whose shade is suppressed while the rest keep [bodyFill] — the "explicit
-     * bodies only" narrowing (`unshadedAutoBodyRunIds`). Empty draws every run the same.
+     * Body runs whose shade is suppressed while the rest keep [bodyFill] — the kind's
+     * checkbox, the "explicit bodies only" narrowing, and each authored body's own tri-state
+     * override, all resolved by `unshadedBodyRunIds`. Empty draws every run the same.
      */
     unfilledBodyIds: Set<String> = emptySet(),
+    /** Taper mirror of [unfilledBodyIds] (`unshadedTaperIds`). */
+    unfilledTaperIds: Set<String> = emptySet(),
+    /**
+     * Liner mirror of [unfilledBodyIds] (`unshadedLinerIds`). A sheet printing measured Ø
+     * values inside the profile names every liner here — grey under a sheet-white knockout
+     * halo reads as a pasted box, so that rule outranks any per-liner override.
+     */
+    unfilledLinerIds: Set<String> = emptySet(),
 ) {
     // ── Shade fills first (drawn under all outlines) ──────────────────────
     // Body fill is drawn inside `drawBodiesForRunout` — a blended face shades under its
@@ -1276,6 +1301,7 @@ internal fun drawShaftProfile(
     taperFill?.let { f ->
         spec.tapers.forEach { t ->
             if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
+            if (t.id in unfilledTaperIds) return@forEach
             val path = android.graphics.Path().apply {
                 moveTo(xAt(t.startFromAftMm), cy - rPx(t.startDiaMm))
                 lineTo(xAt(t.startFromAftMm + t.lengthMm), cy - rPx(t.endDiaMm))
@@ -1291,6 +1317,7 @@ internal fun drawShaftProfile(
     linerFill?.let { f ->
         spec.liners.forEach { ln ->
             if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
+            if (ln.id in unfilledLinerIds) return@forEach
             val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
             val r = rPx(ln.odMm)
             drawLinerFillPdf(c, cy, x0, x1, r, linerShoulderSpecs(ln, x0, x1, r, xAt, rPx), f)

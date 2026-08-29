@@ -764,6 +764,44 @@ fun ShaftViewModel.updateLinerShowLabel(index: Int, show: Boolean) = _spec.updat
 }
 
 /**
+ * Shade/bare THIS body on the drawing, overriding the kind's Settings checkbox either way.
+ * Draw-only, and the same identity-guarded [withItemField] path as [updateBodyShowDia] — no
+ * geometry, no value rewrite. Only the two dimensioned sheets read it; the wear and undercut
+ * documents keep one fill per kind.
+ */
+fun ShaftViewModel.updateBodyShade(index: Int, shade: Boolean) = _spec.update { s ->
+    s.withItemField(
+        list = s.bodies, index = index, newValue = shade,
+        get = { it.shadeOnDrawing },
+        copyField = { old, v -> old.copy(shadeOnDrawing = v) },
+        withList = { s.copy(bodies = it) },
+    )
+}
+
+/** Taper mirror of [updateBodyShade]. */
+fun ShaftViewModel.updateTaperShade(index: Int, shade: Boolean) = _spec.update { s ->
+    s.withItemField(
+        list = s.tapers, index = index, newValue = shade,
+        get = { it.shadeOnDrawing },
+        copyField = { old, v -> old.copy(shadeOnDrawing = v) },
+        withList = { s.copy(tapers = it) },
+    )
+}
+
+/**
+ * Liner mirror of [updateBodyShade]. A consolidated sheet printing measured Ø values inside
+ * the profile still draws every liner bare — the knockout-halo rule outranks this override.
+ */
+fun ShaftViewModel.updateLinerShade(index: Int, shade: Boolean) = _spec.update { s ->
+    s.withItemField(
+        list = s.liners, index = index, newValue = shade,
+        get = { it.shadeOnDrawing },
+        copyField = { old, v -> old.copy(shadeOnDrawing = v) },
+        withList = { s.copy(liners = it) },
+    )
+}
+
+/**
  * Sets a body's blended faces and their profile.
  *
  * Drawing-only: a blend changes the silhouette and nothing else — not OAL, not resolve,

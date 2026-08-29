@@ -8,6 +8,28 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-29
 
+### feat(pdf): per-component "Shade on drawing" — tri-state, on the explicit cards
+
+On-device request: shade one component — a named "SKF" body — without switching shading on
+for every body ("colored in the preview right away rather than selecting all explicit bodies").
+Explicit `Body`/`Taper`/`Liner` cards gain a **"Shade on drawing"** toggle backed by
+`shadeOnDrawing: Boolean? = null` — tri-state like the name flag, and nullable from day one
+(the label flag's serialized-default lesson): unset follows the kind's "Shade in Components"
+checkbox (with "Explicit bodies only" still carving auto runs out of the body default);
+explicit ON shades that one component even with the kind off; explicit OFF keeps it unshaded
+with the kind on. Threads keep their hatch — no shade flag.
+
+Mechanically the fill passes now always receive a paint and a per-component decision rides
+the id sets: the audit's subtractive `unfilledBodyIds` seam generalizes to three pure
+builders (`unshadedBodyRunIds`/`unshadedTaperIds`/`unshadedLinerIds`), so the schematic and
+the runout/consolidated sheet resolve shading identically, S-break stub fills and blend
+curves follow their run's decision as before, and a flagless document prints byte-identically
+at every checkbox combination. Two boundaries stand above the flag, both documented: the
+consolidated sheet's in-profile-values liner lock (halos over grey read as pasted boxes),
+and the wear/undercut documents' one-fill-per-kind `SimpleShaftProfile` (the same boundary
+"Explicit bodies only" already has — the logged DESIGN_INTENT §5 debt). Split/merge
+fragments carry the flag with the other display choices.
+
 ### feat(pdf): options-sheet audit — Print everywhere, content chips, reorder, expandables, bubble sliders
 
 Every PDF preview overlay (Runout, Wear, Undercut, Consolidated Output) now offers a Print

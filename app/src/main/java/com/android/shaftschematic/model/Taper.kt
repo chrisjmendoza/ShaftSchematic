@@ -26,6 +26,12 @@ import kotlin.math.max
  *   schematic. Tri-state, draw-only — mirrors [com.android.shaftschematic.model.Body.showNameOnDrawing]:
  *   `null` (default) follows the Settings switch, explicit `true`/`false` overrides it either
  *   way; never rewrites [label], never touches geometry.
+ * @property shadeOnDrawing Whether this taper draws with the grey shade fill. Tri-state,
+ *   draw-only — mirrors [com.android.shaftschematic.model.Body.shadeOnDrawing]: `null`
+ *   (default) follows the kind's Settings checkbox (`PdfPrefs.shadedTapers`), an explicit
+ *   `true` shades THIS taper with that checkbox off, an explicit `false` leaves it bare with
+ *   the checkbox on. Read only by the schematic and the runout/consolidated sheet; the wear
+ *   and undercut documents keep one fill per kind.
  */
 @Serializable
 data class Taper(
@@ -44,6 +50,7 @@ data class Taper(
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
     val showNameOnDrawing: Boolean? = null,
+    val shadeOnDrawing: Boolean? = null,
 ) : Segment
 
 /** Basic invariants for a Taper. */

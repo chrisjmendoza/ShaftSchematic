@@ -117,7 +117,10 @@ it may be retired into a constant.
 - "Explicit bodies only" shading does not reach the wear/undercut documents (their
   `SimpleShaftProfile` body pass takes one fill for every run), so those two sheets hide
   the checkbox per §3.2's no-inert-controls rule. If those documents should honor it, the
-  pref needs threading through that pass and the undercut strip windows.
+  pref needs threading through that pass and the undercut strip windows. The per-component
+  "Shade on drawing" flag (`shadeOnDrawing`, cards) shares this exact boundary: it decides
+  fills on the schematic and runout/consolidated sheets only, and honoring it on wear/
+  undercut is the same threading job.
 
 ---
 

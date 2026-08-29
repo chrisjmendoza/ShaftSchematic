@@ -334,8 +334,8 @@ internal fun carryBodyKeyway(from: Body, to: Body): Body {
 }
 
 /**
- * Carries [from]'s **draw-only** decisions — name, Ø/name visibility, and the compression
- * opt-out — onto [to] (a fragment/merge/expansion of the same physical material). Nothing
+ * Carries [from]'s **draw-only** decisions — name, Ø/name visibility, the shade override, and
+ * the compression opt-out — onto [to] (a fragment/merge/expansion of the same material). Nothing
  * here is geometry, so unlike the keyway there is no fit test: every piece of one authored
  * body prints the way that body was authored to print.
  *
@@ -347,6 +347,7 @@ internal fun carryBodyDisplay(from: Body, to: Body): Body = to.copy(
     label = from.label,
     showDiaOnDrawing = from.showDiaOnDrawing,
     showNameOnDrawing = from.showNameOnDrawing,
+    shadeOnDrawing = from.shadeOnDrawing,
     compressOnDrawing = from.compressOnDrawing,
 )
 

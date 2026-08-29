@@ -304,13 +304,14 @@ class BodySplitMergeTest {
     private fun flagged(id: String, startMm: Float, lengthMm: Float) = Body(
         id = id, startFromAftMm = startMm, lengthMm = lengthMm, diaMm = 60f,
         label = "SKF", showDiaOnDrawing = true, showNameOnDrawing = false,
-        compressOnDrawing = false,
+        shadeOnDrawing = true, compressOnDrawing = false,
     )
 
     private fun assertCarried(b: Body, where: String) {
         assertEquals("$where keeps the name", "SKF", b.label)
         assertTrue("$where keeps Ø visibility", b.showDiaOnDrawing)
         assertEquals("$where keeps name visibility", false, b.showNameOnDrawing)
+        assertEquals("$where keeps the shade override", true, b.shadeOnDrawing)
         assertFalse("$where keeps the compression opt-out", b.compressOnDrawing)
     }
 

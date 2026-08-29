@@ -65,11 +65,13 @@ internal fun TaperPagerCard(
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
     componentTitlesDefault: Boolean = true,
+    componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     taperTitleById: Map<String, String>,
     f1: (Float) -> String,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
+    onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onSetKeyways180Apart: (Boolean) -> Unit,
@@ -304,6 +306,14 @@ internal fun TaperPagerCard(
             checked = t.showNameOnDrawing ?: componentTitlesDefault,
             testTag = "taper_show_label_toggle",
             onCheckedChange = { onUpdateTaperShowLabel(idx, it) },
+        )
+
+        // Unset follows the kind's Settings checkbox; an explicit value overrides it either way.
+        ShowDiaToggleRow(
+            label = "Shade on drawing",
+            checked = t.shadeOnDrawing ?: componentShadeDefaults.tapers,
+            testTag = "taper_shade_toggle",
+            onCheckedChange = { onUpdateTaperShade(idx, it) },
         )
 
         if (perComponentUnitsEnabled) {

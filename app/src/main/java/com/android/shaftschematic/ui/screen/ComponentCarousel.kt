@@ -148,6 +148,8 @@ internal fun ComponentCarouselPager(
     showComponentDebugLabels: Boolean,
     /** The Settings "Show component titles" switch — what an UNSET per-component name toggle follows. */
     componentTitlesDefault: Boolean = true,
+    /** The kind-level shade checkboxes — what an UNSET per-component shade toggle follows. */
+    componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
@@ -156,6 +158,7 @@ internal fun ComponentCarouselPager(
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
+    onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
@@ -163,6 +166,7 @@ internal fun ComponentCarouselPager(
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
+    onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
@@ -171,6 +175,7 @@ internal fun ComponentCarouselPager(
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
     onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
+    onUpdateLinerShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     linerShouldersEnabled: Boolean = false,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -303,6 +308,7 @@ internal fun ComponentCarouselPager(
                     outerPaddingHorizontal = componentCardPadding,
                     showComponentDebugLabels = showComponentDebugLabels,
                     componentTitlesDefault = componentTitlesDefault,
+                    componentShadeDefaults = componentShadeDefaults,
                     onAddBody = onAddBody,
                     onSetAutoSectionDia = onSetAutoSectionDia,
                     onSetAutoBlend = onSetAutoBlend,
@@ -310,6 +316,7 @@ internal fun ComponentCarouselPager(
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
                     onUpdateBodyShowLabel = onUpdateBodyShowLabel,
+                    onUpdateBodyShade = onUpdateBodyShade,
                     onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
                     onUpdateBodyBlend = onUpdateBodyBlend,
                     onUpdateBodyLabel = onUpdateBodyLabel,
@@ -317,6 +324,7 @@ internal fun ComponentCarouselPager(
                     onUpdateTaper = onUpdateTaper,
                     onUpdateTaperLabel = onUpdateTaperLabel,
                     onUpdateTaperShowLabel = onUpdateTaperShowLabel,
+                    onUpdateTaperShade = onUpdateTaperShade,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateTaperReference = onUpdateTaperReference,
                     onUpdateThread = onUpdateThread,
@@ -325,6 +333,7 @@ internal fun ComponentCarouselPager(
                     onUpdateLiner = onUpdateLiner,
                     onUpdateLinerShowDia = onUpdateLinerShowDia,
                     onUpdateLinerShowLabel = onUpdateLinerShowLabel,
+                    onUpdateLinerShade = onUpdateLinerShade,
                     onUpdateLinerShoulder = onUpdateLinerShoulder,
                     linerShouldersEnabled = linerShouldersEnabled,
                     onUpdateLinerLabel = onUpdateLinerLabel,
@@ -566,6 +575,7 @@ internal fun ComponentPagerCard(
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
     componentTitlesDefault: Boolean = true,
+    componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean) -> Unit,
@@ -573,6 +583,7 @@ internal fun ComponentPagerCard(
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
+    onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
@@ -580,6 +591,7 @@ internal fun ComponentPagerCard(
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
+    onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
@@ -588,6 +600,7 @@ internal fun ComponentPagerCard(
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
     onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
+    onUpdateLinerShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     linerShouldersEnabled: Boolean = false,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -640,6 +653,7 @@ internal fun ComponentPagerCard(
             outerPaddingHorizontal = outerPaddingHorizontal,
             showComponentDebugLabels = showComponentDebugLabels,
             componentTitlesDefault = componentTitlesDefault,
+            componentShadeDefaults = componentShadeDefaults,
             bodyTitleById = bodyTitleById,
             f1 = ::f1,
             startValidator = ::startValidator,
@@ -650,6 +664,7 @@ internal fun ComponentPagerCard(
             onUpdateBody = onUpdateBody,
             onUpdateBodyShowDia = onUpdateBodyShowDia,
             onUpdateBodyShowLabel = onUpdateBodyShowLabel,
+            onUpdateBodyShade = onUpdateBodyShade,
             onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
             onUpdateBodyBlend = onUpdateBodyBlend,
             onUpdateBodyLabel = onUpdateBodyLabel,
@@ -675,11 +690,13 @@ internal fun ComponentPagerCard(
             outerPaddingHorizontal = outerPaddingHorizontal,
             showComponentDebugLabels = showComponentDebugLabels,
             componentTitlesDefault = componentTitlesDefault,
+            componentShadeDefaults = componentShadeDefaults,
             taperTitleById = taperTitleById,
             f1 = ::f1,
             onUpdateTaper = onUpdateTaper,
             onUpdateTaperLabel = onUpdateTaperLabel,
             onUpdateTaperShowLabel = onUpdateTaperShowLabel,
+            onUpdateTaperShade = onUpdateTaperShade,
             onUpdateTaperKeyway = onUpdateTaperKeyway,
             onUpdateTaperReference = onUpdateTaperReference,
             onSetKeyways180Apart = onSetKeyways180Apart,
@@ -728,11 +745,13 @@ internal fun ComponentPagerCard(
             outerPaddingHorizontal = outerPaddingHorizontal,
             showComponentDebugLabels = showComponentDebugLabels,
             componentTitlesDefault = componentTitlesDefault,
+            componentShadeDefaults = componentShadeDefaults,
             linerTitleById = linerTitleById,
             f1 = ::f1,
             onUpdateLiner = onUpdateLiner,
             onUpdateLinerShowDia = onUpdateLinerShowDia,
             onUpdateLinerShowLabel = onUpdateLinerShowLabel,
+            onUpdateLinerShade = onUpdateLinerShade,
             onUpdateLinerShoulder = onUpdateLinerShoulder,
             linerShouldersEnabled = linerShouldersEnabled,
             onUpdateLinerLabel = onUpdateLinerLabel,
@@ -774,6 +793,21 @@ internal fun ComponentPagerCard(
  * "Show dimension rail" these are post-hoc display choices made after seeing a printed sheet,
  * not properties of the component being added. See `docs/contracts/AddComponentDialogs.md`.
  */
+/**
+ * The three kind-level shade checkboxes (Settings → Drawing, mirrored in both PDF options
+ * sheets) as one immutable holder — the DEFAULT each card's unset "Shade on drawing" toggle
+ * displays. Carried together because every card row needs exactly one of them and threading
+ * three loose Booleans through the pager would read as three unrelated flags.
+ *
+ * A body's default is plain `shadedBodies`: `shadeExplicitBodiesOnly` narrows AUTO runs only,
+ * and every card carrying this row is an explicit component.
+ */
+data class ComponentShadeDefaults(
+    val bodies: Boolean = false,
+    val tapers: Boolean = false,
+    val liners: Boolean = false,
+)
+
 @Composable
 internal fun ShowDiaToggleRow(
     label: String,

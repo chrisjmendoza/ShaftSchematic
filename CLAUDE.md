@@ -55,9 +55,19 @@ Specifically:
 **Carve-out — post-hoc display toggles are card-only.** A control that only exists to change
 how an *already-drawn* component prints, has a stable default, and is reached for after
 looking at a printed sheet is not a property of the component being added; in an Add dialog
-it would be a permanently-preset box adding noise to every add. Exactly five qualify: the
+it would be a permanently-preset box adding noise to every add. Exactly six qualify: the
 coupler slot's "show dimension rail", **"Show Ø on drawing"** (`Body`/`Liner`/auto-body
-cards), **"Show name on drawing"** (`showNameOnDrawing`, all four explicit component cards —
+cards), **"Shade on drawing"** (`shadeOnDrawing`, explicit `Body`/`Taper`/`Liner` cards —
+TRI-STATE like the name flag: unset follows the kind's "Shade in Components" checkbox
+(`shadedBodies`/`shadedTapers`/`shadedLiners`, with `shadeExplicitBodiesOnly` still carving
+auto runs out of the body default), explicit ON shades that one component even with the kind
+off — on-device request: shade a named SKF section without shading every body — and explicit
+OFF keeps it unshaded with the kind on. Effective per-run decisions are precomputed by the
+pure `unshadedBodyRunIds`/`unshadedTaperIds`/`unshadedLinerIds`
+(`ui/resolved/ResolvedComponent.kt`) and threaded as id sets into the fill passes, which now
+always receive a paint; the consolidated sheet's in-profile-values liner lock and the
+wear/undercut documents' one-fill-per-kind `SimpleShaftProfile` boundary both stand above the
+per-component flag), **"Show name on drawing"** (`showNameOnDrawing`, all four explicit component cards —
 TRI-STATE per-component gate on the schematic's name label: unset follows the global
 `showComponentTitles` pref, an explicit ON prints even with that pref off, an explicit OFF
 hides even with it on — the pref is the default, never a master gate over an authored
@@ -272,7 +282,9 @@ measured on every pass since there are no draft frames to skip): a commit that r
 page is worthless while the sheet covers it (on-device report). Only the UNDERCUT sheet keeps
 the plain 78% cap with the centered full-size page. Liners follow `shadedLiners` like
 bodies and tapers **except when in-profile values print** — a sheet-white knockout halo over
-grey reads as a pasted box, so on such a sheet liners draw unfilled whatever the pref says.
+grey reads as a pasted box, so on such a sheet liners draw unfilled whatever the pref says —
+and whatever a liner's per-component `shadeOnDrawing` says: the lock stands above the
+per-component flag too.
 ONE predicate decides it, `consolidatedSheetHasInProfileValues`
 (`pdf/RunoutPdfComposer.kt` — wear info elected in, not a blank draft, and at least one
 worn-section value > 0 or one valued reading on a component that still resolves): the

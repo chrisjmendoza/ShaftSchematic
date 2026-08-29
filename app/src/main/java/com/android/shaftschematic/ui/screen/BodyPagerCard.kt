@@ -50,9 +50,9 @@ import com.android.shaftschematic.util.UnitSystem
  * it; an explicit body shows the editable Start/Length/Ø, the blend/seal faces, and the keyway
  * section. Every control here that changes geometry, position, or a value is mirrored in
  * `AddBodyDialog` by the add-dialog-parity invariant; "Show Ø on drawing", "Show name on
- * drawing", "Compress on drawing", and the "Prints in: in | mm" chip are the documented
- * card-only carve-outs — each changes only how an already-drawn body prints and is reached
- * for after looking at a printed sheet, and this one's default is set at creation.
+ * drawing", "Compress on drawing", "Shade on drawing", and the "Prints in: in | mm" chip are
+ * the documented card-only carve-outs — each changes only how an already-drawn body prints and
+ * is reached for after looking at a printed sheet.
  *
  * [f1] and [startValidator] are supplied by [ComponentPagerCard] because the thread card shares
  * them; [startValidator] closes over the spec and document unit that validate an overlap.
@@ -67,6 +67,7 @@ internal fun BodyPagerCard(
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
     componentTitlesDefault: Boolean = true,
+    componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     bodyTitleById: Map<String, String>,
     f1: (Float) -> String,
     startValidator: (String, ComponentKind, Float) -> (String) -> String?,
@@ -77,6 +78,7 @@ internal fun BodyPagerCard(
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
+    onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
@@ -314,6 +316,15 @@ internal fun BodyPagerCard(
             checked = b.compressOnDrawing,
             testTag = "body_compress_toggle",
             onCheckedChange = { onUpdateBodyCompressOnDrawing(idx, it) },
+        )
+        // Unset follows the kind's Settings checkbox; ticking it shades THIS body with that
+        // checkbox off (the on-device case: one named section grey, the rest of the drawing
+        // clean), and unticking bares it with the checkbox on.
+        ShowDiaToggleRow(
+            label = "Shade on drawing",
+            checked = b.shadeOnDrawing ?: componentShadeDefaults.bodies,
+            testTag = "body_shade_toggle",
+            onCheckedChange = { onUpdateBodyShade(idx, it) },
         )
 
         // Blend — a machined smooth transition into whatever the face steps to.

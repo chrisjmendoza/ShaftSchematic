@@ -56,10 +56,11 @@ internal fun drawBodyRunsWithBreaks(
      */
     keywayAvoidSpansMm: List<KeywaySpan> = emptyList(),
     /**
-     * Run ids whose shade is suppressed while the rest of [bodies] keeps [fill] — the
-     * "explicit bodies only" narrowing (`ui/resolved/unshadedAutoBodyRunIds`). Decided per run INSIDE this
-     * one pass so every run keeps its own fill-then-outline order; two passes over split lists
-     * would reorder fills against neighbouring outlines for nothing.
+     * Run ids whose shade is suppressed while the rest of [bodies] keeps [fill] — the kind's
+     * checkbox, the "explicit bodies only" narrowing, and each authored body's own tri-state
+     * override, all resolved to ids by `ui/resolved/unshadedBodyRunIds`. Decided per run INSIDE
+     * this one pass so every run keeps its own fill-then-outline order; two passes over split
+     * lists would reorder fills against neighbouring outlines for nothing.
      */
     unfilledBodyIds: Set<String> = emptySet(),
 ) {

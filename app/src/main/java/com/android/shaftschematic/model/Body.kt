@@ -42,6 +42,17 @@ import java.util.UUID
  *   every component of every saved document, and honoring those stamps as authored overrides
  *   made one checked toggle appear to turn every label on (on-device report). A stored value
  *   under THIS key is always an authored choice.
+ * @property shadeOnDrawing Whether this body draws with the grey shade fill. Tri-state,
+ *   draw-only (no geometry, no value rewrite): `null` — the default — follows the kind's
+ *   Settings checkbox (`PdfPrefs.shadedBodies`, narrowed by `shadeExplicitBodiesOnly`, which
+ *   only ever bares AUTO runs); an explicit `true` shades THIS body even with the kind's
+ *   checkbox off (on-device request: shade one named section without shading the whole
+ *   drawing); an explicit `false` leaves it bare even with the kind on. Nullable from the
+ *   start on purpose — a non-null default would serialize an authored-looking stamp onto
+ *   every component of every saved document, which is what forced the name-label flag's key
+ *   rename. The wear and undercut documents deliberately do not read it: their
+ *   `SimpleShaftProfile` takes one fill per kind, the same boundary `shadeExplicitBodiesOnly`
+ *   already has.
  * @property compressOnDrawing Whether this body may foreshorten on a sheet. Draw-only: it
  *   changes nothing in the model, resolve, OAL, collision, or footer geometry, and never
  *   rewrites a stored span. `false` pins the body's stored span at true scale in the
@@ -81,6 +92,7 @@ data class Body(
     val keywaySpooned: Boolean = false,
     val showDiaOnDrawing: Boolean = false,
     val showNameOnDrawing: Boolean? = null,
+    val shadeOnDrawing: Boolean? = null,
     val compressOnDrawing: Boolean = true,
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,

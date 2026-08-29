@@ -158,6 +158,8 @@ fun ShaftScreen(
     pdfTieringMode: PdfTieringMode = PdfTieringMode.AUTO,
     /** The Settings "Show component titles" switch — the default a card's unset name toggle follows. */
     componentTitlesDefault: Boolean = true,
+    /** The kind-level shade checkboxes — the default a card's unset shade toggle follows. */
+    componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     showComponentArrows: Boolean,
     componentArrowWidthDp: Int,
     showHighlightSelection: Boolean = true,
@@ -219,6 +221,7 @@ fun ShaftScreen(
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
+    onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
@@ -226,6 +229,7 @@ fun ShaftScreen(
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
     onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
+    onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
@@ -234,6 +238,7 @@ fun ShaftScreen(
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
     onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
+    onUpdateLinerShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     linerShouldersEnabled: Boolean = false,
     /** Settings → Drawing → "Unit converter in Add dialogs": gates the calculator icon on the five Add dialogs. */
@@ -711,6 +716,7 @@ fun ShaftScreen(
                     edgeArrowWidthDp = componentArrowWidthDp,
                     showComponentDebugLabels = showComponentDebugLabels,
                     componentTitlesDefault = componentTitlesDefault,
+                    componentShadeDefaults = componentShadeDefaults,
                     selectedComponentId = selectedComponentId,
                     // Auto-body promotion adds a plain body; keyways and blends are added
                     // later via the promoted card's own fields.
@@ -726,6 +732,7 @@ fun ShaftScreen(
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
                     onUpdateBodyShowLabel = onUpdateBodyShowLabel,
+                    onUpdateBodyShade = onUpdateBodyShade,
                     onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
                     onUpdateBodyBlend = onUpdateBodyBlend,
                     onUpdateBodyLabel = onUpdateBodyLabel,
@@ -733,6 +740,7 @@ fun ShaftScreen(
                     onUpdateTaper = onUpdateTaper,
                     onUpdateTaperLabel = onUpdateTaperLabel,
                     onUpdateTaperShowLabel = onUpdateTaperShowLabel,
+                    onUpdateTaperShade = onUpdateTaperShade,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateTaperReference = onUpdateTaperReference,
                     onUpdateThread = onUpdateThread,
@@ -741,6 +749,7 @@ fun ShaftScreen(
                     onUpdateLiner = onUpdateLiner,
                     onUpdateLinerShowDia = onUpdateLinerShowDia,
                     onUpdateLinerShowLabel = onUpdateLinerShowLabel,
+                    onUpdateLinerShade = onUpdateLinerShade,
                     onUpdateLinerShoulder = onUpdateLinerShoulder,
                     linerShouldersEnabled = linerShouldersEnabled,
                     onUpdateLinerLabel = onUpdateLinerLabel,

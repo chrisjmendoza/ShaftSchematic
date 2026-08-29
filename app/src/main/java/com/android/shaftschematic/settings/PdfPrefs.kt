@@ -125,8 +125,10 @@ data class PdfPrefs(
      *
      * Reaches the ink through the resolved SOURCE, not the drawable body: `bodyForPdf` maps a
      * `ResolvedBody` to a plain `Body` and drops the source, so the schematic and the
-     * runout/consolidated composers pass the AUTO run ids alongside the fill
-     * (`unshadedAutoBodyRunIds`) and the one shared body pass suppresses those in place.
+     * runout/consolidated composers pass the unshaded run ids alongside the fill
+     * (`unshadedBodyRunIds`) and the one shared body pass suppresses those in place. It
+     * narrows AUTO runs only — an explicit body's own `shadeOnDrawing` override is what
+     * decides that body, with [shadedBodies] as its default.
      *
      * The wear and undercut documents are untouched: their profile goes through
      * `pdf/SimpleShaftProfile.kt`, whose body pass takes one fill for every run — the

@@ -37,7 +37,9 @@ import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
-import com.android.shaftschematic.ui.resolved.unshadedAutoBodyRunIds
+import com.android.shaftschematic.ui.resolved.unshadedBodyRunIds
+import com.android.shaftschematic.ui.resolved.unshadedLinerIds
+import com.android.shaftschematic.ui.resolved.unshadedTaperIds
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
@@ -266,9 +268,18 @@ fun composeShaftPdf(
         style = Paint.Style.FILL
         color = Color.argb(40, 0, 0, 0)
     }
-    val bodyFill:  Paint? = if (pdfPrefs.shadedBodies)  shadeFill() else null
-    val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
-    val linerFill: Paint? = if (pdfPrefs.shadedLiners)  shadeFill() else null
+    // The fill paints exist unconditionally; WHICH components use them is one decision per
+    // component, made by the unshaded-id builders. A kind's checkbox turned off simply names
+    // every component of that kind, so the flags stay the default a per-component override
+    // can beat — never a master gate over an authored choice.
+    val bodyFill:  Paint = shadeFill()
+    val taperFill: Paint = shadeFill()
+    val linerFill: Paint = shadeFill()
+    val unfilledBodyIds = unshadedBodyRunIds(
+        spec, resolvedComponents, pdfPrefs.shadedBodies, pdfPrefs.shadeExplicitBodiesOnly,
+    )
+    val unfilledTaperIds = unshadedTaperIds(spec, pdfPrefs.shadedTapers)
+    val unfilledLinerIds = unshadedLinerIds(spec, pdfPrefs.shadedLiners)
 
     // One body path: plain rectangles when a body draws at true scale under the break
     // threshold, the center-break pair when foreshortened by the compressed mapping or
@@ -280,9 +291,7 @@ fun composeShaftPdf(
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
         blends = blendsForPdf,
         keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(spec),
-        unfilledBodyIds = unshadedAutoBodyRunIds(
-            resolvedComponents, pdfPrefs.shadedBodies, pdfPrefs.shadeExplicitBodiesOnly,
-        ),
+        unfilledBodyIds = unfilledBodyIds,
     )
     // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every other
     // host is a secondary. At 180° a secondary renders hidden (dashed, no fill); at 90° it renders
@@ -299,9 +308,10 @@ fun composeShaftPdf(
     drawTapers(
         c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill,
         hiddenKeywayIds, clocking, secondaryKeywayIds, diaPtPerMm,
+        unfilledIds = unfilledTaperIds,
     )
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, diaPtPerMm)
-    drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill)
+    drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill, unfilledIds = unfilledLinerIds)
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill(), bodies = bodiesForPdf)
     c.restore()
 
@@ -833,9 +843,16 @@ private fun drawTapers(
     clocking: KeywayClocking = KeywayClocking.NONE,
     secondaryKeywayIds: Set<String> = emptySet(),
     ptPerMm: Float = 1f,
+    /**
+     * Tapers whose shade is suppressed while the rest of [tapers] keeps [fill]
+     * (`ui/resolved/unshadedTaperIds` — the kind's checkbox with each taper's own tri-state
+     * override applied). Empty fills every taper the same.
+     */
+    unfilledIds: Set<String> = emptySet(),
 ) {
     tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
+        val taperFill = if (t.id in unfilledIds) null else fill
         val x0 = requireFinite("taper.x0", xAt(t.startFromAftMm))
         val x1 = requireFinite("taper.x1", xAt(t.startFromAftMm + t.lengthMm))
         val r0 = requireFinite("taper.r0", rPx(t.startDiaMm))
@@ -843,11 +860,11 @@ private fun drawTapers(
         val top0 = requireFinite("taper.top0", cy - r0); val bot0 = requireFinite("taper.bot0", cy + r0)
         val top1 = requireFinite("taper.top1", cy - r1); val bot1 = requireFinite("taper.bot1", cy + r1)
 
-        if (fill != null) {
+        if (taperFill != null) {
             val path = Path().apply {
                 moveTo(x0, top0); lineTo(x1, top1); lineTo(x1, bot1); lineTo(x0, bot0); close()
             }
-            c.drawPath(path, fill)
+            c.drawPath(path, taperFill)
         }
         c.drawLine(x0, top0, x1, top1, outline)
         c.drawLine(x0, bot0, x1, bot1, outline)
@@ -964,16 +981,22 @@ private fun drawLiners(
     outline: Paint,
     dim: Paint,
     fill: Paint? = null,
+    /**
+     * Liners whose shade is suppressed while the rest of [liners] keeps [fill]
+     * (`ui/resolved/unshadedLinerIds`). Empty fills every liner the same.
+     */
+    unfilledIds: Set<String> = emptySet(),
 ) {
     liners.forEach { ln ->
         if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
+        val linerFill = if (ln.id in unfilledIds) null else fill
         val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
         val r = rPx(ln.odMm)
 
         // Shoulder specs, fill and stroke all come from the shared pass
         // (`pdf/LinerShoulderDraw.kt`) the runout/consolidated sheet draws through too.
         val specs = linerShoulderSpecs(ln, x0, x1, r, xAt, rPx)
-        if (fill != null) drawLinerFillPdf(c, cy, x0, x1, r, specs, fill)
+        if (linerFill != null) drawLinerFillPdf(c, cy, x0, x1, r, specs, linerFill)
         drawLinerOutlinePdf(c, cy, x0, x1, r, specs, outline, dim)
     }
 }

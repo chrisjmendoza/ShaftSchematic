@@ -56,11 +56,13 @@ internal fun LinerPagerCard(
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
     componentTitlesDefault: Boolean = true,
+    componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     linerTitleById: Map<String, String>,
     f1: (Float) -> String,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
     onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
+    onUpdateLinerShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit,
     linerShouldersEnabled: Boolean,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -158,6 +160,15 @@ internal fun LinerPagerCard(
             checked = ln.showNameOnDrawing ?: componentTitlesDefault,
             testTag = "liner_show_label_toggle",
             onCheckedChange = { onUpdateLinerShowLabel(idx, it) },
+        )
+        // Unset follows the kind's Settings checkbox. A consolidated sheet printing measured Ø
+        // values inside the profile draws every liner bare whatever this says — grey under a
+        // sheet-white knockout halo reads as a pasted box.
+        ShowDiaToggleRow(
+            label = "Shade on drawing",
+            checked = ln.shadeOnDrawing ?: componentShadeDefaults.liners,
+            testTag = "liner_shade_toggle",
+            onCheckedChange = { onUpdateLinerShade(idx, it) },
         )
 
         // Shoulders: capability-gated entry, but authored work always keeps its

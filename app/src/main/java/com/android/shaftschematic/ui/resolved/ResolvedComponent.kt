@@ -335,32 +335,67 @@ private const val BODY_FRAGMENT_ID_SEPARATOR = '#'
 fun resolvedBodyBaseId(id: String): String = id.substringBefore(BODY_FRAGMENT_ID_SEPARATOR)
 
 /**
- * Ids of the body runs that must draw UNFILLED when the body shade is narrowed to authored
- * sections (`PdfPrefs.shadedBodies` + `PdfPrefs.shadeExplicitBodiesOnly`): every AUTO-sourced
- * run, i.e. the bare shaft between the components the user placed.
+ * Ids of the body runs that must draw UNFILLED — the composers' whole shade decision for
+ * bodies, resolved to a set of run ids.
+ *
+ * Per run: an AUTO span (bare shaft) follows the kind's checkbox narrowed by
+ * `PdfPrefs.shadeExplicitBodiesOnly`, which bares AUTO runs and nothing else; an EXPLICIT run
+ * follows its stored body's tri-state [com.android.shaftschematic.model.Body.shadeOnDrawing]
+ * — `null` takes [shadedBodies], an explicit value overrides it either way (a named section
+ * can shade with the kind off, or stay bare with it on). Fragments of a split body look their
+ * author's choice up through [resolvedBodyBaseId], so every run of one body agrees.
  *
  * The composers' drawable bodies come from `ShaftSpec.bodyForPdf`, which keeps the RESOLVED id
- * (fragments included) and drops the source, so the decision has to be made here — off the
- * resolved list — and handed to the one body pass as ids. Suppressing per body inside that
- * single pass, rather than splitting the run list into a filled and an unfilled pass, is what
- * keeps the fill-then-outline z-order each run already has.
+ * (fragments included) and drops the source and the flags, so the decision has to be made here
+ * and handed to the one body pass as ids. Suppressing per run inside that single pass, rather
+ * than splitting the run list into a filled and an unfilled pass, is what keeps the
+ * fill-then-outline z-order each run already has — which is why the composers build the fill
+ * paint unconditionally and let this set decide: a kind switched off simply names every run.
  *
- * Empty unless BOTH flags are on: the narrowing only ever subtracts from a shade that was
- * asked for. Empty too without a resolve pass ([resolved] null) — a spec's stored bodies are
- * authored by definition, so there is nothing auto-sourced to leave bare.
+ * Without a resolve pass ([resolved] null) the drawn bodies are the stored ones, so the same
+ * rule runs over [spec]'s own list, keyed by stored id.
  */
-fun unshadedAutoBodyRunIds(
+fun unshadedBodyRunIds(
+    spec: ShaftSpec,
     resolved: List<ResolvedComponent>?,
     shadedBodies: Boolean,
     shadeExplicitBodiesOnly: Boolean,
 ): Set<String> {
-    if (!shadedBodies || !shadeExplicitBodiesOnly || resolved == null) return emptySet()
+    if (resolved == null) {
+        return spec.bodies.filterNot { it.shadeOnDrawing ?: shadedBodies }.map { it.id }.toSet()
+    }
     return resolved
         .filterIsInstance<ResolvedBody>()
-        .filter { it.source == ResolvedComponentSource.AUTO }
+        .filterNot { run ->
+            if (run.source == ResolvedComponentSource.AUTO) {
+                shadedBodies && !shadeExplicitBodiesOnly
+            } else {
+                spec.bodies.firstOrNull { it.id == resolvedBodyBaseId(run.id) }?.shadeOnDrawing
+                    ?: shadedBodies
+            }
+        }
         .map { it.id }
         .toSet()
 }
+
+/**
+ * Taper mirror of [unshadedBodyRunIds]: ids of the tapers that must draw unfilled, each
+ * following its own tri-state [com.android.shaftschematic.model.Taper.shadeOnDrawing] with
+ * [shadedTapers] as the default. Tapers never fragment, so a stored id IS the drawn id and
+ * there is no resolved list to consult.
+ */
+fun unshadedTaperIds(spec: ShaftSpec, shadedTapers: Boolean): Set<String> =
+    spec.tapers.filterNot { it.shadeOnDrawing ?: shadedTapers }.map { it.id }.toSet()
+
+/**
+ * Liner mirror of [unshadedBodyRunIds], same stored-id rule as [unshadedTaperIds].
+ *
+ * A consolidated sheet printing measured Ø values inside the profile outranks every value
+ * here — the composer drops the liner fill whole on such a sheet, because a sheet-white
+ * knockout halo over grey reads as a pasted box.
+ */
+fun unshadedLinerIds(spec: ShaftSpec, shadedLiners: Boolean): Set<String> =
+    spec.liners.filterNot { it.shadeOnDrawing ?: shadedLiners }.map { it.id }.toSet()
 
 private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>): List<ResolvedComponent> {
     if (components.isEmpty()) return components

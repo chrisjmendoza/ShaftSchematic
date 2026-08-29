@@ -156,6 +156,7 @@ data class Body(
     val label: String? = null,  // optional user-defined display label; not used for geometry
     val showDiaOnDrawing: Boolean = false,  // below-shaft Ø callout visibility; OPT-IN for bodies
     val showNameOnDrawing: Boolean? = null, // schematic name-label; tri-state: null follows the global titles switch, explicit true/false overrides it (all four kinds; retired showLabelOnDrawing key ignored at decode)
+    val shadeOnDrawing: Boolean? = null,    // PDF fill; tri-state: null follows the kind's "Shade in Components" checkbox (auto runs also follow "Explicit bodies only"), explicit overrides (Body/Taper/Liner only)
     // Blended faces (draw-only): curve length inward from each face, 0 = square.
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,
@@ -281,6 +282,7 @@ data class Liner(
     val label: String? = null,  // optional user-defined display label; not used for geometry
     val showDiaOnDrawing: Boolean = true,  // below-shaft Ø callout visibility; defaults true (unlike Body)
     val showNameOnDrawing: Boolean? = null, // schematic name-label; tri-state, see Body
+    val shadeOnDrawing: Boolean? = null,    // PDF fill; tri-state, see Body
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val endMmPhysical: Float = 0f,  // kept in sync with start + length by Liner.normalized()
 ) : Segment

@@ -43,6 +43,7 @@ import com.android.shaftschematic.ui.viewmodel.updateBodyKeyway
 import com.android.shaftschematic.ui.viewmodel.updateBodyLabel
 import com.android.shaftschematic.ui.viewmodel.updateBodyCompressOnDrawing
 import com.android.shaftschematic.ui.viewmodel.updateBodyShowDia
+import com.android.shaftschematic.ui.viewmodel.updateBodyShade
 import com.android.shaftschematic.ui.viewmodel.updateBodyShowLabel
 import com.android.shaftschematic.ui.viewmodel.updateCouplerBoltSlot
 import com.android.shaftschematic.ui.viewmodel.updateCouplerBoltSlotReference
@@ -52,11 +53,13 @@ import com.android.shaftschematic.ui.viewmodel.updateLinerAuthoredReference
 import com.android.shaftschematic.ui.viewmodel.updateLinerLabel
 import com.android.shaftschematic.ui.viewmodel.updateLinerShoulder
 import com.android.shaftschematic.ui.viewmodel.updateLinerShowDia
+import com.android.shaftschematic.ui.viewmodel.updateLinerShade
 import com.android.shaftschematic.ui.viewmodel.updateLinerShowLabel
 import com.android.shaftschematic.ui.viewmodel.updateTaper
 import com.android.shaftschematic.ui.viewmodel.updateTaperAuthoredReference
 import com.android.shaftschematic.ui.viewmodel.updateTaperKeyway
 import com.android.shaftschematic.ui.viewmodel.updateTaperLabel
+import com.android.shaftschematic.ui.viewmodel.updateTaperShade
 import com.android.shaftschematic.ui.viewmodel.updateTaperShowLabel
 import com.android.shaftschematic.ui.viewmodel.updateThread
 import com.android.shaftschematic.ui.viewmodel.updateThreadLabel
@@ -166,6 +169,12 @@ fun ShaftRoute(
     val showDimDebugOverlay by vm.showDimDebugOverlay.collectAsState()
     val pdfTieringMode by vm.pdfTieringMode.collectAsState()
     val pdfShowComponentTitles by vm.pdfShowComponentTitles.collectAsState()
+    // The kind-level shade checkboxes, as the DEFAULT each card's unset per-component shade
+    // toggle displays. `shadeExplicitBodiesOnly` is deliberately absent: it narrows AUTO runs
+    // only, and every card carrying that toggle is an explicit component.
+    val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
+    val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
+    val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
 
     val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
     val editorResetNonce by vm.editorResetNonce.collectAsState()
@@ -228,6 +237,9 @@ fun ShaftRoute(
         showDimDebugOverlay = showDimDebugOverlay,
         pdfTieringMode = pdfTieringMode,
         componentTitlesDefault = pdfShowComponentTitles,
+        componentShadeDefaults = ComponentShadeDefaults(
+            bodies = pdfShadedBodies, tapers = pdfShadedTapers, liners = pdfShadedLiners,
+        ),
         showComponentArrows = showComponentArrows,
         componentArrowWidthDp = componentArrowWidthDp,
         showHighlightSelection = showHighlightSelection,
@@ -278,6 +290,7 @@ fun ShaftRoute(
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
         onUpdateBodyShowDia = { i, show    -> vm.updateBodyShowDia(i, show) },
         onUpdateBodyShowLabel = { i, show  -> vm.updateBodyShowLabel(i, show) },
+        onUpdateBodyShade = { i, shade -> vm.updateBodyShade(i, shade) },
         onUpdateBodyCompressOnDrawing = { i, on -> vm.updateBodyCompressOnDrawing(i, on) },
         onUpdateBodyBlend = { i, aft, fwd, p, sAft, sFwd -> vm.updateBodyBlend(i, aft, fwd, p, sAft, sFwd) },
         onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label) },
@@ -285,6 +298,7 @@ fun ShaftRoute(
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },
         onUpdateTaperLabel = { i, label    -> vm.updateTaperLabel(i, label) },
         onUpdateTaperShowLabel = { i, show -> vm.updateTaperShowLabel(i, show) },
+        onUpdateTaperShade = { i, shade -> vm.updateTaperShade(i, shade) },
         onUpdateTaperKeyway = { i, w, d, l, offset, spooned -> vm.updateTaperKeyway(i, w, d, l, offset, spooned) },
         onUpdateTaperReference = { i, ref -> vm.updateTaperAuthoredReference(i, ref) },
         onUpdateThread = { i, s, l, maj, p, desig -> vm.updateThread(i, s, l, maj, p, desig) },
@@ -293,6 +307,7 @@ fun ShaftRoute(
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
         onUpdateLinerShowDia = { i, show   -> vm.updateLinerShowDia(i, show) },
         onUpdateLinerShowLabel = { i, show -> vm.updateLinerShowLabel(i, show) },
+        onUpdateLinerShade = { i, shade -> vm.updateLinerShade(i, shade) },
         onUpdateLinerShoulder = { i, end, len, od, r -> vm.updateLinerShoulder(i, end, len, od, r) },
         linerShouldersEnabled = linerShouldersEnabled,
         dialogUnitConverterEnabled = dialogUnitConverterEnabled,
