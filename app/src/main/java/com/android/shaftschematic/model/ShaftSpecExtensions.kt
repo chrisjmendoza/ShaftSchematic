@@ -346,7 +346,7 @@ internal fun carryBodyKeyway(from: Body, to: Body): Body {
 internal fun carryBodyDisplay(from: Body, to: Body): Body = to.copy(
     label = from.label,
     showDiaOnDrawing = from.showDiaOnDrawing,
-    showLabelOnDrawing = from.showLabelOnDrawing,
+    showNameOnDrawing = from.showNameOnDrawing,
     compressOnDrawing = from.compressOnDrawing,
 )
 

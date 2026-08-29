@@ -30,13 +30,18 @@ import java.util.UUID
  *   callouts are opt-in per card, so the schematic stays clean unless a Ø is deliberately
  *   shown — the footer's "Body:" list still always carries every Ø. When several shown
  *   bodies share a Ø, the callout anchors at the longest of them.
- * @property showLabelOnDrawing Whether this body's name prints as a component label under the
+ * @property showNameOnDrawing Whether this body's name prints as a component label under the
  *   schematic. Tri-state, draw-only (never rewrites [label]): `null` — the default — follows
  *   the Settings switch ("Show component titles in PDF"), so a document saved before the flag
  *   existed prints exactly as its setting says; an explicit `true` prints THIS name even with
  *   that switch off (on-device report: a freshly checked card toggle did nothing under a
  *   global switch turned off long before); an explicit `false` hides this name even with it
- *   on. The per-sheet export option (template mode) still gates the whole pass.
+ *   on. The per-sheet export option (template mode) still gates the whole pass. The field
+ *   name is deliberately fresh (`showNameOnDrawing`; the retired `showLabelOnDrawing` key is
+ *   ignored at decode): the flag's first build blanket-serialized `true` under the old key on
+ *   every component of every saved document, and honoring those stamps as authored overrides
+ *   made one checked toggle appear to turn every label on (on-device report). A stored value
+ *   under THIS key is always an authored choice.
  * @property compressOnDrawing Whether this body may foreshorten on a sheet. Draw-only: it
  *   changes nothing in the model, resolve, OAL, collision, or footer geometry, and never
  *   rewrites a stored span. `false` pins the body's stored span at true scale in the
@@ -75,7 +80,7 @@ data class Body(
     val keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val keywaySpooned: Boolean = false,
     val showDiaOnDrawing: Boolean = false,
-    val showLabelOnDrawing: Boolean? = null,
+    val showNameOnDrawing: Boolean? = null,
     val compressOnDrawing: Boolean = true,
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,

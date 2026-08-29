@@ -11,7 +11,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Per-component name-label visibility (`showLabelOnDrawing`) as the schematic's label pass sees
+ * Per-component name-label visibility (`showNameOnDrawing`) as the schematic's label pass sees
  * it. The flag is TRI-STATE: `null` follows the global titles default handed to
  * [componentLabelSpans], an explicit value overrides it in either direction — a checked card
  * toggle must print its one name even under a global switch turned off (on-device report). Only
@@ -28,19 +28,19 @@ class ComponentLabelVisibilityTest {
         overallLengthMm = 2000f,
         bodies = listOf(
             Body(id = "b1", startFromAftMm = 0f, lengthMm = 400f, diaMm = 120f,
-                label = "Coupling end", showLabelOnDrawing = body),
+                label = "Coupling end", showNameOnDrawing = body),
         ),
         tapers = listOf(
             Taper(id = "t1", startFromAftMm = 400f, lengthMm = 300f, startDiaMm = 100f, endDiaMm = 120f,
-                label = "Prop taper", showLabelOnDrawing = taper),
+                label = "Prop taper", showNameOnDrawing = taper),
         ),
         threads = listOf(
             Threads(id = "th1", startFromAftMm = 1700f, lengthMm = 100f, majorDiaMm = 90f,
-                label = "Nut thread", showLabelOnDrawing = thread),
+                label = "Nut thread", showNameOnDrawing = thread),
         ),
         liners = listOf(
             Liner(id = "l1", startFromAftMm = 800f, lengthMm = 200f, odMm = 150f,
-                label = "Fwd sleeve", showLabelOnDrawing = liner),
+                label = "Fwd sleeve", showNameOnDrawing = liner),
         ),
     )
 
@@ -101,7 +101,7 @@ class ComponentLabelVisibilityTest {
         val s = ShaftSpec(
             overallLengthMm = 1200f,
             bodies = listOf(
-                Body(id = "b1", startFromAftMm = 0f, lengthMm = 400f, diaMm = 120f, showLabelOnDrawing = false),
+                Body(id = "b1", startFromAftMm = 0f, lengthMm = 400f, diaMm = 120f, showNameOnDrawing = false),
                 Body(id = "b2", startFromAftMm = 600f, lengthMm = 400f, diaMm = 120f),
             ),
         )

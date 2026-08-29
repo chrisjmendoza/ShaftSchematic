@@ -427,8 +427,12 @@ private val helpSections: List<HelpSection> = listOf(
                     "print.\n\n" +
                     "• \"Open PDF after export\" — default off. Hands the finished file to your " +
                     "PDF viewer as soon as it is written.\n" +
-                    "• \"Show component titles in PDF\" — default on. Prints the component " +
-                    "names above the drawing.\n" +
+                    "• \"Show component titles in PDF\" — default on. The DEFAULT for " +
+                    "component names on the schematic: components you haven't decided about " +
+                    "follow it. Each card's \"Show name on drawing\" toggle overrides it for " +
+                    "that one component, in either direction — a name switched on there " +
+                    "prints even with this off, and one switched off stays hidden even with " +
+                    "this on.\n" +
                     "• \"Shade in PDF\": \"Bodies\", \"Tapers\", \"Liners\" — all off by " +
                     "default. Fills those sections with light grey instead of leaving them " +
                     "outlined. The same three checkboxes appear in each document's PDF Options " +

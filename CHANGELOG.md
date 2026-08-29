@@ -97,6 +97,24 @@ now joins the base name exactly as the schematic does (omitted when unset; no-po
 byte-identical to before). The Wear and Undercut routes' private copies of the builder were
 deleted in favor of the one in `OutputDoc`.
 
+### fix(pdf): the name-label flag moves to a fresh key — first-build stamps dropped
+
+On-device report: "show individual component labels seems to turn ALL of them on. I want
+PER component option." The tri-state semantics (below) were behaving as designed; the data
+was not: the flag's FIRST build serialized its plain default (`showLabelOnDrawing: true`)
+onto every component of every document saved with it, and the tri-state build then honored
+those stamps as authored always-show overrides — so the moment the sheet showed any labels,
+it showed all of them, whatever the global switch said.
+
+The flag is renamed to **`showNameOnDrawing`** and the retired `showLabelOnDrawing` key is
+ignored at decode — the only clean cut, since a default-stamp and an authored choice are
+byte-identical under the old key. Semantics are unchanged and are what the user confirmed
+wanting: the Settings switch ("Show component titles in PDF") is the DEFAULT for components
+whose toggle was never touched; each card's "Show name on drawing" overrides it in either
+direction — checked prints even with the global off, unchecked-after-touching hides even
+with it on. A name checked under the old key needs one re-check. Documents never touched by
+the first build are unaffected in every respect.
+
 ### fix(pdf): the spoon bowl tightens — uniform drawn clearance on both axes
 
 On-device report: on a compressed sheet the spooned keyway's bowl drew tall — "the distance

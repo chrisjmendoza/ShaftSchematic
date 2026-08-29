@@ -57,11 +57,14 @@ how an *already-drawn* component prints, has a stable default, and is reached fo
 looking at a printed sheet is not a property of the component being added; in an Add dialog
 it would be a permanently-preset box adding noise to every add. Exactly five qualify: the
 coupler slot's "show dimension rail", **"Show Ø on drawing"** (`Body`/`Liner`/auto-body
-cards), **"Show name on drawing"** (`showLabelOnDrawing`, all four explicit component cards —
+cards), **"Show name on drawing"** (`showNameOnDrawing`, all four explicit component cards —
 TRI-STATE per-component gate on the schematic's name label: unset follows the global
 `showComponentTitles` pref, an explicit ON prints even with that pref off, an explicit OFF
 hides even with it on — the pref is the default, never a master gate over an authored
-choice), **"Compress on drawing"** (`Body.compressOnDrawing`, explicit-body cards — see the
+choice. The field name is fresh: the retired `showLabelOnDrawing` key is IGNORED at decode,
+because the flag's first build blanket-serialized `true` under it on every component and
+honoring those stamps as authored overrides made one checked toggle appear to turn every
+label on — on-device report. Do not resurrect the old key), **"Compress on drawing"** (`Body.compressOnDrawing`, explicit-body cards — see the
 compression invariant below; its authoring default is set at creation, so the dialog would
 be a preset box), and the per-component **"Prints in: in | mm"** unit chip (explicit
 `Body`/`Taper`/

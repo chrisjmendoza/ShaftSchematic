@@ -571,7 +571,7 @@ internal data class ComponentLabelSpan(val text: String, val startMm: Float, val
 /**
  * The component-name labels a sheet prints, AFT→FWD within each kind.
  *
- * Per-component visibility (`showLabelOnDrawing`) is TRI-STATE: `null` follows
+ * Per-component visibility (`showNameOnDrawing`) is TRI-STATE: `null` follows
  * [titlesDefault] — the global
  * [com.android.shaftschematic.settings.PdfPrefs.showComponentTitles] switch — while an
  * explicit `true`/`false` overrides it for that one component in either direction. Gating the
@@ -594,26 +594,26 @@ internal fun componentLabelSpans(spec: ShaftSpec, titlesDefault: Boolean): List<
     val bodyTitleById = buildBodyTitleById(spec)
     spec.bodies.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
         .forEachIndexed { i, b ->
-            emit(b.showLabelOnDrawing, bodyTitleById[b.id] ?: "Body #${i + 1}", b.startFromAftMm, b.lengthMm)
+            emit(b.showNameOnDrawing, bodyTitleById[b.id] ?: "Body #${i + 1}", b.startFromAftMm, b.lengthMm)
         }
 
     val taperTitleById = buildTaperTitleById(spec)
     spec.tapers.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
         .forEachIndexed { i, t ->
-            emit(t.showLabelOnDrawing, taperTitleById[t.id] ?: "Taper #${i + 1}", t.startFromAftMm, t.lengthMm)
+            emit(t.showNameOnDrawing, taperTitleById[t.id] ?: "Taper #${i + 1}", t.startFromAftMm, t.lengthMm)
         }
 
     val threadTitleById = buildThreadTitleById(spec)
     spec.threads.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
         .forEachIndexed { i, th ->
-            emit(th.showLabelOnDrawing, threadTitleById[th.id] ?: "Thread #${i + 1}", th.startFromAftMm, th.lengthMm)
+            emit(th.showNameOnDrawing, threadTitleById[th.id] ?: "Thread #${i + 1}", th.startFromAftMm, th.lengthMm)
         }
 
     val linerTitleById = buildLinerTitleById(spec)
     spec.liners.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
         .forEachIndexed { i, ln ->
             val label = ln.label?.trim()?.ifEmpty { null } ?: linerTitleById[ln.id] ?: "Liner ${i + 1}"
-            emit(ln.showLabelOnDrawing, label, ln.startFromAftMm, ln.lengthMm)
+            emit(ln.showNameOnDrawing, label, ln.startFromAftMm, ln.lengthMm)
         }
 }
 

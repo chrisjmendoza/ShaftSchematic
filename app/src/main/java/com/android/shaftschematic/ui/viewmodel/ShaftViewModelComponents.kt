@@ -727,8 +727,8 @@ fun ShaftViewModel.updateBodyCompressOnDrawing(index: Int, compress: Boolean) = 
 fun ShaftViewModel.updateBodyShowLabel(index: Int, show: Boolean) = _spec.update { s ->
     s.withItemField(
         list = s.bodies, index = index, newValue = show,
-        get = { it.showLabelOnDrawing },
-        copyField = { old, v -> old.copy(showLabelOnDrawing = v) },
+        get = { it.showNameOnDrawing },
+        copyField = { old, v -> old.copy(showNameOnDrawing = v) },
         withList = { s.copy(bodies = it) },
     )
 }
@@ -737,8 +737,8 @@ fun ShaftViewModel.updateBodyShowLabel(index: Int, show: Boolean) = _spec.update
 fun ShaftViewModel.updateTaperShowLabel(index: Int, show: Boolean) = _spec.update { s ->
     s.withItemField(
         list = s.tapers, index = index, newValue = show,
-        get = { it.showLabelOnDrawing },
-        copyField = { old, v -> old.copy(showLabelOnDrawing = v) },
+        get = { it.showNameOnDrawing },
+        copyField = { old, v -> old.copy(showNameOnDrawing = v) },
         withList = { s.copy(tapers = it) },
     )
 }
@@ -747,8 +747,8 @@ fun ShaftViewModel.updateTaperShowLabel(index: Int, show: Boolean) = _spec.updat
 fun ShaftViewModel.updateThreadShowLabel(index: Int, show: Boolean) = _spec.update { s ->
     s.withItemField(
         list = s.threads, index = index, newValue = show,
-        get = { it.showLabelOnDrawing },
-        copyField = { old, v -> old.copy(showLabelOnDrawing = v) },
+        get = { it.showNameOnDrawing },
+        copyField = { old, v -> old.copy(showNameOnDrawing = v) },
         withList = { s.copy(threads = it) },
     )
 }
@@ -757,8 +757,8 @@ fun ShaftViewModel.updateThreadShowLabel(index: Int, show: Boolean) = _spec.upda
 fun ShaftViewModel.updateLinerShowLabel(index: Int, show: Boolean) = _spec.update { s ->
     s.withItemField(
         list = s.liners, index = index, newValue = show,
-        get = { it.showLabelOnDrawing },
-        copyField = { old, v -> old.copy(showLabelOnDrawing = v) },
+        get = { it.showNameOnDrawing },
+        copyField = { old, v -> old.copy(showNameOnDrawing = v) },
         withList = { s.copy(liners = it) },
     )
 }

@@ -404,15 +404,23 @@ preference and never re-derive it.
 # 5.3b Component Name Labels (per-component visibility)
 
 The schematic's below-shaft component-name labels (`drawComponentLabelsPdf`, entries built by
-the pure `componentLabelSpans`) are gated per component: `showLabelOnDrawing` on `Body` /
+the pure `componentLabelSpans`) are gated per component: `showNameOnDrawing` on `Body` /
 `Taper` / `Threads` / `Liner`, **tri-state**. Unset (the default — what every pre-flag
 document decodes to) follows the global Settings switch (`PdfPrefs.showComponentTitles`), so
 untouched documents print exactly as their setting says; an explicit `true` prints that one
 name even with the switch off (a checked card toggle must never be silently dead under a
 forgotten global off — on-device report); an explicit `false` hides it even with the switch
 on. The global is the flags' DEFAULT, never a master gate; only `PdfExportOptions.showLabels`
-(template mode) still drops the pass whole. The card toggle displays the resolved state. Auto
-spans are never labelled, so they carry no flag. Hiding a label never renumbers the
+(template mode) still drops the pass whole. The card toggle displays the resolved state.
+
+**The field name is fresh, and load-bearing**: the retired `showLabelOnDrawing` key is
+IGNORED at decode. The flag's first build blanket-serialized `true` under the old key on
+every component of every saved document (a plain default, not an authored choice), and
+honoring those stamps as explicit overrides made one checked toggle appear to turn every
+label on (on-device report). A stored value under the current key is always an authored
+choice; do not resurrect the old key.
+
+Auto spans are never labelled, so they carry no flag. Hiding a label never renumbers the
 positional fallback names of the remaining components ("Body #2" stays #2). Card-only
 toggles (`*_show_label_toggle`), the same carve-out as "Show Ø on drawing"; draw-only in
 every respect.
