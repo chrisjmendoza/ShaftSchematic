@@ -202,6 +202,39 @@ fun UndercutRoute(
     val collidingIds = remember(spec) { spec.collidingIds() }
     val gate = remember(spec, collidingIds) { exportPdfGate(spec, collidingIds) }
 
+    /**
+     * Sends the undercut drawing to the platform print dialog. ONE action behind the tab
+     * body's Print button and the preview overlay's Print icon, so the two entry points
+     * cannot drift. Every value is snapshotted here on the UI thread — `onWrite` runs on a
+     * binder thread.
+     */
+    fun printUndercutDrawing() {
+        val jobName = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft)
+            .removeSuffix(".pdf")
+        val specSnapshot = spec
+        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
+            jobNumber = jobNumber, side = shaftPosition, item = item)
+        val unitSnapshot = unit
+        val prefsSnapshot = vm.currentPdfPrefs
+        val resolvedSnapshot = resolvedComponents
+        val thicknessSnapshot = lineThicknessScale
+        val recordSnapshot = undercutRecord
+        val blankSnapshot = blankDraft
+        val displayUnitsSnapshot = vm.currentDisplayUnits()
+        printShaftPdfPage(ctx, jobName) { page ->
+            composeUndercutPdf(
+                page = page, spec = specSnapshot,
+                project = projectSnapshot, unit = unitSnapshot,
+                displayUnits = displayUnitsSnapshot,
+                pdfPrefs = prefsSnapshot,
+                resolvedComponents = resolvedSnapshot,
+                undercutRecord = recordSnapshot,
+                lineThicknessScale = thicknessSnapshot,
+                blankValues = blankSnapshot,
+            )
+        }
+    }
+
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
     val segs = remember(resolvedComponents, spec) { surfaceSegsFrom(resolvedComponents, bodyBlends(spec, resolvedComponents)) }
     // In-progress exaggeration drag (PreviewTuning doctrine): the canvas restyles from this
@@ -627,33 +660,7 @@ fun UndercutRoute(
 
             // ── Print button ──────────────────────────────────────────────────
             OutlinedButton(
-                onClick = {
-                    val jobName = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft)
-                        .removeSuffix(".pdf")
-                    // Snapshot state on the UI thread; onWrite runs on a binder thread.
-                    val specSnapshot = spec
-                    val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition, item = item)
-                    val unitSnapshot = unit
-                    val prefsSnapshot = vm.currentPdfPrefs
-                    val resolvedSnapshot = resolvedComponents
-                    val thicknessSnapshot = lineThicknessScale
-                    val recordSnapshot = undercutRecord
-                    val blankSnapshot = blankDraft
-                    val displayUnitsSnapshot = vm.currentDisplayUnits()
-                    printShaftPdfPage(ctx, jobName) { page ->
-                        composeUndercutPdf(
-                            page = page, spec = specSnapshot,
-                            project = projectSnapshot, unit = unitSnapshot,
-                            displayUnits = displayUnitsSnapshot,
-                            pdfPrefs = prefsSnapshot,
-                            resolvedComponents = resolvedSnapshot,
-                            undercutRecord = recordSnapshot,
-                            lineThicknessScale = thicknessSnapshot,
-                            blankValues = blankSnapshot,
-                        )
-                    }
-                },
+                onClick = { printUndercutDrawing() },
                 enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -685,6 +692,8 @@ fun UndercutRoute(
                 showPreview = false
                 launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft))
             },
+            // The tab body's Print action, unchanged — one function behind both.
+            onPrint = { printUndercutDrawing() },
             optionsSheet = {
                 // Same blank-draft state as the tab body's switch — ONE state behind both, so
                 // the tab and the sheet can never disagree about what the preview is showing.
@@ -696,6 +705,10 @@ fun UndercutRoute(
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,
                     pdfShadedLiners = pdfShadedLiners,
+                    // This document's profile shades every body run whatever the
+                    // explicit-only pref says, so its row is hidden here rather than shown
+                    // as a checkbox the page ignores.
+                    showShadeExplicitBodiesOnly = false,
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
                     blankDraft = blankDraft,

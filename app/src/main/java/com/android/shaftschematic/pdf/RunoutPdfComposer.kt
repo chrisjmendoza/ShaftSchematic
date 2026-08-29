@@ -54,6 +54,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
+import com.android.shaftschematic.ui.resolved.unshadedAutoBodyRunIds
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualLabel
@@ -303,10 +304,15 @@ fun composeRunoutPdf(
             docSpec.liners.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.LINER, it.startFromAftMm, it.lengthMm)) }
         }
     }
+    // User-set bubble size and drop. Both bubble draw sites scale from the same two prefs, so
+    // the canvas preview and the printed sheet stay identical. `minGap` is deliberately NOT
+    // scaled: it is the clearance floor between circles, not part of a bubble's size, and every
+    // pitch the layout engine derives already grows with the radius.
+    val bubbleRadiusPt = BUBBLE_RADIUS_PT * pdfPrefs.runoutBubbleScale
     val bubbleGeom = RunoutBubbleGeometry(
-        radius = BUBBLE_RADIUS_PT,
+        radius = bubbleRadiusPt,
         minGap = BUBBLE_MIN_GAP_PT,
-        shortLeader = SHORT_LEADER_PT,
+        shortLeader = SHORT_LEADER_PT * pdfPrefs.runoutBubbleDropScale,
         contentLeft = contentLeft,
         contentRight = contentRight,
     )
@@ -645,7 +651,10 @@ fun composeRunoutPdf(
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill,
         ptPerMm = diaPtPerMm, truePtPerMm = diaPtPerMm,
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
-        blends = bodyBlendsForSheet)
+        blends = bodyBlendsForSheet,
+        unfilledBodyIds = unshadedAutoBodyRunIds(
+            resolvedComponents, pdfPrefs.shadedBodies, pdfPrefs.shadeExplicitBodiesOnly,
+        ))
 
     // ── Wear marks + worn sections + in-profile values (consolidated sheet) ───
     // Z-order (on-device request): marks first — wear-area bands and pit X's — then the
@@ -690,7 +699,7 @@ fun composeRunoutPdf(
     )
     // Blank drafts keep the bubbles (they ARE the write-in circles) but drop recorded values.
     val effectiveReadings = if (blankValues) RunoutReadings() else runoutReadings
-    drawPlacedBubbles(c, bubbleResult.bubbles, outline, effectiveReadings, unit)
+    drawPlacedBubbles(c, bubbleResult.bubbles, outline, effectiveReadings, unit, bubbleRadiusPt)
 
     // ── Draw TIR direction line (directly above the footer block) ─────────────
     // Runout content only — elected out with the bubbles on a Schematic + Wear sheet.
@@ -1255,6 +1264,11 @@ internal fun drawShaftProfile(
      * cap stands at the neighbouring diameter. Empty without a resolve pass (square faces).
      */
     blends: List<BodyBlend> = emptyList(),
+    /**
+     * Body runs whose shade is suppressed while the rest keep [bodyFill] — the "explicit
+     * bodies only" narrowing (`unshadedAutoBodyRunIds`). Empty draws every run the same.
+     */
+    unfilledBodyIds: Set<String> = emptySet(),
 ) {
     // ── Shade fills first (drawn under all outlines) ──────────────────────
     // Body fill is drawn inside `drawBodiesForRunout` — a blended face shades under its
@@ -1290,6 +1304,7 @@ internal fun drawShaftProfile(
         breakMinFracOfTrue = breakMinFracOfTrue,
         blends = blends,
         keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(authoredSpec),
+        unfilledBodyIds = unfilledBodyIds,
     )
     // Body keyways, from the SAME pass the schematic draws (`drawBodyKeywaysPdf`) so a slot
     // cannot print on one sheet and vanish from the other. Read off [authoredSpec]: [spec]
@@ -1392,8 +1407,13 @@ private fun drawPlacedBubbles(
     outline: Paint,
     readings: RunoutReadings,
     unit: UnitSystem,
+    /**
+     * The radius the plan was built with ([BUBBLE_RADIUS_PT] × `PdfPrefs.runoutBubbleScale`).
+     * Taken as a parameter rather than re-read from the constant: circles drawn at a radius the
+     * planner did not space for would overlap each other and their leaders.
+     */
+    r: Float,
 ) {
-    val r = BUBBLE_RADIUS_PT
     val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.BLACK
@@ -1656,11 +1676,16 @@ private const val HEADER_HEIGHT_PT = 22f    // Compact single-line header
 private const val OAL_GAP_PT       = 6f     // Gap from header rule to OAL line
 private const val OAL_LINE_SPACE_PT = 90f   // OAL line height above shaft top (≈1.25 in — raised so the dimension doesn't crowd the profile)
 
-// Bubble geometry — sized to hold hand-written decimal readings (e.g. .016)
+// Bubble geometry — sized to hold hand-written decimal readings (e.g. .016).
 // Row spacing and leader routing are derived from these by geom/RunoutBubbleLayout.kt.
-private const val BUBBLE_RADIUS_PT      = 23f  // 46 pt ≈ 0.64 inch diameter (roomy to hand-write a value in)
-private const val BUBBLE_MIN_GAP_PT     = 5f   // Minimum clear distance between circle edges
-private const val SHORT_LEADER_PT       = 18f  // Deepest shaft surface → top of bubble row 0
+//
+// The radius and the leader are BASE values: `PdfPrefs.runoutBubbleScale` and
+// `runoutBubbleDropScale` multiply them, and at their defaults the sheet draws exactly these.
+// Internal so a test can pin that pair. The gap is a fixed clearance floor — it is what keeps
+// circles apart, not part of a bubble's size, so no pref scales it.
+internal const val BUBBLE_RADIUS_PT      = 23f  // 46 pt ≈ 0.64 inch diameter (roomy to hand-write a value in)
+internal const val BUBBLE_MIN_GAP_PT     = 5f   // Minimum clear distance between circle edges
+internal const val SHORT_LEADER_PT       = 18f  // Deepest shaft surface → top of bubble row 0
 
 // Extra space below the last bubble row
 private const val BUBBLE_GAP_PT         = 8f

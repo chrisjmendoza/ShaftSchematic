@@ -334,6 +334,34 @@ private const val BODY_FRAGMENT_ID_SEPARATOR = '#'
  */
 fun resolvedBodyBaseId(id: String): String = id.substringBefore(BODY_FRAGMENT_ID_SEPARATOR)
 
+/**
+ * Ids of the body runs that must draw UNFILLED when the body shade is narrowed to authored
+ * sections (`PdfPrefs.shadedBodies` + `PdfPrefs.shadeExplicitBodiesOnly`): every AUTO-sourced
+ * run, i.e. the bare shaft between the components the user placed.
+ *
+ * The composers' drawable bodies come from `ShaftSpec.bodyForPdf`, which keeps the RESOLVED id
+ * (fragments included) and drops the source, so the decision has to be made here — off the
+ * resolved list — and handed to the one body pass as ids. Suppressing per body inside that
+ * single pass, rather than splitting the run list into a filled and an unfilled pass, is what
+ * keeps the fill-then-outline z-order each run already has.
+ *
+ * Empty unless BOTH flags are on: the narrowing only ever subtracts from a shade that was
+ * asked for. Empty too without a resolve pass ([resolved] null) — a spec's stored bodies are
+ * authored by definition, so there is nothing auto-sourced to leave bare.
+ */
+fun unshadedAutoBodyRunIds(
+    resolved: List<ResolvedComponent>?,
+    shadedBodies: Boolean,
+    shadeExplicitBodiesOnly: Boolean,
+): Set<String> {
+    if (!shadedBodies || !shadeExplicitBodiesOnly || resolved == null) return emptySet()
+    return resolved
+        .filterIsInstance<ResolvedBody>()
+        .filter { it.source == ResolvedComponentSource.AUTO }
+        .map { it.id }
+        .toSet()
+}
+
 private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>): List<ResolvedComponent> {
     if (components.isEmpty()) return components
 

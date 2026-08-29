@@ -153,6 +153,12 @@ fun RunoutRoute(
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
+    // Bubble size and drop: canvas inputs AND render-loop keys. The canvas below plans its own
+    // geometry from them; the composed sheet reads them off the `PdfPrefs` snapshot, which the
+    // loop cannot observe.
+    val pdfRunoutBubbleScale by vm.pdfRunoutBubbleScale.collectAsState()
+    val pdfRunoutBubbleDropScale by vm.pdfRunoutBubbleDropScale.collectAsState()
     // Fraction style: a chip tap changes the renderer's active style, which the render loop
     // cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
@@ -260,6 +266,36 @@ fun RunoutRoute(
         consolidated = false,
     )
 
+    /**
+     * Sends the classic runout sheet to the platform print dialog. ONE action behind the tab
+     * body's Print button and the preview overlay's Print icon, so the two entry points
+     * cannot drift. Every value is snapshotted here on the UI thread — `onWrite` runs on a
+     * binder thread.
+     */
+    fun printClassicRunout() {
+        val jobName = outputFilename.removeSuffix(".pdf")
+        val specSnapshot = spec
+        val configSnapshot = runoutConfig
+        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
+            jobNumber = jobNumber, side = shaftPosition, item = item)
+        val unitSnapshot = unit
+        val prefsSnapshot = vm.currentPdfPrefs
+        val resolvedSnapshot = resolvedComponents
+        val thicknessSnapshot = lineThicknessScale
+        val readingsSnapshot = runoutReadings
+        val placementsSnapshot = stationPlacements
+        val blankSnapshot = blankDraft
+        val displayUnitsSnapshot = vm.currentDisplayUnits()
+        printShaftPdfPage(ctx, jobName) { page ->
+            composeClassicRunout(
+                page, specSnapshot, configSnapshot, projectSnapshot,
+                unitSnapshot, prefsSnapshot, resolvedSnapshot,
+                thicknessSnapshot, readingsSnapshot, placementsSnapshot,
+                blankSnapshot, displayUnitsSnapshot,
+            )
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
@@ -301,6 +337,9 @@ fun RunoutRoute(
                 shadedTapers = pdfShadedTapers,
                 shadedLiners = pdfShadedLiners,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
+                runoutBubbleScale = pdfRunoutBubbleScale,
+                runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 fractionStyle = pdfFractionStyle,
                 dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
@@ -445,6 +484,10 @@ fun RunoutRoute(
                 val scaleForTap  = rememberUpdatedState(previewScale)
                 val offsetForTap = rememberUpdatedState(previewOffset)
                 val placementsForDrag = rememberUpdatedState(stationPlacements)
+                // Same reason: the gesture handlers re-plan the bubble field to hit-test it, and
+                // a resize must reach that plan without re-keying the gesture.
+                val bubbleScaleForTap = rememberUpdatedState(pdfRunoutBubbleScale)
+                val bubbleDropForTap = rememberUpdatedState(pdfRunoutBubbleDropScale)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -463,6 +506,7 @@ fun RunoutRoute(
                                         size.width.toFloat(), size.height.toFloat(),
                                         spec, resolvedComponents,
                                         runoutConfig.componentOverrides, placementsForDrag.value,
+                                        bubbleScaleForTap.value, bubbleDropForTap.value,
                                     )
                                     val p = toPlanSpace(
                                         tap, size.width.toFloat(), size.height.toFloat(),
@@ -491,6 +535,7 @@ fun RunoutRoute(
                                         size.width.toFloat(), size.height.toFloat(),
                                         spec, resolvedComponents,
                                         runoutConfig.componentOverrides, placementsForDrag.value,
+                                        bubbleScaleForTap.value, bubbleDropForTap.value,
                                     )
                                     val p = toPlanSpace(
                                         raw, size.width.toFloat(), size.height.toFloat(),
@@ -536,6 +581,7 @@ fun RunoutRoute(
                                             drag.componentId, drag.stationIndex,
                                             drag.positionsMm[drag.stationIndex],
                                         ),
+                                        bubbleScaleForTap.value, bubbleDropForTap.value,
                                     )
                                     val p = toPlanSpace(
                                         change.position, size.width.toFloat(), size.height.toFloat(),
@@ -597,6 +643,7 @@ fun RunoutRoute(
                             size.width, size.height,
                             spec, resolvedComponents, runoutConfig.componentOverrides,
                             livePlacements,
+                            pdfRunoutBubbleScale, pdfRunoutBubbleDropScale,
                         )
                         with(ShaftRenderer) {
                             draw(spec, preview.layout, previewOpts, resolvedComponents)
@@ -756,30 +803,7 @@ fun RunoutRoute(
 
             // ── Print button ──────────────────────────────────────────────────
             OutlinedButton(
-                onClick = {
-                    val jobName = outputFilename.removeSuffix(".pdf")
-                    // Snapshot state on the UI thread; onWrite runs on a binder thread.
-                    val specSnapshot = spec
-                    val configSnapshot = runoutConfig
-                    val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition, item = item)
-                    val unitSnapshot = unit
-                    val prefsSnapshot = vm.currentPdfPrefs
-                    val resolvedSnapshot = resolvedComponents
-                    val thicknessSnapshot = lineThicknessScale
-                    val readingsSnapshot = runoutReadings
-                    val placementsSnapshot = stationPlacements
-                    val blankSnapshot = blankDraft
-                    val displayUnitsSnapshot = vm.currentDisplayUnits()
-                    printShaftPdfPage(ctx, jobName) { page ->
-                        composeClassicRunout(
-                            page, specSnapshot, configSnapshot, projectSnapshot,
-                            unitSnapshot, prefsSnapshot, resolvedSnapshot,
-                            thicknessSnapshot, readingsSnapshot, placementsSnapshot,
-                            blankSnapshot, displayUnitsSnapshot,
-                        )
-                    }
-                },
+                onClick = { printClassicRunout() },
                 enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -843,12 +867,15 @@ fun RunoutRoute(
                 showPreview = false
                 launcher.launch(outputFilename)
             },
+            // The tab body's Print action, unchanged — one function behind both.
+            onPrint = { printClassicRunout() },
             optionsSheet = {
                 RunoutWearOptionsSheet(
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,
                     pdfShadedLiners = pdfShadedLiners,
+                    shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                     vm = vm,
                     showCouplingFaceRow = true,
                     couplingFaceOn = runoutConfig.showCouplingFace,
@@ -866,15 +893,21 @@ fun RunoutRoute(
                     // The classic sheet's drawn height and liner floors come off the same
                     // `RunoutConfig` fields as the consolidated sheet's, so the sheet being
                     // looked at can be tuned against itself here too.
-                    showHeightControls = true,
+                    showHeightSlider = true,
                     heightScale = runoutConfig.heightScale,
                     heightSliderBase = heightSliderBase,
                     heightSliderMaxDiaMm = heightSliderDiaMm,
+                    showLinerCompression = true,
                     linersProportional = runoutConfig.linersProportional,
                     linerCompression = runoutConfig.linerCompression,
                     estimateKeptFrac = { frac ->
                         estimatedLinerKeptFracOfTrue(spec, heightSliderBase, runoutConfig.heightScale, frac)
                     },
+                    // This sheet's bubbles are the document, so their size and drop are
+                    // tuned here as well as from Settings.
+                    showBubbleControls = true,
+                    runoutBubbleScale = pdfRunoutBubbleScale,
+                    runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 )
             },
             sheetTunesPage = true,
@@ -920,6 +953,11 @@ private data class RunoutRenderInputs(
     val shadedTapers: Boolean,
     val shadedLiners: Boolean,
     val sBreakThresholdFrac: Float,
+    val shadeExplicitBodiesOnly: Boolean,
+    /** Bubble size and drop. Keys only — both travel to the composer inside the `PdfPrefs`
+     *  snapshot, and both also feed the canvas preview's own plan. */
+    val runoutBubbleScale: Float,
+    val runoutBubbleDropScale: Float,
     /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
     val fractionStyle: FractionStyle,
     /**
@@ -1073,12 +1111,19 @@ private fun Density.computeRunoutPreview(
     resolvedComponents: List<ResolvedComponent>,
     overrides: Map<String, Int>,
     placements: RunoutStationPlacements = RunoutStationPlacements(),
+    /** `PdfPrefs.runoutBubbleScale` — the same multiplier the sheet applies to its radius. */
+    bubbleScale: Float = 1f,
+    /** `PdfPrefs.runoutBubbleDropScale` — the same multiplier the sheet applies to its drop. */
+    bubbleDropScale: Float = 1f,
 ): RunoutPreview {
     val marginPx = 12.dp.toPx()
+    // The two user-set bubble multipliers, applied exactly as the composer applies them
+    // (`pdf/RunoutPdfComposer.kt`): radius and drop scale, `minGap` stays a fixed clearance
+    // floor. Canvas and sheet must agree — the bubbles are one drawing in two renderings.
     val bubbleGeom = RunoutBubbleGeometry(
-        radius = 7.dp.toPx(),
+        radius = 7.dp.toPx() * bubbleScale,
         minGap = 5.dp.toPx(),
-        shortLeader = 5.dp.toPx(),
+        shortLeader = 5.dp.toPx() * bubbleDropScale,
         contentLeft = 0f,
         contentRight = widthPx,
     )

@@ -37,6 +37,7 @@ import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
+import com.android.shaftschematic.ui.resolved.unshadedAutoBodyRunIds
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
@@ -279,6 +280,9 @@ fun composeShaftPdf(
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
         blends = blendsForPdf,
         keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(spec),
+        unfilledBodyIds = unshadedAutoBodyRunIds(
+            resolvedComponents, pdfPrefs.shadedBodies, pdfPrefs.shadeExplicitBodiesOnly,
+        ),
     )
     // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every other
     // host is a secondary. At 180° a secondary renders hidden (dashed, no fill); at 90° it renders

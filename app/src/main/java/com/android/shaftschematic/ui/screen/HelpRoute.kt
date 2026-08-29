@@ -433,10 +433,12 @@ private val helpSections: List<HelpSection> = listOf(
                     "that one component, in either direction — a name switched on there " +
                     "prints even with this off, and one switched off stays hidden even with " +
                     "this on.\n" +
-                    "• \"Shade in PDF\": \"Bodies\", \"Tapers\", \"Liners\" — all off by " +
+                    "• \"Shade in Components\": \"Bodies\", \"Tapers\", \"Liners\" — all off by " +
                     "default. Fills those sections with light grey instead of leaving them " +
-                    "outlined. The same three checkboxes appear in each document's PDF Options " +
-                    "sheet. On a consolidated sheet that prints Ø values inside the profile, " +
+                    "outlined. \"Explicit bodies only\", under \"Bodies\", narrows the fill to " +
+                    "sections you added: auto (bare-shaft) runs stay unshaded. The same group " +
+                    "appears in each document's PDF Options sheet, folded behind its heading. " +
+                    "On a consolidated sheet that prints Ø values inside the profile, " +
                     "that sheet shows its Liners box unchecked and greyed — the values sit on " +
                     "white halos a fill would fight — and your setting comes straight back on " +
                     "every other document."
@@ -447,11 +449,11 @@ private val helpSections: List<HelpSection> = listOf(
                     "dimensions, for marking up by hand. (Blank draft, the other write-in " +
                     "mode, keeps the dimension lines and empties the values; it lives on each " +
                     "document's preview, not here.)\n" +
-                    "• \"Dimension tiering reference\" — \"Auto (closest end)\" (default), " +
+                    "• \"Measurement reference\" — \"Auto (closest end)\" (default), " +
                     "\"AFT (force AFT SET)\", or \"FWD (force FWD SET)\". Picks which end " +
                     "printed dimensions measure from. Auto anchors each dimension to whichever " +
-                    "end is closer. The same choice appears as \"Measurement reference\" in the " +
-                    "schematic's PDF Options sheet."
+                    "end is closer. The same choice appears under that name in the schematic " +
+                    "and consolidated PDF Options sheets."
             ),
             HelpTopic(
                 "Achievements",
@@ -485,29 +487,35 @@ private val helpSections: List<HelpSection> = listOf(
                 "Drawing controls that live on the document",
                 "These are saved with the job rather than in Settings, so a reopened document " +
                     "prints exactly as it did.\n\n" +
-                    "• \"Shaft height\" — on the Consolidated Output tab and in the " +
-                    "schematic's PDF Options sheet. Sets the drawn shaft height on paper by " +
-                    "value in inches, anywhere from $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — shrink " +
+                    "• \"Shaft height\" — on the Consolidated Output tab and in the schematic, " +
+                    "runout, and wear PDF Options sheets. Sets the drawn shaft height on paper " +
+                    "by value in inches, anywhere from $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — shrink " +
                     "a long shaft to uncramp the sheet, or grow it for room to write in; " +
                     "\"Standard (…)\" returns to the " +
                     "size the Default drawing size setting picks. One value behind the " +
-                    "schematic, runout, and consolidated sheets.\n" +
+                    "schematic, runout, consolidated, and wear sheets.\n" +
                     "• \"Keep liners proportional lengthwise\" and \"Liner compression\" — same " +
                     "two places. Ask for liners at true length, or set how far they may " +
                     "shorten when the page needs the room; the line underneath reports how " +
                     "much true length the page can actually afford. Neither ever changes the " +
                     "drawn shaft height.\n" +
-                    "• \"Blank draft (write-in)\" — on each document's preview and on the " +
-                    "Output tab. Prints the drawing with values blanked for handwriting. Not " +
-                    "saved; it resets each session.\n" +
+                    "• \"Blank draft\" — a Content chip on each document's PDF Options sheet, " +
+                    "and a chip over the schematic preview. Prints the drawing with values " +
+                    "blanked for handwriting. Not saved; it resets each session. On the " +
+                    "schematic, \"Ø callouts\" beside it decides whether that blank sheet " +
+                    "still carries Ø leaders to fill in.\n" +
                     "• \"Cut depth exaggeration\" — on the Undercut Drawing. Changes only how " +
                     "deep cuts look, never the printed numbers.\n" +
                     "• \"Sheet content\", worn sections, and \"Export all\" — on the " +
                     "Consolidated Output tab.\n" +
-                    "• Each document's PDF Options sheet repeats Line thickness, Shade in PDF, " +
-                    "(on the schematic) Measurement reference, and — on the schematic and the " +
-                    "runout/consolidated sheets, the drawings that can break — Body S-break: " +
-                    "the same app-wide settings, reachable without leaving the drawing.\n" +
+                    "• Each document's PDF Options sheet repeats Line thickness and Shade in " +
+                    "Components, on the schematic and consolidated sheets Measurement " +
+                    "reference, and — on the schematic and the runout/consolidated sheets, the " +
+                    "drawings that can break — Body S-break: the same app-wide settings, " +
+                    "reachable without leaving the drawing.\n" +
+                    "• \"Bubble size\" and \"Bubble height\" — on the runout and consolidated " +
+                    "sheets. How large the runout bubbles draw and how far they hang below the " +
+                    "shaft; both move the canvas markers and the printed sheet together.\n" +
                     "• \"Dimension arrows\" — Small / Medium / Large arrowheads on the " +
                     "dimension rails, on the schematic and consolidated sheets. Heads point " +
                     "inward unless the span is too narrow to hold both.\n" +

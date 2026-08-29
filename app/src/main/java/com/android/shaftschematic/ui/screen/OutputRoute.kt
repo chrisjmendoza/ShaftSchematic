@@ -130,6 +130,10 @@ private data class ConsolidatedRenderInputs(
     val shadedTapers: Boolean,
     val shadedLiners: Boolean,
     val sBreakThresholdFrac: Float,
+    val shadeExplicitBodiesOnly: Boolean,
+    /** Bubble size and drop — keys only; both travel inside the `PdfPrefs` snapshot. */
+    val runoutBubbleScale: Float,
+    val runoutBubbleDropScale: Float,
     val arrowSizePt: Float,
     /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
     val fractionStyle: FractionStyle,
@@ -190,6 +194,11 @@ fun OutputRoute(
     val curveLoHeightIn    by vm.pdfCurveLoHeightIn.collectAsState()
     val curveHiHeightIn    by vm.pdfCurveHiHeightIn.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
+    // Bubble size and drop: the composer reads them off the `PdfPrefs` snapshot, so the loop
+    // needs them as keys or a resize never reaches this preview.
+    val pdfRunoutBubbleScale by vm.pdfRunoutBubbleScale.collectAsState()
+    val pdfRunoutBubbleDropScale by vm.pdfRunoutBubbleDropScale.collectAsState()
     // Dimension-rail arrowhead size: a chip tap commits straight to PdfPrefs, so the render
     // loop needs it as an input key or the sheet would keep the old heads.
     val pdfArrowSizePt     by vm.pdfArrowSizePt.collectAsState()
@@ -318,6 +327,38 @@ fun OutputRoute(
         includeWearInfo = variantSnap.includeWearInfo,
     )
 
+    /**
+     * Sends the consolidated sheet to the platform print dialog. ONE action behind the tab
+     * body's Print button and the preview overlay's Print icon, so the two entry points
+     * cannot drift. Every value is snapshotted here on the UI thread — `onWrite` runs on a
+     * binder thread.
+     */
+    fun printConsolidated() {
+        val jobName = outputFilename.removeSuffix(".pdf")
+        val variantSnapshot = variant
+        val specSnapshot = spec
+        val configSnapshot = runoutConfig
+        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
+            jobNumber = jobNumber, side = shaftPosition, item = item)
+        val unitSnapshot = unit
+        val prefsSnapshot = vm.currentPdfPrefs
+        val resolvedSnapshot = resolvedComponents
+        val thicknessSnapshot = lineThicknessScale
+        val readingsSnapshot = runoutReadings
+        val placementsSnapshot = stationPlacements
+        val wearSnapshot = wearRecord
+        val blankSnapshot = blankDraft
+        val displayUnitsSnapshot = vm.currentDisplayUnits()
+        printShaftPdfPage(ctx, jobName) { page ->
+            composeConsolidated(
+                page, variantSnapshot, specSnapshot, configSnapshot,
+                projectSnapshot, unitSnapshot, prefsSnapshot, resolvedSnapshot,
+                thicknessSnapshot, readingsSnapshot, placementsSnapshot,
+                wearSnapshot, blankSnapshot, displayUnitsSnapshot,
+            )
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
@@ -403,6 +444,7 @@ fun OutputRoute(
                             traceDepthFrac = effectiveWearTraceDepthFrac(
                                 wearRecord.traceDepthFrac, prefs.wearTraceDepthFrac,
                             ),
+                            heightScale = runoutConfig.heightScale,
                         )
                         OutputDoc.UNDERCUT -> composeUndercutPdf(
                             page = page, spec = spec, project = project, unit = unit,
@@ -448,6 +490,9 @@ fun OutputRoute(
                 shadedTapers = pdfShadedTapers,
                 shadedLiners = pdfShadedLiners,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
+                runoutBubbleScale = pdfRunoutBubbleScale,
+                runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 arrowSizePt = pdfArrowSizePt,
                 fractionStyle = pdfFractionStyle,
                 dualUnitLayout = pdfDualUnitLayout,
@@ -599,32 +644,7 @@ fun OutputRoute(
             }
 
             OutlinedButton(
-                onClick = {
-                    val jobName = outputFilename.removeSuffix(".pdf")
-                    // Snapshot state on the UI thread; onWrite runs on a binder thread.
-                    val variantSnapshot = variant
-                    val specSnapshot = spec
-                    val configSnapshot = runoutConfig
-                    val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition, item = item)
-                    val unitSnapshot = unit
-                    val prefsSnapshot = vm.currentPdfPrefs
-                    val resolvedSnapshot = resolvedComponents
-                    val thicknessSnapshot = lineThicknessScale
-                    val readingsSnapshot = runoutReadings
-                    val placementsSnapshot = stationPlacements
-                    val wearSnapshot = wearRecord
-                    val blankSnapshot = blankDraft
-                    val displayUnitsSnapshot = vm.currentDisplayUnits()
-                    printShaftPdfPage(ctx, jobName) { page ->
-                        composeConsolidated(
-                            page, variantSnapshot, specSnapshot, configSnapshot,
-                            projectSnapshot, unitSnapshot, prefsSnapshot, resolvedSnapshot,
-                            thicknessSnapshot, readingsSnapshot, placementsSnapshot,
-                            wearSnapshot, blankSnapshot, displayUnitsSnapshot,
-                        )
-                    }
-                },
+                onClick = { printConsolidated() },
                 enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -834,12 +854,15 @@ fun OutputRoute(
                 showPreview = false
                 launcher.launch(outputFilename)
             },
+            // The tab body's Print action, unchanged — one function behind both.
+            onPrint = { printConsolidated() },
             optionsSheet = {
                 RunoutWearOptionsSheet(
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,
                     pdfShadedLiners = pdfShadedLiners,
+                    shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                     vm = vm,
                     linerShadeLocked = linerShadeLocked,
                     showCouplingFaceRow = true,
@@ -855,15 +878,21 @@ fun OutputRoute(
                     tuning = tuning,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },
-                    showHeightControls = true,
+                    showHeightSlider = true,
                     heightScale = runoutConfig.heightScale,
                     heightSliderBase = heightSliderBase,
                     heightSliderMaxDiaMm = heightSliderDiaMm,
+                    showLinerCompression = true,
                     linersProportional = runoutConfig.linersProportional,
                     linerCompression = runoutConfig.linerCompression,
                     estimateKeptFrac = { frac ->
                         estimatedLinerKeptFracOfTrue(spec, heightSliderBase, runoutConfig.heightScale, frac)
                     },
+                    // Bubbles print on this sheet whenever the variant includes them, so
+                    // their size and drop are tuned here as on the Runout tab.
+                    showBubbleControls = true,
+                    runoutBubbleScale = pdfRunoutBubbleScale,
+                    runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                     showMeasurementReference = true,
                     pdfTieringMode = pdfTieringMode,
                 )

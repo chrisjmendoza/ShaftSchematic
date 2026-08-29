@@ -273,6 +273,21 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfShadedLiners = MutableStateFlow(false)
     val pdfShadedLiners: StateFlow<Boolean> = _pdfShadedLiners.asStateFlow()
 
+    // Narrows the body shade to authored sections (auto/bare-shaft runs draw unfilled). Also a
+    // preview re-render key on every tab that rasterizes with the current PdfPrefs.
+    internal val _pdfShadeExplicitBodiesOnly = MutableStateFlow(PdfPrefs().shadeExplicitBodiesOnly)
+    val pdfShadeExplicitBodiesOnly: StateFlow<Boolean> = _pdfShadeExplicitBodiesOnly.asStateFlow()
+
+    // Runout bubble radius multiplier. Read by the sheet composer AND the Runout tab's canvas,
+    // so it is both a canvas input and a preview re-render key.
+    internal val _pdfRunoutBubbleScale = MutableStateFlow(PdfPrefs().runoutBubbleScale)
+    val pdfRunoutBubbleScale: StateFlow<Float> = _pdfRunoutBubbleScale.asStateFlow()
+
+    // How far the first bubble row hangs below the shaft, as a multiplier. Same two consumers
+    // as the radius above.
+    internal val _pdfRunoutBubbleDropScale = MutableStateFlow(PdfPrefs().runoutBubbleDropScale)
+    val pdfRunoutBubbleDropScale: StateFlow<Float> = _pdfRunoutBubbleDropScale.asStateFlow()
+
     // Sizing-curve anchor heights (paper inches): what a 4" / 8" shaft draws by default.
     internal val _pdfCurveLoHeightIn = MutableStateFlow(PdfPrefs().curveLoHeightIn)
     val pdfCurveLoHeightIn: StateFlow<Float> = _pdfCurveLoHeightIn.asStateFlow()
@@ -909,6 +924,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfShadedLinersFlow(getApplication()).collectLatest { persisted ->
                 _pdfShadedLiners.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(shadedLiners = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfShadeExplicitBodiesOnlyFlow(getApplication()).collectLatest { persisted ->
+                _pdfShadeExplicitBodiesOnly.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(shadeExplicitBodiesOnly = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfRunoutBubbleScaleFlow(getApplication()).collectLatest { persisted ->
+                _pdfRunoutBubbleScale.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(runoutBubbleScale = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfRunoutBubbleDropScaleFlow(getApplication()).collectLatest { persisted ->
+                _pdfRunoutBubbleDropScale.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(runoutBubbleDropScale = persisted) }
             }
         }
         viewModelScope.launch {

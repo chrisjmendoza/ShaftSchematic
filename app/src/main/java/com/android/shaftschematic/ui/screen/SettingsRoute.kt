@@ -145,6 +145,7 @@ fun SettingsRoute(
     val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
+    val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
     val pdfCurveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
@@ -839,7 +840,7 @@ fun SettingsRoute(
                     // column with a padded heading, so adopting the sheets' tighter block
                     // would restyle the page. Same prefs, same setters.
                     Text(
-                        "Shade in PDF",
+                        "Shade in Components",
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(start = 4.dp, top = 4.dp)
                     )
@@ -847,6 +848,31 @@ fun SettingsRoute(
                         Checkbox(checked = pdfShadedBodies, onCheckedChange = { vm.setPdfShadedBodies(it) })
                         Spacer(Modifier.width(8.dp))
                         Text("Bodies")
+                    }
+                    // Sub-option of "Bodies": it narrows the fill to authored sections, so it
+                    // only bites while the fill is on.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 24.dp),
+                    ) {
+                        Checkbox(
+                            checked = pdfShadeExplicitBodiesOnly,
+                            enabled = pdfShadedBodies,
+                            onCheckedChange = { vm.setPdfShadeExplicitBodiesOnly(it) },
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                "Explicit bodies only",
+                                color = if (pdfShadedBodies) MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                "Auto (bare-shaft) sections stay unshaded.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = pdfShadedTapers, onCheckedChange = { vm.setPdfShadedTapers(it) })
@@ -876,7 +902,7 @@ fun SettingsRoute(
                     // --- PDF Tiering Mode ---
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Dimension tiering reference",
+                        "Measurement reference",
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(start = 16.dp)
                     )

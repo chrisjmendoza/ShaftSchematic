@@ -6,6 +6,38 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-08-29
+
+### feat(pdf): options-sheet audit — Print everywhere, content chips, reorder, expandables, bubble sliders
+
+Every PDF preview overlay (Runout, Wear, Undercut, Consolidated Output) now offers a Print
+icon in its top bar beside Export, not just its tab body — each route reuses the exact same
+snapshot-and-compose action for both, factored into one local function so the two entry
+points can't drift.
+
+The schematic and shared options sheets both lead with a compact "Content" chip row —
+Blank draft / Ø callouts / Labels on the schematic, Blank draft / Coupling face on the
+shared sheet — replacing the old switch rows and moving their captions to Help. Both sheets
+now follow one unified order: "Shaft height" leads the live-tuning group (ahead of Body
+S-break and Line thickness, since it's the control reached for most), followed by Liner
+compression, a new "Runout bubbles" heading (Bubble size 60–150% / Bubble height 50–200%,
+runout + consolidated sheets only), Dimension arrows, Fractions, then "Measurement
+reference" and "Shade in Components" collapse into expandable sections, with Dual units
+last. The wear document's main profile band now honors the shared per-job "Shaft height"
+multiplier too (the wear composer's own absolute paper-band clamp; detail strips are
+untouched).
+
+Two new app-wide `PdfPrefs`: `runoutBubbleScale` / `runoutBubbleDropScale` (both default
+1.0, byte-identical output) scale the runout bubble radius and row-0 drop at both draw
+sites — the sheet composer and the canvas preview; `runoutBubbleDropScale` is explicitly
+experimental. A third, `shadeExplicitBodiesOnly` (default off), narrows "Shade in
+Components" → Bodies to explicit bodies only, leaving auto (bare-shaft) runs unfilled; the
+narrowing never reaches the wear/undercut documents' profile pass, so those two sheets hide
+the sub-checkbox rather than show one their page ignores. "Shade in
+PDF" is renamed "Shade in Components" and "Dimension tiering reference" is renamed
+"Measurement reference" everywhere, including Settings, which gained the same "Explicit
+bodies only" sub-checkbox.
+
 ## 2026-08-28
 
 ### fix(resolve): an explicit body never absorbs the auto fill beside it

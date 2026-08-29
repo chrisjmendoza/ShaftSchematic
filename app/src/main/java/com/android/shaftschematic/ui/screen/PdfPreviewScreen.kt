@@ -47,7 +47,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -156,6 +155,7 @@ fun PdfPreviewScreen(
     val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
+    val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
     // Arrowhead size: a chip tap commits straight to PdfPrefs, so the render loop needs it as
     // an input key or the page would keep the old heads.
@@ -229,6 +229,7 @@ fun PdfPreviewScreen(
                 shadedBodies = pdfShadedBodies,
                 shadedTapers = pdfShadedTapers,
                 shadedLiners = pdfShadedLiners,
+                shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
                 arrowSizePt = pdfArrowSizePt,
                 fractionStyle = pdfFractionStyle,
@@ -576,6 +577,7 @@ fun PdfPreviewScreen(
                 pdfShadedBodies = pdfShadedBodies,
                 pdfShadedTapers = pdfShadedTapers,
                 pdfShadedLiners = pdfShadedLiners,
+                pdfShadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                 pdfBlankDraft = pdfBlankDraft,
                 pdfBlankDiaCallouts = pdfBlankDiaCallouts,
                 tuning = tuning,
@@ -607,6 +609,9 @@ private data class SchematicRenderInputs(
     val shadedBodies: Boolean,
     val shadedTapers: Boolean,
     val shadedLiners: Boolean,
+    /** Narrows the body shade to authored sections. Key only — it travels inside the
+     *  `PdfPrefs` snapshot. The bubble prefs never reach this composer, so they stay out. */
+    val shadeExplicitBodiesOnly: Boolean,
     val sBreakThresholdFrac: Float,
     val arrowSizePt: Float,
     val fractionStyle: FractionStyle,
@@ -657,6 +662,7 @@ private fun PdfOptionsSheet(
     pdfShadedBodies: Boolean,
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
+    pdfShadeExplicitBodiesOnly: Boolean,
     pdfBlankDraft: Boolean,
     pdfBlankDiaCallouts: Boolean,
     /**
@@ -685,74 +691,59 @@ private fun PdfOptionsSheet(
         Text("PDF Options", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(12.dp))
 
-        // ── Blank draft (write-in) ───────────────────────────────────────────
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(
-                checked = pdfBlankDraft,
-                onCheckedChange = { vm.setPdfBlankDraft(it) },
+        // ── Content ──────────────────────────────────────────────────────────
+        // What this sheet CARRIES, as chips. The captions moved to Help: on a sheet capped
+        // below the page strip, three explained switch rows cost exactly the room the
+        // sliders under them need. "Ø callouts" is a sub-election of the blank draft — a
+        // write-in sheet either carries Ø leaders ready to fill in or prints clear so the
+        // diameters can be hand-written wherever they belong — so it is visible but
+        // untappable until blank mode is on, where it has no effect otherwise.
+        ContentChipRow {
+            ContentChip(
+                label = "Blank draft",
+                selected = pdfBlankDraft,
+                onClick = { vm.setPdfBlankDraft(!pdfBlankDraft) },
             )
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "Prints the drawing with all values blanked for handwriting. Not saved — resets each session.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-
-        // Sub-option of the switch above: a blank sheet either carries Ø leaders ready to
-        // fill in, or prints clear so the diameters can be written in freehand wherever they
-        // belong. Disabled (but visible) when blank mode is off, where it has no effect.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 24.dp, top = 4.dp),
-        ) {
-            Switch(
-                checked = pdfBlankDiaCallouts,
+            ContentChip(
+                label = "Ø callouts",
+                selected = pdfBlankDiaCallouts,
                 enabled = pdfBlankDraft,
-                onCheckedChange = { vm.setPdfBlankDiaCallouts(it) },
+                onClick = { vm.setPdfBlankDiaCallouts(!pdfBlankDiaCallouts) },
                 modifier = Modifier.testTag("pdf_blank_dia_callouts_toggle"),
             )
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(
-                    "Ø callouts",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (pdfBlankDraft) MaterialTheme.colorScheme.onSurface
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    "Off prints the shaft clear of Ø leaders so they can be hand-written.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
-
-        // ── Labels ───────────────────────────────────────────────────────────
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(
-                checked = pdfShowComponentTitles,
-                onCheckedChange = { vm.setPdfShowComponentTitles(it) },
+            // The global default under each component's tri-state "Show name on drawing"
+            // gate — an authored per-component choice still wins over it.
+            ContentChip(
+                label = "Labels",
+                selected = pdfShowComponentTitles,
+                onClick = { vm.setPdfShowComponentTitles(!pdfShowComponentTitles) },
             )
-            Spacer(Modifier.width(12.dp))
-            Text("Component labels", style = MaterialTheme.typography.bodyLarge)
         }
 
         Spacer(Modifier.height(12.dp))
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
 
-        // ── Line thickness ───────────────────────────────────────────────────
-        LineThicknessSlider(
-            scale = lineThicknessScale,
-            onCommit = { vm.setLineThicknessScale(it) },
-            onDrag = { tuning.lineThickness = it },
+        // ── Shaft height ─────────────────────────────────────────────────────
+        // The same per-job multiplier the runout / consolidated sheets carry
+        // (`RunoutConfig.heightScale`) — one slider value behind every drawing
+        // (on-device request: the schematic was meant to follow it too). Selected by
+        // drawn-height VALUE in paper inches; the schematic's base is the default
+        // sizing curve at the configured anchor heights, no width-fit term.
+        //
+        // It leads the sliders because it is the one reached for most (on-device
+        // direction), and because it reshapes the page under a finger — the live-tuning
+        // group the page strip above this sheet exists to keep in view. The sheet is taller
+        // than its cap and scrolls, so a tuning slider parked below the typography rows
+        // reads as absent (on-device report).
+        val sliderDiaMm = remember(spec) { heightSliderMaxDiaFor(spec) }
+        val sliderBase = schematicHeightSliderBase(sliderDiaMm, curveLoHeightIn, curveHiHeightIn)
+        ShaftHeightSlider(
+            heightScale = heightScale,
+            baseScale = sliderBase,
+            maxDiaMm = sliderDiaMm,
+            onCommit = { vm.setRunoutHeightScale(it) },
+            onDrag = { tuning.heightScale = it },
         )
 
         Spacer(Modifier.height(12.dp))
@@ -772,26 +763,11 @@ private fun PdfOptionsSheet(
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
 
-        // ── Shaft height ─────────────────────────────────────────────────────
-        // The same per-job multiplier the runout / consolidated sheets carry
-        // (`RunoutConfig.heightScale`) — one slider value behind every drawing
-        // (on-device request: the schematic was meant to follow it too). Selected by
-        // drawn-height VALUE in paper inches; the schematic's base is the default
-        // sizing curve at the configured anchor heights, no width-fit term.
-        //
-        // It sits with Line thickness and Body S-break because those four sliders are the
-        // ones that reshape the page under a finger — the live-tuning group the page strip
-        // above this sheet exists to keep in view. The sheet is taller than its cap and
-        // scrolls, so a tuning slider parked below the typography rows reads as absent
-        // (on-device report).
-        val sliderDiaMm = remember(spec) { heightSliderMaxDiaFor(spec) }
-        val sliderBase = schematicHeightSliderBase(sliderDiaMm, curveLoHeightIn, curveHiHeightIn)
-        ShaftHeightSlider(
-            heightScale = heightScale,
-            baseScale = sliderBase,
-            maxDiaMm = sliderDiaMm,
-            onCommit = { vm.setRunoutHeightScale(it) },
-            onDrag = { tuning.heightScale = it },
+        // ── Line thickness ───────────────────────────────────────────────────
+        LineThicknessSlider(
+            scale = lineThicknessScale,
+            onCommit = { vm.setLineThicknessScale(it) },
+            onDrag = { tuning.lineThickness = it },
         )
 
         Spacer(Modifier.height(12.dp))
@@ -833,35 +809,25 @@ private fun PdfOptionsSheet(
         Spacer(Modifier.height(12.dp))
 
         // ── Measurement reference ────────────────────────────────────────────
-        Text("Measurement reference", style = MaterialTheme.typography.titleSmall)
-        Spacer(Modifier.height(4.dp))
-        listOf(
-            PdfTieringMode.AUTO to "Auto (closest end)",
-            PdfTieringMode.AFT  to "AFT",
-            PdfTieringMode.FWD  to "FWD",
-        ).forEach { (mode, label) ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(
-                    selected = pdfTieringMode == mode,
-                    onClick = { vm.setPdfTieringMode(mode) },
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(label, style = MaterialTheme.typography.bodyLarge)
-            }
-        }
+        MeasurementReferenceSection(
+            pdfTieringMode = pdfTieringMode,
+            onCommit = { vm.setPdfTieringMode(it) },
+        )
 
         Spacer(Modifier.height(12.dp))
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
 
-        // ── Shade in PDF ─────────────────────────────────────────────────────
+        // ── Shade in Components ──────────────────────────────────────────────
         ShadeInPdfChecks(
             pdfShadedBodies = pdfShadedBodies,
             pdfShadedTapers = pdfShadedTapers,
             pdfShadedLiners = pdfShadedLiners,
+            shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
             onSetShadedBodies = { vm.setPdfShadedBodies(it) },
             onSetShadedTapers = { vm.setPdfShadedTapers(it) },
             onSetShadedLiners = { vm.setPdfShadedLiners(it) },
+            onSetShadeExplicitBodiesOnly = { vm.setPdfShadeExplicitBodiesOnly(it) },
         )
 
         Spacer(Modifier.height(12.dp))

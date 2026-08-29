@@ -1,6 +1,17 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-08-12 — §5.6 documents the consolidated preview's Tune sheet gaining
+Last updated: 2026-08-29 — §5.5/§5.6 document the PDF options audit: a Print icon now sits
+in every preview overlay's top bar beside Export (each route reuses its own tab-body Print
+action, so the two entry points cannot drift); the schematic and shared options sheets both
+lead with a compact "Content" chip row in place of the old switch rows; both sheets reorder
+around a single unified sequence (Shaft height now leads, ahead of S-break and Line
+thickness; Liner compression and the new "Runout bubbles" size/drop sliders follow; Dimension
+arrows, Fractions, then the "Measurement reference" and "Shade in Components" sections
+collapse into expandables, with Dual units last); the wear document's MAIN profile band now
+takes the shared per-job "Shaft height" multiplier too (§5.7); and "Shade in PDF" /
+"Dimension tiering reference" are renamed "Shade in Components" / "Measurement reference"
+everywhere, Settings included, with a new "Explicit bodies only" sub-checkbox under Bodies.
+2026-08-12 — §5.6 documents the consolidated preview's Tune sheet gaining
 Blank draft, Shaft height, Liner compression, and Measurement reference (the schematic
 Tune sheet's applicable set, minus Component labels and the blank Ø-callouts sub-toggle,
 which the consolidated composer never reads). 2026-08-06 (b) — §5.4/§5.5 gain the one-collision-space rule for dimension
@@ -580,31 +591,54 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   filename suffix.
 - On the schematic PDF preview the toggle surfaces **twice from one state**: an
   always-visible `FilterChip` overlaid top-center on the preview itself (testTag
-  `pdf_blank_toggle` — added because the options-sheet switch alone was too hard to find,
-  on-device report) and the original switch in the Tune options sheet. Both drive
-  `setPdfBlankDraft`, so they can never disagree; toggling re-renders the preview live.
+  `pdf_blank_toggle` — added because the options-sheet control alone was too hard to find,
+  on-device report) and the "Blank draft" chip in the Tune options sheet's Content row. Both
+  drive `setPdfBlankDraft`, so they can never disagree; toggling re-renders the preview live.
   The overlaid chip carries an **opaque container plus a drop shadow** — an M3 filter chip's
   unselected container is transparent, and the drawing's rails and values read straight
   through the label as the page panned under it (on-device report). Its colors stay
   **theme-driven**, not `SheetInk`: it is an interactive affordance over the paper, not ink
   printed on it, and a forced-white box would carry dark theme's near-white label onto white.
 
-**The Tune options sheet** (`PdfPreviewScreen.kt`) hosts, in order: Blank draft (write-in)
-+ its Ø-callouts sub-switch, Component labels, then the **live-tuning group at the head of
-the sliders** — Line thickness, Body S-break, **"Shaft height"**, **Liner compression**
-(the latter two §5.7 — the same per-job `RunoutConfig` values the Consolidated Output tab
+**The Tune options sheet** (`PdfPreviewScreen.kt`) leads with a compact **"Content" chip
+row** (`ContentChipRow`/`ContentChip`, `ShaftHeightSlider.kt`) — **Blank draft**, **Ø
+callouts** (enabled only while Blank draft is on, still testTag `pdf_blank_dia_callouts_toggle`),
+**Labels** — replacing the old switch rows; the captions they used to carry moved to Help, since
+three explained rows cost exactly the room the sliders below need. Then, in order: the
+**live-tuning group** — **"Shaft height"**, Body S-break, Line thickness, Liner compression
+(the first and last §5.7 — the same per-job `RunoutConfig` values the Consolidated Output tab
 exposes, §5.6; the group leads because these are the controls the page-strip layout exists
-to keep judgeable, and the height slider buried tenth of thirteen read as absent —
-on-device report) — then Dimension arrows, Fractions, Measurement reference, the
-Shade-in-PDF checkboxes, and Dual units + layout LAST (rarely used options trail, on-device
-request). The sheet scrolls; its height is capped by
-`tuningSheetMaxHeightDp` (78% is only the ceiling — the page strip usually binds first).
+to keep judgeable, and Shaft height leads it — the control reached for most, on-device
+direction) — then Dimension arrows, Fractions, the expandable **"Measurement reference"**
+section, the expandable **"Shade in Components"** section (renamed from "Shade in PDF"; a
+new "Explicit bodies only" sub-checkbox sits under its Bodies row — see below), and Dual
+units + layout LAST (rarely used options trail, on-device request). Both expandables
+(`OptionsExpander`, `ShaftHeightSlider.kt`) start collapsed, header testTags
+`options_measure_ref_expander` / `options_shade_expander`. The sheet scrolls; its height is
+capped by `tuningSheetMaxHeightDp` (78% is only the ceiling — the page strip usually binds
+first).
+
+**Shade explicit bodies only** (`PdfPrefs.shadeExplicitBodiesOnly`, default `false`): with
+"Bodies" shading on, this narrows the fill to explicit bodies only — auto (bare-shaft) runs
+draw unfilled. Decided by the pure `unshadedAutoBodyRunIds` (`ui/resolved/ResolvedComponent.kt`)
+and consumed as an `unfilledBodyIds` set inside the single shared `drawBodyRunsWithBreaks`
+pass (`pdf/BodyRunDraw.kt`), so the fill-then-outline order within one run is untouched — no
+second pass, no re-layering against liners/tapers. The narrowing never reaches the wear and
+undercut documents — their `SimpleShaftProfile` body pass takes one fill for every run — so
+those two sheets HIDE the sub-checkbox (`showShadeExplicitBodiesOnly = false`) rather than
+offering one the page would visibly ignore.
 
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
 `PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print
-framework — Print buttons live on the PDF preview top bar and the runout/wear screens.
-A print and an export of the same document are composed by the same call and are
-therefore identical.
+framework. A print and an export of the same document are composed by the same call and are
+therefore identical. Every PDF preview surface now offers it from **two** places that share
+one action: the tab-body Print button, and a compact Print icon in `PdfPreviewOverlay`'s top
+bar (`onPrint`, left of Export — an icon rather than a labelled button, since the bar is
+already tight in portrait with Close/title/Tune/Export). Each route factors its print action
+into one local function — `printClassicRunout` (RunoutRoute), `printWearDocument`
+(WearRoute), `printUndercutDrawing` (UndercutRoute), `printConsolidated` (OutputRoute) — used
+by both call sites, so they cannot drift; the schematic preview's top bar already had its own
+Print button and is unaffected.
 
 ---
 
@@ -642,18 +676,45 @@ undercut; all on by default) written to one picked folder (`OpenDocumentTree` +
 line. Nothing auto-opens after a batch.
 
 **The consolidated preview's Tune sheet** (`RunoutWearOptionsSheet`, `ui/screen/PdfPreviewOverlay.kt`)
-hosts, in order: Blank draft (write-in) — this tab's own toggle, shown here too so the
-sheet can be judged live — Line thickness, Body S-break, the **"Shaft height" slider** and
-the **liner compression** control (§5.7, the same per-job `RunoutConfig` values as the
-tab's own controls), Measurement reference, and the Shade-in-PDF checkboxes: the same set
-as the schematic Tune sheet (§5.5) minus Component labels and the blank Ø-callouts
-sub-toggle, which the consolidated composer never reads, so they would be inert here. The
-other tabs reuse the same sheet with these additions off: the Runout instance keeps Line
-thickness, Body S-break (the classic sheet draws compression breaks too), and the shade
-checkboxes — the classic sheet honors the same per-job height/liner values, but they are
-tuned from the Output tab or the schematic Tune sheet, and it draws no dimension rails, so
-the Measurement-reference radios would be inert there; the Wear and Undercut instances
-show only Line thickness and the shade checkboxes.
+follows the same unified order the schematic sheet uses (§5.5): a **Content chip row**
+(Blank draft — this tab's own toggle, shown here too so the sheet can be judged live —
+Coupling face), then **"Shaft height"**, Body S-break, Line thickness, **liner
+compression** (§5.7, the same per-job `RunoutConfig` values as the tab's own controls), a
+**"Runout bubbles"** heading with the **Bubble size** / **Bubble height** sliders (see
+below), Dimension arrows, Fractions, the expandable **Measurement reference** section,
+and the expandable **Shade in Components** section (+ its "Explicit bodies only"
+sub-checkbox) — Dual units + layout LAST. This is the fullest instance of the shared sheet:
+every gated row is on. The other three tabs reuse the same sheet with rows gated off by
+what their composer actually reads:
+- **Runout** (the classic standalone sheet) keeps the Content chips, Shaft height, Body
+  S-break (it draws compression breaks too), Line thickness, Liner compression, and the
+  Runout bubbles sliders (its bubbles are the whole point of the sheet) — off: Dimension
+  arrows and Measurement reference, since it draws no dimension rails.
+- **Wear** keeps the Content chip (Blank draft only — no Coupling face row), its own wear
+  tuning block (Components election, Strip size, Trace depth, Wear area shade,
+  Taper–liner join — `showWearControls`), **and now "Shaft height"** (the wear composer's
+  MAIN profile band takes the shared multiplier too, §5.7) plus Line thickness — off:
+  Body S-break, Liner compression, Runout bubbles, Dimension arrows, and Measurement
+  reference (the wear composer takes none of them).
+- **Undercut** keeps only the Content chip (Blank draft) and Line thickness — its normal
+  form draws no whole-shaft profile, so none of the sizing/compression/bubble controls
+  apply.
+
+Every instance keeps Fractions (ungated — every document here prints lengths) and Shade in
+Components (ungated) at their fixed spots in the order.
+
+**"Runout bubbles" sliders** (`BubbleSizeSlider` / `BubbleDropSlider`, `ShaftHeightSlider.kt`,
+Runout + Output only): **"Bubble size"** (60–150%, 5% steps, "Standard" reset at 100%) is
+`PdfPrefs.runoutBubbleScale`, a multiplier on the bubble radius both draw sites take
+(`BUBBLE_RADIUS_PT` on the sheet, the canvas preview's own `radius`). **"Bubble height"**
+(50–200%, "Standard" reset at 100%) is `PdfPrefs.runoutBubbleDropScale`, a multiplier on how
+far the first bubble row hangs below the shaft (`SHORT_LEADER_PT` / the canvas's
+`shortLeader`); its caption reads "Experimental — how far the bubbles hang below the shaft;
+moves where the pointer lines land" — it exists to find the depth that reads best and may be
+retired. Both commit on release (no live-tuning channel; the preview re-renders off the
+stored pref, which rides the render-inputs record) and ride Drawing profiles like every other
+`PdfPrefs` field. See `docs/contracts/RunoutSheet.md` ("Bubble sizing") for the bubble
+geometry itself.
 
 **Hardened writes everywhere**: every SAF export in the app goes through
 `util/PdfSafExport.writeShaftPdfToUri` — a composer throw repaints the page as a valid
@@ -670,6 +731,24 @@ wear, undercut, and consolidated surfaces alike.
 100%) multiplies the solved profile scale on the **runout/consolidated sheets AND the
 schematic** — one value behind every drawing output (slider on the Consolidated Output
 tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
+
+The **wear document's MAIN profile band** honors the same multiplier too
+(`composeWearPdf(heightScale)`), through a separate, simpler path than the compression solve
+below: `geom/WearProfileHeight.kt`'s `wearProfileHeightScale(heightFrac, naturalHeightPt)`
+scales the profile's drawn radius (`rPxProfile`, `pdf/WearPdfComposer.kt`) and is clamped so
+the drawn height (`wearProfileDrawnHeightPt`) stays inside the same absolute paper band as
+every other sheet (`PROFILE_MIN/MAX_SHAFT_HEIGHT_PT`) — the floor never raises a shaft above
+its natural (100%) height, so 1f still draws byte-identically to before the parameter
+existed. Everything drawn INSIDE the profile band that rides its radius (wear bands, pit X
+anchors, OAL line offsets, the thread-stub hatch) reads `rPxProfile` so marks stay ON the
+drawn shaft. Detail strips, strip packing, and the "Strip size" slider are untouched — the
+multiplier scopes to the whole-shaft profile band only. Threaded through every
+`composeWearPdf` caller — the Wear tab's preview/export/print and the Output tab's
+Export-all — from the one shared per-job `runoutConfig.heightScale`; the Wear route's
+render-inputs record carries `heightScale` as a re-render key. The Wear options-sheet row
+(`RunoutWearOptionsSheet(showHeightSlider = true)`) has no live-tuning channel — the wear
+sheet commits on release like its other controls and re-renders the whole page, the same
+posture as its trace-depth/wear-band controls.
 
 - Range 50%–300% (`PROFILE_HEIGHT_SCALE_MIN/MAX`).
 - **100% = the default sizing curve** (`defaultShaftHeightPt`, `geom/ProfileCompression.kt`):

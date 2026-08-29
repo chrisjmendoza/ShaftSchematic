@@ -14,6 +14,10 @@ import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MAX_MM
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MIN_MM
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
@@ -88,6 +92,44 @@ fun ShaftViewModel.setPdfShadedLiners(v: Boolean, persist: Boolean = true) {
     _pdfShadedLiners.value = v
     SettingsStore.updatePdfPrefs { it.copy(shadedLiners = v) }
     if (persist) viewModelScope.launch { SettingsStore.setPdfShadedLiners(getApplication(), v) }
+}
+
+/**
+ * Wired to the "Shade in Components" block in Settings and both PDF options sheets — narrows
+ * the body shade to authored sections, leaving auto (bare-shaft) runs unfilled. Subtractive:
+ * it changes nothing while [setPdfShadedBodies] is off.
+ */
+fun ShaftViewModel.setPdfShadeExplicitBodiesOnly(v: Boolean, persist: Boolean = true) {
+    _pdfShadeExplicitBodiesOnly.value = v
+    SettingsStore.updatePdfPrefs { it.copy(shadeExplicitBodiesOnly = v) }
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setPdfShadeExplicitBodiesOnly(getApplication(), v) }
+    }
+}
+
+/**
+ * Wired to the runout/output options sheets' "Bubble size" slider — a multiplier on the runout
+ * bubble radius. Both bubble draw sites read it off `PdfPrefs`, so the canvas preview and the
+ * printed sheet resize together.
+ */
+fun ShaftViewModel.setPdfRunoutBubbleScale(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_RUNOUT_BUBBLE_SCALE_MIN, PDF_RUNOUT_BUBBLE_SCALE_MAX)
+    _pdfRunoutBubbleScale.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(runoutBubbleScale = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfRunoutBubbleScale(getApplication(), clamped) }
+}
+
+/**
+ * Wired to the runout/output options sheets' "Bubble height" slider — how far the first bubble
+ * row hangs below the shaft, which is what moves where the leader lines land.
+ */
+fun ShaftViewModel.setPdfRunoutBubbleDropScale(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX)
+    _pdfRunoutBubbleDropScale.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(runoutBubbleDropScale = clamped) }
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setPdfRunoutBubbleDropScale(getApplication(), clamped) }
+    }
 }
 
 fun ShaftViewModel.setPdfCurveLoHeightIn(v: Float, persist: Boolean = true) {
@@ -282,6 +324,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfShadedBodies(prefs.shadedBodies)
     setPdfShadedTapers(prefs.shadedTapers)
     setPdfShadedLiners(prefs.shadedLiners)
+    setPdfShadeExplicitBodiesOnly(prefs.shadeExplicitBodiesOnly)
     setPdfCurveLoHeightIn(prefs.curveLoHeightIn)
     setPdfCurveHiHeightIn(prefs.curveHiHeightIn)
     setPdfSBreakThresholdFrac(prefs.sBreakThresholdFrac)
@@ -291,6 +334,8 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfWearTraceDepthFrac(prefs.wearTraceDepthFrac)
     setPdfWearBandShadeFrac(prefs.wearBandShadeFrac)
     setPdfWearJoinGapMaxMm(prefs.wearJoinGapMaxMm)
+    setPdfRunoutBubbleScale(prefs.runoutBubbleScale)
+    setPdfRunoutBubbleDropScale(prefs.runoutBubbleDropScale)
     setLineThicknessScale(profile.clampedLineThicknessScale)
 }
 

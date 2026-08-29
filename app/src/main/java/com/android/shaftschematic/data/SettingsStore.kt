@@ -30,6 +30,10 @@ import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MAX_MM
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MIN_MM
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfPrefs
@@ -122,6 +126,11 @@ object SettingsStore {
     private val KEY_PDF_WEAR_TRACE_DEPTH_FRAC = floatPreferencesKey("pdf_wear_trace_depth_frac")
     private val KEY_PDF_WEAR_BAND_SHADE_FRAC = floatPreferencesKey("pdf_wear_band_shade_frac")
     private val KEY_PDF_WEAR_JOIN_GAP_MAX_MM = floatPreferencesKey("pdf_wear_join_gap_max_mm")
+    private val KEY_PDF_SHADE_EXPLICIT_BODIES_ONLY =
+        booleanPreferencesKey("pdf_shade_explicit_bodies_only")
+    private val KEY_PDF_RUNOUT_BUBBLE_SCALE = floatPreferencesKey("pdf_runout_bubble_scale")
+    private val KEY_PDF_RUNOUT_BUBBLE_DROP_SCALE =
+        floatPreferencesKey("pdf_runout_bubble_drop_scale")
 
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
@@ -253,6 +262,42 @@ object SettingsStore {
     suspend fun setPdfWearJoinGapMaxMm(ctx: Context, v: Float) {
         ctx.settingsDataStore.edit {
             it[KEY_PDF_WEAR_JOIN_GAP_MAX_MM] = v.coerceIn(PDF_WEAR_JOIN_GAP_MIN_MM, PDF_WEAR_JOIN_GAP_MAX_MM)
+        }
+    }
+
+    // Narrows the body shade to authored sections: with pdf_shaded_bodies on, auto (bare-shaft)
+    // runs draw unfilled. Subtractive — meaningless on its own.
+    fun pdfShadeExplicitBodiesOnlyFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsDataStore.data.map { p ->
+            p[KEY_PDF_SHADE_EXPLICIT_BODIES_ONLY] ?: PdfPrefs().shadeExplicitBodiesOnly
+        }
+    suspend fun setPdfShadeExplicitBodiesOnly(ctx: Context, v: Boolean) {
+        ctx.settingsDataStore.edit { it[KEY_PDF_SHADE_EXPLICIT_BODIES_ONLY] = v }
+    }
+
+    // Runout bubble radius multiplier — both draw sites (sheet and canvas preview) read it.
+    fun pdfRunoutBubbleScaleFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p ->
+            (p[KEY_PDF_RUNOUT_BUBBLE_SCALE] ?: PdfPrefs().runoutBubbleScale)
+                .coerceIn(PDF_RUNOUT_BUBBLE_SCALE_MIN, PDF_RUNOUT_BUBBLE_SCALE_MAX)
+        }
+    suspend fun setPdfRunoutBubbleScale(ctx: Context, v: Float) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PDF_RUNOUT_BUBBLE_SCALE] =
+                v.coerceIn(PDF_RUNOUT_BUBBLE_SCALE_MIN, PDF_RUNOUT_BUBBLE_SCALE_MAX)
+        }
+    }
+
+    // How far the first bubble row hangs below the shaft, as a multiplier on the shipped drop.
+    fun pdfRunoutBubbleDropScaleFlow(ctx: Context): Flow<Float> =
+        ctx.settingsDataStore.data.map { p ->
+            (p[KEY_PDF_RUNOUT_BUBBLE_DROP_SCALE] ?: PdfPrefs().runoutBubbleDropScale)
+                .coerceIn(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX)
+        }
+    suspend fun setPdfRunoutBubbleDropScale(ctx: Context, v: Float) {
+        ctx.settingsDataStore.edit {
+            it[KEY_PDF_RUNOUT_BUBBLE_DROP_SCALE] =
+                v.coerceIn(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX)
         }
     }
 

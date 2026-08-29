@@ -55,6 +55,13 @@ internal fun drawBodyRunsWithBreaks(
      * prints plain.
      */
     keywayAvoidSpansMm: List<KeywaySpan> = emptyList(),
+    /**
+     * Run ids whose shade is suppressed while the rest of [bodies] keeps [fill] — the
+     * "explicit bodies only" narrowing (`ui/resolved/unshadedAutoBodyRunIds`). Decided per run INSIDE this
+     * one pass so every run keeps its own fill-then-outline order; two passes over split lists
+     * would reorder fills against neighbouring outlines for nothing.
+     */
+    unfilledBodyIds: Set<String> = emptySet(),
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
     val avoidX = keywayAvoidSpansMm.map {
@@ -63,6 +70,7 @@ internal fun drawBodyRunsWithBreaks(
     }
     bodies.forEach { b ->
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
+        val runFill = if (b.id in unfilledBodyIds) null else fill
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
 
@@ -91,8 +99,8 @@ internal fun drawBodyRunsWithBreaks(
         // not hidden compression.
         val compress = foreshortened || (b.compressOnDrawing && bodyLenPt >= COMPRESS_TRIGGER_PT)
 
-        drawBlendCurvePdf(c, edges.aftCurve, cy, outline, fill)
-        drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, fill)
+        drawBlendCurvePdf(c, edges.aftCurve, cy, outline, runFill)
+        drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, runFill)
 
         // Break layout first: the gap steers clear of any protected keyway window, and a
         // run with no clear placement falls back to the plain rectangle.
@@ -109,7 +117,7 @@ internal fun drawBodyRunsWithBreaks(
 
         if (pair == null || gapCenter == null) {
             // classic rectangle body
-            if (fill != null) c.drawRect(fx0, top, fx1, bot, fill)
+            if (runFill != null) c.drawRect(fx0, top, fx1, bot, runFill)
             c.drawLine(fx0, top, fx1, top, outline)
             c.drawLine(fx0, bot, fx1, bot, outline)
         } else {
@@ -123,16 +131,16 @@ internal fun drawBodyRunsWithBreaks(
             // fill to the break line left a white crescent inside the outline in one half of
             // the stub and spilled grey past the curve into the paper gap in the other), and a
             // stub the gap has squeezed to nothing fills not at all rather than invert.
-            if (fill != null && leftEnd > fx0) {
-                c.drawPath(breakStubFillPath(fx0, leftEnd, top, bot, amp), fill)
+            if (runFill != null && leftEnd > fx0) {
+                c.drawPath(breakStubFillPath(fx0, leftEnd, top, bot, amp), runFill)
             }
             c.drawLine(fx0, top, leftEnd, top, outline)
             c.drawLine(fx0, bot, leftEnd, bot, outline)
             drawBreakEdge(c, leftEnd, top, bot, amp, capPaint, eyeAtTop = false)
 
             // Right stub — same-direction S-curve on left end (curves match so edges appear to merge)
-            if (fill != null && fx1 > rightBeg) {
-                c.drawPath(breakStubFillPath(fx1, rightBeg, top, bot, amp), fill)
+            if (runFill != null && fx1 > rightBeg) {
+                c.drawPath(breakStubFillPath(fx1, rightBeg, top, bot, amp), runFill)
             }
             drawBreakEdge(c, rightBeg, top, bot, amp, capPaint, eyeAtTop = true)
             c.drawLine(rightBeg, top, fx1, top, outline)

@@ -72,6 +72,7 @@ import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeWearPdf
 import com.android.shaftschematic.pdf.buildWearStripTitleById
 import com.android.shaftschematic.pdf.defaultWearStripComponentIds
+import com.android.shaftschematic.pdf.wearProfileBaseScale
 import com.android.shaftschematic.pdf.wearStripComponentsFor
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
@@ -162,6 +163,10 @@ fun WearRoute(
     // preview has to redraw when it changes.
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
+    // The shared per-job "Shaft height" multiplier — ONE value behind every drawing. Only its
+    // heightScale reaches this document: the wear composer scales the MAIN profile band with it
+    // and nothing else in `RunoutConfig` applies to this sheet.
+    val runoutConfig       by vm.runoutConfig.collectAsState()
     val wearTraceDefault   by vm.pdfWearTraceDepthFrac.collectAsState()
     val wearBandShadeFrac  by vm.pdfWearBandShadeFrac.collectAsState()
     val wearJoinGapMaxMm   by vm.pdfWearJoinGapMaxMm.collectAsState()
@@ -204,6 +209,48 @@ fun WearRoute(
     val collidingIds = remember(spec) { spec.collidingIds() }
     val gate = remember(spec, collidingIds) { exportPdfGate(spec, collidingIds) }
 
+    // "Shaft height" slider inputs. The base is the composer's own 100% scale, so the inches
+    // the slider reports and the profile band it draws come off one number.
+    val heightSliderDiaMm = remember(spec) { heightSliderMaxDiaFor(spec) }
+    val heightSliderBase = remember(spec) { wearProfileBaseScale(spec) }
+
+    /**
+     * Sends the wear document to the platform print dialog. ONE action behind the tab body's
+     * Print button and the preview overlay's Print icon, so the two entry points cannot
+     * drift. Every value is snapshotted here on the UI thread — `onWrite` runs on a binder
+     * thread.
+     */
+    fun printWearDocument() {
+        val jobName = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft)
+            .removeSuffix(".pdf")
+        val specSnapshot = spec
+        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
+            jobNumber = jobNumber, side = shaftPosition, item = item)
+        val unitSnapshot = unit
+        val prefsSnapshot = vm.currentPdfPrefs
+        val resolvedSnapshot = resolvedComponents
+        val thicknessSnapshot = lineThicknessScale
+        val recordSnapshot = wearRecord
+        val blankSnapshot = blankDraft
+        val traceDepthSnapshot = traceDepthFrac
+        val heightSnapshot = runoutConfig.heightScale
+        val displayUnitsSnapshot = vm.currentDisplayUnits()
+        printShaftPdfPage(ctx, jobName) { page ->
+            composeWearPdf(
+                page = page, spec = specSnapshot,
+                project = projectSnapshot, unit = unitSnapshot,
+                displayUnits = displayUnitsSnapshot,
+                pdfPrefs = prefsSnapshot,
+                resolvedComponents = resolvedSnapshot,
+                lineThicknessScale = thicknessSnapshot,
+                wearRecord = recordSnapshot,
+                blankValues = blankSnapshot,
+                traceDepthFrac = traceDepthSnapshot,
+                heightScale = heightSnapshot,
+            )
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
@@ -223,6 +270,7 @@ fun WearRoute(
                     wearRecord = wearRecord,
                     blankValues = blankDraft,
                     traceDepthFrac = traceDepthFrac,
+                    heightScale = runoutConfig.heightScale,
                 )
             }
             if (wrote && openAfterExport) openWearPdf(ctx, uri)
@@ -239,11 +287,13 @@ fun WearRoute(
     // unitOverrides and dualUnits are keys for the same reason: they reach the composer only
     // through the displayUnits snapshot built below. pdfDualUnitLayout joins them — the
     // composer reads it off the PdfPrefs snapshot, so without the key the sheet's own layout
-    // chips would change nothing on the page they sit over.
+    // chips would change nothing on the page they sit over. runoutConfig.heightScale is keyed on
+    // its own (the rest of the config draws nothing here): it sizes the main profile band.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
                    wearRecord, blankDraft, pdfFractionStyle, traceDepthFrac, wearBandShadeFrac,
-                   wearJoinGapMaxMm, unitOverrides, dualUnits, pdfDualUnitLayout) {
+                   wearJoinGapMaxMm, unitOverrides, dualUnits, pdfDualUnitLayout,
+                   runoutConfig.heightScale) {
         if (!showPreview) { previewBitmap = null; previewInkBand = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
@@ -251,6 +301,7 @@ fun WearRoute(
         val displayUnitsSnapshot = DisplayUnits(unit, unitOverrides, dualUnits)
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
             jobNumber = jobNumber, side = shaftPosition, item = item)
+        val heightSnapshot = runoutConfig.heightScale
         // The ink band is measured off the raw raster, on the same IO pass that produced it.
         val (bmp, band) = withContext(Dispatchers.IO) {
             val raster = renderPdfPageBitmap(ctx) { page ->
@@ -260,6 +311,7 @@ fun WearRoute(
                     pdfPrefs = prefsSnapshot, resolvedComponents = resolvedComponents,
                     lineThicknessScale = thicknessSnapshot, wearRecord = wearRecord,
                     blankValues = blankDraft, traceDepthFrac = traceDepthFrac,
+                    heightScale = heightSnapshot,
                 )
             }
             raster to raster?.inkBand()
@@ -453,35 +505,7 @@ fun WearRoute(
 
             // ── Print button ──────────────────────────────────────────────────
             OutlinedButton(
-                onClick = {
-                    val jobName = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft)
-                        .removeSuffix(".pdf")
-                    // Snapshot state on the UI thread; onWrite runs on a binder thread.
-                    val specSnapshot = spec
-                    val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition, item = item)
-                    val unitSnapshot = unit
-                    val prefsSnapshot = vm.currentPdfPrefs
-                    val resolvedSnapshot = resolvedComponents
-                    val thicknessSnapshot = lineThicknessScale
-                    val recordSnapshot = wearRecord
-                    val blankSnapshot = blankDraft
-                    val traceDepthSnapshot = traceDepthFrac
-                    val displayUnitsSnapshot = vm.currentDisplayUnits()
-                    printShaftPdfPage(ctx, jobName) { page ->
-                        composeWearPdf(
-                            page = page, spec = specSnapshot,
-                            project = projectSnapshot, unit = unitSnapshot,
-                            displayUnits = displayUnitsSnapshot,
-                            pdfPrefs = prefsSnapshot,
-                            resolvedComponents = resolvedSnapshot,
-                            lineThicknessScale = thicknessSnapshot,
-                            wearRecord = recordSnapshot,
-                            blankValues = blankSnapshot,
-                            traceDepthFrac = traceDepthSnapshot,
-                        )
-                    }
-                },
+                onClick = { printWearDocument() },
                 enabled = gate.enabled,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -567,6 +591,8 @@ fun WearRoute(
                 showPreview = false
                 launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft))
             },
+            // The tab body's Print action, unchanged — one function behind both.
+            onPrint = { printWearDocument() },
             optionsSheet = {
                 // The sheet tunes the drawing being looked at (on-device request): the same
                 // blank-draft switch as the tab body (ONE state, so the two always agree) and
@@ -596,6 +622,18 @@ fun WearRoute(
                     wearShowShaftProfile = wearRecord.showShaftProfile,
                     wearCompactStrips = wearRecord.compactStrips,
                     wearStripSizeFrac = wearRecord.stripSizeFrac,
+                    // The shared per-job multiplier sizes this sheet's MAIN profile band, so
+                    // the slider belongs here too. The liner-compression half of the runout
+                    // pair stays off: this composer has no compression solve to raise floors
+                    // against, and a control that draws nothing is noise.
+                    showHeightSlider = true,
+                    heightScale = runoutConfig.heightScale,
+                    heightSliderBase = heightSliderBase,
+                    heightSliderMaxDiaMm = heightSliderDiaMm,
+                    // This document's profile shades every body run whatever the
+                    // explicit-only pref says, so its row is hidden here rather than shown
+                    // as a checkbox the page ignores.
+                    showShadeExplicitBodiesOnly = false,
                 )
             },
             // The sheet reshapes this page, so it must not cover it: a full-screen sheet hid
