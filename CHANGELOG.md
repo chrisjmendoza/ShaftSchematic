@@ -8,6 +8,76 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-08-29
 
+### chore(test): full-suite spec audit — tests that can fail for the right reason
+
+Every test class was walked against the contracts. The theme of the findings: a number of tests
+asserted on their own arithmetic rather than on the code they named, so the invariant they
+documented was not actually guarded.
+
+**Tests that now drive the real thing.**
+- `ShaftViewModelUpdateTest` hand-wrote `spec.copy(...)` mutations and asserted on its own
+  copies — it never called `updateBody`/`updateTaper`/`updateThread`/`updateLiner`, so a
+  reintroduced snap or forward cascade would not have failed it. The whole class now runs under
+  Robolectric against a real `ShaftViewModel`: seed with `onSetOverallLengthMm` + the `addXAt`
+  functions, drive the real `updateX`, read `spec.value`. Three things are pinned per case — the
+  edited component lands **verbatim** (a negative start included, golden rule), every other
+  component's span is byte-identical, and `overallLengthMm` is untouched. That last one was
+  pinned nowhere in the repo: nothing an edit does to a component may grow or shrink the shaft
+  around it. Two sub-issues fixed: the "updating body start does not move subsequent liner" case
+  rewrote 0 over 0 and never moved anything, and the class carried a third copy of the FWD
+  re-anchor formula.
+- `ShaftViewModelRemoveTest` lost three tests that asserted their own `MutableList` calls. The
+  taper case now drives the real `removeTaper` and pins the documented `mergeBodiesAround` pair:
+  equal-Ø flanks fuse into one body spanning the freed gap, unequal-Ø flanks both survive
+  untouched (fusing them would invent a diameter nobody typed). The two undo cases stay.
+- `TaperAddOrientationTest`'s overhang case had lost its discriminating assertion — SET/LET land
+  on the same faces under both the authored-OAL rule and the retired grown-OAL one. A Robolectric
+  case now adds an overhanging taper for real and pins that the authored OAL stands.
+
+**Coverage added where a documented branch had none.**
+- `deriveAutoBodies`' 0-OAL guards (`ui/resolved/AutoBodyOalGuardTest`): an empty spec with no
+  authored length resolves to nothing, a spec with components resolves only the gaps BETWEEN
+  them, and both edges reappear once a length is typed.
+- The OAL field's edges (`ui/screen/OverallLengthFieldTest`): clearing the field and pressing
+  Done — or walking away — commits nothing and restores the stored length, a not-yet-typed length
+  is not an error while a component past a real one is, and a parseable keystroke commits
+  immediately (the documented exception to commit-on-blur).
+- The Save button's aggregate (`ComponentCardSaveButtonTest`): several fields on one card, a
+  dirty field leaving composition, an instant-commit checkbox that must never register, plus
+  `CardDirtyState` directly.
+- `NumericInputFieldBlurTest`: a run of divergent edits still reports dirty exactly once, and an
+  external model refresh arriving mid-focus settles the field without writing back.
+- `ComponentWarningsTest`: a coupler bolt slot past the FWD end raises nothing (reference
+  features are outside the bounds check), and two tapers identical in stored span but differing
+  in authored reference both get the chip (bounds are judged on the STORED span).
+
+**Three behavior-preserving extractions**, each so a test could reach the shipped code rather
+than a copy of it: `OverallLengthField` out of `ShaftScreen.kt`, `ShaftSpec.renderSpanSpec()`
+out of the two duplicated `safeSpec` blocks (`ui/drawing/RenderSpanSpec.kt` — it deliberately
+folds excluded threads, unlike `coverageEndMm()`, because a thread drawn outside the shaft still
+has to fit on the canvas; the thumbnail's copy had dropped them), and
+`taperPhysStartForNewLength` out of `TaperPagerCard`'s Length handler
+(`ui/input/TaperLengthReanchor.kt`), which its test now calls.
+
+**One production wording fix.** The spec-level banner emitted "1 segments shorter than 1 mm";
+it now reads "1 segment" / "*n* segments", matching the past-OAL line beside it
+(`docs/VALIDATION_RULES.md` §4.3).
+
+**Repairs.** `TemplateScrubTest`'s hand-kept mirror of `exportTemplateJson` had drifted — it
+omitted `unitOverrides`, so nothing checked that per-component unit overrides travel with a
+template; the mirror is corrected and a test added. Corrected in the docs: the auto-body
+leading/trailing comment ("only when OAL is manually specified"), `specWarningMessages`' "not yet
+wired to any UI surface" (it is, `SpecWarningBanner`), `ShaftScreen.md`'s "commits per keystroke
+in manual mode", and `VALIDATION_RULES.md` §5.3's Bounds row (`collectAddWarnings` early-outs on
+a negative start, so only its `end > OAL` arm is reachable there). `ShaftSpec.validate()` gained
+a line saying it is a test-only sample-integrity gate.
+
+**Deleted:** the stock `ExampleUnitTest`/`ExampleInstrumentedTest` boilerplate, and a handful of
+assertions that could not fail — a `Color.alpha > 0f` check, `150f + 150f == 300f`, a ratio
+re-derived from the constant it was testing, an `x >= y` on a value with a known answer, and an
+`|| label.length > 4` escape hatch that let an OAL label pass without containing its distance.
+2113 tests green.
+
 ### feat(ui): carousel length validation + a Save button that says whether anything is pending
 
 Two on-device requests on the component carousel.

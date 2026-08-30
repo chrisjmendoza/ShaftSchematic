@@ -276,17 +276,14 @@ class WithNewOalTest {
             startDiaMm = 60f, endDiaMm = 50f, authoredReference = LinerAuthoredReference.FWD)
         val spec = ShaftSpec(overallLengthMm = 500f, tapers = listOf(taper))
 
-        // Old behaviour: .copy(overallLengthMm = 1000) — physStart stays at 350, drifts to FWD end 450
-        val oldBehaviourFwdEnd = taper.startFromAftMm + taper.lengthMm  // 450 (drifted, not at 950)
-
-        // New behaviour: withNewOal reanchors physStart = 1000 - 50 - 100 = 850
+        // withNewOal reanchors physStart = 1000 - 50 - 100 = 850; a bare
+        // .copy(overallLengthMm = 1000) would leave it at 350 and drift the FWD end to 450.
         val result = spec.withNewOal(1000f)
         val newFwdEnd = result.tapers[0].startFromAftMm + result.tapers[0].lengthMm  // 950
 
         assertEquals("authored-from-fwd must still be 50mm",
             50f, 1000f - result.tapers[0].startFromAftMm - result.tapers[0].lengthMm, EPS)
         assertEquals("FWD end is now at 950 (oal - authored)", 950f, newFwdEnd, EPS)
-        assertEquals("Old copy would have put FWD end at 450 (drifted)", 450f, oldBehaviourFwdEnd, EPS)
     }
 
     // ── Coupler bolt slots — FWD default reference must reanchor like tapers/liners ──

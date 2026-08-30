@@ -30,7 +30,7 @@ class ShaftLayoutTest {
         assertTrue(result.pxPerMm > 0f)
         assertEquals(spec, result.spec)
         assertEquals(0f, result.minXMm, 0.001f)
-        assertTrue(result.maxXMm >= result.minXMm)
+        assertEquals(1000f, result.maxXMm, 0.001f)
     }
 
     @Test

@@ -6,6 +6,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
+/**
+ * The unit edge: `toMmOrNull` parsing display text into canonical mm, `formatDisplay` rendering
+ * mm back out, and the TPI → pitch conversion. Nothing here touches the model.
+ */
 class UnitConversionTest {
 
     // ── toMmOrNull ────────────────────────────────────────────────────────────
@@ -74,7 +78,7 @@ class UnitConversionTest {
 
     @Test
     fun `formatDisplay inch round trip for common shaft diameter`() {
-        // 6" stored as 152.4 mm — display should show 6.0000 (4 decimal min for inches)
+        // 6" stored as 152.4 mm — the inch display trims its trailing zeros back to "6".
         val s = formatDisplay(152.4f, UnitSystem.INCHES, 4)
         assertEquals("6", s)
     }

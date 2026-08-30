@@ -3,6 +3,10 @@ package com.android.shaftschematic.ui.viewmodel
 import org.junit.Test
 import org.junit.Assert.*
 
+/**
+ * Taper rate text: `parseRateText`'s accepted spellings (`1:12`, `3/4`, a bare decimal) and the
+ * derivation that fills in a missing end diameter from the rate over the taper's length.
+ */
 class TaperRateTest {
 
     // ─────────────────────────────────────────────

@@ -494,97 +494,11 @@ fun ShaftScreen(
                     ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Overall Length — always the authored value; 0 until the user types one.
-                var hasLenFocus by remember { mutableStateOf(false) }
-                var lenTextOnFocus by remember { mutableStateOf<String?>(null) }
-
-                val displayMm = spec.overallLengthMm
-                var lengthText by remember(unit) {
-                    mutableStateOf(formatDisplay(displayMm, unit))
-                }
-                // The field echoes the user's own text — a typed "150 3/4" stays a fraction
-                // instead of being rewritten to "150.75" (on-device report). The model is
-                // deliberately not a remember key, or its per-keystroke echo would reformat
-                // the text mid-typing. The display only re-derives from the model when the
-                // field is unfocused AND its text no longer explains the model value (undo,
-                // an edit from elsewhere, a reverted empty commit).
-                LaunchedEffect(displayMm, unit, hasLenFocus) {
-                    if (!hasLenFocus) {
-                        val parsed = toMmOrNull(lengthText, unit)
-                        if (parsed == null || kotlin.math.abs(parsed - displayMm) > 0.01f) {
-                            lengthText = formatDisplay(displayMm, unit)
-                        }
-                    }
-                }
-
-                // A not-yet-set OAL (0) is not an error — the renderer draws to the coverage
-                // end until a length is typed.
-                val isOversized = spec.overallLengthMm > 0f &&
-                    spec.overallLengthMm < lastOccupiedEndMm(spec)
-
-                OutlinedTextField(
-                    value = lengthText,
-                    onValueChange = { input ->
-                        lengthText = input
-                        toMmOrNull(input, unit)?.let { mm ->
-                            onSetOverallLengthMm(mm)
-                        }
-                    },
-                    label = { Text("Overall Length (${abbr(unit)})") },
-                    singleLine = true,
-                    enabled = true,
-                    isError = isOversized,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(onDone = {
-                        val t = lengthText.trim()
-                        if (t.isEmpty()) {
-                            // An empty field commits nothing: the text reverts to the stored
-                            // length rather than zeroing the shaft.
-                            lengthText = formatDisplay(spec.overallLengthMm, unit)
-                        } else {
-                            toMmOrNull(t, unit)?.let { mm ->
-                                onSetOverallLengthMm(mm)
-                                onSetOverallLengthRaw(t) // keep user’s display text
-                            }
-                        }
-                    }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { f ->
-                            val wasFocused = hasLenFocus
-                            hasLenFocus = f.isFocused
-
-                            if (!wasFocused && f.isFocused) {
-                                // Baseline for the commit-on-change rule.
-                                lenTextOnFocus = lengthText
-                                // A not-yet-set length reads "0"; clear it so the user can
-                                // type without a leading zero. Leaving without typing reverts.
-                                if (lengthText.trim() == "0") lengthText = ""
-                            }
-
-                            if (wasFocused && !f.isFocused) {
-                                val baseline = lenTextOnFocus
-                                lenTextOnFocus = null
-                                val t = lengthText.trim()
-
-                                // Commit only what changed since focus (BlurCommitPolicy).
-                                if (baseline != null && lengthText == baseline) {
-                                    return@onFocusChanged
-                                }
-
-                                if (t.isEmpty()) {
-                                    lengthText = formatDisplay(spec.overallLengthMm, unit)
-                                } else {
-                                    toMmOrNull(t, unit)?.let { mm ->
-                                        onSetOverallLengthMm(mm)
-                                        onSetOverallLengthRaw(t)
-                                    }
-                                }
-                            }
-                        }
+                OverallLengthField(
+                    spec = spec,
+                    unit = unit,
+                    onSetOverallLengthMm = onSetOverallLengthMm,
+                    onSetOverallLengthRaw = onSetOverallLengthRaw,
                 )
 
                 // Read-only: computed OAL in measurement space (less excluded end threads)
@@ -1306,6 +1220,117 @@ internal fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String
 internal fun disp(mm: Float, unit: UnitSystem, d: Int = 3): String =
     formatDisplay(mm, unit, d)
 
+
+/**
+ * The shaft's Overall Length entry field.
+ *
+ * Three behaviours it owns, each deliberate:
+ *  • **Per-keystroke commit.** Every parseable keystroke reaches [onSetOverallLengthMm] so the
+ *    preview grows as the user types — the documented exception to the commit-on-blur rule
+ *    (`docs/contracts/ShaftScreen.md`).
+ *  • **An empty field commits nothing.** Blur or IME Done on empty text restores the stored
+ *    length instead of zeroing the shaft, so clearing the field to retype cannot wipe the OAL.
+ *  • **Oversize is an error STYLE, not a rejection.** A component past the authored length is a
+ *    legal, advisory state; the field is only tinted. A not-yet-typed length (0) is not
+ *    oversize — the renderer draws to the coverage end until a length is authored.
+ *
+ * The text echoes what the user typed ("150 3/4" stays a fraction) and only re-derives from the
+ * model while unfocused and no longer explaining the stored value — an undo, an edit from
+ * elsewhere, or a reverted empty commit.
+ */
+@Composable
+internal fun OverallLengthField(
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    onSetOverallLengthMm: (Float) -> Unit,
+    onSetOverallLengthRaw: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var hasLenFocus by remember { mutableStateOf(false) }
+    var lenTextOnFocus by remember { mutableStateOf<String?>(null) }
+
+    val displayMm = spec.overallLengthMm
+    var lengthText by remember(unit) {
+        mutableStateOf(formatDisplay(displayMm, unit))
+    }
+    LaunchedEffect(displayMm, unit, hasLenFocus) {
+        if (!hasLenFocus) {
+            val parsed = toMmOrNull(lengthText, unit)
+            if (parsed == null || kotlin.math.abs(parsed - displayMm) > 0.01f) {
+                lengthText = formatDisplay(displayMm, unit)
+            }
+        }
+    }
+
+    val isOversized = spec.overallLengthMm > 0f &&
+        spec.overallLengthMm < lastOccupiedEndMm(spec)
+
+    OutlinedTextField(
+        value = lengthText,
+        onValueChange = { input ->
+            lengthText = input
+            toMmOrNull(input, unit)?.let { mm ->
+                onSetOverallLengthMm(mm)
+            }
+        },
+        label = { Text("Overall Length (${abbr(unit)})") },
+        singleLine = true,
+        enabled = true,
+        isError = isOversized,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Decimal,
+            imeAction = ImeAction.Done
+        ),
+        keyboardActions = KeyboardActions(onDone = {
+            val t = lengthText.trim()
+            if (t.isEmpty()) {
+                lengthText = formatDisplay(spec.overallLengthMm, unit)
+            } else {
+                toMmOrNull(t, unit)?.let { mm ->
+                    onSetOverallLengthMm(mm)
+                    onSetOverallLengthRaw(t) // keep user’s display text
+                }
+            }
+        }),
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag(OAL_FIELD_TAG)
+            .onFocusChanged { f ->
+                val wasFocused = hasLenFocus
+                hasLenFocus = f.isFocused
+
+                if (!wasFocused && f.isFocused) {
+                    // Baseline for the commit-on-change rule.
+                    lenTextOnFocus = lengthText
+                    // A not-yet-set length reads "0"; clear it so the user can
+                    // type without a leading zero. Leaving without typing reverts.
+                    if (lengthText.trim() == "0") lengthText = ""
+                }
+
+                if (wasFocused && !f.isFocused) {
+                    val baseline = lenTextOnFocus
+                    lenTextOnFocus = null
+                    val t = lengthText.trim()
+
+                    // Commit only what changed since focus (BlurCommitPolicy).
+                    if (baseline != null && lengthText == baseline) {
+                        return@onFocusChanged
+                    }
+
+                    if (t.isEmpty()) {
+                        lengthText = formatDisplay(spec.overallLengthMm, unit)
+                    } else {
+                        toMmOrNull(t, unit)?.let { mm ->
+                            onSetOverallLengthMm(mm)
+                            onSetOverallLengthRaw(t)
+                        }
+                    }
+                }
+            }
+    )
+}
+
+internal const val OAL_FIELD_TAG = "overall_length_field"
 
 private const val OAL_EPS_MM: Double = 1e-3
 

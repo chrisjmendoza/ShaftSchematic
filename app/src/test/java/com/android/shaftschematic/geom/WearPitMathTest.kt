@@ -12,9 +12,9 @@ import org.junit.Test
 class WearPitMathTest {
 
     @Test
-    fun `large pit arm is the shared ratio times the small arm`() {
+    fun `a large pit draws at twice the small arm`() {
         assertEquals(10f, pitHalfArm(PitSize.SMALL, 10f), 0f)
-        assertEquals(10f * PIT_LARGE_TO_SMALL_RATIO, pitHalfArm(PitSize.LARGE, 10f), 1e-4f)
+        assertEquals(20f, pitHalfArm(PitSize.LARGE, 10f), 1e-4f)
     }
 
     @Test

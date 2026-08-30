@@ -104,7 +104,7 @@ Responsibilities
   - Black/White Only mode (forces black outlines and disables fills in Preview)
 
 - **Scrollable Form Area:**  
-  - Overall length field (unit-aware; commits per keystroke in manual mode)  
+  - Overall length field (`OverallLengthField`, unit-aware; commits per keystroke)  
   - Project information sheet (Job Number, Customer, Vessel, Item, Shaft Position, Notes) —
     opened from the toolbar, **Save/Cancel**, not commit-on-blur (see Notes). **Item** is an
     optional shaft designation ("Tail shaft", "Line shaft"); blank is the default and prints

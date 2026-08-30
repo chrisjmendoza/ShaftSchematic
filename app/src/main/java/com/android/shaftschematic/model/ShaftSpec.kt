@@ -205,6 +205,10 @@ fun ShaftSpec.hiddenKeywayHostIds(): Set<String> =
 /**
  * Basic non-overlap validation: checks non-negative fields and that each segment is within
  * [overallLengthMm]. Does not test for intersections or sequencing constraints.
+ *
+ * A **test-only** integrity gate for sample specs and bundled assets. Nothing in the app calls
+ * it: in the running app an oversized component is a legal, advisory-only state
+ * (`ui/util/ComponentWarnings.kt`), never a validity failure.
  */
 fun ShaftSpec.validate(): Boolean {
     if (overallLengthMm < 0f) return false

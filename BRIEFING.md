@@ -55,7 +55,7 @@ User Input → ShaftViewModel → ShaftSpec (mm)
 ```
 model/          ← immutable data classes (all mm)
 geom/           ← pure geometry helpers (OAL, tier assignment, snap)
-ui/viewmodel/   ← ShaftViewModel + SnapUtils + SessionAddDefaults
+ui/viewmodel/   ← ShaftViewModel + SessionAddDefaults
 ui/drawing/     ← ShaftLayout, ShaftRenderer, GridRenderer, ShaftDrawing
 ui/screen/      ← StartScreen, ShaftScreen, ShaftEditorRoute, dialogs
 ui/input/       ← NumericInputField, TaperSetLetMapping
@@ -94,8 +94,8 @@ All axial positions are measured **AFT → FWD**. `ShaftSpec.validate()` checks 
 ### OAL Window
 `geom/OalComputations.kt` — computes how much length is excluded at the AFT/FWD ends when end threads have `excludeFromOAL = true`. Also derives the actual SET (small end of taper) positions in measurement space from taper geometry. Coordinate-anchored (not list-order dependent). Tested in `OalComputationsTest`.
 
-### Snap Engine
-`ui/viewmodel/SnapUtils.kt` — `buildSnapAnchors(spec)` + `snapPositionMm(rawMm, anchors, config: SnapConfig)`. Pure mm, no pixel math. Tolerance comes from `snapToleranceMm(unit)`: 1.0 mm in metric, 0.04 in (≈1.016 mm) in imperial, so the snap radius feels the same on screen either way. Unit-tested in `ShaftSpecSnapExtensionsTest`.
+### Snap (model layer only)
+Nothing snaps a typed position (golden rule — the tap-to-add gesture and its `SnapUtils` pipeline were removed with it). The one surviving snap helper is model-layer: `ShaftSpec.snapForwardFrom(anchor)` (`model/ShaftSpecExtensions.kt`) aligns right-hand neighbors end-to-start in physical order; no ViewModel path calls it on typed commits. Unit-tested in `ShaftSpecSnapExtensionsTest`.
 
 ### Tier Assignment
 `geom/DeterministicTierAssigner.kt` — assigns PDF dimension tier/rail slots to components deterministically. Tested in `DeterministicTierAssignerTest`.
@@ -145,7 +145,7 @@ Unit tests live in `app/src/test/`:
 | Test file | Covers |
 |---|---|
 | `ShaftSpecTest` | Spec helpers: coverage, maxOD |
-| `ShaftSpecSnapExtensionsTest` | Snap engine edge cases |
+| `ShaftSpecSnapExtensionsTest` | Model-layer `snapForwardFrom` + physical key order |
 | `SegmentTest` | Segment validity |
 | `ShaftPositionTest` | Position enum logic |
 | `OalComputationsTest` | OAL exclusion logic |

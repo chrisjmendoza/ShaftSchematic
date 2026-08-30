@@ -1,10 +1,10 @@
 package com.android.shaftschematic.pdf.dim
 
+import com.android.shaftschematic.pdf.formatLenDim
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import com.android.shaftschematic.util.DualLabel
 import org.junit.Test
 
 class OalSpanLabelTest {
@@ -30,9 +30,11 @@ class OalSpanLabelTest {
 
         assertEquals(25.4, span.x1Mm, 1e-9)
         assertEquals(1234.0, span.x2Mm, 1e-9)
-        assertTrue(span.label.inline().startsWith("OAL "))
-        // Label distance must match the span width, not some other value
+        // The label prints the SET-to-SET distance, not either endpoint.
         val dist = 1234.0 - 25.4
-        assertTrue(span.label.inline().contains(dist.toLong().toString()) || span.label.inline().length > 4)
+        assertEquals(
+            "OAL " + formatLenDim(dist, UnitSystem.MILLIMETERS),
+            span.label.inline(),
+        )
     }
 }

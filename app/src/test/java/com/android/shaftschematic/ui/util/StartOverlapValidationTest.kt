@@ -10,6 +10,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
+/**
+ * `startOverlapErrorMm` — the inline Start-field validator on the carousel cards and Add dialogs.
+ *
+ * It flags a placement that would land on another precision component. Bodies are deliberately
+ * not obstacles: a body runs under a liner and up against a taper as a matter of course.
+ */
 class StartOverlapValidationTest {
 
     @Test

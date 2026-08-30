@@ -1,111 +1,78 @@
 package com.android.shaftschematic.ui.viewmodel
 
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
+import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Taper
-import com.android.shaftschematic.model.Threads
-import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
- * Tests for component removal logic.
+ * Component removal.
  *
- * These tests verify the data model consistency when components are removed. Carousel rows
- * are derived from the spec (resolved components in physical order), so a delete has exactly
- * one piece of state to keep consistent.
+ * Deleting a taper frees the span it occupied, and `mergeBodiesAround` decides what happens to
+ * the bodies that flanked it: fragments that already agree on Ø fuse back into the one body they
+ * were split from, while flanks at DIFFERENT diameters are two distinct authored sections and
+ * must both survive untouched — fusing them would invent a diameter nobody typed. The remove
+ * cases here drive the real [ShaftViewModel] so the merge rule is exercised where it actually
+ * runs (`BodySplitMergeTest` covers the pure transform).
  *
- * Recovery from a delete flows through the general session undo/redo. The
- * `delete + undoEdit` tests at the bottom assert that deleting a component then undoing
- * restores the spec, exercised through the real [SessionHistory] + [EditState] the ViewModel
- * records (see ShaftViewModelUndoRedoTest for why the AndroidViewModel itself is not
- * instantiated in this JVM suite).
+ * Recovery from a delete flows through the general session undo/redo; the `delete + undoEdit`
+ * cases at the bottom drive the real [SessionHistory] + [EditState] the ViewModel records
+ * directly, since the recorder — not the delete — is what they are about.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ShaftViewModelRemoveTest {
 
+    private fun vm(oalMm: Float) =
+        ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+            .also { it.onSetOverallLengthMm(oalMm) }
+
+    private fun spans(spec: ShaftSpec) =
+        spec.bodies.map { it.startFromAftMm to it.lengthMm }.toSet()
+
     @Test
-    fun `removing component from spec works correctly`() {
-        val body1 = Body(id = "b1", startFromAftMm = 0f, lengthMm = 100f, diaMm = 50f)
-        val body2 = Body(id = "b2", startFromAftMm = 100f, lengthMm = 100f, diaMm = 50f)
-        val spec = ShaftSpec(bodies = listOf(body1, body2))
+    fun `removing a taper fuses equal-diameter flanking bodies into one`() {
+        val vm = vm(600f)
+        vm.addBodyAt(startMm = 0f, lengthMm = 200f, diaMm = 60f)
+        vm.addBodyAt(startMm = 350f, lengthMm = 250f, diaMm = 60f)
+        vm.addTaperAt(startMm = 200f, lengthMm = 150f, startDiaMm = 60f, endDiaMm = 60f)
 
-        // Simulate remove: find index and create new spec without it
-        val idToRemove = "b1"
-        val idx = spec.bodies.indexOfFirst { it.id == idToRemove }
-        assertTrue("Should find body to remove", idx >= 0)
+        vm.removeTaper(vm.spec.value.tapers.single().id)
 
-        val updatedSpec = spec.copy(
-            bodies = spec.bodies.toMutableList().apply { removeAt(idx) }
-        )
-
-        assertEquals(1, updatedSpec.bodies.size)
-        assertEquals("b2", updatedSpec.bodies.first().id)
+        val s = vm.spec.value
+        assertTrue("the taper is gone", s.tapers.isEmpty())
+        assertEquals("the two flanks fused", 1, s.bodies.size)
+        assertEquals("the merged body spans the freed gap",
+            setOf(0f to 600f), spans(s))
     }
 
     @Test
-    fun `removing a taper leaves the flanking bodies untouched`() {
-        val body1 = Body(id = "b1", startFromAftMm = 0f, lengthMm = 100f, diaMm = 50f)
-        val taper1 = Taper(id = "t1", startFromAftMm = 100f, lengthMm = 50f, startDiaMm = 50f, endDiaMm = 30f)
-        val body2 = Body(id = "b2", startFromAftMm = 150f, lengthMm = 100f, diaMm = 30f)
+    fun `removing a taper leaves unequal-diameter flanking bodies untouched`() {
+        val vm = vm(600f)
+        vm.addBodyAt(startMm = 0f, lengthMm = 200f, diaMm = 60f)
+        vm.addBodyAt(startMm = 350f, lengthMm = 250f, diaMm = 90f)
+        vm.addTaperAt(startMm = 200f, lengthMm = 150f, startDiaMm = 60f, endDiaMm = 90f)
 
-        val spec = ShaftSpec(
-            bodies = listOf(body1, body2),
-            tapers = listOf(taper1)
-        )
+        vm.removeTaper(vm.spec.value.tapers.single().id)
 
-        val idToRemove = "t1"
-        val taperIdx = spec.tapers.indexOfFirst { it.id == idToRemove }
-        val updatedSpec = spec.copy(
-            tapers = spec.tapers.toMutableList().apply { removeAt(taperIdx) }
-        )
-
-        assertEquals(0, updatedSpec.tapers.size)
-        assertEquals(2, updatedSpec.bodies.size)
-        assertEquals(listOf("b1", "b2"), updatedSpec.bodies.map { it.id })
-        assertEquals(150f, updatedSpec.bodies[1].startFromAftMm, 0.001f)
-    }
-
-    @Test
-    fun `removing multiple components in sequence maintains consistency`() {
-        val body1 = Body(id = "b1", startFromAftMm = 0f, lengthMm = 100f, diaMm = 50f)
-        val body2 = Body(id = "b2", startFromAftMm = 100f, lengthMm = 100f, diaMm = 50f)
-        val body3 = Body(id = "b3", startFromAftMm = 200f, lengthMm = 100f, diaMm = 50f)
-
-        var spec = ShaftSpec(bodies = listOf(body1, body2, body3))
-
-        // Remove b2
-        val idx1 = spec.bodies.indexOfFirst { it.id == "b2" }
-        spec = spec.copy(bodies = spec.bodies.toMutableList().apply { removeAt(idx1) })
-
-        assertEquals(2, spec.bodies.size)
-
-        // Remove b1
-        val idx2 = spec.bodies.indexOfFirst { it.id == "b1" }
-        spec = spec.copy(bodies = spec.bodies.toMutableList().apply { removeAt(idx2) })
-
-        assertEquals(1, spec.bodies.size)
-        assertEquals("b3", spec.bodies.first().id)
-    }
-
-    @Test
-    fun `removing nonexistent ID from list is no-op`() {
-        val body1 = Body(id = "b1", startFromAftMm = 0f, lengthMm = 100f, diaMm = 50f)
-        val spec = ShaftSpec(bodies = listOf(body1))
-
-        val idx = spec.bodies.indexOfFirst { it.id == "fake-id" }
-        assertTrue("Should not find fake ID", idx < 0)
-
-        // When idx < 0, the original spec is returned unchanged
-        val updatedSpec = if (idx < 0) spec else spec.copy(
-            bodies = spec.bodies.toMutableList().apply { removeAt(idx) }
-        )
-
-        assertEquals(1, updatedSpec.bodies.size)
-        assertEquals("b1", updatedSpec.bodies.first().id)
+        val s = vm.spec.value
+        assertTrue("the taper is gone", s.tapers.isEmpty())
+        assertEquals("both authored sections survive", 2, s.bodies.size)
+        assertEquals("neither span moved",
+            setOf(0f to 200f, 350f to 250f), spans(s))
+        assertEquals("neither diameter was invented over",
+            setOf(60f, 90f), s.bodies.map { it.diaMm }.toSet())
     }
 
     // ── Delete-undo recovery (via general session undo) ──────────

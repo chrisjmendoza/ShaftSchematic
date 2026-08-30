@@ -16,8 +16,8 @@ import org.junit.Test
  * transforms the ViewModel setters delegate to (`setKeyways180Apart` / `setKeyways90Apart` /
  * `setKeyways90Cw` are one-line `_spec.update { … }` wrappers around these).
  *
- * [ShaftViewModel] is an `AndroidViewModel` and isn't instantiated in this JVM suite — the same
- * convention as `ShaftViewModelWearSpotTest` and `ShaftViewModelUndercutTest`.
+ * The setters carry no logic of their own, so this class exercises the pure transforms directly
+ * rather than instantiating the AndroidViewModel around them.
  */
 class ShaftViewModelKeywayClockingTest {
 

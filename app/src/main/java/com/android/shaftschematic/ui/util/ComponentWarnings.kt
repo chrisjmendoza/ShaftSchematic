@@ -208,7 +208,7 @@ private fun linerOdBelowUnderlyingBody(spec: ShaftSpec, liner: Liner): Boolean {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- * Spec-scoped warnings (§4.3 — computed + tested; not yet wired to any UI surface)
+ * Spec-scoped warnings (§4.3 — surfaced by the Schematic tab's `SpecWarningBanner`)
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -234,7 +234,8 @@ private fun linerOdBelowUnderlyingBody(spec: ShaftSpec, liner: Liner): Boolean {
 fun specWarningMessages(spec: ShaftSpec): List<String> {
     val out = mutableListOf<String>()
     val tiny = countTinySegments(spec)
-    if (tiny > 0) out += "$tiny segments shorter than 1 mm"
+    if (tiny == 1) out += "1 segment shorter than 1 mm"
+    else if (tiny > 1) out += "$tiny segments shorter than 1 mm"
     val past = countPastShaftEnd(spec)
     if (past == 1) out += "1 component extends past shaft length"
     else if (past > 1) out += "$past components extend past shaft length"

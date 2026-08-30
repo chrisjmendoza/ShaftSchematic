@@ -383,8 +383,9 @@ Coupler bolt slots are **excluded from all collision detection** (`collisionGrou
   `specWarningMessages(spec)` in `ui/util/ComponentWarnings.kt` counts stored components with
   length in `(0, SHORT_SEGMENT_MM]` (`SHORT_SEGMENT_MM = 1f` mm) across bodies, tapers, liners,
   and non-excluded threads (excluded threads are skipped, matching §3.1/§5.2's treatment of
-  them as outside the envelope), and emits `"$tiny segments shorter than 1 mm"` when the count
-  is `> 0`. This is in addition to the existing **component-level** short-segment check already
+  them as outside the envelope), and emits `"1 segment shorter than 1 mm"` /
+  `"$n segments shorter than 1 mm"` when the count is `> 0` — singular/plural like the past-OAL
+  line below. This is in addition to the existing **component-level** short-segment check already
   folded into `bodyWarningMessages`/`taperWarningMessages`/`linerWarningMessages`/
   `threadWarningMessages` (same `SHORT_SEGMENT_MM` threshold; all four are list-returning, so
   every applicable warning surfaces on the card).
@@ -462,7 +463,7 @@ collisions or bounds violations are found, a confirmation dialog appears
 
 | Check | Condition | Applies when |
 |-------|-----------|--------------|
-| Bounds | `outsideShaftSpan` (§3.1a) — `start < 0` or `end > OAL` | `overallLengthMm > 0` (a not-yet-set OAL has no span to fall outside of) |
+| Bounds | `outsideShaftSpan` (§3.1a) — here only its `end > OAL` arm is reachable | `overallLengthMm > 0` (a not-yet-set OAL has no span to fall outside of) |
 | Taper collision | overlaps any existing Taper | always |
 | Thread collision | overlaps any existing non-excluded Thread | always |
 | Liner collision | overlaps any existing Liner | always |
@@ -471,7 +472,11 @@ collisions or bounds violations are found, a confirmation dialog appears
 | Coupler bolt slot | — | **never** (`collisionGroup()` → null) |
 
 The bounds row is the SAME predicate the carousel cards' past-OAL chip reads (§3.1a). The two
-differ in wording only — do not fork the comparison back out into either surface.
+differ in wording only — do not fork the comparison back out into either surface. They differ in
+REACH, though: `collectAddWarnings` early-outs on `startMm < 0f` (and on `lengthMm <= 0f`), so a
+negative start never reaches the predicate here — the dialog's own Submit gate rejects it first.
+The predicate's negative-start arm serves the card chip path, where a start committed verbatim
+can be negative.
 
 ---
 

@@ -28,9 +28,12 @@ UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
   the UI edge.
 - Oversize is allowed but surfaced as an error state (no automatic correction).
 - **0 means "not yet authored".** Nothing backfills it — not a document load, not the first
-  component added. The renderer's 0-OAL fallback (`safeSpec` in
-  `ui/drawing/compose/ShaftDrawing.kt`, mirrored in `ShaftThumbnail.kt`) draws such a shaft to
-  its coverage end, and it is the only guard. The preview OAL badge mirrors the same fallback.
+  component added. The renderer's 0-OAL fallback — `ShaftSpec.renderSpanSpec()`
+  (`ui/drawing/RenderSpanSpec.kt`), ONE implementation read by `ShaftDrawing` and
+  `ShaftThumbnail` — draws such a shaft to its coverage end, and it is the only guard. It
+  deliberately folds EXCLUDED threads into that end, unlike `coverageEndMm()`: a thread drawn
+  outside the shaft envelope still has to fit inside the canvas. The preview OAL badge mirrors
+  the same fallback.
 - Consumers that need a span from a 0-OAL spec fall back themselves; they never write one back.
   `resolveComponents` passes `spec.overallLengthMm` straight into `deriveAutoBodies`, whose
   `<= 0f` branches are the genuine 0-OAL guards.

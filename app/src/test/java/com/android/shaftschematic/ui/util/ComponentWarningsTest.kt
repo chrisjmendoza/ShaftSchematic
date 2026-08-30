@@ -1,7 +1,9 @@
 package com.android.shaftschematic.ui.util
 
 import com.android.shaftschematic.model.Body
+import com.android.shaftschematic.model.CouplerBoltSlot
 import com.android.shaftschematic.model.Liner
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
@@ -22,6 +24,7 @@ class ComponentWarningsTest {
     private val SHORT = "Very short segment (< 1 mm)"
     private val LENGTH_SANITY = "Length exceeds 15 m — check for a typo"
     private val DIA_SANITY = "Diameter exceeds 1 m — check for a typo"
+    private val PAST_OAL_1000 = "Extends past shaft length (OAL 1000 mm)"
 
     // Mirrors the private thresholds in ComponentWarnings.kt.
     private val MAX_LEN = 15_000f
@@ -359,7 +362,7 @@ class ComponentWarningsTest {
             overallLengthMm = 1000f,
             tapers = listOf(Taper(startFromAftMm = 0f, lengthMm = 0.5f, startDiaMm = 80f, endDiaMm = 60f)),
         )
-        assertEquals(listOf("1 segments shorter than 1 mm"), specWarningMessages(spec))
+        assertEquals(listOf("1 segment shorter than 1 mm"), specWarningMessages(spec))
     }
 
     /* ── Past-OAL bounds advisory (shared predicate) ────────────────────────── */
@@ -499,7 +502,39 @@ class ComponentWarningsTest {
         assertTrue(specWarningMessages(tight).contains("1 component extends past shaft length"))
     }
 
-    private companion object {
-        const val PAST_OAL_1000 = "Extends past shaft length (OAL 1000 mm)"
+    /**
+     * §3.1a — a coupler bolt slot is a reference feature, not a component: it never enters
+     * coverage, collision, or these bounds. A row of cutouts whose footprint runs past the FWD
+     * end is ordinary authoring on a coupling at the very end of the shaft, and flagging it
+     * would put a permanent advisory on a correct drawing.
+     */
+    @Test
+    fun `a coupler bolt slot past the shaft end raises nothing`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            couplerBoltSlots = listOf(
+                CouplerBoltSlot(startFromAftMm = 980f, holeDiaMm = 20f, count = 3, spacingMm = 30f),
+            ),
+        )
+        assertTrue(specWarningMessages(spec).none { it.contains("past shaft length") })
+    }
+
+    /**
+     * §3.3 — bounds are judged on the STORED span. The authored reference is display metadata:
+     * two tapers occupying the same millimetres are equally past the end whichever face their
+     * Start field was measured from.
+     */
+    @Test
+    fun `the authored reference does not change the bounds verdict`() {
+        val aftRef = Taper(
+            id = "t-aft", startFromAftMm = 900f, lengthMm = 200f, startDiaMm = 80f, endDiaMm = 60f,
+            authoredReference = LinerAuthoredReference.AFT,
+        )
+        val fwdRef = aftRef.copy(id = "t-fwd", authoredReference = LinerAuthoredReference.FWD)
+        val spec = ShaftSpec(overallLengthMm = 1000f, tapers = listOf(aftRef, fwdRef))
+
+        assertTrue(taperWarningMessages(spec, aftRef).contains(PAST_OAL_1000))
+        assertTrue(taperWarningMessages(spec, fwdRef).contains(PAST_OAL_1000))
+        assertTrue(specWarningMessages(spec).contains("2 components extend past shaft length"))
     }
 }

@@ -866,8 +866,9 @@ on **every parseable keystroke** (not just on blur). This is intentional — the
 updates live. Do not change this to commit-on-blur only. An **empty** field on IME-Done or
 blur commits nothing and reverts the text to the stored value; it never zeroes the shaft.
 `overallLengthMm == 0` means "not typed yet", not an error: the field draws no red state and
-the renderer's `safeSpec` fallback (`ui/drawing/compose/ShaftDrawing.kt`, mirrored in
-`ShaftThumbnail.kt` and the preview OAL badge) draws such a shaft to its coverage end.
+the renderer's 0-OAL fallback (`ShaftSpec.renderSpanSpec()`, `ui/drawing/RenderSpanSpec.kt` —
+ONE implementation behind both canvases and the preview OAL badge) draws such a shaft to its
+coverage end.
 Nothing backfills it — not a load, not the first component added.
 See `docs/contracts/OverallLength.md`.
 

@@ -116,10 +116,4 @@ class SeverityLadderTest {
             assertEquals("$name: two rungs share a colour", rungs.size, rungs.distinct().size)
         }
     }
-
-    /** Compile-time guard that the schemes really are `ColorScheme`s this test can read. */
-    @Test
-    fun `all four schemes are exposed`() {
-        schemes.values.forEach { s: ColorScheme -> assertTrue(s.tertiaryContainer.alpha > 0f) }
-    }
 }

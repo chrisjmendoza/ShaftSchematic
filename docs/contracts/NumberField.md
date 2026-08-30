@@ -6,8 +6,9 @@ File: `ui/input/NumericInputField.kt` (composable `NumericInputField`; wrapped b
 `CommitNum` in `ComponentCarousel.kt` and `CommitNumField` in `AddComponentDialogs.kt`)  
 Purpose: Single-line numeric field that holds local text; commits on blur/IME Done via callback.
 
-Version: v0.4 (2026-08-29; adds the `onDirtyChange` contract behind the carousel card's Save
-button, and the Length "> 0" validator convention. v0.3 2026-07-26 added the focus-baseline
+Version: v0.5 (2026-08-29; the edge-trigger and external-refresh edges of `onDirtyChange` are now
+pinned by tests). v0.4 (2026-08-29) added the `onDirtyChange` contract behind the carousel card's
+Save button, and the Length "> 0" validator convention. v0.3 2026-07-26 added the focus-baseline
 rule and test coverage. v0.2 2026-07-18 superseded v0.1 "NumberField" — the composable was
 renamed `NumericInputField`, contract filename kept for link stability)
 
@@ -63,7 +64,13 @@ Test coverage
 - `ui/input/NumericInputFieldBlurTest` — the predicate actually wired into the field:
   real focus/blur/IME events, re-focus baseline, invalid-input revert, and the
   `onDirtyChange` edges (clean on compose, dirty on divergence, clean again after a commit,
-  a revert, and a validator rejection). Runs on the JVM under Robolectric.
+  a revert, and a validator rejection). Two further edges are pinned as of 2026-08-29: a RUN of
+  divergent edits still reports exactly once (edge-triggered, not per keystroke), and an
+  external model refresh arriving while the field holds focus settles it clean **without**
+  writing anything back. Runs on the JVM under Robolectric.
+- `ui/screen/ComponentCardSaveButtonTest` — the Save button off the aggregate: several fields on
+  one card, a field leaving composition, and instant-commit controls that never register, plus
+  `CardDirtyState` itself.
 - `ui/util/StartOverlapValidationTest` — `positiveLengthErrorMm`, pure JVM.
 
 Responsibilities

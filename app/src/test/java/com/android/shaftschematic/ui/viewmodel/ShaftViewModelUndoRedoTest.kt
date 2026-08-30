@@ -16,9 +16,9 @@ import org.junit.Test
  * Session undo/redo at the ViewModel contract level, exercised through the REAL
  * [SessionHistory] + [EditState] the ViewModel uses.
  *
- * `ShaftViewModel` is an `AndroidViewModel` and is not instantiated in this JVM suite (same
- * convention as `ShaftViewModelUpdateTest` / `ShaftViewModelUnsavedWorkTest`). Instead these
- * tests drive the exact pieces `ShaftViewModel` wires together: the central recorder builds an
+ * This class drives the history layer directly rather than through the ViewModel — the recorder
+ * and its timestamps are what it is about, and Robolectric-based siblings exercise the ViewModel
+ * itself. These tests drive the exact pieces `ShaftViewModel` wires together: the central recorder builds an
  * [EditState] from the flows and calls `editHistory.record(edit, now)`; `undoEdit()`/`redoEdit()`
  * call `editHistory.undo(currentEditState())` / `redo(...)`. Timestamps are supplied explicitly
  * (the ViewModel passes `System.currentTimeMillis()`), separated past the coalescing window so

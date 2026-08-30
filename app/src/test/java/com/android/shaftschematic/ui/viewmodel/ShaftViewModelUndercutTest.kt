@@ -13,11 +13,10 @@ import org.junit.Test
  * `updateUndercut` / `updateUndercutReference` / `removeUndercut`, Phase 1 of
  * `docs/archive/UndercutDrawing_PLAN.md` §6, §7).
  *
- * These mirror what each function does inside `_undercutRecord.update {}` — plain list
- * operations on [UndercutRecord], with no geometry side effects — so they stay fast JVM
- * unit tests with no Android dependencies (`ShaftViewModel` is an `AndroidViewModel` and
- * isn't instantiated directly in this test suite; see `ShaftViewModelWearSpotTest` for the
- * same convention on the sibling reference-only feature).
+ * These mirror what each function does inside `_undercutRecord.update {}` — plain list operations
+ * on [UndercutRecord] with no geometry side effects — so this class drives the record transforms
+ * directly rather than instantiating the AndroidViewModel, the same shape as
+ * `ShaftViewModelWearSpotTest` on the sibling reference-only feature.
  */
 class ShaftViewModelUndercutTest {
 

@@ -9,13 +9,14 @@ import org.junit.Test
 /**
  * Pure show/dismiss coverage for the Schematic tab's spec-level warning banner.
  *
- * The logic is message-AGNOSTIC — it keys off the set, never the text — so multi-message cases
- * use plainly synthetic strings rather than inventing a second real warning. Today
- * `specWarningMessages` produces exactly one.
+ * The logic is message-AGNOSTIC — it keys off the set, never the text — but the multi-message
+ * cases still use the real pair `specWarningMessages` can emit, so a dismissal is exercised
+ * against a set the banner can actually be shown with.
  */
 class SpecWarningVisibilityTest {
 
     private val realMessage = "2 segments shorter than 1 mm"
+    private val otherRealMessage = "1 component extends past shaft length"
 
     @Test
     fun `banner hidden when there are no messages`() {
@@ -42,16 +43,16 @@ class SpecWarningVisibilityTest {
         val grown = listOf("3 segments shorter than 1 mm")
         assertTrue(bannerVisible(grown, dismissedKey))
 
-        val extra = original + "some later warning"
+        val extra = original + otherRealMessage
         assertTrue(bannerVisible(extra, dismissedKey))
     }
 
     @Test
     fun `banner stays hidden when the same set recomputes in the same order`() {
-        val messages = listOf(realMessage, "some later warning")
+        val messages = listOf(realMessage, otherRealMessage)
         val dismissedKey = warningSetKey(messages)
         // A fresh, structurally-identical list from a later recompute — not the same instance.
-        val recomputed = listOf(realMessage, "some later warning")
+        val recomputed = listOf(realMessage, otherRealMessage)
         assertFalse(bannerVisible(recomputed, dismissedKey))
     }
 

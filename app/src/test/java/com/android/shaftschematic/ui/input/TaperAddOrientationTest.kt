@@ -1,10 +1,16 @@
 package com.android.shaftschematic.ui.input
 
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.keywayAbsSpanMm
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.addTaperAt
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Add-path taper orientation.
@@ -17,9 +23,12 @@ import org.junit.Test
  *
  * These tests drive the pieces `AddTaperDialog` and `ShaftViewModel.addTaperAt` wire together:
  * the dialog's FWD start arithmetic, [taperAddDiameterOrder] over [classifyTaperSideByMidpoint]
- * against the shaft's authored OAL, and [ShaftViewModel.deriveTaperDiameters]. Same convention
- * as `ShaftViewModelUpdateTest` — the AndroidViewModel is not instantiated in this JVM suite.
+ * against the shaft's authored OAL, and [ShaftViewModel.deriveTaperDiameters]. The overhang case
+ * additionally drives the real add through a Robolectric-hosted [ShaftViewModel], because the
+ * face assertions alone cannot tell the authored-OAL rule from the retired grown-OAL one.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class TaperAddOrientationTest {
 
     private val oalMm = 2540f       // 100"
@@ -154,9 +163,29 @@ class TaperAddOrientationTest {
     @Test
     fun `an overhanging taper is classified against the authored OAL`() {
         // The OAL stands as authored, so a taper running past the FWD end is still read as a
-        // FWD-half taper against that length — nothing grows the shaft around it.
+        // FWD-half taper against that length.
         val t = storedTaper(enteredStartMm = oalMm - 100f, measureFromFwd = false)
         assertSetFacesFwd(t)
+    }
+
+    @Test
+    fun `nothing grows the shaft around an overhanging taper`() {
+        // The half-classification alone cannot separate the authored-OAL rule from the retired
+        // grow-the-shaft one — both put SET/LET on the same faces here. What separates them is
+        // the shaft: an oversized taper is a legal, advisory state and the OAL stays as typed.
+        val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+        vm.onSetOverallLengthMm(oalMm)
+
+        vm.addTaperAt(
+            startMm = 2440f,           // 96" — 15" of taper runs 36" past a 100" shaft
+            lengthMm = lengthMm,
+            startDiaMm = letDiaMm,
+            endDiaMm = setDiaMm,
+        )
+
+        assertEquals("the taper is stored where it was placed",
+            2440f, vm.spec.value.tapers.single().startFromAftMm, 0.001f)
+        assertEquals("the authored OAL stands", oalMm, vm.spec.value.overallLengthMm, 0.001f)
     }
 
     @Test

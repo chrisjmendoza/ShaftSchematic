@@ -22,9 +22,8 @@ import org.junit.Test
  *
  * Job identity and measurement records are dropped at WRITE time, not merely ignored on load:
  * a template that still contained a customer name would carry it into every drawing built from
- * it, and into any copy of that file. `ShaftViewModel` is an `AndroidViewModel` and is not
- * instantiated in this JVM suite (the convention `ShaftViewModelUnsavedWorkTest` follows), so
- * this mirrors `exportTemplateJson`'s exact envelope and checks what a saved template holds.
+ * it, and into any copy of that file. These mirror `exportTemplateJson`'s exact envelope and
+ * check what a saved template holds after a real encode/decode round trip.
  */
 class TemplateScrubTest {
 
@@ -49,6 +48,7 @@ class TemplateScrubTest {
         wearRecord = WearRecord(spots = listOf(WearSpot(linerId = "l1"))),
         runoutReadings = RunoutReadings(listOf(RunoutReading(componentId = "b1", stationIndex = 0, valueMm = 0.05f))),
         undercutRecord = UndercutRecord(),
+        unitOverrides = mapOf("l1" to UnitSystem.MILLIMETERS),
     )
 
     /**
@@ -63,6 +63,7 @@ class TemplateScrubTest {
                 preferredUnit = doc.preferredUnit,
                 unitLocked = doc.unitLocked,
                 spec = doc.spec,
+                unitOverrides = doc.unitOverrides,
             )
         )
 
@@ -108,6 +109,18 @@ class TemplateScrubTest {
         assertEquals(152.4f, decoded.spec.liners.single().odMm, 0.001f)
         assertEquals(UnitSystem.INCHES, decoded.preferredUnit)
         assertTrue(decoded.unitLocked)
+    }
+
+    /**
+     * Per-component unit overrides travel with the geometry: which feature is metric is an
+     * authoring fact about the shaft family, not about whose job it is. (The per-job dual-display
+     * flag, by contrast, does not.)
+     */
+    @Test
+    fun `per-component unit overrides travel with a template`() {
+        val decoded = ShaftDocCodec.decode(exportTemplateJson(fullJobDoc()))
+
+        assertEquals(mapOf("l1" to UnitSystem.MILLIMETERS), decoded.unitOverrides)
     }
 
     @Test

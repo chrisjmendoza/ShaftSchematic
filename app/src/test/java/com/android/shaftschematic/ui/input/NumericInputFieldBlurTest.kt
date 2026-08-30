@@ -5,6 +5,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -21,12 +24,17 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Compose-level coverage of the commit-on-blur contract (TODO §5.2).
+ * Compose-level coverage of the field's two wired behaviours: commit-on-blur, and the
+ * `onDirtyChange` reporting the card's Save button is enabled off.
  *
- * [BlurCommitPolicyTest] pins the decision; this pins that the decision is actually *wired
- * into* the field — that real focus and blur events reach it, and that the captured
+ * [BlurCommitPolicyTest] pins the commit decision; this pins that the decision is actually
+ * *wired into* the field — that real focus and blur events reach it, and that the captured
  * baseline is taken at focus-gain rather than at composition. A correct predicate wired to
  * nothing would pass the pure test and fail here.
+ *
+ * The dirty half is **edge-triggered**: it reports the moment the text diverges from what a
+ * walk-away would leave behind and again when a commit, a revert, or an external model refresh
+ * settles it — never once per keystroke.
  *
  * Runs on the JVM under Robolectric, so it goes in CI with the plain unit tests.
  */
@@ -221,6 +229,41 @@ class NumericInputFieldBlurTest {
         rule.waitForIdle()
 
         assertEquals(listOf(false, true, false), dirtyReports)
+    }
+
+    @Test
+    fun `a run of edits past the first reports nothing further`() {
+        // Edge-triggered for real: three divergent values in a row are still ONE report. A
+        // level-triggered listener would fire on every keystroke and recompose the card's Save
+        // button with it.
+        rule.setContent { Host() }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("13")
+        rule.onNodeWithTag(FIELD).performTextReplacement("14")
+        rule.onNodeWithTag(FIELD).performTextReplacement("15")
+        rule.waitForIdle()
+
+        assertEquals("one report for the whole run", listOf(false, true), dirtyReports)
+    }
+
+    @Test
+    fun `an external model refresh settles the field without committing`() {
+        // An undo, or an edit made elsewhere, hands the field a new value while it still holds
+        // focus. The new value becomes what a walk-away would leave behind, so the field is
+        // clean again — and the refresh is not a user edit, so nothing may be written back.
+        var initial by mutableStateOf("12.5")
+        rule.setContent { Host(initialText = initial) }
+
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("13")
+        rule.waitForIdle()
+        assertEquals(listOf(false, true), dirtyReports)
+
+        initial = "20"     // no blur: the field never lost focus
+        rule.waitForIdle()
+
+        assertEquals("a refresh must not write back", emptyList<String>(), commits)
+        assertEquals("the refreshed value is the settled one", false, dirtyReports.last())
     }
 
     private companion object {

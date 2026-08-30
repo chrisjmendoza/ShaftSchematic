@@ -232,7 +232,9 @@ fun deriveAutoBodies(
         if (gapEnd > gapStart) spans.add(Span(gapStart, gapEnd))
     }
 
-    // Leading/trailing spans only when OAL is manually specified (overallLengthMm > 0)
+    // Leading/trailing spans exist only against an authored shaft span: with no positive OAL
+    // there is no leading edge and no trailing edge to fill to, so only the gaps BETWEEN
+    // explicit components resolve.
     if (overallLengthMm > 0f) {
         val first = explicit.first()
         val last = explicit.last()
