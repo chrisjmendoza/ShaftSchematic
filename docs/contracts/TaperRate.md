@@ -6,7 +6,7 @@ File: `util/TaperRateAuto.kt`
 Purpose: Compute an auto-derived taper rate display string from Length + SET + LET
 geometry, and parse/validate user-entered manual taper rate text.
 
-Version: v1.0 (2026-07-18)  
+Version: v1.1 (2026-09-01)  
 Supersedes: `TaperParser.md`, `TaperParserContract.md` — those documented
 `util/TaperParser.kt`, which was deleted 2026-07-11 alongside this file's introduction.
 The two old docs remain on disk (not deleted per doc-repo policy) but describe code that
@@ -73,9 +73,21 @@ Notes
   functions in `util/TaperRateAuto.kt`.
 - `BORE_BREAK_MM = 152.4f` (6 in) and `COMPARABLY_CLOSE_MARGIN = 0.01f` are private
   constants in `TaperRateAuto.kt` backing the bore-preference tie-break described above.
+- `DEFAULT_SLOPE_ERROR_TOLERANCE` and `formatOneToN` are `internal`, not private: the
+  standalone taper calculator (`util/TaperCalcMath.kt`, `docs/DESIGN_INTENT.md` §3.8) checks a
+  typed rate against typed geometry with the same tolerance and sets `1:N` the same way. That
+  calculator holds no rate list, no tolerance and no tie-break of its own — it completes a
+  geometry from any three of L.E.T. / S.E.T. / length / rate and hands the result to
+  `autoTaperRate` to be named, so the two surfaces cannot disagree about what a taper is
+  called. Its inch-per-foot line (`12 / N`) is the general form of the footer's `1:12` → 1"/ft
+  and `1:16` → 3/4"/ft, derived from the EXACT N rather than the snapped name.
 
 Change Log
 ----------
+**v1.1 (2026-09-01)**
+- `DEFAULT_SLOPE_ERROR_TOLERANCE` and `formatOneToN` promoted to `internal` for the standalone
+  taper calculator. No behavior change.
+
 **v1.0 (2026-07-18)**
 - Initial contract for `TaperRateAuto.kt`'s `autoTaperRate`/`autoTaperRateText`/
   `parseTaperRateText`/`manualTaperRateBlockingMessage`/`manualTaperRateWarning`.

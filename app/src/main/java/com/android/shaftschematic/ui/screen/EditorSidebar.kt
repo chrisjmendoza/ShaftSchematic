@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ContentCut
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Schema
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SquareFoot
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material3.HorizontalDivider
@@ -69,8 +71,11 @@ import androidx.compose.ui.unit.dp
  * ## Items
  * Top group:  Home · Schematic · Runout Sheet · Wear Document · Undercut Drawing ·
  *             Consolidated Output
- * Bottom group: Keyway calculator · Unit converter · Settings — tools, not document views, so
- * they are never dimmed by the "built" gate (neither calculator reads anything from the shaft).
+ * Bottom group: Keyway calculator · Taper calculator · Unit converter · Help & FAQ ·
+ * Settings — tools, not document views, so they are never dimmed by the "built" gate (no
+ * calculator reads anything from the shaft). The two calculators sit adjacent. Help sits with
+ * them rather than behind Settings: reference content is reached for mid-job, and Settings is
+ * for changing things.
  * Runout, Wear, Undercut, and Consolidated Output are dimmed when [runoutEnabled] is
  * false (shaft not yet built).
  *
@@ -84,7 +89,9 @@ import androidx.compose.ui.unit.dp
  * @param onHome        Called when the user taps the Home item.
  * @param onSettings    Called when the user taps the Settings item.
  * @param onKeywayCalculator Called when the user taps the Keyway calculator tool item.
+ * @param onTaperCalculator Called when the user taps the Taper calculator tool item.
  * @param onUnitConverter Called when the user taps the Unit converter tool item.
+ * @param onHelp        Called when the user taps the Help & FAQ item.
  */
 @Composable
 fun EditorSidebarOverlay(
@@ -97,7 +104,9 @@ fun EditorSidebarOverlay(
     onHome: () -> Unit,
     onSettings: () -> Unit,
     onKeywayCalculator: () -> Unit = {},
+    onTaperCalculator: () -> Unit = {},
     onUnitConverter: () -> Unit = {},
+    onHelp: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize()) {
@@ -223,11 +232,26 @@ fun EditorSidebarOverlay(
                             onClick = { onKeywayCalculator(); onClose() },
                         )
                         NavItem(
+                            icon = Icons.Filled.SquareFoot,
+                            label = "Taper calculator",
+                            selected = false,
+                            enabled = true,
+                            onClick = { onTaperCalculator(); onClose() },
+                        )
+                        NavItem(
                             icon = Icons.Filled.SwapHoriz,
                             label = "Unit converter",
                             selected = false,
                             enabled = true,
                             onClick = { onUnitConverter(); onClose() },
+                        )
+
+                        NavItem(
+                            icon = Icons.AutoMirrored.Filled.HelpOutline,
+                            label = "Help & FAQ",
+                            selected = false,
+                            enabled = true,
+                            onClick = { onHelp(); onClose() },
                         )
 
                         // ── Settings ──────────────────────────────────────────

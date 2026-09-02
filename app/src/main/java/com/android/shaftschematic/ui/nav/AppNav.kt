@@ -156,6 +156,7 @@ fun AppNav(vm: ShaftViewModel) {
                         onOpen = { runGuarded { nav.navigate("openLocal") } },
                         onOpenTemplates = { nav.navigate("templates") },
                         onSettings = { nav.navigate("settings") },
+                        onHelp = { nav.navigate("help") },
                         onSendFeedback = {
                             val intent = FeedbackIntentFactory.create(
                                 context = ctx,
@@ -280,6 +281,7 @@ fun AppNav(vm: ShaftViewModel) {
                         }
                     },
                     onOpenSettings = { nav.navigate("settings") },
+                    onOpenHelp = { nav.navigate("help") },
                     onOpenDeveloperOptions = { nav.navigate("developerOptions") },
                     // PDF EXPORT = show preview first, then SAF
                     onExportPdf = { nav.navigate("pdfPreview") }

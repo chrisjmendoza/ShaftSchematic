@@ -48,6 +48,8 @@ fun ShaftEditorRoute(
     /** Close the current document (guarded for unsaved work) and return to Start. */
     onCloseDocument: () -> Unit = {},
     onOpenSettings: () -> Unit,
+    /** Open the Help & FAQ screen from the sidebar's tools group. */
+    onOpenHelp: () -> Unit = {},
     onOpenDeveloperOptions: () -> Unit,
     /** Export the main shaft schematic PDF (goes to existing preview/SAF flow). */
     onExportPdf: () -> Unit,
@@ -58,6 +60,7 @@ fun ShaftEditorRoute(
     // state, so all the route holds is whether it is open.
     var keywayCalcOpen by rememberSaveable { mutableStateOf(false) }
     // Same posture as the keyway calculator — a read-only tool, not a document surface.
+    var taperCalcOpen by rememberSaveable { mutableStateOf(false) }
     var converterOpen by rememberSaveable { mutableStateOf(false) }
 
     val spec by vm.spec.collectAsState()
@@ -137,13 +140,22 @@ fun ShaftEditorRoute(
             onHome = onNavigateHome,
             onSettings = onOpenSettings,
             onKeywayCalculator = { keywayCalcOpen = true },
+            onTaperCalculator = { taperCalcOpen = true },
             onUnitConverter = { converterOpen = true },
+            onHelp = onOpenHelp,
         )
 
         if (keywayCalcOpen) {
             BoreKeywayCalcDialog(
                 defaultUnit = unit,
                 onDismiss = { keywayCalcOpen = false },
+            )
+        }
+
+        if (taperCalcOpen) {
+            TaperCalcDialog(
+                defaultUnit = unit,
+                onDismiss = { taperCalcOpen = false },
             )
         }
 

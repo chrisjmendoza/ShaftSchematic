@@ -34,13 +34,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 /**
- * HelpRoute — in-app how-to guides and FAQ (Settings → Help & FAQ).
+ * HelpRoute — in-app glossary, how-to guides, and FAQ. Reached from the editor sidebar's
+ * tools group, the Start screen, and the Settings list: reference content is looked for
+ * mid-job, so it keeps a top-level entry rather than living only behind Settings.
  *
  * Purpose
  * Static reference content only: no ViewModel, no state beyond which cards are expanded.
  * Topics describe CURRENT app behavior — when a behavior changes, the topic must change in
  * the same PR (same posture as the contract docs; this screen is the user-facing summary
  * of them).
+ *
+ * The "Glossary" section sits second, right after Getting Started, so a term can be looked
+ * up without reading past the guides; its entries define shop and app vocabulary in the
+ * wording the controls themselves use.
  *
  * The "Settings Reference" section carries that obligation control by control: every
  * user-visible control on every Settings page (main, Preview Colors, PDF Export) has an
@@ -153,8 +159,8 @@ private val helpSections: List<HelpSection> = listOf(
         listOf(
             HelpTopic(
                 "Create your first shaft",
-                "From the home screen tap New. Set the overall length (OAL) or leave it in " +
-                    "auto mode and let it follow the components you add. Add tapers, threads, " +
+                "From the home screen tap New. Type the overall length (OAL) — the preview " +
+                    "follows it as you type. Add tapers, threads, " +
                     "liners, and bodies with the add buttons; each component becomes a card in " +
                     "the carousel where you edit its dimensions. Any span you don't cover is " +
                     "filled automatically with bare shaft (an \"auto-body\"), so the drawing " +
@@ -184,6 +190,112 @@ private val helpSections: List<HelpSection> = listOf(
                     "character at a time. History covers the shaft itself — components, " +
                     "lengths, keyways — and lasts for the editing session; it is not saved " +
                     "with the file and starts fresh when you open a document."
+            ),
+        )
+    ),
+    HelpSection(
+        "Glossary",
+        listOf(
+            HelpTopic(
+                "AFT / FWD",
+                "The two ends of the shaft. AFT is always the left end of the drawing, FWD the " +
+                    "right. \"Measure From\" chips on a component pick which end its distance is " +
+                    "quoted from — the same component, described from either side.",
+                illustration = { AftFwdFigure() },
+            ),
+            HelpTopic(
+                "Blank draft",
+                "The write-in mode: the drawing prints with its dimension lines but the values " +
+                    "left empty, so measurements can be filled in by hand on the job. It is a " +
+                    "per-sheet choice that resets each session, and it never changes the data."
+            ),
+            HelpTopic(
+                "Body S-break",
+                "The pair of curved breaks drawn through a body run, the drafting symbol for " +
+                    "\"length removed here\". It appears when a run had to be shortened on paper " +
+                    "so the whole shaft fits at a readable height; Settings → Drawing → \"Body " +
+                    "S-break\" sets how much squeeze earns it. Dimension values always print the " +
+                    "true lengths.",
+                illustration = { SBreakFigure() },
+            ),
+            HelpTopic(
+                "Coupling face",
+                "The end view shops hand-sketch on a runout sheet, taken looking forward: the " +
+                    "coupling OD, the pilot bore with its keyseat, and the bolt circle with its " +
+                    "holes. Elect it onto the runout and consolidated sheets from their options; " +
+                    "the pilot runout is recorded inside the bore like any other reading."
+            ),
+            HelpTopic(
+                "Dual units",
+                "Prints every dimension in both units — the primary value with the converted one " +
+                    "beside it or stacked under it (Settings → Drawing → \"Dual-unit layout\"). " +
+                    "Both terms always carry their unit, and the converted one is a courtesy " +
+                    "reading, never a second measurement."
+            ),
+            HelpTopic(
+                "L.E.T. / S.E.T.",
+                "Large End of Taper and Small End of Taper — the two ends of a taper, by " +
+                    "diameter rather than by which way they face. Both diameters print in the " +
+                    "footer for each taper, and the S.E.T. datums are what undercut and worn " +
+                    "section distances can be quoted from."
+            ),
+            HelpTopic(
+                "Liner compression",
+                "The per-job pair beside the Shaft height slider that asks for liners at true " +
+                    "length: check \"Keep liners proportional lengthwise\", or set with the " +
+                    "slider how far they may shorten. The page keeps as much true liner length " +
+                    "as fits; the request never changes the drawn shaft height."
+            ),
+            HelpTopic(
+                "Measurement reference",
+                "Which end printed dimensions measure from — \"Auto (closest end)\" (the " +
+                    "default, anchoring each dimension to whichever end is nearer), \"AFT (force " +
+                    "AFT SET)\", or \"FWD (force FWD SET)\". Same name in Settings → PDF Export " +
+                    "Options and on the schematic and consolidated PDF Options sheets."
+            ),
+            HelpTopic(
+                "OAL (overall length)",
+                "The shaft's overall length, end to end, and the span every drawing is laid out " +
+                    "against. Any part of it you don't cover with a component is filled with " +
+                    "bare shaft (an auto-body), so the drawing is always continuous."
+            ),
+            HelpTopic(
+                "Runout station / bubble",
+                "A station is one dial-indicator position on a component; its bubble is the " +
+                    "numbered circle drawn under the shaft where the reading is written. " +
+                    "Stations are per component, not per drawn run, so a body split by liners " +
+                    "still numbers straight through AFT to FWD."
+            ),
+            HelpTopic(
+                "Shade in Components",
+                "The PDF option group that fills bodies, tapers, or liners with light grey " +
+                    "instead of leaving them outlined. It is the default for each kind; a " +
+                    "component card's \"Shade on drawing\" toggle overrides it for that one " +
+                    "component, in either direction."
+            ),
+            HelpTopic(
+                "Shaft height",
+                "The per-job slider that sets how tall the shaft draws on paper, in inches, " +
+                    "from $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — shrink a long shaft to uncramp the sheet, " +
+                    "or grow it for room to write in. It is a drawing size only: no diameter, " +
+                    "length, or printed value changes with it, and \"Standard (…)\" returns to " +
+                    "the size the Default drawing size setting picks."
+            ),
+            HelpTopic(
+                "TIR (total indicator reading)",
+                "The full sweep an indicator shows at one station — the difference between its " +
+                    "high and low readings as the shaft is turned. It is typed into that " +
+                    "station's bubble, with the high spot marked as a clock position; the sheet " +
+                    "prints which way the indicator was read (\"TIR's taken looking AFT / " +
+                    "FORWARD\")."
+            ),
+            HelpTopic(
+                "Trace depth exaggeration",
+                "Wear measured on a liner dips the drawn surface line through the measured " +
+                    "diameters. Real wear is far too shallow to see at drawing scale, so the dip " +
+                    "is drawn deeper than true (never shallower) — set the amount per job on the " +
+                    "Wear sheet, or its default in Settings → Drawing. The printed Ø values are " +
+                    "always the measured numbers you typed."
             ),
         )
     ),
@@ -258,7 +370,7 @@ private val helpSections: List<HelpSection> = listOf(
                     "bottom, so the shop knows how to read the high-spot arrows.\n\n" +
                     "The preview stays put at the top of the tab while you scroll, so you can " +
                     "watch the bubbles move as you change a component's station count. The " +
-                    "orientation setting and the Preview / Print / Export buttons sit directly " +
+                    "orientation setting and the Print / Preview / Export buttons sit directly " +
                     "under it; the station editor is at the bottom, since it is only needed " +
                     "when the sheet needs adjusting."
             ),
@@ -540,7 +652,7 @@ private val helpSections: List<HelpSection> = listOf(
                 "By design. A value you type is never rounded, snapped, or \"helpfully\" " +
                     "adjusted — down to .001. Components sit exactly where you put them, and " +
                     "the automatic bare-shaft spans absorb the consequences. Only derived " +
-                    "values (auto OAL, auto-body spans, auto taper rate text) move on their own."
+                    "values (auto-body spans, auto taper rate text) move on their own."
             ),
             HelpTopic(
                 "Why don't wear marks, runout readings, or undercuts change my shaft?",

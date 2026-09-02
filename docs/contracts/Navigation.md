@@ -6,7 +6,7 @@ ShaftEditorRoute.kt, ShaftRoute.kt, StartScreen.kt, RunoutRoute.kt, WearRoute.kt
 UndercutRoute.kt, HelpRoute.kt (ui/screen/)  
 Layer: UI → Nav
 
-Version: v0.8 (2026-08-14)
+Version: v0.10 (2026-09-01)
 
 Invariants
 - Routes are stable, typed constants or sealed routes.
@@ -15,7 +15,8 @@ Invariants
   state** (sidebar), not NavHost navigation — leaving the editor route discards tab state.
 
 Route graph (AppNav.kt NavHost)
-- `start` → StartScreen (New Drawing / Open / Unsaved drafts list (up to 3) / Settings)
+- `start` → StartScreen (New Drawing / Open / Unsaved drafts list (up to 3) / Settings /
+  Help & FAQ / Send Feedback)
 - `editor` → **ShaftEditorRoute** — the editor container. Owns the sidebar overlay
   (`EditorSidebarOverlay`) and the `EditorTab` state switching between:
   - Schematic tab → ShaftRoute → ShaftScreen
@@ -27,11 +28,28 @@ Route graph (AppNav.kt NavHost)
     consolidated-sheet variants, worn-section editor, "Shaft height" slider, the
     liner-compression pair, blank draft, Export all; same "built" gating, last in the
     sidebar
+  - Sidebar **tools group** (bottom, never dimmed by the "built" gate — no tool reads
+    anything from the shaft): Keyway calculator · **Taper calculator** · Unit converter ·
+    Help & FAQ · Settings, in that order. The two calculators are adjacent. Each calculator
+    is an `AlertDialog` emitted by ShaftEditorRoute as a sibling of the tab content, with the
+    route owning only a `rememberSaveable` open flag and passing the document unit as
+    `defaultUnit`: `BoreKeywayCalcDialog`, `TaperCalcDialog`
+    (`docs/DESIGN_INTENT.md` §3.8, solve in `util/TaperCalcMath.kt`), `UnitConverterDialog`.
+    Calculators are document-free — they read nothing from the spec, write nothing back, and
+    never mark the session dirty.
 - `settings` → SettingsRoute — main page plus two in-screen sub-pages (`SettingsPage`:
   Preview Colors, PDF Export), back-arrow returns to the main page before leaving the route
 - `about` → AboutRoute
-- `help` → HelpRoute — static Help & FAQ content (no ViewModel); entered from Settings.
-  Four sections: Getting Started, How-To Guides, **Settings Reference**, FAQ. Topics
+- `help` → HelpRoute — static Help & FAQ content (no ViewModel). **Three entry points**:
+  the editor sidebar's tools group (directly above Settings), the Start screen's button
+  column (under Settings), and the Settings list row. Help is reference content reached for
+  mid-job, so it must keep a top-level entry — Settings alone is the failing state
+  (`docs/DESIGN_INTENT.md` §3.7). Five sections: Getting Started, **Glossary**, How-To
+  Guides, **Settings Reference**, FAQ. The Glossary sits second so a term can be looked up
+  without reading past the guides; it defines shop and app vocabulary (AFT/FWD, blank draft,
+  S-break, coupling face, dual units, L.E.T./S.E.T., liner compression, measurement
+  reference, OAL, runout station/bubble, Shade in Components, shaft height, TIR, trace depth
+  exaggeration) in the wording of `docs/DESIGN_INTENT.md` §4. Topics
   restate current behavior — a behavior change must update the matching topic in the same
   change (the screen is the user-facing summary of the contract docs). The Settings
   Reference section carries the same obligation for **every user-visible Settings
@@ -50,7 +68,7 @@ Responsibilities
 - **StartScreen.kt:** Landing screen — recents, "Unsaved drafts" card (up to 3 entries
   from `ShaftViewModel.drafts`: name or "Untitled draft", relative age, tap to
   `continueDraft(id)`, X icon → "Discard this draft?" confirm → `discardDraft(id)`),
-  entry to editor/settings. AppNav wires `drafts`/`continueDraft`/`discardDraft`
+  entry to editor/settings/help. AppNav wires `drafts`/`continueDraft`/`discardDraft`
   from the VM. See `docs/contracts/Persistence.md` (Autosave / draft ring).
 
 Document title strip (`ui/screen/EditorDocumentTitle.kt`)

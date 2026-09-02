@@ -42,7 +42,7 @@ import com.android.shaftschematic.doc.stripShaftDocExtension
  * StartScreen
  *
  * Purpose
- * Simple hub with New, Open (internal), and Settings.
+ * Simple hub with New, Open (internal), Settings, and Help.
  *
  * Contract
  * - Emits navigation intents only.
@@ -53,6 +53,8 @@ fun StartScreen(
     onNew: () -> Unit,
     onOpen: () -> Unit,
     onSettings: () -> Unit,
+    /** Open the Help & FAQ screen — a top-level entry, never only behind Settings. */
+    onHelp: () -> Unit = {},
     onSendFeedback: () -> Unit,
     onOpenTemplates: () -> Unit = {},
     drafts: List<AutosaveManager.DraftEntry> = emptyList(),
@@ -214,6 +216,10 @@ fun StartScreen(
         ) { Text("Start from Template") }
         Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text("Open…") }
         OutlinedButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) { Text("Settings") }
+        OutlinedButton(
+            onClick = onHelp,
+            modifier = Modifier.fillMaxWidth().testTag("start_help_button"),
+        ) { Text("Help & FAQ") }
         OutlinedButton(onClick = onSendFeedback, modifier = Modifier.fillMaxWidth()) { Text("Send Feedback") }
     }
 }
