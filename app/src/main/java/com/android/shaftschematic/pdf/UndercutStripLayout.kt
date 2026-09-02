@@ -7,6 +7,8 @@ import com.android.shaftschematic.geom.ClampedUndercutSpanMm
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.nearestSetReference
+import com.android.shaftschematic.geom.undercutCalloutAnchorMm
+import com.android.shaftschematic.geom.undercutCalloutAnchorsMm
 import com.android.shaftschematic.geom.undercutNestingForest
 import com.android.shaftschematic.model.LinerAnchor
 import com.android.shaftschematic.model.Undercut
@@ -627,9 +629,10 @@ fun buildUndercutTotalSpan(spans: List<UndercutSpanMm>, unit: UnitSystem, dual: 
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * Measured-Ø callout stations for one strip: one per undercut, positioned at its clamped
- * span's axial centre, labelled with [formatDiaWithUnit] (no "Ø" prefix — the footer/
- * callout convention).
+ * Measured-Ø callout stations for one strip: one per undercut, positioned on the largest
+ * visible shelf of its own floor ([undercutCalloutAnchorMm], the clamped span's centre for a
+ * cut with nothing machined inside it), labelled with [formatDiaWithUnit] (no "Ø" prefix — the
+ * footer/callout convention).
  *
  * An undercut with no entered Ø (`diaMm == 0` — placed but not yet measured) is SKIPPED:
  * the printed sheet never carries a placeholder for a value nobody recorded, the same rule
@@ -649,17 +652,26 @@ fun buildUndercutDiaStations(
     unit: UnitSystem,
     labelWidthPt: (DualLabel) -> Float,
     dual: Boolean = false,
-): List<DiaCalloutStation> = undercuts.mapNotNull { u ->
-    if (u.diaMm <= 0f) return@mapNotNull null
-    val span = clampedById[u.id] ?: return@mapNotNull null
-    if (span.isEmpty) return@mapNotNull null
-    val label = formatDiaWithUnitDualLabel(u.diaMm.toDouble(), unit, dual)
-    DiaCalloutStation(
-        key = u.id,
-        stationX = xAtMm((span.startMm + span.endMm) * 0.5f),
-        label = label,
-        labelWidth = labelWidthPt(label),
-    )
+): List<DiaCalloutStation> {
+    // The anchors are derived from EVERY drawable cut on the strip, not just the ones carrying a
+    // Ø: an unmeasured child still replaces its parent's floor over its own span, so it still has
+    // to be subtracted or the parent's leader lands on it.
+    val spans = undercuts.mapNotNull { u ->
+        val s = clampedById[u.id] ?: return@mapNotNull null
+        if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
+    }
+    val anchorById = undercutCalloutAnchorsMm(spans)
+    return undercuts.mapNotNull { u ->
+        if (u.diaMm <= 0f) return@mapNotNull null
+        val anchorMm = anchorById[u.id] ?: return@mapNotNull null
+        val label = formatDiaWithUnitDualLabel(u.diaMm.toDouble(), unit, dual)
+        DiaCalloutStation(
+            key = u.id,
+            stationX = xAtMm(anchorMm),
+            label = label,
+            labelWidth = labelWidthPt(label),
+        )
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

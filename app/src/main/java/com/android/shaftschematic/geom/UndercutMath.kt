@@ -331,6 +331,64 @@ fun undercutNestingForest(spans: List<UndercutSpanMm>): List<UndercutNesting> {
 }
 
 /**
+ * Where a cut's measured-Ø callout hangs from: the midpoint of the largest **visible** segment
+ * of its own drawn floor, in shaft-space mm.
+ *
+ * A leader has to terminate on the floor it names. A cut's span midpoint does that only while
+ * nothing is machined inside it: a child cut replaces the parent's floor over its own span, so a
+ * parent whose midpoint falls in a child lands its leader on the child's face or in the void
+ * below it. Concentric cuts are worse — several cuts sharing a midpoint drop every leader onto
+ * ONE shared stem that fans out to the spread labels, a bird foot in which no leader identifies
+ * a floor at all (on-device report).
+ *
+ * So the anchor is a shelf: subtract from [span] every other span CONTAINED in it
+ * ([undercutSpanContains] — subtracting the direct children covers deeper descendants too, since
+ * those lie inside the children), then take the midpoint of the widest remaining segment. Ties
+ * go to the AFT-most segment, so concentric nesting stays deterministic.
+ *
+ * A childless cut has one segment — its whole span — so it anchors at its own midpoint exactly
+ * as it always did. A cut whose children cover it end to end draws no floor of its own anywhere;
+ * it falls back to the span midpoint, the least-bad position and the historical one.
+ */
+fun undercutCalloutAnchorMm(
+    span: UndercutSpanMm,
+    others: List<UndercutSpanMm>,
+    epsMm: Float = UNDERCUT_SPAN_EPS_MM,
+): Float {
+    val mid = (span.startMm + span.endMm) * 0.5f
+    if (span.endMm - span.startMm <= epsMm) return mid
+
+    val children = others
+        .filter { it.id != span.id && undercutSpanContains(span, it, epsMm) }
+        .map { it.startMm.coerceIn(span.startMm, span.endMm) to it.endMm.coerceIn(span.startMm, span.endMm) }
+        .sortedBy { it.first }
+
+    var bestStart = 0f
+    var bestEnd = 0f
+    var bestWidth = 0f
+    fun consider(a: Float, b: Float) {
+        if (b - a > bestWidth) { bestStart = a; bestEnd = b; bestWidth = b - a }
+    }
+    var cursor = span.startMm
+    children.forEach { (cs, ce) ->
+        consider(cursor, cs)
+        cursor = max(cursor, ce)
+    }
+    consider(cursor, span.endMm)
+
+    return if (bestWidth <= epsMm) mid else (bestStart + bestEnd) * 0.5f
+}
+
+/**
+ * [undercutCalloutAnchorMm] over a whole strip's [spans], keyed by span id — the form both
+ * draw sites take, so a leader leaves the same shelf on the canvas overlay and on the sheet.
+ */
+fun undercutCalloutAnchorsMm(
+    spans: List<UndercutSpanMm>,
+    epsMm: Float = UNDERCUT_SPAN_EPS_MM,
+): Map<String, Float> = spans.associate { it.id to undercutCalloutAnchorMm(it, spans, epsMm) }
+
+/**
  * A zoomed detail window covering one cluster of undercuts, in shaft-space mm.
  * [undercutIds] are the member undercuts in aft → fwd order. Windows returned by
  * [clusterUndercuts] are disjoint and sorted aft → fwd — consumed by the overview

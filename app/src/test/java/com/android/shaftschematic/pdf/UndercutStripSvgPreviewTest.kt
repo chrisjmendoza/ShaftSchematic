@@ -15,6 +15,7 @@ import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
+import com.android.shaftschematic.geom.undercutCalloutAnchorMm
 import com.android.shaftschematic.geom.undercutNestingForest
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
@@ -297,6 +298,12 @@ class UndercutStripSvgPreviewTest {
         val nestedRailRows: Int,
         /** Every notch's drawn floor Ø by id, parents before children — the staircase. */
         val drawnFloorById: Map<String, Float>,
+        /**
+         * Where each Ø leader leaves the profile, in strip x — the shelf anchor
+         * ([undercutCalloutAnchorMm]). Concentric cuts share a span midpoint, so these must
+         * differ pairwise or the leaders collapse onto one stem.
+         */
+        val diaStationXById: Map<String, Float>,
         /**
          * Per notch, the Ø its AFT and FWD section faces rise to — the first and last surface
          * point of its single region. A face sharing the parent's shoulder reaches the outer
@@ -587,6 +594,7 @@ class UndercutStripSvgPreviewTest {
             linerFills = linerFills,
             nestedRailRows = nestedRows.size,
             drawnFloorById = stripNotches.associate { it.id to it.floorDiaMm },
+            diaStationXById = stations.associate { it.key to it.stationX },
             nestedSurfaceEndDias = stripNotches
                 .filter { it.profiles.isNotEmpty() }
                 .associate { n ->
@@ -722,6 +730,16 @@ class UndercutStripSvgPreviewTest {
         assertTrue(h.drawnFloorById.getValue("n1") < h.drawnFloorById.getValue("n0"))
         assertTrue(h.drawnFloorById.getValue("n2") < h.drawnFloorById.getValue("n1"))
         assertTrue("every step keeps a drawable core", h.drawnFloorById.getValue("n2") > 0f)
+        // Concentric: all three share a span midpoint, so midpoint anchoring dropped every Ø
+        // leader onto ONE stem. Each must now leave from its own visible shelf.
+        val hStations = h.diaStationXById
+        assertEquals("every step carries a Ø leader", 3, hStations.size)
+        listOf("n0" to "n1", "n1" to "n2", "n0" to "n2").forEach { (a, b) ->
+            assertTrue(
+                "$a and $b must not share a leader origin (${hStations.getValue(a)})",
+                kotlin.math.abs(hStations.getValue(a) - hStations.getValue(b)) > 1f,
+            )
+        }
 
         // I) THE SHOP'S CASE: a 4" relief with a 1" more-corroded section machined deeper in the
         //    MIDDLE of it. The strip must read as three sections — relief floor, deeper floor,

@@ -86,6 +86,7 @@ import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.resolveUndercutFloors
+import com.android.shaftschematic.geom.undercutCalloutAnchorsMm
 import com.android.shaftschematic.geom.undercutCanonicalForNewLength
 import com.android.shaftschematic.geom.undercutOverlapIssue
 import com.android.shaftschematic.geom.undercutPreviewDrawRange
@@ -743,6 +744,9 @@ fun UndercutWindowDetailOverlay(
                         // ── Ø callouts below (shared planDiaCallouts engine) ──
                         if (notches.isNotEmpty()) {
                             val leaderColor = outlineColor.copy(alpha = 0.6f)
+                            // Same shelf anchors the sheet uses, so a leader leaves the same
+                            // point of the same floor on both draw sites.
+                            val anchorById = undercutCalloutAnchorsMm(spans)
                             val stations = notches.mapNotNull { n ->
                                 val u = drawUndercuts.firstOrNull { it.id == n.id }
                                     ?: return@mapNotNull null
@@ -753,7 +757,7 @@ fun UndercutWindowDetailOverlay(
                                 )
                                 DiaCalloutStation(
                                     key = n.id,
-                                    stationX = xPx((n.startMm + n.endMm) / 2f),
+                                    stationX = xPx(anchorById[n.id] ?: ((n.startMm + n.endMm) / 2f)),
                                     label = label,
                                     labelWidth = textPaint.measureText(label.primary),
                                 )

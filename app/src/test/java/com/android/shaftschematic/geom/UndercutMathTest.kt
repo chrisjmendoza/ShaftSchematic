@@ -339,6 +339,91 @@ class UndercutMathTest {
         assertEquals("first", forest.getValue("child").parentId)
     }
 
+    // ── Ø callout shelf anchors ──
+
+    @Test
+    fun `a childless cut anchors at its own midpoint`() {
+        val only = UndercutSpanMm("solo", 100f, 300f)
+        assertEquals(200f, undercutCalloutAnchorMm(only, listOf(only)), 1e-3f)
+        // A neighbour that is not contained changes nothing.
+        val sibling = UndercutSpanMm("sib", 400f, 500f)
+        assertEquals(200f, undercutCalloutAnchorMm(only, listOf(only, sibling)), 1e-3f)
+    }
+
+    @Test
+    fun `one mid-span child sends the anchor to the larger shelf`() {
+        val parent = UndercutSpanMm("p", 0f, 300f)
+        val child = UndercutSpanMm("c", 60f, 100f)
+        // Shelves [0,60] and [100,300]; the FWD one is wider.
+        assertEquals(200f, undercutCalloutAnchorMm(parent, listOf(parent, child)), 1e-3f)
+    }
+
+    @Test
+    fun `equal shelves break the tie to the AFT-most`() {
+        val parent = UndercutSpanMm("p", 0f, 300f)
+        val child = UndercutSpanMm("c", 100f, 200f)
+        assertEquals(50f, undercutCalloutAnchorMm(parent, listOf(parent, child)), 1e-3f)
+    }
+
+    @Test
+    fun `a child flush at the AFT shoulder leaves one FWD shelf`() {
+        val parent = UndercutSpanMm("p", 100f, 300f)
+        val child = UndercutSpanMm("c", 100f, 160f)
+        assertEquals(230f, undercutCalloutAnchorMm(parent, listOf(parent, child)), 1e-3f)
+    }
+
+    @Test
+    fun `a concentric staircase gives every level its own anchor`() {
+        // The bird-foot case: three cuts sharing one span midpoint. Midpoint anchoring put all
+        // three leaders on one stem; each must now leave from its own visible floor.
+        val spans = listOf(
+            UndercutSpanMm("n0", 200f, 440f),
+            UndercutSpanMm("n1", 250f, 390f),
+            UndercutSpanMm("n2", 290f, 350f),
+        )
+        assertTrue("the scenario is concentric", spans.all { (it.startMm + it.endMm) / 2f == 320f })
+        val anchors = undercutCalloutAnchorsMm(spans)
+        assertEquals(225f, anchors.getValue("n0"), 1e-3f)   // [200,250] ties [390,440], AFT wins
+        assertEquals(270f, anchors.getValue("n1"), 1e-3f)   // [250,290] ties [350,390]
+        assertEquals(320f, anchors.getValue("n2"), 1e-3f)   // childless
+        val distinct = anchors.values.map { it }.toSet()
+        assertEquals("every level anchors somewhere else", 3, distinct.size)
+    }
+
+    @Test
+    fun `a deeper descendant is covered by subtracting its parent`() {
+        // n2 lies inside n1, so subtracting n1 alone already removes it — the result must not
+        // depend on whether the grandchild is listed.
+        val outer = UndercutSpanMm("n0", 200f, 440f)
+        val withGrandchild = listOf(outer, UndercutSpanMm("n1", 250f, 390f), UndercutSpanMm("n2", 290f, 350f))
+        val without = withGrandchild.dropLast(1)
+        assertEquals(
+            undercutCalloutAnchorMm(outer, without),
+            undercutCalloutAnchorMm(outer, withGrandchild),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun `children covering the whole span fall back to the midpoint`() {
+        val parent = UndercutSpanMm("p", 100f, 300f)
+        val children = listOf(
+            UndercutSpanMm("a", 100f, 200f),
+            UndercutSpanMm("b", 200f, 300f),
+        )
+        assertEquals(200f, undercutCalloutAnchorMm(parent, listOf(parent) + children), 1e-3f)
+    }
+
+    @Test
+    fun `a partially overlapping sibling is never subtracted`() {
+        // Legacy data: neither span contains the other, so both keep their historical midpoints.
+        val a = UndercutSpanMm("a", 100f, 300f)
+        val b = UndercutSpanMm("b", 200f, 400f)
+        val anchors = undercutCalloutAnchorsMm(listOf(a, b))
+        assertEquals(200f, anchors.getValue("a"), 1e-3f)
+        assertEquals(300f, anchors.getValue("b"), 1e-3f)
+    }
+
     @Test
     fun `stale classifier mirrors the span issue check`() {
         assertFalse(isUndercutStaleOverrun(100f, 50f, 1000f))

@@ -8,6 +8,37 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-09-01
 
+### fix(undercut): Ø callouts anchor on the cut's visible shelf
+
+On-device report from the nested-undercuts sheets: on a staircase of concentric cuts every Ø
+leader left the profile at the **same** x, dropping onto one shared vertical stem that fanned
+out to the spread labels — a bird foot in which no leader identified which floor its value
+named. The same anchoring also mis-landed a plain nested pair: a parent's span midpoint can
+fall **inside** a child, so the leader terminated on the child's section face or in the void
+below it rather than on the parent's floor.
+
+- **New pure anchor** `undercutCalloutAnchorMm(span, others)` / `undercutCalloutAnchorsMm(spans)`
+  (`geom/UndercutMath.kt`, beside the containment forest): subtract from a cut's clamped span
+  every other span **contained** in it (`undercutSpanContains` — direct children are enough,
+  since deeper descendants lie inside them), then take the midpoint of the **widest remaining
+  segment**, ties to the AFT-most so concentric nesting stays deterministic. That segment is the
+  largest piece of the cut's own floor still drawn, which is exactly where its leader can
+  terminate on the surface it names.
+- **Childless cuts are byte-identical** — one segment, its whole span, so the anchor is the span
+  midpoint the builder always used. A cut whose children cover it end to end draws no floor
+  anywhere and falls back to the midpoint, the historical position and the least-bad one. A
+  **partially** overlapping sibling (legacy data, contained by nothing) is never subtracted.
+- **Both draw sites moved together** — `buildUndercutDiaStations` (`pdf/UndercutStripLayout.kt`,
+  the PDF strips) and the authoring overlay's callout pass (`ui/screen/UndercutDetail.kt`) take
+  the same anchors, so a leader leaves the same shelf on paper and on screen. The leader's floor
+  Y was already per-cut and is unchanged; only the station x moves. Anchors derive from **every**
+  drawable cut on the strip, unmeasured ones included — a child with no Ø prints no callout but
+  still replaces its parent's floor.
+- Pinned by `UndercutMathTest` (childless, mid-span child, exact tie, AFT-flush child, the
+  three-level concentric staircase, full coverage, partial overlap), `UndercutStripLayoutTest`
+  (station build, unmeasured child), and `UndercutStripSvgPreviewTest`, whose H staircase now
+  asserts the three leader origins differ pairwise.
+
 ### feat(ui): Standalone taper calculator
 
 "A taper calculator where I can find the taper rate by entering known values without having

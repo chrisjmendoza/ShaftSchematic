@@ -768,4 +768,37 @@ class UndercutStripLayoutTest {
         )
         assertTrue(stations.isEmpty())
     }
+
+    @Test
+    fun `nested cuts anchor their stations on their own visible shelves`() {
+        // Concentric staircase: midpoint anchoring stacked all three leaders on one stem.
+        val ids = listOf("n0" to (200f to 440f), "n1" to (250f to 390f), "n2" to (290f to 350f))
+        val undercuts = ids.map { (id, span) ->
+            Undercut(id = id, startFromAftMm = span.first, lengthMm = span.second - span.first, diaMm = 200f)
+        }
+        val clamped = ids.associate { (id, span) -> id to ClampedUndercutSpanMm(span.first, span.second) }
+        val byKey = buildUndercutDiaStations(
+            undercuts, clamped, xAtMm = { it }, unit = mm, labelWidthPt = { 10f },
+        ).associate { it.key to it.stationX }
+        assertEquals(225f, byKey.getValue("n0"), 1e-3f)
+        assertEquals(270f, byKey.getValue("n1"), 1e-3f)
+        assertEquals(320f, byKey.getValue("n2"), 1e-3f)
+    }
+
+    @Test
+    fun `an unmeasured child still moves its parent's station off its floor`() {
+        // The child prints no Ø of its own, but it still replaces the parent's floor over its
+        // span — so the parent's leader may not anchor there.
+        val parent = Undercut(id = "p", startFromAftMm = 0f, lengthMm = 300f, diaMm = 200f)
+        val child = Undercut(id = "c", startFromAftMm = 60f, lengthMm = 40f, diaMm = 0f)
+        val clamped = mapOf(
+            "p" to ClampedUndercutSpanMm(0f, 300f),
+            "c" to ClampedUndercutSpanMm(60f, 100f),
+        )
+        val stations = buildUndercutDiaStations(
+            listOf(parent, child), clamped, xAtMm = { it }, unit = mm, labelWidthPt = { 10f },
+        )
+        assertEquals(1, stations.size)
+        assertEquals(200f, stations[0].stationX, 1e-3f)
+    }
 }

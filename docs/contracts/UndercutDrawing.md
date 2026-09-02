@@ -173,6 +173,11 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   Partial overlaps are TOLERATED, not repaired — neither span contains the other, so both stay
   top-level siblings. The forest drives the nested notch build, the drawn-floor stacking, the
   extra rail rows, and which cuts the deepest-depth pool counts.
+- **Ø callout shelf anchor** `undercutCalloutAnchorMm(span, others)` /
+  `undercutCalloutAnchorsMm(spans)` → where a cut's Ø leader leaves its own floor, in shaft-space
+  mm: subtract every contained span from the cut's own, take the midpoint of the widest remaining
+  segment (ties AFT-most), fall back to the span midpoint when nothing is left. Childless cuts
+  are unchanged. See the strip callout rules below.
 - **Stale classifier** `isUndercutStaleOverrun(startFromAftMm, lengthMm, oalMm)` — non-blocking;
   reuses `undercutSpanIssue` to detect a previously-valid record that no longer fits (OAL
   shrank). Card shows "Extends past shaft end — re-measure"; render clamps via
@@ -810,10 +815,22 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     one, a total span would just restate that undercut's own length, already dimensioned on the
     chain below (a lone relief holding a nested cut included);
   - **Ø callouts below** via `planDiaCallouts`/`buildUndercutDiaStations` (leader to notch floor,
-    `formatDiaWithUnit`, **no "Ø" prefix**); an undercut with `diaMm <= 0` is **skipped
-    entirely** on the printed callouts (no placeholder for an unrecorded value) — its notch
-    still draws (at the symbolic floor) and still gets dimensioned on the rail, so the section
-    isn't lost from the sheet, only its Ø value is absent;
+    `formatDiaWithUnit`, **no "Ø" prefix**); each leader leaves the **shelf anchor**
+    `undercutCalloutAnchorMm` — the midpoint of the largest still-visible segment of that cut's
+    OWN floor, found by subtracting from its span every other span contained in it (direct
+    children suffice; deeper descendants lie inside them), ties to the AFT-most segment. A
+    childless cut has one segment and so anchors at its span midpoint, exactly as it always did;
+    a cut its children cover end to end draws no floor anywhere and falls back to the midpoint.
+    The anchors are derived from **every drawable cut on the strip**, unmeasured ones included:
+    a child with no Ø prints no callout but still replaces its parent's floor. Midpoint anchoring
+    broke on nesting twice — a parent's midpoint can sit inside a child (the leader lands on the
+    child's face or in the void), and concentric cuts share a midpoint outright, collapsing every
+    leader onto ONE stem that fans out to the spread labels, a bird foot in which no leader
+    identifies a floor (on-device report). Both draw sites take the same anchors
+    (`UndercutPdfComposer` strips, `UndercutDetail`'s overlay); an undercut with `diaMm <= 0` is
+    **skipped entirely** on the printed callouts (no placeholder for an unrecorded value) — its
+    notch still draws (at the symbolic floor) and still gets dimensioned on the rail, so the
+    section isn't lost from the sheet, only its Ø value is absent;
   - **title at the bottom** (`buildUndercutStripTitle(linerTitle, anchorLabel)`): a `LinerStrip`
     prints `"<liner title> — <dist> FROM AFT/FWD S.E.T."` (e.g. `"AFT Liner — 250.0 FROM AFT
     S.E.T."`) — the same `name — anchor` construction the wear sheet uses for that liner, so it
